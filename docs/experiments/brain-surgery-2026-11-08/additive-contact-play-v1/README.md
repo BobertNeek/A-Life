@@ -1,0 +1,21 @@
+# Additive contact and Play-drive experiment
+
+On 2026-11-10 I combined the previously qualified Play-need runtime source with the actual-contact Phase B source in a temporary CPU build. This is an experimental integration, not a production change or trained-brain migration. Main and acquired checkpoints were not modified.
+
+## What ran
+
+The combined code compiled with Rust 1.99.1 using offline locked dependencies. First, the existing contact fixture and the separately owned Play-host cold-continuation fixture both passed in the combined source. Those two checks used separate hosts.
+
+I then made the controlled contact fixture select one of three native recipes: Original60, Play Candidate76, and equal-work Padded Sham76. Each fresh host performed one scripted Play, then a warm Play, a matching cold Play restored from the prefix, and a matched cold NoManip continuation. All three exact tests passed on CPU. Each arm performed four world/biology intervals and two cold restores; the warm and cold repeat-Play outputs matched in each arm. The existing rejection audit was run on each authentic first receipt.
+
+In all three arms, the first toy interaction produced investigation but no stimulation; the next scripted Play had novelty 0.5, produced stimulation 0.5 and reduced the small accumulated boredom to zero. The matched NoManip continuation had no stimulation and boredom increased. Candidate and equal-work sham had the same observed biology in this low-boredom, forced-action case. They cost more body energy than Original60 in this fixture, as expected from their added work. No optimizer or lifetime weight updates occurred.
+
+## What this proves and does not prove
+
+This is a first narrow additive host test: the Play-drive recipe and contact-familiarity mechanism coexist with awake rest and save/restore in one controlled creature. It does not show that Play is selected autonomously, that the candidate is better than the equal-work sham, or that care, grip, learning and other skills work together. The boredom level was far below the candidate's positive-drive reference; these observations cannot assess its intended high-boredom action preference. Full compute pricing, GPU hardware, all checkpoint cross-owner negatives and a real long-lived creature remain untested. The contact production dispatch remains closed; the fixture uses a test-only controlled strategy.
+
+## Reconstructing
+
+Start with the exact 830-file Phase B source described in [the source checkpoint](../contact-phase-b-source-v2/README.md), then apply [the test-only contact permit](../contact-phase-b-local-test-v1/test-permit.patch). Apply the published [Play runtime patch](https://github.com/BobertNeek/A-Life/blob/qualification/m2-play-hosted-qualification-v3/docs/experiments/m2-play-hosted-qualification-v3/OWNED-RUNTIME.patch) (SHA-256 61fbd9e2f2ce4319ab223d52977e1355b74317f2dbba5c9f8edcdaea264f1636) with git apply --reject. The expected rejects are two grouped-host-loop hunks and three optional-vocal-host hunks. Then apply integration-resolution.patch (SHA-256 02279fcbf3b389de7b9602281903c6335d5a66becb71758399d5b5f001da28ae), which resolves those conflicts, corrects the Play test imports, and defines the three test recipes. I verified that applying the resolution reproduced all seven changed files byte-for-byte.
+
+Run the exact lib tests whose names end in additive_original_contact, additive_play_candidate_contact, and additive_play_sham_contact. Each passed individually, with 262 other tests filtered out. The earlier combined-source Play host continuation and contact fixture also passed individually. These focused results are not a full workspace test.
