@@ -702,6 +702,97 @@ mod tests {
         fs::remove_dir(&root).unwrap();
     }
 
+    #[cfg(feature = "gpu-tests")]
+    #[test]
+    fn experimental_founder_runs_an_offline_software_vulkan_tick() {
+        let seed = 246_810;
+        let mut founder_config = CanonicalNewGameConfig::phase3(seed, 1).unwrap();
+        founder_config.brain_class = BrainScaleTier::Standard2048;
+        let standard =
+            FoundationWeightAsset::builtin_n2048_v1(founder_config.sensor_profile).unwrap();
+        let initial =
+            alife_world::create_canonical_new_game_with_n2048_candidate(&founder_config, &standard)
+                .unwrap();
+        let genome = initial
+            .world
+            .organism_registry()
+            .get(OrganismId(1))
+            .unwrap()
+            .phenotype()
+            .brain_genome
+            .clone();
+        let development =
+            DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(1.0).unwrap());
+        let (phenotype, _) = PhenotypeCompiler::compile_n2048_experimental_graph(
+            genome,
+            development,
+            founder_config.sensor_profile,
+        )
+        .unwrap();
+        let candidate = FoundationWeightAsset::from_trained_weights(
+            &phenotype,
+            phenotype
+                .synapses()
+                .iter()
+                .map(|s| s.genetic_weight())
+                .collect(),
+            TrainingStageManifest::bootstrap(),
+        )
+        .unwrap();
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "alife-experimental-software-{}-{nonce}",
+            std::process::id()
+        ));
+        fs::create_dir(&root).unwrap();
+        let candidate_path = root.join("candidate.alife-foundation");
+        fs::write(&candidate_path, candidate.encode_canonical().unwrap()).unwrap();
+        let mut config = RuntimeConfig::deterministic_default(seed, BrainScaleTier::Standard2048);
+        config.features.gpu_backend_enabled = true;
+        let launch = CanonicalNewGameLaunchRequest {
+            world_seed: seed,
+            population: 1,
+            disable_age_death: true,
+            save_path: root.join("world.json"),
+            asset_root: root.clone(),
+            config,
+            assets: AssetManifest::empty(),
+        };
+        let mut runtime = create_canonical_new_game_runtime_using_backend(
+            launch,
+            NewGameFounderSelection::N2048ExperimentalCandidate {
+                asset_path: candidate_path,
+            },
+            false,
+            || {
+                let backend = GpuClosedLoopBackend::new_software_vulkan_runtime_test(
+                    GpuRuntimeProfile::production_v1(),
+                )?;
+                assert!(backend.is_software_runtime_test());
+                assert_eq!(
+                    format!(
+                        "{:?}",
+                        backend
+                            .software_runtime_test_adapter_info()
+                            .unwrap()
+                            .device_type
+                    ),
+                    "Cpu"
+                );
+                Ok(backend)
+            },
+        )
+        .unwrap()
+        .runtime;
+        runtime.tick().unwrap();
+        assert_eq!(runtime.world_tick_for_test(), Tick(1));
+        drop(runtime);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
     #[test]
     fn experimental_founder_stages_and_roundtrips_without_reinterpreting_standard_assets() {
         let seed = 240_826;
