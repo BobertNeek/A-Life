@@ -1,0 +1,3 @@
+# Low-energy feeding pilot
+
+Two fresh seeds, paired whole-care and combined candidate, 120 CPU decisions per scene, initial body energy 0.15. Both candidates consumed known palatable food in 2/2, left bitter food unconsumed in 2/2, and consumed chemically neutral food in 1/2. For the candidate that left neutral food, energy fell from approximately 0.15 to 0.131 and the hunger drive rose from 0 to approximately 0.257. The other seed consumed its neutral target. This shows a feeding limitation worth investigating, not proof that the creature should always eat an unknown substance, nor proof of a regression against the comparison brain. These are small artificial test scenes and no general starvation survival claim is made.
