@@ -1,0 +1,53 @@
+{
+  "seed": 2026111554,
+  "reports": [
+    {
+      "mode": "normal",
+      "red_first": true,
+      "red_id": 6,
+      "blue_id": 7,
+      "choice": "red",
+      "safe": true,
+      "same_original_trace": true,
+      "cold": true,
+      "optimizer": true,
+      "sha256": "0bc5ea12416467d670b79c85e6f7b4e1fcd4666b29b9f7a9a03a6c1ad3fbb9fc"
+    },
+    {
+      "mode": "normal",
+      "red_first": false,
+      "red_id": 7,
+      "blue_id": 6,
+      "choice": "red",
+      "safe": true,
+      "same_original_trace": false,
+      "cold": true,
+      "optimizer": true,
+      "sha256": "55bb34a0955c48d46419ccc9053ed34888d4fe2fa0e9e274952fc285b5d45966"
+    },
+    {
+      "mode": "sham",
+      "red_first": true,
+      "red_id": 6,
+      "blue_id": 7,
+      "choice": "red",
+      "safe": true,
+      "same_original_trace": true,
+      "cold": true,
+      "optimizer": true,
+      "sha256": "ab0b906f554b1cd167900caeb4c20005f682b8bf9353cec58b44db4960716cd4"
+    },
+    {
+      "mode": "sham",
+      "red_first": false,
+      "red_id": 7,
+      "blue_id": 6,
+      "choice": "red",
+      "safe": true,
+      "same_original_trace": false,
+      "cold": true,
+      "optimizer": true,
+      "sha256": "865fdd9791ec22a73a0c68d69b11c6f9e002fe9d86dc161ef943dddb9748755a"
+    }
+  ]
+}
