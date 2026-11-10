@@ -322,7 +322,11 @@ fn whole_care_with_contact(
 /// Exploratory native circuit: feed the lateral sight rays through existing
 /// recurrent context paths into opposing turn preferences, with a modest
 /// context recurrence boost. This is NOT a claimed spatial map or solver.
-fn wire_spatial_trace(p: &BrainPhenotype, weights: &mut [f32]) -> Result<Vec<serde_json::Value>> {
+fn wire_spatial_trace(
+    p: &BrainPhenotype,
+    weights: &mut [f32],
+    turn_gain: f32,
+) -> Result<Vec<serde_json::Value>> {
     use std::collections::{BTreeSet, VecDeque};
     let context_regions = [LobeKind::WorkingContextExecutive, LobeKind::MemoryInterface]
         .into_iter()
@@ -392,7 +396,27 @@ fn wire_spatial_trace(p: &BrainPhenotype, weights: &mut [f32]) -> Result<Vec<ser
                     continue;
                 }
                 for &i in &outgoing[node as usize] {
-                    let next = p.synapses()[i].target();
+                    let edge = &p.synapses()[i];
+                    let next = edge.target();
+                    // The later lattice edit retains only self/cardinal links
+                    // inside its reciprocal block. Never select a relay that
+                    // the lattice would immediately erase.
+                    let cells = match (edge.route_index(), edge.source(), edge.target()) {
+                        (7, a @ 896..=911, b @ 1600..=1615) => Some((a - 896, b - 1600)),
+                        (8, a @ 1600..=1615, b @ 896..=911) => Some((a - 1600, b - 896)),
+                        _ => None,
+                    };
+                    if let Some((a, b)) = cells {
+                        if (a / 4).abs_diff(b / 4) + (a % 4).abs_diff(b % 4) > 1 {
+                            continue;
+                        }
+                    }
+                    // Reserve separate spatial cells for left and right rays;
+                    // do not collide with the front-row lattice inputs.
+                    let side_cell = if ray == 3 { 904 } else { 907 };
+                    if path.is_empty() && next != side_cell {
+                        continue;
+                    }
                     if used_nodes.contains(&next) {
                         continue;
                     }
@@ -425,7 +449,7 @@ fn wire_spatial_trace(p: &BrainPhenotype, weights: &mut [f32]) -> Result<Vec<ser
                 c.head()==DecoderHeadKind::ActionCandidate && c.family()==CandidateActionFamily::Inspect && c.input_lane()==0)
             {
                 let before = weights[i];
-                weights[i] = before + direction * 6.0;
+                weights[i] = before + direction * turn_gain;
                 decoder_count += 1;
                 edits.push(json!({"role":"spatial_turn_bias","ray":ray,"index":i,"source":motor,"before":before,"after":weights[i]}));
             }
@@ -749,48 +773,53 @@ fn trial(spec: TrialSpec<'_>) -> Result<serde_json::Value> {
             }
         }
     }
-    if arm == "nav-edit"
-        || arm == "nav-combined"
-        || arm == "nav-lattice"
-        || arm == "nav-strong"
-        || arm == "nav-care"
-        || arm == "nav-care2"
-        || arm == "nav-map"
-        || arm == "nav-stable"
+    let edit_arm = if arm == "nav-turn10" { "nav-map" } else { arm };
+    if edit_arm == "nav-edit"
+        || edit_arm == "nav-combined"
+        || edit_arm == "nav-lattice"
+        || edit_arm == "nav-strong"
+        || edit_arm == "nav-care"
+        || edit_arm == "nav-care2"
+        || edit_arm == "nav-map"
+        || edit_arm == "nav-stable"
     {
         if config.sensor_profile != SensorProfile::GroundedTerrainVisionV1 {
             return Err("navigation circuit requires terrain vision".into());
         }
-        edits.extend(wire_spatial_trace(&p, &mut weights)?);
-        if arm == "nav-lattice"
-            || arm == "nav-strong"
-            || arm == "nav-care"
-            || arm == "nav-care2"
-            || arm == "nav-map"
-            || arm == "nav-stable"
+        edits.extend(wire_spatial_trace(
+            &p,
+            &mut weights,
+            if arm == "nav-turn10" { 60.0 } else { 6.0 },
+        )?);
+        if edit_arm == "nav-lattice"
+            || edit_arm == "nav-strong"
+            || edit_arm == "nav-care"
+            || edit_arm == "nav-care2"
+            || edit_arm == "nav-map"
+            || edit_arm == "nav-stable"
         {
             edits.extend(wire_local_spatial_lattice(
                 &p,
                 &mut weights,
-                if arm == "nav-stable" {
+                if edit_arm == "nav-stable" {
                     1.3
-                } else if arm == "nav-map" {
+                } else if edit_arm == "nav-map" {
                     0.85
                 } else {
                     0.4
                 },
             )?);
-            if arm == "nav-map" || arm == "nav-stable" {
+            if edit_arm == "nav-map" || edit_arm == "nav-stable" {
                 edits.extend(wire_visual_lattice_inputs(&p, &mut weights)?);
             }
         }
-        if arm == "nav-combined"
-            || arm == "nav-lattice"
-            || arm == "nav-strong"
-            || arm == "nav-care"
-            || arm == "nav-care2"
-            || arm == "nav-map"
-            || arm == "nav-stable"
+        if edit_arm == "nav-combined"
+            || edit_arm == "nav-lattice"
+            || edit_arm == "nav-strong"
+            || edit_arm == "nav-care"
+            || edit_arm == "nav-care2"
+            || edit_arm == "nav-map"
+            || edit_arm == "nav-stable"
         {
             // Grounded target distance is available only for a seen object.
             // Bias exploratory approach without inventing a food label or taste.
@@ -815,11 +844,11 @@ fn trial(spec: TrialSpec<'_>) -> Result<serde_json::Value> {
                 {
                     let before = weights[i];
                     weights[i] = before
-                        + if arm == "nav-strong"
-                            || arm == "nav-care"
-                            || arm == "nav-care2"
-                            || arm == "nav-map"
-                            || arm == "nav-stable"
+                        + if edit_arm == "nav-strong"
+                            || edit_arm == "nav-care"
+                            || edit_arm == "nav-care2"
+                            || edit_arm == "nav-map"
+                            || edit_arm == "nav-stable"
                         {
                             80.0
                         } else {
@@ -834,7 +863,11 @@ fn trial(spec: TrialSpec<'_>) -> Result<serde_json::Value> {
             }
         }
     }
-    if arm == "nav-care" || arm == "nav-care2" || arm == "nav-map" || arm == "nav-stable" {
+    if edit_arm == "nav-care"
+        || edit_arm == "nav-care2"
+        || edit_arm == "nav-map"
+        || edit_arm == "nav-stable"
+    {
         // Curiosity about an actually contacted object, not a food or safety oracle.
         // Strong bitter/pain avoidance remains a separate signal and is tested.
         let reference = p
@@ -858,7 +891,10 @@ fn trial(spec: TrialSpec<'_>) -> Result<serde_json::Value> {
             {
                 let before = weights[i];
                 weights[i] = before
-                    + if arm == "nav-care2" || arm == "nav-map" || arm == "nav-stable" {
+                    + if edit_arm == "nav-care2"
+                        || edit_arm == "nav-map"
+                        || edit_arm == "nav-stable"
+                    {
                         -20.0
                     } else {
                         4.0
@@ -1206,6 +1242,82 @@ fn trial(spec: TrialSpec<'_>) -> Result<serde_json::Value> {
             } else {
                 None
             };
+            // Probe whether each side-ray actually affects the neural turn
+            // logits in opposite directions; never modifies the live host.
+            let side_pulse = if tick == 0
+                && (arm == "nav-map" || arm == "nav-turn10")
+                && std::env::var_os("ALIFE_RESEARCH_SIDE_PULSE").is_some()
+            {
+                let left = frame
+                    .candidates()
+                    .iter()
+                    .position(|c| c.action_id == HeadlessActionIds::TURN_LEFT)
+                    .ok_or("left turn absent")?;
+                let right = frame
+                    .candidates()
+                    .iter()
+                    .position(|c| c.action_id == HeadlessActionIds::TURN_RIGHT)
+                    .ok_or("right turn absent")?;
+                let mut results = Vec::new();
+                for ray in [3u16, 12u16] {
+                    let source = edits
+                        .iter()
+                        .find(|e| e["role"] == "spatial_visual_context_relay" && e["ray"] == ray)
+                        .and_then(|e| e["source"].as_u64())
+                        .ok_or("side source absent")? as usize;
+                    for steps in [1usize, 2, 4, 8] {
+                        let eval_with = |pulse: bool| -> Result<(Vec<f32>, Vec<f32>)> {
+                            let mut ticks = vec![row.replay_tick.clone(); steps];
+                            if pulse {
+                                ticks[0].encoded_inputs[source] += 0.25;
+                            }
+                            let out = trainer.evaluate_replay(&TrainingSequence {
+                                phenotype_hash: trainer.phenotype().phenotype_hash(),
+                                initial: row.initial.clone(),
+                                ticks,
+                                burn_in_ticks: 0,
+                                memory_candidate_gain: trainer
+                                    .phenotype()
+                                    .candidate_decoder()
+                                    .memory_channel()
+                                    .map_or(0., |m| m.max_candidate_gain()),
+                            })?;
+                            Ok((
+                                out.candidate_logits
+                                    .last()
+                                    .ok_or("empty side replay")?
+                                    .clone(),
+                                out.final_activations
+                                    .last()
+                                    .ok_or("empty motor replay")?
+                                    .clone(),
+                            ))
+                        };
+                        let (base, base_act) = eval_with(false)?;
+                        let (changed, changed_act) = eval_with(true)?;
+                        let motors = trainer
+                            .phenotype()
+                            .synapses()
+                            .iter()
+                            .filter_map(|edge| match edge.kind() {
+                                CompiledSynapseKind::Decoder(c)
+                                    if c.head() == DecoderHeadKind::ActionCandidate
+                                        && c.family() == CandidateActionFamily::Inspect
+                                        && c.input_lane() == 0 =>
+                                {
+                                    Some(edge.source())
+                                }
+                                _ => None,
+                            })
+                            .collect::<std::collections::BTreeSet<_>>();
+                        let motor_response=motors.into_iter().map(|i|json!({"neuron":i,"baseline":base_act[i as usize],"delta":changed_act[i as usize]-base_act[i as usize]})).collect::<Vec<_>>();
+                        results.push(json!({"ray":ray,"source":source,"steps":steps,"delta_left_minus_right":(changed[left]-changed[right])-(base[left]-base[right]),"motors":motor_response}));
+                    }
+                }
+                Some(results)
+            } else {
+                None
+            };
             let mut debug_neurons = std::collections::BTreeSet::new();
             let mut bridge_ids = std::collections::BTreeSet::new();
             for circuit in &edits {
@@ -1288,7 +1400,7 @@ fn trial(spec: TrialSpec<'_>) -> Result<serde_json::Value> {
                     "activation": &eval.final_activations[0][region.start as usize..(region.start+region.len) as usize],
                 }))
             }).collect::<Vec<_>>();
-            rows.push(json!({"tick":tick,"position":observed_position,"visible_goal":visible_goal,"neural_body":frame.body().neural_projection(frame.sensor_profile()),"vision_ranges":frame.sensory().channels.visual_affordance,"latent_context":latent_context,"lattice_pulse":lattice_pulse,"counter":row.sampling_counter,"action":row.action,"candidates":frame.candidates(),"logits":eval.candidate_logits[0],"ingest_taste_motors":motors,"encoded_hunger_plus_0_1_logit_delta":hunger_probe,"encoded_hunger_3_frozen_frames_delta":hunger_three_frames,"constructed_neuron_activations":debug_activations,"effective_bridges":effective_bridges,"enabled_routes":row.replay_tick.enabled_routes,"outcome":outcome,"reward":row.biological_reward}));
+            rows.push(json!({"tick":tick,"position":observed_position,"visible_goal":visible_goal,"neural_body":frame.body().neural_projection(frame.sensor_profile()),"vision_ranges":frame.sensory().channels.visual_affordance,"latent_context":latent_context,"lattice_pulse":lattice_pulse,"side_pulse":side_pulse,"counter":row.sampling_counter,"action":row.action,"candidates":frame.candidates(),"logits":eval.candidate_logits[0],"ingest_taste_motors":motors,"encoded_hunger_plus_0_1_logit_delta":hunger_probe,"encoded_hunger_3_frozen_frames_delta":hunger_three_frames,"constructed_neuron_activations":debug_activations,"effective_bridges":effective_bridges,"enabled_routes":row.replay_tick.enabled_routes,"outcome":outcome,"reward":row.biological_reward}));
         }
     }
     assert_eq!(before, serde_json::to_vec(&trainer.checkpoint())?);
@@ -1520,6 +1632,7 @@ fn main() -> Result<()> {
         "nav-care2-factor" => vec![("nav-base", 0.), ("nav-care2", 0.)],
         "nav-map-factor" => vec![("nav-base", 0.), ("nav-map", 0.)],
         "nav-stable-factor" => vec![("nav-map", 0.), ("nav-stable", 0.)],
+        "nav-turn10-factor" => vec![("nav-map", 0.), ("nav-turn10", 0.)],
         "bold-factor" => vec![("whole-care", 0.), ("whole-care-bold", 0.)],
         "contact" => vec![("whole-care-v5", 0.), ("whole-care", 0.)],
         "whole" => vec![
