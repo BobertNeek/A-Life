@@ -1649,13 +1649,29 @@ impl PortableSaveFile {
         let development = expressed.development_state_at(Tick::new(u64::from(
             expressed.development.maturation_duration_ticks,
         )))?;
-        let phenotype = PhenotypeCompiler::compile_from_foundation_asset(
-            &expressed.brain_genome,
-            &BrainCapacityClass::production_for_id(creature_genome.foundation.brain_class_id)?,
-            &development,
-            SensorProfile::GroundedObjectSlotsV1,
-            &foundation,
-        )?;
+        let capacity =
+            BrainCapacityClass::production_for_id(creature_genome.foundation.brain_class_id)?;
+        let phenotype = if foundation.is_n2048_experimental_graph() {
+            if capacity.id() != BrainCapacityClass::N2048_ID
+                || foundation.manifest().sensor_profile() != SensorProfile::GroundedObjectSlotsV1
+            {
+                return Err(ScaffoldContractError::PhenotypeCompile.into());
+            }
+            PhenotypeCompiler::compile_n2048_experimental_foundation_candidate(
+                expressed.brain_genome.clone(),
+                development.clone(),
+                foundation.clone(),
+            )?
+            .0
+        } else {
+            PhenotypeCompiler::compile_from_foundation_asset(
+                &expressed.brain_genome,
+                &capacity,
+                &development,
+                SensorProfile::GroundedObjectSlotsV1,
+                &foundation,
+            )?
+        };
         if phenotype.phenotype_hash() != reference.phenotype_hash {
             return Err(PersistenceError::InvalidConfig {
                 field: "creature.composite_genetics.phenotype_hash",
