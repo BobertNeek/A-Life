@@ -1,0 +1,5 @@
+# Experimental founder admission prototype
+
+`bold-game-admission.patch` prototypes a separate `n2048-experimental:<asset-path>` fresh-founder choice. It uses the existing experimental new-game constructor and selects the experimental compiler in the GPU live runtime when the saved candidate identifies itself as experimental. The ordinary `n2048:` choice remains separate; existing lives are not converted.
+
+At current-main c3aec16, `cargo check -p alife_game_app --features gpu-runtime` and the corresponding `--tests` check completed on the cloud CPU environment. A check compiles code and test targets but does not execute tests or run a GPU. The full Bevy frontend check stopped at a missing `libudev` development package in this cloud environment. No GPU dispatch, game launch, save/load in the actual game, or gameplay has been verified. This patch is a prototype, not merged into the game. Validate the asset identity and all relevant GPU, save/load and gameplay paths before admission or promotion.
