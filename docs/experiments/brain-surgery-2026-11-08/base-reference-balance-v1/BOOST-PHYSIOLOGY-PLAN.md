@@ -1,0 +1,3 @@
+# Prepared physiology comparison
+
+Freeze the two-weight 1.25× candidate and original whole-care. Test four new matched seeds 2026111518–1521 with nearby food, far food and harmless bitter food; 32 neural steps and 600 world-only preparation ticks per trial, initial body energy 0.4. There are 24 CPU trials. Preparation advances body/world physiology without neural decisions, so it is not a previously lived or learned creature. Record the actual prepared hunger/fatigue/energy, target outcomes, candidate digests, exact weight changes, cold continuation and optimizer flags. A short cutoff and four seed pairs cannot establish general fitness, starvation behavior or learning. No default, user checkpoint or retained life will be overwritten.
