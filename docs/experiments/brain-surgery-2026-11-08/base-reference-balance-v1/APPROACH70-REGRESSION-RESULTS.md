@@ -1,0 +1,7 @@
+# Approach70: fresh single-food regression
+
+The candidate changes exactly two genetic Approach action-decoder chemical-lane weights: 25968 4→2.8 and 25983 20→14. The prospective CPU matrix completed 24 trials: four fresh matched seeds 2026111547–1550 × nearby positive food, far positive food and harmless bitter food × original/Approach70; 64 decisions each. Research fast-write sham was explicitly off; ordinary fast plasticity remained active. Each arm is a disposable experimental fresh founder; no game default, GPU or user's learned life was changed.
+
+Both versions consumed nearby and far positive food 4/4. For nearby food, original first physical consumption decisions were [3,4,4,5], candidate [2,2,2,3]. For far food, original was [42,42,42,42], candidate [26,26,28,26]. Neither consumed harmless bitter food 4/4 within this bound. This is an observed speed difference and no obvious regression in these narrow cases, not proof of better general behavior, learned aversion or a production-ready brain. Initial hunger was zero in this newborn fixture. All 24 exact cold-next-step and founder-optimizer-unchanged checks passed. `approach70-regression-summary.json` records all outcomes, exact edits and full-receipt hashes.
+
+In the separate counterbalanced cue-outcome study, the same candidate made unforced two-food choices but showed no fast-write-dependent useful learning: see CUE-MATRIX-RESULTS.md. The research switch and candidate remain unmerged and unpromoted until the learning issue and gameplay compatibility are addressed.
