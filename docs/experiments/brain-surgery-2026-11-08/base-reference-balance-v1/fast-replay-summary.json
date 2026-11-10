@@ -1,0 +1,374 @@
+{
+  "complete": true,
+  "main": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "trials": [
+    {
+      "seed": 2026111539,
+      "scene": "far-food",
+      "arm": "whole-care-ingest-boost",
+      "fast_ablation": {
+        "actual_logits": [
+          3.2642979621887207,
+          16.793771743774414,
+          -30.185537338256836,
+          15.044992446899414,
+          3.056138515472412,
+          0.0,
+          0.0,
+          0.05594980716705322,
+          0.0,
+          -1.0524478966544848e-05,
+          0.0,
+          0.0
+        ],
+        "candidate_count": 12,
+        "fast_removed_logits": [
+          3.264293909072876,
+          16.797658920288086,
+          -30.184520721435547,
+          15.046019554138184,
+          3.0560431480407715,
+          0.0,
+          0.0,
+          0.05594503879547119,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "max_logit_delta": 0.003887176513671875,
+        "offsets_bound_to_sealed_state": true,
+        "same_replay_perception": true
+      },
+      "neural_changes": {
+        "eligibility": {
+          "changed": 25680,
+          "decoder": 1104,
+          "max_abs_delta": 1.0,
+          "recurrent": 24576
+        },
+        "fast": {
+          "changed": 25680,
+          "decoder": 1104,
+          "max_abs_delta": 0.0001359169400529936,
+          "recurrent": 24576
+        },
+        "final_weight_generation": 16,
+        "initial_weight_generation": 0,
+        "lifetime": {
+          "changed": 0,
+          "decoder": 0,
+          "max_abs_delta": 0.0,
+          "recurrent": 0
+        }
+      },
+      "cold_next_step_exact": true,
+      "optimizer_unchanged": true,
+      "candidate_digest": [
+        76,
+        12,
+        46,
+        215,
+        189,
+        144,
+        7,
+        26,
+        132,
+        194,
+        254,
+        152,
+        23,
+        237,
+        210,
+        245,
+        97,
+        167,
+        135,
+        132,
+        241,
+        141,
+        129,
+        107,
+        116,
+        54,
+        86,
+        237,
+        187,
+        91,
+        176,
+        212
+      ],
+      "sha256": "ef8bf792a8fddc8b7c288f26be0a02da38d24ec9b5297c9fe5aacfcbdb4c2d1b"
+    },
+    {
+      "seed": 2026111539,
+      "scene": "far-food",
+      "arm": "whole-care",
+      "fast_ablation": {
+        "actual_logits": [
+          3.2642982006073,
+          16.797529220581055,
+          -30.18560791015625,
+          12.482427597045898,
+          3.056145668029785,
+          0.0,
+          0.0,
+          0.055950164794921875,
+          0.0,
+          -2.596868284854281e-07,
+          0.0,
+          0.0
+        ],
+        "candidate_count": 12,
+        "fast_removed_logits": [
+          3.264294147491455,
+          16.79766082763672,
+          -30.184558868408203,
+          12.481849670410156,
+          3.056047201156616,
+          0.0,
+          0.0,
+          0.05594527721405029,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "max_logit_delta": 0.001049041748046875,
+        "offsets_bound_to_sealed_state": true,
+        "same_replay_perception": true
+      },
+      "neural_changes": {
+        "eligibility": {
+          "changed": 25208,
+          "decoder": 632,
+          "max_abs_delta": 1.0,
+          "recurrent": 24576
+        },
+        "fast": {
+          "changed": 25208,
+          "decoder": 632,
+          "max_abs_delta": 0.00013846922956872731,
+          "recurrent": 24576
+        },
+        "final_weight_generation": 16,
+        "initial_weight_generation": 0,
+        "lifetime": {
+          "changed": 0,
+          "decoder": 0,
+          "max_abs_delta": 0.0,
+          "recurrent": 0
+        }
+      },
+      "cold_next_step_exact": true,
+      "optimizer_unchanged": true,
+      "candidate_digest": [
+        104,
+        161,
+        34,
+        251,
+        133,
+        56,
+        73,
+        148,
+        210,
+        207,
+        177,
+        83,
+        111,
+        71,
+        252,
+        1,
+        103,
+        168,
+        99,
+        157,
+        64,
+        254,
+        22,
+        104,
+        191,
+        38,
+        102,
+        160,
+        149,
+        161,
+        215,
+        34
+      ],
+      "sha256": "7bbf440ae63267b1395e51c04488ea35406cd4f26ccfd02a0b428d1cf90b5a55"
+    },
+    {
+      "seed": 2026111539,
+      "scene": "food",
+      "arm": "whole-care-ingest-boost",
+      "fast_ablation": {
+        "actual_logits": [
+          -1.5899522622930817e-05,
+          0.0544530488550663,
+          -1.3360714547161479e-05,
+          -2.684190621948801e-05,
+          -0.002682330319657922,
+          -1.0764493708848022e-05
+        ],
+        "candidate_count": 6,
+        "fast_removed_logits": [
+          0.0,
+          0.055944204330444336,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "max_logit_delta": 0.002682330319657922,
+        "offsets_bound_to_sealed_state": true,
+        "same_replay_perception": true
+      },
+      "neural_changes": {
+        "eligibility": {
+          "changed": 26464,
+          "decoder": 1888,
+          "max_abs_delta": 1.0,
+          "recurrent": 24576
+        },
+        "fast": {
+          "changed": 26464,
+          "decoder": 1888,
+          "max_abs_delta": 0.00025201099924743176,
+          "recurrent": 24576
+        },
+        "final_weight_generation": 16,
+        "initial_weight_generation": 0,
+        "lifetime": {
+          "changed": 0,
+          "decoder": 0,
+          "max_abs_delta": 0.0,
+          "recurrent": 0
+        }
+      },
+      "cold_next_step_exact": true,
+      "optimizer_unchanged": true,
+      "candidate_digest": [
+        76,
+        12,
+        46,
+        215,
+        189,
+        144,
+        7,
+        26,
+        132,
+        194,
+        254,
+        152,
+        23,
+        237,
+        210,
+        245,
+        97,
+        167,
+        135,
+        132,
+        241,
+        141,
+        129,
+        107,
+        116,
+        54,
+        86,
+        237,
+        187,
+        91,
+        176,
+        212
+      ],
+      "sha256": "552d5f9bee09fa01481573463d4bd539e802f026e0d74b0bb7c532e8ebadb3bf"
+    },
+    {
+      "seed": 2026111539,
+      "scene": "food",
+      "arm": "whole-care",
+      "fast_ablation": {
+        "actual_logits": [
+          -1.5899522622930817e-05,
+          0.0544530488550663,
+          -1.3360714547161479e-05,
+          -2.684190621948801e-05,
+          -0.002682330319657922,
+          -1.0764493708848022e-05
+        ],
+        "candidate_count": 6,
+        "fast_removed_logits": [
+          0.0,
+          0.055944204330444336,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "max_logit_delta": 0.002682330319657922,
+        "offsets_bound_to_sealed_state": true,
+        "same_replay_perception": true
+      },
+      "neural_changes": {
+        "eligibility": {
+          "changed": 26464,
+          "decoder": 1888,
+          "max_abs_delta": 1.0,
+          "recurrent": 24576
+        },
+        "fast": {
+          "changed": 26464,
+          "decoder": 1888,
+          "max_abs_delta": 0.00025201099924743176,
+          "recurrent": 24576
+        },
+        "final_weight_generation": 16,
+        "initial_weight_generation": 0,
+        "lifetime": {
+          "changed": 0,
+          "decoder": 0,
+          "max_abs_delta": 0.0,
+          "recurrent": 0
+        }
+      },
+      "cold_next_step_exact": true,
+      "optimizer_unchanged": true,
+      "candidate_digest": [
+        104,
+        161,
+        34,
+        251,
+        133,
+        56,
+        73,
+        148,
+        210,
+        207,
+        177,
+        83,
+        111,
+        71,
+        252,
+        1,
+        103,
+        168,
+        99,
+        157,
+        64,
+        254,
+        22,
+        104,
+        191,
+        38,
+        102,
+        160,
+        149,
+        161,
+        215,
+        34
+      ],
+      "sha256": "f648799f5c379b80932f5570bff95f206e9db80d399bb36588eb00100720155f"
+    }
+  ]
+}
