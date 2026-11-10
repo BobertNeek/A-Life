@@ -1,0 +1,262 @@
+{
+  "complete": true,
+  "main": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "trials": [
+    {
+      "seed": 2026111540,
+      "scene": "food",
+      "arm": "whole-care-ingest-boost",
+      "neural_changes": {
+        "eligibility": {
+          "changed": 26464,
+          "decoder": 1888,
+          "max_abs_delta": 1.0,
+          "recurrent": 24576
+        },
+        "fast": {
+          "changed": 26464,
+          "decoder": 1888,
+          "max_abs_delta": 0.000184364864253439,
+          "recurrent": 24576
+        },
+        "final_weight_generation": 16,
+        "initial_weight_generation": 0,
+        "lifetime": {
+          "changed": 0,
+          "decoder": 0,
+          "max_abs_delta": 0.0,
+          "recurrent": 0
+        }
+      },
+      "sleep_probe": {
+        "consolidated_generation": 17,
+        "exact_cold_next": true,
+        "forced_recovery": true,
+        "phases": [
+          "ForcedRecoverySleep",
+          "ForcedRecoverySleep",
+          "ForcedRecoverySleep",
+          "ForcedRecoverySleep",
+          "ForcedRecoverySleep",
+          "ForcedRecoverySleep",
+          "ForcedRecoverySleep",
+          "ForcedRecoverySleep",
+          "Consolidating",
+          "Waking",
+          "Waking",
+          "Waking",
+          "Awake",
+          "Awake"
+        ],
+        "pre_sleep_eligibility_to_consolidated": {
+          "changed": 26464,
+          "decoder": 1888,
+          "max_abs_delta": 1.0,
+          "recurrent": 24576
+        },
+        "pre_sleep_fast_to_consolidated": {
+          "changed": 26464,
+          "decoder": 1888,
+          "max_abs_delta": 0.0015093630645424128,
+          "recurrent": 24576
+        },
+        "pre_sleep_generation": 16,
+        "pre_sleep_lifetime_to_consolidated": {
+          "changed": 26464,
+          "decoder": 1888,
+          "max_abs_delta": 0.0016351413214579225,
+          "recurrent": 24576
+        },
+        "resumed_at": 14,
+        "resumed_generation": 18
+      },
+      "fast_ablation": {
+        "actual_logits": [
+          -2.4038067536480412e-08,
+          0.05594269931316376,
+          -5.437510480987839e-06,
+          -4.4597785745281726e-05,
+          -3.079690577578731e-05,
+          -2.0109091565245762e-05
+        ],
+        "candidate_count": 6,
+        "fast_removed_logits": [
+          0.0,
+          0.05594444274902344,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "max_logit_delta": 4.4597785745281726e-05,
+        "offsets_bound_to_sealed_state": true,
+        "same_replay_perception": true
+      },
+      "cold_next_step_exact": true,
+      "optimizer_unchanged": true,
+      "candidate_digest": [
+        76,
+        12,
+        46,
+        215,
+        189,
+        144,
+        7,
+        26,
+        132,
+        194,
+        254,
+        152,
+        23,
+        237,
+        210,
+        245,
+        97,
+        167,
+        135,
+        132,
+        241,
+        141,
+        129,
+        107,
+        116,
+        54,
+        86,
+        237,
+        187,
+        91,
+        176,
+        212
+      ],
+      "sha256": "b5b73b73fa26de80a6e0d8680add64ed152f687d437b77fa702b3aaaa8823474"
+    },
+    {
+      "seed": 2026111540,
+      "scene": "food",
+      "arm": "whole-care",
+      "neural_changes": {
+        "eligibility": {
+          "changed": 26448,
+          "decoder": 1872,
+          "max_abs_delta": 1.0,
+          "recurrent": 24576
+        },
+        "fast": {
+          "changed": 26448,
+          "decoder": 1872,
+          "max_abs_delta": 0.00013332758680917323,
+          "recurrent": 24576
+        },
+        "final_weight_generation": 16,
+        "initial_weight_generation": 0,
+        "lifetime": {
+          "changed": 0,
+          "decoder": 0,
+          "max_abs_delta": 0.0,
+          "recurrent": 0
+        }
+      },
+      "sleep_probe": {
+        "consolidated_generation": 17,
+        "exact_cold_next": true,
+        "forced_recovery": true,
+        "phases": [
+          "ForcedRecoverySleep",
+          "ForcedRecoverySleep",
+          "ForcedRecoverySleep",
+          "ForcedRecoverySleep",
+          "ForcedRecoverySleep",
+          "ForcedRecoverySleep",
+          "ForcedRecoverySleep",
+          "ForcedRecoverySleep",
+          "Consolidating",
+          "Waking",
+          "Waking",
+          "Waking",
+          "Awake",
+          "Awake"
+        ],
+        "pre_sleep_eligibility_to_consolidated": {
+          "changed": 26448,
+          "decoder": 1872,
+          "max_abs_delta": 1.0,
+          "recurrent": 24576
+        },
+        "pre_sleep_fast_to_consolidated": {
+          "changed": 26448,
+          "decoder": 1872,
+          "max_abs_delta": 0.0015957242576405406,
+          "recurrent": 24576
+        },
+        "pre_sleep_generation": 16,
+        "pre_sleep_lifetime_to_consolidated": {
+          "changed": 26448,
+          "decoder": 1872,
+          "max_abs_delta": 0.0017286990769207478,
+          "recurrent": 24576
+        },
+        "resumed_at": 14,
+        "resumed_generation": 18
+      },
+      "fast_ablation": {
+        "actual_logits": [
+          -2.4043629309744574e-08,
+          0.05594305694103241,
+          -1.4945976900548885e-08,
+          0.001974676502868533,
+          -3.0794897611485794e-05,
+          -1.8813670976669528e-05
+        ],
+        "candidate_count": 6,
+        "fast_removed_logits": [
+          0.0,
+          0.05594456195831299,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "max_logit_delta": 0.001974676502868533,
+        "offsets_bound_to_sealed_state": true,
+        "same_replay_perception": true
+      },
+      "cold_next_step_exact": true,
+      "optimizer_unchanged": true,
+      "candidate_digest": [
+        104,
+        161,
+        34,
+        251,
+        133,
+        56,
+        73,
+        148,
+        210,
+        207,
+        177,
+        83,
+        111,
+        71,
+        252,
+        1,
+        103,
+        168,
+        99,
+        157,
+        64,
+        254,
+        22,
+        104,
+        191,
+        38,
+        102,
+        160,
+        149,
+        161,
+        215,
+        34
+      ],
+      "sha256": "62f7ee35a77f6a8bd71df9f71f0c43ca62ad455f2a3378ae98464a41798b4757"
+    }
+  ]
+}
