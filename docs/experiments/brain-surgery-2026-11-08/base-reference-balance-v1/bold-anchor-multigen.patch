@@ -1,0 +1,57 @@
+--- a/crates/alife_core/src/evolutionary_genetics.rs
++++ b/crates/alife_core/src/evolutionary_genetics.rs
+@@ -1082,8 +1082,35 @@
+     ) -> Result<Self, ScaffoldContractError> {
+         maternal.validate_contract()?;
+         paternal.validate_contract()?;
++        // Disposable proof-of-concept only. Production retains exact-asset mating.
++        let inherited_match =
++            if std::env::var_os("ALIFE_RESEARCH_EQUIVALENT_FOUNDATION_WEIGHTS").is_some() {
++                match (
++                    &maternal.n2048_foundation_candidate,
++                    &paternal.n2048_foundation_candidate,
++                ) {
++                    (Some(a), Some(b))
++                        if a.is_n2048_experimental_graph() && b.is_n2048_experimental_graph() =>
++                    {
++                        let (x, y) = (a.manifest(), b.manifest());
++                        x.sensor_profile() == y.sensor_profile()
++                            && x.layout_digest() == y.layout_digest()
++                            && x.route_abi_digest() == y.route_abi_digest()
++                            && x.address_map_digest() == y.address_map_digest()
++                            && x.training_stage() == y.training_stage()
++                            && a.weights().len() == b.weights().len()
++                            && a.weights()
++                                .iter()
++                                .zip(b.weights())
++                                .all(|(u, v)| u.to_bits() == v.to_bits())
++                    }
++                    (a, b) => a == b,
++                }
++            } else {
++                maternal.n2048_foundation_candidate == paternal.n2048_foundation_candidate
++            };
+         if conception_seed == 0
+-            || maternal.n2048_foundation_candidate != paternal.n2048_foundation_candidate
++            || !inherited_match
+             || maternal.nano512_readout_candidate != paternal.nano512_readout_candidate
+             || maternal.nano512_action_credit_candidate_v2
+                 != paternal.nano512_action_credit_candidate_v2
+--- a/crates/alife_archive/tests/lineage_library.rs
++++ b/crates/alife_archive/tests/lineage_library.rs
+@@ -2713,3 +2713,15 @@
+     drop(lib);fs::remove_dir_all(root).unwrap();fs::remove_file(anchor_path).unwrap();std::env::remove_var("ALIFE_RESEARCH_SENSOR_ANCHOR");std::env::remove_var("ALIFE_RESEARCH_SENSOR_SEED");
+ }
+ 
++#[test]
++fn research_anchored_inherited_weights_multiple_generations() {
++    let source=FoundationWeightAsset::decode_canonical(include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"),"/../../assets/foundations/experimental-whole-care-bold-v1.alife-foundation"))).unwrap();let m=source.manifest();
++    let identity=FoundationGeneticIdentity::new(m.foundation_id().raw(),u16::try_from(m.foundation_version().raw()).unwrap(),m.compatibility_family_id().raw(),BrainCapacityClass::N2048_ID).unwrap();
++    let mut mother=CreatureGenome::early_mammal_founder(701,identity).unwrap().with_n2048_foundation_candidate(source.clone()).unwrap();let mut father=CreatureGenome::early_mammal_founder(702,identity).unwrap().with_n2048_foundation_candidate(source.clone()).unwrap();
++    let e=mother.express().unwrap();let d=e.development_state_at(Tick::new(u64::from(e.development.maturation_duration_ticks))).unwrap();std::env::set_var("ALIFE_RESEARCH_SENSOR_SEED",e.brain_genome.seeds.sensor_layout_seed.to_string());
++    let (parent,_) = PhenotypeCompiler::compile_n2048_experimental_graph(e.brain_genome,d,SensorProfile::GroundedObjectSlotsV1).unwrap();let anchor_path=std::env::temp_dir().join(format!("research-sensor-generations-{}.json",std::process::id()));fs::write(&anchor_path,serde_json::to_vec(parent.sensor_encoder()).unwrap()).unwrap();std::env::set_var("ALIFE_RESEARCH_SENSOR_ANCHOR",&anchor_path);std::env::set_var("ALIFE_RESEARCH_EQUIVALENT_FOUNDATION_WEIGHTS","1");
++    let ports=|p:&BrainPhenotype|p.sensor_encoder().assignments().iter().map(|a|(a.source_group().raw(),a.source_index(),a.target_neuron())).collect::<std::collections::BTreeSet<_>>();let anchors=ports(&parent);
++    let root=temp_root("research-anchored-generations");let mut lib=LineageLibrary::open(LineageLibraryConfig::profile_default(&root)).unwrap();
++    for generation in 0..10 {let mut child=CreatureGenome::reproduce(&mother,&father,703+generation).unwrap();let e=child.express().unwrap();let d=e.development_state_at(Tick::new(u64::from(e.development.maturation_duration_ticks))).unwrap();let (p,_) = PhenotypeCompiler::compile_n2048_experimental_graph(e.brain_genome.clone(),d.clone(),SensorProfile::GroundedObjectSlotsV1).unwrap();assert!(anchors.is_subset(&ports(&p)));assert!(parent.synapses().iter().zip(p.synapses()).all(|(a,b)|a.source()==b.source()&&a.target()==b.target()&&a.route_index()==b.route_index()&&a.kind()==b.kind()));let rebound=FoundationWeightAsset::from_trained_weights(&p,source.weights().to_vec(),source.manifest().training_stage()).unwrap();assert_eq!(source.weights().iter().map(|x|x.to_bits()).collect::<Vec<_>>(),rebound.weights().iter().map(|x|x.to_bits()).collect::<Vec<_>>());child=child.with_n2048_foundation_candidate(rebound.clone()).unwrap();let (bound,_) = PhenotypeCompiler::compile_n2048_experimental_foundation_candidate(e.brain_genome,d,rebound.clone()).unwrap();let bytes=rebound.encode_canonical().unwrap();let run=format!("research-anchored-{generation}");let digest=lib.archive_composite_birth(CompositeGeneticArchiveInput{source_run_id:&run,organism_id:OrganismId(703+generation),birth_tick:Tick::new(9),creature_genome:&child,phenotype:&bound,foundation_asset_bytes:&bytes}).unwrap();let manifest=lib.load_manifest(digest).unwrap();assert_eq!(lib.load_creature_genome(&manifest).unwrap(),child);println!("generation={generation} anchors={} ports={} weights={} archived=true",anchors.len(),ports(&p).len(),source.weights().len());father=mother;mother=child;}
++    drop(lib);fs::remove_dir_all(root).unwrap();fs::remove_file(anchor_path).unwrap();for k in ["ALIFE_RESEARCH_SENSOR_ANCHOR","ALIFE_RESEARCH_SENSOR_SEED","ALIFE_RESEARCH_EQUIVALENT_FOUNDATION_WEIGHTS"]{std::env::remove_var(k);}
++}
