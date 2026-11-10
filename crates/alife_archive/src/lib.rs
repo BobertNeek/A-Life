@@ -1110,13 +1110,27 @@ impl LineageLibrary {
             let development = expressed.development_state_at(Tick::new(u64::from(
                 expressed.development.maturation_duration_ticks,
             )))?;
-            let expected = PhenotypeCompiler::compile_from_foundation_asset(
-                &expressed.brain_genome,
-                &capacity,
-                &development,
-                input.sensor_profile,
-                &foundation,
-            )?;
+            let expected = if foundation.is_n2048_experimental_graph() {
+                if capacity.id() != BrainCapacityClass::N2048_ID
+                    || foundation.manifest().sensor_profile() != input.sensor_profile
+                {
+                    return Err(ScaffoldContractError::PhenotypeCompile.into());
+                }
+                PhenotypeCompiler::compile_n2048_experimental_foundation_candidate(
+                    expressed.brain_genome.clone(),
+                    development.clone(),
+                    foundation.clone(),
+                )?
+                .0
+            } else {
+                PhenotypeCompiler::compile_from_foundation_asset(
+                    &expressed.brain_genome,
+                    &capacity,
+                    &development,
+                    input.sensor_profile,
+                    &foundation,
+                )?
+            };
             if expected != *input.phenotype || expected.phenotype_hash() != input.phenotype_hash {
                 return Err(ArchiveError::Integrity(
                     "generic composite birth phenotype does not match caller".to_string(),

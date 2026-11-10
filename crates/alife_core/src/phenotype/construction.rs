@@ -55,8 +55,20 @@ fn compile_inner(
             capacity.execution().max_neurons(),
         )?
     };
-    let encoder =
-        super::io_compile::compile_encoder(genome, development, &layout, inputs.sensor_profile())?;
+    let encoder = if inputs
+        .foundation_abi()
+        .n2048_experimental_graph()
+        .is_some_and(|r| r.is_anchored_v2())
+    {
+        super::io_compile::compile_anchored_encoder_v2(
+            genome,
+            development,
+            &layout,
+            inputs.sensor_profile(),
+        )?
+    } else {
+        super::io_compile::compile_encoder(genome, development, &layout, inputs.sensor_profile())?
+    };
     let (mut projections, mut synapses, mut receipts) =
         if inputs.foundation_abi().n2048_experimental_graph().is_some() {
             super::topology_compile::compile_n2048_experimental(genome, &layout, capacity)?

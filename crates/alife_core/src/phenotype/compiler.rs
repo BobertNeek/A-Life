@@ -32,6 +32,24 @@ impl PhenotypeCompiler {
         Ok((Self::compile_validated(&inputs, &capacity)?, inputs))
     }
 
+    pub fn compile_n2048_anchored_v2_graph(
+        genome: BrainGenome,
+        development: DevelopmentState,
+        sensor_profile: SensorProfile,
+    ) -> Result<(BrainPhenotype, PhenotypeCompilerInputs), ScaffoldContractError> {
+        let capacity = BrainCapacityClass::n2048();
+        let inputs = PhenotypeCompilerInputs::try_new_with_foundation_selection(
+            genome,
+            &capacity,
+            development,
+            sensor_profile,
+            crate::FoundationAbiSelection::N2048ExperimentalGraphV2(
+                crate::N2048ExperimentalGraphV1::fresh_anchored_v2(sensor_profile)?,
+            ),
+        )?;
+        Ok((Self::compile_validated(&inputs, &capacity)?, inputs))
+    }
+
     pub fn compile_n2048_experimental_foundation_candidate(
         genome: BrainGenome,
         development: DevelopmentState,
@@ -43,9 +61,15 @@ impl PhenotypeCompiler {
             &capacity,
             development,
             asset.manifest().sensor_profile(),
-            crate::FoundationAbiSelection::N2048ExperimentalGraphV1(
-                crate::N2048ExperimentalGraphV1::for_asset(&asset)?,
-            ),
+            if asset.is_n2048_anchored_v2() {
+                crate::FoundationAbiSelection::N2048ExperimentalGraphV2(
+                    crate::N2048ExperimentalGraphV1::for_asset(&asset)?,
+                )
+            } else {
+                crate::FoundationAbiSelection::N2048ExperimentalGraphV1(
+                    crate::N2048ExperimentalGraphV1::for_asset(&asset)?,
+                )
+            },
         )?;
         Ok((Self::compile_validated(&inputs, &capacity)?, inputs))
     }

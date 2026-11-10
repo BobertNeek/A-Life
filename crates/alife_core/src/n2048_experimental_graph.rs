@@ -25,11 +25,44 @@ impl N2048ExperimentalGraphV1 {
             foundation_bytes: None,
         })
     }
+    pub fn fresh_anchored_v2(sensor_profile: SensorProfile) -> Result<Self, ScaffoldContractError> {
+        if sensor_profile != SensorProfile::GroundedObjectSlotsV1 {
+            return Err(ScaffoldContractError::PhenotypeCompile);
+        }
+        let mut v = Self::fresh(sensor_profile)?;
+        v.recipe_digest = Self::anchored_recipe_digest();
+        v.set_anchored_version();
+        Ok(v)
+    }
+    pub fn anchored_recipe_digest() -> [u64; 4] {
+        let mut d =
+            CanonicalDigestBuilder::new(b"alife.n2048.experimental-anchored-sensor-graph.v2");
+        for word in Self::recipe_digest() {
+            d.write_u64(word);
+        }
+        d.write_u64(crate::phenotype::experimental_sensor_anchor::SENSOR_SEED);
+        for &(g, l, n) in crate::phenotype::experimental_sensor_anchor::PORTS {
+            d.write_u16(g);
+            d.write_u16(l);
+            d.write_u32(n);
+        }
+        d.finish256()
+    }
+    pub const fn is_anchored_v2(&self) -> bool {
+        self.schema_version == 2
+    }
+    pub(crate) fn set_anchored_version(&mut self) {
+        self.schema_version = 2;
+    }
     pub fn for_asset(asset: &FoundationWeightAsset) -> Result<Self, ScaffoldContractError> {
         if !asset.is_n2048_experimental_graph() {
             return Err(ScaffoldContractError::PhenotypeCompile);
         }
-        let mut value = Self::fresh(asset.manifest().sensor_profile())?;
+        let mut value = if asset.is_n2048_anchored_v2() {
+            Self::fresh_anchored_v2(asset.manifest().sensor_profile())?
+        } else {
+            Self::fresh(asset.manifest().sensor_profile())?
+        };
         value.foundation_bytes = Some(asset.encode_canonical()?);
         Ok(value)
     }
@@ -41,6 +74,9 @@ impl N2048ExperimentalGraphV1 {
             d.write_u32(value);
         }
         d.finish256()
+    }
+    pub const fn selected_recipe_digest(&self) -> [u64; 4] {
+        self.recipe_digest
     }
     pub const fn sensor_profile(&self) -> SensorProfile {
         self.sensor_profile
@@ -59,10 +95,10 @@ impl N2048ExperimentalGraphV1 {
         capacity: &BrainCapacityClass,
         profile: SensorProfile,
     ) -> Result<(), ScaffoldContractError> {
-        if self.schema_version != 1
+        if !((self.schema_version == 1 && self.recipe_digest == Self::recipe_digest())
+            || (self.schema_version == 2 && self.recipe_digest == Self::anchored_recipe_digest()))
             || capacity.id() != BrainCapacityClass::N2048_ID
             || self.sensor_profile != profile
-            || self.recipe_digest != Self::recipe_digest()
         {
             return Err(ScaffoldContractError::PhenotypeCompile);
         }

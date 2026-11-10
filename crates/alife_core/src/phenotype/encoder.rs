@@ -188,12 +188,25 @@ impl SensorEncoderPlan {
         inputs: &PhenotypeCompilerInputs,
     ) -> Result<(), ScaffoldContractError> {
         self.validate_against(phenotype)?;
-        let expected = super::io_compile::compile_encoder(
-            inputs.genome(),
-            inputs.development(),
-            phenotype.lobe_layout(),
-            self.sensor_profile,
-        )?;
+        let expected = if inputs
+            .foundation_abi()
+            .n2048_experimental_graph()
+            .is_some_and(|r| r.is_anchored_v2())
+        {
+            super::io_compile::compile_anchored_encoder_v2(
+                inputs.genome(),
+                inputs.development(),
+                phenotype.lobe_layout(),
+                self.sensor_profile,
+            )?
+        } else {
+            super::io_compile::compile_encoder(
+                inputs.genome(),
+                inputs.development(),
+                phenotype.lobe_layout(),
+                self.sensor_profile,
+            )?
+        };
         if self == &expected {
             Ok(())
         } else {

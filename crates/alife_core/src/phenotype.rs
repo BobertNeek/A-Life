@@ -10,6 +10,7 @@ mod compiler;
 mod construction;
 mod decoder;
 mod encoder;
+pub(crate) mod experimental_sensor_anchor;
 mod inputs;
 mod io_compile;
 mod layout_compile;

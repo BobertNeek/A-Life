@@ -134,3 +134,21 @@ jobs:
             closed_loop_runtime::software_training_test::tests::software_runtime_test_marker_survives_staging_and_device_loss \
             -- --ignored --exact --nocapture --test-threads=1 2>&1 | tee "$log"
           grep -Eq '^test result: ok\. 1 passed; 0 failed; 0 ignored;' "$log"
+
+      - name: Exercise experimental founder on software Vulkan
+        run: |
+          set -euo pipefail
+          log="$RUNNER_TEMP/experimental-founder-software-vulkan.log"
+          cargo test --locked -p alife_game_app --features gpu-tests --lib \
+            new_game_lifecycle::tests::experimental_founder_runs_an_offline_software_vulkan_tick \
+            -- --exact --nocapture --test-threads=1 2>&1 | tee "$log"
+          grep -Eq '^test result: ok\. 1 passed; 0 failed; 0 ignored;' "$log"
+
+      - name: Exercise anchored V2 founder on software Vulkan
+        run: |
+          set -euo pipefail
+          log="$RUNNER_TEMP/anchored-v2-founder-software-vulkan.log"
+          cargo test --locked -p alife_game_app --features gpu-tests --lib \
+            new_game_lifecycle::tests::anchored_v2_founder_runs_and_restores_on_offline_software_vulkan \
+            -- --exact --nocapture --test-threads=1 2>&1 | tee "$log"
+          grep -Eq '^test result: ok\. 1 passed; 0 failed; 0 ignored;' "$log"

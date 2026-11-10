@@ -1277,6 +1277,160 @@ fn genetic_birth_rejects_unexpected_foundation_bytes_before_writing_assets() {
 }
 
 #[test]
+fn experimental_founder_composite_birth_preserves_inherited_graph_and_weights() {
+    let root = temp_root("experimental-composite-birth");
+    let mut library = LineageLibrary::open(LineageLibraryConfig::profile_default(&root)).unwrap();
+    let foundation = FoundationWeightAsset::decode_canonical(include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../assets/foundations/experimental-whole-care-bold-v1.alife-foundation"
+    )))
+    .unwrap();
+    let m = foundation.manifest();
+    let identity = FoundationGeneticIdentity::new(
+        m.foundation_id().raw(),
+        u16::try_from(m.foundation_version().raw()).unwrap(),
+        m.compatibility_family_id().raw(),
+        BrainCapacityClass::N2048_ID,
+    )
+    .unwrap();
+    let child = CreatureGenome::early_mammal_founder(703, identity)
+        .unwrap()
+        .with_n2048_foundation_candidate(foundation.clone())
+        .unwrap();
+    let expressed = child.express().unwrap();
+    let development = expressed
+        .development_state_at(Tick::new(u64::from(
+            expressed.development.maturation_duration_ticks,
+        )))
+        .unwrap();
+    assert!(PhenotypeCompiler::compile_from_foundation_asset(
+        &expressed.brain_genome,
+        &BrainCapacityClass::n2048(),
+        &development,
+        SensorProfile::GroundedObjectSlotsV1,
+        &foundation
+    )
+    .is_err());
+    let (phenotype, _) = PhenotypeCompiler::compile_n2048_experimental_foundation_candidate(
+        expressed.brain_genome,
+        development,
+        foundation.clone(),
+    )
+    .unwrap();
+    let bytes = foundation.encode_canonical().unwrap();
+    let digest = library
+        .archive_composite_birth(CompositeGeneticArchiveInput {
+            source_run_id: "experimental-composite",
+            organism_id: OrganismId(703),
+            birth_tick: Tick::new(9),
+            creature_genome: &child,
+            phenotype: &phenotype,
+            foundation_asset_bytes: &bytes,
+        })
+        .unwrap();
+    let manifest = library.load_manifest(digest).unwrap();
+    let restored = library.load_creature_genome(&manifest).unwrap();
+    assert_eq!(restored, child);
+    assert_eq!(
+        restored
+            .n2048_foundation_candidate
+            .as_ref()
+            .unwrap()
+            .encode_canonical()
+            .unwrap(),
+        bytes
+    );
+    drop(library);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn anchored_v2_offspring_composite_archive_roundtrips() {
+    let root = temp_root("anchored-v2-offspring-birth");
+    let mut library = LineageLibrary::open(LineageLibraryConfig::profile_default(&root)).unwrap();
+    let foundation = FoundationWeightAsset::decode_canonical(include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../assets/foundations/experimental-anchored-v2-research.alife-foundation"
+    )))
+    .unwrap();
+    let m = foundation.manifest();
+    let identity = FoundationGeneticIdentity::new(
+        m.foundation_id().raw(),
+        u16::try_from(m.foundation_version().raw()).unwrap(),
+        m.compatibility_family_id().raw(),
+        BrainCapacityClass::N2048_ID,
+    )
+    .unwrap();
+    let maternal = CreatureGenome::early_mammal_founder(701, identity)
+        .unwrap()
+        .with_n2048_foundation_candidate(foundation.clone())
+        .unwrap();
+    let paternal = CreatureGenome::early_mammal_founder(702, identity)
+        .unwrap()
+        .with_n2048_foundation_candidate(foundation.clone())
+        .unwrap();
+    let child = CreatureGenome::reproduce(&maternal, &paternal, 703).unwrap();
+    let inherited = child.n2048_foundation_candidate.as_ref().unwrap().clone();
+    assert_eq!(
+        inherited
+            .weights()
+            .iter()
+            .map(|x| x.to_bits())
+            .collect::<Vec<_>>(),
+        foundation
+            .weights()
+            .iter()
+            .map(|x| x.to_bits())
+            .collect::<Vec<_>>()
+    );
+    let expressed = child.express().unwrap();
+    let development = expressed
+        .development_state_at(Tick::new(u64::from(
+            expressed.development.maturation_duration_ticks,
+        )))
+        .unwrap();
+    assert!(PhenotypeCompiler::compile_from_foundation_asset(
+        &expressed.brain_genome,
+        &BrainCapacityClass::n2048(),
+        &development,
+        SensorProfile::GroundedObjectSlotsV1,
+        &foundation
+    )
+    .is_err());
+    let (phenotype, _) = PhenotypeCompiler::compile_n2048_experimental_foundation_candidate(
+        expressed.brain_genome,
+        development,
+        inherited.clone(),
+    )
+    .unwrap();
+    let bytes = inherited.encode_canonical().unwrap();
+    let digest = library
+        .archive_composite_birth(CompositeGeneticArchiveInput {
+            source_run_id: "anchored-v2-offspring",
+            organism_id: OrganismId(703),
+            birth_tick: Tick::new(9),
+            creature_genome: &child,
+            phenotype: &phenotype,
+            foundation_asset_bytes: &bytes,
+        })
+        .unwrap();
+    let manifest = library.load_manifest(digest).unwrap();
+    let restored = library.load_creature_genome(&manifest).unwrap();
+    assert_eq!(restored, child);
+    assert_eq!(
+        restored
+            .n2048_foundation_candidate
+            .as_ref()
+            .unwrap()
+            .encode_canonical()
+            .unwrap(),
+        bytes
+    );
+    drop(library);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn composite_birth_round_trips_complete_creature_genome_provenance() {
     let root = temp_root("composite-genome");
     let mut library = LineageLibrary::open(LineageLibraryConfig::profile_default(&root)).unwrap();

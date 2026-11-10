@@ -174,7 +174,11 @@ pub(super) fn compute_abi_digests(
         use crate::blake3_digest::{domain_hasher, Blake3Write};
         let mut route = domain_hasher(b"alife.n2048.experimental-route-abi.v1");
         let mut plasticity = domain_hasher(b"alife.n2048.experimental-plasticity-abi.v1");
-        for word in crate::N2048ExperimentalGraphV1::recipe_digest() {
+        for word in selection
+            .n2048_experimental_graph()
+            .expect("checked above")
+            .selected_recipe_digest()
+        {
             route.write_u64(word);
             plasticity.write_u64(word);
         }
