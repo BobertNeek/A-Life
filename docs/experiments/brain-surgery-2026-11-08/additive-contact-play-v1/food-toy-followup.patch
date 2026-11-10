@@ -1,9 +1,10 @@
 --- a/crates/alife_training/src/cpu/actual_contact_four_interval_tests.rs
 +++ b/crates/alife_training/src/cpu/actual_contact_four_interval_tests.rs
-@@ -569,3 +569,32 @@
+@@ -568,3 +568,33 @@
+ #[test] fn additive_natural_original() {run_natural_after_contact::<0>();}
  #[test] fn additive_natural_candidate() {run_natural_after_contact::<1>();}
  #[test] fn additive_natural_sham() {run_natural_after_contact::<2>();}
- 
++
 +// Fresh ordinary physical scene. Unlike the controlled fixture above, every
 +// motor bundle is sampled by the host; no action or drive level is injected.
 +fn run_natural_food_toy<const ARM:u8>() {
