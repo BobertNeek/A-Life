@@ -1,0 +1,224 @@
+{
+  "reports": [
+    {
+      "seed": 2026111553,
+      "safe_red": true,
+      "red_left": true,
+      "safe_first": true,
+      "matched_palette": false,
+      "memory_pain_gain": 0.0,
+      "sham": false,
+      "exposures": [
+        {
+          "consumed_at": 2,
+          "episode": 0,
+          "is_red": null,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 2,
+          "training_color": "green"
+        },
+        {
+          "consumed_at": 2,
+          "episode": 1,
+          "is_red": null,
+          "pain_delta": 0.24000000953674316,
+          "safe": false,
+          "target": 3,
+          "training_color": "gray-green"
+        },
+        {
+          "consumed_at": 2,
+          "episode": 2,
+          "is_red": null,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 4,
+          "training_color": "green"
+        },
+        {
+          "consumed_at": 2,
+          "episode": 3,
+          "is_red": null,
+          "pain_delta": 0.2315065562725067,
+          "safe": false,
+          "target": 5,
+          "training_color": "gray-green"
+        }
+      ],
+      "choice": "red",
+      "choice_was_safe_cue": null,
+      "probe_steps": 2,
+      "fast_changed": 25760,
+      "cold_next_exact": true,
+      "founder_optimizer_unchanged": true,
+      "file": "1553-different-baseline.json",
+      "sha256": "8fd0a117b1056368f816c490732775a3c8b6a404387613329891fb9fac10d292"
+    },
+    {
+      "seed": 2026111553,
+      "safe_red": true,
+      "red_left": true,
+      "safe_first": true,
+      "matched_palette": false,
+      "memory_pain_gain": 4.0,
+      "sham": false,
+      "exposures": [
+        {
+          "consumed_at": 2,
+          "episode": 0,
+          "is_red": null,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 2,
+          "training_color": "green"
+        },
+        {
+          "consumed_at": 2,
+          "episode": 1,
+          "is_red": null,
+          "pain_delta": 0.24000000953674316,
+          "safe": false,
+          "target": 3,
+          "training_color": "gray-green"
+        },
+        {
+          "consumed_at": 2,
+          "episode": 2,
+          "is_red": null,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 4,
+          "training_color": "green"
+        },
+        {
+          "consumed_at": 2,
+          "episode": 3,
+          "is_red": null,
+          "pain_delta": 0.2315065562725067,
+          "safe": false,
+          "target": 5,
+          "training_color": "gray-green"
+        }
+      ],
+      "choice": "red",
+      "choice_was_safe_cue": null,
+      "probe_steps": 2,
+      "fast_changed": 25760,
+      "cold_next_exact": true,
+      "founder_optimizer_unchanged": true,
+      "file": "1553-different-pain4.json",
+      "sha256": "9a01cc3d6247944f27ccf25689461221a07ae33e353aa8144593a3cab2076c5a"
+    },
+    {
+      "seed": 2026111553,
+      "safe_red": true,
+      "red_left": true,
+      "safe_first": true,
+      "matched_palette": true,
+      "memory_pain_gain": 0.0,
+      "sham": false,
+      "exposures": [
+        {
+          "consumed_at": 2,
+          "episode": 0,
+          "is_red": true,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 2,
+          "training_color": "red"
+        },
+        {
+          "consumed_at": 2,
+          "episode": 1,
+          "is_red": false,
+          "pain_delta": 0.24000000953674316,
+          "safe": false,
+          "target": 3,
+          "training_color": "blue"
+        },
+        {
+          "consumed_at": 2,
+          "episode": 2,
+          "is_red": true,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 4,
+          "training_color": "red"
+        },
+        {
+          "consumed_at": 2,
+          "episode": 3,
+          "is_red": false,
+          "pain_delta": 0.2315065562725067,
+          "safe": false,
+          "target": 5,
+          "training_color": "blue"
+        }
+      ],
+      "choice": "blue",
+      "choice_was_safe_cue": false,
+      "probe_steps": 2,
+      "fast_changed": 25760,
+      "cold_next_exact": true,
+      "founder_optimizer_unchanged": true,
+      "file": "1553-matched-baseline.json",
+      "sha256": "bc08656c2747d7e01d586cdead1fa316f82444115581c00e914074b07ad54268"
+    },
+    {
+      "seed": 2026111553,
+      "safe_red": true,
+      "red_left": true,
+      "safe_first": true,
+      "matched_palette": true,
+      "memory_pain_gain": 4.0,
+      "sham": false,
+      "exposures": [
+        {
+          "consumed_at": 2,
+          "episode": 0,
+          "is_red": true,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 2,
+          "training_color": "red"
+        },
+        {
+          "consumed_at": 2,
+          "episode": 1,
+          "is_red": false,
+          "pain_delta": 0.24000000953674316,
+          "safe": false,
+          "target": 3,
+          "training_color": "blue"
+        },
+        {
+          "consumed_at": 2,
+          "episode": 2,
+          "is_red": true,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 4,
+          "training_color": "red"
+        },
+        {
+          "consumed_at": 2,
+          "episode": 3,
+          "is_red": false,
+          "pain_delta": 0.2315065562725067,
+          "safe": false,
+          "target": 5,
+          "training_color": "blue"
+        }
+      ],
+      "choice": "red",
+      "choice_was_safe_cue": true,
+      "probe_steps": 4,
+      "fast_changed": 25880,
+      "cold_next_exact": true,
+      "founder_optimizer_unchanged": true,
+      "file": "1553-matched-pain4.json",
+      "sha256": "c6fa1cb29f1d3936ae9693868cbd30a70ad64903efdc8a019b130b938ff2e898"
+    }
+  ]
+}
