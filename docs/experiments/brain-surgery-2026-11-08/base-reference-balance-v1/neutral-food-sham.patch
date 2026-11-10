@@ -1,0 +1,172 @@
+--- a/crates/alife_training/src/cpu/organism.rs
++++ b/crates/alife_training/src/cpu/organism.rs
+@@ -383,6 +383,9 @@
+         let frame = credit.modulator().frame();
+         let mut next = self.checkpoint.clone();
+         next.weight_generation = next.weight_generation.checked_add(1).ok_or_else(invalid)?;
++        // RESEARCH-ONLY local comparison binary: compute the identical candidate
++        // update but optionally suppress fast writes. Never publish as gameplay.
++        let research_fast_write_sham = std::env::var_os("ALIFE_RESEARCH_FAST_WRITE_SHAM").is_some();
+         for (i, s) in p.synapses().iter().enumerate() {
+             let r = &p.plasticity_receptors()[s.receptor_index() as usize];
+             let factor = r.receptor_profile().project(&frame)?;
+@@ -402,7 +405,7 @@
+                 );
+             let post = next.neural.activations[s.target() as usize];
+             let (min, max) = r.fast_weight_bounds();
+-            next.fast[i] = waking_fast_update(
++            let candidate_fast = waking_fast_update(
+                 founder.weights()[i],
+                 next.lifetime[i],
+                 next.fast[i],
+@@ -415,6 +418,7 @@
+                 min,
+                 max,
+             )?;
++            if !research_fast_write_sham { next.fast[i] = candidate_fast; }
+         }
+         next.eligibility = staged.clone();
+         next.last_decision_tick = Some(pending.tick);
+--- a/crates/alife_training/examples/probe_weight_space_care.rs
++++ b/crates/alife_training/examples/probe_weight_space_care.rs
+@@ -1,4 +1,10 @@
+ //! Disposable exploratory direct-weight probe. CPU only; never reads a life.
++#[allow(dead_code)]
++#[path = "support/motor_operating_point.rs"]
++mod readout;
++#[allow(dead_code)]
++#[path = "support/dedicated_fatigue.rs"]
++mod dedicated;
+ use alife_core::*;
+ use alife_runtime::canonical_preparation::foundation_construction_development;
+ use alife_training::{cpu::*, AdamWConfig, StageTrainableMask, TrainingSequence};
+@@ -297,7 +303,50 @@
+             whole_care(&p)?
+         };
+         weights = whole;
++        if matches!(arm, "whole-care-balanced" | "whole-care-narrow" | "whole-care-ingest-only" | "whole-care-ingest-boost") {
++            let (w, _) = readout::counterbalance(&p, &weights, &circuits, 0., true)?;
++            let (w, _) = dedicated::full_reference_calibration(&p, &w, &circuits, true)?;
++            weights = w;
++            if arm == "whole-care-ingest-boost" {
++                let (baseline, _) = whole_care(&p)?;
++                for (i, synapse) in p.synapses().iter().enumerate() {
++                    let is_ingest = matches!(synapse.kind(), CompiledSynapseKind::Decoder(c) if c.head() == DecoderHeadKind::ActionCandidate && c.family() == CandidateActionFamily::Ingest);
++                    weights[i] = if is_ingest && weights[i].to_bits() != baseline[i].to_bits() { baseline[i] * 1.25 } else { baseline[i] };
++                }
++            }
++            if arm == "whole-care-ingest-only" {
++                let (baseline, _) = whole_care(&p)?;
++                for (i, synapse) in p.synapses().iter().enumerate() {
++                    if !matches!(synapse.kind(), CompiledSynapseKind::Decoder(c) if c.head() == DecoderHeadKind::ActionCandidate && c.family() == CandidateActionFamily::Ingest) {
++                        weights[i] = baseline[i];
++                    }
++                }
++            }
++            if arm == "whole-care-narrow" {
++                let (baseline, _) = whole_care(&p)?;
++                let reference = circuits.iter().find(|c| c["role"] == "reference" && c["family"] == serde_json::to_value(CandidateActionFamily::Approach).unwrap()).and_then(|c| c["reference_motor"].as_u64()).ok_or("missing Approach reference")? as u32;
++                for (i, synapse) in p.synapses().iter().enumerate() {
++                    if synapse.source() == reference && matches!(synapse.kind(), CompiledSynapseKind::Decoder(c) if c.head() == DecoderHeadKind::ActionCandidate && c.family() == CandidateActionFamily::Approach) {
++                        weights[i] = baseline[i];
++                    }
++                }
++            }
++        }
+         edits = circuits;
++        if matches!(arm, "whole-care-balanced" | "whole-care-narrow" | "whole-care-ingest-only" | "whole-care-ingest-boost") {
++            let (baseline, _) = whole_care(&p)?;
++            for (i, (before, after)) in baseline.iter().zip(&weights).enumerate() {
++                if before.to_bits() != after.to_bits() {
++                    if !matches!(p.synapses()[i].kind(), CompiledSynapseKind::Decoder(c) if c.head() == DecoderHeadKind::ActionCandidate) {
++                        return Err("reference calibration changed a non-action decoder weight".into());
++                    }
++                    edits.push(json!({"role":"reference_weight_edit","index":i,"before":before,"after":after}));
++                }
++            }
++            if !edits.iter().any(|e| e["role"] == "reference_weight_edit") {
++                return Err("reference calibration made no changes".into());
++            }
++        }
+         if arm == "whole-care-no-need" || arm == "whole-care-no-tonic" {
+             let role = if arm.ends_with("no-need") {
+                 "need"
+@@ -439,6 +488,8 @@
+     let mut physical = world.entity(object).unwrap().grounded_physical;
+     physical.chemical[0] = if scene.starts_with("bitter-food") {
+         -0.85
++    } else if scene == "neutral-food" {
++        0.
+     } else if scene == "toy" {
+         0.
+     } else {
+@@ -474,6 +525,8 @@
+         .get(own)
+         .unwrap()
+         .biochemistry();
++    let initial_checkpoint = host.checkpoint(&trainer)?;
++    let initial_neural = initial_checkpoint.residents.iter().find(|r| r.neural.organism_id == own).ok_or("missing initial neural owner")?.neural.clone();
+     let mut rows = Vec::new();
+     for tick in 0..ticks {
+         let step = host.step(&trainer, 1.)?;
+@@ -493,6 +546,8 @@
+             if tick == 0 && scene != "toy" {
+                 let expected = if scene.starts_with("bitter-food") {
+                     -0.85
++                } else if scene == "neutral-food" {
++                    0.
+                 } else {
+                     0.85
+                 };
+@@ -613,6 +668,23 @@
+     }
+     assert_eq!(before, serde_json::to_vec(&trainer.checkpoint())?);
+     let ck = host.checkpoint(&trainer)?;
++    let final_neural = &ck.residents.iter().find(|r| r.neural.organism_id == own).ok_or("missing final neural owner")?.neural;
++    let change_stats = |a: &[f32], b: &[f32]| -> Result<serde_json::Value> {
++        if a.len() != b.len() || a.len() != trainer.phenotype().synapses().len() { return Err("neural weight state length mismatch".into()); }
++        let mut changed = 0usize;
++        let mut recurrent = 0usize;
++        let mut decoder = 0usize;
++        let mut max_abs_delta = 0f32;
++        for (i, (x, y)) in a.iter().zip(b).enumerate() {
++            if x.to_bits() != y.to_bits() {
++                changed += 1;
++                match trainer.phenotype().synapses()[i].kind() { CompiledSynapseKind::Recurrent => recurrent += 1, CompiledSynapseKind::Decoder(_) => decoder += 1 }
++                max_abs_delta = max_abs_delta.max((y - x).abs());
++            }
++        }
++        Ok(json!({"changed":changed,"recurrent":recurrent,"decoder":decoder,"max_abs_delta":max_abs_delta}))
++    };
++    let neural_changes = json!({"fast":change_stats(&initial_neural.fast, &final_neural.fast)?,"lifetime":change_stats(&initial_neural.lifetime, &final_neural.lifetime)?,"eligibility":change_stats(&initial_neural.eligibility, &final_neural.eligibility)?,"initial_weight_generation":initial_neural.weight_generation,"final_weight_generation":final_neural.weight_generation});
+     let bytes = serde_json::to_vec(&ck)?;
+     let mut cold = CpuCanonicalHost::from_checkpoint(serde_json::from_slice(&bytes)?, &trainer)?;
+     assert_eq!(bytes, serde_json::to_vec(&cold.checkpoint(&trainer)?)?);
+@@ -630,7 +702,7 @@
+     );
+     let r = host.world().organism_registry().get(own).unwrap();
+     Ok(
+-        json!({"seed":seed,"arm":arm,"scene":scene,"edits":edits,"source_digest":source.digest(),"candidate_digest":candidate_digest,"changed_weights":changed_weights,"experimental_graph":experimental,"active_tiles":trainer.phenotype().budgets().global.active_tiles,"microstep_count":trainer.phenotype().microstep_count(),"total_synapses":trainer.phenotype().synapses().len(),"preparation_ticks":preparation_ticks,"target_hazard_pain":target_hazard_pain,"initial_biology":initial_biology,"optimizer_unchanged":true,"cold_next_step_exact":true,"target_active":!host.world().entity(object).unwrap().consumed,"final_position":host.world().entity(host.world().entity_id("learner").unwrap()).unwrap().position,"final_target_carrier":host.world().entity(object).unwrap().carried_by,"final_body":r.biochemistry().body,"final_homeostasis":r.biochemistry().homeostasis,"rows":rows}),
++        json!({"research_fast_write_sham":std::env::var_os("ALIFE_RESEARCH_FAST_WRITE_SHAM").is_some(),"neural_changes":neural_changes,"seed":seed,"arm":arm,"scene":scene,"edits":edits,"source_digest":source.digest(),"candidate_digest":candidate_digest,"changed_weights":changed_weights,"experimental_graph":experimental,"active_tiles":trainer.phenotype().budgets().global.active_tiles,"microstep_count":trainer.phenotype().microstep_count(),"total_synapses":trainer.phenotype().synapses().len(),"preparation_ticks":preparation_ticks,"target_hazard_pain":target_hazard_pain,"initial_biology":initial_biology,"optimizer_unchanged":true,"cold_next_step_exact":true,"target_active":!host.world().entity(object).unwrap().consumed,"final_position":host.world().entity(host.world().entity_id("learner").unwrap()).unwrap().position,"final_target_carrier":host.world().entity(object).unwrap().carried_by,"final_body":r.biochemistry().body,"final_homeostasis":r.biochemistry().homeostasis,"rows":rows}),
+     )
+ }
+ fn graph_report(p: &BrainPhenotype) -> serde_json::Value {
+@@ -707,6 +779,7 @@
+             ![
+                 "food",
+                 "bitter-food",
++                "neutral-food",
+                 "toy",
+                 "far-food",
+                 "food-left",
+@@ -737,6 +810,10 @@
+             ("wrong-sign", -gain),
+         ],
+         "validate" => vec![("untouched", 0.), ("whole-care", 0.)],
++        "balanced" => vec![("whole-care", 0.), ("whole-care-balanced", 0.)],
++        "narrow" => vec![("whole-care", 0.), ("whole-care-balanced", 0.), ("whole-care-narrow", 0.)],
++        "ingest-factor" => vec![("whole-care", 0.), ("whole-care-ingest-only", 0.)],
++        "boost-factor" => vec![("whole-care", 0.), ("whole-care-ingest-boost", 0.)],
+         "contact" => vec![("whole-care-v5", 0.), ("whole-care", 0.)],
+         "whole" => vec![
+             ("untouched", 0.),
