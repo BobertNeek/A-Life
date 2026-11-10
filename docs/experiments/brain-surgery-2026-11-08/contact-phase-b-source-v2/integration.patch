@@ -1,0 +1,104 @@
+--- a/crates/alife_training/src/cpu/actual_contact_bridge.rs
++++ b/crates/alife_training/src/cpu/actual_contact_bridge.rs
+@@ -5,6 +5,11 @@
+ use crate::cpu::actual_contact_contract::{self as contract, Contact, Fact, Kind, Phase, Verdict};
+ use serde::de::Visitor;
+ use serde::{Deserializer, Serializer};
++
++#[cfg(test)]
++pub(in crate::cpu::host) mod phase_b_capture_audit {
++    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/cpu/actual_contact_capture_negative_tests_v2.rs"));
++}
+ 
+ fn invalid_contact() -> CpuHostError {
+     CpuHostError::State("actual-contact authority mismatch")
+--- a/crates/alife_training/src/cpu/actual_contact_four_interval_tests.rs
++++ b/crates/alife_training/src/cpu/actual_contact_four_interval_tests.rs
+@@ -35,6 +35,8 @@
+     lane44: f32,
+     lane45: f32,
+     scores: ActualContactScoresV1,
++    configured_microsteps: u8,
++    actual_microsteps: u32,
+ }
+ thread_local! { static WITNESS: RefCell<Option<Witness>> = const { RefCell::new(None) }; }
+ struct Controlled<const PLAY: bool>;
+@@ -130,6 +132,8 @@
+             lane44: replay.decoder_inputs[44],
+             lane45: replay.decoder_inputs[45],
+             scores: scores.clone(),
++            configured_microsteps: f.phenotype().microstep_count(),
++            actual_microsteps: output.replay_tick.microstep_count,
+         };
+         WITNESS.with(|s| {
+             let mut s = s.borrow_mut();
+@@ -330,6 +334,9 @@
+     let [lane44_bits, lane45_bits] = actual_lanes.lane_bits[witness.play_index];
+     assert!(lane44_bits == witness.lane44.to_bits() && lane45_bits == witness.lane45.to_bits());
+     assert!(d.motor.native.core.source_execution_count == 1);
++    assert!(d.motor.native.core.work.phases == 4);
++    assert!((2..=4).contains(&witness.configured_microsteps));
++    assert!((2..=u32::from(witness.configured_microsteps)).contains(&witness.actual_microsteps));
+     assert!(d.motor.native.core.final_generation == generation + 1);
+     assert!(actual.biology_before == before);
+     let after = *h
+@@ -421,6 +428,8 @@
+         "boredom_before":before.homeostasis.drives.extension[0],"boredom_after":after.homeostasis.drives.extension[0],
+         "actual_semantic_memory_ops":work.memory_ops,"reserved_semantic_memory_ops":work.reserved_memory_ops,
+         "memory_rate_q24":work.memory_rate_q24,"administration_price_qualified":false,
++        "configured_source_microsteps":witness.configured_microsteps,
++        "actual_source_microsteps":witness.actual_microsteps,"appended_mediation_phases":d.motor.native.core.work.phases,
+         "source_executions":1,"world_intervals":1,"biology_intervals":1,"optimizer_updates":0});
+     println!("ACTUAL_CONTACT_FIXED4_INTERVAL_V1 {}", row);
+     (
+@@ -433,7 +442,10 @@
+ fn actual_contact_fixed_four_intervals_one_prefix_play_warm_cold_nomani_v1() {
+     let (mut warm, inputs) = construct_one_fresh_host_with_toy();
+     let frozen_initial = frozen(&warm);
++    crate::cpu::host::actual_contact_bridge::phase_b_capture_audit::arm();
+     let (prefix_row, _, prefix_witness) = interval::<true>(&mut warm, "prefix_play", 0);
++    let negative_dose = crate::cpu::host::actual_contact_bridge::phase_b_capture_audit::take();
++    println!("ACTUAL_CONTACT_CAPTURE_NEGATIVE_DOSE_V1 {}", negative_dose);
+     assert!(frozen(&warm) == frozen_initial);
+     let prefix = wire(&warm);
+     assert!(CpuChannelNativeM2HostCheckpointV1::decode(&prefix).is_err());
+@@ -463,6 +475,9 @@
+         "retained_target_count_after",
+         "bank_digest_before",
+         "bank_digest_after",
++        "configured_source_microsteps",
++        "actual_source_microsteps",
++        "appended_mediation_phases",
+         "actual_semantic_memory_ops",
+         "reserved_semantic_memory_ops",
+     ] {
+@@ -503,7 +518,10 @@
+         "ACTUAL_CONTACT_FIXED4_COMPLETE_V1 {}",
+         json!({"fresh_hosts":1,"toy_spawns":1,"successful_cold_restores":2,
+         "prefix_intervals":1,"treatment_intervals":3,"source_executions":4,"world_intervals":4,"biology_intervals":4,
+-        "optimizer_updates":0,"probe_forwards":0,"production_negative_draw_calls":1,"warm_cold_complete_equal":true,
++        "optimizer_updates":0,"probe_forwards":0,"appended_mediation_phases":16,
++        "actual_source_microsteps_min":8,"actual_source_microsteps_max":16,"production_negative_sample_api_calls":1,"production_negative_old_evaluator_api_calls":1,
++        "production_negative_draw_invocations_min":12,"production_negative_draw_invocations_max":14,
++        "draw_bounds_are_source_callgraph_not_runtime_counters":true,"warm_cold_complete_equal":true,
+         "pending_cross_owner_staging_negative":"deferred_no_extra_forward","contact_value_policy":"UnknownJointValue"})
+     );
+ }
+--- a/crates/alife_training/src/cpu/grouped_host_loop.rs
++++ b/crates/alife_training/src/cpu/grouped_host_loop.rs
+@@ -680,6 +680,15 @@
+             };
+             let contact_close = if P::ACTUAL_CONTACT {
+                 let source_digest=json_digest(b"ALIFE-ACTUAL-CONTACT-PENDING-V1",r.neural.actual_contact_source()?)?;
++                #[cfg(test)]
++                super::actual_contact_bridge::phase_b_capture_audit::run_if_armed(
++                    &r.grouped.as_ref().and_then(|g| g.actual_contact.as_ref())
++                        .ok_or(CpuHostError::State("missing actual-contact audit owner"))?.contacts,
++                    &frame, &bundle, &receipt, motor_candidates,
++                    output.dispatch_generation, source_digest,
++                    contact_bindings.as_ref()
++                        .ok_or(CpuHostError::State("missing actual-contact audit bindings"))?,
++                );
+                 Some(r.grouped.as_mut().and_then(|g|g.actual_contact.as_mut())
+                     .ok_or(CpuHostError::State("missing actual-contact close owner"))?
+                     .contacts.capture_close(&frame,&bundle,&receipt,motor_candidates,

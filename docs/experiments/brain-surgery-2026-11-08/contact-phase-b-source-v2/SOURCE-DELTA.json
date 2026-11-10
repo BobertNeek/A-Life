@@ -1,0 +1,44 @@
+{
+  "schema": "actual-contact-phase-b-closed-source-delta-v2",
+  "base_capsule_sha256": "c25f33654f09476854e2f05d26dc971642eba4de32b2c5396fd5f6e0ddecad58",
+  "base_phase_a_raw_inventory_sha256": "acf26e40e19663cc0b973a00612af30e2ab7ac9be9f98955aeaa656675d6b76b",
+  "patch": "integration.patch",
+  "patch_sha256": "dfa6209a97603acdf572431822bf457e6dfa9880ef99108e87f13fd2a0247180",
+  "new_helper": "actual_contact_capture_negative_tests_v2.rs",
+  "changes": [
+    {
+      "base_sha256": "aaa7d9d07352c7dcf583aaa664502d0ebc64d06c588cd00be201c92c1d1a8837",
+      "bytes": 23081,
+      "path": "crates/alife_training/src/cpu/actual_contact_bridge.rs",
+      "sha256": "46123410d018a1ad3e7437a2fabac8f58d879252a5254fb8d1bc9849e4d71909"
+    },
+    {
+      "base_sha256": null,
+      "bytes": 13657,
+      "path": "crates/alife_training/src/cpu/actual_contact_capture_negative_tests_v2.rs",
+      "sha256": "34fe00295403bcb1dfb36ecf79ba7c9de27e0e3862ff4e697df96b092439a47a"
+    },
+    {
+      "base_sha256": "27a6b757df19ec435f60ad1ac405a010bcb9b3889af2f48e6a704a61b6d0ee6b",
+      "bytes": 23139,
+      "path": "crates/alife_training/src/cpu/actual_contact_four_interval_tests.rs",
+      "sha256": "6cb4c00ebb0704c1431de2039f153e16fcc1759ed0f2bcc6e0e10b1716c42a63"
+    },
+    {
+      "base_sha256": "f818df179bcb1ef3192b8a46b282ac49f58f871704eeee580fd28353a0ec001f",
+      "bytes": 46349,
+      "path": "crates/alife_training/src/cpu/grouped_host_loop.rs",
+      "sha256": "f56b378a85de8cf296563d6a44b08314b9b1369e5329a4fbcf3ef8f0b7d02018"
+    }
+  ],
+  "raw_source_files": 830,
+  "raw_source_bytes": 23171389,
+  "raw_inventory_sha256": "c42372ed74383cb14a8ac23d3cfcf9e4967fc37cddd88a16640b84e3ed4c0f72",
+  "native_qualified": false,
+  "test_registered": false,
+  "dispatch_gates_changed": false,
+  "runner_implemented": false,
+  "source_tree_materialized": false,
+  "supersedes_staged_draft": "actual_contact_capture_negative_tests.rs is preserved but excluded from this candidate",
+  "reconstruction": "Apply three-file exact unified integration.patch to source/ members of the pinned Phase A capsule; add this plaintext helper at its change-record path. Verify every base and result SHA. No other source changes."
+}
