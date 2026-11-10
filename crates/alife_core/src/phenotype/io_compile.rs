@@ -184,6 +184,56 @@ pub(super) fn compile_encoder(
     SensorEncoderPlan::try_new(profile, assignments)
 }
 
+/// Experimental V2: keep reference source-to-neuron meanings stable while
+/// allowing a child's existing genes to remove or add receptors. New ports are
+/// placed outside all reserved reference targets in the same lobe.
+pub(super) fn compile_anchored_encoder_v2(
+    genome: &BrainGenome,
+    development: &DevelopmentState,
+    layout: &LobeLayout,
+    profile: SensorProfile,
+) -> Result<SensorEncoderPlan, ScaffoldContractError> {
+    if profile != SensorProfile::GroundedObjectSlotsV1 {
+        return Err(compile_error());
+    }
+    let mut anchored_genome = genome.clone();
+    anchored_genome.seeds.sensor_layout_seed = super::experimental_sensor_anchor::SENSOR_SEED;
+    let raw = compile_encoder(&anchored_genome, development, layout, profile)?;
+    let anchors = super::experimental_sensor_anchor::PORTS
+        .iter()
+        .copied()
+        .collect::<BTreeSet<_>>();
+    let mut used = anchors.iter().map(|(_, _, n)| *n).collect::<BTreeSet<_>>();
+    let mut result = Vec::with_capacity(raw.assignments().len());
+    for a in raw.assignments() {
+        let key = (a.source_group().raw(), a.source_index(), a.target_neuron());
+        let mut target = a.target_neuron();
+        if !anchors.contains(&key) {
+            if used.contains(&target) {
+                let region = layout
+                    .lobe_by_neuron_index(target)
+                    .ok_or_else(compile_error)?;
+                target = (region.start..region.start + region.len)
+                    .find(|n| !used.contains(n))
+                    .ok_or_else(compile_error)?;
+            }
+            used.insert(target);
+        }
+        let (lo, hi) = a.clamp_range();
+        result.push(SensorEncoderAssignment::new(
+            a.source_group(),
+            a.source_index(),
+            target,
+            a.scale(),
+            a.bias(),
+            lo,
+            hi,
+        ));
+    }
+    result.sort_by_key(|a| (a.target_neuron(), a.source_group().raw(), a.source_index()));
+    SensorEncoderPlan::try_new(profile, result)
+}
+
 #[allow(clippy::type_complexity)]
 pub(super) fn compile_decoders(
     genome: &BrainGenome,

@@ -1075,6 +1075,28 @@ impl CreatureGenome {
         Ok(genome)
     }
 
+    /// V2 founders may carry different inherited genetic weights when their
+    /// structural coordinate identities match. V1 and ordinary candidate
+    /// assets retain the existing exact-match rule.
+    pub fn compatible_n2048_foundation_assets(&self, other: &Self) -> bool {
+        match (
+            &self.n2048_foundation_candidate,
+            &other.n2048_foundation_candidate,
+        ) {
+            (Some(a), Some(b)) if a.is_n2048_anchored_v2() && b.is_n2048_anchored_v2() => {
+                let x = a.manifest();
+                let y = b.manifest();
+                x.sensor_profile() == y.sensor_profile()
+                    && x.layout_digest() == y.layout_digest()
+                    && x.route_abi_digest() == y.route_abi_digest()
+                    && x.address_map_digest() == y.address_map_digest()
+                    && x.training_stage() == y.training_stage()
+                    && a.weights().len() == b.weights().len()
+            }
+            (a, b) => a == b,
+        }
+    }
+
     pub fn reproduce(
         maternal: &Self,
         paternal: &Self,
@@ -1083,7 +1105,7 @@ impl CreatureGenome {
         maternal.validate_contract()?;
         paternal.validate_contract()?;
         if conception_seed == 0
-            || maternal.n2048_foundation_candidate != paternal.n2048_foundation_candidate
+            || !maternal.compatible_n2048_foundation_assets(paternal)
             || maternal.nano512_readout_candidate != paternal.nano512_readout_candidate
             || maternal.nano512_action_credit_candidate_v2
                 != paternal.nano512_action_credit_candidate_v2
@@ -1141,7 +1163,7 @@ impl CreatureGenome {
                 maternal.lineage_id.0 ^ paternal.lineage_id.0.rotate_left(29) ^ conception_seed,
             ))
         };
-        let genome = Self {
+        let mut genome = Self {
             schema_version: CREATURE_GENOME_SCHEMA_VERSION,
             id,
             parent_genome_ids: vec![maternal.id, paternal.id],
@@ -1165,6 +1187,85 @@ impl CreatureGenome {
             predisposition,
         };
         genome.validate_contract()?;
+        if let Some(asset) = maternal
+            .n2048_foundation_candidate
+            .as_ref()
+            .filter(|a| a.is_n2048_anchored_v2())
+        {
+            let profile = asset.manifest().sensor_profile();
+            let compile_parent =
+                |parent: &Self| -> Result<crate::BrainPhenotype, ScaffoldContractError> {
+                    let expressed = parent.express()?;
+                    let age = Tick::new(u64::from(expressed.development.maturation_duration_ticks));
+                    let development = expressed.development_state_at(age)?;
+                    let inherited = parent
+                        .n2048_foundation_candidate
+                        .as_ref()
+                        .ok_or(ScaffoldContractError::PhenotypeCompile)?;
+                    Ok(
+                        crate::PhenotypeCompiler::compile_n2048_experimental_foundation_candidate(
+                            expressed.brain_genome,
+                            development,
+                            inherited.clone(),
+                        )?
+                        .0,
+                    )
+                };
+            let left = compile_parent(maternal)?;
+            let right = compile_parent(paternal)?;
+            let expressed = genome.express()?;
+            let age = Tick::new(u64::from(expressed.development.maturation_duration_ticks));
+            let development = expressed.development_state_at(age)?;
+            let (child, _) = crate::PhenotypeCompiler::compile_n2048_anchored_v2_graph(
+                expressed.brain_genome,
+                development,
+                profile,
+            )?;
+            let same_coordinates = |parent: &crate::BrainPhenotype| {
+                parent.route_abi_digest() == child.route_abi_digest()
+                    && parent.persistent_address_map().digest()
+                        == child.persistent_address_map().digest()
+                    && parent.synapses().len() == child.synapses().len()
+                    && parent
+                        .synapses()
+                        .iter()
+                        .zip(child.synapses())
+                        .all(|(a, b)| {
+                            a.source() == b.source()
+                                && a.target() == b.target()
+                                && a.route_index() == b.route_index()
+                                && a.kind() == b.kind()
+                        })
+            };
+            if !same_coordinates(&left) || !same_coordinates(&right) {
+                return Err(ScaffoldContractError::IncompatibleGeneticClass);
+            }
+            let paternal_asset = paternal
+                .n2048_foundation_candidate
+                .as_ref()
+                .ok_or(ScaffoldContractError::PhenotypeCompile)?;
+            // Inherit one genetic value per verified matching coordinate. These
+            // are founder-genome values, never learned lifetime or fast state.
+            let inherited_weights = asset
+                .weights()
+                .iter()
+                .zip(paternal_asset.weights())
+                .map(|(a, b)| {
+                    if a.to_bits() == b.to_bits() || context.rng.next_u64() & 1 == 0 {
+                        *a
+                    } else {
+                        *b
+                    }
+                })
+                .collect();
+            genome.n2048_foundation_candidate =
+                Some(crate::FoundationWeightAsset::from_trained_weights(
+                    &child,
+                    inherited_weights,
+                    asset.manifest().training_stage(),
+                )?);
+            genome.validate_contract()?;
+        }
         Ok(genome)
     }
 

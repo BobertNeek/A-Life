@@ -768,6 +768,72 @@ mod tests {
         std::fs::remove_dir_all(root).unwrap();
     }
 
+    #[cfg(feature = "gpu-tests")]
+    #[test]
+    fn anchored_v2_founder_runs_and_restores_on_offline_software_vulkan() {
+        let seed = 246_810;
+        let candidate = FoundationWeightAsset::decode_canonical(include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../assets/foundations/experimental-anchored-v2-research.alife-foundation"
+        )))
+        .unwrap();
+        assert!(candidate.is_n2048_experimental_graph());
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "alife-anchored-v2-software-{}-{nonce}",
+            std::process::id()
+        ));
+        fs::create_dir(&root).unwrap();
+        let candidate_path = root.join("candidate.alife-foundation");
+        fs::write(&candidate_path, candidate.encode_canonical().unwrap()).unwrap();
+        let mut config = RuntimeConfig::deterministic_default(seed, BrainScaleTier::Nano512);
+        config.features.gpu_backend_enabled = true;
+        let launch = CanonicalNewGameLaunchRequest {
+            world_seed: seed,
+            population: 1,
+            disable_age_death: true,
+            save_path: root.join("world.json"),
+            asset_root: root.clone(),
+            config,
+            assets: AssetManifest::empty(),
+        };
+        let mut runtime = create_canonical_new_game_runtime_using_backend(
+            launch,
+            NewGameFounderSelection::N2048ExperimentalCandidate {
+                asset_path: candidate_path,
+            },
+            false,
+            || {
+                let backend = GpuClosedLoopBackend::new_software_vulkan_runtime_test(
+                    GpuRuntimeProfile::production_v1(),
+                )?;
+                assert!(backend.is_software_runtime_test());
+                assert_eq!(
+                    format!(
+                        "{:?}",
+                        backend
+                            .software_runtime_test_adapter_info()
+                            .unwrap()
+                            .device_type
+                    ),
+                    "Cpu"
+                );
+                Ok(backend)
+            },
+        )
+        .unwrap()
+        .runtime;
+        runtime.tick().unwrap();
+        assert_eq!(runtime.world_tick_for_test(), Tick(1));
+        crate::gpu_live_runtime::experimental_software_roundtrip_smoke(&mut runtime, &root, seed)
+            .unwrap();
+        drop(runtime);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
     #[test]
     fn experimental_founder_stages_and_roundtrips_without_reinterpreting_standard_assets() {
         let seed = 240_826;
@@ -783,6 +849,109 @@ mod tests {
             .as_nanos();
         let root = std::env::temp_dir().join(format!(
             "alife-n2048-experimental-new-game-{}-{nonce}",
+            std::process::id()
+        ));
+        fs::create_dir(&root).unwrap();
+        let candidate_path = root.join("candidate.alife-foundation");
+        fs::write(&candidate_path, candidate.encode_canonical().unwrap()).unwrap();
+        let mut config = RuntimeConfig::deterministic_default(seed, BrainScaleTier::Nano512);
+        config.features.gpu_backend_enabled = true;
+        let staged = stage_phase3_new_game_with_founder(
+            CanonicalNewGameLaunchRequest {
+                world_seed: seed,
+                population: 1,
+                disable_age_death: true,
+                save_path: root.join("world.json"),
+                asset_root: root.clone(),
+                config,
+                assets: AssetManifest::empty(),
+            },
+            NewGameFounderSelection::parse(&format!(
+                "n2048-experimental:{}",
+                candidate_path.display()
+            ))
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(staged.save.config.brain_class, BrainScaleTier::Standard2048);
+        assert_eq!(
+            staged.save.creatures[0].brain_class,
+            BrainScaleTier::Standard2048
+        );
+        #[cfg(feature = "gpu-runtime")]
+        crate::gpu_live_runtime::experimental_resident_plan_smoke(
+            staged.world.organism_registry().get(OrganismId(1)).unwrap(),
+            staged.world.tick(),
+            SensorProfile::GroundedObjectSlotsV1,
+        )
+        .expect("experimental fresh founder must produce a GPU resident authority plan");
+        staged.save.to_json_file(&staged.save_path).unwrap();
+        // Loading must depend on the saved genome, not the original CLI asset path.
+        fs::remove_file(&candidate_path).unwrap();
+        let loaded = PortableSaveFile::from_json_file(&staged.save_path).unwrap();
+        loaded.validate_with_asset_root(&root).unwrap();
+        assert_eq!(loaded.config.brain_class, BrainScaleTier::Standard2048);
+        let world = loaded.restore_headless_world().unwrap();
+        assert!(world.age_death_disabled());
+        assert_eq!(
+            world.canonical_signature_digest().unwrap(),
+            staged.world.canonical_signature_digest().unwrap()
+        );
+        let admission = world
+            .organism_registry()
+            .get(OrganismId(1))
+            .unwrap()
+            .authoritative_admission_at(world.tick())
+            .unwrap();
+        let restored_asset = admission.genome.n2048_foundation_candidate.unwrap();
+        assert_eq!(
+            restored_asset.encode_canonical().unwrap(),
+            candidate.encode_canonical().unwrap()
+        );
+        let brain_genome = admission.phenotype.brain_genome;
+        let development = DevelopmentState::new(
+            brain_genome.id,
+            Tick::ZERO,
+            NormalizedScalar::new(1.0).unwrap(),
+        );
+        let (compiled, _) = PhenotypeCompiler::compile_n2048_experimental_foundation_candidate(
+            brain_genome,
+            development,
+            restored_asset,
+        )
+        .unwrap();
+        assert_eq!(compiled.brain_class_id(), BrainCapacityClass::N2048_ID);
+        assert_eq!(
+            compiled
+                .synapses()
+                .iter()
+                .map(|synapse| synapse.genetic_weight().to_bits())
+                .collect::<Vec<_>>(),
+            candidate
+                .weights()
+                .iter()
+                .map(|weight| weight.to_bits())
+                .collect::<Vec<_>>()
+        );
+        fs::remove_file(&staged.save_path).unwrap();
+        fs::remove_dir(&root).unwrap();
+    }
+
+    #[test]
+    fn anchored_v2_founder_stages_and_roundtrips_without_reinterpreting_v1() {
+        let seed = 240_826;
+        let candidate = FoundationWeightAsset::decode_canonical(include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../assets/foundations/experimental-anchored-v2-research.alife-foundation"
+        )))
+        .unwrap();
+        assert!(candidate.is_n2048_experimental_graph());
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "alife-n2048-anchored-v2-new-game-{}-{nonce}",
             std::process::id()
         ));
         fs::create_dir(&root).unwrap();

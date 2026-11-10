@@ -2376,16 +2376,9 @@ impl HeadlessWorld {
         }
         let maternal_expressed_brain_class = maternal.genome().expressed_brain_class()?;
         let paternal_expressed_brain_class = paternal.genome().expressed_brain_class()?;
-        if maternal
+        if !maternal
             .genome()
-            .n2048_foundation_candidate
-            .as_ref()
-            .map(|asset| asset.digest())
-            != paternal
-                .genome()
-                .n2048_foundation_candidate
-                .as_ref()
-                .map(|asset| asset.digest())
+            .compatible_n2048_foundation_assets(paternal.genome())
             || maternal.genome().nano512_readout_candidate
                 != paternal.genome().nano512_readout_candidate
             || maternal.genome().nano512_action_credit_candidate_v2
@@ -14198,6 +14191,81 @@ mod task_4_3a2_tests {
         assert_eq!(
             world.canonical_signature_digest().unwrap(),
             replay.canonical_signature_digest().unwrap()
+        );
+    }
+
+    #[test]
+    fn anchored_v2_parents_produce_real_birth_with_child_bound_genetic_asset() {
+        use alife_core::{
+            BrainCapacityClass, FoundationGeneticIdentity, FoundationWeightAsset,
+            PhenotypeCompiler, SensorProfile,
+        };
+        let asset = FoundationWeightAsset::decode_canonical(include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../assets/foundations/experimental-anchored-v2-research.alife-foundation"
+        )))
+        .unwrap();
+        let m = asset.manifest();
+        let identity = FoundationGeneticIdentity::new(
+            m.foundation_id().raw(),
+            u16::try_from(m.foundation_version().raw()).unwrap(),
+            m.compatibility_family_id().raw(),
+            BrainCapacityClass::N2048_ID,
+        )
+        .unwrap();
+        let mut serial = 0u64;
+        let (mut world, next_tick) = prepared_world_with_genes(
+            Vec3f::new(0.5, 0.0, 0.0),
+            COMPATIBILITY_FAMILY_ID,
+            Tick::ZERO,
+            Tick::ZERO,
+            |genome| {
+                serial += 1;
+                let mut g =
+                    alife_core::CreatureGenome::early_mammal_founder(700 + serial, identity)
+                        .unwrap()
+                        .with_n2048_foundation_candidate(asset.clone())
+                        .unwrap();
+                g.reproduction.fertility = alife_core::ContinuousLocus::mean(1.0, 1.0).unwrap();
+                *genome = g;
+            },
+        );
+        assert!(world
+            .eligible_mating_pair(MATERNAL_ID, PATERNAL_ID, next_tick)
+            .unwrap()
+            .is_some());
+        let id = OrganismId(world.next_organism_id);
+        assert_eq!(world.try_advance_tick().unwrap(), next_tick);
+        let newborn = world
+            .organism_registry()
+            .get(id)
+            .expect("actual child born");
+        let inherited = newborn
+            .genome()
+            .n2048_foundation_candidate
+            .as_ref()
+            .unwrap();
+        assert!(inherited.is_n2048_anchored_v2());
+        assert!(asset
+            .weights()
+            .iter()
+            .zip(inherited.weights())
+            .all(|(a, b)| a.to_bits() == b.to_bits()));
+        let expressed = newborn.genome().express().unwrap();
+        let maturity = expressed
+            .development_state_at(Tick::new(u64::from(
+                expressed.development.maturation_duration_ticks,
+            )))
+            .unwrap();
+        let (phenotype, _) = PhenotypeCompiler::compile_n2048_experimental_foundation_candidate(
+            expressed.brain_genome,
+            maturity,
+            inherited.clone(),
+        )
+        .unwrap();
+        assert_eq!(
+            phenotype.sensor_profile(),
+            SensorProfile::GroundedObjectSlotsV1
         );
     }
 
