@@ -1,0 +1,5 @@
+# Host-checkpoint ablation pilot rejected
+
+The one-boundary disposable checkpoint ablation specified in FAST-ABLATION-PLAN.md failed on its first seed/scene before any counterfactual decision. `CpuCanonicalHost::from_checkpoint` returned `State("canonical organism authority differs from private CPU state")` after the clone's fast offsets were replaced. The host integrity check correctly prevented admission of the altered state. The run exited 1, with no comparison result; the one fresh founder file created before the error is preserved locally. No user life, default asset or accepted checkpoint was changed.
+
+Do not bypass, reseal, or weaken this guard just to obtain an experiment. A distinct detached replay can instead compare the observed next decision's same captured initial state and percept with its effective fast offsets removed numerically, verifying those offsets against the sealed actual state first. That comparison must be labeled a replay-level policy-sensitivity probe, not an executed counterfactual life or proof of useful learning.
