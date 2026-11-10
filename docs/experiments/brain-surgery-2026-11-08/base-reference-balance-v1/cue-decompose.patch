@@ -1,0 +1,31 @@
+--- a/crates/alife_training/examples/probe_cue_learning.rs
++++ b/crates/alife_training/examples/probe_cue_learning.rs
+@@ -69,10 +69,26 @@
+         for d in &step.decisions {
+             let o=d.patch.outcome();
+             let seq=TrainingSequence { phenotype_hash:trainer.phenotype().phenotype_hash(), initial:d.initial.clone(), ticks:vec![d.replay_tick.clone()], burn_in_ticks:0, memory_candidate_gain:trainer.phenotype().candidate_decoder().memory_channel().map_or(0.,|m|m.max_candidate_gain()) };
+-            let logits=trainer.evaluate_replay(&seq)?.candidate_logits[0].clone();
++            let evaluation=trainer.evaluate_replay(&seq)?;
++            let logits=evaluation.candidate_logits[0].clone();
++            let mut decompositions=Vec::new();
++            for (j,candidate) in d.replay_tick.candidates.iter().enumerate() {
++                if !matches!(candidate.family, CandidateActionFamily::Approach | CandidateActionFamily::Ingest) { continue; }
++                let mut lanes=std::collections::BTreeMap::<u16,f32>::new();
++                for (idx,synapse) in trainer.phenotype().synapses().iter().enumerate() {
++                    if let CompiledSynapseKind::Decoder(c)=synapse.kind() {
++                        if c.head()==DecoderHeadKind::ActionCandidate && c.family()==candidate.family {
++                            let lane=c.input_lane() as usize;
++                            let contribution=(trainer.weights()[idx]+d.replay_tick.effective_weight_offsets[idx])*evaluation.final_activations[0][synapse.source() as usize]*candidate.decoder_inputs[lane];
++                            *lanes.entry(c.input_lane()).or_insert(0.) += contribution;
++                        }
++                    }
++                }
++                decompositions.push(json!({"candidate_index":j,"family":candidate.family,"lanes":lanes}));
++            }
+             let actor_id=host.world().organism_registry().get(own).ok_or("missing actor")?.world_entity_id();
+             let actor_position=host.world().entity(actor_id).ok_or("missing actor body")?.position;
+-            trace.push(json!({"tick":i+1,"action":d.action,"contact":o.physical.contact,"target":o.physical.target_entity.map(|x|x.raw()),"outcome":o,"candidates":d.patch.pre_action().perception().candidates(),"logits":logits,"actor_position_after":actor_position}));
++            trace.push(json!({"tick":i+1,"action":d.action,"contact":o.physical.contact,"target":o.physical.target_entity.map(|x|x.raw()),"outcome":o,"candidates":d.patch.pre_action().perception().candidates(),"logits":logits,"decompositions":decompositions,"actor_position_after":actor_position}));
+         }
+         let r=host.world().entity(red_id).ok_or("red lost")?.consumed;let b=host.world().entity(blue_id).ok_or("blue lost")?.consumed;
+         if r||b {choice=Some(if r&&b {"both"} else if r {"red"} else {"blue"}); break;}
