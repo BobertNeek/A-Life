@@ -1,0 +1,40 @@
+--- a/crates/alife_training/src/cpu/organism.rs
++++ b/crates/alife_training/src/cpu/organism.rs
+@@ -280,6 +280,8 @@
+         // Slot 3 is the vocal channel in the native six-slot joint ABI.
+         let vocal_selected = action.motor_candidates[3].is_some();
+         let mut staged = self.checkpoint.eligibility.clone();
++        // Research-only ablation of action-decoder trace carryover. Not gameplay.
++        let research_decoder_reset = std::env::var_os("ALIFE_RESEARCH_DECODER_TRACE_RESET").is_some();
+         for (i, s) in p.synapses().iter().enumerate() {
+             let receptor = &p.plasticity_receptors()[s.receptor_index() as usize];
+             let local = match s.kind() {
+@@ -313,7 +315,8 @@
+                     })
+                     .sum(),
+             };
+-            let next = decay(receptor.eligibility_decay(), elapsed) * staged[i] + local;
++            let previous = decay(receptor.eligibility_decay(), elapsed) * staged[i];
++            let next = if research_decoder_reset && matches!(s.kind(), CompiledSynapseKind::Decoder(c) if c.head() == DecoderHeadKind::ActionCandidate) { local } else { previous + local };
+             finite(&[next])?;
+             // Disabled recurrent routes decay without adding or clamping, as WGSL.
+             staged[i] = if matches!(s.kind(), CompiledSynapseKind::Recurrent)
+--- a/crates/alife_training/examples/probe_cue_learning.rs
++++ b/crates/alife_training/examples/probe_cue_learning.rs
+@@ -88,7 +88,7 @@
+         }
+         exposures.push(json!({"episode":episode,"safe":safe,"is_red":is_red,"target":target.raw(),"consumed_at":hit,"pain_delta":pain}));
+         if hit.is_none() {
+-            let report=json!({"schema":"cue-study-pilot-v1","approach_scale":approach_scale,"approach_edits":approach_edits,"credit_trace":credit_trace,"safe_first":safe_first,"seed":seed,"safe_red":safe_red,"red_left":red_left,"sham":std::env::var_os("ALIFE_RESEARCH_FAST_WRITE_SHAM").is_some(),"censored":"exposure_not_consumed","exposures":exposures});
++            let report=json!({"schema":"cue-study-pilot-v1","approach_scale":approach_scale,"approach_edits":approach_edits,"credit_trace":credit_trace,"decoder_trace_reset":std::env::var_os("ALIFE_RESEARCH_DECODER_TRACE_RESET").is_some(),"safe_first":safe_first,"seed":seed,"safe_red":safe_red,"red_left":red_left,"sham":std::env::var_os("ALIFE_RESEARCH_FAST_WRITE_SHAM").is_some(),"censored":"exposure_not_consumed","exposures":exposures});
+             let mut f=std::fs::OpenOptions::new().write(true).create_new(true).open(path)?;f.write_all(&serde_json::to_vec_pretty(&report)?)?;return Ok(());
+         }
+     }
+@@ -129,6 +129,6 @@
+     let fast_changed=initial.fast.iter().zip(&final_neural.fast).filter(|(a,b)|a.to_bits()!=b.to_bits()).count();
+     let bytes=serde_json::to_vec(&checkpoint)?;let mut cold=CpuCanonicalHost::from_checkpoint(serde_json::from_slice(&bytes)?,&trainer)?;let mut warm=host.snapshot();warm.step(&trainer,1.)?;cold.step(&trainer,1.)?;
+     let exact=serde_json::to_vec(&warm.checkpoint(&trainer)?)? == serde_json::to_vec(&cold.checkpoint(&trainer)?)?;
+-    let report=json!({"schema":"cue-study-pilot-v1","approach_scale":approach_scale,"approach_edits":approach_edits,"credit_trace":credit_trace,"safe_first":safe_first,"seed":seed,"safe_red":safe_red,"red_left":red_left,"sham":std::env::var_os("ALIFE_RESEARCH_FAST_WRITE_SHAM").is_some(),"exposures":exposures,"probe_red_id":red_id.raw(),"probe_blue_id":blue_id.raw(),"choice":choice,"choice_was_safe_cue":choice.and_then(|c| match c {"red"=>Some(safe_red),"blue"=>Some(!safe_red),_=>None}),"probe_steps":steps,"fast_changed":fast_changed,"cold_next_exact":exact,"founder_optimizer_unchanged":founder_before==serde_json::to_vec(&trainer.checkpoint())?,"trace":trace});
++    let report=json!({"schema":"cue-study-pilot-v1","approach_scale":approach_scale,"approach_edits":approach_edits,"credit_trace":credit_trace,"decoder_trace_reset":std::env::var_os("ALIFE_RESEARCH_DECODER_TRACE_RESET").is_some(),"safe_first":safe_first,"seed":seed,"safe_red":safe_red,"red_left":red_left,"sham":std::env::var_os("ALIFE_RESEARCH_FAST_WRITE_SHAM").is_some(),"exposures":exposures,"probe_red_id":red_id.raw(),"probe_blue_id":blue_id.raw(),"choice":choice,"choice_was_safe_cue":choice.and_then(|c| match c {"red"=>Some(safe_red),"blue"=>Some(!safe_red),_=>None}),"probe_steps":steps,"fast_changed":fast_changed,"cold_next_exact":exact,"founder_optimizer_unchanged":founder_before==serde_json::to_vec(&trainer.checkpoint())?,"trace":trace});
+     let mut f=std::fs::OpenOptions::new().write(true).create_new(true).open(path)?;f.write_all(&serde_json::to_vec_pretty(&report)?)?;Ok(())
+ }
