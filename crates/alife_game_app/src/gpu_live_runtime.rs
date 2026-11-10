@@ -625,6 +625,35 @@ fn captured_sleep_covers_queued_target(queued: SleepState, captured: SleepState)
         )
 }
 
+#[cfg(test)]
+pub(crate) fn experimental_resident_plan_smoke(
+    record: &WorldOrganismRecord,
+    tick: Tick,
+    profile: SensorProfile,
+) -> Result<(), GameAppShellError> {
+    let plan = resident_authority_plan_from_record(
+        record,
+        record.organism_id(),
+        record.world_entity_id(),
+        tick,
+        BrainScaleTier::Standard2048,
+        profile,
+    )?;
+    let resident = plan.into_fresh_resident()?;
+    let stored = archive_foundation_asset_bytes(&resident)?
+        .ok_or(ScaffoldContractError::PhenotypeCompile)?;
+    let expected = record
+        .genome()
+        .n2048_foundation_candidate
+        .as_ref()
+        .ok_or(ScaffoldContractError::PhenotypeCompile)?
+        .encode_canonical()?;
+    if stored != expected {
+        return Err(ScaffoldContractError::PhenotypeCompile.into());
+    }
+    Ok(())
+}
+
 fn resident_authority_plan_from_record(
     record: &WorldOrganismRecord,
     organism_id: OrganismId,
@@ -4275,6 +4304,11 @@ fn archive_foundation_asset_bytes(
     resident: &ResidentCognition,
 ) -> Result<Option<Vec<u8>>, GameAppShellError> {
     if let Some(asset) = resident.compiler_inputs.n2048_candidate_asset() {
+        asset.validate_against(&resident.phenotype)?;
+        return Ok(Some(asset.encode_canonical()?));
+    }
+    if let Some(recipe) = resident.phenotype.foundation_abi().n2048_experimental_graph() {
+        let asset = recipe.asset()?.ok_or(ScaffoldContractError::PhenotypeCompile)?;
         asset.validate_against(&resident.phenotype)?;
         return Ok(Some(asset.encode_canonical()?));
     }
