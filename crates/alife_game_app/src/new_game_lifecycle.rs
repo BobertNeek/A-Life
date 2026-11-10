@@ -789,6 +789,8 @@ mod tests {
         .runtime;
         runtime.tick().unwrap();
         assert_eq!(runtime.world_tick_for_test(), Tick(1));
+        crate::gpu_live_runtime::experimental_software_roundtrip_smoke(&mut runtime, &root, seed)
+            .unwrap();
         drop(runtime);
         std::fs::remove_dir_all(root).unwrap();
     }
