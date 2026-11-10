@@ -861,7 +861,22 @@
  }
 --- a/crates/alife_training/examples/probe_weight_space_care.rs
 +++ b/crates/alife_training/examples/probe_weight_space_care.rs
-@@ -37,11 +37,11 @@
+@@ -3,11 +3,11 @@
+ #[path = "support/bold_base.rs"]
+ mod bold;
+ #[allow(dead_code)]
+-#[path = "support/motor_operating_point.rs"]
+-mod readout;
+-#[allow(dead_code)]
+ #[path = "support/dedicated_fatigue.rs"]
+ mod dedicated;
++#[allow(dead_code)]
++#[path = "support/motor_operating_point.rs"]
++mod readout;
+ use alife_core::*;
+ use alife_runtime::canonical_preparation::foundation_construction_development;
+ use alife_training::{cpu::*, AdamWConfig, StageTrainableMask, TrainingSequence};
+@@ -37,11 +37,19 @@
          &r.phenotype().development_state_at(Tick::ZERO)?,
      )?;
      if experimental {
@@ -871,13 +886,249 @@
 -            config.sensor_profile,
 -        )?;
 +        let (p, _) = if std::env::var_os("ALIFE_RESEARCH_ANCHORED_V2").is_some() {
-+            PhenotypeCompiler::compile_n2048_anchored_v2_graph(genome.clone(),development.clone(),config.sensor_profile)?
++            PhenotypeCompiler::compile_n2048_anchored_v2_graph(
++                genome.clone(),
++                development.clone(),
++                config.sensor_profile,
++            )?
 +        } else {
-+            PhenotypeCompiler::compile_n2048_experimental_graph(genome.clone(),development.clone(),config.sensor_profile)?
++            PhenotypeCompiler::compile_n2048_experimental_graph(
++                genome.clone(),
++                development.clone(),
++                config.sensor_profile,
++            )?
 +        };
          let asset = FoundationWeightAsset::from_trained_weights(
              &p,
              p.synapses().iter().map(|s| s.genetic_weight()).collect(),
+@@ -306,7 +314,13 @@
+             whole_care(&p)?
+         };
+         weights = whole;
+-        if matches!(arm, "whole-care-balanced" | "whole-care-narrow" | "whole-care-ingest-only" | "whole-care-ingest-boost") {
++        if matches!(
++            arm,
++            "whole-care-balanced"
++                | "whole-care-narrow"
++                | "whole-care-ingest-only"
++                | "whole-care-ingest-boost"
++        ) {
+             let (w, _) = readout::counterbalance(&p, &weights, &circuits, 0., true)?;
+             let (w, _) = dedicated::full_reference_calibration(&p, &w, &circuits, true)?;
+             weights = w;
+@@ -314,22 +328,37 @@
+                 let (baseline, _) = whole_care(&p)?;
+                 for (i, synapse) in p.synapses().iter().enumerate() {
+                     let is_ingest = matches!(synapse.kind(), CompiledSynapseKind::Decoder(c) if c.head() == DecoderHeadKind::ActionCandidate && c.family() == CandidateActionFamily::Ingest);
+-                    weights[i] = if is_ingest && weights[i].to_bits() != baseline[i].to_bits() { baseline[i] * 1.25 } else { baseline[i] };
++                    weights[i] = if is_ingest && weights[i].to_bits() != baseline[i].to_bits() {
++                        baseline[i] * 1.25
++                    } else {
++                        baseline[i]
++                    };
+                 }
+             }
+             if arm == "whole-care-ingest-only" {
+                 let (baseline, _) = whole_care(&p)?;
+                 for (i, synapse) in p.synapses().iter().enumerate() {
+-                    if !matches!(synapse.kind(), CompiledSynapseKind::Decoder(c) if c.head() == DecoderHeadKind::ActionCandidate && c.family() == CandidateActionFamily::Ingest) {
++                    if !matches!(synapse.kind(), CompiledSynapseKind::Decoder(c) if c.head() == DecoderHeadKind::ActionCandidate && c.family() == CandidateActionFamily::Ingest)
++                    {
+                         weights[i] = baseline[i];
+                     }
+                 }
+             }
+             if arm == "whole-care-narrow" {
+                 let (baseline, _) = whole_care(&p)?;
+-                let reference = circuits.iter().find(|c| c["role"] == "reference" && c["family"] == serde_json::to_value(CandidateActionFamily::Approach).unwrap()).and_then(|c| c["reference_motor"].as_u64()).ok_or("missing Approach reference")? as u32;
++                let reference = circuits
++                    .iter()
++                    .find(|c| {
++                        c["role"] == "reference"
++                            && c["family"]
++                                == serde_json::to_value(CandidateActionFamily::Approach).unwrap()
++                    })
++                    .and_then(|c| c["reference_motor"].as_u64())
++                    .ok_or("missing Approach reference")? as u32;
+                 for (i, synapse) in p.synapses().iter().enumerate() {
+-                    if synapse.source() == reference && matches!(synapse.kind(), CompiledSynapseKind::Decoder(c) if c.head() == DecoderHeadKind::ActionCandidate && c.family() == CandidateActionFamily::Approach) {
++                    if synapse.source() == reference
++                        && matches!(synapse.kind(), CompiledSynapseKind::Decoder(c) if c.head() == DecoderHeadKind::ActionCandidate && c.family() == CandidateActionFamily::Approach)
++                    {
+                         weights[i] = baseline[i];
+                     }
+                 }
+@@ -337,25 +366,41 @@
+         }
+         edits = circuits;
+         if arm == "whole-care-bold" {
+-            let (candidate, authored)=bold::build(&p,&weights)?;
+-            weights=candidate; edits.extend(authored);
++            let (candidate, authored) = bold::build(&p, &weights)?;
++            weights = candidate;
++            edits.extend(authored);
+         }
+         if arm == "whole-care-approach70" {
+-            let mut count=0usize;
+-            for (i,synapse) in p.synapses().iter().enumerate() {
+-                if matches!(synapse.kind(),CompiledSynapseKind::Decoder(c) if c.head()==DecoderHeadKind::ActionCandidate && c.family()==CandidateActionFamily::Approach && c.input_lane()==15) && weights[i] != 0. {
+-                    let before=weights[i]; weights[i] *= 0.70; count += 1;
++            let mut count = 0usize;
++            for (i, synapse) in p.synapses().iter().enumerate() {
++                if matches!(synapse.kind(),CompiledSynapseKind::Decoder(c) if c.head()==DecoderHeadKind::ActionCandidate && c.family()==CandidateActionFamily::Approach && c.input_lane()==15)
++                    && weights[i] != 0.
++                {
++                    let before = weights[i];
++                    weights[i] *= 0.70;
++                    count += 1;
+                     edits.push(json!({"role":"approach_taste_weight_edit","index":i,"before":before,"after":weights[i]}));
+                 }
+             }
+-            if count != 2 { return Err("unexpected Approach taste weight count".into()); }
++            if count != 2 {
++                return Err("unexpected Approach taste weight count".into());
++            }
+         }
+-        if matches!(arm, "whole-care-balanced" | "whole-care-narrow" | "whole-care-ingest-only" | "whole-care-ingest-boost") {
++        if matches!(
++            arm,
++            "whole-care-balanced"
++                | "whole-care-narrow"
++                | "whole-care-ingest-only"
++                | "whole-care-ingest-boost"
++        ) {
+             let (baseline, _) = whole_care(&p)?;
+             for (i, (before, after)) in baseline.iter().zip(&weights).enumerate() {
+                 if before.to_bits() != after.to_bits() {
+-                    if !matches!(p.synapses()[i].kind(), CompiledSynapseKind::Decoder(c) if c.head() == DecoderHeadKind::ActionCandidate) {
+-                        return Err("reference calibration changed a non-action decoder weight".into());
++                    if !matches!(p.synapses()[i].kind(), CompiledSynapseKind::Decoder(c) if c.head() == DecoderHeadKind::ActionCandidate)
++                    {
++                        return Err(
++                            "reference calibration changed a non-action decoder weight".into()
++                        );
+                     }
+                     edits.push(json!({"role":"reference_weight_edit","index":i,"before":before,"after":after}));
+                 }
+@@ -543,7 +588,13 @@
+         .unwrap()
+         .biochemistry();
+     let initial_checkpoint = host.checkpoint(&trainer)?;
+-    let initial_neural = initial_checkpoint.residents.iter().find(|r| r.neural.organism_id == own).ok_or("missing initial neural owner")?.neural.clone();
++    let initial_neural = initial_checkpoint
++        .residents
++        .iter()
++        .find(|r| r.neural.organism_id == own)
++        .ok_or("missing initial neural owner")?
++        .neural
++        .clone();
+     let mut rows = Vec::new();
+     for tick in 0..ticks {
+         let step = host.step(&trainer, 1.)?;
+@@ -685,9 +736,16 @@
+     }
+     assert_eq!(before, serde_json::to_vec(&trainer.checkpoint())?);
+     let ck = host.checkpoint(&trainer)?;
+-    let final_neural = &ck.residents.iter().find(|r| r.neural.organism_id == own).ok_or("missing final neural owner")?.neural;
++    let final_neural = &ck
++        .residents
++        .iter()
++        .find(|r| r.neural.organism_id == own)
++        .ok_or("missing final neural owner")?
++        .neural;
+     let change_stats = |a: &[f32], b: &[f32]| -> Result<serde_json::Value> {
+-        if a.len() != b.len() || a.len() != trainer.phenotype().synapses().len() { return Err("neural weight state length mismatch".into()); }
++        if a.len() != b.len() || a.len() != trainer.phenotype().synapses().len() {
++            return Err("neural weight state length mismatch".into());
++        }
+         let mut changed = 0usize;
+         let mut recurrent = 0usize;
+         let mut decoder = 0usize;
+@@ -695,11 +753,16 @@
+         for (i, (x, y)) in a.iter().zip(b).enumerate() {
+             if x.to_bits() != y.to_bits() {
+                 changed += 1;
+-                match trainer.phenotype().synapses()[i].kind() { CompiledSynapseKind::Recurrent => recurrent += 1, CompiledSynapseKind::Decoder(_) => decoder += 1 }
++                match trainer.phenotype().synapses()[i].kind() {
++                    CompiledSynapseKind::Recurrent => recurrent += 1,
++                    CompiledSynapseKind::Decoder(_) => decoder += 1,
++                }
+                 max_abs_delta = max_abs_delta.max((y - x).abs());
+             }
+         }
+-        Ok(json!({"changed":changed,"recurrent":recurrent,"decoder":decoder,"max_abs_delta":max_abs_delta}))
++        Ok(
++            json!({"changed":changed,"recurrent":recurrent,"decoder":decoder,"max_abs_delta":max_abs_delta}),
++        )
+     };
+     let neural_changes = json!({"fast":change_stats(&initial_neural.fast, &final_neural.fast)?,"lifetime":change_stats(&initial_neural.lifetime, &final_neural.lifetime)?,"eligibility":change_stats(&initial_neural.eligibility, &final_neural.eligibility)?,"initial_weight_generation":initial_neural.weight_generation,"final_weight_generation":final_neural.weight_generation});
+     let bytes = serde_json::to_vec(&ck)?;
+@@ -726,22 +789,44 @@
+         for i in 0..80 {
+             let step = sleeper.step(&trainer, 1.)?;
+             let snap = sleeper.checkpoint(&trainer)?;
+-            let resident = snap.residents.iter().find(|r| r.neural.organism_id == own).ok_or("missing sleeping owner")?;
++            let resident = snap
++                .residents
++                .iter()
++                .find(|r| r.neural.organism_id == own)
++                .ok_or("missing sleeping owner")?;
+             phases.push(format!("{:?}", resident.sleep.state().phase));
+-            if step.sleep_consolidations > 0 { consolidated = Some(resident.neural.clone()); }
+-            if consolidated.is_some() && !step.decisions.is_empty() { resumed_at = Some(i + 1); break; }
++            if step.sleep_consolidations > 0 {
++                consolidated = Some(resident.neural.clone());
++            }
++            if consolidated.is_some() && !step.decisions.is_empty() {
++                resumed_at = Some(i + 1);
++                break;
++            }
+         }
+         let consolidated = consolidated.ok_or("no sleep consolidation within 80 intervals")?;
+         let resumed_at = resumed_at.ok_or("no decision resumed within 80 intervals")?;
+         let wake = sleeper.checkpoint(&trainer)?;
+-        let wake_neural = &wake.residents.iter().find(|r| r.neural.organism_id == own).ok_or("missing waking owner")?.neural;
++        let wake_neural = &wake
++            .residents
++            .iter()
++            .find(|r| r.neural.organism_id == own)
++            .ok_or("missing waking owner")?
++            .neural;
+         let bytes = serde_json::to_vec(&wake)?;
+-        let mut restored = CpuCanonicalHost::from_checkpoint(serde_json::from_slice(&bytes)?, &trainer)?;
++        let mut restored =
++            CpuCanonicalHost::from_checkpoint(serde_json::from_slice(&bytes)?, &trainer)?;
+         let mut continued = sleeper.snapshot();
+-        continued.step(&trainer, 1.)?; restored.step(&trainer, 1.)?;
+-        if serde_json::to_vec(&continued.checkpoint(&trainer)?)? != serde_json::to_vec(&restored.checkpoint(&trainer)?)? { return Err("sleep wake cold continuation mismatch".into()); }
++        continued.step(&trainer, 1.)?;
++        restored.step(&trainer, 1.)?;
++        if serde_json::to_vec(&continued.checkpoint(&trainer)?)?
++            != serde_json::to_vec(&restored.checkpoint(&trainer)?)?
++        {
++            return Err("sleep wake cold continuation mismatch".into());
++        }
+         json!({"forced_recovery":true,"phases":phases,"resumed_at":resumed_at,"pre_sleep_fast_to_consolidated":change_stats(&final_neural.fast,&consolidated.fast)?,"pre_sleep_lifetime_to_consolidated":change_stats(&final_neural.lifetime,&consolidated.lifetime)?,"pre_sleep_eligibility_to_consolidated":change_stats(&final_neural.eligibility,&consolidated.eligibility)?,"pre_sleep_generation":final_neural.weight_generation,"consolidated_generation":consolidated.weight_generation,"resumed_generation":wake_neural.weight_generation,"exact_cold_next":true})
+-    } else { serde_json::Value::Null };
++    } else {
++        serde_json::Value::Null
++    };
+     let r = host.world().organism_registry().get(own).unwrap();
+     Ok(
+         json!({"sleep_probe":sleep_probe,"research_fast_write_sham":std::env::var_os("ALIFE_RESEARCH_FAST_WRITE_SHAM").is_some(),"neural_changes":neural_changes,"seed":seed,"arm":arm,"scene":scene,"edits":edits,"source_digest":source.digest(),"candidate_digest":candidate_digest,"changed_weights":changed_weights,"experimental_graph":experimental,"active_tiles":trainer.phenotype().budgets().global.active_tiles,"microstep_count":trainer.phenotype().microstep_count(),"total_synapses":trainer.phenotype().synapses().len(),"preparation_ticks":preparation_ticks,"target_hazard_pain":target_hazard_pain,"initial_biology":initial_biology,"optimizer_unchanged":true,"cold_next_step_exact":true,"target_active":!host.world().entity(object).unwrap().consumed,"final_position":host.world().entity(host.world().entity_id("learner").unwrap()).unwrap().position,"final_target_carrier":host.world().entity(object).unwrap().carried_by,"final_body":r.biochemistry().body,"final_homeostasis":r.biochemistry().homeostasis,"rows":rows}),
+@@ -853,7 +938,11 @@
+         ],
+         "validate" => vec![("untouched", 0.), ("whole-care", 0.)],
+         "balanced" => vec![("whole-care", 0.), ("whole-care-balanced", 0.)],
+-        "narrow" => vec![("whole-care", 0.), ("whole-care-balanced", 0.), ("whole-care-narrow", 0.)],
++        "narrow" => vec![
++            ("whole-care", 0.),
++            ("whole-care-balanced", 0.),
++            ("whole-care-narrow", 0.),
++        ],
+         "ingest-factor" => vec![("whole-care", 0.), ("whole-care-ingest-only", 0.)],
+         "boost-factor" => vec![("whole-care", 0.), ("whole-care-ingest-boost", 0.)],
+         "approach-factor" => vec![("whole-care", 0.), ("whole-care-approach70", 0.)],
 --- /dev/null
 +++ b/crates/alife_core/src/phenotype/experimental_sensor_anchor.rs
 @@ -0,0 +1,187 @@
@@ -1070,7 +1321,7 @@
 +];
 --- /dev/null
 +++ b/crates/alife_core/tests/n2048_anchored_v2.rs
-@@ -0,0 +1,274 @@
+@@ -0,0 +1,292 @@
 +use alife_core::*;
 +#[test]
 +fn anchored_v2_has_distinct_identity_and_exact_asset_roundtrip() {
@@ -1131,6 +1382,24 @@
 +        .iter()
 +        .zip(source.weights())
 +        .all(|(s, w)| s.genetic_weight().to_bits() == w.to_bits()));
++    let v2_recipe = N2048ExperimentalGraphV1::for_asset(&asset).unwrap();
++    assert!(PhenotypeCompilerInputs::try_new_with_foundation_selection(
++        g.clone(),
++        &BrainCapacityClass::n2048(),
++        d.clone(),
++        SensorProfile::GroundedObjectSlotsV1,
++        FoundationAbiSelection::N2048ExperimentalGraphV1(v2_recipe)
++    )
++    .is_err());
++    let v1_recipe = N2048ExperimentalGraphV1::fresh(SensorProfile::GroundedObjectSlotsV1).unwrap();
++    assert!(PhenotypeCompilerInputs::try_new_with_foundation_selection(
++        g.clone(),
++        &BrainCapacityClass::n2048(),
++        d.clone(),
++        SensorProfile::GroundedObjectSlotsV1,
++        FoundationAbiSelection::N2048ExperimentalGraphV2(v1_recipe)
++    )
++    .is_err());
 +    assert!(PhenotypeCompiler::compile_n2048_foundation_candidate(g, d, asset).is_err());
 +}
 +
@@ -1347,27 +1616,42 @@
 +}
 --- /dev/null
 +++ b/crates/alife_training/examples/research_dump_founder_anchor.rs
-@@ -0,0 +1,17 @@
+@@ -0,0 +1,32 @@
 +#[allow(dead_code)]
 +#[path = "probe_weight_space_care.rs"]
 +mod base;
 +use alife_core::*;
 +use alife_world::*;
 +fn main() -> Result<(), Box<dyn std::error::Error>> {
-+    let seed=2026111560u64;
-+    let (mut config, phenotype, _) = base::source(seed,true)?;
-+    let anchor=serde_json::to_vec_pretty(phenotype.sensor_encoder())?;
-+    std::fs::write("/workspace/scratch/ee5e08a3ca9b/base-weight-study-20261110/v2-reference-anchor.json",anchor)?;
-+    config.brain_class=BrainScaleTier::Standard2048;
-+    let asset=FoundationWeightAsset::builtin_n2048_v1(config.sensor_profile)?;
-+    let world=create_canonical_new_game_with_n2048_candidate(&config,&asset)?;
-+    let record=world.world.organism_registry().iter().next().ok_or("no founder")?;
-+    println!("reference_sensor_seed={} assignments={}",record.phenotype().brain_genome.seeds.sensor_layout_seed,phenotype.sensor_encoder().assignments().len());
++    let seed = 2026111560u64;
++    let (mut config, phenotype, _) = base::source(seed, true)?;
++    let anchor = serde_json::to_vec_pretty(phenotype.sensor_encoder())?;
++    let path = std::env::args().nth(1).ok_or("new output path required")?;
++    use std::io::Write;
++    let mut out = std::fs::OpenOptions::new()
++        .write(true)
++        .create_new(true)
++        .open(path)?;
++    out.write_all(&anchor)?;
++    config.brain_class = BrainScaleTier::Standard2048;
++    let asset = FoundationWeightAsset::builtin_n2048_v1(config.sensor_profile)?;
++    let world = create_canonical_new_game_with_n2048_candidate(&config, &asset)?;
++    let record = world
++        .world
++        .organism_registry()
++        .iter()
++        .next()
++        .ok_or("no founder")?;
++    println!(
++        "reference_sensor_seed={} assignments={}",
++        record.phenotype().brain_genome.seeds.sensor_layout_seed,
++        phenotype.sensor_encoder().assignments().len()
++    );
 +    Ok(())
 +}
 --- /dev/null
 +++ b/crates/alife_training/examples/research_generate_anchored_v2.rs
-@@ -0,0 +1,26 @@
+@@ -0,0 +1,70 @@
 +#[allow(dead_code)]
 +#[path = "probe_weight_space_care.rs"]
 +mod base;
@@ -1375,22 +1659,66 @@
 +use alife_runtime::canonical_preparation::foundation_construction_development;
 +use alife_world::*;
 +fn main() -> Result<(), Box<dyn std::error::Error>> {
-+    let seed=2026111560u64;
-+    let (config,v1,_) = base::source(seed,true)?;
-+    let standard=FoundationWeightAsset::builtin_n2048_v1(config.sensor_profile)?;
-+    let game=create_canonical_new_game_with_n2048_candidate(&config,&standard)?;
-+    let r=game.world.organism_registry().iter().next().ok_or("no founder")?;
-+    let genome=r.phenotype().brain_genome.clone();
-+    let d=foundation_construction_development(&genome,&BrainCapacityClass::n2048(),&r.phenotype().development_state_at(Tick::ZERO)?)?;
-+    let (v2,_) = PhenotypeCompiler::compile_n2048_anchored_v2_graph(genome.clone(),d.clone(),config.sensor_profile)?;
-+    assert_eq!(v1.sensor_encoder(),v2.sensor_encoder(),"reference sensor plan changed");
-+    assert!(v1.synapses().iter().zip(v2.synapses()).all(|(a,b)|a.source()==b.source()&&a.target()==b.target()&&a.route_index()==b.route_index()&&a.kind()==b.kind()));
-+    let v1_asset=FoundationWeightAsset::decode_canonical(include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"),"/../../assets/foundations/experimental-whole-care-bold-v1.alife-foundation")))?;
-+    let asset=FoundationWeightAsset::from_trained_weights(&v2,v1_asset.weights().to_vec(),v1_asset.manifest().training_stage())?;
-+    let (bound,_) = PhenotypeCompiler::compile_n2048_experimental_foundation_candidate(genome,d,asset.clone())?;
-+    assert!(bound.synapses().iter().zip(v1_asset.weights()).all(|(s,w)|s.genetic_weight().to_bits()==w.to_bits()));
-+    let path="/workspace/scratch/ee5e08a3ca9b/base-weight-study-20261110/experimental-anchored-v2-research.alife-foundation";
-+    let mut out=std::fs::OpenOptions::new().write(true).create_new(true).open(path)?; use std::io::Write;out.write_all(&asset.encode_canonical()?)?;
++    let seed = 2026111560u64;
++    let (config, v1, _) = base::source(seed, true)?;
++    let standard = FoundationWeightAsset::builtin_n2048_v1(config.sensor_profile)?;
++    let game = create_canonical_new_game_with_n2048_candidate(&config, &standard)?;
++    let r = game
++        .world
++        .organism_registry()
++        .iter()
++        .next()
++        .ok_or("no founder")?;
++    let genome = r.phenotype().brain_genome.clone();
++    let d = foundation_construction_development(
++        &genome,
++        &BrainCapacityClass::n2048(),
++        &r.phenotype().development_state_at(Tick::ZERO)?,
++    )?;
++    let (v2, _) = PhenotypeCompiler::compile_n2048_anchored_v2_graph(
++        genome.clone(),
++        d.clone(),
++        config.sensor_profile,
++    )?;
++    assert_eq!(
++        v1.sensor_encoder(),
++        v2.sensor_encoder(),
++        "reference sensor plan changed"
++    );
++    assert!(v1
++        .synapses()
++        .iter()
++        .zip(v2.synapses())
++        .all(|(a, b)| a.source() == b.source()
++            && a.target() == b.target()
++            && a.route_index() == b.route_index()
++            && a.kind() == b.kind()));
++    let v1_asset = FoundationWeightAsset::decode_canonical(include_bytes!(concat!(
++        env!("CARGO_MANIFEST_DIR"),
++        "/../../assets/foundations/experimental-whole-care-bold-v1.alife-foundation"
++    )))?;
++    let asset = FoundationWeightAsset::from_trained_weights(
++        &v2,
++        v1_asset.weights().to_vec(),
++        v1_asset.manifest().training_stage(),
++    )?;
++    let (bound, _) = PhenotypeCompiler::compile_n2048_experimental_foundation_candidate(
++        genome,
++        d,
++        asset.clone(),
++    )?;
++    assert!(bound
++        .synapses()
++        .iter()
++        .zip(v1_asset.weights())
++        .all(|(s, w)| s.genetic_weight().to_bits() == w.to_bits()));
++    let path = std::env::args().nth(1).ok_or("new output path required")?;
++    let mut out = std::fs::OpenOptions::new()
++        .write(true)
++        .create_new(true)
++        .open(&path)?;
++    use std::io::Write;
++    out.write_all(&asset.encode_canonical()?)?;
 +    println!("research_v2 distinct_id={:?} sensory_equal=true synapse_coordinates_equal=true weight_bits_equal=true path={path}",asset.manifest().foundation_id());
 +    Ok(())
 +}
