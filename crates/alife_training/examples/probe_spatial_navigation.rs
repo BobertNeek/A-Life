@@ -359,7 +359,9 @@ fn wire_spatial_trace(p: &BrainPhenotype, weights: &mut [f32]) -> Result<Vec<ser
     let mut used_nodes = BTreeSet::new();
     let mut used_motors = BTreeSet::new();
     let mut edits = Vec::new();
-    for (ray, direction) in [(0u16, -1.0f32), (7u16, 1.0f32)] {
+    // Mid-side rays distinguish nearby gaps; extreme rear-facing rays can
+    // both report open even when the forward detour is one-sided.
+    for (ray, direction) in [(3u16, -1.0f32), (12u16, 1.0f32)] {
         let sources = p
             .sensor_encoder()
             .assignments()
@@ -472,7 +474,7 @@ fn wire_spatial_trace(p: &BrainPhenotype, weights: &mut [f32]) -> Result<Vec<ser
 fn wire_local_spatial_lattice(
     p: &BrainPhenotype,
     weights: &mut [f32],
-    persistent: bool,
+    self_gain: f32,
 ) -> Result<Vec<serde_json::Value>> {
     let mut counts = [0usize; 2];
     let mut edits = Vec::new();
@@ -493,13 +495,9 @@ fn wire_local_spatial_lattice(
             let bc = b % 4;
             let adjacent = ar.abs_diff(br) + ac.abs_diff(bc) == 1;
             let after = if a == b {
-                if persistent {
-                    0.85
-                } else {
-                    0.4
-                }
+                self_gain
             } else if adjacent {
-                if persistent {
+                if self_gain > 0.4 {
                     0.06
                 } else {
                     0.1
@@ -528,8 +526,8 @@ fn wire_visual_lattice_inputs(
     use std::collections::BTreeSet;
     let mut used_sources = BTreeSet::new();
     let mut edits = Vec::new();
-    for ray in 0..8u16 {
-        let target = 896 + u32::from(ray / 2);
+    for (slot, ray) in [0u16, 2, 4, 6, 9, 11, 13, 15].into_iter().enumerate() {
+        let target = 896 + (slot / 2) as u32;
         let edge = p
             .sensor_encoder()
             .assignments()
@@ -758,6 +756,7 @@ fn trial(spec: TrialSpec<'_>) -> Result<serde_json::Value> {
         || arm == "nav-care"
         || arm == "nav-care2"
         || arm == "nav-map"
+        || arm == "nav-stable"
     {
         if config.sensor_profile != SensorProfile::GroundedTerrainVisionV1 {
             return Err("navigation circuit requires terrain vision".into());
@@ -768,13 +767,20 @@ fn trial(spec: TrialSpec<'_>) -> Result<serde_json::Value> {
             || arm == "nav-care"
             || arm == "nav-care2"
             || arm == "nav-map"
+            || arm == "nav-stable"
         {
             edits.extend(wire_local_spatial_lattice(
                 &p,
                 &mut weights,
-                arm == "nav-map",
+                if arm == "nav-stable" {
+                    1.3
+                } else if arm == "nav-map" {
+                    0.85
+                } else {
+                    0.4
+                },
             )?);
-            if arm == "nav-map" {
+            if arm == "nav-map" || arm == "nav-stable" {
                 edits.extend(wire_visual_lattice_inputs(&p, &mut weights)?);
             }
         }
@@ -784,6 +790,7 @@ fn trial(spec: TrialSpec<'_>) -> Result<serde_json::Value> {
             || arm == "nav-care"
             || arm == "nav-care2"
             || arm == "nav-map"
+            || arm == "nav-stable"
         {
             // Grounded target distance is available only for a seen object.
             // Bias exploratory approach without inventing a food label or taste.
@@ -812,6 +819,7 @@ fn trial(spec: TrialSpec<'_>) -> Result<serde_json::Value> {
                             || arm == "nav-care"
                             || arm == "nav-care2"
                             || arm == "nav-map"
+                            || arm == "nav-stable"
                         {
                             80.0
                         } else {
@@ -826,7 +834,7 @@ fn trial(spec: TrialSpec<'_>) -> Result<serde_json::Value> {
             }
         }
     }
-    if arm == "nav-care" || arm == "nav-care2" || arm == "nav-map" {
+    if arm == "nav-care" || arm == "nav-care2" || arm == "nav-map" || arm == "nav-stable" {
         // Curiosity about an actually contacted object, not a food or safety oracle.
         // Strong bitter/pain avoidance remains a separate signal and is tested.
         let reference = p
@@ -850,7 +858,7 @@ fn trial(spec: TrialSpec<'_>) -> Result<serde_json::Value> {
             {
                 let before = weights[i];
                 weights[i] = before
-                    + if arm == "nav-care2" || arm == "nav-map" {
+                    + if arm == "nav-care2" || arm == "nav-map" || arm == "nav-stable" {
                         -20.0
                     } else {
                         4.0
@@ -1127,7 +1135,7 @@ fn trial(spec: TrialSpec<'_>) -> Result<serde_json::Value> {
             // Detached impulse/ablation experiment: inputs are edited only in a
             // copied replay, never in the live world or policy state.
             let lattice_pulse = if tick == 0
-                && (arm == "nav-lattice" || arm == "nav-map")
+                && (arm == "nav-lattice" || arm == "nav-map" || arm == "nav-stable")
                 && std::env::var_os("ALIFE_RESEARCH_GRID_PULSE").is_some()
             {
                 let grid_edges = trainer
@@ -1143,10 +1151,20 @@ fn trial(spec: TrialSpec<'_>) -> Result<serde_json::Value> {
                         inside.then_some(i)
                     })
                     .collect::<Vec<_>>();
+                let ray_pulse = std::env::var_os("ALIFE_RESEARCH_RAY_PULSE").is_some();
+                let pulse_neuron = if ray_pulse {
+                    edits
+                        .iter()
+                        .find(|e| e["role"] == "egocentric_visual_grid_input" && e["ray"] == 0)
+                        .and_then(|e| e["source"].as_u64())
+                        .ok_or("ray zero path absent")? as usize
+                } else {
+                    896
+                };
                 let run = |steps: usize, pulse: bool, ablate: bool| -> Result<Vec<f32>> {
                     let mut ticks = vec![row.replay_tick.clone(); steps];
                     if pulse {
-                        ticks[0].encoded_inputs[896] += 0.25;
+                        ticks[0].encoded_inputs[pulse_neuron] += 0.25;
                     }
                     if ablate {
                         for tick in &mut ticks {
@@ -1174,7 +1192,7 @@ fn trial(spec: TrialSpec<'_>) -> Result<serde_json::Value> {
                         .clone())
                 };
                 let mut samples = Vec::new();
-                for steps in 1..=4 {
+                for steps in [1usize, 2, 4, 8, 16] {
                     let normal = run(steps, false, false)?;
                     let pulsed = run(steps, true, false)?;
                     let off = run(steps, false, true)?;
@@ -1182,7 +1200,7 @@ fn trial(spec: TrialSpec<'_>) -> Result<serde_json::Value> {
                     let deltas = |a: &[f32], b: &[f32], start: usize| {
                         (start..start + 16).map(|i| a[i] - b[i]).collect::<Vec<_>>()
                     };
-                    samples.push(json!({"steps":steps,"predictive_delta":deltas(&pulsed,&normal,896),"context_delta":deltas(&pulsed,&normal,1600),"ablated_predictive_delta":deltas(&off_pulsed,&off,896),"ablated_context_delta":deltas(&off_pulsed,&off,1600)}));
+                    samples.push(json!({"steps":steps,"pulse_neuron":pulse_neuron,"ray_pulse":ray_pulse,"predictive_delta":deltas(&pulsed,&normal,896),"context_delta":deltas(&pulsed,&normal,1600),"ablated_predictive_delta":deltas(&off_pulsed,&off,896),"ablated_context_delta":deltas(&off_pulsed,&off,1600)}));
                 }
                 Some(samples)
             } else {
@@ -1270,7 +1288,7 @@ fn trial(spec: TrialSpec<'_>) -> Result<serde_json::Value> {
                     "activation": &eval.final_activations[0][region.start as usize..(region.start+region.len) as usize],
                 }))
             }).collect::<Vec<_>>();
-            rows.push(json!({"tick":tick,"position":observed_position,"visible_goal":visible_goal,"latent_context":latent_context,"lattice_pulse":lattice_pulse,"counter":row.sampling_counter,"action":row.action,"candidates":frame.candidates(),"logits":eval.candidate_logits[0],"ingest_taste_motors":motors,"encoded_hunger_plus_0_1_logit_delta":hunger_probe,"encoded_hunger_3_frozen_frames_delta":hunger_three_frames,"constructed_neuron_activations":debug_activations,"effective_bridges":effective_bridges,"enabled_routes":row.replay_tick.enabled_routes,"outcome":outcome,"reward":row.biological_reward}));
+            rows.push(json!({"tick":tick,"position":observed_position,"visible_goal":visible_goal,"neural_body":frame.body().neural_projection(frame.sensor_profile()),"vision_ranges":frame.sensory().channels.visual_affordance,"latent_context":latent_context,"lattice_pulse":lattice_pulse,"counter":row.sampling_counter,"action":row.action,"candidates":frame.candidates(),"logits":eval.candidate_logits[0],"ingest_taste_motors":motors,"encoded_hunger_plus_0_1_logit_delta":hunger_probe,"encoded_hunger_3_frozen_frames_delta":hunger_three_frames,"constructed_neuron_activations":debug_activations,"effective_bridges":effective_bridges,"enabled_routes":row.replay_tick.enabled_routes,"outcome":outcome,"reward":row.biological_reward}));
         }
     }
     assert_eq!(before, serde_json::to_vec(&trainer.checkpoint())?);
@@ -1501,6 +1519,7 @@ fn main() -> Result<()> {
         "nav-care-factor" => vec![("nav-base", 0.), ("nav-care", 0.)],
         "nav-care2-factor" => vec![("nav-base", 0.), ("nav-care2", 0.)],
         "nav-map-factor" => vec![("nav-base", 0.), ("nav-map", 0.)],
+        "nav-stable-factor" => vec![("nav-map", 0.), ("nav-stable", 0.)],
         "bold-factor" => vec![("whole-care", 0.), ("whole-care-bold", 0.)],
         "contact" => vec![("whole-care-v5", 0.), ("whole-care", 0.)],
         "whole" => vec![
