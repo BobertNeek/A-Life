@@ -85,6 +85,13 @@ fn fresh_activations(brain: &BrainPhenotype, frame: &PerceptionFrameDraft) -> Ve
             SensorEncoderSourceGroup::SensoryChannel => sensory[lane],
             SensorEncoderSourceGroup::Body => body[lane],
             SensorEncoderSourceGroup::Homeostasis => homeostasis[lane],
+            SensorEncoderSourceGroup::VisibleObject => {
+                visible_object_neural::visible_object_neural_lanes(
+                    frame.sensor_profile(),
+                    frame.grounded_object_slots(),
+                )
+                .unwrap()[lane]
+            }
             SensorEncoderSourceGroup::HeardLanguage | SensorEncoderSourceGroup::SemanticPrior => {
                 0.0
             }
