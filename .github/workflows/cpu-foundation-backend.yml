@@ -118,6 +118,8 @@ jobs:
           cargo build --locked -p alife_game_app --features cpu-training --bin train_cpu_care --bin train_cpu_care_round
           python -B scripts/check_cpu_retention_native.py target/debug/train_cpu_care
           cargo clippy --locked -p alife_game_app --features cpu-training --lib --bin train_cpu_care --bin train_cpu_care_round --test cpu_care --test cpu_care_round -- -D warnings
+      - name: Preserve opt-in neutral-contact benefit and nonfood failure witnesses
+        run: cargo test --locked -p alife_training --features cpu-backend --example probe_neutral_contact_review -- --nocapture
       - name: Strict CPU source review
         run: cargo clippy --locked -p alife_training --features cpu-backend --lib --bins --test cpu_backend --test cpu_collector --test cpu_absent_speech --test cpu_collect_only --test cpu_cooperative_round --test cpu_cli --test cpu_cadence_csr --test backend_handoff -- -D warnings
       - name: Compile hardware differential test without requesting an adapter
