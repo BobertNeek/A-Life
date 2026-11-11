@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 
 use alife_core::{
     Blake3Digest, BrainCapacityClass, BrainPhenotype, FoundationWeightAsset, PhenotypeHash,
-    ProjectionType, ScaffoldContractError,
+    ScaffoldContractError,
 };
 
 use crate::StageTrainableMask;
@@ -157,11 +157,10 @@ pub fn merge_founder_branches_with_policy(
                 .projections()
                 .get(usize::from(synapse.route_index()))
                 .ok_or(ScaffoldContractError::PhenotypeCompile)?;
-            if match projection.projection_type() {
-                ProjectionType::LateralInhibition => merged >= 0.0,
-                ProjectionType::Homeostatic | ProjectionType::MotorProposal => merged < 0.0,
-                _ => false,
-            } {
+            if !phenotype
+                .genetic_weight_sign_policy(synapse.kind(), projection.projection_type())
+                .accepts(merged)
+            {
                 return Err(ScaffoldContractError::PhenotypeCompile);
             }
         }

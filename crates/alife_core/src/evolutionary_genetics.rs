@@ -1088,15 +1088,21 @@ impl CreatureGenome {
         Ok(genome)
     }
 
-    /// V2 founders may carry different inherited genetic weights when their
-    /// structural coordinate identities match. V1 and ordinary candidate
-    /// assets retain the existing exact-match rule.
+    /// Anchored V2 or signed-motor V3 founders may carry different inherited
+    /// weights within the same immutable policy/family and structural identity.
+    /// V1 and ordinary candidate assets retain the existing exact-match rule.
     pub fn compatible_n2048_foundation_assets(&self, other: &Self) -> bool {
         match (
             &self.n2048_foundation_candidate,
             &other.n2048_foundation_candidate,
         ) {
-            (Some(a), Some(b)) if a.is_n2048_anchored_v2() && b.is_n2048_anchored_v2() => {
+            (Some(a), Some(b))
+                if a.uses_n2048_anchored_sensor_layout()
+                    && b.uses_n2048_anchored_sensor_layout()
+                    && a.manifest().foundation_id() == b.manifest().foundation_id()
+                    && a.manifest().compatibility_family_id()
+                        == b.manifest().compatibility_family_id() =>
+            {
                 let x = a.manifest();
                 let y = b.manifest();
                 x.sensor_profile() == y.sensor_profile()
@@ -1203,9 +1209,14 @@ impl CreatureGenome {
         if let Some(asset) = maternal
             .n2048_foundation_candidate
             .as_ref()
-            .filter(|a| a.is_n2048_anchored_v2())
+            .filter(|a| a.uses_n2048_anchored_sensor_layout())
         {
             let profile = asset.manifest().sensor_profile();
+            let compile_child = if asset.is_n2048_signed_motor_v3() {
+                crate::PhenotypeCompiler::compile_n2048_signed_motor_v3_graph
+            } else {
+                crate::PhenotypeCompiler::compile_n2048_anchored_v2_graph
+            };
             let compile_parent =
                 |parent: &Self| -> Result<crate::BrainPhenotype, ScaffoldContractError> {
                     let expressed = parent.express()?;
@@ -1229,11 +1240,7 @@ impl CreatureGenome {
             let expressed = genome.express()?;
             let age = Tick::new(u64::from(expressed.development.maturation_duration_ticks));
             let development = expressed.development_state_at(age)?;
-            let (child, _) = crate::PhenotypeCompiler::compile_n2048_anchored_v2_graph(
-                expressed.brain_genome,
-                development,
-                profile,
-            )?;
+            let (child, _) = compile_child(expressed.brain_genome, development, profile)?;
             let same_coordinates = |parent: &crate::BrainPhenotype| {
                 parent.route_abi_digest() == child.route_abi_digest()
                     && parent.persistent_address_map().digest()
@@ -1304,16 +1311,13 @@ impl CreatureGenome {
                         .iter()
                         .find(|p| p.route_index() == synapse.route_index())
                         .ok_or(ScaffoldContractError::PhenotypeCompile)?;
-                    after = match projection.projection_type() {
-                        crate::ProjectionType::LateralInhibition => {
+                    after = match child
+                        .genetic_weight_sign_policy(synapse.kind(), projection.projection_type())
+                    {
+                        crate::GeneticWeightSignPolicy::StrictNegative => {
                             -after.abs().max(f32::MIN_POSITIVE)
                         }
-                        crate::ProjectionType::Homeostatic
-                        | crate::ProjectionType::MotorProposal
-                            if synapse.kind() == crate::CompiledSynapseKind::Recurrent =>
-                        {
-                            after.abs()
-                        }
+                        crate::GeneticWeightSignPolicy::Nonnegative => after.abs(),
                         _ => after,
                     };
                     if before.to_bits() != after.to_bits() {
@@ -1337,11 +1341,7 @@ impl CreatureGenome {
             let age = Tick::new(u64::from(expressed.development.maturation_duration_ticks));
             let development = expressed.development_state_at(age)?;
             let (child_with_mutations, _) =
-                crate::PhenotypeCompiler::compile_n2048_anchored_v2_graph(
-                    expressed.brain_genome,
-                    development,
-                    profile,
-                )?;
+                compile_child(expressed.brain_genome, development, profile)?;
             if !same_coordinates(&child_with_mutations) {
                 return Err(ScaffoldContractError::IncompatibleGeneticClass);
             }

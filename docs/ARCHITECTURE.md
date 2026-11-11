@@ -69,8 +69,19 @@ per-frame path with batched GPU mutable-state capture (`capture_training_states`
 Candidate memory admits consequences, surprises, manipulation, blocked attempts,
 and first novel inspection rather than routine movement ticks.
 
-Action arbitration uses signed `ActionCandidate` and `SpeechPayload` decoder projections
-and signed `TemporalPredictive -> ActionPlanning` (`MotorProposal`) tracts, with dedicated
+Action arbitration uses signed `ActionCandidate` and `SpeechPayload` decoder projections.
+Legacy and anchored V2 recurrent `MotorProposal` genetic weights remain nonnegative.
+The explicit fresh `N2048ExperimentalGraphV3` foundation permits signed recurrent
+`MotorProposal` genetic weights, including `TemporalPredictive -> ActionPlanning`
+tracts. V3 keeps V2 initial weights, coordinates and sensor anchors, but has a new
+recipe, foundation ID and compatibility family; it cannot resume V2 lives,
+checkpoints or optimizer histories. Compilation, mutation, CPU/GPU Adam metadata
+and founder merge use this immutable identity-bound sign policy. Homeostatic
+nonnegative and lateral-inhibition strictly negative genetic policies are unchanged.
+Runtime effective weights still combine genetic, lifetime and fast-plastic values
+without a new sign clamp. This opt-in does not change New Game defaults.
+
+Action arbitration has dedicated
 motor neuron populations per `CandidateActionFamily` (`Ingest`, `Contact` for `Grab`,
 `Other` for `Play`, `Manipulate`, `Locomote`, and `Avoid`). Innate `Approach` priors
 are valence-aware via chemical/recalled valence (`feature 15`), and `Avoid` includes a

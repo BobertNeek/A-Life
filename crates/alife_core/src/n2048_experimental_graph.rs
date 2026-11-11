@@ -34,6 +34,29 @@ impl N2048ExperimentalGraphV1 {
         v.set_anchored_version();
         Ok(v)
     }
+    /// Fresh opt-in identity: V2 coordinates with signed recurrent motor genes.
+    pub fn fresh_signed_motor_v3(
+        sensor_profile: SensorProfile,
+    ) -> Result<Self, ScaffoldContractError> {
+        let mut value = Self::fresh_anchored_v2(sensor_profile)?;
+        value.schema_version = 3;
+        value.recipe_digest = Self::signed_motor_recipe_digest();
+        Ok(value)
+    }
+    pub fn signed_motor_recipe_digest() -> [u64; 4] {
+        let mut d = CanonicalDigestBuilder::new(b"alife.n2048.experimental-signed-motor.v3");
+        for word in Self::anchored_recipe_digest() {
+            d.write_u64(word);
+        }
+        d.write_u16(1); // SignedRecurrentMotorProposalV1, immutable policy.
+        d.finish256()
+    }
+    pub const fn is_signed_motor_v3(&self) -> bool {
+        self.schema_version == 3
+    }
+    pub const fn uses_anchored_sensor_layout(&self) -> bool {
+        self.is_anchored_v2() || self.is_signed_motor_v3()
+    }
     pub fn anchored_recipe_digest() -> [u64; 4] {
         let mut d =
             CanonicalDigestBuilder::new(b"alife.n2048.experimental-anchored-sensor-graph.v2");
@@ -58,7 +81,9 @@ impl N2048ExperimentalGraphV1 {
         if !asset.is_n2048_experimental_graph() {
             return Err(ScaffoldContractError::PhenotypeCompile);
         }
-        let mut value = if asset.is_n2048_anchored_v2() {
+        let mut value = if asset.is_n2048_signed_motor_v3() {
+            Self::fresh_signed_motor_v3(asset.manifest().sensor_profile())?
+        } else if asset.is_n2048_anchored_v2() {
             Self::fresh_anchored_v2(asset.manifest().sensor_profile())?
         } else {
             Self::fresh(asset.manifest().sensor_profile())?
@@ -96,15 +121,22 @@ impl N2048ExperimentalGraphV1 {
         profile: SensorProfile,
     ) -> Result<(), ScaffoldContractError> {
         if !((self.schema_version == 1 && self.recipe_digest == Self::recipe_digest())
-            || (self.schema_version == 2 && self.recipe_digest == Self::anchored_recipe_digest()))
+            || (self.schema_version == 2 && self.recipe_digest == Self::anchored_recipe_digest())
+            || (self.schema_version == 3
+                && self.recipe_digest == Self::signed_motor_recipe_digest()))
             || capacity.id() != BrainCapacityClass::N2048_ID
             || self.sensor_profile != profile
+            || (self.uses_anchored_sensor_layout()
+                && profile != SensorProfile::GroundedObjectSlotsV1)
         {
             return Err(ScaffoldContractError::PhenotypeCompile);
         }
         SensorProfile::try_from_raw(profile.raw())?;
         if let Some(asset) = self.asset()? {
-            if !asset.is_n2048_experimental_graph() || asset.manifest().sensor_profile() != profile
+            if !asset.is_n2048_experimental_graph()
+                || asset.manifest().sensor_profile() != profile
+                || self.is_signed_motor_v3() != asset.is_n2048_signed_motor_v3()
+                || self.is_anchored_v2() != asset.is_n2048_anchored_v2()
             {
                 return Err(ScaffoldContractError::PhenotypeCompile);
             }
