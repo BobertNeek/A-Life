@@ -1124,3 +1124,249 @@ fn check_cohort_auxiliary(mode: u8) {
         }
     }
 }
+
+fn motor_policy_fixture(v3: bool) -> (BrainPhenotype, FoundationWeightAsset, usize) {
+    let g = BrainGenome::scaffold(0x2048_2026, BrainCapacityClass::N2048_ID);
+    let d = DevelopmentState::new(g.id, Tick::ZERO, NormalizedScalar::new(1.0).unwrap());
+    let compile = if v3 {
+        PhenotypeCompiler::compile_n2048_signed_motor_v3_graph
+    } else {
+        PhenotypeCompiler::compile_n2048_anchored_v2_graph
+    };
+    let (p, _) = compile(g.clone(), d.clone(), SensorProfile::GroundedObjectSlotsV1).unwrap();
+    let i = p
+        .synapses()
+        .iter()
+        .position(|s| {
+            s.kind() == CompiledSynapseKind::Recurrent
+                && p.projections()[s.route_index() as usize].projection_type()
+                    == alife_core::ProjectionType::MotorProposal
+        })
+        .unwrap();
+    let mut weights = p
+        .synapses()
+        .iter()
+        .map(|s| s.genetic_weight())
+        .collect::<Vec<_>>();
+    weights[i] = 0.00001;
+    let a = FoundationWeightAsset::from_trained_weights(
+        &p,
+        weights,
+        alife_core::TrainingStageManifest::bootstrap(),
+    )
+    .unwrap();
+    let (p, _) =
+        PhenotypeCompiler::compile_n2048_experimental_foundation_candidate(g, d, a.clone())
+            .unwrap();
+    (p, a, i)
+}
+
+#[test]
+fn signed_motor_v3_adam_crosses_zero_preserving_moments_integer_ages_and_frozen_state() {
+    let mut results = Vec::new();
+    for v3 in [false, true] {
+        let (p, a, i) = motor_policy_fixture(v3);
+        let mask = StageTrainableMask::from_synapse_indices(&p, &[i as u32]).unwrap();
+        let mut t =
+            CpuFoundationTrainer::new(p.clone(), a.clone(), mask, AdamWConfig::default()).unwrap();
+        let mut c = t.checkpoint();
+        c.optimizer_step = 16_777_219;
+        for j in 0..c.weights.len() {
+            c.update_ages[j] = if j == i { 16_777_217 } else { 7 };
+            c.first_moment[j] = 0.05;
+            c.second_moment[j] = 0.1;
+        }
+        t.restore_checkpoint(c.clone()).unwrap();
+        let mut gradients = vec![0.; p.synapses().len()];
+        gradients[i] = 1.;
+        t.apply_gradients(&gradients).unwrap();
+        let next = t.checkpoint();
+        assert_eq!(next.update_ages[i], 16_777_218);
+        assert_eq!(next.optimizer_step, 16_777_220);
+        assert_eq!(next.weights[i] < 0., v3);
+        for j in 0..c.weights.len() {
+            if j != i {
+                assert_eq!(next.weights[j].to_bits(), c.weights[j].to_bits());
+                assert_eq!(next.first_moment[j].to_bits(), c.first_moment[j].to_bits());
+                assert_eq!(
+                    next.second_moment[j].to_bits(),
+                    c.second_moment[j].to_bits()
+                );
+                assert_eq!(next.update_ages[j], c.update_ages[j]);
+            }
+        }
+        let bytes = serde_json::to_vec(&next).unwrap();
+        let restored = serde_json::from_slice(&bytes).unwrap();
+        let mut resumed = CpuFoundationTrainer::from_checkpoint(p, a, restored).unwrap();
+        t.apply_gradients(&gradients).unwrap();
+        resumed.apply_gradients(&gradients).unwrap();
+        assert_eq!(t.checkpoint(), resumed.checkpoint());
+        if v3 {
+            let exported = t
+                .export_candidate(alife_core::TrainingStageManifest::bootstrap())
+                .unwrap();
+            assert!(exported.is_n2048_signed_motor_v3());
+            let g = BrainGenome::scaffold(0x2048_2026, BrainCapacityClass::N2048_ID);
+            let d = DevelopmentState::new(g.id, Tick::ZERO, NormalizedScalar::new(1.).unwrap());
+            let (bound, _) =
+                PhenotypeCompiler::compile_n2048_experimental_foundation_candidate(g, d, exported)
+                    .unwrap();
+            assert_eq!(
+                bound.synapses()[i].genetic_weight().to_bits(),
+                t.weights()[i].to_bits()
+            );
+        }
+        results.push((
+            next.first_moment[i].to_bits(),
+            next.second_moment[i].to_bits(),
+            next.update_ages[i],
+        ));
+        let mut overflow = t.checkpoint();
+        overflow.optimizer_step = u32::MAX;
+        overflow.update_ages[i] = u32::MAX;
+        t.restore_checkpoint(overflow.clone()).unwrap();
+        assert!(t.apply_gradients(&gradients).is_err());
+        assert_eq!(t.checkpoint(), overflow);
+    }
+    assert_eq!(results[0], results[1]);
+}
+
+#[test]
+fn signed_motor_v3_checkpoint_rejects_cross_policy_restore_both_ways() {
+    let (p2, a2, _) = motor_policy_fixture(false);
+    let (p3, a3, _) = motor_policy_fixture(true);
+    let t2 = trainer(&p2, &a2);
+    let t3 = trainer(&p3, &a3);
+    assert!(
+        CpuFoundationTrainer::from_checkpoint(p3.clone(), a3.clone(), t2.checkpoint()).is_err()
+    );
+    assert!(CpuFoundationTrainer::from_checkpoint(p2, a2, t3.checkpoint()).is_err());
+    assert!(t2.checkpoint().validate_for(&p3, a3.digest()).is_err());
+}
+
+#[test]
+fn signed_motor_v3_negative_gene_reverses_cpu_recurrent_contribution() {
+    let (p, a, i) = motor_policy_fixture(true);
+    let mut weights = a.weights().to_vec();
+    let synapse = &p.synapses()[i];
+    let route = synapse.route_index() as usize;
+    let source = synapse.source() as usize;
+    let target = synapse.target() as usize;
+    let mut q = sequence(&p, 1, 0);
+    q.initial.activations.fill(0.);
+    q.initial.activations[source] = 1.;
+    q.initial.activity_ema.fill(0.);
+    q.initial.metabolic_load.fill(0.);
+    q.initial.dendrites = DendriticBranchSet::new(vec![]).unwrap();
+    let tick = &mut q.ticks[0];
+    tick.encoded_inputs.fill(0.);
+    tick.effective_weight_offsets.fill(0.);
+    tick.enabled_routes.fill(false);
+    tick.enabled_routes[route] = true;
+    tick.projection_gain = 1.;
+    tick.local_threshold_shift = 0.;
+    tick.microstep_count = 1;
+    for (j, s) in p.synapses().iter().enumerate() {
+        if s.route_index() as usize == route {
+            weights[j] = 0.;
+        }
+    }
+    let mut outputs = Vec::new();
+    for w in [-0.3, 0., 0.3] {
+        weights[i] = w;
+        let asset = FoundationWeightAsset::from_trained_weights(
+            &p,
+            weights.clone(),
+            a.manifest().training_stage(),
+        )
+        .unwrap();
+        let g = BrainGenome::scaffold(0x2048_2026, BrainCapacityClass::N2048_ID);
+        let d = DevelopmentState::new(g.id, Tick::ZERO, NormalizedScalar::new(1.).unwrap());
+        let (admitted, _) =
+            PhenotypeCompiler::compile_n2048_experimental_foundation_candidate(g, d, asset.clone())
+                .unwrap();
+        assert_eq!(
+            admitted.synapses()[i].genetic_weight().to_bits(),
+            w.to_bits()
+        );
+        q.phenotype_hash = admitted.phenotype_hash();
+        let t = trainer(&admitted, &asset);
+        outputs.push(t.evaluate_replay(&q).unwrap().final_activations[0][target]);
+    }
+    assert!(
+        outputs[0] < outputs[1] && outputs[1] < outputs[2],
+        "{outputs:?}"
+    );
+}
+
+#[test]
+fn signed_motor_v3_founder_merge_keeps_motor_sign_and_rejects_other_routes_and_families() {
+    use alife_training::{merge_founder_branches, FounderMergeBranch};
+    for v3 in [false, true] {
+        let (p, parent, motor) = motor_policy_fixture(v3);
+        for (i, value, allowed) in [
+            (motor, -0.2, v3),
+            (
+                p.synapses()
+                    .iter()
+                    .position(|s| {
+                        s.kind() == CompiledSynapseKind::Recurrent
+                            && p.projections()[s.route_index() as usize].projection_type()
+                                == alife_core::ProjectionType::Homeostatic
+                    })
+                    .unwrap(),
+                -0.2,
+                false,
+            ),
+            (
+                p.synapses()
+                    .iter()
+                    .position(|s| {
+                        s.kind() == CompiledSynapseKind::Recurrent
+                            && p.projections()[s.route_index() as usize].projection_type()
+                                == alife_core::ProjectionType::LateralInhibition
+                    })
+                    .unwrap(),
+                0.2,
+                false,
+            ),
+        ] {
+            let mut weights = parent.weights().to_vec();
+            weights[i] = value;
+            let changed = FoundationWeightAsset::from_trained_weights(
+                &p,
+                weights,
+                parent.manifest().training_stage(),
+            )
+            .unwrap();
+            let branch = |asset| FounderMergeBranch {
+                asset,
+                parent_asset_digest: parent.digest(),
+                parent_phenotype_hash: p.phenotype_hash(),
+                parent_compiler_inputs_digest: p.compiler_inputs_digest(),
+            };
+            let mask = StageTrainableMask::from_synapse_indices(&p, &[i as u32]).unwrap();
+            let result = merge_founder_branches(
+                &p,
+                &parent,
+                &branch(changed),
+                &branch(parent.clone()),
+                &mask,
+            );
+            if allowed {
+                assert_eq!(result.unwrap().0.weights()[i].to_bits(), value.to_bits());
+            } else {
+                assert!(result.is_err());
+            }
+            let (_, foreign, _) = motor_policy_fixture(!v3);
+            assert!(merge_founder_branches(
+                &p,
+                &parent,
+                &branch(foreign),
+                &branch(parent.clone()),
+                &mask
+            )
+            .is_err());
+        }
+    }
+}
