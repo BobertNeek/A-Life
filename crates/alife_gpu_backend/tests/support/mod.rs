@@ -2,6 +2,8 @@
 #![allow(dead_code)] // Shared by integration targets that intentionally use disjoint helpers.
 
 pub mod scaling;
+#[cfg(all(feature = "gpu-tests", feature = "training-rollout"))]
+pub mod visible_object_parity;
 
 use alife_core::{
     ActionCandidate, ActionId, ActionKind, ActionTarget, AlphaMask, BodySnapshot,

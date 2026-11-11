@@ -196,7 +196,7 @@ impl SensorEncoderPlan {
         let expected = if inputs
             .foundation_abi()
             .n2048_experimental_graph()
-            .is_some_and(|r| r.is_anchored_v2())
+            .is_some_and(|r| r.uses_anchored_sensor_layout())
         {
             super::io_compile::compile_anchored_encoder_v2(
                 inputs.genome(),

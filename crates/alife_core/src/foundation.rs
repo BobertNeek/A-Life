@@ -479,6 +479,7 @@ impl FoundationId {
     pub const N2048_V1: Self = Self(0x4E32_3034_385F_5631);
     pub const N2048_EXPERIMENTAL_GRAPH_V1: Self = Self(0x4E32_3034_3845_0001);
     pub const N2048_EXPERIMENTAL_ANCHORED_V2: Self = Self(0x4E32_3034_3845_0002);
+    pub const N2048_EXPERIMENTAL_SIGNED_MOTOR_V3: Self = Self(0x4E32_3034_3845_0003);
 
     pub const fn raw(self) -> u64 {
         self.0
@@ -504,6 +505,7 @@ impl FoundationCompatibilityFamilyId {
     pub const N2048_FOUNDATION: Self = Self(0x4E32_3034_385F_FA11);
     pub const N2048_EXPERIMENTAL_GRAPH: Self = Self(0x4E32_3034_3845_FA11);
     pub const N2048_EXPERIMENTAL_ANCHORED: Self = Self(0x4E32_3034_3845_FA12);
+    pub const N2048_EXPERIMENTAL_SIGNED_MOTOR: Self = Self(0x4E32_3034_3845_FA13);
 
     pub const fn raw(self) -> u64 {
         self.0
@@ -722,6 +724,14 @@ impl FoundationManifest {
         let (foundation_id, compatibility_family_id) = if experimental {
             if selection
                 .n2048_experimental_graph()
+                .is_some_and(|r| r.is_signed_motor_v3())
+            {
+                (
+                    FoundationId::N2048_EXPERIMENTAL_SIGNED_MOTOR_V3,
+                    FoundationCompatibilityFamilyId::N2048_EXPERIMENTAL_SIGNED_MOTOR,
+                )
+            } else if selection
+                .n2048_experimental_graph()
                 .is_some_and(|r| r.is_anchored_v2())
             {
                 (
@@ -833,6 +843,14 @@ impl FoundationManifest {
         let (foundation_id, compatibility_family_id) = if experimental {
             if selection
                 .n2048_experimental_graph()
+                .is_some_and(|r| r.is_signed_motor_v3())
+            {
+                (
+                    FoundationId::N2048_EXPERIMENTAL_SIGNED_MOTOR_V3,
+                    FoundationCompatibilityFamilyId::N2048_EXPERIMENTAL_SIGNED_MOTOR,
+                )
+            } else if selection
+                .n2048_experimental_graph()
                 .is_some_and(|r| r.is_anchored_v2())
             {
                 (
@@ -888,12 +906,18 @@ pub struct FoundationWeightAsset {
 }
 
 impl FoundationWeightAsset {
+    pub const fn is_n2048_signed_motor_v3(&self) -> bool {
+        self.manifest.foundation_id.raw() == FoundationId::N2048_EXPERIMENTAL_SIGNED_MOTOR_V3.raw()
+    }
+    pub const fn uses_n2048_anchored_sensor_layout(&self) -> bool {
+        self.is_n2048_anchored_v2() || self.is_n2048_signed_motor_v3()
+    }
     pub const fn is_n2048_anchored_v2(&self) -> bool {
         self.manifest.foundation_id.raw() == FoundationId::N2048_EXPERIMENTAL_ANCHORED_V2.raw()
     }
     pub const fn is_n2048_experimental_graph(&self) -> bool {
         self.manifest.foundation_id.raw() == FoundationId::N2048_EXPERIMENTAL_GRAPH_V1.raw()
-            || self.is_n2048_anchored_v2()
+            || self.uses_n2048_anchored_sensor_layout()
     }
 
     pub const fn is_nano512_readout_candidate(&self) -> bool {
@@ -1245,7 +1269,12 @@ impl FoundationWeightAsset {
             {
                 return Err(ScaffoldContractError::PhenotypeCompile);
             }
-            if self.is_n2048_anchored_v2() {
+            if self.is_n2048_signed_motor_v3() {
+                (
+                    FoundationId::N2048_EXPERIMENTAL_SIGNED_MOTOR_V3,
+                    FoundationCompatibilityFamilyId::N2048_EXPERIMENTAL_SIGNED_MOTOR,
+                )
+            } else if self.is_n2048_anchored_v2() {
                 (
                     FoundationId::N2048_EXPERIMENTAL_ANCHORED_V2,
                     FoundationCompatibilityFamilyId::N2048_EXPERIMENTAL_ANCHORED,

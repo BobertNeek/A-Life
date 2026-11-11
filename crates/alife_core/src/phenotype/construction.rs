@@ -58,7 +58,7 @@ fn compile_inner(
     let encoder = if inputs
         .foundation_abi()
         .n2048_experimental_graph()
-        .is_some_and(|r| r.is_anchored_v2())
+        .is_some_and(|r| r.uses_anchored_sensor_layout())
     {
         super::io_compile::compile_anchored_encoder_v2(
             genome,
@@ -252,14 +252,14 @@ fn compile_inner(
                     .ok_or(ScaffoldContractError::PhenotypeCompile)?;
                 let delta = genome_weight_delta(overlay_seed, global_index as u32);
                 let mut composed = *weight + delta;
-                match projection.projection_type() {
-                    crate::ProjectionType::LateralInhibition if composed >= 0.0 => {
+                match inputs
+                    .foundation_abi()
+                    .genetic_weight_sign_policy(synapse.kind(), projection.projection_type())
+                {
+                    super::GeneticWeightSignPolicy::StrictNegative if composed >= 0.0 => {
                         composed = -0.000_1;
                     }
-                    crate::ProjectionType::Homeostatic | crate::ProjectionType::MotorProposal
-                        if synapse.kind() == super::CompiledSynapseKind::Recurrent
-                            && composed < 0.0 =>
-                    {
+                    super::GeneticWeightSignPolicy::Nonnegative if composed < 0.0 => {
                         composed = 0.000_1;
                     }
                     _ => {}
@@ -317,14 +317,14 @@ fn compile_inner(
                 } else {
                     *weight + delta
                 };
-                match projection.projection_type() {
-                    crate::ProjectionType::LateralInhibition if composed >= 0.0 => {
+                match inputs
+                    .foundation_abi()
+                    .genetic_weight_sign_policy(synapse.kind(), projection.projection_type())
+                {
+                    super::GeneticWeightSignPolicy::StrictNegative if composed >= 0.0 => {
                         composed = -0.000_1;
                     }
-                    crate::ProjectionType::Homeostatic | crate::ProjectionType::MotorProposal
-                        if synapse.kind() == super::CompiledSynapseKind::Recurrent
-                            && composed < 0.0 =>
-                    {
+                    super::GeneticWeightSignPolicy::Nonnegative if composed < 0.0 => {
                         composed = 0.000_1;
                     }
                     _ => {}

@@ -11,6 +11,7 @@ mod construction;
 mod decoder;
 mod encoder;
 pub(crate) mod experimental_sensor_anchor;
+mod genetic_sign;
 mod inputs;
 mod io_compile;
 mod layout_compile;
@@ -33,6 +34,7 @@ pub use compiled::{
 pub use compiler::PhenotypeCompiler;
 pub use decoder::{AuxiliaryDecoderPlan, CandidateDecoderFamilyPlan, CandidateDecoderPlan};
 pub use encoder::{SensorEncoderAssignment, SensorEncoderPlan, SensorEncoderSourceGroup};
+pub use genetic_sign::GeneticWeightSignPolicy;
 pub use inputs::{FoundationWeightApplication, PhenotypeCompilerInputs};
 pub use learning::{
     PlasticityReceptorPlan, ReplayCapturePlan, SleepConsolidationPlan, MAX_REPLAY_CAPTURE_SYNAPSES,

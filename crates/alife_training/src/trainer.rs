@@ -13,11 +13,13 @@ mod packed_checkpoint_gpu_tests;
 #[path = "trainer/dynamic_dispatch_tests.rs"]
 mod dynamic_dispatch_tests;
 
+#[cfg(test)]
+use alife_core::ProjectionType;
 use std::{num::NonZeroU64, sync::mpsc};
 
 use alife_core::{
-    BrainPhenotype, CompiledSynapseKind, FoundationWeightAsset, ProjectionType,
-    ScaffoldContractError, SpeechDecoderLayoutV1, TrainingStageManifest, CANDIDATE_FEATURE_COUNT,
+    BrainPhenotype, CompiledSynapseKind, FoundationWeightAsset, ScaffoldContractError,
+    SpeechDecoderLayoutV1, TrainingStageManifest, CANDIDATE_FEATURE_COUNT,
 };
 use alife_gpu_backend::{GpuClosedLoopBackend, GpuRuntimeProfile};
 use alife_runtime::{GpuAuthoritativeSession, GpuSessionConsumerKind};
@@ -2125,16 +2127,12 @@ fn cached_phenotype_metadata(
                 u32::from(coordinate.input_lane()),
             ),
         };
-        // Decoder coefficients are signed mathematical readouts. Only recurrent
-        // pathways obey the inherited excitatory/inhibitory route contract.
-        let sign_policy = match (synapse.kind(), projection.projection_type()) {
-            (CompiledSynapseKind::Recurrent, ProjectionType::LateralInhibition) => 1,
-            (
-                CompiledSynapseKind::Recurrent,
-                ProjectionType::Homeostatic | ProjectionType::MotorProposal,
-            ) => 2,
-            _ => 0,
-        };
+        // The validated foundation identity owns the genetic sign contract.
+        // V3 motor genes and all decoder coefficients are signed; legacy recurrent
+        // motor/homeostatic and inhibitory routes retain their existing policies.
+        let sign_policy = phenotype
+            .genetic_weight_sign_policy(synapse.kind(), projection.projection_type())
+            as u32;
         prefix_meta.extend_from_slice(&[
             synapse.source(),
             synapse.target(),
@@ -3023,6 +3021,45 @@ mod tests {
                 pack_replay_sequence(&replay, reused, phenotype.neuron_count()),
                 pack_replay_sequence(&replay, fresh, phenotype.neuron_count())
             );
+        }
+    }
+}
+
+#[cfg(test)]
+mod signed_motor_policy_tests {
+    use super::*;
+    use alife_core::*;
+    #[test]
+    fn v3_gpu_metadata_relaxes_only_recurrent_motor() {
+        for signed in [false, true] {
+            let g = BrainGenome::scaffold(0x2048_2026, BrainCapacityClass::N2048_ID);
+            let d = DevelopmentState::new(g.id, Tick::ZERO, NormalizedScalar::new(1.).unwrap());
+            let compile = if signed {
+                PhenotypeCompiler::compile_n2048_signed_motor_v3_graph
+            } else {
+                PhenotypeCompiler::compile_n2048_anchored_v2_graph
+            };
+            let (p, _) = compile(g, d, SensorProfile::GroundedObjectSlotsV1).unwrap();
+            let (meta, layout) = pack_metadata_and_layout(&p, None).unwrap();
+            let mut motors = 0;
+            for (i, s) in p.synapses().iter().enumerate() {
+                let projection = p.projections()[s.route_index() as usize].projection_type();
+                let expected = match (s.kind(), projection) {
+                    (CompiledSynapseKind::Recurrent, ProjectionType::MotorProposal) => {
+                        motors += 1;
+                        if signed {
+                            0
+                        } else {
+                            2
+                        }
+                    }
+                    (CompiledSynapseKind::Recurrent, ProjectionType::Homeostatic) => 2,
+                    (_, ProjectionType::LateralInhibition) => 1,
+                    _ => 0,
+                };
+                assert_eq!(meta[layout.synapse_records as usize + i * 8 + 7], expected);
+            }
+            assert!(motors > 0);
         }
     }
 }
