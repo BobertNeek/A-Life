@@ -284,11 +284,12 @@ fn sensor_profile_raw_mapping_is_stable_and_total() {
         (1, SensorProfile::PrivilegedAffordanceV1),
         (2, SensorProfile::GroundedObjectSlotsV1),
         (3, SensorProfile::GroundedTerrainVisionV1),
+        (4, SensorProfile::GroundedTerrainObjectPortsV2),
     ] {
         assert_eq!(profile.raw(), raw);
         assert_eq!(SensorProfile::try_from_raw(raw).unwrap(), profile);
     }
-    for raw in std::iter::once(0).chain(4..=u16::MAX) {
+    for raw in std::iter::once(0).chain(5..=u16::MAX) {
         assert!(SensorProfile::try_from_raw(raw).is_err());
     }
 }
