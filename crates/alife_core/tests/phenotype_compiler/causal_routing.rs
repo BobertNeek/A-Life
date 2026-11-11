@@ -773,12 +773,13 @@ mod causal_genome_and_routing_tests {
             (SensorEncoderSourceGroup::Homeostasis, 3),
             (SensorEncoderSourceGroup::HeardLanguage, 4),
             (SensorEncoderSourceGroup::SemanticPrior, 5),
+            (SensorEncoderSourceGroup::VisibleObject, 6),
         ] {
             assert_eq!(value.raw(), raw);
             assert_eq!(SensorEncoderSourceGroup::try_from_raw(raw).unwrap(), value);
         }
         assert!(SensorEncoderSourceGroup::try_from_raw(0).is_err());
-        assert!(SensorEncoderSourceGroup::try_from_raw(6).is_err());
+        assert!(SensorEncoderSourceGroup::try_from_raw(7).is_err());
 
         for (value, raw) in [
             (DecoderHeadKind::ActionCandidate, 1),

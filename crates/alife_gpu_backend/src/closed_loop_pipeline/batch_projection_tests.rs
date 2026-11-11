@@ -22,10 +22,12 @@ struct Fixture {
 
 impl Fixture {
     fn new(capacity: BrainCapacityClass) -> Self {
+        Self::with_profile(capacity, SensorProfile::PrivilegedAffordanceV1)
+    }
+    fn with_profile(capacity: BrainCapacityClass, profile: SensorProfile) -> Self {
         let genome = BrainGenome::scaffold(41, capacity.id());
         let development =
             DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(0.35).unwrap());
-        let profile = SensorProfile::PrivilegedAffordanceV1;
         let phenotype =
             PhenotypeCompiler::compile(&genome, &capacity, &development, profile).unwrap();
         let mut plan = crate::GpuClassBucketPlan::new(capacity, 2).unwrap();
@@ -38,31 +40,48 @@ impl Fixture {
             let slot = plan.insert_phenotype(row, row + 7, &phenotype).unwrap();
             let owner = OrganismId(u64::from(row) + 1);
             let tick = Tick(100);
-            let candidates = [
-                (ActionKind::Idle, CandidateActionFamily::Idle),
-                (ActionKind::Inspect, CandidateActionFamily::Inspect),
-            ]
-            .into_iter()
-            .enumerate()
-            .map(|(index, (kind, family))| {
-                let mut features = CandidateFeatureVector::zero();
-                features.0[0] = (row as f32 + 1.0) * (index as f32 - 0.5);
-                ActionCandidate::new(
-                    index as u16,
-                    kind.canonical_id(),
-                    kind,
-                    family,
+            let candidates = if profile == SensorProfile::GroundedTerrainObjectPortsV2 {
+                vec![ActionCandidate::new(
+                    0,
+                    ActionKind::Idle.canonical_id(),
+                    ActionKind::Idle,
+                    CandidateActionFamily::Idle,
                     CandidateObservationRef::None,
                     ActionTarget::NONE,
-                    features,
-                    Confidence::new(0.8).unwrap(),
-                    NormalizedScalar::new(0.1).unwrap(),
+                    CandidateFeatureVector::zero(),
+                    Confidence::new(1.0).unwrap(),
+                    NormalizedScalar::new(0.0).unwrap(),
                     DurationTicks::new(1),
                     DurationTicks::new(1),
                 )
-                .unwrap()
-            })
-            .collect();
+                .unwrap()]
+            } else {
+                [
+                    (ActionKind::Idle, CandidateActionFamily::Idle),
+                    (ActionKind::Inspect, CandidateActionFamily::Inspect),
+                ]
+                .into_iter()
+                .enumerate()
+                .map(|(index, (kind, family))| {
+                    let mut features = CandidateFeatureVector::zero();
+                    features.0[0] = (row as f32 + 1.0) * (index as f32 - 0.5);
+                    ActionCandidate::new(
+                        index as u16,
+                        kind.canonical_id(),
+                        kind,
+                        family,
+                        CandidateObservationRef::None,
+                        ActionTarget::NONE,
+                        features,
+                        Confidence::new(0.8).unwrap(),
+                        NormalizedScalar::new(0.1).unwrap(),
+                        DurationTicks::new(1),
+                        DurationTicks::new(1),
+                    )
+                    .unwrap()
+                })
+                .collect()
+            };
             let draft = PerceptionFrameDraft::new(
                 owner,
                 tick,
@@ -194,6 +213,39 @@ impl Fixture {
             NonZeroU64::new(1).unwrap(),
             13,
         )
+    }
+}
+
+#[test]
+fn visible_object_bank_survives_batch_digest_insertion() {
+    let fixture = Fixture::with_profile(
+        BrainCapacityClass::n2048(),
+        SensorProfile::GroundedTerrainObjectPortsV2,
+    );
+    for with_memory in [false, true] {
+        let batch = fixture.build(with_memory).unwrap();
+        validate_dispatch(fixture.phenotype.neuron_count(), &batch).unwrap();
+        for row in 0..2 {
+            let local =
+                GpuPerceptionUpload::try_from_frame(&fixture.frames[row], &fixture.slots[row], 0)
+                    .unwrap();
+            let prefix = local.frame_payload_words.len()
+                - 256
+                - alife_core::visible_object_neural::NEURAL_VISIBLE_OBJECT_LANES;
+            let start = batch.headers[row].sensory_offset as usize;
+            assert_eq!(
+                &batch.frame_payload_words[start..start + prefix],
+                &local.frame_payload_words[..prefix]
+            );
+            let after_digests = start + prefix + fixture.frames[row].candidates().len() * 4;
+            assert_eq!(
+                &batch.frame_payload_words[after_digests
+                    ..after_digests
+                        + 256
+                        + alife_core::visible_object_neural::NEURAL_VISIBLE_OBJECT_LANES],
+                &local.frame_payload_words[prefix..]
+            );
+        }
     }
 }
 

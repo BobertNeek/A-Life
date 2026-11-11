@@ -497,6 +497,9 @@ fn encoder_has_exact_abi_widths_sorted_assignments_and_every_active_sensor() {
             SensorEncoderSourceGroup::SensoryChannel => encoder.sensory_lane_count(),
             SensorEncoderSourceGroup::Body => encoder.body_lane_count(),
             SensorEncoderSourceGroup::Homeostasis => encoder.homeostasis_lane_count(),
+            SensorEncoderSourceGroup::VisibleObject => {
+                alife_core::visible_object_neural::NEURAL_VISIBLE_OBJECT_LANES as u16
+            }
             SensorEncoderSourceGroup::HeardLanguage | SensorEncoderSourceGroup::SemanticPrior => {
                 128
             }

@@ -362,6 +362,14 @@ mod hardware {
         );
     }
 
+    #[cfg(feature = "training-rollout")]
+    #[test]
+    fn visible_object_ports_match_cpu_encoding_on_gpu() {
+        super::support::visible_object_parity::assert_visible_object_ports_match_cpu_encoding(
+            &mut required_backend(),
+        );
+    }
+
     fn assert_tick_identity(
         tick: &GpuClosedLoopTick,
         handle: GpuBrainHandle,

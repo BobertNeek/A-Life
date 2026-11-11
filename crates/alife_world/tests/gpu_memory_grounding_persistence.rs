@@ -201,6 +201,7 @@ fn memory_and_topology_summaries_bind_exact_owner_and_profile() {
             SensorProfile::PrivilegedAffordanceV1 => SensorProfile::GroundedObjectSlotsV1,
             SensorProfile::GroundedObjectSlotsV1 => SensorProfile::PrivilegedAffordanceV1,
             SensorProfile::GroundedTerrainVisionV1 => SensorProfile::GroundedObjectSlotsV1,
+            SensorProfile::GroundedTerrainObjectPortsV2 => SensorProfile::GroundedObjectSlotsV1,
         });
         assert!(saved_memory.validate_for(organism, other).is_err());
         assert!(saved_topology.validate_for(organism, other).is_err());

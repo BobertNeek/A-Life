@@ -654,7 +654,7 @@ fn canonical_n2048_runtime_address_digest(
     let cache = match sensor_profile {
         SensorProfile::PrivilegedAffordanceV1 => &PRIVILEGED,
         SensorProfile::GroundedObjectSlotsV1 => &GROUNDED,
-        SensorProfile::GroundedTerrainVisionV1 => {
+        SensorProfile::GroundedTerrainVisionV1 | SensorProfile::GroundedTerrainObjectPortsV2 => {
             return Err(ScaffoldContractError::SensorProfileMismatch);
         }
     };

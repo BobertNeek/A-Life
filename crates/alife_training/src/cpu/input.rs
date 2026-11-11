@@ -38,6 +38,17 @@ pub fn encode_cpu_frame(
         .chain(homeostasis.hormones.to_array())
         .collect::<Vec<_>>();
     let language = frame.sensory().language_prior_neural_lanes();
+    let visible_objects = if frame.sensor_profile() == SensorProfile::GroundedTerrainObjectPortsV2 {
+        Some(
+            alife_core::visible_object_neural::visible_object_neural_lanes(
+                frame.sensor_profile(),
+                frame.grounded_object_slots(),
+            )
+            .map_err(|_| invalid())?,
+        )
+    } else {
+        None
+    };
     let mut encoded = vec![0.; p.neuron_count() as usize];
     for assignment in p.sensor_encoder().assignments() {
         let index = assignment.source_index() as usize;
@@ -51,6 +62,10 @@ pub fn encode_cpu_frame(
             }
             SensorEncoderSourceGroup::HeardLanguage => language.get(index).copied(),
             SensorEncoderSourceGroup::SemanticPrior => language.get(128 + index).copied(),
+            SensorEncoderSourceGroup::VisibleObject => visible_objects
+                .as_ref()
+                .and_then(|v| v.get(index))
+                .map(|v| v * effects.attention_gain),
         }
         .ok_or_else(invalid)?;
         let (min, max) = assignment.clamp_range();

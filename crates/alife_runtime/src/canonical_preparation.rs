@@ -538,12 +538,12 @@ pub fn grounded_successor_state(
         .entity(world_entity_id)
         .ok_or(ScaffoldContractError::InvalidId)?;
     let velocity = match profile {
-        SensorProfile::GroundedObjectSlotsV1 | SensorProfile::GroundedTerrainVisionV1 => {
-            object.grounded_physical.velocity
-        }
+        SensorProfile::GroundedObjectSlotsV1
+        | SensorProfile::GroundedTerrainVisionV1
+        | SensorProfile::GroundedTerrainObjectPortsV2 => object.grounded_physical.velocity,
         SensorProfile::PrivilegedAffordanceV1 => Vec3f::ZERO,
     };
-    let position = if profile == SensorProfile::GroundedTerrainVisionV1 {
+    let position = if profile.has_terrain_vision() {
         Vec3f::ZERO
     } else {
         object.position

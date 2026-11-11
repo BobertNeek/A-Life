@@ -70,6 +70,7 @@ pub mod traits;
 pub mod units;
 pub mod validation;
 pub mod version;
+pub mod visible_object_neural;
 
 pub use action::{
     heuristic_baseline_arbitrate, ActionArbitrationConfig, ActionArbitrationTrace,

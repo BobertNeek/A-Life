@@ -167,3 +167,15 @@ jobs:
           grep -q 'signed_motor_gpu_adam_executed: v3=false' "$log"
           grep -q 'signed_motor_gpu_gradient_crossing_executed: v3=true' "$log"
           grep -q 'signed_motor_gpu_gradient_crossing_executed: v3=false' "$log"
+
+      - name: Check visible-object CPU encoder parity on offline software Vulkan
+        run: |
+          set -euo pipefail
+          # Fresh synthetic founders, actual Cpu/Vulkan WGSL dispatch.
+          # This is software correctness, never physical-GPU qualification.
+          log="$RUNNER_TEMP/visible-object-ports-software-vulkan.log"
+          cargo test --locked -p alife_gpu_backend --features gpu-tests,training-rollout \
+            --test software_visible_object_ports \
+            visible_object_ports_match_cpu_encoding_on_software_vulkan \
+            -- --ignored --exact --nocapture --test-threads=1 2>&1 | tee "$log"
+          grep -Eq '^test result: ok\. 1 passed; 0 failed; 0 ignored;' "$log"
