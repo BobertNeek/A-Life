@@ -48,3 +48,7 @@ required-features = ["cpu-backend"]
 [[example]]
 name = "probe_weight_space_care"
 required-features = ["cpu-backend"]
+
+[[example]]
+name = "probe_neutral_contact_review"
+required-features = ["cpu-backend"]
