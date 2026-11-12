@@ -38,6 +38,15 @@ const FACTORIZED_MOTOR_CHANNELS: [MotorChannel; FACTORIZED_MOTOR_CHANNEL_COUNT] 
     MotorChannel::Posture,
 ];
 
+/// Explicit schema2 layout; never reinterpret the legacy two-head L+Manipulation ABI.
+const ORIENTATION_MOTOR_CHANNELS_V2: [MotorChannel; 5] = [
+    MotorChannel::Locomotion,
+    MotorChannel::Orientation,
+    MotorChannel::Manipulation,
+    MotorChannel::Vocal,
+    MotorChannel::Posture,
+];
+
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct CandidateDecoderFamilyPlan {
     family: CandidateActionFamily,
@@ -222,14 +231,19 @@ impl CandidateDecoderPlan {
         let architecture = phenotype.cognitive_architecture();
         let head_count = usize::from(architecture.motor_head_count());
         let width = architecture.motor_head_width();
+        let channels: &[MotorChannel] = match architecture.schema_version() {
+            1 => &FACTORIZED_MOTOR_CHANNELS,
+            2 => &ORIENTATION_MOTOR_CHANNELS_V2,
+            _ => return Err(ScaffoldContractError::PhenotypeCompile),
+        };
         if head_count == 0
-            || head_count > FACTORIZED_MOTOR_CHANNEL_COUNT
+            || head_count > channels.len()
             || width == 0
             || u32::from(width) * head_count as u32 > u32::from(self.motor_width)
         {
             return Err(ScaffoldContractError::PhenotypeCompile);
         }
-        Ok(FACTORIZED_MOTOR_CHANNELS[..head_count].to_vec())
+        Ok(channels[..head_count].to_vec())
     }
 
     pub(super) fn try_new(

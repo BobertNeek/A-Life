@@ -501,22 +501,28 @@ impl GpuPhenotypeUpload {
             hash[index * 2 + 1] = (value >> 32) as u32;
         }
         Ok(Self {
-            joint_motor_mode: super::GPU_JOINT_SELECTION_V1_MARKER
-                | phenotype
-                    .candidate_decoder()
-                    .factorized_motor_channels(phenotype)
-                    .map_err(|_| GpuClosedLoopError::MalformedUpload)?
-                    .iter()
-                    .fold(0, |mask, channel| {
-                        mask | (1
-                            << match channel {
-                                alife_core::MotorChannel::Locomotion => 0,
-                                alife_core::MotorChannel::Manipulation => 2,
-                                alife_core::MotorChannel::Vocal => 3,
-                                alife_core::MotorChannel::Posture => 4,
-                                _ => 7,
-                            })
-                    }),
+            joint_motor_mode: (if phenotype.cognitive_architecture().schema_version()
+                == alife_core::genome::COGNITIVE_ARCHITECTURE_ORIENTATION_SCHEMA_VERSION
+            {
+                super::GPU_ORIENTATION_LAYOUT_V2_MARKER
+            } else {
+                super::GPU_JOINT_SELECTION_V1_MARKER
+            }) | phenotype
+                .candidate_decoder()
+                .factorized_motor_channels(phenotype)
+                .map_err(|_| GpuClosedLoopError::MalformedUpload)?
+                .iter()
+                .fold(0, |mask, channel| {
+                    mask | (1
+                        << match channel {
+                            alife_core::MotorChannel::Locomotion => 0,
+                            alife_core::MotorChannel::Orientation => 1,
+                            alife_core::MotorChannel::Manipulation => 2,
+                            alife_core::MotorChannel::Vocal => 3,
+                            alife_core::MotorChannel::Posture => 4,
+                            _ => 7,
+                        })
+                }),
             class_id: phenotype.brain_class_id().raw() as u32,
             neuron_count,
             microstep_count: phenotype.microstep_count() as u32,

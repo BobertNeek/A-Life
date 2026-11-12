@@ -114,9 +114,32 @@ pub struct CognitiveArchitectureGenomeParameters {
     structural_learning_rate: f32,
 }
 
+/// Legacy constructors and serialized genomes retain their exact v1 behavior.
 pub const COGNITIVE_ARCHITECTURE_SCHEMA_VERSION: u16 = 1;
+pub const COGNITIVE_ARCHITECTURE_ORIENTATION_SCHEMA_VERSION: u16 = 2;
 
 impl CognitiveArchitectureGenomeParameters {
+    /// Opt in a fresh genome to independent orientation. This is not a save migration.
+    /// V2 heads select the prefix Locomotion, Orientation, Manipulation, Vocal, Posture.
+    /// Two heads enable gaze; one still enables only independent locomotion.
+    pub fn with_independent_orientation_v2(
+        mut self,
+        motor_head_count: u8,
+    ) -> Result<Self, ScaffoldContractError> {
+        self.schema_version = COGNITIVE_ARCHITECTURE_ORIENTATION_SCHEMA_VERSION;
+        self.motor_head_count = motor_head_count;
+        self.validate_contract()?;
+        Ok(self)
+    }
+
+    fn motor_head_bound(&self) -> usize {
+        if self.schema_version == COGNITIVE_ARCHITECTURE_ORIENTATION_SCHEMA_VERSION {
+            5
+        } else {
+            crate::motor::MAX_MOTOR_CHANNELS
+        }
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn try_new_v1(
         attention_capacity: u8,
@@ -284,7 +307,8 @@ impl CognitiveArchitectureGenomeParameters {
             capacity.min(crate::predictive::MAX_SUCCESSOR_FEATURES as u32),
             u16
         );
-        count!(motor_head_count, 1, crate::motor::MAX_MOTOR_CHANNELS, u8);
+        // The receiving parent determines the persisted channel layout.
+        count!(motor_head_count, 1, self.motor_head_bound(), u8);
         count!(motor_head_width, 1, 256, u16);
         count!(
             dendritic_branch_capacity,
@@ -397,8 +421,11 @@ impl CognitiveArchitectureGenomeParameters {
     }
 
     fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
-        if self.schema_version != COGNITIVE_ARCHITECTURE_SCHEMA_VERSION
-            || self.attention_capacity == 0
+        if !matches!(
+            self.schema_version,
+            COGNITIVE_ARCHITECTURE_SCHEMA_VERSION
+                | COGNITIVE_ARCHITECTURE_ORIENTATION_SCHEMA_VERSION
+        ) || self.attention_capacity == 0
             || usize::from(self.attention_capacity) > crate::attention::MAX_FOCAL_TARGETS
             || self.active_concept_limit == 0
             || usize::from(self.active_concept_limit)
@@ -408,7 +435,7 @@ impl CognitiveArchitectureGenomeParameters {
             || self.predictor_capacity < 8
             || usize::from(self.predictor_capacity) > crate::predictive::MAX_SUCCESSOR_FEATURES
             || self.motor_head_count == 0
-            || usize::from(self.motor_head_count) > crate::motor::MAX_MOTOR_CHANNELS
+            || usize::from(self.motor_head_count) > self.motor_head_bound()
             || self.motor_head_width == 0
             || self.motor_head_width > 256
             || self.dendritic_branch_capacity == 0
@@ -2369,5 +2396,34 @@ fn derive_seed(species_seed: u64, brain_class_id: BrainClassId, salt: u64) -> u6
         1
     } else {
         value
+    }
+}
+
+#[cfg(test)]
+mod orientation_layout_inheritance_tests {
+    use super::*;
+    #[test]
+    fn orientation_layout_mutation_bounds_and_parent_policy_are_explicit() {
+        let old = CognitiveArchitectureGenomeParameters::canonical_default();
+        let new = old.with_independent_orientation_v2(2).unwrap();
+        let class = crate::BrainCapacityClass::n2048().id();
+        let mut bounds = Vec::new();
+        let child = new
+            .map_inherited_parameters(&old, class, |a, _, lo, hi| {
+                bounds.push((lo, hi));
+                Ok(a.clamp(lo, hi))
+            })
+            .unwrap();
+        assert_eq!(child.schema_version(), 2);
+        assert_eq!(bounds[4], (1., 5.));
+        let mut bounds = Vec::new();
+        let child = old
+            .map_inherited_parameters(&new, class, |a, _, lo, hi| {
+                bounds.push((lo, hi));
+                Ok(a.clamp(lo, hi))
+            })
+            .unwrap();
+        assert_eq!(child.schema_version(), 1);
+        assert_eq!(bounds[4], (1., 6.));
     }
 }

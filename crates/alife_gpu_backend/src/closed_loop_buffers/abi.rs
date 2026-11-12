@@ -446,10 +446,15 @@ impl GpuBrainSlotRecord {
 
 /// Explicit extension tag. Zero retains historical global-only eligibility.
 pub const GPU_JOINT_SELECTION_V1_MARKER: u32 = 0x4a31_0000;
+/// Brain configuration policy only. Packed six-slot selection/eligibility receipts
+/// remain V1; their slot meanings and representation have not changed.
+pub const GPU_ORIENTATION_LAYOUT_V2_MARKER: u32 = 0x4a32_0000;
 pub fn valid_joint_motor_mode(mode: u32) -> bool {
     mode == 0
         || (mode & 0xffff_ff00 == GPU_JOINT_SELECTION_V1_MARKER
             && matches!(mode & 0xff, 1 | 5 | 13 | 29))
+        || (mode & 0xffff_ff00 == GPU_ORIENTATION_LAYOUT_V2_MARKER
+            && matches!(mode & 0xff, 1 | 3 | 7 | 15 | 31))
 }
 pub fn pack_joint_motor_candidates(candidates: [u16; 6]) -> [u32; 2] {
     let mut words = [0, GPU_JOINT_SELECTION_V1_MARKER];
