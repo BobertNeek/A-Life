@@ -130,7 +130,6 @@ $BundleManifest = Get-Content -Raw -LiteralPath (Join-Path $Root $BundleManifest
 # Copy the files the runtime uses, including registered assets and license notices.
 # Editable sources and old map exports stay in the repository, outside the game package.
 $CopyFiles = @(
-    "LICENSE"
     "crates/alife_game_app/environment_manifest.json"
     $BundleManifestPath
     $ProductionManifestPath
@@ -164,7 +163,7 @@ Write-Host "Default profile: $Profile"
 Write-Host "Minimum fallback profile: $FallbackProfile"
 Write-Host "Brain policy default: $BrainPolicy"
 Write-Host "Features: $ProductionFeatures"
-Write-Host "License bundle: LICENSE plus crates/alife_game_app/assets/production_voxel_v1/production_asset_manifest.json"
+Write-Host "Licensing notices: crates/alife_game_app/assets/production_voxel_v1/production_asset_manifest.json and referenced notices"
 Write-Host "GPU authority diagnostics: failure stops learned actions"
 Write-Host "Crash summary path: $PackageCrashSummary"
 Write-Host "Cargo build command: $($BuildCommand -join ' ')"
@@ -230,7 +229,12 @@ try {
         environment_manifest = "crates/alife_game_app/environment_manifest.json"
         production_asset_manifest = "crates/alife_game_app/assets/production_voxel_v1/production_asset_manifest.json"
         production_asset_root = "crates/alife_game_app/assets/production_voxel_v1"
-        license_bundle = @("LICENSE", "crates/alife_game_app/assets/production_voxel_v1/production_asset_manifest.json")
+        license_bundle = @(
+            $ProductionManifestPath
+            "crates/alife_game_app/assets/production_voxel_v1/models/ATTRIBUTION.md"
+            "crates/alife_game_app/assets/production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md"
+            $ProductionManifest.entries | ForEach-Object { $_.license_ref }
+        ) | Sort-Object -Unique
         default_profile = $Profile
         minimum_fallback_profile = $FallbackProfile
         default_brain_policy = $BrainPolicy
@@ -276,9 +280,10 @@ runtime diagnostics and generated receipts stay package-local or under
 `target/artifacts/` and must not be committed.
 
 The package includes the production voxel asset pack, production asset manifest,
-MIT project license, required GPU shader sources, production environment manifest,
-fixture data, and license notices. Editable Blender sources, exporters, and unused
-map exports remain in the repository. It creates no release tag.
+required GPU shader sources, production environment manifest, fixture data, and
+third-party license notices. No project license has been selected for A-Life.
+Editable Blender sources, exporters, and unused map exports remain in the
+repository. It creates no release tag.
 "@ | Set-Content -Encoding UTF8 (Join-Path $PackageRoot "README_PACKAGE.md")
 
     if (-not $NoZip) {

@@ -2,7 +2,7 @@
 name = "alife_tools"
 version.workspace = true
 edition.workspace = true
-license.workspace = true
+publish.workspace = true
 repository.workspace = true
 
 [dependencies]

@@ -15,7 +15,7 @@
         "tool": "terrain_atlas_builder"
       },
       "license": "A-Life-Generated-Source",
-      "license_ref": "LICENSE",
+      "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/terrain/terrain_albedo_atlas.png",
       "placeholder": false,
       "replacement_policy": "regenerate-from-committed-config-and-a-permissively-licensed-source-sheet",
@@ -37,7 +37,7 @@
         "tool": "terrain_atlas_builder"
       },
       "license": "A-Life-Generated-Source",
-      "license_ref": "LICENSE",
+      "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/terrain/terrain_normal_atlas.png",
       "placeholder": false,
       "replacement_policy": "regenerate-from-committed-config-and-a-permissively-licensed-source-sheet",
@@ -59,7 +59,7 @@
         "tool": "terrain_atlas_builder"
       },
       "license": "A-Life-Generated-Source",
-      "license_ref": "LICENSE",
+      "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/terrain/terrain_orm_atlas.png",
       "placeholder": false,
       "replacement_policy": "regenerate-from-committed-config-and-a-permissively-licensed-source-sheet",
@@ -81,7 +81,7 @@
         "tool": "Blender-5.2.1-LTS"
       },
       "license": "A-Life-Generated-Source",
-      "license_ref": "LICENSE",
+      "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/creatures/hearthling/hearthling.glb",
       "placeholder": false,
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
@@ -103,7 +103,7 @@
         "tool": "Blender-5.2.1-LTS"
       },
       "license": "A-Life-Generated-Source",
-      "license_ref": "LICENSE",
+      "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/Berry_shrub.glb",
       "placeholder": false,
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
@@ -125,7 +125,7 @@
         "tool": "Blender-5.2.1-LTS"
       },
       "license": "A-Life-Generated-Source",
-      "license_ref": "LICENSE",
+      "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/Boulder_variant_1.glb",
       "placeholder": false,
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
@@ -147,7 +147,7 @@
         "tool": "Blender-5.2.1-LTS"
       },
       "license": "A-Life-Generated-Source",
-      "license_ref": "LICENSE",
+      "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/Boulder_variant_2.glb",
       "placeholder": false,
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
@@ -169,7 +169,7 @@
         "tool": "Blender-5.2.1-LTS"
       },
       "license": "A-Life-Generated-Source",
-      "license_ref": "LICENSE",
+      "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/Boulder_variant_3.glb",
       "placeholder": false,
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
@@ -191,7 +191,7 @@
         "tool": "Blender-5.2.1-LTS"
       },
       "license": "A-Life-Generated-Source",
-      "license_ref": "LICENSE",
+      "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/Cliff_outcrop.glb",
       "placeholder": false,
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
@@ -213,7 +213,7 @@
         "tool": "Blender-5.2.1-LTS"
       },
       "license": "A-Life-Generated-Source",
-      "license_ref": "LICENSE",
+      "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/Fern_patch.glb",
       "placeholder": false,
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
@@ -235,7 +235,7 @@
         "tool": "Blender-5.2.1-LTS"
       },
       "license": "A-Life-Generated-Source",
-      "license_ref": "LICENSE",
+      "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/Grass_clump.glb",
       "placeholder": false,
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
@@ -257,7 +257,7 @@
         "tool": "Blender-5.2.1-LTS"
       },
       "license": "A-Life-Generated-Source",
-      "license_ref": "LICENSE",
+      "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/Oak_variant_1.glb",
       "placeholder": false,
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
@@ -279,7 +279,7 @@
         "tool": "Blender-5.2.1-LTS"
       },
       "license": "A-Life-Generated-Source",
-      "license_ref": "LICENSE",
+      "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/Oak_variant_2.glb",
       "placeholder": false,
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
@@ -301,7 +301,7 @@
         "tool": "Blender-5.2.1-LTS"
       },
       "license": "A-Life-Generated-Source",
-      "license_ref": "LICENSE",
+      "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/Oak_variant_3.glb",
       "placeholder": false,
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
@@ -323,7 +323,7 @@
         "tool": "Blender-5.2.1-LTS"
       },
       "license": "A-Life-Generated-Source",
-      "license_ref": "LICENSE",
+      "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/Wildflower_patch.glb",
       "placeholder": false,
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
@@ -345,7 +345,7 @@
         "tool": "OpenAI-image-generation"
       },
       "license": "A-Life-Generated-Source",
-      "license_ref": "LICENSE",
+      "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/ground-detail.png",
       "placeholder": false,
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
@@ -367,7 +367,7 @@
         "tool": "Blender-4.3.2"
       },
       "license": "A-Life-Generated-Source",
-      "license_ref": "LICENSE",
+      "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/island/BerryBush.glb",
       "placeholder": false,
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
@@ -389,7 +389,7 @@
         "tool": "Blender-4.3.2"
       },
       "license": "A-Life-Generated-Source",
-      "license_ref": "LICENSE",
+      "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/island/BoulderA.glb",
       "placeholder": false,
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
@@ -411,7 +411,7 @@
         "tool": "Blender-4.3.2"
       },
       "license": "A-Life-Generated-Source",
-      "license_ref": "LICENSE",
+      "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/island/BoulderB.glb",
       "placeholder": false,
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
@@ -433,7 +433,7 @@
         "tool": "Blender-4.3.2"
       },
       "license": "A-Life-Generated-Source",
-      "license_ref": "LICENSE",
+      "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/island/BoulderC.glb",
       "placeholder": false,
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
@@ -455,7 +455,7 @@
         "tool": "Blender-4.3.2"
       },
       "license": "A-Life-Generated-Source",
-      "license_ref": "LICENSE",
+      "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/island/Broadleaf.glb",
       "placeholder": false,
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
@@ -477,7 +477,7 @@
         "tool": "Blender-4.3.2"
       },
       "license": "A-Life-Generated-Source",
-      "license_ref": "LICENSE",
+      "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/island/Cliff.glb",
       "placeholder": false,
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
@@ -499,7 +499,7 @@
         "tool": "Blender-4.3.2"
       },
       "license": "A-Life-Generated-Source",
-      "license_ref": "LICENSE",
+      "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/island/CoastalShrub.glb",
       "placeholder": false,
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
@@ -521,7 +521,7 @@
         "tool": "Blender-4.3.2"
       },
       "license": "A-Life-Generated-Source",
-      "license_ref": "LICENSE",
+      "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/island/Conifer.glb",
       "placeholder": false,
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
@@ -543,7 +543,7 @@
         "tool": "Blender-4.3.2"
       },
       "license": "A-Life-Generated-Source",
-      "license_ref": "LICENSE",
+      "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/island/Fern.glb",
       "placeholder": false,
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
@@ -565,7 +565,7 @@
         "tool": "Blender-4.3.2"
       },
       "license": "A-Life-Generated-Source",
-      "license_ref": "LICENSE",
+      "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/island/Flowers.glb",
       "placeholder": false,
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
@@ -587,7 +587,7 @@
         "tool": "Blender-4.3.2"
       },
       "license": "A-Life-Generated-Source",
-      "license_ref": "LICENSE",
+      "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/island/Grass.glb",
       "placeholder": false,
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
@@ -609,7 +609,7 @@
         "tool": "Blender-4.3.2"
       },
       "license": "A-Life-Generated-Source",
-      "license_ref": "LICENSE",
+      "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/island/Sapling.glb",
       "placeholder": false,
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
@@ -631,7 +631,7 @@
         "tool": "Blender-5.2.1-LTS"
       },
       "license": "A-Life-Generated-Source",
-      "license_ref": "LICENSE",
+      "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/island/Scree.glb",
       "placeholder": false,
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
@@ -653,7 +653,7 @@
         "tool": "Blender-5.2.1-LTS"
       },
       "license": "A-Life-Generated-Source",
-      "license_ref": "LICENSE",
+      "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/island/terrain-chunks.glb",
       "placeholder": false,
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
@@ -675,7 +675,7 @@
         "tool": "Blender-5.2.1-LTS"
       },
       "license": "A-Life-Generated-Source",
-      "license_ref": "LICENSE",
+      "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/island/props.json",
       "placeholder": false,
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
@@ -697,7 +697,7 @@
         "tool": "Blender-5.2.1 LTS"
       },
       "license": "A-Life-Generated-Source",
-      "license_ref": "LICENSE",
+      "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/hand/wizard-god-hand.glb",
       "placeholder": false,
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
