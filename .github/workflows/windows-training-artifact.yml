@@ -105,6 +105,13 @@ jobs:
     name: Build and check Windows training CLI
     runs-on: windows-latest
     timeout-minutes: 50
+    env:
+      CARGO_BUILD_JOBS: '2'
+      CARGO_INCREMENTAL: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      RUST_TEST_THREADS: '1'
+      RUST_MIN_STACK: '33554432'
     defaults:
       run:
         shell: pwsh
