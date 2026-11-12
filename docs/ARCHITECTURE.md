@@ -89,6 +89,30 @@ non-contact spatial retreat fallback.
 
 GPU unavailability is typed unavailability. CPU reference helpers do not take over the production neural policy.
 
+## Opt-in independent orientation
+
+Independent orientation is an explicit fresh-genome opt-in, not a change to
+existing creatures. `CognitiveArchitectureGenomeParameters::with_independent_orientation_v2`
+sets persisted architecture schema 2. With two heads its channel prefix is
+Locomotion/Orientation; further heads add Manipulation, Vocal and Posture.
+Schema 1 keeps the original Locomotion/Manipulation/Vocal/Posture prefix, default
+one head, serialized fields and canonical hash stream. A global Look winner can
+still issue orientation under either version. New schema 2 permits Look to be
+sampled independently when another channel owns the global representative.
+
+The receiving parent's architecture version determines inherited layout; v2
+mutation bounds cover its five implemented channels, and the existing compiled
+motor-width budget still applies. Species-specific mapping is not introduced.
+The version changes phenotype identity; old learned checkpoints are not migrated
+or reinterpreted. GPU brain configuration uses a distinct v2 mask marker, while
+the existing six-slot joint-selection/eligibility receipt format is unchanged.
+CPU sampling/probability and GPU upload/admission use the same channel policy.
+
+This capability is not a navigation policy. Existing gaze logits can repeatedly
+swivel toward a head limit. HOLD_GAZE, absent-look, physical head-limit, blank-scene,
+and feeding controls must be distinguished from useful learned search. Do not
+turn it on globally or infer better navigation from a plumbing test.
+
 ## Rest and realized translation
 
 The world combines a factorized motor bundle into one body event and advances

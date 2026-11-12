@@ -1,9 +1,13 @@
 const GPU_CLOSED_LOOP_LAYOUT_VERSION:u32 = 4u;
 const JOINT_SELECTION_V1_MARKER:u32 = 0x4a310000u;
+// Configuration policy only; packed six-slot selection receipts remain V1.
+const ORIENTATION_LAYOUT_V2_MARKER:u32 = 0x4a320000u;
 fn valid_joint_motor_mode(mode:u32) -> bool {
   let mask = mode & 255u;
   return mode == 0u || ((mode & 0xffffff00u) == JOINT_SELECTION_V1_MARKER
-    && (mask == 1u || mask == 5u || mask == 13u || mask == 29u));
+    && (mask == 1u || mask == 5u || mask == 13u || mask == 29u))
+    || ((mode & 0xffffff00u) == ORIENTATION_LAYOUT_V2_MARKER
+      && (mask == 1u || mask == 3u || mask == 7u || mask == 15u || mask == 31u));
 }
 const GPU_SELECTION_RECORD_WORDS:u32 = 16u;
 const GPU_LEARNING_SCHEMA_VERSION:u32 = 3u;
