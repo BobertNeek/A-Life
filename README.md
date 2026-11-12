@@ -72,3 +72,8 @@ These boundaries describe the current codebase.
 - Missing evidence is `Unknown` or `Blocked`, never a pass.
 
 Use the PowerShell wrappers in `scripts/` on Windows. They route shell checks through Git Bash rather than WSL.
+
+## Licensing
+
+No project license has been selected for A-Life. Third-party materials retain
+their own licenses and notices.
