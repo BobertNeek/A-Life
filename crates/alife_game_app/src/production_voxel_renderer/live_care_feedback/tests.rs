@@ -49,7 +49,7 @@ fn receipt_row(kind: alife_world::PlayerCareKind, tick: u64) -> WorldOrganismPre
     let mut row = quiet_world().presentation_snapshot().organisms.remove(0);
     row.last_player_care = alife_world::PresentationEvidence::Observed {
         value: alife_world::PlayerCareReceipt {
-            kind,
+            kinds: alife_world::PlayerCareKindSet::single(kind),
             applied_tick: Tick::new(tick),
             praise_signal_before: 0.10,
             praise_signal_after: 0.42,
@@ -201,7 +201,6 @@ fn care_words_come_from_the_codebook_and_carry_valence_in_colour() {
         PlayerCareKind::Praise,
         PlayerCareKind::Scold,
         PlayerCareKind::Slap,
-        PlayerCareKind::PetAndPraise,
     ] {
         let word = care_word(kind);
         assert!(
@@ -213,9 +212,13 @@ fn care_words_come_from_the_codebook_and_carry_valence_in_colour() {
     assert_eq!(care_word(PlayerCareKind::Praise), "get");
     assert_eq!(care_word(PlayerCareKind::Scold), "look");
     assert_eq!(care_word(PlayerCareKind::Slap), "retreat");
-    // Pet and pet-and-praise collide on "play" by design: the creature's
-    // vocabulary cannot say more yet, and the debug readout keeps the kind.
-    assert_eq!(care_word(PlayerCareKind::PetAndPraise), "play");
+    // A pet-and-praise set still says "play" through the display kind;
+    // the set itself is pinned in the world tests.
+    assert_eq!(
+        alife_world::PlayerCareKindSet::single(PlayerCareKind::Pet)
+            .display_kind(),
+        Some(PlayerCareKind::Pet)
+    );
     assert_eq!(care_color(PlayerCareKind::Pet), care_color(PlayerCareKind::Praise));
     assert_eq!(care_color(PlayerCareKind::Scold), care_color(PlayerCareKind::Slap));
     assert_ne!(care_color(PlayerCareKind::Pet), care_color(PlayerCareKind::Scold));
@@ -228,8 +231,8 @@ fn cared_row_fails_closed_on_every_identity_or_lifecycle_mismatch_and_on_unknown
     let (root, visual) = root_and_visual(&row);
     assert_eq!(
         cared_row(&root, &visual, Some(&row.object), Some(&row))
-            .map(|receipt| receipt.kind),
-        Some(PlayerCareKind::Pet)
+            .map(|receipt| receipt.display_kind()),
+        Some(Some(PlayerCareKind::Pet))
     );
     assert!(cared_row(&root, &visual, None, Some(&row)).is_none());
     assert!(cared_row(&root, &visual, Some(&row.object), None).is_none());
@@ -303,8 +306,8 @@ fn cared_row_fails_closed_on_every_identity_or_lifecycle_mismatch_and_on_unknown
     let frame_row = frame.organism_snapshots().remove(0);
     let (frame_root, frame_visual) = root_and_visual(&frame_row);
     assert_eq!(
-        cared_receipt(&frame, &frame_root, &frame_visual).map(|receipt| receipt.kind),
-        Some(PlayerCareKind::Pet)
+        cared_receipt(&frame, &frame_root, &frame_visual).map(|receipt| receipt.display_kind()),
+        Some(Some(PlayerCareKind::Pet))
     );
     let empty =
         LiveBrainPresentationFrame::try_new(Vec::new(), Tick::ZERO, Vec::new()).unwrap();
@@ -373,9 +376,12 @@ fn pet_and_praise_together_show_the_social_word() {
     world.queue_player_care(organism, position, false).unwrap();
     world.queue_player_care(organism, position, true).unwrap();
     world.try_advance_tick().unwrap();
+    let receipt = world.last_player_care(organism).unwrap();
+    assert!(receipt.kinds.contains(alife_world::PlayerCareKind::Pet));
+    assert!(receipt.kinds.contains(alife_world::PlayerCareKind::Praise));
     assert_eq!(
-        world.last_player_care(organism).unwrap().kind,
-        alife_world::PlayerCareKind::PetAndPraise
+        receipt.display_kind(),
+        Some(alife_world::PlayerCareKind::Pet)
     );
     let row = world.presentation_snapshot().organisms.remove(0);
     let mut app = fixture(&world);
@@ -385,6 +391,35 @@ fn pet_and_praise_together_show_the_social_word() {
     assert_eq!(cues.len(), 1);
     let (word, _) = cue_word(&app, cues[0]);
     assert_eq!(word, "play");
+}
+
+#[test]
+fn scold_and_slap_together_show_the_strongest_negative_word() {
+    let mut world = cared_game();
+    let (organism, entity) = world.organism_entity_ids()[0];
+    let position = world.entity(entity).unwrap().position;
+    world
+        .queue_player_interaction_v1(organism, position, alife_world::PlayerInteractionV1::Scold)
+        .unwrap();
+    world
+        .queue_player_interaction_v1(organism, position, alife_world::PlayerInteractionV1::Slap)
+        .unwrap();
+    world.try_advance_tick().unwrap();
+    let receipt = world.last_player_care(organism).unwrap();
+    assert!(receipt.kinds.contains(alife_world::PlayerCareKind::Scold));
+    assert!(receipt.kinds.contains(alife_world::PlayerCareKind::Slap));
+    assert_eq!(
+        receipt.display_kind(),
+        Some(alife_world::PlayerCareKind::Slap)
+    );
+    let row = world.presentation_snapshot().organisms.remove(0);
+    let mut app = fixture(&world);
+    spawn_root(&mut app, &row, Transform::default());
+    advance(&mut app, 0);
+    let cues = cue_entities(&mut app);
+    assert_eq!(cues.len(), 1);
+    let (word, _) = cue_word(&app, cues[0]);
+    assert_eq!(word, "retreat");
 }
 
 #[test]
