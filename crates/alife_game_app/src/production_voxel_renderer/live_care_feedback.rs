@@ -17,7 +17,7 @@
 //! flinch. An old save with no recorded receipt reads exactly like a
 //! creature never yet cared for, and both show nothing.
 use super::*;
-use bevy::prelude::{Text2d, TextColor, TextFont};
+use bevy::prelude::{Query, Text2d, TextColor, TextFont};
 
 // One word per individual, bounded independently of population scale.
 const MAX_CUES: usize = 8;

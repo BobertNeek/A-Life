@@ -214,6 +214,13 @@ fn player_care_receipt_records_pet_and_praise_on_tick_and_survives_save() {
     world.try_advance_tick().unwrap();
     assert_eq!(world.last_player_care(organism).unwrap(), before);
     // The receipt survives a save/load round trip.
+    let mut creatures = game.creatures;
+    for creature in &mut creatures {
+        let record = world.organism_registry().get(creature.organism_id).unwrap();
+        creature.mind.tick = record.biochemistry().tick;
+        creature.mind.homeostasis = record.biochemistry().homeostasis;
+        creature.development_tick = record.biochemistry().development.last_update_tick;
+    }
     let save = alife_world::PortableSaveFile::from_headless_world(
         "care-receipt",
         &world,
@@ -222,7 +229,7 @@ fn player_care_receipt_records_pet_and_praise_on_tick_and_survives_save() {
             alife_core::BrainScaleTier::Nano512,
         ),
         alife_world::AssetManifest::empty(),
-        game.creatures,
+        creatures,
     )
     .unwrap();
     let restored =
@@ -360,6 +367,13 @@ fn player_care_receipt_records_scold_and_slap_kinds_and_mixed_sets() {
     assert!(receipt.kinds.contains(PlayerCareKind::Slap));
     assert_eq!(receipt.display_kind(), Some(PlayerCareKind::Slap));
     // The mixed receipt survives a save/load round trip as a set.
+    let mut creatures = game.creatures;
+    for creature in &mut creatures {
+        let record = world.organism_registry().get(creature.organism_id).unwrap();
+        creature.mind.tick = record.biochemistry().tick;
+        creature.mind.homeostasis = record.biochemistry().homeostasis;
+        creature.development_tick = record.biochemistry().development.last_update_tick;
+    }
     let save = alife_world::PortableSaveFile::from_headless_world(
         "care-receipt-mixed",
         &world,
@@ -368,7 +382,7 @@ fn player_care_receipt_records_scold_and_slap_kinds_and_mixed_sets() {
             alife_core::BrainScaleTier::Nano512,
         ),
         alife_world::AssetManifest::empty(),
-        game.creatures,
+        creatures,
     )
     .unwrap();
     let restored =
