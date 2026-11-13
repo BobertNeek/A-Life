@@ -354,15 +354,10 @@ fn positive_and_negative_player_cues_share_grounded_projection_once() {
                     world.queue_player_interaction_v1(id, p, *kind).unwrap();
                 }
             }
-            let biology_before = world
-                .organism_registry()
-                .get(id)
-                .unwrap()
-                .biochemistry()
-                .clone();
+            let biology_before = *world.organism_registry().get(id).unwrap().biochemistry();
             let frame = world.perception_frame(id, Tick(0), profile, h).unwrap();
             frame.validate_contract().unwrap();
-            let mut expected = baseline.sensory().channels.clone();
+            let mut expected = baseline.sensory().channels;
             if kinds.contains(&PlayerInteractionV1::Praise) {
                 expected.auditory_acoustic[1] = 1.;
             }
