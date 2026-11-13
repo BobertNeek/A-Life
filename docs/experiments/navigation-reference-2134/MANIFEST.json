@@ -1,0 +1,89 @@
+{
+  "source_factory": "produce_current_self_orientation2000",
+  "founder_seed_base": 2026111560,
+  "sensor_profile": "GroundedTerrainObjectPortsV2",
+  "capacity": 2048,
+  "weights": 32768,
+  "source_defined_fresh_weights_exact_old2092": true,
+  "no_World_or_neural_forward": true,
+  "no_acquired_CP_Adam_or_lifetime": true,
+  "whole_host_modules_required": [
+    "RetainedCanonicalHost1992",
+    "position2013",
+    "joint2056",
+    "own_feedback2086"
+  ],
+  "not_current_main_drop_in": true,
+  "asset_digest": [
+    63,
+    242,
+    233,
+    111,
+    207,
+    188,
+    189,
+    121,
+    174,
+    229,
+    192,
+    8,
+    203,
+    52,
+    246,
+    248,
+    104,
+    28,
+    199,
+    103,
+    30,
+    20,
+    167,
+    66,
+    19,
+    138,
+    1,
+    171,
+    228,
+    238,
+    92,
+    0
+  ],
+  "files": {
+    "README.md": {
+      "sha256": "89b3e006098f695b623343de97e6c0228a63effea1929aa456d2880fa3b989d1",
+      "bytes": 3011
+    },
+    "REFERENCE-STATIC-PLAN.json": {
+      "sha256": "af1e54094199c526777d0e903fdf414fc10c062b53aa69cf8a2a68a61f4d98d7",
+      "bytes": 1213
+    },
+    "RESEARCH-ENV.json": {
+      "sha256": "a3e4eb6cbbbd856eb1549d21759c3bb11f06732144ecba0e9f3e8845c2e1328b",
+      "bytes": 512
+    },
+    "asset.json": {
+      "sha256": "02aed47df4b425129e30cedd7bb35effa7ecb80f39c25e669f18e5e4cfcbfa92",
+      "bytes": 170046
+    },
+    "development.json": {
+      "sha256": "842ca3883dcfa174645844c2d83cbb57c8129208818a01bba5a96b470baa884d",
+      "bytes": 243
+    },
+    "genome.json": {
+      "sha256": "652314cc0556fa245008fb4c58a1837d4a84a74bc95f2818a878aff220594e56",
+      "bytes": 10177
+    },
+    "native-codec.rs": {
+      "sha256": "6cc29fe65443bf2aacb73f41f2a6bdebed1da042244f92234f881d72cc35d9dd",
+      "bytes": 4964
+    },
+    "native-reference.rs": {
+      "sha256": "1acf7dd8a133401093ab9b7974d5973081cdb6b2c4ab37417eed529388ec0b52",
+      "bytes": 27585
+    },
+    "navigation-orientation2000-fresh.alife-foundation": {
+      "sha256": "86ec1e5472eeac9c3167ec865422c74d6d5959570caa0904c971963f19542927",
+      "bytes": 131581
+    }
+  }
+}
