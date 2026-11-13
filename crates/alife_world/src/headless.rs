@@ -2,6 +2,8 @@
 //!
 //! Owns physical state, perception, action legality, and organism biology.
 
+mod partial_observability_v1;
+pub use partial_observability_v1::{GroundedAvailabilityFrameV1, GroundedSourceAvailabilityV1};
 mod awake_translation;
 mod contact_withdrawal;
 mod grounded_path;
@@ -3963,6 +3965,27 @@ impl HeadlessWorld {
         index: Option<&HeadlessPerceptionBatchIndex>,
     ) -> Result<(PerceptionFrameDraft, Option<GroundedCandidateBinding>), ScaffoldContractError>
     {
+        self.perception_frame_draft_with_availability_sink(
+            organism_id,
+            tick,
+            profile,
+            homeostasis,
+            index,
+            None,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn perception_frame_draft_with_availability_sink(
+        &mut self,
+        organism_id: OrganismId,
+        tick: Tick,
+        profile: SensorProfile,
+        homeostasis: HomeostaticSnapshot,
+        index: Option<&HeadlessPerceptionBatchIndex>,
+        availability: Option<&mut Vec<GroundedSourceAvailabilityV1>>,
+    ) -> Result<(PerceptionFrameDraft, Option<GroundedCandidateBinding>), ScaffoldContractError>
+    {
         homeostasis
             .validate_contract()
             .map_err(|_| ScaffoldContractError::InvalidPerceptionFrame)?;
@@ -4035,6 +4058,11 @@ impl HeadlessWorld {
                     .map(WorldOrganismRecord::embodiment);
                 if terrain_vision {
                     grounded.calibrate(embodiment)?;
+                }
+                if let Some(sink) = availability {
+                    partial_observability_v1::capture_calibrated_sources(
+                        sink, &snapshot, &grounded, embodiment,
+                    )?;
                 }
                 // Possession is a real grip contact. Nominate only a target
                 // already present in this visual snapshot, after calibration;
