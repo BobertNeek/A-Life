@@ -85,6 +85,7 @@ struct Trial {
     initial_energy: f32,
     final_energy: f32,
     injury: f32,
+    alive: bool,
     decisions: usize,
     failed_ingests: usize,
     actions: std::collections::BTreeMap<String, usize>,
@@ -345,7 +346,7 @@ fn trial(
     let own = old.organism_id();
     let mirror = if seed.is_multiple_of(2) { 1. } else { -1. };
     let initial_local = match scene {
-        "contact" | "toy" => Vec3f::new(0.25, 0., 0.),
+        "contact" | "toy" | "hazard" => Vec3f::new(0.25, 0., 0.),
         "toy-then-food" | "wait-then-food" => Vec3f::new(100., 0., 0.),
         "crossing" | "frozen-crossing" => Vec3f::new(2.5, 0., -mirror),
         _ => Vec3f::new(2.5, 0., 0.),
@@ -356,15 +357,23 @@ fn trial(
         .build()?;
     let target = world.editor_spawn_object(WorldEditorSpawnSpec {
         label: "target".into(),
-        kind: if scene == "toy" {
-            WorldObjectKind::ActivityToy
-        } else {
-            WorldObjectKind::Food
+        kind: match scene {
+            "toy" => WorldObjectKind::ActivityToy,
+            "hazard" => WorldObjectKind::Hazard,
+            _ => WorldObjectKind::Food,
         },
         organism_id: None,
-        position: initial,
-        nutrition: if scene == "toy" { 0. } else { 0.6 },
-        hazard_pain: 0.,
+        position: if scene == "hazard" {
+            Vec3f::new(100., 0., 0.)
+        } else {
+            initial
+        },
+        nutrition: if matches!(scene, "toy" | "hazard") {
+            0.
+        } else {
+            0.6
+        },
+        hazard_pain: if scene == "hazard" { 0.05 } else { 0. },
         radius: 0.3,
         token_id: None,
     })?;
@@ -383,14 +392,22 @@ fn trial(
         },
     )?;
     let mut distraction_id = None;
-    if matches!(scene, "choice" | "toy-then-food") {
+    if matches!(scene, "choice" | "toy-then-food" | "hazard-choice") {
         let distraction = world.editor_spawn_object(WorldEditorSpawnSpec {
             label: "nonfood".into(),
-            kind: WorldObjectKind::ActivityToy,
+            kind: if scene == "hazard-choice" {
+                WorldObjectKind::Hazard
+            } else {
+                WorldObjectKind::ActivityToy
+            },
             organism_id: None,
-            position: variation.rotate(Vec3f::new(0.25, 0., 0.)),
+            position: if scene == "hazard-choice" {
+                Vec3f::new(100., 0., 0.)
+            } else {
+                variation.rotate(Vec3f::new(0.25, 0., 0.))
+            },
             nutrition: 0.,
-            hazard_pain: 0.,
+            hazard_pain: if scene == "hazard-choice" { 0.05 } else { 0. },
             radius: 0.3,
             token_id: None,
         })?;
@@ -445,6 +462,16 @@ fn trial(
         }
         Ok::<_, ScaffoldContractError>(())
     })?;
+    // Begin hazard exposure with the first neural decision, after ordinary
+    // maturation. Otherwise the unattended preparation itself kills the newborn.
+    if scene == "hazard" {
+        host.world_mut().editor_move_object(target, initial)?;
+    } else if scene == "hazard-choice" {
+        host.world_mut().editor_move_object(
+            distraction_id.unwrap(),
+            variation.rotate(Vec3f::new(0.25, 0., 0.)),
+        )?;
+    }
     let hunter = host.world().entity_id("hunter").unwrap();
     let body = host
         .world()
@@ -464,6 +491,7 @@ fn trial(
         initial_energy: body.energy,
         final_energy: body.energy,
         injury: 0.,
+        alive: true,
         decisions: 0,
         failed_ingests: 0,
         actions: Default::default(),
@@ -572,7 +600,24 @@ fn trial(
             result.consumed_tick = Some(tick);
             break;
         }
+        result.alive = host
+            .world()
+            .organism_registry()
+            .get(own)
+            .unwrap()
+            .lifecycle()
+            .is_alive();
+        if !result.alive {
+            break;
+        }
     }
+    result.alive = host
+        .world()
+        .organism_registry()
+        .get(own)
+        .unwrap()
+        .lifecycle()
+        .is_alive();
     let body = host
         .world()
         .organism_registry()
@@ -613,6 +658,8 @@ fn run(base: &FoundationWeightAsset, p: &BrainPhenotype, r: Request) -> Result<s
                 "choice",
                 "toy-then-food",
                 "wait-then-food",
+                "hazard",
+                "hazard-choice",
             ]
             .contains(&s.as_str())
         })
@@ -666,7 +713,7 @@ fn run(base: &FoundationWeightAsset, p: &BrainPhenotype, r: Request) -> Result<s
     }
     Ok(
         json!({"backend":"native-cpu", "memory_cap":trainer.phenotype().candidate_decoder().memory_channel().map(|m|m.max_candidate_gain()), "base_digest":base.digest(),"candidate_digest":asset.digest(),
-        "assay_version":4,"motor_heads":r.motor_heads,"variation":r.variation,"readout_scale":r.readout_scale,"bearing_gain":r.bearing_gain,"params":r.params,"memory_aversion":r.memory_aversion,"ticks":r.ticks,"seconds":start.elapsed().as_secs_f64(),"trials":trials}),
+        "assay_version":5,"motor_heads":r.motor_heads,"variation":r.variation,"readout_scale":r.readout_scale,"bearing_gain":r.bearing_gain,"params":r.params,"memory_aversion":r.memory_aversion,"ticks":r.ticks,"seconds":start.elapsed().as_secs_f64(),"trials":trials}),
     )
 }
 
@@ -828,6 +875,26 @@ mod tests {
         assert!(masks[0].as_u64().unwrap() > 0);
         assert!(masks[2].as_u64().unwrap() > 0);
         assert_eq!(masks[1], 0);
+    }
+
+    #[test]
+    fn hazard_exposure_begins_after_preparation_and_has_real_consequences() {
+        let (asset, p, game) = prepare_founder(base(), 1).unwrap();
+        let mask = StageTrainableMask::recurrent_only(&p).unwrap();
+        let trainer = CpuFoundationTrainer::new(p, asset, mask, AdamWConfig::default()).unwrap();
+        let result = trial(
+            &game,
+            &trainer,
+            2026112800,
+            "hazard",
+            3,
+            false,
+            Variation::default(),
+        )
+        .unwrap();
+        assert!(result.decisions > 0);
+        assert!(result.injury > 0.);
+        assert!(!result.consumed);
     }
 
     #[test]

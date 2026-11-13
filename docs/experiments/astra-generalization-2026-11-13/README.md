@@ -12,6 +12,38 @@ sensitivities in PyTorch, proposed edits, and tested their physical consequences
 The experiment includes feedback-driven selection; it is not a replication of
 the paper's restricted one-shot experiments.
 
+## Latest cumulative continuation
+
+The current working child is **`pursuit-twohead-contact20.alife-foundation` plus
+its exported count2 construction genome**. It starts from the exported bearing4
+child and changes one additional genetic weight: +20 on Ingest source1839,
+contact lane18. Its distance penalties and all memory/recurrent weights stay intact.
+
+On ten further paired cases (2026112700–2709), both parent and child ate98/110
+food targets with the same per-scene success counts. Unsuccessful Ingest-containing
+bundles across all scenes fell3062→2093 (31.6%); toy Ingest selections fell1596→922
+(42.2%). Total time-to-meal across the same98 successful cases rose5470→5822
+intervals (6.4%). The exact export was reloaded for a full matched case.
+
+The preceding broad Ingest scaling experiment was rejected: scaling all readouts
+to1/8 also retained98/110 meals and reduced toy attempts1574→1199, but weakened
+distance penalties and increased all unsuccessful Ingest bundles3040→4579.
+This is why the accepted child edits contact weights alone.
+
+New hazard controls are separate exploratory tests, not included in the food
+success table. Exposure begins after ordinary600-tick maturation; placing hazards
+beside unattended newborns during preparation killed them before any neural
+trial, so that invalid setup was corrected before reporting behavior. All three
+brains survived the short revised controls but accumulated substantial injury.
+The contact edit improved hazard→food outcome in one of four cases and reduced
+injury in those mixed cases. A carried painful object remains a weakness:
+Inspect/Approach/Flee/Eat/Grab/Play provide no explicit voluntary Drop action.
+No world behavior or reflex was modified here. This finding was relayed to Bob.
+
+Assay v5 records survival and stops at death. Seven focused native tests and
+strict Clippy pass, including actual hazard exposure after preparation. The older six-test statements
+below describe the already-merged first stage.
+
 ## Verified improvement
 
 Ten fresh paired cases (sampling seeds 2026112500–2509), four appearances, five
@@ -30,11 +62,11 @@ one inherited genotype, not ten independent species or a maze benchmark.
 | **Total food meals** | **68/110** | **74/110** | **97/110** | **97/110** |
 | Toy Ingest selections (lower is better) | 700 | 1956 | 1594 | 1324 |
 
-The main-compatible working child is `pursuit-twohead-bearing4.alife-foundation`
+The first-stage child is `pursuit-twohead-bearing4.alife-foundation`
 **together with its exported construction genome**. The independent reload
 reproduced the candidate digest and every trial metric for a complete twelve-scene
-case. The next readout-scale generation starts from that exported child, with
-zero additional targeting deltas. This is cumulative progress, not a reset.
+case. The subsequent contact-weight generation above started from that exported
+child, with zero additional targeting deltas. This is cumulative progress.
 
 The gain has a cost: nonfood eating attempts increased. The child wins the
 meal-dominant selection objective, but is not a universal behavioral improvement.
@@ -65,10 +97,11 @@ contact weights and reduced Inspect weights repaired parts of this but did not
 solve the wider target-choice problem. Enabling the existing manipulation head
 made the combined targeting edit substantially more useful.
 
-The channel also has a limitation: the existing sampler draws an interaction
-whenever its mask is nonempty; it has no separate empty-channel draw. Toy retry
-counts therefore rise. Later experiments soften the Ingest readout now that it
-need not win the global contest. No sampler, world legality or reward rule was
+The enabled channel draws a candidate whenever its mask is nonempty, including
+the existing targetless NO_MANIPULATION option. The higher toy retry count comes
+from relative readout scores, not a missing no-op (an earlier explanation was
+incorrect). Later experiments soften the Ingest contact readout now that it need
+not win the global contest, while preserving distance penalties. No sampler, world legality or reward rule was
 changed to make these scores succeed.
 
 ## Memory cap experiment
@@ -102,7 +135,8 @@ rebound research fixture. No production/default cap change is included.
 including rejected pilots; it omits bulky neural traces. Each result identifies
 its actual source and candidate digest, parameters, scenario settings and runtime
 variant. `artifacts.json` identifies exported files. `export.json` records the
-working child's export. `bearing-sensitivity.json` and `analyze_native_trace.py`
+bearing child's export; `contact-export.json` records its contact20 successor.
+`bearing-sensitivity.json` and `analyze_native_trace.py`
 show PyTorch calculations on frozen native states, not whole-life predictions.
 
 ```sh
@@ -113,16 +147,18 @@ python docs/experiments/astra-generalization-2026-11-13/reproduce.py \
   --output /tmp/bearing-case.json
 ```
 
-Use `winner-reload` with the exported two-head asset to verify direct continuation.
+Use `winner-reload` with the bearing4 asset, or `contact-winner-reload` with
+contact20, to verify direct continuation.
 The request includes `motor_heads:2`; without that gene, loading the weights alone
 would test a different creature. `--trace` retains neural/action diagnostics.
 The search script supports fixed `--motor-heads`, `--bearing-gain`,
 `--readout-scale` and `--variation`; further weight mutations should load the
 selected exported asset rather than reconstruct an independent founder.
 
-All six focused native tests and strict Clippy passed. Both normal and cap8
-research variants passed the six tests. Python scripts compile. GPU execution,
-long-life care, hazards and the full repository suite were not tested here.
+The first-stage six focused native tests and strict Clippy passed. Both normal
+and cap8 research variants passed those six tests. Python scripts compile. GPU
+execution, long-life care and the full repository suite were not tested here.
+The later hazard controls are described above and do not establish injury avoidance.
 Hosted Actions cannot currently run because the private repository's included
 minutes are exhausted and its spending budget is zero, per the owner's board
 report; these are local validation results, not a CI-green claim.
