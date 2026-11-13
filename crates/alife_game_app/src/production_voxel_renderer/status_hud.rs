@@ -120,45 +120,54 @@ impl Readout {
 /// DEBUG-ONLY inspector line for the selected creature's last observed
 /// player care. Never wired into the user-facing HUD: the game shows the
 /// creature's response (a nod or flinch, and its own word above it), not
-/// ticks and decimals. Only the kind-relevant channel is shown: praise
-/// and scold move the praise signal, pet and slap move loneliness. No
-/// receipt is UNKNOWN, never a definite absence — a save from before
-/// receipts existed reads exactly the same way, so the line says
-/// "unknown" and never "none yet" or "felt nothing".
+/// ticks and decimals. One kind shows only its kind-relevant channel:
+/// praise and scold move the praise signal, pet and slap move loneliness.
+/// A mixed set names every kind and shows both channels — the debug line
+/// is where the exact set lives. No receipt is UNKNOWN, never a definite
+/// absence — a save from before receipts existed reads exactly the same
+/// way, so the line says "unknown" and never "none yet" or "felt nothing".
 #[allow(dead_code)]
 fn debug_care_line(care: &PresentationEvidence<PlayerCareReceipt>) -> String {
     match care {
         PresentationEvidence::Unknown => "care: unknown (no receipt recorded)".to_string(),
-        PresentationEvidence::Observed { value, .. } => match value.kind {
-            PlayerCareKind::Pet => format!(
-                "Petted, felt at tick {}, loneliness {:.2} to {:.2}",
-                value.applied_tick.raw(),
-                value.loneliness_before,
-                value.loneliness_after
-            ),
-            PlayerCareKind::Praise => format!(
-                "Praised, felt at tick {}, praise {:.2} to {:.2}",
-                value.applied_tick.raw(),
-                value.praise_signal_before,
-                value.praise_signal_after
-            ),
-            PlayerCareKind::Scold => format!(
-                "Scolded, felt at tick {}, praise {:.2} to {:.2}",
-                value.applied_tick.raw(),
-                value.praise_signal_before,
-                value.praise_signal_after
-            ),
-            PlayerCareKind::Slap => format!(
-                "Slapped, felt at tick {}, loneliness {:.2} to {:.2}",
-                value.applied_tick.raw(),
-                value.loneliness_before,
-                value.loneliness_after
-            ),
-            PlayerCareKind::PetAndPraise => format!(
-                "Petted and praised, felt at tick {}",
-                value.applied_tick.raw()
-            ),
-        },
+        PresentationEvidence::Observed { value, .. } => {
+            let words: Vec<&str> = value
+                .kinds
+                .iter()
+                .map(|kind| match kind {
+                    PlayerCareKind::Pet => "Petted",
+                    PlayerCareKind::Praise => "Praised",
+                    PlayerCareKind::Scold => "Scolded",
+                    PlayerCareKind::Slap => "Slapped",
+                })
+                .collect();
+            let label = words.join(" and ");
+            if value.kinds.iter().count() == 1 {
+                let channel = if value.kinds.contains(PlayerCareKind::Pet)
+                    || value.kinds.contains(PlayerCareKind::Slap)
+                {
+                    format!(
+                        "loneliness {:.2} to {:.2}",
+                        value.loneliness_before, value.loneliness_after
+                    )
+                } else {
+                    format!(
+                        "praise {:.2} to {:.2}",
+                        value.praise_signal_before, value.praise_signal_after
+                    )
+                };
+                format!("{label}, felt at tick {}, {channel}", value.applied_tick.raw())
+            } else {
+                format!(
+                    "{label}, felt at tick {}, praise {:.2} to {:.2}, loneliness {:.2} to {:.2}",
+                    value.applied_tick.raw(),
+                    value.praise_signal_before,
+                    value.praise_signal_after,
+                    value.loneliness_before,
+                    value.loneliness_after
+                )
+            }
+        }
     }
 }
 fn valid_row(

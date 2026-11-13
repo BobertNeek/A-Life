@@ -655,13 +655,16 @@ pub(super) fn animate(
                 // The receipt is the authority: the nod/flinch fires only
                 // for a receipt this row actually carries. No receipt means
                 // no pulse — unknown stays unrendered, never a "nothing
-                // felt" pose.
+                // felt" pose. A multi-kind receipt pulses once, for its
+                // display kind; the debug readout keeps the full set.
                 let care = frame
                     .current
                     .organism(marker.stable_id)
                     .and_then(|row| match &row.last_player_care {
                         alife_world::PresentationEvidence::Observed { value, .. } => {
-                            Some((value.applied_tick.raw(), value.kind))
+                            value
+                                .display_kind()
+                                .map(|kind| (value.applied_tick.raw(), kind))
                         }
                         alife_world::PresentationEvidence::Unknown => None,
                     });

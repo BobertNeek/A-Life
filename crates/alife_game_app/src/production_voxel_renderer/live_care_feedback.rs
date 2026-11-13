@@ -53,19 +53,21 @@ pub(super) struct CareWord;
 ///   codebook gains an approval/disapproval word.
 /// - slap (negative physical) -> "retreat": the creature reads the hit as
 ///   a reason to move away.
-/// - pet and praise together -> "play": the social frame dominates, as in
-///   the receipt itself.
+/// A receipt may carry several kinds at once (a pet and a praise queued
+/// before one tick, a scold with a slap). The word comes from the receipt's
+/// display kind: negative dominates, and among positives a pet outranks
+/// praise, so pet-and-praise still says "play". That rule is interpretive,
+/// not a measurement — the debug readout (`status_hud::debug_care_line`)
+/// keeps the exact set.
 ///
-/// Pet and pet-and-praise collide on "play"; the nod is the same for both.
-/// That is honest — the creature's vocabulary cannot say more yet — and
-/// the debug readout (`status_hud::debug_care_line`) keeps the exact kind.
+/// Pet and a pet-and-praise set collide on "play"; the nod is the same for
+/// both. That is honest — the creature's vocabulary cannot say more yet.
 pub(super) fn care_word(kind: alife_world::PlayerCareKind) -> &'static str {
     match kind {
         alife_world::PlayerCareKind::Pet => "play",
         alife_world::PlayerCareKind::Praise => "get",
         alife_world::PlayerCareKind::Scold => "look",
         alife_world::PlayerCareKind::Slap => "retreat",
-        alife_world::PlayerCareKind::PetAndPraise => "play",
     }
 }
 
@@ -258,6 +260,12 @@ pub(super) fn sync(
             continue;
         }
         shown.insert(organism_id, receipt.applied_tick.raw());
+        // The word and colour come from the display kind: one kind per
+        // moment, chosen by the receipt's rule (negative dominates, pet
+        // over praise). An empty set has no display kind and shows nothing.
+        let Some(display) = receipt.display_kind() else {
+            continue;
+        };
         commands
             .spawn((
                 Name::new("Live care response: creature word"),
@@ -276,12 +284,12 @@ pub(super) fn sync(
             .with_children(|parent| {
                 parent.spawn((
                     CareWord,
-                    Text2d::new(care_word(receipt.kind)),
+                    Text2d::new(care_word(display)),
                     TextFont {
                         font_size: 18.0,
                         ..Default::default()
                     },
-                    TextColor(care_color(receipt.kind)),
+                    TextColor(care_color(display)),
                     word_transform(pose.rotation, camera_rotation),
                     bevy::picking::Pickable::IGNORE,
                 ));
