@@ -110,14 +110,16 @@ fn explicit_zero_effect_kinds_and_bad_pairing() {
             [0.; 2]
         );
     }
-    assert!(score_output2029(
-        &model([1.; 2]),
-        [0.; 4],
-        PositionEffectKind2029::Angular,
-        effect(PositionEffectKind2029::Translation),
-        0.
-    )
-    .is_err());
+    assert!(
+        score_output2029(
+            &model([1.; 2]),
+            [0.; 4],
+            PositionEffectKind2029::Angular,
+            effect(PositionEffectKind2029::Translation),
+            0.
+        )
+        .is_err()
+    );
 }
 #[test]
 fn independent_history_cold_signed_and_atomic() {
@@ -152,17 +154,19 @@ fn independent_history_cold_signed_and_atomic() {
 fn overflow_and_tape_tamper_reject() {
     let mut h = model([f32::MAX; 2]);
     h.inner.gains = [f32::MAX, 1.];
-    assert!(score_output2029(
-        &h,
-        [1., 1., 1., 1.],
-        PositionEffectKind2029::Translation,
-        PositionEffect2018 {
-            translation: [1., 0.],
-            angular: [0.; 2]
-        },
-        f32::MAX
-    )
-    .is_err());
+    assert!(
+        score_output2029(
+            &h,
+            [1., 1., 1., 1.],
+            PositionEffectKind2029::Translation,
+            PositionEffect2018 {
+                translation: [1., 0.],
+                angular: [0.; 2]
+            },
+            f32::MAX
+        )
+        .is_err()
+    );
     let mut s = score_output2029(
         &model([1.; 2]),
         [0.2, 0.1, 1., 1.],
@@ -406,9 +410,11 @@ fn shared_source_batch_matches_single_scores() {
     }
     assert!(score_output_batch2029(&h, s, &kinds, &effects, &[]).is_err());
     assert!(score_output_batch2029(&h, [f32::NAN; 4], &[], &[], &[]).is_err());
-    assert!(score_output_batch2029(&h, s, &[], &[], &[])
-        .unwrap()
-        .is_empty());
+    assert!(
+        score_output_batch2029(&h, s, &[], &[], &[])
+            .unwrap()
+            .is_empty()
+    );
 }
 #[test]
 fn finite_dot_but_overflowing_old_projection_uses_stable_fallback() {
@@ -491,4 +497,187 @@ fn wide_chain_preserves_tiny_live_local_gradient() {
     assert_eq!(g.inner.gains[0].to_bits(), expected.to_bits());
     assert_eq!(g.inner.state, [0.; 4]);
     assert_eq!(g.amplitudes, [0.; 2]);
+}
+
+#[test]
+fn finite_outer_chain_preserves_zero_and_tiny_projector_adjoints() {
+    for (gain, occupancy) in [
+        (0.0, 1.0),
+        (0.25, 1.0),
+        (0.1, 0.5),
+        (1e-40, 1.0),
+        (f32::MIN_POSITIVE, 1.0),
+    ] {
+        let h = PositionOutputHead2029::fresh(
+            PositionHead2018::fresh([gain, 0.0], AdamWConfig::default()).unwrap(),
+            [f32::MAX, 1.0],
+            AdamWConfig::default(),
+        )
+        .unwrap();
+        let tape = h
+            .forward_detached(
+                [0.0, 0.0, occupancy, 1.0],
+                PositionEffectKind2029::Translation,
+                PositionEffect2018 {
+                    translation: [1.0, 0.0],
+                    angular: [0.0; 2],
+                },
+                0.0,
+            )
+            .unwrap();
+        let a = h.backward_detached(&tape, 1.0).unwrap();
+        let expected = (f64::from(f32::MAX) * f64::from(occupancy) * 4.0 * f64::from(gain)) as f32;
+        assert_eq!(a.inner.state[0].to_bits(), expected.to_bits());
+        assert_eq!(a.inner.state[1..], [0.0; 3]);
+        assert_eq!(a.inner.gains, [0.0; 2]);
+        assert_eq!(a.amplitudes, [0.0; 2]);
+        assert_eq!(a.base, 1.0);
+    }
+}
+#[test]
+fn genuinely_unrepresentable_position_adjoint_is_rejected() {
+    let h = PositionOutputHead2029::fresh(
+        PositionHead2018::fresh([1.0, 0.0], AdamWConfig::default()).unwrap(),
+        [f32::MAX, 1.0],
+        AdamWConfig::default(),
+    )
+    .unwrap();
+    let t = h
+        .forward_detached(
+            [0.0, 0.0, 1.0, 1.0],
+            PositionEffectKind2029::Translation,
+            PositionEffect2018 {
+                translation: [1.0, 0.0],
+                angular: [0.0; 2],
+            },
+            0.0,
+        )
+        .unwrap();
+    assert!(h.backward_detached(&t, 1.0).is_err());
+}
+
+#[test]
+fn finite_outer_chain_zero_effect_retains_zero_and_tiny_live_effect_adjoints() {
+    for gain in [2.0, -2.0, f32::MAX] {
+        let h = PositionOutputHead2029::fresh(
+            PositionHead2018::fresh([gain, 0.0], AdamWConfig::default()).unwrap(),
+            [f32::MAX, 1.0],
+            AdamWConfig::default(),
+        )
+        .unwrap();
+        let t = h
+            .forward_detached(
+                [0.0, 0.0, 1.0, 1.0],
+                PositionEffectKind2029::Translation,
+                PositionEffect2018 {
+                    translation: [0.0; 2],
+                    angular: [0.0; 2],
+                },
+                0.0,
+            )
+            .unwrap();
+        let a = h.backward_detached(&t, 1.0).unwrap();
+        assert_eq!(a.inner.state, [0.0; 4]);
+        assert_eq!(a.inner.translation, [0.0; 2]);
+        assert_eq!(a.inner.angular, [0.0; 2]);
+        assert_eq!(a.inner.gains, [0.0; 2]);
+    }
+    let h = PositionOutputHead2029::fresh(
+        PositionHead2018::fresh([2.0, 0.0], AdamWConfig::default()).unwrap(),
+        [f32::MAX, 1.0],
+        AdamWConfig::default(),
+    )
+    .unwrap();
+    let t = h
+        .forward_detached(
+            [2.5e-41, 0.0, 1.0, 1.0],
+            PositionEffectKind2029::Translation,
+            PositionEffect2018 {
+                translation: [0.0; 2],
+                angular: [0.0; 2],
+            },
+            0.0,
+        )
+        .unwrap();
+    let a = h.backward_detached(&t, 1.0).unwrap();
+    let u = 4.0f32 * 2.5e-41f32;
+    assert_eq!(
+        a.inner.translation[0],
+        (f64::from(f32::MAX) * 2.0 * f64::from(u)) as f32
+    );
+    assert!(a.inner.translation[0] > 0.0);
+    assert_eq!(a.inner.state, [0.0; 4]);
+}
+
+#[test]
+fn huge_finite_chain_zero_inner_gain_keeps_live_gain_adjoint() {
+    let h = PositionOutputHead2029::fresh(
+        PositionHead2018::fresh([0.0; 2], AdamWConfig::default()).unwrap(),
+        [f32::MAX, 1.0],
+        AdamWConfig::default(),
+    )
+    .unwrap();
+    let t = h
+        .forward_detached(
+            [0.2, 0.1, 1.0, 1.0],
+            PositionEffectKind2029::Translation,
+            PositionEffect2018 {
+                translation: [1.0, 0.0],
+                angular: [0.0; 2],
+            },
+            0.0,
+        )
+        .unwrap();
+    let a = h.backward_detached(&t, 1.0).unwrap();
+    let u = 0.8f32 / (1.0f32 + 0.8 * 0.8 + 0.4 * 0.4).sqrt();
+    assert_eq!(a.inner.gains[0], f32::MAX * u);
+    assert!(a.inner.gains[0] > 0.0);
+    assert_eq!(a.inner.state, [0.0; 4]);
+    assert_eq!(a.inner.translation, [0.0; 2]);
+}
+
+#[test]
+fn ordinary_position_and_effect_derivatives_preserve_original_f32_bits() {
+    for state in [
+        [0.2, -0.1, 0.9, 0.8],
+        [-0.3, 0.4, 0.7, 0.6],
+        [0.0, 0.1, 1.0, 1.0],
+    ] {
+        for kind in [
+            PositionEffectKind2029::Translation,
+            PositionEffectKind2029::Angular,
+        ] {
+            for upstream in [0.7, -1.3] {
+                let h = PositionHead2018::fresh([1.0, -0.7], AdamWConfig::default()).unwrap();
+                let s = score2018(&h, state, effect(kind), 0.0).unwrap();
+                let actual = backward2018(&s, upstream).unwrap();
+                let v = [4.0 * state[0], 4.0 * state[1]];
+                let d = (1.0 + (v[0] * v[0] + v[1] * v[1])).sqrt();
+                let u = [v[0] / d, v[1] / d];
+                let oc = state[2] * state[3];
+                let b = upstream * (1.0 - s.component * s.component);
+                let e = [
+                    h.gains[0] * s.effect.translation[0] + h.gains[1] * s.effect.angular[0],
+                    h.gains[0] * s.effect.translation[1] + h.gains[1] * s.effect.angular[1],
+                ];
+                let ve = v[0] * e[0] + v[1] * e[1];
+                let d3 = d * d * d;
+                for (i, &ui) in u.iter().enumerate() {
+                    let projected = e[i] / d - v[i] * ve / d3;
+                    assert_eq!(
+                        actual.state[i].to_bits(),
+                        (b * oc * 4.0 * projected).to_bits()
+                    );
+                    assert_eq!(
+                        actual.translation[i].to_bits(),
+                        (b * oc * h.gains[0] * ui).to_bits()
+                    );
+                    assert_eq!(
+                        actual.angular[i].to_bits(),
+                        (b * oc * h.gains[1] * ui).to_bits()
+                    );
+                }
+            }
+        }
+    }
 }

@@ -217,19 +217,35 @@ pub fn backward2018(
     } else {
         [(e[0] - u[0] * ue) / d, (e[1] - u[1] * ue) / d]
     };
+    // Preserve ordinary f32 results. An intermediate can overflow before a
+    // zero or small final factor makes the complete derivative representable.
+    let product4 = |a: f32, b: f32, c: f32, d: f32| {
+        let ordinary = a * b * c * d;
+        if ordinary.is_finite() {
+            ordinary
+        } else {
+            (f64::from(a) * f64::from(b) * f64::from(c) * f64::from(d)) as f32
+        }
+    };
     let out = PositionAdjoint2018 {
         gains: [
             b * oc * dot(u, s.effect.translation),
             b * oc * dot(u, s.effect.angular),
         ],
         state: [
-            b * oc * 4. * projected[0],
-            b * oc * 4. * projected[1],
+            product4(b, oc, 4., projected[0]),
+            product4(b, oc, 4., projected[1]),
             b * s.state[3] * ue,
             b * s.state[2] * ue,
         ],
-        translation: [b * oc * s.gains[0] * u[0], b * oc * s.gains[0] * u[1]],
-        angular: [b * oc * s.gains[1] * u[0], b * oc * s.gains[1] * u[1]],
+        translation: [
+            product4(b, oc, s.gains[0], u[0]),
+            product4(b, oc, s.gains[0], u[1]),
+        ],
+        angular: [
+            product4(b, oc, s.gains[1], u[0]),
+            product4(b, oc, s.gains[1], u[1]),
+        ],
         before_score: adjoint,
     };
     finite(&out.gains)?;
@@ -315,16 +331,18 @@ mod tests {
         };
         assert!(score2018(&h, [0.; 4], effect, 0.).is_err());
         let h = PositionHead2018::fresh([1.; 2], AdamWConfig::default()).unwrap();
-        assert!(score2018(
-            &h,
-            [2., 0., 1., 1.],
-            PositionEffect2018 {
-                translation: [0.; 2],
-                angular: [0.; 2]
-            },
-            0.
-        )
-        .is_err());
+        assert!(
+            score2018(
+                &h,
+                [2., 0., 1., 1.],
+                PositionEffect2018 {
+                    translation: [0.; 2],
+                    angular: [0.; 2]
+                },
+                0.
+            )
+            .is_err()
+        );
     }
 }
 fn digest2018<T: Serialize>(x: &T) -> Result<[u64; 4], TrainingError> {
