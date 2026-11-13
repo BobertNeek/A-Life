@@ -1,6 +1,6 @@
 use super::*;
 use alife_core::{BrainCapacityClass, CreatureGenome, FoundationGeneticIdentity};
-use alife_world::{HeadlessScenarioBuilder, HeadlessWorld, WorldOrganismRecord};
+use alife_world::{HeadlessScenarioBuilder, HeadlessWorld, PlayerCareKindSet, WorldOrganismRecord};
 fn authoritative_world() -> HeadlessWorld {
     authoritative_world_with_energy(None)
 }
@@ -447,9 +447,9 @@ fn debug_care_line_reports_the_last_observed_response_and_marks_unknown_as_unkno
         debug_care_line(&PresentationEvidence::Unknown),
         "care: unknown (no receipt recorded)"
     );
-    let observed = |kind: PlayerCareKind| PresentationEvidence::Observed {
+    let observed = |kinds: PlayerCareKindSet| PresentationEvidence::Observed {
         value: PlayerCareReceipt {
-            kind,
+            kinds,
             applied_tick: Tick::new(7),
             praise_signal_before: 0.10,
             praise_signal_after: 0.42,
@@ -458,24 +458,44 @@ fn debug_care_line_reports_the_last_observed_response_and_marks_unknown_as_unkno
         },
         tick: Tick::new(7),
     };
+    let single = |kind: PlayerCareKind| PlayerCareKindSet::single(kind);
     assert_eq!(
-        debug_care_line(&observed(PlayerCareKind::Pet)),
+        debug_care_line(&observed(single(PlayerCareKind::Pet))),
         "Petted, felt at tick 7, loneliness 0.61 to 0.55"
     );
     assert_eq!(
-        debug_care_line(&observed(PlayerCareKind::Praise)),
+        debug_care_line(&observed(single(PlayerCareKind::Praise))),
         "Praised, felt at tick 7, praise 0.10 to 0.42"
     );
     assert_eq!(
-        debug_care_line(&observed(PlayerCareKind::Scold)),
+        debug_care_line(&observed(single(PlayerCareKind::Scold))),
         "Scolded, felt at tick 7, praise 0.10 to 0.42"
     );
     assert_eq!(
-        debug_care_line(&observed(PlayerCareKind::Slap)),
+        debug_care_line(&observed(single(PlayerCareKind::Slap))),
         "Slapped, felt at tick 7, loneliness 0.61 to 0.55"
     );
+    // A mixed set names every kind and shows both channels — the debug
+    // line is where the exact set lives.
+    let mut pet_and_praise = PlayerCareKindSet::empty();
+    pet_and_praise.insert(PlayerCareKind::Pet);
+    pet_and_praise.insert(PlayerCareKind::Praise);
     assert_eq!(
-        debug_care_line(&observed(PlayerCareKind::PetAndPraise)),
-        "Petted and praised, felt at tick 7"
+        debug_care_line(&observed(pet_and_praise)),
+        "Petted and praised, felt at tick 7, praise 0.10 to 0.42, loneliness 0.61 to 0.55"
+    );
+    let mut scold_and_slap = PlayerCareKindSet::empty();
+    scold_and_slap.insert(PlayerCareKind::Scold);
+    scold_and_slap.insert(PlayerCareKind::Slap);
+    assert_eq!(
+        debug_care_line(&observed(scold_and_slap)),
+        "Scolded and slapped, felt at tick 7, praise 0.10 to 0.42, loneliness 0.61 to 0.55"
+    );
+    let mut pet_and_scold = PlayerCareKindSet::empty();
+    pet_and_scold.insert(PlayerCareKind::Pet);
+    pet_and_scold.insert(PlayerCareKind::Scold);
+    assert_eq!(
+        debug_care_line(&observed(pet_and_scold)),
+        "Petted and scolded, felt at tick 7, praise 0.10 to 0.42, loneliness 0.61 to 0.55"
     );
 }
