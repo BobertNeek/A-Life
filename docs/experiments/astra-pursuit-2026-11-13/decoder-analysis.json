@@ -1,0 +1,102 @@
+{
+  "scope": "Frozen native baseline activations, local decoder sensitivity only; not predicted whole-life behavior",
+  "torch": "2.15.0+cpu",
+  "rows": [
+    {
+      "tick": 0,
+      "appearance_sum": 3.500000238418579,
+      "old_paired_sensitivity": 0.003214568132534623,
+      "new_signal_sensitivity": 1.4932016134262085
+    },
+    {
+      "tick": 1,
+      "appearance_sum": 3.500000238418579,
+      "old_paired_sensitivity": 0.0014363230438902974,
+      "new_signal_sensitivity": 2.3316166400909424
+    },
+    {
+      "tick": 2,
+      "appearance_sum": 3.500000238418579,
+      "old_paired_sensitivity": -0.005178690422326326,
+      "new_signal_sensitivity": 2.7834880352020264
+    },
+    {
+      "tick": 3,
+      "appearance_sum": 3.500000238418579,
+      "old_paired_sensitivity": -0.0022791328374296427,
+      "new_signal_sensitivity": 3.0285162925720215
+    },
+    {
+      "tick": 4,
+      "appearance_sum": 3.500000238418579,
+      "old_paired_sensitivity": 0.01570567674934864,
+      "new_signal_sensitivity": 3.1704208850860596
+    },
+    {
+      "tick": 5,
+      "appearance_sum": 3.500000238418579,
+      "old_paired_sensitivity": 0.04252580180764198,
+      "new_signal_sensitivity": 3.259019136428833
+    },
+    {
+      "tick": 6,
+      "appearance_sum": 3.500000238418579,
+      "old_paired_sensitivity": 0.07000473886728287,
+      "new_signal_sensitivity": 3.316601037979126
+    },
+    {
+      "tick": 7,
+      "appearance_sum": 3.500000238418579,
+      "old_paired_sensitivity": 0.09350181370973587,
+      "new_signal_sensitivity": 3.3544061183929443
+    },
+    {
+      "tick": 8,
+      "appearance_sum": 3.500000238418579,
+      "old_paired_sensitivity": 0.11171463876962662,
+      "new_signal_sensitivity": 3.379183530807495
+    },
+    {
+      "tick": 9,
+      "appearance_sum": 3.500000238418579,
+      "old_paired_sensitivity": 0.12506838142871857,
+      "new_signal_sensitivity": 3.3953700065612793
+    },
+    {
+      "tick": 10,
+      "appearance_sum": 3.500000238418579,
+      "old_paired_sensitivity": 0.13455311954021454,
+      "new_signal_sensitivity": 3.405928373336792
+    },
+    {
+      "tick": 11,
+      "appearance_sum": 3.500000238418579,
+      "old_paired_sensitivity": 0.14117147028446198,
+      "new_signal_sensitivity": 3.4128215312957764
+    },
+    {
+      "tick": 12,
+      "appearance_sum": 3.500000238418579,
+      "old_paired_sensitivity": 0.1457512229681015,
+      "new_signal_sensitivity": 3.417336940765381
+    },
+    {
+      "tick": 13,
+      "appearance_sum": 3.500000238418579,
+      "old_paired_sensitivity": 0.14891363680362701,
+      "new_signal_sensitivity": 3.4203109741210938
+    },
+    {
+      "tick": 14,
+      "appearance_sum": 3.500000238418579,
+      "old_paired_sensitivity": 0.1511024385690689,
+      "new_signal_sensitivity": 3.422283887863159
+    },
+    {
+      "tick": 15,
+      "appearance_sum": 3.500000238418579,
+      "old_paired_sensitivity": 0.15262471139431,
+      "new_signal_sensitivity": 3.4236032962799072
+    }
+  ]
+}

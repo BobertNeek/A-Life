@@ -1,0 +1,45 @@
+{
+  "params": [
+    3.5628414154052734,
+    -1.1101834774017334,
+    -10.744718551635742,
+    -23.066162109375,
+    23.09345245361328,
+    0.6747460961341858
+  ],
+  "file": "0005-g0-m4.json",
+  "score": 64.70792707800865,
+  "scenes": {
+    "contact": {
+      "n": 2,
+      "consumed": 2,
+      "caught": 2,
+      "failed_ingests": 0
+    },
+    "stationary": {
+      "n": 2,
+      "consumed": 2,
+      "caught": 2,
+      "failed_ingests": 0
+    },
+    "receding": {
+      "n": 2,
+      "consumed": 0,
+      "caught": 1,
+      "failed_ingests": 0
+    },
+    "crossing": {
+      "n": 2,
+      "consumed": 2,
+      "caught": 2,
+      "failed_ingests": 0
+    },
+    "toy": {
+      "n": 2,
+      "consumed": 0,
+      "caught": 0,
+      "failed_ingests": 55
+    }
+  },
+  "seconds": 15.577204818
+}
