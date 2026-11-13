@@ -34,10 +34,15 @@ impl LocalEvidence {
         }
         let directory = root.join(id);
         fs::create_dir(&directory)?;
-        Ok(Self {
+        let evidence = Self {
             directory,
             last_valid: None,
-        })
+        };
+        // Always protect the newly claimed run, even when the caller's outer
+        // ignore file exists but does not cover raw checkpoints. Failure leaves
+        // a claimed, non-retryable directory and no raw evidence is written.
+        evidence.save(".gitignore", b"*\n")?;
+        Ok(evidence)
     }
     pub fn save(&self, name: &str, bytes: &[u8]) -> io::Result<()> {
         if name.is_empty()
@@ -116,6 +121,29 @@ mod tests {
         let e = LocalEvidence::begin(&nested, "id").unwrap();
         assert_eq!(fs::read(nested.join(".gitignore")).unwrap(), b"*\n");
         assert!(e.directory().is_dir());
+        fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    fn existing_noncovering_outer_ignore_and_other_files_are_untouched() {
+        let root = root("outer-ignore");
+        fs::write(root.join(".gitignore"), b"target/\n").unwrap();
+        fs::write(root.join("source.rs"), b"preserved source").unwrap();
+        fs::create_dir(root.join("prior-run")).unwrap();
+        fs::write(root.join("prior-run/CP.json"), b"preserved life").unwrap();
+        let e = LocalEvidence::begin(&root, "new-run").unwrap();
+        assert_eq!(fs::read(e.directory().join(".gitignore")).unwrap(), b"*\n");
+        e.save("CP.json", b"new life").unwrap();
+        assert!(LocalEvidence::begin(&root, "new-run").is_err());
+        assert_eq!(fs::read(root.join(".gitignore")).unwrap(), b"target/\n");
+        assert_eq!(
+            fs::read(root.join("source.rs")).unwrap(),
+            b"preserved source"
+        );
+        assert_eq!(
+            fs::read(root.join("prior-run/CP.json")).unwrap(),
+            b"preserved life"
+        );
+        assert_eq!(fs::read(root.join("new-run/CP.json")).unwrap(), b"new life");
         fs::remove_dir_all(root).unwrap();
     }
     #[test]

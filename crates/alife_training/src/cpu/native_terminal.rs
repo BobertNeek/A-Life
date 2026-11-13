@@ -99,8 +99,10 @@ pub fn read(
         }
         .to_string()
     })?;
-    if same_object_failed_contact && let Some(c) = context.as_mut() {
-        c.desirability = c.desirability.min(0.0);
+    if same_object_failed_contact {
+        if let Some(c) = context.as_mut() {
+            c.desirability = c.desirability.min(0.0);
+        }
     }
     Ok(Some(Receipt {
         same_object_failed_contact,
