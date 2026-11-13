@@ -139,3 +139,9 @@ Focused validation: three native tests cover all six real mutation directions,
 compiled weight admission, consequence-only memory edits, and matched initial
 food/toy perception. Strict Clippy passes. The full suite and GPU tests were not
 run because this addition is an offline example and search tool.
+
+After rebasing onto `18ba1e20` (#340), the example was rebuilt and all three tests
+and strict Clippy passed again. The seven baseline and seven pursuit trials for
+seed 2026111400, plus six memory trials for seed 2026111500, reproduced every
+recorded trial metric and candidate digest exactly. Python compilation and a
+parent-allowance-file smoke test passed: 40% remaining launched zero evaluations.
