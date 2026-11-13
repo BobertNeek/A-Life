@@ -129,9 +129,8 @@ impl PpoJointAction {
             if mask & !self.representative_mask != 0 {
                 return Err(invalid());
             }
-            for candidate in 0..count {
-                if mask & (1 << candidate) != 0 && self.forced_slots[candidate] != Some(slot as u8)
-                {
+            for (candidate, forced_slot) in self.forced_slots.iter().copied().enumerate() {
+                if mask & (1 << candidate) != 0 && forced_slot != Some(slot as u8) {
                     return Err(invalid());
                 }
             }
@@ -1901,6 +1900,56 @@ fn read_gpu_f32(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn joint_action_checks_every_masked_candidate_slot_including_bit_31() {
+        for count in [1, 2, PPO_MAX_CANDIDATES] {
+            for slot in 0..PPO_MOTOR_SLOTS {
+                for candidate in 0..count {
+                    let mut action = PpoJointAction {
+                        candidate_count: count as u16,
+                        representative_mask: u32::MAX >> (32 - count),
+                        motor_masks: [0; PPO_MOTOR_SLOTS],
+                        representative: (count - 1) as u16,
+                        forced_slots: vec![None; count],
+                        motor_candidates: [None; PPO_MOTOR_SLOTS],
+                        old_joint_log_probability: 0.0,
+                        temperature: 1.0,
+                    };
+                    action.forced_slots[candidate] = Some(slot as u8);
+                    action.motor_masks[slot] = 1 << candidate;
+                    action.motor_candidates[slot] = Some(candidate as u16);
+                    action.validate(1.0).unwrap();
+
+                    action.forced_slots[candidate] = Some(((slot + 1) % PPO_MOTOR_SLOTS) as u8);
+                    assert!(action.validate(1.0).is_err());
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn joint_action_rejects_invalid_candidate_counts_and_forced_slot_lengths() {
+        for count in [0, 1, 2, PPO_MAX_CANDIDATES, PPO_MAX_CANDIDATES + 1] {
+            for length in [0, 1, 2, PPO_MAX_CANDIDATES, PPO_MAX_CANDIDATES + 1] {
+                let action = PpoJointAction {
+                    candidate_count: count as u16,
+                    representative_mask: 1,
+                    motor_masks: [0; PPO_MOTOR_SLOTS],
+                    representative: 0,
+                    forced_slots: vec![None; length],
+                    motor_candidates: [None; PPO_MOTOR_SLOTS],
+                    old_joint_log_probability: 0.0,
+                    temperature: 1.0,
+                };
+                assert_eq!(
+                    action.validate(1.0).is_ok(),
+                    (1..=PPO_MAX_CANDIDATES).contains(&count) && length == count,
+                    "count={count}, length={length}",
+                );
+            }
+        }
+    }
 
     #[test]
     fn sparse_imitation_loss_excludes_omissions_and_rejects_failed_rows() {
