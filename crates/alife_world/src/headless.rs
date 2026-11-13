@@ -4144,13 +4144,17 @@ impl HeadlessWorld {
                         )?;
                     }
                 }
-                // The received vocal dose is available to every grounded profile,
-                // not only profiles that request the terrain/nonvisual helper.
+                // Player cues are present in every grounded profile. Environmental touch
+                // is already calibrated by the terrain helper; calibrate each
+                // player touch once, then max-mix without attenuating that contact.
+                // Praise retains its legacy received-dose contract (no extra hearing gain).
                 if let Some(event) = self.pending_player_care.get(&organism_id.raw()) {
+                    sensory.channels.auditory_acoustic[1] = event.player_reward;
                     sensory.channels.auditory_acoustic[2] = event.social_disapproval_v1;
                     let touch_gain =
                         embodiment.map_or(1.0, |body| body.sensor_gain(SensorCapability::Touch));
                     sensory.channels.tactile_contact[0] = sensory.channels.tactile_contact[0]
+                        .max((event.social_contact * touch_gain).clamp(0.0, 1.0))
                         .max((event.damage * touch_gain).clamp(0.0, 1.0));
                 }
                 let heard = self
@@ -4335,13 +4339,6 @@ impl HeadlessWorld {
         let gain =
             |capability| record.map_or(1.0, |record| record.embodiment().sensor_gain(capability));
         let yaw = observer.body_yaw + observer.head_yaw;
-        if let Some(event) = observer
-            .organism_id
-            .and_then(|id| self.pending_player_care.get(&id.raw()))
-        {
-            sensory.channels.tactile_contact[0] = event.social_contact;
-            sensory.channels.auditory_acoustic[1] = event.player_reward;
-        }
         let lateral = Vec3f::new(-yaw.sin() * 0.25, 0.0, yaw.cos() * 0.25);
         let samples = [
             add(observer.position, lateral),

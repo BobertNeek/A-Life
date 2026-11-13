@@ -226,19 +226,21 @@ fn scold_uses_received_hearing_and_max_gain_is_bounded() {
             .unwrap()
             .biochemistry()
             .homeostasis;
-        let frame = world
-            .perception_frame(
-                id,
-                Tick(0),
-                SensorProfile::GroundedObjectSlotsV1,
-                homeostasis,
-            )
+        world
+            .queue_player_interaction_v1(id, position, PlayerInteractionV1::Praise)
             .unwrap();
-        frame.validate_contract().unwrap();
-        assert_eq!(
-            frame.sensory().channels.auditory_acoustic[2],
-            if hearing { 1.0 } else { 0.0 }
-        );
+        for profile in profiles() {
+            let frame = world
+                .perception_frame(id, Tick(0), profile, homeostasis)
+                .unwrap();
+            frame.validate_contract().unwrap();
+            assert_eq!(
+                frame.sensory().channels.auditory_acoustic[2],
+                if hearing { 1.0 } else { 0.0 }
+            );
+            // Preserve Praise's existing unscaled contract, even without Hearing.
+            assert_eq!(frame.sensory().channels.auditory_acoustic[1], 1.0);
+        }
         let result = world
             .apply_registered_command(&HeadlessWorldCommand::idle(id).unwrap(), entity, Tick(1))
             .unwrap();
@@ -307,5 +309,237 @@ fn new_physical_cue_is_present_in_all_grounded_profiles() {
             frame.sensory().channels.tactile_contact[0],
             baseline.sensory().channels.tactile_contact[0].max((0.02 * touch_gain).clamp(0.0, 1.0))
         );
+    }
+}
+
+fn profiles() -> [SensorProfile; 3] {
+    [
+        SensorProfile::GroundedObjectSlotsV1,
+        SensorProfile::GroundedTerrainVisionV1,
+        SensorProfile::GroundedTerrainObjectPortsV2,
+    ]
+}
+
+#[test]
+fn positive_and_negative_player_cues_share_grounded_projection_once() {
+    let base = game().world;
+    let (id, entity) = base.organism_entity_ids()[0];
+    let p = base.entity(entity).unwrap().position;
+    let record = base.organism_registry().get(id).unwrap();
+    let h = record.biochemistry().homeostasis;
+    let touch = record.embodiment().sensor_gain(SensorCapability::Touch);
+    let hearing = record
+        .embodiment()
+        .sensor_gain(SensorCapability::Hearing)
+        .clamp(0., 1.);
+    for profile in profiles() {
+        for kinds in [
+            vec![],
+            vec![PlayerInteractionV1::Praise],
+            vec![PlayerInteractionV1::Pet],
+            vec![PlayerInteractionV1::Scold],
+            vec![PlayerInteractionV1::Slap],
+            vec![
+                PlayerInteractionV1::Praise,
+                PlayerInteractionV1::Pet,
+                PlayerInteractionV1::Scold,
+                PlayerInteractionV1::Slap,
+            ],
+        ] {
+            let mut none = base.clone();
+            let baseline = none.perception_frame(id, Tick(0), profile, h).unwrap();
+            let mut world = base.clone();
+            for _ in 0..3 {
+                for kind in &kinds {
+                    world.queue_player_interaction_v1(id, p, *kind).unwrap();
+                }
+            }
+            let biology_before = world
+                .organism_registry()
+                .get(id)
+                .unwrap()
+                .biochemistry()
+                .clone();
+            let frame = world.perception_frame(id, Tick(0), profile, h).unwrap();
+            frame.validate_contract().unwrap();
+            let mut expected = baseline.sensory().channels.clone();
+            if kinds.contains(&PlayerInteractionV1::Praise) {
+                expected.auditory_acoustic[1] = 1.;
+            }
+            if kinds.contains(&PlayerInteractionV1::Scold) {
+                expected.auditory_acoustic[2] = hearing;
+            }
+            for (kind, dose) in [
+                (PlayerInteractionV1::Pet, 0.25),
+                (PlayerInteractionV1::Slap, 0.02),
+            ] {
+                if kinds.contains(&kind) {
+                    expected.tactile_contact[0] =
+                        expected.tactile_contact[0].max((dose * touch).clamp(0., 1.));
+                }
+            }
+            assert_eq!(
+                frame.sensory().channels,
+                expected,
+                "profile {profile:?}, kinds {kinds:?}"
+            );
+            assert_eq!(
+                world.organism_registry().get(id).unwrap().biochemistry(),
+                &biology_before,
+                "projection must not mutate biology"
+            );
+        }
+    }
+}
+
+#[test]
+fn pet_does_not_attenuate_environmental_contact_or_double_calibration() {
+    let mut base = game().world;
+    let (id, entity) = base.organism_entity_ids()[0];
+    let p = base.entity(entity).unwrap().position;
+    base.editor_spawn_object(WorldEditorSpawnSpec {
+        label: "contact-control".into(),
+        kind: WorldObjectKind::Food,
+        organism_id: None,
+        position: p,
+        nutrition: 0.0,
+        hazard_pain: 0.0,
+        radius: 0.25,
+        token_id: None,
+    })
+    .unwrap();
+    let record = base.organism_registry().get(id).unwrap();
+    let h = record.biochemistry().homeostasis;
+    let gain = record.embodiment().sensor_gain(SensorCapability::Touch);
+    for profile in profiles().into_iter().skip(1) {
+        let mut world = base.clone();
+        let before = world.perception_frame(id, Tick(0), profile, h).unwrap();
+        assert_eq!(
+            before.sensory().channels.tactile_contact[0],
+            gain.clamp(0., 1.)
+        );
+        world
+            .queue_player_interaction_v1(id, p, PlayerInteractionV1::Pet)
+            .unwrap();
+        let after = world.perception_frame(id, Tick(0), profile, h).unwrap();
+        assert_eq!(before.sensory().channels, after.sensory().channels);
+    }
+}
+
+#[test]
+fn all_profiles_apply_touch_calibration_exactly_once_at_extremes() {
+    for enabled in [false, true] {
+        let mut base = game().world;
+        let (id, entity) = base.organism_entity_ids()[0];
+        let p = base.entity(entity).unwrap().position;
+        let mut record = base.organism_registry().get(id).unwrap().clone();
+        let mut value = serde_json::to_value(record.embodiment()).unwrap();
+        value["revision"] = serde_json::json!(record.embodiment().revision() + 1);
+        let ports = value["sensors"].as_array().unwrap().clone();
+        let old = value["sensor_calibration"].as_array().unwrap();
+        let (mut sensors, mut calibration, mut offset) = (vec![], vec![], 0);
+        for port in ports {
+            let width = port["value_lanes"].as_u64().unwrap() as usize;
+            let touch = port["capability"] == "Touch";
+            if !touch || enabled {
+                sensors.push(port);
+                calibration.extend((offset..offset + width).map(|i| {
+                    if touch {
+                        serde_json::json!(1.0)
+                    } else {
+                        old[i].clone()
+                    }
+                }));
+            }
+            offset += width;
+        }
+        value["sensors"] = serde_json::json!(sensors);
+        value["sensor_calibration"] = serde_json::json!(calibration);
+        record
+            .replace_embodiment_state(serde_json::from_value(value).unwrap())
+            .unwrap();
+        let touch = record.embodiment().sensor_gain(SensorCapability::Touch);
+        assert_eq!(touch, if enabled { 1.5 } else { 0. });
+        let h = record.biochemistry().homeostasis;
+        base.replace_organism_record_exact(record).unwrap();
+        for kind in [PlayerInteractionV1::Pet, PlayerInteractionV1::Slap] {
+            for profile in profiles() {
+                let mut world = base.clone();
+                let before = world.perception_frame(id, Tick(0), profile, h).unwrap();
+                world.queue_player_interaction_v1(id, p, kind).unwrap();
+                let after = world.perception_frame(id, Tick(0), profile, h).unwrap();
+                let dose = if kind == PlayerInteractionV1::Pet {
+                    0.25
+                } else {
+                    0.02
+                };
+                assert_eq!(
+                    after.sensory().channels.tactile_contact[0],
+                    before.sensory().channels.tactile_contact[0].max(dose * touch)
+                );
+                let applied = world
+                    .apply_registered_command(
+                        &HeadlessWorldCommand::idle(id).unwrap(),
+                        entity,
+                        Tick(1),
+                    )
+                    .unwrap();
+                assert_eq!(
+                    if kind == PlayerInteractionV1::Pet {
+                        applied.action_result.body_event.social_contact
+                    } else {
+                        applied.action_result.body_event.damage
+                    },
+                    dose,
+                    "sensory gain must not rewrite the existing physical dose"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn legacy_positive_wrapper_and_saved_pending_frames_are_exact() {
+    for (praise, kind) in [
+        (true, PlayerInteractionV1::Praise),
+        (false, PlayerInteractionV1::Pet),
+    ] {
+        let game = game();
+        let base = game.world;
+        let (id, entity) = base.organism_entity_ids()[0];
+        let p = base.entity(entity).unwrap().position;
+        let h = base
+            .organism_registry()
+            .get(id)
+            .unwrap()
+            .biochemistry()
+            .homeostasis;
+        let mut old = base.clone();
+        let mut typed = base;
+        old.queue_player_care(id, p, praise).unwrap();
+        typed.queue_player_interaction_v1(id, p, kind).unwrap();
+        assert_eq!(
+            old.canonical_signature_digest().unwrap(),
+            typed.canonical_signature_digest().unwrap()
+        );
+        let save = PortableSaveFile::from_headless_world(
+            "positive",
+            &typed,
+            RuntimeConfig::deterministic_default(typed.seed(), BrainScaleTier::Nano512),
+            AssetManifest::empty(),
+            game.creatures,
+        )
+        .unwrap();
+        let mut restored = PortableSaveFile::from_json_str(&serde_json::to_string(&save).unwrap())
+            .unwrap()
+            .restore_headless_world()
+            .unwrap();
+        for profile in profiles() {
+            let a = old.perception_frame(id, Tick(0), profile, h).unwrap();
+            let b = typed.perception_frame(id, Tick(0), profile, h).unwrap();
+            let c = restored.perception_frame(id, Tick(0), profile, h).unwrap();
+            assert_eq!(a.sensory().channels, b.sensory().channels);
+            assert_eq!(b.sensory().channels, c.sensory().channels);
+        }
     }
 }

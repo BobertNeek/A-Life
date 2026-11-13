@@ -59,18 +59,26 @@ change. No full game PR merge is part of this feature.
 CPU core/world tests are not GPU neural qualification or evidence of learned
 behavior. Hosted workflows did not run due the repository's allocation issue.
 
-### Existing positive-input sensory limitation
-
-The legacy Praise/Pet explicit acoustic/tactile projection is terrain-profile
-specific. Their biochemical delivery is shared across profiles. This patch does
-not silently revise those legacy profile semantics. The new Scold and Slap cues
-are projected across all grounded profiles, using Hearing and Touch calibration
-respectively; Slap can still injure a touch-insensitive body. Neither an applied
-biochemical dose nor the presence of a sensory channel proves felt experience
-or understanding. Privileged debug profiles are not qualified as player-input
-perception by these tests.
-
 The fresh canonical recipe adds two emitter evaluations to the existing honest
 biochemical work receipt, even with no Scold. Legacy loaded graphs retain their
 original work/state behavior. Therefore no-input bit identity is claimed for
 unchanged legacy graphs, not for every work counter of a newly opted-in founder.
+
+## Grounded cue projection
+
+All three grounded sensor profiles receive pending Praise on acoustic lane 1,
+Scold on acoustic lane 2, and Pet/Slap on tactile lane 0. Pet and Slap use one
+Touch calibration, then max-mix with already calibrated environmental contact.
+They do not attenuate a stronger environmental contact or double its gain.
+Praise preserves its historical unscaled player-reward cue; Scold retains its
+once-received Hearing dose. These are distinct existing contracts, not a new
+uniform hearing or reward policy.
+
+This corrects missing Praise/Pet cues in GroundedObjectSlotsV1. Terrain profiles
+retain their prior positive-cue arithmetic. Projection is read-only and does not
+consume pending doses, change biology, valuation, eligibility rules or acquired
+weights. A detectable cue, a physiological response, and reinforcement are
+separate observations: for example, Pet can change social hormones without
+positive immediate credit in a creature with no social need and zero inherited
+valuation for those hormone changes. No action-specific attribution or learned
+obedience follows from cue-delivery tests.
