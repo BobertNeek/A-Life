@@ -244,14 +244,12 @@ mod tests {
         assert_eq!(Config::from_bytes(&c.to_bytes().unwrap()).unwrap(), c);
         assert!(c.score(0.1).unwrap() > 0.0);
         assert!(c.derivative(0.1).unwrap() > 0.0);
-        assert!(
-            Config {
-                schema_version: 2,
-                gain: 16.0
-            }
-            .score(0.1)
-            .is_err()
-        );
+        assert!(Config {
+            schema_version: 2,
+            gain: 16.0
+        }
+        .score(0.1)
+        .is_err());
         assert!(c.score(f32::NAN).is_err());
         assert!(Config::from_bytes(&Head::new(false, 16.0).unwrap().to_bytes()).is_err());
     }

@@ -2,7 +2,7 @@
 //! No action forcing, target motion, teleport, neural reset or fabricated reward.
 use alife_core::*;
 use alife_runtime::canonical_preparation::foundation_construction_development;
-use alife_training::{AdamWConfig, StageTrainableMask, cpu::*};
+use alife_training::{cpu::*, AdamWConfig, StageTrainableMask};
 use alife_world::*;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};

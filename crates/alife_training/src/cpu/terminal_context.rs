@@ -27,7 +27,11 @@ const PARENT_COMPILER_INPUTS: [u64; 4] = [
 /// Host wire version, not the independent terminal recipe version.
 /// Default-off stays byte-compatible; enabled heads must not be discarded by old readers.
 pub(crate) fn terminal_host_checkpoint_schema2135(has_head: bool) -> u16 {
-    if has_head { 3 } else { 2 }
+    if has_head {
+        3
+    } else {
+        2
+    }
 }
 
 pub(crate) fn validate_terminal_host_checkpoint_schema2135(
@@ -489,13 +493,11 @@ mod host_schema_tests {
         let bytes = serde_json::to_vec(&new).unwrap();
         let restored: Envelope = serde_json::from_slice(&bytes).unwrap();
         assert_eq!(restored.terminal_context2135, Some(config));
-        assert!(
-            validate_terminal_host_checkpoint_schema2135(
-                restored.schema_version,
-                restored.terminal_context2135.is_some()
-            )
-            .is_ok()
-        );
+        assert!(validate_terminal_host_checkpoint_schema2135(
+            restored.schema_version,
+            restored.terminal_context2135.is_some()
+        )
+        .is_ok());
         let old: OldEnvelope = serde_json::from_slice(&bytes).unwrap();
         // Original host admission rejects every version other than 2 (version1 separately).
         assert_ne!(old.schema_version, 2);

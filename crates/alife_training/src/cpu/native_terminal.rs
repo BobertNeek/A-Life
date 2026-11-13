@@ -5,7 +5,7 @@ mod terminal_kernel;
 use alife_core::{
     CandidateActionFamily, CandidateMemoryQueryV2, PhysicalContactKind, PortableMemoryBankAssetV2,
 };
-use terminal_kernel::{Context, Error, MAX_RECORDS, Source};
+use terminal_kernel::{Context, Error, Source, MAX_RECORDS};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Policy {
