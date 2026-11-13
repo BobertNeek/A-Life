@@ -43,7 +43,7 @@ Present and substantial — the simulation is serious:
   including `PlayerReward`, `PlayStimulation`, `SocialContact`.
 - **God hand:** exists — skinned hand, Hover/Point/Grab/Carry/Release;
   world-owned carry/drop of creatures and objects (one at a time).
-- **Care dock:** exists — Food, Touch, Toy, Praise, Speech. Praise routes
+- **Care dock:** exists — Food, Pet, Toy, Praise, Speech. Praise routes
   through the `PlayerReward` emitter into an endocrine slot.
 - **Language:** real but tiny — an 18-word bounded codebook, token IDs,
   player/creature/teacher utterances, a perception-only nursery.
@@ -57,17 +57,27 @@ Missing or unproven — the game around the simulation is thin:
   search: `village` 0 hits, `worship` 0, `moral` 0, `slap` 0. Belief exists
   only as "stale belief" in episodic-memory recall code. No villager agents,
   buildings, or faith mechanic of any kind.
-- **No punishment channel at all, by design.** Praise is the only
-  training signal, and deliberately weak: "its clearance ends reinforcement;
-  it does not punish the next action." There is no way to shape a creature
-  by disapproval — the B&W moral axis has one pole.
+- **No punishment channel at all, by design — until Nov 13.** Praise was the
+  only training signal, and deliberately weak: "its clearance ends
+  reinforcement; it does not punish the next action." There was no way to
+  shape a creature by disapproval — the B&W moral axis had one pole.
+  **Decided Nov 13 (Cassidy + Bob prime): four actions — praise + pet
+  (positive), scold + slap (negative).** Praise/scold are social feedback;
+  pet/slap are distinct physical interactions; effects go through the
+  creature's biology and learning, not direct weight changes. Bob prime
+  coordinates the brains side. The receipt and presentation are already
+  built for all four (slice 2 follow-up); the scold/slap dock actions are
+  a follow-up slice.
 - **No verified mating, birth, or social bonds.** The scaffolding exists
   (`ReproductionReadiness`, mating-reach code, loneliness drive,
   `SocialContact` emitter) but no verified mating action, birth execution,
   or friendship/bond state was found.
-- **Touch/Praise do not establish a creature response.** The care dock file
-  says so itself: queued stimuli record only Queued/Placed/Rejected
-  evidence. The player cannot tell whether the creature noticed.
+- **Touch/Praise did not establish a creature response — fixed in slice 2,
+  reworked in the slice 2 follow-up.** The care dock file says so itself:
+  queued stimuli record only Queued/Placed/Rejected evidence. The player
+  could not tell whether the creature noticed. Slice 2 recorded the
+  response (world-owned receipt); the follow-up presents it the way the
+  creature would — a nod or flinch, and its own word above it.
 - **The care → learning → family loop is integrated but unproven.**
   `docs/STATUS.md` (Oct 21, 2026): complete autonomous family lifecycle,
   retained learning, and visible save/load continuity still need observation
@@ -96,10 +106,18 @@ Missing or unproven — the game around the simulation is thin:
 4. **A village to believe in.** The biggest lift and the most B&W of the
    pillars: villagers, belief, buildings, economy. Starts as one small
    believable unit, not a city sim.
-5. **Consequences you can see.** Every action's outcome must be visible in
-   the world — learning, sleep, mood, injury, ageing. Overlays and
-   readouts must derive from authoritative state, never from a launch
-   snapshot.
+5. **Visual style is the language.** Features teach themselves through how
+   things look and behave, not through labels or explanations. The
+   user-facing game avoids text: menus use single words, creatures speak
+   in text bubbles, and no technical information or labels are displayed
+   at the user — numeric readouts are debug-only. A creature's response
+   to care reads in its body (a nod, a flinch) and its own word, never in
+   a line of numbers. Timing is the strictest rule: a response is visibly
+   tied to the moment it was felt, not a lingering label. And what the
+   creature thinks it is being judged for must be visible — the word names
+   what it thinks just happened, the posture carries whether it was good
+   or bad. Unknown stays unknown: no receipt is never rendered as a
+   definite "nothing felt".
 6. **Fifty creatures at 20 FPS.** Polished means the target hardware
    holds the target load. Performance work follows measurements only —
    no speculative optimization, no benchmarks as proof.
@@ -119,7 +137,13 @@ Missing or unproven — the game around the simulation is thin:
   Touches `alife_world` + `alife_game_app`. Design:
   `docs/bob-soul-slice2-care-response.md`. Status: implemented in this
   pass — world-owned receipt + HUD acknowledgement; tests written for
-  Codex/CI.
+  Codex/CI. **Follow-up (same day): the HUD text line was the wrong
+  presentation — Cassidy wants no technical text at the user and visual
+  style as the language. Reworked: the receipt now surfaces as a nod or
+  flinch plus the creature's own word above it; numbers are debug-only;
+  the receipt covers all four decided actions (praise/pet/scold/slap);
+  no receipt renders as unknown, never as "nothing felt".**
+  See `docs/bob-soul-slice2-care-response.md` ("Follow-up" section).
 - **Slice 3 — Half-life chemistry.** Add per-species half-life to the
   biochemical graph (Creatures-style), with conversion from the current
   `decay_retention` and unit tests. Needs a semantics decision: how
