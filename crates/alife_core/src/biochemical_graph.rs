@@ -157,6 +157,8 @@ pub enum BiochemicalSourceLocus {
     HealthDeficit,
     /// Appended, opt-in V1 body-event source. Legacy enum ordinals stay fixed.
     AwakeRestRecoveryV1,
+    /// Appended social input; never interpreted as tissue damage.
+    SocialDisapprovalV1,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -1107,6 +1109,19 @@ impl BiochemicalPhenotype {
         Ok(self)
     }
 
+    /// Explicit fresh-genotype opt-in. Loaded organisms are never rewritten.
+    pub(crate) fn with_social_disapproval_v1(mut self) -> Result<Self, ScaffoldContractError> {
+        self.emitters
+            .retain(|row| row.source != BiochemicalSourceLocus::SocialDisapprovalV1);
+        for (target, gain) in [(ids::FEAR, 0.12), (ids::CORTISOL, 0.15)] {
+            let mut release = emitter(BiochemicalSourceLocus::SocialDisapprovalV1, target, gain);
+            release.developmental_expression_floor = 1.0;
+            self.emitters.push(release);
+        }
+        self.compile()?;
+        Ok(self)
+    }
+
     pub(crate) fn with_player_reward(mut self) -> Result<Self, ScaffoldContractError> {
         // Newborns can receive care before mature regulatory expression.
         for row in &mut self.emitters {
@@ -1506,7 +1521,7 @@ impl BiochemicalGraphState {
                     }
                 };
                 let release_count =
-                    emitter_release_count(emitter.source, cadence_crossings, awake_rest);
+                    emitter_release_count(emitter.source, cadence_crossings, awake_rest, event);
                 apply_delta(
                     phenotype,
                     &mut next,
@@ -1912,6 +1927,7 @@ fn source_value(
         BiochemicalSourceLocus::Awake => f32::from(!body.sleeping),
         BiochemicalSourceLocus::Sleeping => f32::from(body.sleeping),
         BiochemicalSourceLocus::PlayerReward => event.player_reward,
+        BiochemicalSourceLocus::SocialDisapprovalV1 => event.social_disapproval_v1,
         BiochemicalSourceLocus::PlayStimulation => event.play_stimulation,
         BiochemicalSourceLocus::PerceivedNovelty => event.perceived_novelty,
         BiochemicalSourceLocus::Investigation => event.investigation,
@@ -1933,6 +1949,7 @@ fn emitter_release_count(
     source: BiochemicalSourceLocus,
     cadence_crossings: u32,
     awake_rest: crate::AwakeRestEventV1,
+    event: BodyEventDelta,
 ) -> u32 {
     match source {
         BiochemicalSourceLocus::Damage
@@ -1944,6 +1961,7 @@ fn emitter_release_count(
         | BiochemicalSourceLocus::PlayStimulation
         | BiochemicalSourceLocus::PerceivedNovelty
         | BiochemicalSourceLocus::Investigation => 1,
+        BiochemicalSourceLocus::SocialDisapprovalV1 => u32::from(event.social_disapproval_v1 > 0.0),
         // A missing event must not become a digital/inverted zero-input signal.
         // Keep inherited variants loadable/mutable, but inert without a positive
         // typed event. Positive admission separately requires the exact V1 recipe.
@@ -2275,6 +2293,7 @@ mod awake_rest_v1_tests {
             nutrition: 0.4,
             social_contact: 0.5,
             player_reward: 0.6,
+            social_disapproval_v1: 0.0,
             play_stimulation: 0.7,
             perceived_novelty: 0.8,
             investigation: 0.9,

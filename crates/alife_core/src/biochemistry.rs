@@ -469,6 +469,9 @@ pub struct BodyEventDelta {
     pub social_contact: f32,
     #[serde(default, skip_serializing_if = "is_zero_player_reward")]
     pub player_reward: f32,
+    /// One-shot social disapproval, not injury or absence of reward.
+    #[serde(default, skip_serializing_if = "is_zero_player_reward")]
+    pub social_disapproval_v1: f32,
     #[serde(default, skip_serializing_if = "is_zero_player_reward")]
     pub play_stimulation: f32,
     #[serde(default, skip_serializing_if = "is_zero_player_reward")]
@@ -488,6 +491,7 @@ impl BodyEventDelta {
             nutrition: 0.0,
             social_contact: 0.0,
             player_reward: 0.0,
+            social_disapproval_v1: 0.0,
             play_stimulation: 0.0,
             perceived_novelty: 0.0,
             investigation: 0.0,
@@ -506,6 +510,7 @@ impl Validate for BodyEventDelta {
             self.nutrition,
             self.social_contact,
             self.player_reward,
+            self.social_disapproval_v1,
             self.play_stimulation,
             self.perceived_novelty,
             self.investigation,
