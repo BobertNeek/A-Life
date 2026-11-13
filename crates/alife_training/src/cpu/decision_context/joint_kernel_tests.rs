@@ -85,3 +85,47 @@ fn invalid() {
     assert!(Policy::new(&b, 3, 12, &[Some(0); 5], &[0.; 4], 1.).is_err());
     assert!(make(&b, &[0.; 4], 1.).sample([1., 0., 0.]).is_err());
 }
+
+#[test]
+fn pair_constant_offsets_do_not_erase_base_contrast() {
+    let b = [0., 1., 0., 1., -2.];
+    for temp in [0.3, 1., 3., f32::MIN_POSITIVE] {
+        let reference = make(&b, &[0.; 4], temp);
+        for common in [1e12, -1e12, 1e20, -1e20, f32::MAX, -f32::MAX] {
+            let shifted = make(&b, &[common; 4], temp);
+            assert_eq!(reference.pairs(), shifted.pairs());
+            assert_eq!(reference.categories(), shifted.categories());
+            assert_eq!(reference.gradient(0, 3), shifted.gradient(0, 3));
+            assert_eq!(reference.entropy_gradient(), shifted.entropy_gradient());
+            for u in [[0.; 3], [0.2, 0.5, 0.8], [0.9999999; 3]] {
+                assert_eq!(reference.sample(u).unwrap(), shifted.sample(u).unwrap());
+            }
+        }
+    }
+}
+
+#[test]
+fn mixed_extreme_cancellation_preserves_small_pair_residuals() {
+    // Exact pair totals are [1,2,1,2], despite three very different scales.
+    // Independently centering components then adding would lose these residuals.
+    for huge in [1e20, f32::MAX, -f32::MAX] {
+        let p = make(&[huge, 0., 1., 2., -2.], &[-huge, -huge, 0., 0.], 1.);
+        let reference = make(&[0., 0., 1., 2., -2.], &[0.; 4], 1.);
+        assert_eq!(p.pairs(), reference.pairs());
+        assert!((p.pairs()[0] - 0.13447071068499755).abs() < 1e-15);
+        assert!((p.pairs()[1] - 0.36552928931500245).abs() < 1e-15);
+        assert!(p.logprob(0, 0).is_finite());
+    }
+}
+
+#[test]
+fn pair_extremes_and_temperature_remain_finite() {
+    let p = make(
+        &[f32::MAX, -f32::MAX, f32::MAX, -f32::MAX, 0.],
+        &[-f32::MAX, f32::MAX, f32::MAX, f32::MAX],
+        f32::MIN_POSITIVE,
+    );
+    assert!((p.pairs().iter().sum::<f64>() - 1.).abs() < 1e-15);
+    let (h, b, v) = p.entropy_gradient();
+    assert!(h.is_finite() && b.iter().chain(&v).all(|x| x.is_finite()));
+}
