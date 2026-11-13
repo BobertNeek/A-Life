@@ -1,0 +1,27 @@
+name: Detached decision-context primitives
+on:
+  pull_request:
+    branches: [main]
+    paths: ['crates/alife_training/**', 'crates/alife_core/**', 'Cargo.toml', 'Cargo.lock', '.github/workflows/experimental-decision-context.yml']
+  push:
+    branches: [main]
+    paths: ['crates/alife_training/**', 'crates/alife_core/**', 'Cargo.toml', 'Cargo.lock', '.github/workflows/experimental-decision-context.yml']
+permissions:
+  contents: read
+jobs:
+  detached-cpu-context:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CARGO_BUILD_JOBS: '2'
+      CARGO_INCREMENTAL: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      RUST_TEST_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Detached local kernels and controls, not body admission
+        run: cargo test --locked -p alife_training --features experimental-decision-context --lib decision_context
+      - name: Default feature set remains valid
+        run: cargo check --locked -p alife_training --lib --no-default-features

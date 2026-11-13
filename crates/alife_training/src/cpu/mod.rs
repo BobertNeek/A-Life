@@ -2,6 +2,9 @@
 //! The collector owns organism biology and outcomes; the trainer owns genetic
 //! parameters, Adam state and detached replay. CPU execution is opt-in.
 
+#[cfg(feature = "experimental-decision-context")]
+pub mod decision_context;
+
 mod activity;
 mod cohort;
 mod collector_output;

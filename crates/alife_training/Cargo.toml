@@ -26,6 +26,7 @@ serde_json.workspace = true
 
 [features]
 default = []
+experimental-decision-context = ["cpu-backend"]
 receipt-lineage = ["dep:serde_json", "dep:sha2", "dep:base64", "serde_json/unbounded_depth"]
 cpu-backend = ["receipt-lineage", "dep:zstd"]
 gpu-tests = ["alife_gpu_backend/gpu-tests", "alife_runtime/gpu-tests"]
