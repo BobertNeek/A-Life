@@ -1,0 +1,22 @@
+{
+  "assets/foundations/experimental-anchored-v2-research.alife-foundation": {
+    "bytes": 131581,
+    "sha256": "eb5fd45b97af3c104ade8d24bd7e33d4eb9b43f22c15a359fef921b2dedc1a30"
+  },
+  "docs/experiments/astra-pursuit-2026-11-13/pursuit-v1.alife-foundation": {
+    "bytes": 131581,
+    "sha256": "6197f2a5ad7cf50a3bcb230812b61cc1deba2be0018d51b391af38af502b7a36"
+  },
+  "docs/experiments/astra-pursuit-2026-11-13/pursuit-memory16.alife-foundation": {
+    "bytes": 131581,
+    "sha256": "8f84afd6ac2ec575a8df61d18a0a18ac17296615a9ef7af7d22df416b3dd0ad7"
+  },
+  "crates/alife_training/examples/evolve_pursuit.rs": {
+    "bytes": 17661,
+    "sha256": "a4afaa9d30830728f884b3db30a24af99405d49418d255f37dc2593119be526b"
+  },
+  "scripts/evolve_pursuit.py": {
+    "bytes": 6015,
+    "sha256": "249d92b6d20ff4a21d9f24a02ac68b5df749b3ea79005af254ac0d6b0cff52cc"
+  }
+}
