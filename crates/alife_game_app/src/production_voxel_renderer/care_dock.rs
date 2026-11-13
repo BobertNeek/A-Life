@@ -11,16 +11,20 @@ use bevy::ui::{BorderColor, BorderRadius, FocusPolicy, UiRect};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Component)]
 pub(super) enum Action {
     Food,
-    Touch,
+    Pet,
     Toy,
     Praise,
+    Scold,
+    Slap,
     Speech,
 }
-pub(super) const ACTIONS: [Action; 5] = [
+pub(super) const ACTIONS: [Action; 7] = [
     Action::Food,
-    Action::Touch,
+    Action::Pet,
     Action::Toy,
     Action::Praise,
+    Action::Scold,
+    Action::Slap,
     Action::Speech,
 ];
 impl Action {
@@ -30,36 +34,46 @@ impl Action {
     fn icon(self) -> &'static str {
         match self {
             Self::Food => "food",
-            Self::Touch => "touch",
+            // The pet glyph asset keeps its legacy filename.
+            Self::Pet => "touch",
             Self::Toy => "toy",
             Self::Praise => "praise",
+            Self::Scold => "scold",
+            Self::Slap => "slap",
             Self::Speech => "speech",
         }
     }
     pub(super) fn key(self) -> KeyCode {
         match self {
             Self::Food => KeyCode::KeyE,
-            Self::Touch => KeyCode::KeyC,
+            Self::Pet => KeyCode::KeyC,
             Self::Toy => KeyCode::KeyJ,
             Self::Praise => KeyCode::KeyK,
+            // V is verbal (scold), B is blow (slap): bottom row, next to C.
+            Self::Scold => KeyCode::KeyV,
+            Self::Slap => KeyCode::KeyB,
             Self::Speech => KeyCode::Enter,
         }
     }
     fn label(self) -> &'static str {
         match self {
             Self::Food => "Food placement",
-            Self::Touch => "Gentle touch",
+            Self::Pet => "Pet",
             Self::Toy => "Toy offer",
             Self::Praise => "Praise offer",
+            Self::Scold => "Scold",
+            Self::Slap => "Slap",
             Self::Speech => "Speech",
         }
     }
     fn accessible_label(self) -> &'static str {
         match self {
             Self::Food => "Place food. Select ground first. E.",
-            Self::Touch => "Offer gentle touch. Select a living creature first. C.",
+            Self::Pet => "Offer a pet. Select a living creature first. C.",
             Self::Toy => "Offer a toy. Select a living creature first. J.",
             Self::Praise => "Offer praise. Select a living creature first. K.",
+            Self::Scold => "Offer a scold. Select a living creature first. V.",
+            Self::Slap => "Offer a slap. Select a living creature first. B.",
             Self::Speech => "Open speech composer. Enter.",
         }
     }
@@ -87,11 +101,11 @@ pub(crate) struct State {
     pending: Option<Action>,
     captured: bool,
     release_gate: bool,
-    pressed: [bool; 5],
+    pressed: [bool; 7],
     pub(crate) speech_opened: bool,
     accessible_reader: MessageCursor<ActionRequest>,
     selected: Option<StableVoxelObjectRef>,
-    evidence: [Evidence; 5],
+    evidence: [Evidence; 7],
 }
 impl State {
     pub(super) fn take_pending(&mut self) -> Option<Action> {
@@ -99,7 +113,7 @@ impl State {
     }
     pub(super) fn observe_selection(&mut self, selected: Option<StableVoxelObjectRef>) {
         if self.selected != selected {
-            self.evidence = [Evidence::None; 5];
+            self.evidence = [Evidence::None; 7];
             self.selected = selected;
         }
     }
@@ -108,7 +122,7 @@ impl State {
     }
     pub(super) fn reset(&mut self) {
         self.pending = None;
-        self.evidence = [Evidence::None; 5];
+        self.evidence = [Evidence::None; 7];
         self.selected = None;
     }
 }
@@ -136,8 +150,8 @@ fn decoration_accessibility() -> AccessibilityNode {
 
 const HEIGHT: f32 = 72.0;
 const BOTTOM: f32 = 12.0;
-const WIDTH: f32 = 296.0;
-const EMBEDDED: [(&str, &[u8]); 9] = [
+const WIDTH: f32 = 408.0;
+const EMBEDDED: [(&str, &[u8]); 11] = [
     (
         "food",
         include_bytes!("../../../../assets/ui/care_dock/food.png"),
@@ -157,6 +171,14 @@ const EMBEDDED: [(&str, &[u8]); 9] = [
     (
         "speech",
         include_bytes!("../../../../assets/ui/care_dock/speech.png"),
+    ),
+    (
+        "scold",
+        include_bytes!("../../../../assets/ui/care_dock/scold.png"),
+    ),
+    (
+        "slap",
+        include_bytes!("../../../../assets/ui/care_dock/slap.png"),
     ),
     (
         "pending",
@@ -326,7 +348,7 @@ pub(crate) fn collect_input(world: &mut World) {
         .query_filtered::<&Interaction, Or<(With<Action>, With<DockRoot>)>>()
         .iter(world)
         .any(|i| *i != Interaction::None);
-    let mut pressed = [false; 5];
+    let mut pressed = [false; 7];
     for (action, interaction) in world.query::<(&Action, &Interaction)>().iter(world) {
         pressed[action.index()] = *interaction == Interaction::Pressed;
     }
@@ -454,8 +476,8 @@ trait CarePort {
         &mut self,
         organism: OrganismId,
         source: Vec3f,
-        praise: bool,
-    ) -> Result<(), GameAppShellError>;
+        kind: alife_world::PlayerInteractionV1,
+    ) -> Result<alife_world::PlayerInteractionQueueOutcomeV1, GameAppShellError>;
 }
 #[cfg(feature = "gpu-runtime")]
 impl CarePort for crate::GpuLiveBrainRuntime {
@@ -472,9 +494,9 @@ impl CarePort for crate::GpuLiveBrainRuntime {
         &mut self,
         organism: OrganismId,
         source: Vec3f,
-        praise: bool,
-    ) -> Result<(), GameAppShellError> {
-        self.provide_player_care(organism, source, praise)
+        kind: alife_world::PlayerInteractionV1,
+    ) -> Result<alife_world::PlayerInteractionQueueOutcomeV1, GameAppShellError> {
+        self.provide_player_interaction_v1(organism, source, kind)
     }
 }
 #[cfg(any(feature = "gpu-runtime", test))]
@@ -508,8 +530,20 @@ fn dispatch_core(
     if action == Action::Toy {
         return port.toy(organism).map(Evidence::Placed);
     }
-    port.care(organism, source, action == Action::Praise)?;
-    Ok(Evidence::Queued)
+    let kind = match action {
+        Action::Pet => alife_world::PlayerInteractionV1::Pet,
+        Action::Praise => alife_world::PlayerInteractionV1::Praise,
+        Action::Scold => alife_world::PlayerInteractionV1::Scold,
+        Action::Slap => alife_world::PlayerInteractionV1::Slap,
+        _ => unreachable!("food, toy and speech return above"),
+    };
+    match port.care(organism, source, kind)? {
+        alife_world::PlayerInteractionQueueOutcomeV1::Queued => Ok(Evidence::Queued),
+        // No dose received (a zero-hearing scold): the world accepted the
+        // input and did nothing with it. Nothing was queued, so nothing
+        // is marked and no delivery is claimed.
+        alife_world::PlayerInteractionQueueOutcomeV1::NoReceivedDose => Ok(Evidence::None),
+    }
 }
 pub(super) fn requested(
     action: Action,
@@ -522,7 +556,7 @@ pub(super) fn requested(
             || (keyboard.just_pressed(action.key()) && (action == Action::Food || !debug)))
 }
 
-/// The one frontend dispatcher used by E/C/J/K and real pointer controls.
+/// The one frontend dispatcher used by E/C/J/K/V/B and real pointer controls.
 pub(super) fn dispatch(
     action: Action,
     selected: Option<StableVoxelObjectRef>,
@@ -542,13 +576,21 @@ pub(super) fn dispatch(
             Ok(evidence) => {
                 frame.refresh_world_objects(runtime.world());
                 ux.last_error = None;
-                ux.last_action = match action {
-                    Action::Food => "Food placed".into(),
-                    Action::Toy => {
+                ux.last_action = match (action, evidence) {
+                    (Action::Food, _) => "Food placed".into(),
+                    (Action::Toy, _) => {
                         "Plaything offered; physical ball placed, creature response unconfirmed"
                             .into()
                     }
-                    _ => action.queued_status(),
+                    (_, Evidence::Queued) => action.queued_status(),
+                    // NoReceivedDose matches no strip arm, so the strip shows
+                    // nothing; the sentence is visible verbatim only in the
+                    // debug panel. It is not an error: the world accepted
+                    // the input and delivered no dose.
+                    (_, Evidence::None) => {
+                        format!("{} offered; no dose received", action.label())
+                    }
+                    (_, _) => action.queued_status(),
                 };
                 evidence
             }
@@ -659,12 +701,14 @@ pub(super) fn sync(world: &mut World) {
                         .and_then(|id| r.runtime.world().entity(id))
                         .is_some_and(|o| o.carried_by.is_some()),
                 care_target(r.runtime.world(), selected).is_some(),
+                care_target(r.runtime.world(), selected).is_some(),
+                care_target(r.runtime.world(), selected).is_some(),
                 world.contains_resource::<ProductionConversationLineageUiState>(),
             ]
         })
-        .unwrap_or([false; 5]);
+        .unwrap_or([false; 7]);
     #[cfg(not(feature = "gpu-runtime"))]
-    let availability = [false; 5];
+    let availability = [false; 7];
     let mut evidence = world.resource::<State>().evidence;
     #[cfg(feature = "gpu-runtime")]
     if let Some(conversation) = world.get_resource::<ProductionConversationLineageUiState>() {
@@ -680,8 +724,8 @@ pub(super) fn sync(world: &mut World) {
 }
 fn apply_feedback(
     world: &mut World,
-    availability: [bool; 5],
-    evidence: [Evidence; 5],
+    availability: [bool; 7],
+    evidence: [Evidence; 7],
     error: bool,
 ) {
     let handles = world.resource::<Icons>().0.clone();

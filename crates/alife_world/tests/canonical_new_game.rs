@@ -135,6 +135,320 @@ fn player_care_is_local_gene_controlled_and_survives_pending_save() {
 }
 
 #[test]
+fn player_care_receipt_records_pet_and_praise_on_tick_and_survives_save() {
+    use alife_world::{PlayerCareKind, PlayerCareKindSet, PresentationEvidence};
+    let game = phase3_game(1);
+    let mut world = game.world;
+    let (organism, entity) = world.organism_entity_ids()[0];
+    let position = world.entity(entity).unwrap().position;
+    // No receipt before any care is unknown, not a confirmed absence:
+    // a save from before receipts existed reads exactly the same way.
+    assert_eq!(world.last_player_care(organism), None);
+    assert!(matches!(
+        world
+            .presentation_snapshot()
+            .organisms
+            .remove(0)
+            .last_player_care,
+        PresentationEvidence::Unknown
+    ));
+    // A pet is felt on the tick that consumes it, not on the queue.
+    let mut control = world.clone();
+    world.queue_player_care(organism, position, false).unwrap();
+    assert_eq!(world.last_player_care(organism), None);
+    let tick = world.try_advance_tick().unwrap();
+    control.try_advance_tick().unwrap();
+    let receipt = world.last_player_care(organism).expect("pet receipt");
+    assert_eq!(
+        receipt.kinds,
+        PlayerCareKindSet::single(PlayerCareKind::Pet)
+    );
+    assert_eq!(receipt.applied_tick, tick);
+    let untouched_loneliness = control
+        .organism_registry()
+        .get(organism)
+        .unwrap()
+        .biochemistry()
+        .homeostasis
+        .drives
+        .loneliness;
+    assert!(receipt.loneliness_after <= untouched_loneliness);
+    match world
+        .presentation_snapshot()
+        .organisms
+        .remove(0)
+        .last_player_care
+    {
+        PresentationEvidence::Observed {
+            value,
+            tick: observed_tick,
+        } => {
+            assert_eq!(value, receipt);
+            assert_eq!(observed_tick, receipt.applied_tick);
+        }
+        PresentationEvidence::Unknown => panic!("expected an observed care receipt"),
+    }
+    // A praise overwrites the pet receipt: last only.
+    world.queue_player_care(organism, position, true).unwrap();
+    let tick = world.try_advance_tick().unwrap();
+    let receipt = world.last_player_care(organism).expect("praise receipt");
+    assert_eq!(
+        receipt.kinds,
+        PlayerCareKindSet::single(PlayerCareKind::Praise)
+    );
+    assert_eq!(receipt.applied_tick, tick);
+    assert!(receipt.praise_signal_after > receipt.praise_signal_before);
+    // Both queued before one tick record the {Pet, Praise} set.
+    world.queue_player_care(organism, position, false).unwrap();
+    world.queue_player_care(organism, position, true).unwrap();
+    world.try_advance_tick().unwrap();
+    let kinds = world.last_player_care(organism).unwrap().kinds;
+    assert!(kinds.contains(PlayerCareKind::Pet));
+    assert!(kinds.contains(PlayerCareKind::Praise));
+    assert_eq!(kinds.iter().count(), 2);
+    // A rejected queue records nothing and leaves the last receipt alone.
+    let before = world.last_player_care(organism).unwrap();
+    assert!(world
+        .queue_player_care(organism, alife_core::Vec3f::new(100.0, 0.0, 0.0), true)
+        .is_err());
+    world.try_advance_tick().unwrap();
+    assert_eq!(world.last_player_care(organism).unwrap(), before);
+    // The receipt survives a save/load round trip.
+    let save = alife_world::PortableSaveFile::from_headless_world(
+        "care-receipt",
+        &world,
+        alife_world::RuntimeConfig::deterministic_default(
+            world.seed(),
+            alife_core::BrainScaleTier::Nano512,
+        ),
+        alife_world::AssetManifest::empty(),
+        game.creatures,
+    )
+    .unwrap();
+    let restored =
+        alife_world::PortableSaveFile::from_json_str(&serde_json::to_string(&save).unwrap())
+            .unwrap()
+            .restore_headless_world()
+            .unwrap();
+    assert_eq!(restored.last_player_care(organism), Some(before));
+}
+
+/// A canonical world whose creature has no hearing port, mirroring the
+/// zero-hearing case in `player_interaction_v1.rs`: a scold there is an
+/// accepted input with no received dose.
+fn deaf_game() -> alife_world::CanonicalNewGame {
+    let mut game = phase3_game(1);
+    let (id, _) = game.world.organism_entity_ids()[0];
+    let mut record = game.world.organism_registry().get(id).unwrap().clone();
+    // Test-only construction of an alternate validated embodiment, not a
+    // production creature/save migration or acquired-state edit.
+    let mut value = serde_json::to_value(record.embodiment()).unwrap();
+    value["revision"] = serde_json::json!(record.embodiment().revision() + 1);
+    let ports = value["sensors"].as_array().unwrap().clone();
+    let old = value["sensor_calibration"].as_array().unwrap();
+    let mut offset = 0;
+    let mut sensors = vec![];
+    let mut calibration = vec![];
+    for port in ports {
+        let width = port["value_lanes"].as_u64().unwrap() as usize;
+        let is_hearing = port["capability"] == "Hearing";
+        if !is_hearing {
+            sensors.push(port);
+            calibration.extend((offset..offset + width).map(|i| old[i].clone()));
+        }
+        offset += width;
+    }
+    value["sensors"] = serde_json::json!(sensors);
+    value["sensor_calibration"] = serde_json::json!(calibration);
+    record
+        .replace_embodiment_state(serde_json::from_value(value).unwrap())
+        .unwrap();
+    assert_eq!(
+        record
+            .embodiment()
+            .sensor_gain(alife_core::SensorCapability::Hearing),
+        0.0
+    );
+    game.world.replace_organism_record_exact(record).unwrap();
+    game
+}
+
+#[test]
+fn player_care_receipt_records_scold_and_slap_kinds_and_mixed_sets() {
+    use alife_world::{
+        PlayerCareKind, PlayerCareKindSet, PlayerInteractionQueueOutcomeV1, PlayerInteractionV1,
+    };
+    let game = phase3_game(1);
+    let mut world = game.world;
+    let (organism, entity) = world.organism_entity_ids()[0];
+    let position = world.entity(entity).unwrap().position;
+    // A scold records the Scold kind and moves fear, never damage.
+    let mut control = world.clone();
+    assert_eq!(
+        world
+            .queue_player_interaction_v1(organism, position, PlayerInteractionV1::Scold)
+            .unwrap(),
+        PlayerInteractionQueueOutcomeV1::Queued
+    );
+    let tick = world.try_advance_tick().unwrap();
+    control.try_advance_tick().unwrap();
+    let receipt = world.last_player_care(organism).expect("scold receipt");
+    assert_eq!(
+        receipt.kinds,
+        PlayerCareKindSet::single(PlayerCareKind::Scold)
+    );
+    assert_eq!(receipt.applied_tick, tick);
+    let fear = |w: &alife_world::HeadlessWorld| {
+        w.organism_registry()
+            .get(organism)
+            .unwrap()
+            .biochemistry()
+            .homeostasis
+            .drives
+            .fear
+    };
+    assert!(fear(&world) > fear(&control));
+    // A slap records the Slap kind and injures, where the scold did not.
+    let mut control = world.clone();
+    assert_eq!(
+        world
+            .queue_player_interaction_v1(organism, position, PlayerInteractionV1::Slap)
+            .unwrap(),
+        PlayerInteractionQueueOutcomeV1::Queued
+    );
+    world.try_advance_tick().unwrap();
+    control.try_advance_tick().unwrap();
+    let receipt = world.last_player_care(organism).expect("slap receipt");
+    assert_eq!(
+        receipt.kinds,
+        PlayerCareKindSet::single(PlayerCareKind::Slap)
+    );
+    let injury = |w: &alife_world::HeadlessWorld| {
+        w.organism_registry()
+            .get(organism)
+            .unwrap()
+            .biochemistry()
+            .body
+            .injury
+    };
+    assert!(injury(&world) > injury(&control));
+    // Pet + scold in one tick record both kinds; the display is the scold.
+    world
+        .queue_player_interaction_v1(organism, position, PlayerInteractionV1::Pet)
+        .unwrap();
+    world
+        .queue_player_interaction_v1(organism, position, PlayerInteractionV1::Scold)
+        .unwrap();
+    world.try_advance_tick().unwrap();
+    let receipt = world.last_player_care(organism).expect("mixed receipt");
+    assert!(receipt.kinds.contains(PlayerCareKind::Pet));
+    assert!(receipt.kinds.contains(PlayerCareKind::Scold));
+    assert_eq!(receipt.kinds.iter().count(), 2);
+    assert_eq!(receipt.display_kind(), Some(PlayerCareKind::Scold));
+    // Scold + slap record both; the display is the slap.
+    world
+        .queue_player_interaction_v1(organism, position, PlayerInteractionV1::Scold)
+        .unwrap();
+    world
+        .queue_player_interaction_v1(organism, position, PlayerInteractionV1::Slap)
+        .unwrap();
+    world.try_advance_tick().unwrap();
+    let receipt = world
+        .last_player_care(organism)
+        .expect("negative mix receipt");
+    assert!(receipt.kinds.contains(PlayerCareKind::Scold));
+    assert!(receipt.kinds.contains(PlayerCareKind::Slap));
+    assert_eq!(receipt.display_kind(), Some(PlayerCareKind::Slap));
+    // The mixed receipt survives a save/load round trip as a set.
+    let save = alife_world::PortableSaveFile::from_headless_world(
+        "care-receipt-mixed",
+        &world,
+        alife_world::RuntimeConfig::deterministic_default(
+            world.seed(),
+            alife_core::BrainScaleTier::Nano512,
+        ),
+        alife_world::AssetManifest::empty(),
+        game.creatures,
+    )
+    .unwrap();
+    let restored =
+        alife_world::PortableSaveFile::from_json_str(&serde_json::to_string(&save).unwrap())
+            .unwrap()
+            .restore_headless_world()
+            .unwrap();
+    assert_eq!(
+        restored.last_player_care(organism),
+        world.last_player_care(organism)
+    );
+}
+
+#[test]
+fn player_care_receipt_records_nothing_for_a_zero_hearing_scold() {
+    use alife_world::{PlayerInteractionQueueOutcomeV1, PlayerInteractionV1};
+    let game = deaf_game();
+    let mut world = game.world;
+    let (organism, entity) = world.organism_entity_ids()[0];
+    let position = world.entity(entity).unwrap().position;
+    // The queue is accepted but receives no dose, and changes nothing.
+    let before = world.canonical_signature_digest().unwrap();
+    assert_eq!(
+        world
+            .queue_player_interaction_v1(organism, position, PlayerInteractionV1::Scold)
+            .unwrap(),
+        PlayerInteractionQueueOutcomeV1::NoReceivedDose
+    );
+    assert_eq!(world.canonical_signature_digest().unwrap(), before);
+    world.try_advance_tick().unwrap();
+    assert_eq!(world.last_player_care(organism), None);
+    // Praise is not hearing-gated: the same creature still queues it.
+    assert_eq!(
+        world
+            .queue_player_interaction_v1(organism, position, PlayerInteractionV1::Praise)
+            .unwrap(),
+        PlayerInteractionQueueOutcomeV1::Queued
+    );
+}
+
+#[test]
+fn player_care_receipt_loads_slice2_single_kind_strings() {
+    use alife_world::{PlayerCareKind, PlayerCareKindSet, PlayerCareReceipt};
+    let game = phase3_game(1);
+    let mut world = game.world;
+    let (organism, entity) = world.organism_entity_ids()[0];
+    let position = world.entity(entity).unwrap().position;
+    world.queue_player_care(organism, position, false).unwrap();
+    world.try_advance_tick().unwrap();
+    let receipt = world.last_player_care(organism).unwrap();
+    // Rewrite to the slice-2 shape: one kind string under "kind".
+    let mut value = serde_json::to_value(&receipt).unwrap();
+    value.as_object_mut().unwrap().remove("kinds");
+    value
+        .as_object_mut()
+        .unwrap()
+        .insert("kind".into(), serde_json::json!("Pet"));
+    let loaded: PlayerCareReceipt = serde_json::from_value(value).unwrap();
+    assert_eq!(loaded, receipt);
+    // The removed pair loads as both kinds.
+    let mut value = serde_json::to_value(&receipt).unwrap();
+    value.as_object_mut().unwrap().remove("kinds");
+    value
+        .as_object_mut()
+        .unwrap()
+        .insert("kind".into(), serde_json::json!("TouchAndPraise"));
+    let loaded: PlayerCareReceipt = serde_json::from_value(value).unwrap();
+    assert!(loaded.kinds.contains(PlayerCareKind::Pet));
+    assert!(loaded.kinds.contains(PlayerCareKind::Praise));
+    assert_eq!(loaded.kinds.iter().count(), 2);
+    let mut expected = PlayerCareKindSet::empty();
+    expected.insert(PlayerCareKind::Pet);
+    expected.insert(PlayerCareKind::Praise);
+    assert_eq!(loaded.kinds, expected);
+    // And the new shape round-trips as written.
+    let round: PlayerCareReceipt =
+        serde_json::from_str(&serde_json::to_string(&receipt).unwrap()).unwrap();
+    assert_eq!(round, receipt);
+}
+#[test]
 fn food_and_toy_variants_have_physical_gene_controlled_and_persistent_effects() {
     use alife_core::{
         ActionCommand, ActionKind, ActionTarget, AlleleSide, BiochemicalSourceLocus,

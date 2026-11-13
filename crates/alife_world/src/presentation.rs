@@ -8,7 +8,8 @@ use alife_core::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    HabitatId, HabitatMode, HeadlessWorld, OrganismLifecycle, WorldObject, WorldObjectKind,
+    HabitatId, HabitatMode, HeadlessWorld, OrganismLifecycle, PlayerCareReceipt, WorldObject,
+    WorldObjectKind,
 };
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -76,6 +77,9 @@ pub struct WorldOrganismPresentationRow {
     pub sleep_work_units: u64,
     pub motor: Option<PresentationMotorSnapshot>,
     pub outcome: Option<PresentationOutcomeSnapshot>,
+    /// Last player-care dose this organism actually felt, if any. Unknown
+    /// when no queued touch or praise has been applied to it yet.
+    pub last_player_care: PresentationEvidence<PlayerCareReceipt>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -122,6 +126,13 @@ impl HeadlessWorld {
                     sleep_work_units: record.sleep_work_units(),
                     motor: None,
                     outcome: None,
+                    last_player_care: self.last_player_care(record.organism_id()).map_or(
+                        PresentationEvidence::Unknown,
+                        |receipt| PresentationEvidence::Observed {
+                            value: receipt,
+                            tick: receipt.applied_tick,
+                        },
+                    ),
                 })
             })
             .collect::<Vec<_>>();

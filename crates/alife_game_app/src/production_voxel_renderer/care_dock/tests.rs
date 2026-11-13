@@ -404,18 +404,18 @@ pub(crate) fn export_nodes(world: &mut World) -> Vec<Value> {
 }
 #[test]
 fn cpu_layout_fits_four_viewports_and_exports_actual_wordless_feedback_nodes() {
-    let mut queued = [Evidence::None; 5];
-    queued[Action::Touch.index()] = Evidence::Queued;
+    let mut queued = [Evidence::None; 7];
+    queued[Action::Pet.index()] = Evidence::Queued;
     queued[Action::Praise.index()] = Evidence::Queued;
-    let mut placed = [Evidence::None; 5];
+    let mut placed = [Evidence::None; 7];
     placed[Action::Food.index()] = Evidence::Placed(WorldEntityId(41));
     placed[Action::Toy.index()] = Evidence::Placed(WorldEntityId(42));
     let cases = [
-        ("ready", [true; 5], [Evidence::None; 5], false),
-        ("queued", [true; 5], queued, false),
-        ("placed", [true; 5], placed, false),
-        ("rejected", [true; 5], [Evidence::Rejected; 5], true),
-        ("unavailable", [false; 5], [Evidence::Unavailable; 5], true),
+        ("ready", [true; 7], [Evidence::None; 7], false),
+        ("queued", [true; 7], queued, false),
+        ("placed", [true; 7], placed, false),
+        ("rejected", [true; 7], [Evidence::Rejected; 7], true),
+        ("unavailable", [false; 7], [Evidence::Unavailable; 7], true),
     ];
     let mut fixtures = Vec::new();
     let mut embedded_assets = Vec::new();
@@ -582,30 +582,31 @@ fn queued_evidence_never_advances_itself_and_selection_changes_clear_it() {
         Some(WorldEntityId(1)),
     ));
     state.observe_selection(selected);
-    state.record(Action::Touch, Evidence::Queued);
+    state.record(Action::Pet, Evidence::Queued);
     for _ in 0..100 {
         state.observe_selection(selected);
-        assert_eq!(state.evidence[Action::Touch.index()], Evidence::Queued);
+        assert_eq!(state.evidence[Action::Pet.index()], Evidence::Queued);
     }
     state.observe_selection(Some(reference(
         StableVoxelRefKind::Creature,
         Some(WorldEntityId(2)),
     )));
-    assert_eq!(state.evidence, [Evidence::None; 5]);
+    assert_eq!(state.evidence, [Evidence::None; 7]);
     state.record(Action::Food, Evidence::Placed(WorldEntityId(41)));
     state.observe_selection(None);
-    assert_eq!(state.evidence, [Evidence::None; 5]);
+    assert_eq!(state.evidence, [Evidence::None; 7]);
 }
 #[derive(Debug, PartialEq)]
 enum Call {
     Food(Vec3f),
     Toy(OrganismId),
-    Care(OrganismId, Vec3f, bool),
+    Care(OrganismId, Vec3f, alife_world::PlayerInteractionV1),
 }
 struct TestPort {
     world: HeadlessWorld,
     calls: Vec<Call>,
     reject: bool,
+    next_outcome: alife_world::PlayerInteractionQueueOutcomeV1,
 }
 impl TestPort {
     fn new() -> Self {
@@ -613,6 +614,7 @@ impl TestPort {
             world: authoritative_world(),
             calls: vec![],
             reject: false,
+            next_outcome: alife_world::PlayerInteractionQueueOutcomeV1::Queued,
         }
     }
     fn result(&self) -> Result<WorldEntityId, GameAppShellError> {
@@ -637,9 +639,14 @@ impl CarePort for TestPort {
         self.calls.push(Call::Toy(o));
         self.result()
     }
-    fn care(&mut self, o: OrganismId, p: Vec3f, praise: bool) -> Result<(), GameAppShellError> {
-        self.calls.push(Call::Care(o, p, praise));
-        self.result().map(|_| ())
+    fn care(
+        &mut self,
+        o: OrganismId,
+        p: Vec3f,
+        kind: alife_world::PlayerInteractionV1,
+    ) -> Result<alife_world::PlayerInteractionQueueOutcomeV1, GameAppShellError> {
+        self.calls.push(Call::Care(o, p, kind));
+        self.result().map(|_| self.next_outcome)
     }
 }
 #[test]
@@ -656,9 +663,9 @@ fn dispatcher_preserves_canonical_sources_physical_ids_and_world_rejections() {
             Call::Food(Vec3f::new(4.5, 7.5, 0.0)),
         ),
         (
-            Action::Touch,
+            Action::Pet,
             Evidence::Queued,
-            Call::Care(OrganismId(1), source, false),
+            Call::Care(OrganismId(1), source, alife_world::PlayerInteractionV1::Pet),
         ),
         (
             Action::Toy,
@@ -668,7 +675,29 @@ fn dispatcher_preserves_canonical_sources_physical_ids_and_world_rejections() {
         (
             Action::Praise,
             Evidence::Queued,
-            Call::Care(OrganismId(1), source, true),
+            Call::Care(
+                OrganismId(1),
+                source,
+                alife_world::PlayerInteractionV1::Praise,
+            ),
+        ),
+        (
+            Action::Scold,
+            Evidence::Queued,
+            Call::Care(
+                OrganismId(1),
+                source,
+                alife_world::PlayerInteractionV1::Scold,
+            ),
+        ),
+        (
+            Action::Slap,
+            Evidence::Queued,
+            Call::Care(
+                OrganismId(1),
+                source,
+                alife_world::PlayerInteractionV1::Slap,
+            ),
         ),
     ] {
         assert_eq!(
@@ -689,6 +718,27 @@ fn dispatcher_preserves_canonical_sources_physical_ids_and_world_rejections() {
     }
     assert!(dispatch_core(&mut port, Action::Speech, selected).is_err());
     assert_eq!(port.calls.len(), before);
+}
+#[test]
+fn dispatcher_reports_no_received_dose_without_a_marker_or_a_queued_claim() {
+    let mut port = TestPort::new();
+    port.next_outcome = alife_world::PlayerInteractionQueueOutcomeV1::NoReceivedDose;
+    let stable = port.world.entity_id("agent").unwrap();
+    let selected = Some(reference(StableVoxelRefKind::Creature, Some(stable)));
+    // The world accepted the input and delivered no dose: dispatch reports
+    // no evidence, so no pending marker appears and no "queued" status is
+    // ever emitted for it. The call itself still reached the runtime.
+    assert_eq!(
+        dispatch_core(&mut port, Action::Scold, selected).unwrap(),
+        Evidence::None
+    );
+    assert_eq!(port.calls.len(), 1);
+    // The other care actions still queue through the same dispatcher.
+    port.next_outcome = alife_world::PlayerInteractionQueueOutcomeV1::Queued;
+    assert_eq!(
+        dispatch_core(&mut port, Action::Slap, selected).unwrap(),
+        Evidence::Queued
+    );
 }
 #[test]
 fn same_frame_pointer_and_keyboard_request_one_action_with_preserved_debug_shortcuts() {
@@ -762,7 +812,14 @@ fn collected_pointer_care_resolves_dispatch_selection_and_rejects_retired_snapsh
         Die,
         Retire,
     }
-    for action in [Action::Food, Action::Touch, Action::Toy, Action::Praise] {
+    for action in [
+        Action::Food,
+        Action::Pet,
+        Action::Toy,
+        Action::Praise,
+        Action::Scold,
+        Action::Slap,
+    ] {
         for change in [
             Change::SelectOther,
             Change::ClearSelection,
@@ -893,7 +950,7 @@ fn collected_pointer_care_resolves_dispatch_selection_and_rejects_retired_snapsh
             let mut state = app.world_mut().resource_mut::<State>();
             state.observe_selection(selected);
             if matches!(change, Change::SelectOther | Change::ClearSelection) {
-                assert_eq!(state.evidence, [Evidence::None; 5]);
+                assert_eq!(state.evidence, [Evidence::None; 7]);
             }
             let pointer = state.take_pending();
             assert_eq!(
@@ -928,9 +985,19 @@ fn collected_pointer_care_resolves_dispatch_selection_and_rejects_retired_snapsh
                         Evidence::Placed(WorldEntityId(41)),
                         Call::Toy(other_organism),
                     ),
-                    Action::Touch | Action::Praise => (
+                    Action::Pet | Action::Praise | Action::Scold | Action::Slap => (
                         Evidence::Queued,
-                        Call::Care(other_organism, moved, action == Action::Praise),
+                        Call::Care(
+                            other_organism,
+                            moved,
+                            match action {
+                                Action::Pet => alife_world::PlayerInteractionV1::Pet,
+                                Action::Praise => alife_world::PlayerInteractionV1::Praise,
+                                Action::Scold => alife_world::PlayerInteractionV1::Scold,
+                                Action::Slap => alife_world::PlayerInteractionV1::Slap,
+                                _ => unreachable!(),
+                            },
+                        ),
                     ),
                     Action::Speech => unreachable!(),
                 };
@@ -944,7 +1011,7 @@ fn collected_pointer_care_resolves_dispatch_selection_and_rejects_retired_snapsh
 fn actual_collect_input_captures_hover_press_wheel_and_release_without_repeat_dispatch() {
     let mut app = input_app();
     app.update();
-    let entity = action_entity(app.world_mut(), Action::Touch);
+    let entity = action_entity(app.world_mut(), Action::Pet);
     app.world_mut()
         .entity_mut(entity)
         .insert(Interaction::Hovered);
@@ -974,7 +1041,7 @@ fn actual_collect_input_captures_hover_press_wheel_and_release_without_repeat_di
     app.update();
     assert_eq!(
         app.world_mut().resource_mut::<State>().take_pending(),
-        Some(Action::Touch)
+        Some(Action::Pet)
     );
     assert_eq!(
         app.world().resource::<god_hand::HandInteraction>().held,
@@ -1122,10 +1189,8 @@ fn escape_cancels_food_move_and_menu_captures_dismissal_until_all_inputs_release
 
         // A dock press while modal never queues care. Keep it and the arrow held
         // across Escape dismissal, including after the pointer leaves the dock.
-        let touch = action_entity(app.world_mut(), Action::Touch);
-        app.world_mut()
-            .entity_mut(touch)
-            .insert(Interaction::Pressed);
+        let pet = action_entity(app.world_mut(), Action::Pet);
+        app.world_mut().entity_mut(pet).insert(Interaction::Pressed);
         app.world_mut()
             .resource_mut::<ButtonInput<MouseButton>>()
             .press(MouseButton::Left);
@@ -1151,7 +1216,7 @@ fn escape_cancels_food_move_and_menu_captures_dismissal_until_all_inputs_release
                 .paused,
             paused
         );
-        app.world_mut().entity_mut(touch).insert(Interaction::None);
+        app.world_mut().entity_mut(pet).insert(Interaction::None);
         app.world_mut()
             .resource_mut::<ButtonInput<KeyCode>>()
             .clear();
@@ -1179,16 +1244,14 @@ fn escape_cancels_food_move_and_menu_captures_dismissal_until_all_inputs_release
             selected
         );
 
-        app.world_mut()
-            .entity_mut(touch)
-            .insert(Interaction::Pressed);
+        app.world_mut().entity_mut(pet).insert(Interaction::Pressed);
         app.world_mut()
             .resource_mut::<ButtonInput<MouseButton>>()
             .press(MouseButton::Left);
         app.update();
         assert_eq!(
             app.world_mut().resource_mut::<State>().take_pending(),
-            Some(Action::Touch),
+            Some(Action::Pet),
             "a fresh deliberate press works after complete release"
         );
     }
@@ -1408,10 +1471,8 @@ fn actual_composer_bounds_fit_supported_viewports_and_capture_preserves_entered_
     state.prepare_recorded_speech_capture();
     let before = crate::production_conversation_lineage_ui::speech_entry_text(&state);
     app.insert_resource(state);
-    let touch = action_entity(app.world_mut(), Action::Touch);
-    app.world_mut()
-        .entity_mut(touch)
-        .insert(Interaction::Pressed);
+    let pet = action_entity(app.world_mut(), Action::Pet);
+    app.world_mut().entity_mut(pet).insert(Interaction::Pressed);
     app.world_mut()
         .resource_mut::<ButtonInput<MouseButton>>()
         .press(MouseButton::Left);
@@ -1755,13 +1816,23 @@ mod help_feedback {
     }
 
     #[test]
-    fn touch_help_distinguishes_queued_care_from_paused_delivery() {
-        check_queued_care(Action::Touch);
+    fn pet_help_distinguishes_queued_care_from_paused_delivery() {
+        check_queued_care(Action::Pet);
     }
 
     #[test]
     fn praise_help_distinguishes_queued_care_from_paused_delivery() {
         check_queued_care(Action::Praise);
+    }
+
+    #[test]
+    fn scold_help_distinguishes_queued_care_from_paused_delivery() {
+        check_queued_care(Action::Scold);
+    }
+
+    #[test]
+    fn slap_help_distinguishes_queued_care_from_paused_delivery() {
+        check_queued_care(Action::Slap);
     }
 
     fn check_selection_independent_feedback(status: String, feedback: &str, queued: bool) {
@@ -1815,13 +1886,23 @@ mod help_feedback {
     }
 
     #[test]
-    fn touch_help_does_not_retarget_queued_care_when_selection_changes() {
-        check_selection_independent_feedback(Action::Touch.queued_status(), "touch queued", true);
+    fn pet_help_does_not_retarget_queued_care_when_selection_changes() {
+        check_selection_independent_feedback(Action::Pet.queued_status(), "Pet queued", true);
     }
 
     #[test]
     fn praise_help_does_not_retarget_queued_care_when_selection_changes() {
         check_selection_independent_feedback(Action::Praise.queued_status(), "Praise queued", true);
+    }
+
+    #[test]
+    fn scold_help_does_not_retarget_queued_care_when_selection_changes() {
+        check_selection_independent_feedback(Action::Scold.queued_status(), "Scold queued", true);
+    }
+
+    #[test]
+    fn slap_help_does_not_retarget_queued_care_when_selection_changes() {
+        check_selection_independent_feedback(Action::Slap.queued_status(), "Slap queued", true);
     }
 
     #[test]
@@ -1882,8 +1963,8 @@ mod help_feedback {
     }
 
     #[test]
-    fn rejected_touch_selection_shows_recovery_guidance_while_paused_or_running() {
-        check_rejected_selection_guidance(Action::Touch);
+    fn rejected_pet_selection_shows_recovery_guidance_while_paused_or_running() {
+        check_rejected_selection_guidance(Action::Pet);
     }
 
     #[test]
@@ -1894,6 +1975,8 @@ mod help_feedback {
     #[test]
     fn rejected_praise_selection_shows_recovery_guidance_while_paused_or_running() {
         check_rejected_selection_guidance(Action::Praise);
+        check_rejected_selection_guidance(Action::Scold);
+        check_rejected_selection_guidance(Action::Slap);
     }
 
     #[test]
@@ -2026,7 +2109,14 @@ mod accessible_input {
 
     #[test]
     fn accessible_care_click_uses_existing_queue_once_and_captures_the_frame() {
-        for action in [Action::Food, Action::Touch, Action::Toy, Action::Praise] {
+        for action in [
+            Action::Food,
+            Action::Pet,
+            Action::Toy,
+            Action::Praise,
+            Action::Scold,
+            Action::Slap,
+        ] {
             let mut app = app();
             let entity = action_entity(app.world_mut(), action);
             request(&mut app, entity, AccessibleAction::Click);
@@ -2051,7 +2141,7 @@ mod accessible_input {
     #[test]
     fn same_frame_accessible_pointer_and_keyboard_care_still_requests_one_dispatch() {
         let mut app = app();
-        let entity = action_entity(app.world_mut(), Action::Touch);
+        let entity = action_entity(app.world_mut(), Action::Pet);
         request(&mut app, entity, AccessibleAction::Click);
         request(&mut app, entity, AccessibleAction::Click);
         app.world_mut()
@@ -2062,7 +2152,7 @@ mod accessible_input {
             .press(MouseButton::Left);
         app.world_mut()
             .resource_mut::<ButtonInput<KeyCode>>()
-            .press(Action::Touch.key());
+            .press(Action::Pet.key());
         app.update();
         let pointer = app.world_mut().resource_mut::<State>().take_pending();
         let keyboard = app.world().resource::<ButtonInput<KeyCode>>();
@@ -2129,7 +2219,7 @@ mod accessible_input {
     fn blocked_accessible_clicks_are_drained_and_unknown_targets_never_queue_care() {
         for blocked in ["debug", "menu", "focus"] {
             let mut app = app();
-            let entity = action_entity(app.world_mut(), Action::Touch);
+            let entity = action_entity(app.world_mut(), Action::Pet);
             match blocked {
                 "debug" => {
                     app.world_mut()
@@ -2184,7 +2274,7 @@ mod accessible_input {
             app.update();
             assert_eq!(
                 app.world_mut().resource_mut::<State>().take_pending(),
-                Some(Action::Touch)
+                Some(Action::Pet)
             );
         }
     }

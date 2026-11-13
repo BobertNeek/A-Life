@@ -518,7 +518,7 @@ fn spawn_ui(world: &mut World) {
     ] {
         world
             .spawn((
-                Name::new("Player menu modal"),
+                Name::new("Menu modal"),
                 MenuRoot(screen),
                 Node {
                     position_type: PositionType::Absolute,
@@ -537,8 +537,8 @@ fn spawn_ui(world: &mut World) {
                     accessible(
                         Role::Dialog,
                         match screen {
-                            Screen::Main => "Player menu",
-                            Screen::Speed => "Simulation speed",
+                            Screen::Main => "Menu",
+                            Screen::Speed => "Speed",
                             Screen::Settings => "Settings",
                             Screen::ConfirmLoad => LOAD_WARNING,
                             Screen::Closed => unreachable!(),

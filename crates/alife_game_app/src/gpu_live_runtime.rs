@@ -8134,6 +8134,21 @@ impl GpuLiveBrainRuntime {
         Ok(())
     }
 
+    /// Queue one of the four player interactions (praise, scold, pet, slap)
+    /// through canonical world authority. Returns the queue outcome: a
+    /// zero-hearing scold is accepted but receives no dose, and the caller
+    /// must not present it as queued.
+    pub fn provide_player_interaction_v1(
+        &mut self,
+        organism: OrganismId,
+        source: Vec3f,
+        kind: alife_world::PlayerInteractionV1,
+    ) -> Result<alife_world::PlayerInteractionQueueOutcomeV1, GameAppShellError> {
+        Ok(self
+            .world
+            .queue_player_interaction_v1(organism, source, kind)?)
+    }
+
     /// A reusable physical plaything. This offers inspection and contact without
     /// setting a creature's intent, chemical reward, or social relationship.
     pub fn offer_player_play(
