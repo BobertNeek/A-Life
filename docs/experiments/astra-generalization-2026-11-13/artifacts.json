@@ -1,0 +1,18 @@
+{
+  "parent": "docs/experiments/astra-pursuit-2026-11-13/pursuit-memory16.alife-foundation",
+  "parent_sha256": "8f84afd6ac2ec575a8df61d18a0a18ac17296615a9ef7af7d22df416b3dd0ad7",
+  "files": {
+    "pursuit-twohead-bearing4.alife-foundation": {
+      "sha256": "ec710f2176ae4cfccdd342953c7778385f1880efc7a0216ca5412aad68d6628c",
+      "bytes": 131581
+    },
+    "pursuit-memory16-cap8.alife-foundation": {
+      "sha256": "7a0efa7f92cabc54c2bedee21617a047c3b1e825f515bae6182e84843e148e21",
+      "bytes": 131581
+    },
+    "pursuit-twohead-bearing4.alife-foundation.genome.json": {
+      "sha256": "5c63a675c89be9195de6b2bdedfc51a0f6f95fa11917ef8db6b75492bba025f7",
+      "bytes": 205948
+    }
+  }
+}

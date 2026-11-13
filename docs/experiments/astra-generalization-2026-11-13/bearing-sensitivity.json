@@ -1,0 +1,118 @@
+{
+  "method": "PyTorch linear decoder sensitivity on frozen native states, not a rollout prediction",
+  "torch": "2.15.0+cpu",
+  "rows": [
+    {
+      "scene": "partial-obstacle",
+      "tick": 0,
+      "target": 2,
+      "old_logit": 4.2569708824157715,
+      "predicted_new_logit_on_frozen_old_state": 7.187219142913818
+    },
+    {
+      "scene": "partial-obstacle",
+      "tick": 0,
+      "target": 3,
+      "old_logit": 6.662874698638916,
+      "predicted_new_logit_on_frozen_old_state": 4.931228518486023
+    },
+    {
+      "scene": "partial-obstacle",
+      "tick": 32,
+      "target": 3,
+      "old_logit": 15.584610939025879,
+      "predicted_new_logit_on_frozen_old_state": 6.166409492492676
+    },
+    {
+      "scene": "partial-obstacle",
+      "tick": 32,
+      "target": 2,
+      "old_logit": 10.242033004760742,
+      "predicted_new_logit_on_frozen_old_state": 11.851397037506104
+    },
+    {
+      "scene": "partial-obstacle",
+      "tick": 64,
+      "target": 3,
+      "old_logit": 15.531783103942871,
+      "predicted_new_logit_on_frozen_old_state": 3.1176300048828125
+    },
+    {
+      "scene": "partial-obstacle",
+      "tick": 64,
+      "target": 2,
+      "old_logit": 10.88693904876709,
+      "predicted_new_logit_on_frozen_old_state": 9.78341794013977
+    },
+    {
+      "scene": "partial-obstacle",
+      "tick": 96,
+      "target": 3,
+      "old_logit": 15.407859802246094,
+      "predicted_new_logit_on_frozen_old_state": 2.993414878845215
+    },
+    {
+      "scene": "partial-obstacle",
+      "tick": 96,
+      "target": 2,
+      "old_logit": 10.794275283813477,
+      "predicted_new_logit_on_frozen_old_state": 9.690655946731567
+    },
+    {
+      "scene": "moving-obstacle",
+      "tick": 0,
+      "target": 2,
+      "old_logit": 4.2569708824157715,
+      "predicted_new_logit_on_frozen_old_state": 7.187219142913818
+    },
+    {
+      "scene": "moving-obstacle",
+      "tick": 0,
+      "target": 3,
+      "old_logit": 6.717690944671631,
+      "predicted_new_logit_on_frozen_old_state": 4.881027936935425
+    },
+    {
+      "scene": "moving-obstacle",
+      "tick": 32,
+      "target": 3,
+      "old_logit": 15.589702606201172,
+      "predicted_new_logit_on_frozen_old_state": 6.67630672454834
+    },
+    {
+      "scene": "moving-obstacle",
+      "tick": 32,
+      "target": 2,
+      "old_logit": 9.792465209960938,
+      "predicted_new_logit_on_frozen_old_state": 12.741467475891113
+    },
+    {
+      "scene": "moving-obstacle",
+      "tick": 64,
+      "target": 3,
+      "old_logit": 15.558187484741211,
+      "predicted_new_logit_on_frozen_old_state": 3.2981948852539062
+    },
+    {
+      "scene": "moving-obstacle",
+      "tick": 64,
+      "target": 2,
+      "old_logit": 9.356352806091309,
+      "predicted_new_logit_on_frozen_old_state": 12.624541521072388
+    },
+    {
+      "scene": "moving-obstacle",
+      "tick": 96,
+      "target": 3,
+      "old_logit": 15.462928771972656,
+      "predicted_new_logit_on_frozen_old_state": 3.2026567459106445
+    },
+    {
+      "scene": "moving-obstacle",
+      "tick": 96,
+      "target": 2,
+      "old_logit": 8.411686897277832,
+      "predicted_new_logit_on_frozen_old_state": 14.590222358703613
+    }
+  ]
+}

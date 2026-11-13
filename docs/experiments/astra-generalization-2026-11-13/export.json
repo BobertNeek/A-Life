@@ -1,0 +1,140 @@
+{
+  "request": {
+    "params": [
+      -3.5628414154052734,
+      49.11018347740173,
+      10.744718551635742,
+      0,
+      0,
+      0
+    ],
+    "bearing_gain": 4,
+    "motor_heads": 2,
+    "seed_start": 2026112500,
+    "seeds": 1,
+    "ticks": 4,
+    "scenes": [
+      "contact"
+    ],
+    "export": "/workspace/alife-astra/docs/experiments/astra-generalization-2026-11-13/pursuit-twohead-bearing4.alife-foundation"
+  },
+  "result": {
+    "assay_version": 4,
+    "backend": "native-cpu",
+    "base_digest": [
+      122,
+      192,
+      140,
+      116,
+      78,
+      57,
+      82,
+      32,
+      128,
+      23,
+      16,
+      252,
+      126,
+      217,
+      107,
+      130,
+      52,
+      169,
+      88,
+      187,
+      173,
+      215,
+      72,
+      197,
+      218,
+      124,
+      186,
+      46,
+      179,
+      243,
+      9,
+      240
+    ],
+    "bearing_gain": 4.0,
+    "candidate_digest": [
+      224,
+      252,
+      172,
+      202,
+      37,
+      120,
+      184,
+      145,
+      35,
+      70,
+      23,
+      108,
+      246,
+      112,
+      221,
+      152,
+      69,
+      131,
+      49,
+      17,
+      45,
+      92,
+      183,
+      43,
+      52,
+      64,
+      61,
+      151,
+      61,
+      176,
+      43,
+      91
+    ],
+    "memory_aversion": 0.0,
+    "memory_cap": 0.5,
+    "motor_heads": 2,
+    "params": [
+      -3.5628414154052734,
+      49.11018371582031,
+      10.744718551635742,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "readout_scale": [
+      1.0,
+      1.0
+    ],
+    "seconds": 0.723492264,
+    "ticks": 4,
+    "trials": [
+      {
+        "actions": {
+          "Approach": 1,
+          "Avoid": 1,
+          "Ingest": 2,
+          "Rest": 1
+        },
+        "caught_tick": 0,
+        "consumed": true,
+        "consumed_tick": 1,
+        "decisions": 2,
+        "failed_ingests": 0,
+        "final_distance": 0.5,
+        "final_energy": 0.3868395984172821,
+        "initial_energy": 0.24939455091953278,
+        "injury": 0.0,
+        "min_distance": 0.25,
+        "scene": "contact",
+        "seed": 2026112500,
+        "target_motion": [],
+        "trace": []
+      }
+    ],
+    "variation": {
+      "angle": 0.0,
+      "appearance": 0,
+      "speed": 1.0
+    }
+  }
+}
