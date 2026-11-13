@@ -211,10 +211,10 @@ fn assert_layout(world: &mut World, size: Vec2) {
         .unwrap()
         .iter()
         .collect::<Vec<_>>();
-    // The identity header and quantity grid must fit and be disjoint. Badge
-    // overlays are contained, but deliberately not treated as separate tiles.
-    // Text node boxes are measured; text glyphs are not.
-    assert_eq!(tiles.len(), 2);
+    // The identity header, care line, and quantity grid must fit and be
+    // disjoint. Badge overlays are contained, but deliberately not treated
+    // as separate tiles. Text node boxes are measured; text glyphs are not.
+    assert_eq!(tiles.len(), 3);
     for (index, &tile) in tiles.iter().enumerate() {
         let bounds = Box2::of(world, tile);
         assert!(bounds.size().x > 0.0 && bounds.size().y > 0.0);
@@ -528,6 +528,7 @@ fn cpu_layout_fits_supported_viewports_and_exports_source_derived_fixtures() {
                 name: None,
                 holding_food: false,
                 stable_id: 42,
+                care: PresentationEvidence::Unknown,
                 values: normal,
             }),
             false,
@@ -538,6 +539,7 @@ fn cpu_layout_fits_supported_viewports_and_exports_source_derived_fixtures() {
                 name: None,
                 holding_food: false,
                 stable_id: 42,
+                care: PresentationEvidence::Unknown,
                 values: [
                     Some(1.0),
                     Some(0.10),
@@ -555,6 +557,7 @@ fn cpu_layout_fits_supported_viewports_and_exports_source_derived_fixtures() {
                 name: None,
                 holding_food: false,
                 stable_id: 42,
+                care: PresentationEvidence::Unknown,
                 values: [None; 6],
             }),
             false,
@@ -565,6 +568,7 @@ fn cpu_layout_fits_supported_viewports_and_exports_source_derived_fixtures() {
                 name: None,
                 holding_food: false,
                 stable_id: 42,
+                care: PresentationEvidence::Unknown,
                 values: [Some(0.0); 6],
             }),
             false,
@@ -575,6 +579,7 @@ fn cpu_layout_fits_supported_viewports_and_exports_source_derived_fixtures() {
                 name: None,
                 holding_food: false,
                 stable_id: 42,
+                care: PresentationEvidence::Unknown,
                 values: [
                     Some(0.40),
                     Some(0.65),
@@ -592,6 +597,7 @@ fn cpu_layout_fits_supported_viewports_and_exports_source_derived_fixtures() {
                 name: None,
                 holding_food: false,
                 stable_id: 42,
+                care: PresentationEvidence::Unknown,
                 values: [Some(0.25), Some(0.82), None, Some(0.78), None, Some(0.12)],
             }),
             false,
@@ -602,6 +608,7 @@ fn cpu_layout_fits_supported_viewports_and_exports_source_derived_fixtures() {
                 name: None,
                 holding_food: true,
                 stable_id: u64::MAX,
+                care: PresentationEvidence::Unknown,
                 values: normal,
             }),
             false,
@@ -612,6 +619,7 @@ fn cpu_layout_fits_supported_viewports_and_exports_source_derived_fixtures() {
                 name: None,
                 holding_food: true,
                 stable_id: 42,
+                care: PresentationEvidence::Unknown,
                 values: normal,
             }),
             true,
@@ -701,6 +709,7 @@ fn unknown_is_not_valid_zero_and_clear_or_debug_hides_selection() {
             name: None,
             holding_food: false,
             stable_id: u64::MAX,
+            care: PresentationEvidence::Unknown,
             values,
         };
         set_readout(&mut world, Some(&readout), false);
@@ -710,6 +719,7 @@ fn unknown_is_not_valid_zero_and_clear_or_debug_hides_selection() {
         name: None,
         holding_food: false,
         stable_id: u64::MAX,
+        care: PresentationEvidence::Unknown,
         values: [Some(0.5); 6],
     };
     for (selected, debug, shown) in [
@@ -797,6 +807,7 @@ fn real_dock_retains_priority_and_status_restores_when_it_fits() {
         name: None,
         holding_food: false,
         stable_id: 42,
+        care: PresentationEvidence::Unknown,
         values: [Some(0.5); 6],
     };
     let panel = world
@@ -812,7 +823,7 @@ fn real_dock_retains_priority_and_status_restores_when_it_fits() {
         adapt_bottom_controls_visibility(&mut world, size, true);
         assert_eq!(visible_in_hierarchy(&world, panel), visible);
     }
-    assert_eq!(panel_bottom(Vec2::new(320.0, 240.0)), 236.0);
+    assert_eq!(panel_bottom(Vec2::new(320.0, 240.0)), 258.0);
 }
 
 #[test]
@@ -839,6 +850,7 @@ fn explicit_help_uses_space_above_dock_and_temporarily_hides_selected_status() {
         name: None,
         holding_food: false,
         stable_id: 42,
+        care: PresentationEvidence::Unknown,
         values: [Some(0.5); 6],
     };
     set_readout(&mut world, Some(&readout), false);
@@ -863,6 +875,7 @@ fn food_badge_clears_and_restores_without_resizing_the_header_or_intercepting_in
     let readout = Readout {
         name: None,
         stable_id: u64::MAX,
+        care: PresentationEvidence::Unknown,
         values: [Some(0.5); 6],
         holding_food: true,
     };
