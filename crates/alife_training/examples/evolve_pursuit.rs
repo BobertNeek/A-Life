@@ -24,6 +24,53 @@ struct Request {
     #[serde(default)]
     memory_aversion: f32,
     export: Option<String>,
+    #[serde(default)]
+    variation: Variation,
+    #[serde(default = "unit_scales")]
+    readout_scale: [f32; 2],
+    #[serde(default)]
+    bearing_gain: f32,
+    #[serde(default = "one_head")]
+    motor_heads: u8,
+}
+
+fn one_head() -> u8 {
+    1
+}
+
+fn unit_scales() -> [f32; 2] {
+    [1., 1.]
+}
+
+#[derive(Clone, Copy, Deserialize, Serialize)]
+#[serde(default, deny_unknown_fields)]
+struct Variation {
+    angle: f32,
+    speed: f32,
+    appearance: u8,
+}
+impl Default for Variation {
+    fn default() -> Self {
+        Self {
+            angle: 0.,
+            speed: 1.,
+            appearance: 0,
+        }
+    }
+}
+impl Variation {
+    fn rotate(self, p: Vec3f) -> Vec3f {
+        let (s, c) = self.angle.sin_cos();
+        Vec3f::new(c * p.x - s * p.z, p.y, s * p.x + c * p.z)
+    }
+    fn appearance(self) -> ([f32; 3], [f32; 3], [f32; 3]) {
+        match self.appearance {
+            1 => ([0.1, 0.1, 0.1], [0.2, 0.1, 0.1], [0.2, 0.1, 0.2]),
+            2 => ([0.9, 0.2, 0.7], [0.8, 0.7, 0.1], [0.1, 0.8, 0.9]),
+            3 => ([0.2, 0.3, 0.9], [0.1, 0.9, 0.6], [0.8, 0.2, 0.1]),
+            _ => ([0.4, 0.6, 0.3], [0.5, 0.3, 0.2], [0.4, 0.5, 0.3]),
+        }
+    }
 }
 
 #[derive(Serialize)]
@@ -52,7 +99,7 @@ fn config(asset: &FoundationWeightAsset) -> Result<CanonicalNewGameConfig> {
     Ok(c)
 }
 
-fn phenotype(asset: &FoundationWeightAsset) -> Result<BrainPhenotype> {
+fn construction_context(asset: &FoundationWeightAsset) -> Result<(BrainGenome, DevelopmentState)> {
     let game = create_canonical_new_game_with_n2048_experimental_candidate(&config(asset)?, asset)?;
     let r = game.world.organism_registry().iter().next().unwrap();
     let dev = foundation_construction_development(
@@ -60,9 +107,14 @@ fn phenotype(asset: &FoundationWeightAsset) -> Result<BrainPhenotype> {
         &BrainCapacityClass::n2048(),
         &r.phenotype().development_state_at(Tick::ZERO)?,
     )?;
+    Ok((r.phenotype().brain_genome.clone(), dev))
+}
+
+fn phenotype(asset: &FoundationWeightAsset) -> Result<BrainPhenotype> {
+    let (genome, dev) = construction_context(asset)?;
     Ok(
         PhenotypeCompiler::compile_n2048_experimental_foundation_candidate(
-            r.phenotype().brain_genome.clone(),
+            genome,
             dev,
             asset.clone(),
         )?
@@ -115,6 +167,48 @@ fn candidate(
     )?)
 }
 
+fn scale_readouts(
+    base: FoundationWeightAsset,
+    p: &BrainPhenotype,
+    scale: [f32; 2],
+    bearing: f32,
+) -> Result<FoundationWeightAsset> {
+    if scale
+        .iter()
+        .any(|v| !v.is_finite() || !(0.0..=4.0).contains(v))
+        || !bearing.is_finite()
+        || bearing.abs() > 64.
+    {
+        return Err("readout scales must be in 0..4 and bearing gain within +/-64".into());
+    }
+    if scale == [1., 1.] && bearing == 0. {
+        return Ok(base);
+    }
+    let mut w = base.weights().to_vec();
+    for (i, s) in p.synapses().iter().enumerate() {
+        if let CompiledSynapseKind::Decoder(c) = s.kind() {
+            if c.head() == DecoderHeadKind::ActionCandidate {
+                match c.family() {
+                    CandidateActionFamily::Approach => w[i] *= scale[0],
+                    CandidateActionFamily::Ingest => w[i] *= scale[1],
+                    _ => {}
+                }
+                if c.family() == CandidateActionFamily::Approach
+                    && c.input_lane() == 1
+                    && s.source() == 1791
+                {
+                    w[i] += bearing;
+                }
+            }
+        }
+    }
+    Ok(FoundationWeightAsset::from_trained_weights(
+        p,
+        w,
+        base.manifest().training_stage(),
+    )?)
+}
+
 fn distance(a: Vec3f, b: Vec3f) -> f32 {
     ((a.x - b.x).powi(2) + (a.z - b.z).powi(2)).sqrt()
 }
@@ -151,16 +245,96 @@ fn memory_candidate(
     )?)
 }
 
+// Fresh founder chromosome experiment. All prior weights and coordinates survive;
+// no acquired life is admitted or rewritten. Exported variants also need their genome.
+fn prepare_founder(
+    asset: FoundationWeightAsset,
+    heads: u8,
+) -> Result<(FoundationWeightAsset, BrainPhenotype, CanonicalNewGame)> {
+    let old = phenotype(&asset)?;
+    let mut game =
+        create_canonical_new_game_with_n2048_experimental_candidate(&config(&asset)?, &asset)?;
+    if heads == 1 {
+        return Ok((asset, old, game));
+    }
+    if !(2..=4).contains(&heads) {
+        return Err("motor heads must be 1..4".into());
+    }
+    let record = game
+        .world
+        .organism_registry()
+        .iter()
+        .next()
+        .unwrap()
+        .clone();
+    let mut genome = record.genome().clone();
+    for architecture in [
+        &mut genome.brain.construction.maternal_architecture,
+        &mut genome.brain.construction.paternal_architecture,
+    ] {
+        let mut wire = serde_json::to_value(*architecture)?;
+        wire["motor_head_count"] = json!(heads);
+        *architecture = serde_json::from_value(wire)?;
+    }
+    // Express the same inherited body and edited construction genes before rebinding.
+    genome.n2048_foundation_candidate = None;
+    let expressed = genome.express()?;
+    let development = foundation_construction_development(
+        &expressed.brain_genome,
+        &BrainCapacityClass::n2048(),
+        &expressed.development_state_at(Tick::ZERO)?,
+    )?;
+    let (fresh, _) = PhenotypeCompiler::compile_n2048_anchored_v2_graph(
+        expressed.brain_genome.clone(),
+        development.clone(),
+        asset.manifest().sensor_profile(),
+    )?;
+    if old.synapses().len() != fresh.synapses().len()
+        || old.synapses().iter().zip(fresh.synapses()).any(|(a, b)| {
+            a.source() != b.source()
+                || a.target() != b.target()
+                || a.kind() != b.kind()
+                || a.route_index() != b.route_index()
+        })
+    {
+        return Err("motor chromosome edit changed weight coordinates".into());
+    }
+    let rebound = FoundationWeightAsset::from_trained_weights(
+        &fresh,
+        asset.weights().to_vec(),
+        asset.manifest().training_stage(),
+    )?;
+    genome = genome.with_n2048_foundation_candidate(rebound.clone())?;
+    let expressed = genome.express()?;
+    let (compiled, _) = PhenotypeCompiler::compile_n2048_experimental_foundation_candidate(
+        expressed.brain_genome.clone(),
+        development,
+        rebound.clone(),
+    )?;
+    game.world
+        .replace_organism_record_exact(WorldOrganismRecord::new(
+            record.organism_id(),
+            record.world_entity_id(),
+            genome.clone(),
+            expressed,
+            *record.biochemistry(),
+            record.birth_tick(),
+        )?)?;
+    game.creatures[0].weights.genetic_fixed_digest =
+        PortableAssetDigest::for_bytes(&serde_json::to_vec(&genome)?).0;
+    Ok((rebound, compiled, game))
+}
+
 fn trial(
-    asset: &FoundationWeightAsset,
+    template: &CanonicalNewGame,
     trainer: &CpuFoundationTrainer,
     seed: u64,
     scene: &str,
     ticks: usize,
     trace: bool,
+    variation: Variation,
 ) -> Result<Trial> {
-    let mut game =
-        create_canonical_new_game_with_n2048_experimental_candidate(&config(asset)?, asset)?;
+    let mut game = template.clone();
     let old = game
         .world
         .organism_registry()
@@ -170,11 +344,13 @@ fn trial(
         .clone();
     let own = old.organism_id();
     let mirror = if seed.is_multiple_of(2) { 1. } else { -1. };
-    let initial = match scene {
+    let initial_local = match scene {
         "contact" | "toy" => Vec3f::new(0.25, 0., 0.),
+        "toy-then-food" | "wait-then-food" => Vec3f::new(100., 0., 0.),
         "crossing" | "frozen-crossing" => Vec3f::new(2.5, 0., -mirror),
         _ => Vec3f::new(2.5, 0., 0.),
     };
+    let initial = variation.rotate(initial_local);
     let mut world = HeadlessScenarioBuilder::new(seed)
         .agent("hunter", own, Vec3f::ZERO)
         .build()?;
@@ -193,24 +369,59 @@ fn trial(
         token_id: None,
     })?;
     // Food and toy appearance are matched. Taste is initially unknown at range.
+    let (color, material, shape) = variation.appearance();
     world.set_grounded_physical_properties(
         target,
         GroundedPhysicalProperties {
             velocity: Vec3f::ZERO,
-            color: [0.4, 0.6, 0.3],
-            material: [0.5, 0.3, 0.2],
-            shape: [0.4, 0.5, 0.3],
+            color,
+            material,
+            shape,
             chemical: [0., 0., 0.],
             surface_temperature: 0.,
             terrain: [0.5, 0.5],
         },
     )?;
-    if scene == "obstacle" {
+    let mut distraction_id = None;
+    if matches!(scene, "choice" | "toy-then-food") {
+        let distraction = world.editor_spawn_object(WorldEditorSpawnSpec {
+            label: "nonfood".into(),
+            kind: WorldObjectKind::ActivityToy,
+            organism_id: None,
+            position: variation.rotate(Vec3f::new(0.25, 0., 0.)),
+            nutrition: 0.,
+            hazard_pain: 0.,
+            radius: 0.3,
+            token_id: None,
+        })?;
+        distraction_id = Some(distraction);
+        world.set_grounded_physical_properties(
+            distraction,
+            GroundedPhysicalProperties {
+                velocity: Vec3f::ZERO,
+                color,
+                material,
+                shape,
+                chemical: [0.; 3],
+                surface_temperature: 0.,
+                terrain: [0.5, 0.5],
+            },
+        )?;
+    }
+    if matches!(scene, "obstacle" | "partial-obstacle" | "moving-obstacle") {
         world.editor_spawn_object(WorldEditorSpawnSpec {
             label: "obstacle".into(),
             kind: WorldObjectKind::Obstacle,
             organism_id: None,
-            position: Vec3f::new(1.25, 0., 0.),
+            position: variation.rotate(Vec3f::new(
+                1.25,
+                0.,
+                if scene == "partial-obstacle" {
+                    0.45 * mirror
+                } else {
+                    0.
+                },
+            )),
             nutrition: 0.,
             hazard_pain: 0.,
             radius: 0.35,
@@ -260,13 +471,47 @@ fn trial(
         target_motion: Vec::new(),
     };
     for tick in 0..ticks {
+        if tick == 64 && matches!(scene, "toy-then-food" | "wait-then-food") {
+            if let Some(id) = distraction_id {
+                host.world_mut().editor_remove_object(id)?;
+            }
+            let pose = host.world().entity(hunter).unwrap().position;
+            let offset = variation.rotate(Vec3f::new(0.25, 0., 0.));
+            host.world_mut().editor_move_object(
+                target,
+                Vec3f::new(pose.x + offset.x, pose.y, pose.z + offset.z),
+            )?;
+        }
         let object = host.world().entity(target).unwrap();
         if !object.consumed && object.carried_by.is_none() {
-            let t = tick as f32;
+            let t = tick as f32 * variation.speed;
             let next = match scene {
-                "receding" => Vec3f::new(initial.x + 0.012 * t, 0., 0.),
-                "crossing" => Vec3f::new(initial.x, 0., initial.z + mirror * 0.020 * t),
-                "zigzag" => Vec3f::new(initial.x + 0.008 * t, 0., mirror * 0.4 * (t * 0.08).sin()),
+                "receding" => variation.rotate(Vec3f::new(initial_local.x + 0.012 * t, 0., 0.)),
+                "crossing" | "moving-obstacle" => variation.rotate(Vec3f::new(
+                    initial_local.x,
+                    0.,
+                    initial_local.z + mirror * 0.020 * t,
+                )),
+                "zigzag" => variation.rotate(Vec3f::new(
+                    initial_local.x + 0.008 * t,
+                    0.,
+                    mirror * 0.4 * (t * 0.08).sin(),
+                )),
+                "orbiting" => variation.rotate(Vec3f::new(
+                    1.8 + 0.7 * (t * 0.028).cos(),
+                    0.,
+                    mirror * 0.7 * (t * 0.028).sin(),
+                )),
+                "fleeing" => {
+                    let hunter_position = host.world().entity(hunter).unwrap().position;
+                    let d = distance(object.position, hunter_position).max(0.001);
+                    let stride = 0.012 * variation.speed;
+                    Vec3f::new(
+                        object.position.x + (object.position.x - hunter_position.x) * stride / d,
+                        object.position.y,
+                        object.position.z + (object.position.z - hunter_position.z) * stride / d,
+                    )
+                }
                 _ => object.position,
             };
             let previous = object.position;
@@ -292,10 +537,24 @@ fn trial(
                 }
             }
             if trace {
+                let replay = trainer.evaluate_replay(&alife_training::TrainingSequence {
+                    phenotype_hash: trainer.phenotype().phenotype_hash(),
+                    initial: row.initial.clone(),
+                    ticks: vec![row.replay_tick.clone()],
+                    burn_in_ticks: 0,
+                    memory_candidate_gain: trainer
+                        .phenotype()
+                        .candidate_decoder()
+                        .memory_channel()
+                        .map_or(0., |m| m.max_candidate_gain()),
+                })?;
                 result.trace.push(json!({"tick":tick,"action":row.action,"candidates":frame.candidates(),
                     "reward":row.biological_reward,"outcome":row.patch.outcome(),
+                    "logits":replay.candidate_logits[0],"decoder_candidates":row.replay_tick.candidates,
                     "motor_activations": ([1760,1775,1776,1791,1824,1839].map(|i| row.final_features[i])),
                     "position":host.world().entity(hunter).unwrap().position,
+                    "steering":host.world().entity(hunter).unwrap().local_steering,
+                    "body_yaw":host.world().entity(hunter).unwrap().body_yaw,
                     "target":host.world().entity(target).unwrap().position}));
             }
         }
@@ -327,7 +586,11 @@ fn trial(
 }
 
 fn run(base: &FoundationWeightAsset, p: &BrainPhenotype, r: Request) -> Result<serde_json::Value> {
-    if r.seeds == 0
+    if !r.variation.angle.is_finite()
+        || !r.variation.speed.is_finite()
+        || !(0.0..=4.0).contains(&r.variation.speed)
+        || r.variation.appearance > 3
+        || r.seeds == 0
         || r.seeds > 100
         || r.ticks == 0
         || r.ticks > 2000
@@ -343,6 +606,13 @@ fn run(base: &FoundationWeightAsset, p: &BrainPhenotype, r: Request) -> Result<s
                 "zigzag",
                 "obstacle",
                 "toy",
+                "partial-obstacle",
+                "moving-obstacle",
+                "orbiting",
+                "fleeing",
+                "choice",
+                "toy-then-food",
+                "wait-then-food",
             ]
             .contains(&s.as_str())
         })
@@ -350,8 +620,13 @@ fn run(base: &FoundationWeightAsset, p: &BrainPhenotype, r: Request) -> Result<s
         return Err("invalid trial dimensions or scene".into());
     }
     let start = std::time::Instant::now();
-    let asset = memory_candidate(candidate(base, p, r.params)?, p, r.memory_aversion)?;
-    let compiled = phenotype(&asset)?;
+    let asset = scale_readouts(
+        memory_candidate(candidate(base, p, r.params)?, p, r.memory_aversion)?,
+        p,
+        r.readout_scale,
+        r.bearing_gain,
+    )?;
+    let (asset, compiled, template) = prepare_founder(asset, r.motor_heads)?;
     assert!(compiled
         .synapses()
         .iter()
@@ -363,19 +638,35 @@ fn run(base: &FoundationWeightAsset, p: &BrainPhenotype, r: Request) -> Result<s
     let mut trials = Vec::new();
     for seed in r.seed_start..r.seed_start + r.seeds as u64 {
         for scene in &r.scenes {
-            trials.push(trial(&asset, &trainer, seed, scene, r.ticks, r.trace)?);
+            trials.push(trial(
+                &template,
+                &trainer,
+                seed,
+                scene,
+                r.ticks,
+                r.trace,
+                r.variation,
+            )?);
         }
     }
     if let Some(path) = r.export {
         let mut f = std::fs::OpenOptions::new()
             .write(true)
             .create_new(true)
-            .open(path)?;
+            .open(&path)?;
         f.write_all(&asset.encode_canonical()?)?;
+        if r.motor_heads != 1 {
+            let record = template.world.organism_registry().iter().next().unwrap();
+            let mut packet = std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(format!("{path}.genome.json"))?;
+            packet.write_all(&serde_json::to_vec(record.genome())?)?;
+        }
     }
     Ok(
-        json!({"backend":"native-cpu", "base_digest":base.digest(),"candidate_digest":asset.digest(),
-        "assay_version":2,"params":r.params,"memory_aversion":r.memory_aversion,"ticks":r.ticks,"seconds":start.elapsed().as_secs_f64(),"trials":trials}),
+        json!({"backend":"native-cpu", "memory_cap":trainer.phenotype().candidate_decoder().memory_channel().map(|m|m.max_candidate_gain()), "base_digest":base.digest(),"candidate_digest":asset.digest(),
+        "assay_version":4,"motor_heads":r.motor_heads,"variation":r.variation,"readout_scale":r.readout_scale,"bearing_gain":r.bearing_gain,"params":r.params,"memory_aversion":r.memory_aversion,"ticks":r.ticks,"seconds":start.elapsed().as_secs_f64(),"trials":trials}),
     )
 }
 
@@ -384,6 +675,37 @@ fn main() -> Result<()> {
         .nth(1)
         .ok_or("usage: evolve_pursuit <experimental-foundation>; JSON requests on stdin")?;
     let base = FoundationWeightAsset::decode_canonical(&std::fs::read(path)?)?;
+    if std::env::args().nth(2).as_deref() == Some("--rebind-context") {
+        let path = std::env::args().nth(3).ok_or("context JSON required")?;
+        let evidence: serde_json::Value = serde_json::from_slice(&std::fs::read(path)?)?;
+        let (genome, dev): (BrainGenome, DevelopmentState) =
+            serde_json::from_value(evidence["construction_context"].clone())?;
+        let fresh = PhenotypeCompiler::compile_n2048_anchored_v2_graph(
+            genome,
+            dev,
+            base.manifest().sensor_profile(),
+        )?
+        .0;
+        let coordinates=fresh.synapses().iter().map(|s|json!({"source":s.source(),"target":s.target(),"kind":s.kind(),"route":s.route_index()})).collect::<Vec<_>>();
+        assert_eq!(serde_json::to_value(coordinates)?, evidence["synapses"]);
+        let rebound = FoundationWeightAsset::from_trained_weights(
+            &fresh,
+            base.weights().to_vec(),
+            base.manifest().training_stage(),
+        )?;
+        assert_eq!(rebound.weights(), base.weights());
+        let destination = std::env::args().nth(4).ok_or("new output path required")?;
+        std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(destination)?
+            .write_all(&rebound.encode_canonical()?)?;
+        eprintln!(
+            "rebound {} unchanged genetic weights to experimental memory cap",
+            rebound.weights().len()
+        );
+        return Ok(());
+    }
     let p = phenotype(&base)?;
     eprintln!(
         "ready: {:?}, {} neurons, {} synapses",
@@ -394,7 +716,7 @@ fn main() -> Result<()> {
     if std::env::args().nth(2).as_deref() == Some("--inspect") {
         println!(
             "{}",
-            json!({"weights":base.weights(),"synapses":p.synapses().iter().map(|s|
+            json!({"construction_context":construction_context(&base)?,"weights":base.weights(),"synapses":p.synapses().iter().map(|s|
             json!({"source":s.source(),"target":s.target(),"kind":s.kind(),"route":s.route_index()})
         ).collect::<Vec<_>>()})
         );
@@ -419,7 +741,7 @@ mod tests {
 
     fn base() -> FoundationWeightAsset {
         FoundationWeightAsset::decode_canonical(include_bytes!(
-            "../../../assets/foundations/experimental-anchored-v2-research.alife-foundation"
+            "../../../docs/experiments/astra-generalization-2026-11-13/pursuit-memory16-cap8.alife-foundation"
         ))
         .unwrap()
     }
@@ -486,14 +808,122 @@ mod tests {
     }
 
     #[test]
+    fn readout_scaling_preserves_recurrent_speech_and_memory_weights() {
+        let base = base();
+        let p = phenotype(&base).unwrap();
+        let edited = scale_readouts(base.clone(), &p, [0.5, 0.25], 8.).unwrap();
+        let mut changes = 0;
+        for ((syn, a), b) in p
+            .synapses()
+            .iter()
+            .zip(base.weights())
+            .zip(edited.weights())
+        {
+            if a.to_bits() != b.to_bits() {
+                changes += 1;
+                assert!(matches!(syn.kind(),CompiledSynapseKind::Decoder(c) if
+                    c.head()==DecoderHeadKind::ActionCandidate && matches!(c.family(),CandidateActionFamily::Approach|CandidateActionFamily::Ingest)));
+            }
+        }
+        assert!(changes > 0);
+        assert!(phenotype(&edited)
+            .unwrap()
+            .synapses()
+            .iter()
+            .zip(edited.weights())
+            .all(|(s, w)| s.genetic_weight().to_bits() == w.to_bits()));
+    }
+
+    #[test]
+    fn independent_manipulation_preserves_weights_and_reaches_native_sampler() {
+        let original = base();
+        let (asset, p, game) = prepare_founder(original.clone(), 2).unwrap();
+        assert_eq!(asset.weights(), original.weights());
+        assert_eq!(
+            p.candidate_decoder().factorized_motor_channels(&p).unwrap(),
+            vec![MotorChannel::Locomotion, MotorChannel::Manipulation]
+        );
+        let mask = StageTrainableMask::recurrent_only(&p).unwrap();
+        let trainer = CpuFoundationTrainer::new(p, asset, mask, AdamWConfig::default()).unwrap();
+        let result = trial(
+            &game,
+            &trainer,
+            2026112400,
+            "contact",
+            1,
+            true,
+            Variation::default(),
+        )
+        .unwrap();
+        let masks = result.trace[0]["action"]["motor_masks"].as_array().unwrap();
+        assert!(masks[0].as_u64().unwrap() > 0);
+        assert!(masks[2].as_u64().unwrap() > 0);
+        assert_eq!(masks[1], 0);
+    }
+
+    #[test]
+    fn zero_speed_control_has_no_actual_target_motion_after_rotation() {
+        let base = base();
+        let p = phenotype(&base).unwrap();
+        let mask = StageTrainableMask::recurrent_only(&p).unwrap();
+        let trainer =
+            CpuFoundationTrainer::new(p, base.clone(), mask, AdamWConfig::default()).unwrap();
+        let template = create_canonical_new_game_with_n2048_experimental_candidate(
+            &config(&base).unwrap(),
+            &base,
+        )
+        .unwrap();
+        let result = trial(
+            &template,
+            &trainer,
+            2026111300,
+            "receding",
+            3,
+            true,
+            Variation {
+                angle: std::f32::consts::FRAC_PI_2,
+                speed: 0.,
+                appearance: 1,
+            },
+        )
+        .unwrap();
+        assert_eq!(result.target_motion.len(), 3);
+        assert!(result.target_motion.iter().all(|r| r["translated"] == 0.0));
+        assert!((result.target_motion[0]["current"]["z"].as_f64().unwrap() - 2.5).abs() < 1e-6);
+    }
+
+    #[test]
     fn edible_and_nonfood_controls_have_identical_initial_visible_features() {
         let base = base();
         let p = phenotype(&base).unwrap();
         let mask = StageTrainableMask::recurrent_only(&p).unwrap();
         let trainer =
             CpuFoundationTrainer::new(p, base.clone(), mask, AdamWConfig::default()).unwrap();
-        let food = trial(&base, &trainer, 2026111300, "contact", 1, true).unwrap();
-        let toy = trial(&base, &trainer, 2026111300, "toy", 1, true).unwrap();
+        let template = create_canonical_new_game_with_n2048_experimental_candidate(
+            &config(&base).unwrap(),
+            &base,
+        )
+        .unwrap();
+        let food = trial(
+            &template,
+            &trainer,
+            2026111300,
+            "contact",
+            1,
+            true,
+            Variation::default(),
+        )
+        .unwrap();
+        let toy = trial(
+            &template,
+            &trainer,
+            2026111300,
+            "toy",
+            1,
+            true,
+            Variation::default(),
+        )
+        .unwrap();
         assert_eq!(food.trace[0]["candidates"], toy.trace[0]["candidates"]);
         for c in food.trace[0]["candidates"].as_array().unwrap() {
             if !c["target"]["entity"].is_null() {

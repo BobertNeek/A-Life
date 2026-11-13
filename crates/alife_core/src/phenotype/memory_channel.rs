@@ -37,7 +37,7 @@ impl MemoryChannelPlan {
             decoder_input_stride: CANDIDATE_FEATURE_COUNT as u32
                 + Self::TARGET_LATENT_WIDTH
                 + Self::FAMILY_VALUE_WIDTH,
-            max_candidate_gain: 0.5,
+            max_candidate_gain: 8.0,
             memory_decoder_synapse_count,
             canonical_digest: [0; 4],
         };
@@ -86,7 +86,7 @@ impl MemoryChannelPlan {
             || self.family_value_lane_start
                 != self.target_latent_lane_start + Self::TARGET_LATENT_WIDTH
             || self.decoder_input_stride != self.target_latent_lane_start + lane_width
-            || self.max_candidate_gain.to_bits() != 0.5_f32.to_bits()
+            || self.max_candidate_gain.to_bits() != 8.0_f32.to_bits()
             || self.memory_decoder_synapse_count < Self::MINIMUM_SYNAPSE_COUNT
             || !self
                 .memory_decoder_synapse_count
