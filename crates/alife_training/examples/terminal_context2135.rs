@@ -1,16 +1,23 @@
-//! Matched mixed toy→food lives on the exact exported pursuit-memory16 parent.
+//! Matched mixed toy→food lives on the exact exported two-head bearing4 asset+genome parent.
 //! No action forcing, target motion, teleport, neural reset or fabricated reward.
 use alife_core::*;
 use alife_runtime::canonical_preparation::foundation_construction_development;
 use alife_training::{AdamWConfig, StageTrainableMask, cpu::*};
 use alife_world::*;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+use std::path::Path;
+#[path = "support/terminal_evidence2135.rs"]
+mod evidence;
+use evidence::LocalEvidence;
 use serde_json::json;
 use std::io::{BufRead, Write};
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct Request {
+    parent: String,
+    evidence_id: String,
     seed: u64,
     ticks: usize,
     leadin: usize,
@@ -25,22 +32,61 @@ fn config(asset: &FoundationWeightAsset) -> Result<CanonicalNewGameConfig> {
     c.sensor_profile = asset.manifest().sensor_profile();
     Ok(c)
 }
-fn phenotype(asset: &FoundationWeightAsset) -> Result<BrainPhenotype> {
-    let game = create_canonical_new_game_with_n2048_experimental_candidate(&config(asset)?, asset)?;
-    let r = game.world.organism_registry().iter().next().unwrap();
+// Load the exported construction genome directly. No new chromosome mutation,
+// weight rebinding or reconstruction of a different founder is performed.
+fn prepare_parent(
+    asset: &FoundationWeightAsset,
+    genome: &CreatureGenome,
+) -> Result<(BrainPhenotype, CanonicalNewGame)> {
+    verify_terminal_genome2135(genome)?;
+    let embedded = genome
+        .n2048_foundation_candidate
+        .as_ref()
+        .ok_or("parent genome lacks foundation")?;
+    if embedded.encode_canonical()? != asset.encode_canonical()? {
+        return Err("genome/asset pair mismatch".into());
+    }
+    let mut game =
+        create_canonical_new_game_with_n2048_experimental_candidate(&config(asset)?, asset)?;
+    let record = game
+        .world
+        .organism_registry()
+        .iter()
+        .next()
+        .unwrap()
+        .clone();
+    let expressed = genome.express()?;
     let dev = foundation_construction_development(
-        &r.phenotype().brain_genome,
+        &expressed.brain_genome,
         &BrainCapacityClass::n2048(),
-        &r.phenotype().development_state_at(Tick::ZERO)?,
+        &expressed.development_state_at(Tick::ZERO)?,
     )?;
-    Ok(
-        PhenotypeCompiler::compile_n2048_experimental_foundation_candidate(
-            r.phenotype().brain_genome.clone(),
-            dev,
-            asset.clone(),
-        )?
-        .0,
-    )
+    let (compiled, _) = PhenotypeCompiler::compile_n2048_experimental_foundation_candidate(
+        expressed.brain_genome.clone(),
+        dev,
+        asset.clone(),
+    )?;
+    verify_terminal_parent2135(asset, &compiled)?;
+    if !compiled
+        .synapses()
+        .iter()
+        .zip(asset.weights())
+        .all(|(s, w)| s.genetic_weight().to_bits() == w.to_bits())
+    {
+        return Err("compiled parent weights changed".into());
+    }
+    game.world
+        .replace_organism_record_exact(WorldOrganismRecord::new(
+            record.organism_id(),
+            record.world_entity_id(),
+            genome.clone(),
+            expressed,
+            *record.biochemistry(),
+            record.birth_tick(),
+        )?)?;
+    game.creatures[0].weights.genetic_fixed_digest =
+        PortableAssetDigest::for_bytes(&serde_json::to_vec(genome)?).0;
+    Ok((compiled, game))
 }
 fn spawn(
     world: &mut HeadlessWorld,
@@ -85,20 +131,43 @@ fn spawn(
     )?;
     Ok(id)
 }
-fn run(asset: &FoundationWeightAsset, request: Request) -> Result<serde_json::Value> {
-    if !["off", "active", "zero", "mask"].contains(&request.arm.as_str())
+fn run(
+    asset: &FoundationWeightAsset,
+    genome: &CreatureGenome,
+    request: &Request,
+    evidence: &mut LocalEvidence,
+) -> Result<serde_json::Value> {
+    if request.parent != "pursuit-twohead-bearing4"
+        || !["off", "active", "zero", "mask"].contains(&request.arm.as_str())
         || !(1..=512).contains(&request.ticks)
         || request.leadin > 2400
     {
         return Err("invalid bounded assay request".into());
     }
-    verify_terminal_parent2135(asset)?;
-    let p = phenotype(asset)?;
+    let (p, mut game) = prepare_parent(asset, genome)?;
     let mask = StageTrainableMask::recurrent_only(&p)?;
     let trainer = CpuFoundationTrainer::new(p, asset.clone(), mask, AdamWConfig::default())?;
     assert_eq!(trainer.weights(), asset.weights());
-    let mut game =
-        create_canonical_new_game_with_n2048_experimental_candidate(&config(asset)?, asset)?;
+    let founder_bytes = serde_json::to_vec(&trainer.checkpoint())?;
+    evidence.save("FOUNDER-OPTIMIZER-BIRTH.json", &founder_bytes)?;
+    evidence.save("PROVENANCE.json",&serde_json::to_vec_pretty(&json!({
+        "schema":2135,"revision":"v4-full-parent","parent_sha256":format!("{:x}",Sha256::digest(asset.encode_canonical()?)),
+        "parent_native_digest":asset.digest(),"parent_manifest":asset.manifest(),
+        "construction_genome_sha256":format!("{:x}",Sha256::digest(serde_json::to_vec(genome)?)),
+        "motor_head_count":trainer.phenotype().cognitive_architecture().motor_head_count(),
+        "motor_channels":trainer.phenotype().candidate_decoder().factorized_motor_channels(trainer.phenotype())?,
+        "compiler_inputs_digest":trainer.phenotype().compiler_inputs_digest(),
+        "founder_seed":2026111701u64,"genome_and_development":"preserved in full native CP world record",
+        "compiled_phenotype_hash":trainer.phenotype().phenotype_hash(),
+        "source_hashes":{"assay":format!("{:x}",Sha256::digest(include_bytes!("terminal_context2135.rs"))),
+            "evidence":format!("{:x}",Sha256::digest(include_bytes!("support/terminal_evidence2135.rs"))),
+            "head":format!("{:x}",Sha256::digest(include_bytes!("../src/cpu/terminal_head.rs")))},
+        "local_only":true,"automatic_retry":false,"compile_commit":option_env!("ALIFE_ASSAY_GIT_COMMIT")
+    }))?)?;
+    evidence.save(
+        "PARENT-CONSTRUCTION-GENOME.json",
+        &serde_json::to_vec(genome)?,
+    )?;
     let old = game
         .world
         .organism_registry()
@@ -145,6 +214,14 @@ fn run(asset: &FoundationWeightAsset, request: Request) -> Result<serde_json::Va
         c.mask_new_context = request.arm == "mask";
         host.enable_terminal_context2135(c, &trainer)?;
     }
+    let birth = host.checkpoint(&trainer)?;
+    let birth_bytes = serde_json::to_vec(&birth)?;
+    evidence.remember_valid(birth_bytes.clone());
+    evidence.save("PREPARED-BIRTH.cp.json", &birth_bytes)?;
+    evidence.save(
+        "RECIPE.json",
+        &serde_json::to_vec_pretty(&birth.terminal_context2135)?,
+    )?;
     let first_hunger = host
         .world()
         .organism_registry()
@@ -166,6 +243,9 @@ fn run(asset: &FoundationWeightAsset, request: Request) -> Result<serde_json::Va
     let mut work = 0u64;
     let mut meal_hunger_deltas = Vec::new();
     let mut capacity_rejected = 0;
+    let mut insufficient_atp = 0;
+    let mut unfunded_admission_checks = 0u64;
+    let mut first_informative_saved = false;
     for tick in 0..request.ticks {
         // Prespecified environmental arrivals; never contingent on the selected action.
         if [64, 128, 192].contains(&tick) {
@@ -187,9 +267,32 @@ fn run(asset: &FoundationWeightAsset, request: Request) -> Result<serde_json::Va
                 },
             )?);
         }
+        // Retain the complete valid pre-step state after any declared arrival.
+        // This is evaluator I/O, not a creature input or additional decision.
+        evidence.remember_valid(serde_json::to_vec(&host.checkpoint(&trainer)?)?);
         let step = host.step(&trainer, 1.)?;
+        // Capture immediately after a committed step, before event serialization.
+        let committed_bytes = serde_json::to_vec(&host.checkpoint(&trainer)?)?;
+        evidence.remember_valid(committed_bytes.clone());
         for row in step.decisions {
             decisions += 1;
+            let consumed = row.patch.outcome().physical.contact == PhysicalContactKind::Consumed;
+            let informative = row.terminal_context2135.as_ref().is_some_and(|r| {
+                r.candidates.iter().any(|c| {
+                    c.consumed_source_count > 0 && c.desirability.is_some_and(|v| v != 0.0)
+                })
+            });
+            if consumed || (informative && !first_informative_saved) {
+                let name = format!("EVENT-{tick:04}-{decisions:04}");
+                evidence.save(&format!("{name}.cp.json"), &committed_bytes)?;
+                evidence.save(&format!("{name}.json"),&serde_json::to_vec(&json!({
+                    "consumed":consumed,"first_informative_context":informative && !first_informative_saved,
+                    "host_interval":tick,"decision":&row,"checkpoint":format!("{name}.cp.json")
+                }))?)?;
+                if informative {
+                    first_informative_saved = true;
+                }
+            }
             let frame = row.patch.pre_action().perception();
             let h = frame.homeostasis().drives.hunger;
             hunger_min = hunger_min.min(h);
@@ -206,6 +309,11 @@ fn run(asset: &FoundationWeightAsset, request: Request) -> Result<serde_json::Va
             }
             if let Some(r) = row.terminal_context2135 {
                 context_rows += 1;
+                insufficient_atp += usize::from(matches!(
+                    r.admission,
+                    TerminalAdmission2135::InsufficientAtp { .. }
+                ));
+                unfunded_admission_checks += u64::from(r.admission_check_unfunded_atp_q16);
                 work += r.reserved_work_units;
                 capacity_rejected += usize::from(r.capacity_rejected);
                 sourced_rows += r
@@ -219,6 +327,15 @@ fn run(asset: &FoundationWeightAsset, request: Request) -> Result<serde_json::Va
     }
     let cp = host.checkpoint(&trainer)?;
     let bytes = serde_json::to_vec(&cp)?;
+    evidence.remember_valid(bytes.clone());
+    evidence.save("FINAL.cp.json", &bytes)?;
+    evidence.save(
+        "FINAL-RECIPE.json",
+        &serde_json::to_vec_pretty(&cp.terminal_context2135)?,
+    )?;
+    let final_founder = serde_json::to_vec(&trainer.checkpoint())?;
+    evidence.save("FOUNDER-OPTIMIZER-FINAL.json", &final_founder)?;
+    assert_eq!(founder_bytes, final_founder);
     let restored = CpuCanonicalHost::from_checkpoint(serde_json::from_slice(&bytes)?, &trainer)?;
     assert_eq!(bytes, serde_json::to_vec(&restored.checkpoint(&trainer)?)?);
     assert_eq!(trainer.weights(), asset.weights());
@@ -227,22 +344,73 @@ fn run(asset: &FoundationWeightAsset, request: Request) -> Result<serde_json::Va
         .filter(|id| host.world().entity(**id).unwrap().consumed)
         .count();
     Ok(
-        json!({"schema":2135,"parent_sha256":"8f84afd6ac2ec575a8df61d18a0a18ac17296615a9ef7af7d22df416b3dd0ad7","seed":request.seed,"arm":request.arm,"gain":request.gain,"ticks":request.ticks,"leadin":request.leadin,"reverse_appearance":request.reverse_appearance,"alias":request.alias,"first_hunger":first_hunger,"hunger_min":hunger_min,"hunger_max":hunger_max,"meals":meals,"consumed_food":consumed_food,"spawned_food":food.len(),"meal_hunger_deltas":meal_hunger_deltas,"failed_ingest_containing_bundles":failed_ingest_bundles,"decisions":decisions,"context_rows":context_rows,"sourced_candidates":sourced_rows,"nonzero_deltas":deltas,"reserved_work_units":work,"capacity_rejected":capacity_rejected,"typed_cold_exact":true,"parent_weights_exact":true,"head_fixed_in_life":true,"long_ppo_calls":0}),
+        json!({"schema":2135,"parent_sha256":TERMINAL_PARENT_SHA256,"construction_genome_sha256":TERMINAL_GENOME_SHA256,"motor_head_count":2,"seed":request.seed,"arm":request.arm,"gain":request.gain,"ticks":request.ticks,"leadin":request.leadin,"reverse_appearance":request.reverse_appearance,"alias":request.alias,"first_hunger":first_hunger,"hunger_min":hunger_min,"hunger_max":hunger_max,"meals":meals,"consumed_food":consumed_food,"spawned_food":food.len(),"meal_hunger_deltas":meal_hunger_deltas,"failed_ingest_containing_bundles":failed_ingest_bundles,"decisions":decisions,"context_rows":context_rows,"sourced_candidates":sourced_rows,"nonzero_deltas":deltas,"reserved_work_units":work,"capacity_rejected":capacity_rejected,"insufficient_atp":insufficient_atp,"unfunded_admission_checks_atp_q16":unfunded_admission_checks,"typed_cold_exact":true,"parent_weights_exact":true,"head_fixed_in_life":true,"long_ppo_calls":0}),
     )
+}
+fn execute_request(
+    asset: &FoundationWeightAsset,
+    genome: &CreatureGenome,
+    root: &Path,
+    request: &Request,
+) -> Result<serde_json::Value> {
+    // Existing directories reject before any simulation, never resume/retry implicitly.
+    let mut evidence = LocalEvidence::begin(root, &request.evidence_id)?;
+    let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(
+        || -> Result<serde_json::Value> {
+            evidence.save("REQUEST.json", &serde_json::to_vec_pretty(request)?)?;
+            let summary = run(asset, genome, request, &mut evidence)?;
+            evidence.save(
+                "COMPLETED.json",
+                &serde_json::to_vec_pretty(&json!({
+                    "completed":true,"summary":&summary,"final_checkpoint":"FINAL.cp.json",
+                    "founder_optimizer":"FOUNDER-OPTIMIZER-FINAL.json","automatic_retry":false
+                }))?,
+            )?;
+            Ok(summary)
+        },
+    ));
+    let failure = match outcome {
+        Ok(Ok(summary)) => return Ok(summary),
+        Ok(Err(error)) => error.to_string(),
+        Err(_) => "assay panic; inspect retained native state; no automatic retry".into(),
+    };
+    let retention = evidence.retain_error_checkpoint();
+    let receipt = json!({"completed":false,"error":failure,"automatic_retry":false,
+        "last_valid_checkpoint_saved":retention.as_ref().is_ok_and(|saved| *saved),
+        "checkpoint_retention_error":retention.as_ref().err().map(ToString::to_string),
+        "last_valid_checkpoint":if retention.as_ref().is_ok_and(|saved| *saved){Some("ERROR-LAST-VALID.cp.json")}else{None}});
+    let receipt_error = evidence
+        .save("ERROR.json", &serde_json::to_vec_pretty(&receipt)?)
+        .err();
+    Err(format!("{failure}; LOCAL evidence: {}; retention: {retention:?}; error receipt write: {receipt_error:?}",evidence.directory().display()).into())
 }
 fn main() -> Result<()> {
     let path = std::env::args()
         .nth(1)
-        .ok_or("exact pursuit-memory16 asset required")?;
-    let asset = FoundationWeightAsset::decode_canonical(&std::fs::read(path)?)?;
-    verify_terminal_parent2135(&asset)?;
+        .ok_or("exact two-head bearing4 foundation required")?;
+    let genome_path = std::env::args()
+        .nth(2)
+        .ok_or("exact exported construction genome required")?;
+    let root = std::env::args()
+        .nth(3)
+        .unwrap_or_else(|| "terminal-context2135-LOCAL".into());
+    let asset_bytes = std::fs::read(path)?;
+    let genome_bytes = std::fs::read(genome_path)?;
+    if format!("{:x}", Sha256::digest(&asset_bytes)) != TERMINAL_PARENT_SHA256
+        || format!("{:x}", Sha256::digest(&genome_bytes)) != TERMINAL_GENOME_SHA256
+    {
+        return Err("current parent asset/genome bytes differ from pinned main export".into());
+    }
+    let asset = FoundationWeightAsset::decode_canonical(&asset_bytes)?;
+    let genome: CreatureGenome = serde_json::from_slice(&genome_bytes)?;
+    verify_terminal_genome2135(&genome)?;
     for line in std::io::stdin().lock().lines() {
         let r = serde_json::from_str::<Request>(&line?)
             .map_err(Into::into)
-            .and_then(|q| run(&asset, q));
+            .and_then(|q| execute_request(&asset, &genome, Path::new(&root), &q));
         match r {
             Ok(v) => println!("{v}"),
-            Err(e) => println!("{}", json!({"error":e.to_string()})),
+            Err(e) => println!("{}", json!({"error":e.to_string(),"automatic_retry":false})),
         };
         std::io::stdout().flush()?;
     }

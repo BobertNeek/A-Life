@@ -378,15 +378,18 @@ impl CpuCanonicalHost {
             ));
         }
         config.validate().map_err(CpuHostError::Preparation)?;
-        verify_terminal_parent2135(&founder.source_foundation)
+        verify_terminal_parent2135(&founder.source_foundation, founder.phenotype())
             .map_err(CpuHostError::Preparation)?;
+        for record in self.world.organism_registry().iter() {
+            verify_terminal_genome2135(record.genome()).map_err(CpuHostError::Preparation)?;
+        }
         self.terminal_context2135 = Some(config);
         Ok(())
     }
     fn validate_founder(&self, founder: &CpuFoundationTrainer) -> Result<(), CpuHostError> {
         if let Some(config) = &self.terminal_context2135 {
             config.validate().map_err(CpuHostError::Preparation)?;
-            verify_terminal_parent2135(&founder.source_foundation)
+            verify_terminal_parent2135(&founder.source_foundation, founder.phenotype())
                 .map_err(CpuHostError::Preparation)?;
         }
         if self.phenotype_hash != founder.phenotype().phenotype_hash()
@@ -478,7 +481,9 @@ impl CpuCanonicalHost {
             .collect::<Result<_, CpuHostError>>()?;
         Ok(CpuCanonicalCheckpoint {
             terminal_context2135: self.terminal_context2135.clone(),
-            schema_version: 2,
+            schema_version: terminal_host_checkpoint_schema2135(
+                self.terminal_context2135.is_some(),
+            ),
             phenotype_hash: self.phenotype_hash,
             founder_weight_digest: self.founder_weight_digest,
             sampling_seed: self.sampling_seed,
@@ -501,9 +506,12 @@ impl CpuCanonicalHost {
                 "version1 CPU checkpoint lacks tracked-object identity; exact private-life restore requires version2",
             ));
         }
-        if checkpoint.schema_version != 2
-            || checkpoint.world.config.brain_policy.policy != PolicyBackend::NeuralClosedLoopCpu
-        {
+        validate_terminal_host_checkpoint_schema2135(
+            checkpoint.schema_version,
+            checkpoint.terminal_context2135.is_some(),
+        )
+        .map_err(CpuHostError::State)?;
+        if checkpoint.world.config.brain_policy.policy != PolicyBackend::NeuralClosedLoopCpu {
             return Err(CpuHostError::State(
                 "not a versioned offline CPU checkpoint",
             ));
@@ -639,6 +647,11 @@ impl CpuCanonicalHost {
             sampling_counter: checkpoint.sampling_counter,
         };
         host.validate_founder(founder)?;
+        if host.terminal_context2135.is_some() {
+            for record in host.world.organism_registry().iter() {
+                verify_terminal_genome2135(record.genome()).map_err(CpuHostError::Preparation)?;
+            }
+        }
         Ok(host)
     }
     fn seal_all_residents(&mut self) -> Result<(), CpuHostError> {
@@ -943,28 +956,16 @@ impl CpuCanonicalHost {
             // Reserve the versioned worst-case research work before exporting
             // the bank or running any additional query. Default-off does none.
             let terminal_context2135 = if let Some(config) = &self.terminal_context2135 {
-                let count = recall
-                    .candidate_keys()
-                    .iter()
-                    .filter(|k| {
-                        k.query().action_family() == CandidateActionFamily::Approach
-                            && k.query().tracked_object_id().is_some()
-                    })
-                    .count();
-                let (_, debit) = reserve_terminal_work2135(r.memory.bank().len(), count)
-                    .map_err(CpuHostError::Preparation)?;
-                if activity
-                    .available_atp_q16
-                    .saturating_sub(activity.debit_atp_q16)
-                    < debit
-                {
-                    return Err(CpuHostError::State(
-                        "terminal research context exceeds available ATP",
-                    ));
-                }
                 Some(
-                    prepare_terminal2135(config, &r.memory, &recall)
-                        .map_err(CpuHostError::Preparation)?,
+                    prepare_terminal2135(
+                        config,
+                        &r.memory,
+                        &recall,
+                        activity
+                            .available_atp_q16
+                            .saturating_sub(activity.debit_atp_q16),
+                    )
+                    .map_err(CpuHostError::Preparation)?,
                 )
             } else {
                 None

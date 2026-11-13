@@ -8,7 +8,6 @@
 //! optimizer, eligibility update, ATP tariff, or host admission is implemented here.
 
 pub const SCHEMA: u16 = 1;
-pub const MAX_ABS_GAIN: f32 = 64.0;
 const MAGIC: [u8; 4] = *b"TC21";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -107,7 +106,7 @@ pub struct Receipt {
 
 impl Head {
     pub fn new(enabled: bool, gain: f32) -> Result<Self, Error> {
-        if !gain.is_finite() || gain.abs() > MAX_ABS_GAIN {
+        if !gain.is_finite() {
             return Err(Error::InvalidConfig);
         }
         Ok(Self { enabled, gain })
@@ -190,11 +189,21 @@ impl Head {
         if !desirability.is_finite() || !(-1.0..=1.0).contains(&desirability) {
             return Err(Error::InvalidInput);
         }
-        let y = (2.0 * self.gain * desirability).tanh();
+        // Preserve v1 arithmetic/bits whenever doubling gain is finite. Only
+        // extreme gains need the reordered product: finite gain * zero is zero,
+        // whereas (2 * MAX) * zero would produce NaN. Overflow after the
+        // multiplication by a nonzero input is valid saturation through tanh.
+        let scaled = if self.gain.abs() <= f32::MAX / 2.0 {
+            2.0 * self.gain * desirability
+        } else {
+            (self.gain * desirability) * 2.0
+        };
+        let y = scaled.tanh();
         let delta = 0.5 * y;
         let derivative_gain = desirability * (1.0 - y * y);
-        // Forward: 3 multiplications + tanh. Derivative: square, subtract, multiply.
-        work.head_scalar_primitives = 7;
+        // Forward: abs, comparison, 3 multiplications, tanh.
+        // Derivative: square, subtract, multiply. Both branches reserve9 units.
+        work.head_scalar_primitives = 9;
         receipt.applied = true;
         receipt.terminal_desirability = Some(desirability);
         receipt.delta = delta;
@@ -266,7 +275,9 @@ mod tests {
         }
         assert!(Head::from_bytes(&bytes[..10]).is_err());
         assert!(Head::new(true, f32::NAN).is_err());
-        assert!(Head::new(true, 65.0).is_err());
+        assert!(Head::new(true, 65.0).is_ok());
+        assert!(Head::new(true, f32::INFINITY).is_err());
+        assert!(Head::new(true, f32::NEG_INFINITY).is_err());
     }
     #[test]
     fn mutable_weight_rejects_transactionally() {
@@ -335,7 +346,7 @@ mod tests {
                     .evaluate(true, Some(x), work)
                     .unwrap();
                 assert!(r.delta.abs() <= 0.5);
-                assert_eq!(r.work.logical_units(), 647);
+                assert_eq!(r.work.logical_units(), 649);
             }
         }
         let r = Head::new(true, 16.0)
@@ -345,5 +356,80 @@ mod tests {
         assert_eq!(r.work.logical_units(), 640);
         assert!(Work::reader(65, 0).is_err());
         assert!(Work::reader(1, 10).is_err());
+    }
+    #[test]
+    fn all_finite_extremes_are_bounded_and_cold_exact() {
+        for gain in [
+            f32::MAX,
+            -f32::MAX,
+            f32::MAX / 2.0,
+            f32::from_bits((f32::MAX / 2.0).to_bits() + 1),
+            -0.0,
+            0.0,
+            f32::MIN_POSITIVE,
+            f32::from_bits(1),
+        ] {
+            for enabled in [false, true] {
+                let head = Head::new(enabled, gain).unwrap();
+                let decoded = Head::from_bytes(&head.to_bytes()).unwrap();
+                assert_eq!(decoded.gain().to_bits(), gain.to_bits());
+                assert_eq!(decoded.enabled(), enabled);
+            }
+            let head = Head::new(true, gain).unwrap();
+            for input in [
+                -1.0,
+                -0.01,
+                -f32::from_bits(1),
+                -0.0,
+                0.0,
+                f32::from_bits(1),
+                0.01,
+                1.0,
+            ] {
+                let r = head.evaluate(true, Some(input), Work::default()).unwrap();
+                assert!(r.delta.is_finite() && r.derivative_gain.is_finite());
+                assert!((-0.5..=0.5).contains(&r.delta));
+                if input == 0.0 {
+                    assert_eq!(r.delta, 0.0);
+                    assert_eq!(r.derivative_gain, 0.0);
+                }
+            }
+        }
+        for gain in [f32::MAX, -f32::MAX] {
+            let h = Head::new(true, gain).unwrap();
+            let r = h.evaluate(true, Some(1.0), Work::default()).unwrap();
+            assert_eq!(r.delta, 0.5 * gain.signum());
+            assert_eq!(r.derivative_gain, 0.0);
+            let (score, _) = h.apply(-0.0, true, Some(0.0), Work::default()).unwrap();
+            assert_eq!(score.to_bits(), (-0.0_f32).to_bits());
+        }
+    }
+    #[test]
+    fn normal_range_keeps_exact_v1_score_and_derivative_bits() {
+        for gain in [-64.0, -16.0, -0.0, 0.0, 0.125, 4.0, 16.0, 64.0] {
+            for input in [
+                -1.0,
+                -0.1,
+                -f32::from_bits(1),
+                -0.0,
+                0.0,
+                f32::from_bits(1),
+                0.001,
+                0.3,
+                1.0,
+            ] {
+                let y = (2.0_f32 * gain * input).tanh();
+                let r = Head::new(true, gain)
+                    .unwrap()
+                    .evaluate(true, Some(input), Work::default())
+                    .unwrap();
+                assert_eq!(r.delta.to_bits(), (0.5 * y).to_bits());
+                assert_eq!(
+                    r.derivative_gain.to_bits(),
+                    (input * (1.0 - y * y)).to_bits()
+                );
+                assert_eq!(r.work.head_scalar_primitives, 9);
+            }
+        }
     }
 }
