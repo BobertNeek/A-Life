@@ -10,3 +10,6 @@ pub use retained::*;
 mod tests;
 mod work;
 pub use work::*;
+
+mod position;
+pub use position::*;
