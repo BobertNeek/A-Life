@@ -360,7 +360,12 @@ fn idle_does_not_consume_a_measurement_or_advance_reference() {
         boundary: true,
         ..measured
     };
-    let resumed = forward2013(&m, *idle_tape.states.last().unwrap(), &[admitted.clone()]).unwrap();
+    let resumed = forward2013(
+        &m,
+        *idle_tape.states.last().unwrap(),
+        std::slice::from_ref(&admitted),
+    )
+    .unwrap();
     let direct = forward2013(&m, s, &[admitted]).unwrap();
     assert_eq!(resumed.states, direct.states);
     // A stationary interval has zero measured displacement, irrespective of stale action velocity.
@@ -390,7 +395,7 @@ fn inactive_capture_inputs_have_zero_adjoint_without_overflow() {
         occupancy: 1.,
         ..Default::default()
     };
-    let tape = forward2013(&m, start, &[i.clone()]).unwrap();
+    let tape = forward2013(&m, start, std::slice::from_ref(&i)).unwrap();
     let g = backward2013(&m, &tape, [1., 0., 0., 0.]).unwrap();
     assert_eq!(g.source_inputs[0][..5], [0.; 5]);
     assert_eq!(g.initial_state, [1., 0., 0., 0.]);
