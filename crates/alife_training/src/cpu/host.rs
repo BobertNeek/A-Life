@@ -101,6 +101,8 @@ pub struct CpuResidentCheckpoint {
 }
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CpuCanonicalCheckpoint {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub terminal_context2135: Option<TerminalContextConfig2135>,
     pub schema_version: u16,
     pub phenotype_hash: PhenotypeHash,
     pub founder_weight_digest: [u64; 4],
@@ -117,6 +119,7 @@ pub struct CpuCanonicalCheckpoint {
 /// chemistry, memories, predictor, neural traces, sleep, sequence and RNG counter.
 #[derive(Clone)]
 pub struct CpuCanonicalHost {
+    terminal_context2135: Option<TerminalContextConfig2135>,
     world: HeadlessWorld,
     creatures: Vec<CreatureSaveState>,
     phenotype_hash: PhenotypeHash,
@@ -127,6 +130,8 @@ pub struct CpuCanonicalHost {
 }
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct CpuCollectedDecision {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub terminal_context2135: Option<TerminalContextReceipt2135>,
     pub organism_id: OrganismId,
     /// Exact native sampling counter. Older diagnostic rows lack this evidence;
     /// they remain readable but cannot be admitted as cooperative shards.
@@ -244,6 +249,7 @@ impl CpuCanonicalHost {
             ));
         }
         let mut host = Self {
+            terminal_context2135: None,
             world,
             creatures,
             phenotype_hash: p.phenotype_hash(),
@@ -359,7 +365,30 @@ impl CpuCanonicalHost {
         *self = snapshot;
         Ok(())
     }
+    /// Opt-in only before the first decision. The complete candidate is the
+    /// exact parent foundation plus this separately persisted research recipe.
+    pub fn enable_terminal_context2135(
+        &mut self,
+        config: TerminalContextConfig2135,
+        founder: &CpuFoundationTrainer,
+    ) -> Result<(), CpuHostError> {
+        if self.sampling_counter != 0 || self.terminal_context2135.is_some() {
+            return Err(CpuHostError::State(
+                "terminal recipe can only be set before first decision",
+            ));
+        }
+        config.validate().map_err(CpuHostError::Preparation)?;
+        verify_terminal_parent2135(&founder.source_foundation)
+            .map_err(CpuHostError::Preparation)?;
+        self.terminal_context2135 = Some(config);
+        Ok(())
+    }
     fn validate_founder(&self, founder: &CpuFoundationTrainer) -> Result<(), CpuHostError> {
+        if let Some(config) = &self.terminal_context2135 {
+            config.validate().map_err(CpuHostError::Preparation)?;
+            verify_terminal_parent2135(&founder.source_foundation)
+                .map_err(CpuHostError::Preparation)?;
+        }
         if self.phenotype_hash != founder.phenotype().phenotype_hash()
             || self.founder_weight_digest != weight_digest(founder)?
         {
@@ -448,6 +477,7 @@ impl CpuCanonicalHost {
             })
             .collect::<Result<_, CpuHostError>>()?;
         Ok(CpuCanonicalCheckpoint {
+            terminal_context2135: self.terminal_context2135.clone(),
             schema_version: 2,
             phenotype_hash: self.phenotype_hash,
             founder_weight_digest: self.founder_weight_digest,
@@ -599,6 +629,7 @@ impl CpuCanonicalHost {
             }
         }
         let host = Self {
+            terminal_context2135: checkpoint.terminal_context2135.clone(),
             world,
             creatures,
             phenotype_hash: checkpoint.phenotype_hash,
@@ -909,6 +940,35 @@ impl CpuCanonicalHost {
                     "CPU neural work exceeds canonical ATP availability",
                 ));
             }
+            // Reserve the versioned worst-case research work before exporting
+            // the bank or running any additional query. Default-off does none.
+            let terminal_context2135 = if let Some(config) = &self.terminal_context2135 {
+                let count = recall
+                    .candidate_keys()
+                    .iter()
+                    .filter(|k| {
+                        k.query().action_family() == CandidateActionFamily::Approach
+                            && k.query().tracked_object_id().is_some()
+                    })
+                    .count();
+                let (_, debit) = reserve_terminal_work2135(r.memory.bank().len(), count)
+                    .map_err(CpuHostError::Preparation)?;
+                if activity
+                    .available_atp_q16
+                    .saturating_sub(activity.debit_atp_q16)
+                    < debit
+                {
+                    return Err(CpuHostError::State(
+                        "terminal research context exceeds available ATP",
+                    ));
+                }
+                Some(
+                    prepare_terminal2135(config, &r.memory, &recall)
+                        .map_err(CpuHostError::Preparation)?,
+                )
+            } else {
+                None
+            };
             let mut context = encode_cpu_frame(
                 p,
                 &frame,
@@ -932,8 +992,16 @@ impl CpuCanonicalHost {
                     .collect(),
             )?;
             context.microstep_count = u32::from(activity.microsteps);
-            let output = r.neural.advance(founder, context, &effects)?;
-            r.activity.remaining_atp_q16 = activity.available_atp_q16 - activity.debit_atp_q16;
+            let mut output = r.neural.advance(founder, context, &effects)?;
+            if let Some(receipt) = &terminal_context2135 {
+                apply_terminal2135(receipt, &mut output.candidate_logits)
+                    .map_err(CpuHostError::Preparation)?;
+            }
+            r.activity.remaining_atp_q16 = activity.available_atp_q16
+                - activity.debit_atp_q16
+                - terminal_context2135
+                    .as_ref()
+                    .map_or(0, |r| r.reserved_atp_q16);
             r.activity.source_frame_digest = frame.frame_digest().0;
             let sampling_counter = self.sampling_counter;
             let action = sample_cpu_joint_action(
@@ -1145,7 +1213,10 @@ impl CpuCanonicalHost {
                 cognitive.attention.budget_receipt.work_units,
                 u64::from(memory.exact_bucket_reads)
                     + u64::from(memory.neighbor_bucket_reads)
-                    + u64::from(memory.similarity_evaluations),
+                    + u64::from(memory.similarity_evaluations)
+                    + terminal_context2135
+                        .as_ref()
+                        .map_or(0, |r| r.reserved_work_units),
                 cognitive.concept.active_concepts.len() as u64,
                 cognitive.gap.active_gaps.len() as u64,
                 prediction.error.len() as u64,
@@ -1262,6 +1333,7 @@ impl CpuCanonicalHost {
                 .checked_add(1)
                 .ok_or(CpuHostError::State("sequence overflow"))?;
             decisions.push(CpuCollectedDecision {
+                terminal_context2135,
                 organism_id: id,
                 sampling_counter: Some(sampling_counter),
                 initial: output.initial,

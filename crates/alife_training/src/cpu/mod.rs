@@ -421,3 +421,6 @@ fn adam_coordinate(
 
 #[cfg(test)]
 mod hotpath_bench;
+
+mod terminal_context;
+pub use terminal_context::*;

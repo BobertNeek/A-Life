@@ -1,0 +1,19 @@
+
+running 14 tests
+test head::tests::cold_roundtrip_and_strict_validation ... ok
+test head::tests::bounded_effect_and_accounted_reader_work ... ok
+test head::tests::derivative_matches_finite_difference_and_zero_is_trainable ... ok
+test head::tests::off_nonapproach_unknown_and_zero_are_exact ... ok
+test head::tests::mutable_weight_rejects_transactionally ... ok
+test head::tests::public_config_validates_and_roundtrips ... ok
+test reader::native_tests::successful_preparation_and_noncontact_never_veto ... ok
+test reader::terminal_kernel::tests::counterbalanced_appearance_not_id ... ok
+test reader::terminal_kernel::tests::finite_bounded_and_budgeted ... ok
+test reader::terminal_kernel::tests::hunger_gates_relief_not_harm ... ok
+test reader::terminal_kernel::tests::repeat_exposure_preserves_sources_and_caps ... ok
+test reader::terminal_kernel::tests::unknown_is_not_neutral ... ok
+test tests::recipe_roundtrip_and_strict_identity ... ok
+test tests::reserve_is_bounded_and_capacity_failure_is_not_free ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
