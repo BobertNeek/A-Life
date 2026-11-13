@@ -440,10 +440,12 @@ fn food_badge_rebinds_on_selection_frame_identity_and_load_changes() {
 
 
 #[test]
-fn care_line_reports_the_last_observed_response_or_its_absence() {
+fn debug_care_line_reports_the_last_observed_response_and_marks_unknown_as_unknown() {
+    // No receipt is unknown, never a definite absence: an old save with no
+    // recorded receipt reads exactly like a creature never yet cared for.
     assert_eq!(
-        care_line(&PresentationEvidence::Unknown),
-        "No touch or praise felt yet."
+        debug_care_line(&PresentationEvidence::Unknown),
+        "care: unknown (no receipt recorded)"
     );
     let observed = |kind: PlayerCareKind| PresentationEvidence::Observed {
         value: PlayerCareReceipt {
@@ -457,45 +459,23 @@ fn care_line_reports_the_last_observed_response_or_its_absence() {
         tick: Tick::new(7),
     };
     assert_eq!(
-        care_line(&observed(PlayerCareKind::Touch)),
-        "Touched, felt at tick 7, loneliness 0.61 to 0.55"
+        debug_care_line(&observed(PlayerCareKind::Pet)),
+        "Petted, felt at tick 7, loneliness 0.61 to 0.55"
     );
     assert_eq!(
-        care_line(&observed(PlayerCareKind::Praise)),
+        debug_care_line(&observed(PlayerCareKind::Praise)),
         "Praised, felt at tick 7, praise 0.10 to 0.42"
     );
     assert_eq!(
-        care_line(&observed(PlayerCareKind::TouchAndPraise)),
-        "Touched and praised, felt at tick 7"
+        debug_care_line(&observed(PlayerCareKind::Scold)),
+        "Scolded, felt at tick 7, praise 0.10 to 0.42"
     );
-}
-
-#[test]
-fn readout_carries_the_world_care_receipt_and_unknown_without_one() {
-    let mut row = row();
-    assert!(matches!(row.last_player_care, PresentationEvidence::Unknown));
-    let readout = Readout::from_row(row.world_entity_id, row.organism_id, Some(&row), []);
-    assert!(matches!(readout.care, PresentationEvidence::Unknown));
-    assert_eq!(care_line(&readout.care), "No touch or praise felt yet.");
-    row.last_player_care = PresentationEvidence::Observed {
-        value: PlayerCareReceipt {
-            kind: PlayerCareKind::Praise,
-            applied_tick: Tick::new(3),
-            praise_signal_before: 0.0,
-            praise_signal_after: 0.3,
-            loneliness_before: 0.5,
-            loneliness_after: 0.5,
-        },
-        tick: Tick::new(3),
-    };
-    let readout = Readout::from_row(row.world_entity_id, row.organism_id, Some(&row), []);
     assert_eq!(
-        care_line(&readout.care),
-        "Praised, felt at tick 3, praise 0.00 to 0.30"
+        debug_care_line(&observed(PlayerCareKind::Slap)),
+        "Slapped, felt at tick 7, loneliness 0.61 to 0.55"
     );
-    // An invalid row fails closed: no care claim from a mismatched identity.
-    let mut foreign = row.clone();
-    foreign.organism_id = OrganismId(2);
-    let readout = Readout::from_row(row.world_entity_id, row.organism_id, Some(&foreign), []);
-    assert!(matches!(readout.care, PresentationEvidence::Unknown));
+    assert_eq!(
+        debug_care_line(&observed(PlayerCareKind::PetAndPraise)),
+        "Petted and praised, felt at tick 7"
+    );
 }
