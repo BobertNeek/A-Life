@@ -28,3 +28,6 @@ pub use joint_head::*;
 
 #[cfg(test)]
 mod joint_chain_tests;
+
+/// Detached, caller-supplied own-motion evidence; never a physical-outcome classifier.
+pub mod own_feedback;
