@@ -20,3 +20,11 @@ mod position_output;
 pub use position_output::*;
 mod position_readout_work;
 pub use position_readout_work::*;
+
+mod joint_policy;
+pub use joint_policy::{JointPolicy2054, JointSample2054};
+mod joint_head;
+pub use joint_head::*;
+
+#[cfg(test)]
+mod joint_chain_tests;
