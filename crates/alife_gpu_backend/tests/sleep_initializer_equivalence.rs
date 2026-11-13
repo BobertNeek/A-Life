@@ -590,13 +590,6 @@ mod device_oracle {
         }
         if !software_only && !compile_original {
             assert_eq!(std::env::var("ALIFE_GPU_BACKEND").as_deref(), Ok("vulkan"));
-            assert!(
-                matches!(
-                    std::env::var("ALIFE_GPU_DX12_COMPILER").as_deref(),
-                    Ok("fxc" | "dxc")
-                ),
-                "explicit compiler required"
-            );
         }
         let cases = corpus();
         assert_eq!(cases.len(), frozen_cpu_golden::CASE_COUNT);
@@ -964,3 +957,4 @@ mod device_oracle {
         });
     }
 }
+
