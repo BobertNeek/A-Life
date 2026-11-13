@@ -331,18 +331,16 @@ mod tests {
         };
         assert!(score2018(&h, [0.; 4], effect, 0.).is_err());
         let h = PositionHead2018::fresh([1.; 2], AdamWConfig::default()).unwrap();
-        assert!(
-            score2018(
-                &h,
-                [2., 0., 1., 1.],
-                PositionEffect2018 {
-                    translation: [0.; 2],
-                    angular: [0.; 2]
-                },
-                0.
-            )
-            .is_err()
-        );
+        assert!(score2018(
+            &h,
+            [2., 0., 1., 1.],
+            PositionEffect2018 {
+                translation: [0.; 2],
+                angular: [0.; 2]
+            },
+            0.
+        )
+        .is_err());
     }
 }
 fn digest2018<T: Serialize>(x: &T) -> Result<[u64; 4], TrainingError> {

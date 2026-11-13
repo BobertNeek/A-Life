@@ -110,16 +110,14 @@ fn explicit_zero_effect_kinds_and_bad_pairing() {
             [0.; 2]
         );
     }
-    assert!(
-        score_output2029(
-            &model([1.; 2]),
-            [0.; 4],
-            PositionEffectKind2029::Angular,
-            effect(PositionEffectKind2029::Translation),
-            0.
-        )
-        .is_err()
-    );
+    assert!(score_output2029(
+        &model([1.; 2]),
+        [0.; 4],
+        PositionEffectKind2029::Angular,
+        effect(PositionEffectKind2029::Translation),
+        0.
+    )
+    .is_err());
 }
 #[test]
 fn independent_history_cold_signed_and_atomic() {
@@ -154,19 +152,17 @@ fn independent_history_cold_signed_and_atomic() {
 fn overflow_and_tape_tamper_reject() {
     let mut h = model([f32::MAX; 2]);
     h.inner.gains = [f32::MAX, 1.];
-    assert!(
-        score_output2029(
-            &h,
-            [1., 1., 1., 1.],
-            PositionEffectKind2029::Translation,
-            PositionEffect2018 {
-                translation: [1., 0.],
-                angular: [0.; 2]
-            },
-            f32::MAX
-        )
-        .is_err()
-    );
+    assert!(score_output2029(
+        &h,
+        [1., 1., 1., 1.],
+        PositionEffectKind2029::Translation,
+        PositionEffect2018 {
+            translation: [1., 0.],
+            angular: [0.; 2]
+        },
+        f32::MAX
+    )
+    .is_err());
     let mut s = score_output2029(
         &model([1.; 2]),
         [0.2, 0.1, 1., 1.],
@@ -410,11 +406,9 @@ fn shared_source_batch_matches_single_scores() {
     }
     assert!(score_output_batch2029(&h, s, &kinds, &effects, &[]).is_err());
     assert!(score_output_batch2029(&h, [f32::NAN; 4], &[], &[], &[]).is_err());
-    assert!(
-        score_output_batch2029(&h, s, &[], &[], &[])
-            .unwrap()
-            .is_empty()
-    );
+    assert!(score_output_batch2029(&h, s, &[], &[], &[])
+        .unwrap()
+        .is_empty());
 }
 #[test]
 fn finite_dot_but_overflowing_old_projection_uses_stable_fallback() {
