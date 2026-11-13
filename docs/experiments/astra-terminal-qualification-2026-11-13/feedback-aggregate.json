@@ -1,0 +1,221 @@
+[
+  {
+    "label": "none",
+    "queued": null,
+    "decisions": 2,
+    "biological_rewards": [
+      -0.00487672071903944,
+      -0.004878795240074396
+    ],
+    "cold_exact": true,
+    "encoded_input_vs_none": [
+      {
+        "step": 0,
+        "changed": 0,
+        "max_abs_delta": 0.0
+      },
+      {
+        "step": 1,
+        "changed": 0,
+        "max_abs_delta": 0.0
+      }
+    ],
+    "resident_vs_none": {
+      "fast": {
+        "changed": 0,
+        "max_abs_delta": 0.0
+      },
+      "lifetime": {
+        "changed": 0,
+        "max_abs_delta": 0.0
+      },
+      "eligibility": {
+        "changed": 0,
+        "max_abs_delta": 0.0
+      }
+    },
+    "after_drive_delta_vs_none": {},
+    "after_hormone_delta_vs_none": {}
+  },
+  {
+    "label": "praise",
+    "queued": "Queued",
+    "decisions": 2,
+    "biological_rewards": [
+      0.05593247339129448,
+      -0.004878589417785406
+    ],
+    "cold_exact": true,
+    "encoded_input_vs_none": [
+      {
+        "step": 0,
+        "changed": 4,
+        "max_abs_delta": 0.469726435
+      },
+      {
+        "step": 1,
+        "changed": 1,
+        "max_abs_delta": 0.056938340000000004
+      }
+    ],
+    "resident_vs_none": {
+      "fast": {
+        "changed": 15656,
+        "max_abs_delta": 4.4177792e-05
+      },
+      "lifetime": {
+        "changed": 0,
+        "max_abs_delta": 0.0
+      },
+      "eligibility": {
+        "changed": 10422,
+        "max_abs_delta": 0.9531645
+      }
+    },
+    "after_drive_delta_vs_none": {
+      "brain_atp": 8.940696716308594e-08,
+      "curiosity": 0.03999999165534973,
+      "hunger": -1.7881393432617188e-07
+    },
+    "after_hormone_delta_vs_none": {
+      "adrenaline": 0.002540290355682373,
+      "dopamine": 0.16920000314712524
+    }
+  },
+  {
+    "label": "scold",
+    "queued": "Queued",
+    "decisions": 2,
+    "biological_rewards": [
+      -0.009973245672881603,
+      -0.005257143173366785
+    ],
+    "cold_exact": true,
+    "encoded_input_vs_none": [
+      {
+        "step": 0,
+        "changed": 4,
+        "max_abs_delta": 0.469726435
+      },
+      {
+        "step": 1,
+        "changed": 2,
+        "max_abs_delta": 0.047448620000000004
+      }
+    ],
+    "resident_vs_none": {
+      "fast": {
+        "changed": 15800,
+        "max_abs_delta": 5.4679485e-06
+      },
+      "lifetime": {
+        "changed": 0,
+        "max_abs_delta": 0.0
+      },
+      "eligibility": {
+        "changed": 7036,
+        "max_abs_delta": 0.1094841
+      }
+    },
+    "after_drive_delta_vs_none": {
+      "fear": 0.11520000547170639
+    },
+    "after_hormone_delta_vs_none": {
+      "adrenaline": 0.0023076534271240234,
+      "cortisol": 0.14100001752376556,
+      "learning_modulator": 0.0018461942672729492
+    }
+  },
+  {
+    "label": "pet",
+    "queued": "Queued",
+    "decisions": 2,
+    "biological_rewards": [
+      0.002361036604270339,
+      -0.0051336209289729595
+    ],
+    "cold_exact": true,
+    "encoded_input_vs_none": [
+      {
+        "step": 0,
+        "changed": 3,
+        "max_abs_delta": 0.11919308099999999
+      },
+      {
+        "step": 1,
+        "changed": 2048,
+        "max_abs_delta": 0.047073566
+      }
+    ],
+    "resident_vs_none": {
+      "fast": {
+        "changed": 15656,
+        "max_abs_delta": 3.8139688999999997e-06
+      },
+      "lifetime": {
+        "changed": 0,
+        "max_abs_delta": 0.0
+      },
+      "eligibility": {
+        "changed": 15640,
+        "max_abs_delta": 0.020561996
+      }
+    },
+    "after_drive_delta_vs_none": {
+      "loneliness": -0.1439998298883438
+    },
+    "after_hormone_delta_vs_none": {
+      "adrenaline": -0.002884507179260254,
+      "learning_modulator": -0.0023076534271240234,
+      "oxytocin": 0.10575002431869507,
+      "serotonin": 0.02820003032684326
+    }
+  },
+  {
+    "label": "slap",
+    "queued": "Queued",
+    "decisions": 2,
+    "biological_rewards": [
+      -0.009931206703186035,
+      -0.0048895166255533695
+    ],
+    "cold_exact": true,
+    "encoded_input_vs_none": [
+      {
+        "step": 0,
+        "changed": 3,
+        "max_abs_delta": 0.009535446999999999
+      },
+      {
+        "step": 1,
+        "changed": 17,
+        "max_abs_delta": 0.005095562000000001
+      }
+    ],
+    "resident_vs_none": {
+      "fast": {
+        "changed": 15944,
+        "max_abs_delta": 2.7612070000000008e-06
+      },
+      "lifetime": {
+        "changed": 0,
+        "max_abs_delta": 0.0
+      },
+      "eligibility": {
+        "changed": 7285,
+        "max_abs_delta": 0.016287034000000002
+      }
+    },
+    "after_drive_delta_vs_none": {
+      "brain_atp": -6.258487701416016e-07,
+      "fear": 0.006719999015331268,
+      "hunger": 8.344650268554688e-07,
+      "pain": 0.015360000543296337
+    },
+    "after_hormone_delta_vs_none": {
+      "adrenaline": 0.010782241821289062,
+      "cortisol": 0.012220010161399841,
+      "learning_modulator": 0.00035387277603149414
+    }
+  }
+]

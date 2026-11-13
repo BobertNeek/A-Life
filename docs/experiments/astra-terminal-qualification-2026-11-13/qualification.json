@@ -1,0 +1,37 @@
+{
+  "source_commit": "1a61583fb739ba89430982f6538f352f67fee79f",
+  "probe_commit": "1eea9adb",
+  "backend": "native CPU",
+  "build": "cargo build --release -p alife_training --features cpu-backend --example terminal_context2135",
+  "build_seconds": 167,
+  "binaries": {
+    "/workspace/bob-terminal-bin/terminal_context2135-v6": "c047732303b8d74ec448f55f9e70aad76660a42aa2c4cc450d546a43e7b74c32",
+    "/workspace/bob-terminal-bin/terminal_checkpoint_probe2135-v6": "23521f83960184a003f54ba159236c1a0ebf79d73733375e0664bc73d7d6b354",
+    "/workspace/bob-terminal-bin/terminal_feedback_probe2135-v6": "7e03788dbb556717e3300911ceb51d1eec4f28366ee0f9323805686a5478831a",
+    "/workspace/bob-terminal-bin/terminal_feedback_probe2135-v6-atp2": "b507481e668b4c4c5a41e58a4ae26f4fe02012cf326a1968a9668fba0a14ec84"
+  },
+  "local_receipts": "/workspace/bob-terminal-v6-LOCAL",
+  "logs": "/workspace/bob-qualification/v5",
+  "original_host_off_comparison": "Prepared ONLY; no original-host comparison life executed. No full-host original/new parity claim.",
+  "pilot": "Completed four matched256-step lives on fresh seed2026111801; all1/3 foods consumed. Zero terminal source/delta. Experimental, not selected or trained.",
+  "provenance_issue": "Real consumption with non-Ingest representative creates no Ingest/Consumed bank source. Do not reclassify the other action family as Ingest; channel-specific provenance requires a deliberate shared-source change.",
+  "low_atp_fixture": "First fixture failed before decision due to record reconstruction losing resident authority; failure checkpoint/error retained. Corrected with_biology_mut ATP0.1 fixture completes2 steps, cold exact, but both reads Admitted. Natural256-step enabled pilots subsequently establish69 InsufficientAtp abstentions each with continuation.",
+  "feedback": "Five matched2-step restored-birth arms; all native full-state cold roundtrips exact. Aggregate includes sensing input count changes and fast/eligibility differences vsNone. These are immediate pathways, not learned meaning or action-specific credit.",
+  "raw_state_uploaded": false,
+  "living_prey": "No living prey fixture here. Pursuit scenes use moving Food; no attack/kill/Agent consumption capability is claimed.",
+  "parent_identity": {
+    "foundation_sha256": "ec710f2176ae4cfccdd342953c7778385f1880efc7a0216ca5412aad68d6628c",
+    "genome_sha256": "5c63a675c89be9195de6b2bdedfc51a0f6f95fa11917ef8db6b75492bba025f7"
+  },
+  "evolution_working_parent": {
+    "name": "pursuit-twohead-contact20",
+    "merge_commit": "e49da8ffeaae0462d6db4b105102ed552f3f5f56",
+    "pr": 346,
+    "source_commit": "4b9f2b2843573004d27bfca4160c85403eb05e8f",
+    "foundation_sha256": "d83a995e802e41b8e17799b0871f75d9ede35f95850049777323112e636654d1",
+    "genome_sha256": "557da394c045d0b4353009c842825677aa7505f636d6252b20f67bfe0c3a5189",
+    "edit": "bearing4 plus20 on Ingest source1839/contact lane18; count2 genome preserved.",
+    "paired_cases": "2026112700-2709;11food+1toy scenes each,256intervals; identical per-scene food success98/110; failed Ingest bundles3062->2093; toyIngest1596->922; matched mealintervals5470->5822(+6.4%).",
+    "limits": "Selection follows earlier contact tuning; ten-case fresh paired evaluation, not universal or statistically proven dominance. Later PR347 navigation alternative101/110 was rejected due partial-obstacle regression6->2; contact20 retained."
+  }
+}

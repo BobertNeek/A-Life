@@ -1,0 +1,91 @@
+[
+  {
+    "arm": "off",
+    "initial_energy": 0.24939455,
+    "final_energy": 0.35999677,
+    "initial_atp": 0.37470844,
+    "final_atp": 0.43208602,
+    "final_health": 1.0,
+    "final_bank_records": 44,
+    "final_consumed_records": 0,
+    "events": [
+      {
+        "interval": 116,
+        "contact": "Consumed",
+        "representative_family": "Inspect",
+        "joint_families": [
+          "Approach",
+          "Ingest",
+          "Inspect"
+        ]
+      }
+    ],
+    "founder_optimizer_unchanged": true
+  },
+  {
+    "arm": "zero",
+    "initial_energy": 0.24939455,
+    "final_energy": 0.2690183,
+    "initial_atp": 0.37470844,
+    "final_atp": 0.38785508,
+    "final_health": 1.0,
+    "final_bank_records": 57,
+    "final_consumed_records": 0,
+    "events": [
+      {
+        "interval": 129,
+        "contact": "Consumed",
+        "representative_family": "Approach",
+        "joint_families": [
+          "Approach",
+          "Ingest"
+        ]
+      }
+    ],
+    "founder_optimizer_unchanged": true
+  },
+  {
+    "arm": "active",
+    "initial_energy": 0.24939455,
+    "final_energy": 0.2690183,
+    "initial_atp": 0.37470844,
+    "final_atp": 0.38785508,
+    "final_health": 1.0,
+    "final_bank_records": 57,
+    "final_consumed_records": 0,
+    "events": [
+      {
+        "interval": 129,
+        "contact": "Consumed",
+        "representative_family": "Approach",
+        "joint_families": [
+          "Approach",
+          "Ingest"
+        ]
+      }
+    ],
+    "founder_optimizer_unchanged": true
+  },
+  {
+    "arm": "mask",
+    "initial_energy": 0.24939455,
+    "final_energy": 0.2690183,
+    "initial_atp": 0.37470844,
+    "final_atp": 0.38785508,
+    "final_health": 1.0,
+    "final_bank_records": 57,
+    "final_consumed_records": 0,
+    "events": [
+      {
+        "interval": 129,
+        "contact": "Consumed",
+        "representative_family": "Approach",
+        "joint_families": [
+          "Approach",
+          "Ingest"
+        ]
+      }
+    ],
+    "founder_optimizer_unchanged": true
+  }
+]

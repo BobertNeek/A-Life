@@ -1,0 +1,26 @@
+[
+  {
+    "case": "off",
+    "exit": 0,
+    "stdout": "{\"full_host_cold_exact\":true,\"schema\":2}\n",
+    "stderr": ""
+  },
+  {
+    "case": "active",
+    "exit": 0,
+    "stdout": "{\"full_host_cold_exact\":true,\"schema\":3}\n",
+    "stderr": ""
+  },
+  {
+    "case": "schema2-with-head",
+    "exit": 1,
+    "stdout": "",
+    "stderr": "Error: State(\"prototype version2 terminal checkpoint is ambiguous; automatic migration is unsupported\")\n"
+  },
+  {
+    "case": "schema3-no-head",
+    "exit": 1,
+    "stdout": "",
+    "stderr": "Error: State(\"version3 CPU checkpoint is missing its terminal head\")\n"
+  }
+]
