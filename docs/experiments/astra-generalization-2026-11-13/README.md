@@ -104,6 +104,31 @@ incorrect). Later experiments soften the Ingest contact readout now that it need
 not win the global contest, while preserving distance penalties. No sampler, world legality or reward rule was
 changed to make these scores succeed.
 
+## Navigation follow-up after contact20
+
+The V1 profile uses an identity sensing rotation even when the physical body
+turns. Its candidate cosine therefore describes a world axis, not forward gaze.
+The earlier +4 cosine edit can help a layout while introducing a compass bias.
+Native traces of seed2026113002 showed 91 locomotion-target switches in the
+partial-obstacle case and 116 in the food/toy case across256 decisions. Both
+lives stalled without a meal. `navigation-hard-trace` reproduces these traces.
+
+Eight small three-case navigation variants were tested from contact20. Removing
+the extra cosine weight and adding16 to source1776's distance weight won14/15
+meals versus12/15 in the pilot. Ten new cases2026113100–3109 then gave101/110
+meals versus97/110 for contact20: moving-obstacle success rose6→9 and food/toy
+choice5→10, but partial-obstacle success fell6→2. All eight basic/sequential food
+categories stayed10/10. Failed Ingest bundles rose2206→2292 and toy selections
+872→996. Across91 cases both completed, meal intervals were4966 versus4936.
+
+This is a useful alternative, not a clean successor: it exchanges obstacle
+strengths and increases nonfood attempts. **Contact20 remains the shared parent.**
+The exact alternative request is `params:[0,16,0,0,0,0], bearing_gain:-4,
+motor_heads:2` on its exported foundation. The evidence archive includes every
+pilot and paired case. No sensor coordinates, target labels, world rules, or
+runtime scoring were changed. Target-specific consequence memory and persistent
+choice are more promising next mechanisms than a stronger universal direction bias.
+
 ## Memory cap experiment
 
 The memory readout is capped at0.5 in the current compiler. Raising genetic
