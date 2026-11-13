@@ -2281,7 +2281,7 @@ impl WorldSaveState {
                     record.organism_id().raw() == *id && record.lifecycle().is_alive()
                 })
             }) || event.energy != 0.0
-                || event.damage != 0.0
+                || (event.damage != 0.0 && event.damage != 0.02)
                 || event.temperature_stress != 0.0
                 || event.nutrition != 0.0
                 || event.play_stimulation != 0.0

@@ -499,6 +499,7 @@ fn calibrate_inherited_founder_biochemistry(
             .with_waking_recovery(allele)?
             .with_health_distress(allele)?
             .with_player_reward(allele)?
+            .with_social_disapproval_v1(allele)?
             .with_play_stimulation(allele)?;
     }
     Ok(())

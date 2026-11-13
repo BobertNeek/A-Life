@@ -526,6 +526,19 @@ impl BiochemicalGraphChromosome {
         self.validate_contract()?;
         Ok(self)
     }
+    /// Opt in a fresh inherited graph to social disapproval, distinct from injury.
+    pub fn with_social_disapproval_v1(
+        mut self,
+        side: AlleleSide,
+    ) -> Result<Self, ScaffoldContractError> {
+        let homolog = match side {
+            AlleleSide::Maternal => &mut self.maternal,
+            AlleleSide::Paternal => &mut self.paternal,
+        };
+        *homolog = homolog.clone().with_social_disapproval_v1()?;
+        self.validate_contract()?;
+        Ok(self)
+    }
     pub fn with_player_reward(mut self, side: AlleleSide) -> Result<Self, ScaffoldContractError> {
         let homolog = match side {
             AlleleSide::Maternal => &mut self.maternal,

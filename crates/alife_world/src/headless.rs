@@ -1733,6 +1733,27 @@ impl HeadlessWorld {
         source: Vec3f,
         praise: bool,
     ) -> Result<(), ScaffoldContractError> {
+        self.queue_player_interaction_v1(
+            organism,
+            source,
+            if praise {
+                crate::PlayerInteractionV1::Praise
+            } else {
+                crate::PlayerInteractionV1::Pet
+            },
+        )
+        .map(|_| ())
+    }
+
+    /// Queue a bounded local experience. Delivery is at the next biological
+    /// boundary, not an authenticated verdict on a previous action.
+    pub fn queue_player_interaction_v1(
+        &mut self,
+        organism: OrganismId,
+        source: Vec3f,
+        kind: crate::PlayerInteractionV1,
+    ) -> Result<crate::PlayerInteractionQueueOutcomeV1, ScaffoldContractError> {
+        let praise = kind.is_social();
         source.validate()?;
         let record = self
             .organism_registry
@@ -1758,16 +1779,24 @@ impl HeadlessWorld {
         {
             return Err(ScaffoldContractError::InvalidActionDecision);
         }
+        // New vocal disapproval reaches biology only through actual hearing.
+        // Zero hearing is an accepted but unperceived input, not psychic stress.
+        let received_social = record
+            .embodiment()
+            .sensor_gain(SensorCapability::Hearing)
+            .clamp(0.0, 1.0);
+        if kind == crate::PlayerInteractionV1::Scold && received_social == 0.0 {
+            return Ok(crate::PlayerInteractionQueueOutcomeV1::NoReceivedDose);
+        }
         let event = self
             .pending_player_care
             .entry(organism.raw())
             .or_insert_with(BodyEventDelta::zero);
-        if praise {
-            event.player_reward = 1.0;
-        } else {
-            event.social_contact = 0.25;
+        kind.apply(event);
+        if kind == crate::PlayerInteractionV1::Scold {
+            event.social_disapproval_v1 = received_social;
         }
-        Ok(())
+        Ok(crate::PlayerInteractionQueueOutcomeV1::Queued)
     }
 
     pub fn habitat_authority(&self) -> &HabitatAuthority {
@@ -3816,7 +3845,7 @@ impl HeadlessWorld {
                 .get(OrganismId(*id))
                 .is_some_and(|record| record.lifecycle().is_alive())
                 || event.energy != 0.0
-                || event.damage != 0.0
+                || (event.damage != 0.0 && event.damage != 0.02)
                 || event.temperature_stress != 0.0
                 || event.nutrition != 0.0
                 || event.play_stimulation != 0.0
@@ -4114,6 +4143,15 @@ impl HeadlessWorld {
                             &obstacles,
                         )?;
                     }
+                }
+                // The received vocal dose is available to every grounded profile,
+                // not only profiles that request the terrain/nonvisual helper.
+                if let Some(event) = self.pending_player_care.get(&organism_id.raw()) {
+                    sensory.channels.auditory_acoustic[2] = event.social_disapproval_v1;
+                    let touch_gain =
+                        embodiment.map_or(1.0, |body| body.sensor_gain(SensorCapability::Touch));
+                    sensory.channels.tactile_contact[0] = sensory.channels.tactile_contact[0]
+                        .max((event.damage * touch_gain).clamp(0.0, 1.0));
                 }
                 let heard = self
                     .speech
@@ -8144,6 +8182,7 @@ fn combine_body_event(total: BodyEventDelta, event: BodyEventDelta) -> BodyEvent
         // Contact is exposure in this interval, not a count of reporting channels.
         social_contact: total.social_contact.max(event.social_contact),
         player_reward: (total.player_reward + event.player_reward).clamp(0.0, 1.0),
+        social_disapproval_v1: total.social_disapproval_v1.max(event.social_disapproval_v1),
         play_stimulation: (total.play_stimulation + event.play_stimulation).clamp(0.0, 1.0),
         perceived_novelty: (total.perceived_novelty + event.perceived_novelty).clamp(0.0, 1.0),
         investigation: (total.investigation + event.investigation).clamp(0.0, 1.0),
@@ -12214,6 +12253,7 @@ mod task_6_factorized_motor_tests {
             nutrition: 0.04,
             social_contact: 0.05,
             player_reward: 0.06,
+            social_disapproval_v1: 0.0,
             play_stimulation: 0.07,
             perceived_novelty: 0.08,
             investigation: 0.09,
@@ -15164,3 +15204,6 @@ fn motion_sphere_entry(start: Vec3f, end: Vec3f, center: Vec3f, radius: f32) -> 
 mod body_clearance_tests;
 
 mod translation_budget;
+
+#[cfg(test)]
+mod player_interaction_v1_tests;
