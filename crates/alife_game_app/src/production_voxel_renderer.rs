@@ -4640,7 +4640,7 @@ fn spawn_fvr05_production_ux_ui(app: &mut App) {
 }
 
 const V0_PLAYER_CONTROL_HINTS: &str =
-    "Click Select | Hold Carry | Wheel Zoom | Edges Pan | E Food | C Pet | J Play | K Praise | Enter Speak | Space Pause | F1 Help";
+    "Click Select | Hold Carry | Wheel Zoom | Edges Pan | E Food | C Pet | J Play | K Praise | V Scold | B Slap | Enter Speak | Space Pause | F1 Help";
 
 fn spawn_v0_player_experience_ui(app: &mut App) {
     status_hud::spawn(app.world_mut());
@@ -4691,7 +4691,7 @@ fn sync_v0_player_control_strip(
         return;
     }
     let mut text = if ux.show_help {
-        "F1 Close help | Space Pause | 1 1x | 2 Max | 3 Headless max (closes window) | S Save | L Load\nClick Select | E Food on ground | G Move food | C Pet | J Offer play | K Praise reward\nEnter Speak | Y Lineage | Arrows/Edges Pan | Home Find creature | F Follow | PgUp/PgDn Next creature | R Reset view\nF6 Speech text | F7 Narration | F8 Translation | F3 Debug".to_string()
+        "F1 Close help | Space Pause | 1 1x | 2 Max | 3 Headless max (closes window) | S Save | L Load\nClick Select | E Food on ground | G Move food | C Pet | J Offer play | K Praise reward | V Scold | B Slap\nEnter Speak | Y Lineage | Arrows/Edges Pan | Home Find creature | F Follow | PgUp/PgDn Next creature | R Reset view\nF6 Speech text | F7 Narration | F8 Translation | F3 Debug".to_string()
     } else {
         V0_PLAYER_CONTROL_HINTS.to_string()
     };
@@ -4759,13 +4759,22 @@ fn sync_v0_player_control_strip(
             text.push_str("\nPet queued.");
         } else if ux.last_action == care_dock::Action::Praise.queued_status() {
             text.push_str("\nPraise queued.");
+        } else if ux.last_action == care_dock::Action::Scold.queued_status() {
+            text.push_str("\nScold queued.");
+        } else if ux.last_action == care_dock::Action::Slap.queued_status() {
+            text.push_str("\nSlap queued.");
         } else if ux.last_action.starts_with("Plaything offered") {
             text.push_str("\nPlaything offered. The creature can investigate or ignore it.");
         }
         if ux.settings.paused
-            && [care_dock::Action::Pet, care_dock::Action::Praise]
-                .into_iter()
-                .any(|action| ux.last_action == action.queued_status())
+            && [
+                care_dock::Action::Pet,
+                care_dock::Action::Praise,
+                care_dock::Action::Scold,
+                care_dock::Action::Slap,
+            ]
+            .into_iter()
+            .any(|action| ux.last_action == action.queued_status())
         {
             text.push_str(" Resume with Space to deliver the stimulus.");
         }
