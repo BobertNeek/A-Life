@@ -128,7 +128,7 @@ pub struct CpuCanonicalHost {
     sampling_seed: u32,
     sampling_counter: u32,
 }
-#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, serde::Deserialize)]
 pub struct CpuCollectedDecision {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub terminal_context2135: Option<TerminalContextReceipt2135>,
@@ -145,6 +145,44 @@ pub struct CpuCollectedDecision {
     pub biological_reward: f32,
     pub patch: ExperiencePatch,
 }
+#[path = "terminal_row_wire.rs"]
+mod terminal_row_wire;
+
+impl serde::Serialize for CpuCollectedDecision {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        // Preserve the original flat field order and omissions without cloning
+        // resident-derived arrays. Enabled rows are diagnostic-only envelopes.
+        #[derive(serde::Serialize)]
+        struct Flat<'a> {
+            #[serde(skip_serializing_if = "Option::is_none")]
+            terminal_context2135: &'a Option<TerminalContextReceipt2135>,
+            organism_id: &'a OrganismId,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            sampling_counter: &'a Option<u32>,
+            initial: &'a crate::TrainingInitialState,
+            replay_tick: &'a crate::TrainingReplayTick,
+            action: &'a crate::PpoJointAction,
+            final_features: &'a Vec<f32>,
+            brain_work: &'a BrainWorkCounters,
+            biological_reward: &'a f32,
+            patch: &'a ExperiencePatch,
+        }
+        let flat = Flat {
+            terminal_context2135: &self.terminal_context2135,
+            organism_id: &self.organism_id,
+            sampling_counter: &self.sampling_counter,
+            initial: &self.initial,
+            replay_tick: &self.replay_tick,
+            action: &self.action,
+            final_features: &self.final_features,
+            brain_work: &self.brain_work,
+            biological_reward: &self.biological_reward,
+            patch: &self.patch,
+        };
+        terminal_row_wire::serialize(&flat, self.terminal_context2135.is_some(), serializer)
+    }
+}
+
 pub struct CpuCanonicalStep {
     pub tick_before: Tick,
     pub tick_after: Tick,
