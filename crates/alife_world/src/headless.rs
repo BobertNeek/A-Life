@@ -1297,13 +1297,37 @@ pub struct HeadlessActionBiologyReceipt {
     pub biology_after: BiochemistryState,
 }
 
-/// Which player-care dose the world applied. Touch and praise are distinct
-/// stimuli; both can be queued before one tick, so both is its own kind.
+/// Which player-care dose the world applied. The four decided actions
+/// (Cassidy + Bob prime, Nov 13, 2026): praise and pet are positive,
+/// scold and slap are negative. Praise/scold are social feedback (the
+/// player-reward channel); pet/slap are distinct physical interactions
+/// (the social-contact channel). Both can be queued before one tick, so
+/// both-positive is its own kind. Scold and slap are not producible yet:
+/// no dock action queues them and `BodyEventDelta` validation holds the
+/// two channels in [0, 1], so no negative dose can reach the recorder
+/// until the scold/slap slice permits one. The kinds exist here so the
+/// presentation (nod/flinch, word, debug line) is already built for all
+/// four and the follow-up slice only has to produce the dose.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PlayerCareKind {
-    Touch,
+    /// Positive physical interaction. Was `Touch` in slice 2; the serde
+    /// alias keeps branch-era saves loading.
+    #[serde(alias = "Touch")]
+    Pet,
     Praise,
-    TouchAndPraise,
+    Scold,
+    Slap,
+    /// Both positive doses queued before one tick. Was `TouchAndPraise`.
+    #[serde(alias = "TouchAndPraise")]
+    PetAndPraise,
+}
+
+impl PlayerCareKind {
+    /// Whether the dose was a negative judgement (scold/slap). The
+    /// presentation flinches for these and nods for the positive kinds.
+    pub fn is_negative(self) -> bool {
+        matches!(self, Self::Scold | Self::Slap)
+    }
 }
 
 /// World-owned record that a queued player-care dose was actually applied to
@@ -1311,7 +1335,9 @@ pub enum PlayerCareKind {
 /// entered its biochemistry and its sensory frame on the same tick boundary.
 /// The before/after values are the two measured channels read around the
 /// biology advance that consumed the dose. Only the kind-relevant pair is
-/// ever displayed: praise moves the praise signal, touch moves loneliness.
+/// ever shown, and only in the debug readout: praise/scold move the praise
+/// signal, pet/slap move loneliness. The user-facing game shows the
+/// creature's response, not these numbers.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct PlayerCareReceipt {
     pub kind: PlayerCareKind,
@@ -1799,8 +1825,11 @@ impl HeadlessWorld {
         Ok(())
     }
 
-    /// The last player-care dose this organism actually felt, if any. `None`
-    /// means no queued touch or praise has been applied to it yet.
+    /// The last player-care dose this organism actually felt, if any.
+    /// `None` means the world holds no recorded receipt for it — unknown,
+    /// not a confirmed absence. A save from before receipts existed and a
+    /// creature never yet cared for both read as `None`; neither may be
+    /// presented as "this creature felt nothing".
     pub fn last_player_care(&self, organism: OrganismId) -> Option<PlayerCareReceipt> {
         self.last_player_care.get(&organism.raw()).copied()
     }
@@ -1818,14 +1847,36 @@ impl HeadlessWorld {
         before: &BiochemistryState,
         after: &BiochemistryState,
     ) {
+        // The kind comes from the applied dose's signs, not from which
+        // button was pressed: only an actually-consumed dose is recorded.
+        // Negative doses are not producible yet (see PlayerCareKind), so
+        // the scold/slap arms are the slot the follow-up slice fills; they
+        // are reachable the moment a negative dose is permitted. A
+        // both-negative or mixed-sign dose is ambiguous — which single kind
+        // the creature felt is a decision for that slice, not a guess here
+        // — so it records nothing rather than misattribute the moment.
+        // (The dose is validated finite upstream, so NaN cannot reach the
+        // comparisons below.)
         let kind = match (
-            applied.player_reward > 0.0,
-            applied.social_contact > 0.0,
+            applied.player_reward.partial_cmp(&0.0),
+            applied.social_contact.partial_cmp(&0.0),
         ) {
-            (true, true) => PlayerCareKind::TouchAndPraise,
-            (true, false) => PlayerCareKind::Praise,
-            (false, true) => PlayerCareKind::Touch,
-            (false, false) => return,
+            (Some(std::cmp::Ordering::Greater), Some(std::cmp::Ordering::Greater)) => {
+                PlayerCareKind::PetAndPraise
+            }
+            (Some(std::cmp::Ordering::Greater), Some(std::cmp::Ordering::Equal)) => {
+                PlayerCareKind::Praise
+            }
+            (Some(std::cmp::Ordering::Equal), Some(std::cmp::Ordering::Greater)) => {
+                PlayerCareKind::Pet
+            }
+            (Some(std::cmp::Ordering::Less), Some(std::cmp::Ordering::Equal)) => {
+                PlayerCareKind::Scold
+            }
+            (Some(std::cmp::Ordering::Equal), Some(std::cmp::Ordering::Less)) => {
+                PlayerCareKind::Slap
+            }
+            _ => return,
         };
         self.last_player_care.insert(
             organism.raw(),
