@@ -71,3 +71,14 @@ Tests cover zero/off semantics, typed negative controls, all 48 parameter and
 eight endpoint finite differences, malformed input rejection, atomic Adam
 failure, head cold round-trips, bounds and logical work. Full native replay,
 GPU, live body and full-host compatibility are outside this detached layer.
+
+
+## Detached command-conditional joint numerical primitives
+
+`JointPolicy2054` is an explicit new two-channel policy kernel. It accepts a validated base vector, disjoint nonempty locomotion/orientation masks, forced-slot metadata and a rectangular pair-potential table. It does not install a production sampler, change motor-channel count, or authenticate live observations. Public candidate/category/pair indices are checked. `JointSample2054` separates the observable representative and selected locomotion/orientation from the diagnostic discarded base-global index. Likelihood credits the marginalized motor category and selected pair, never the discarded index.
+
+At fixed base, base-global f32 operation ordering and every Other representative are independent of pair potential. Pair probabilities and analytic logprob/entropy adjoints use stable f64 math. These are ideal normalized probabilities, not exact counts of a finite uniform-word grid. Zero pair potential does not restore the old motor-tuple tape. Stop/Hold remain ordinary candidates; no null calibration or physical safety is implied.
+
+`JointHead2056` supplies a detached bounded hidden feature followed by a signed output amplitude, with3 signed effect coefficients and separately aged4-coordinate transactional Adam. Inputs are positional context4 and nominal effects6 (translation, body delta, gaze delta), not raw vision or privileged future coordinates. Caller-supplied values are not collector-authenticated. The private tape is bound to the exact forward parameter bits. Zero amplitude leaves the amplitude gradient live; updates do not touch existing heads or learned state. Standalone cold bytes are not a host checkpoint migration.
+
+Both remain under the existing default-off `experimental-decision-context` feature. No host/collector/PPO/World/GPU route, model-binding revision, ATP/work admission, or full recurrent training is provided. Physical outcomes, learned desirability and null calibration require separate qualification. No existing candidate or trained life is promoted.
