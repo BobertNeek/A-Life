@@ -135,6 +135,87 @@ fn player_care_is_local_gene_controlled_and_survives_pending_save() {
 }
 
 #[test]
+fn player_care_receipt_records_touch_and_praise_on_tick_and_survives_save() {
+    use alife_world::{PlayerCareKind, PresentationEvidence};
+    let game = phase3_game(1);
+    let mut world = game.world;
+    let (organism, entity) = world.organism_entity_ids()[0];
+    let position = world.entity(entity).unwrap().position;
+    assert_eq!(world.last_player_care(organism), None);
+    assert!(matches!(
+        world.presentation_snapshot().organisms.remove(0).last_player_care,
+        PresentationEvidence::Unknown
+    ));
+    // A touch is felt on the tick that consumes it, not on the queue.
+    let mut control = world.clone();
+    world.queue_player_care(organism, position, false).unwrap();
+    assert_eq!(world.last_player_care(organism), None);
+    let tick = world.try_advance_tick().unwrap();
+    control.try_advance_tick().unwrap();
+    let receipt = world.last_player_care(organism).expect("touch receipt");
+    assert_eq!(receipt.kind, PlayerCareKind::Touch);
+    assert_eq!(receipt.applied_tick, tick);
+    let untouched_loneliness = control
+        .organism_registry()
+        .get(organism)
+        .unwrap()
+        .biochemistry()
+        .homeostasis
+        .drives
+        .loneliness;
+    assert!(receipt.loneliness_after <= untouched_loneliness);
+    match world.presentation_snapshot().organisms.remove(0).last_player_care {
+        PresentationEvidence::Observed {
+            value,
+            tick: observed_tick,
+        } => {
+            assert_eq!(value, receipt);
+            assert_eq!(observed_tick, receipt.applied_tick);
+        }
+        PresentationEvidence::Unknown => panic!("expected an observed care receipt"),
+    }
+    // A praise overwrites the touch receipt: last only.
+    world.queue_player_care(organism, position, true).unwrap();
+    let tick = world.try_advance_tick().unwrap();
+    let receipt = world.last_player_care(organism).expect("praise receipt");
+    assert_eq!(receipt.kind, PlayerCareKind::Praise);
+    assert_eq!(receipt.applied_tick, tick);
+    assert!(receipt.praise_signal_after > receipt.praise_signal_before);
+    // Both queued before one tick record TouchAndPraise.
+    world.queue_player_care(organism, position, false).unwrap();
+    world.queue_player_care(organism, position, true).unwrap();
+    world.try_advance_tick().unwrap();
+    assert_eq!(
+        world.last_player_care(organism).unwrap().kind,
+        PlayerCareKind::TouchAndPraise
+    );
+    // A rejected queue records nothing and leaves the last receipt alone.
+    let before = world.last_player_care(organism).unwrap();
+    assert!(world
+        .queue_player_care(organism, alife_core::Vec3f::new(100.0, 0.0, 0.0), true)
+        .is_err());
+    world.try_advance_tick().unwrap();
+    assert_eq!(world.last_player_care(organism).unwrap(), before);
+    // The receipt survives a save/load round trip.
+    let save = alife_world::PortableSaveFile::from_headless_world(
+        "care-receipt",
+        &world,
+        alife_world::RuntimeConfig::deterministic_default(
+            world.seed(),
+            alife_core::BrainScaleTier::Nano512,
+        ),
+        alife_world::AssetManifest::empty(),
+        game.creatures,
+    )
+    .unwrap();
+    let restored = alife_world::PortableSaveFile::from_json_str(&serde_json::to_string(&save).unwrap())
+        .unwrap()
+        .restore_headless_world()
+        .unwrap();
+    assert_eq!(restored.last_player_care(organism), Some(before));
+}
+
+#[test]
 fn food_and_toy_variants_have_physical_gene_controlled_and_persistent_effects() {
     use alife_core::{
         ActionCommand, ActionKind, ActionTarget, AlleleSide, BiochemicalSourceLocus,
