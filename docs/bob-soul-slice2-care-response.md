@@ -256,3 +256,108 @@ follow-up noted for the v0 "Last response" line).
   identity line shows `#<stable_id>` (a technical label) and the count
   line shows a bare number — both pre-existing, both noted, neither
   touched here.
+
+## Slice 3 — Scold/slap dock actions + receipt integration
+
+Ports Bob prime's merged four-action backend (PR #338, head `b69137ce`,
+plus the main follow-up fix `e5649c9e6` "Fix positive player cue
+delivery across grounded sensor profiles") onto `bob/soul`, and puts the
+two negative actions on the dock. The presentation already handled all
+four kinds (nod/flinch + one-word bubble + colour); this slice only has
+to produce the doses and generalize the receipt.
+
+### Backend port (integration)
+
+- Verbatim from #338 (`b69137ce`): `player_interaction.rs` (new),
+  `lib.rs`, `biochemistry.rs`, `biochemical_graph.rs`,
+  `evolutionary_genetics.rs`, `new_game.rs`, the unit test module
+  `headless/player_interaction_v1_tests.rs`, the core integration tests,
+  and the design doc `docs/experiments/player-interaction-v1.md` — the
+  doc and the world integration tests are taken at `e5649c9e6`, which
+  supersedes #338's versions of both.
+- `headless.rs` and `persistence.rs` are hand-merged (NEEDS-MERGE-EYES in
+  the slice MANIFEST): bob/soul's receipt machinery is kept; #338's queue
+  fn (with the Scold hearing gate), save damage bound, sensory projection
+  (in `e5649c9e6`'s form, including the deletion of the old observer
+  pending-read block), `combine_body_event` line, test literal, and test
+  module registration are taken. The three consumption sites keep
+  bob/soul's `applied_care` form — the merged `body_event` is identical
+  either way; the variable is what the recorder reads.
+- Verified before the port: `eded459` (bob/soul's branch point) equals
+  `d25c2c2` (#338's base) on all seven pre-existing #338 files, and
+  bob/soul never touched five of them, so those five are a clean verbatim
+  port. `persistence.rs` differs by exactly the receipt wire field plus
+  the one damage-bound line.
+
+### Receipt: one kind -> a set of kinds
+
+`PlayerCareKind` loses the `PetAndPraise` variant. `PlayerCareReceipt`
+now carries `kinds: PlayerCareKindSet` (a bitmask struct, `Copy`, serde
+as a sequence of kind names) instead of `kind: PlayerCareKind`. The
+field carries `#[serde(alias = "kind")]`, and the set deserializer
+accepts one old single-kind string (`"Pet"`/`"Touch"`, `"Praise"`,
+`"Scold"`, `"Slap"`, `"PetAndPraise"`/`"TouchAndPraise"` -> pet +
+praise) or a sequence — slice-2-era saves with receipts still load
+(pinned by a test that rewrites a real receipt to the old shape).
+
+The recorder derives the set from the four fields of the consumed
+player-only dose — `player_reward > 0` -> Praise, `social_contact > 0`
+-> Pet, `social_disapproval_v1 > 0` -> Scold, `damage > 0` -> Slap —
+never from which button was pressed and never from the merged body
+event (a collision's damage is not a slap, a peer's touch is not a
+pet). Each field maps to exactly one kind, so a mixed dose records the
+set it carried; no dose is unattributable, and the old
+both-negative/mixed-sign ambiguity is gone. A zero dose still records
+nothing. This is exactly what #338's design doc assigns to this slice:
+"A receipt's kind set must derive from the consumed player-only dose,
+never merged action Damage. Mixed inputs need a set/mask, not a single
+exclusive label."
+
+The presentation answers with one kind per moment, from
+`PlayerCareKindSet::display_kind`: negative dominates (slap outranks
+scold, either outranks pet or praise); among positives a pet outranks
+praise, preserving the follow-up's pet-and-praise -> "play". The rule
+is interpretive and documented as such; the debug readout carries the
+full set. The nod/flinch pulse and the word bubble both read the
+display kind; an empty set (which the recorder never stores) shows
+nothing.
+
+### Dock
+
+- Order: Food, Pet, Toy, Praise, Scold, Slap, Speech. Scold/Slap need a
+  living creature selected, like Pet/Praise. Dock width grows 296 -> 408
+  (seven 48px buttons, 8px gaps, 16px padding, 8px border).
+- Keys: Scold V (verbal), Slap B (blow) — B is free app-wide; V is also
+  bound in the lineage UI, but the two are mutually exclusive at runtime
+  (world shortcuts are blocked while the Lineage Library is open),
+  bottom row next to C. Labels are the single words "Scold"/"Slap".
+  Icons: new `scold.png` (speech bubble with "!") and `slap.png`
+  (striking hand with motion lines) in `assets/ui/care_dock/`, same
+  64x64 off-white-on-transparent style as the existing glyphs; they
+  need a visual check on screen.
+- Dispatch goes through `queue_player_interaction_v1` for all four care
+  actions (`CarePort::care` now takes the kind and returns the queue
+  outcome; the runtime gains `provide_player_interaction_v1`; the old
+  `provide_player_care` stays for `foundation_training.rs`). `Queued`
+  -> `Evidence::Queued` (marker + "queued" status as before);
+  `NoReceivedDose` -> `Evidence::None` (no marker, no "queued" claim,
+  `last_action` is a neutral sentence visible only in the debug panel,
+  not an error). Errors still -> `Evidence::Rejected`.
+- Hints and help strip gain "V Scold | B Slap"; the status strip gains
+  "Scold queued." / "Slap queued." arms and the paused resume hint
+  covers all four care actions.
+
+### Debug readout (supersedes the follow-up's "Numbers" section)
+
+`status_hud::debug_care_line` now renders sets: one kind shows its
+kind-relevant channel exactly as before; a mixed set names every kind
+and shows both channels (it spans both). Unknown is unchanged.
+
+### What this slice does not do
+
+- No brains, neural, genome, learning, or chemistry changes (the #338
+  port is integration of already-merged backend code, not new brains
+  work). No edits to main or to Bob prime's branch.
+- No new HUD text or numeric readouts at the user. The v0 "Last
+  response" dead machinery and the load-confirm/error strings are still
+  open (see the follow-up's "Menu survey" notes).

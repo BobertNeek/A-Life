@@ -43,8 +43,12 @@ Present and substantial — the simulation is serious:
   including `PlayerReward`, `PlayStimulation`, `SocialContact`.
 - **God hand:** exists — skinned hand, Hover/Point/Grab/Carry/Release;
   world-owned carry/drop of creatures and objects (one at a time).
-- **Care dock:** exists — Food, Pet, Toy, Praise, Speech. Praise routes
-  through the `PlayerReward` emitter into an endocrine slot.
+- **Care dock:** exists — Food, Pet, Toy, Praise, Scold, Slap, Speech.
+  Praise routes through the `PlayerReward` emitter into an endocrine slot;
+  scold is a one-shot social-disapproval source (fear/cortisol where the
+  creature's graph expresses it), slap is a real Damage 0.02 through
+  nociception/injury. All four queue through `queue_player_interaction_v1`
+  and record an applied-kind receipt on the consuming tick.
 - **Language:** real but tiny — an 18-word bounded codebook, token IDs,
   player/creature/teacher utterances, a perception-only nursery.
 - **World:** authoritative — perception, legality, candidates, execution,
@@ -144,17 +148,25 @@ Missing or unproven — the game around the simulation is thin:
   the receipt covers all four decided actions (praise/pet/scold/slap);
   no receipt renders as unknown, never as "nothing felt".**
   See `docs/bob-soul-slice2-care-response.md` ("Follow-up" section).
-- **Slice 3 — Half-life chemistry.** Add per-species half-life to the
+- **Slice 3 — Scold/slap dock actions + receipt integration.** Put the two
+  negative actions on the dock (keys V/B, single-word labels, no new HUD
+  text) through Bob prime's merged four-action backend (PR #338), and
+  generalize the receipt from one kind to the set of kinds the consumed
+  player-only dose actually carried. Touches `alife_world` (backend port +
+  receipt set) + `alife_game_app` (dock, presentation). Design:
+  `docs/bob-soul-slice2-care-response.md` ("Slice 3" section). Status:
+  prepared in this pass; tests written for Codex/CI.
+- **Slice 4 — Half-life chemistry.** Add per-species half-life to the
   biochemical graph (Creatures-style), with conversion from the current
   `decay_retention` and unit tests. Needs a semantics decision: how
   half-life and decay_retention interact. Pure `alife_core`; CI-run tests.
-- **Slice 4 — Familiarity record.** A first-class, observable disposition
+- **Slice 5 — Familiarity record.** A first-class, observable disposition
   toward the player, built from interaction history (PlayerReward,
   SocialContact, oxytocin, loneliness). Shown, never faked.
-- **Slice 5 — Village seed.** Smallest believable belief unit. Design
+- **Slice 6 — Village seed.** Smallest believable belief unit. Design
   with Cassidy before writing code — this one decides the shape of the
   god game.
-- **Slice 6 — Perf measurement.** Measure 50 creatures at 20 FPS on
+- **Slice 7 — Perf measurement.** Measure 50 creatures at 20 FPS on
   supported hardware; fix the measured bottleneck. Needs hardware
   (Codex / Cassidy's PC); not schedulable from this VM.
 
