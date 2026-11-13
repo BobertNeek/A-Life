@@ -1297,6 +1297,31 @@ pub struct HeadlessActionBiologyReceipt {
     pub biology_after: BiochemistryState,
 }
 
+/// Which player-care dose the world applied. Touch and praise are distinct
+/// stimuli; both can be queued before one tick, so both is its own kind.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PlayerCareKind {
+    Touch,
+    Praise,
+    TouchAndPraise,
+}
+
+/// World-owned record that a queued player-care dose was actually applied to
+/// a creature's biology. This is the creature's response as a fact: the dose
+/// entered its biochemistry and its sensory frame on the same tick boundary.
+/// The before/after values are the two measured channels read around the
+/// biology advance that consumed the dose. Only the kind-relevant pair is
+/// ever displayed: praise moves the praise signal, touch moves loneliness.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct PlayerCareReceipt {
+    pub kind: PlayerCareKind,
+    pub applied_tick: Tick,
+    pub praise_signal_before: f32,
+    pub praise_signal_after: f32,
+    pub loneliness_before: f32,
+    pub loneliness_after: f32,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct HeadlessMotorChannelReceipt {
     pub command: ChannelCommand,
@@ -1454,6 +1479,9 @@ pub struct HeadlessWorld {
     speech: SpatialSpeechBus,
     last_creature_utterance_ticks: BTreeMap<u64, Tick>,
     pending_player_care: BTreeMap<u64, BodyEventDelta>,
+    /// Last applied player-care receipt per organism. Last-only history, not
+    /// a pending obligation: a rejected queue never erases it.
+    last_player_care: BTreeMap<u64, PlayerCareReceipt>,
     player_hold: Option<player_hand::PlayerHold>,
     tracked_objects: TrackedObjectRegistry,
     habitats: HabitatAuthority,
@@ -1679,6 +1707,7 @@ impl HeadlessWorld {
             speech: SpatialSpeechBus::default(),
             last_creature_utterance_ticks: BTreeMap::new(),
             pending_player_care: BTreeMap::new(),
+            last_player_care: BTreeMap::new(),
             player_hold: None,
             tracked_objects: TrackedObjectRegistry::new(
                 seed,
@@ -1768,6 +1797,47 @@ impl HeadlessWorld {
             event.social_contact = 0.25;
         }
         Ok(())
+    }
+
+    /// The last player-care dose this organism actually felt, if any. `None`
+    /// means no queued touch or praise has been applied to it yet.
+    pub fn last_player_care(&self, organism: OrganismId) -> Option<PlayerCareReceipt> {
+        self.last_player_care.get(&organism.raw()).copied()
+    }
+
+    /// Record that a queued player-care dose was applied to this organism's
+    /// biology on `tick`. Call immediately after the biology advance that
+    /// consumed the dose; `before`/`after` are the biochemistry states around
+    /// that advance. A zero applied delta records nothing: the dose never
+    /// arrived, so there is no response to report.
+    fn record_player_care_receipt(
+        &mut self,
+        organism: OrganismId,
+        applied: BodyEventDelta,
+        tick: Tick,
+        before: &BiochemistryState,
+        after: &BiochemistryState,
+    ) {
+        let kind = match (
+            applied.player_reward > 0.0,
+            applied.social_contact > 0.0,
+        ) {
+            (true, true) => PlayerCareKind::TouchAndPraise,
+            (true, false) => PlayerCareKind::Praise,
+            (false, true) => PlayerCareKind::Touch,
+            (false, false) => return,
+        };
+        self.last_player_care.insert(
+            organism.raw(),
+            PlayerCareReceipt {
+                kind,
+                applied_tick: tick,
+                praise_signal_before: before.homeostasis.hormones.extension[0],
+                praise_signal_after: after.homeostasis.hormones.extension[0],
+                loneliness_before: before.homeostasis.drives.loneliness,
+                loneliness_after: after.homeostasis.drives.loneliness,
+            },
+        );
     }
 
     pub fn habitat_authority(&self) -> &HabitatAuthority {
@@ -2042,13 +2112,11 @@ impl HeadlessWorld {
                             .copied()
                             .unwrap_or_else(BodyEventDelta::zero),
                     );
-                    let body_event = combine_body_event(
-                        body_event,
-                        candidate
-                            .pending_player_care
-                            .remove(&organism_id.raw())
-                            .unwrap_or_else(BodyEventDelta::zero),
-                    );
+                    let applied_care = candidate
+                        .pending_player_care
+                        .remove(&organism_id.raw())
+                        .unwrap_or_else(BodyEventDelta::zero);
+                    let body_event = combine_body_event(body_event, applied_care);
                     let unlocalized_damage = body_event.damage;
                     // Stationary/body-only intervals receive the same actual
                     // surface-contact dose as action intervals, exactly once.
@@ -2086,6 +2154,11 @@ impl HeadlessWorld {
                         response.applied_body_event = body_event;
                         responses.push(response);
                     }
+                    let care_biology_before = *candidate
+                        .organism_registry
+                        .get(organism_id)
+                        .ok_or(ScaffoldContractError::InvalidId)?
+                        .biochemistry();
                     candidate.advance_biology_with_thermal_candidate(
                         organism_id,
                         next_tick,
@@ -2093,6 +2166,18 @@ impl HeadlessWorld {
                         None,
                         relief,
                     )?;
+                    let care_biology_after = *candidate
+                        .organism_registry
+                        .get(organism_id)
+                        .ok_or(ScaffoldContractError::InvalidId)?
+                        .biochemistry();
+                    candidate.record_player_care_receipt(
+                        organism_id,
+                        applied_care,
+                        next_tick,
+                        &care_biology_before,
+                        &care_biology_after,
+                    );
                     #[cfg(test)]
                     {
                         advanced_organism = true;
@@ -2873,6 +2958,13 @@ impl HeadlessWorld {
             digest.write_bytes(b"player-care-v1");
             digest.write_bytes(
                 &serde_json::to_vec(&self.pending_player_care)
+                    .map_err(|_| ScaffoldContractError::InvalidId)?,
+            );
+        }
+        if !self.last_player_care.is_empty() {
+            digest.write_bytes(b"player-care-receipt-v1");
+            digest.write_bytes(
+                &serde_json::to_vec(&self.last_player_care)
                     .map_err(|_| ScaffoldContractError::InvalidId)?,
             );
         }
@@ -3680,6 +3772,7 @@ impl HeadlessWorld {
             ecology: self.ecology.clone(),
             audible_utterances: self.speech.snapshot(),
             pending_player_care: self.pending_player_care.clone(),
+            last_player_care: self.last_player_care.clone(),
             ingestion_observations: self.ingestion_observations.clone(),
             player_hold: self.player_hold.clone(),
             last_creature_utterance_ticks: self
@@ -3846,6 +3939,7 @@ impl HeadlessWorld {
             ecology: state.ecology.clone(),
             speech: SpatialSpeechBus::restore(state.audible_utterances.clone(), state.tick)?,
             pending_player_care: state.pending_player_care.clone(),
+            last_player_care: state.last_player_care.clone(),
             player_hold: state.player_hold.clone(),
             last_creature_utterance_ticks: state
                 .last_creature_utterance_ticks
@@ -5047,12 +5141,11 @@ impl HeadlessWorld {
             ..BodyEventDelta::zero()
         };
         let body_event = combine_body_event(ambient_event, action_and_hazard_event);
-        let mut body_event = combine_body_event(
-            body_event,
-            self.pending_player_care
-                .remove(&bundle.organism_id.raw())
-                .unwrap_or_else(BodyEventDelta::zero),
-        );
+        let applied_care = self
+            .pending_player_care
+            .remove(&bundle.organism_id.raw())
+            .unwrap_or_else(BodyEventDelta::zero);
+        let mut body_event = combine_body_event(body_event, applied_care);
         if let Some((novelty, _)) = novelty {
             body_event.perceived_novelty = novelty;
         }
@@ -5096,6 +5189,11 @@ impl HeadlessWorld {
         let (body_event, relief) =
             self.thermal_interval_event(body_event, initial_thermal.max(final_thermal));
         body_event.validate_contract()?;
+        let care_biology_before = *self
+            .organism_registry
+            .get(bundle.organism_id)
+            .ok_or(ScaffoldContractError::InvalidId)?
+            .biochemistry();
         if let Some(recovery) = awake_rest {
             // The typed entry validated the inherited recipe and neutral posture.
             // Every realized segment counts, including cancelled net paths. Fresh
@@ -5142,6 +5240,13 @@ impl HeadlessWorld {
             .get(bundle.organism_id)
             .ok_or(ScaffoldContractError::InvalidId)?
             .biochemistry();
+        self.record_player_care_receipt(
+            bundle.organism_id,
+            applied_care,
+            outcome_tick,
+            &care_biology_before,
+            &biology_after,
+        );
 
         let mut touched = BTreeSet::new();
         let mut channel_observations = Vec::new();
@@ -5352,17 +5457,22 @@ impl HeadlessWorld {
         };
         action_result.body_event.social_contact =
             peer_touch_dose(initial_peer_touch || final_peer_touch);
-        action_result.body_event = combine_body_event(
-            action_result.body_event,
-            self.pending_player_care
-                .remove(&command.organism_id.raw())
-                .unwrap_or_else(BodyEventDelta::zero),
-        );
+        let applied_care = self
+            .pending_player_care
+            .remove(&command.organism_id.raw())
+            .unwrap_or_else(BodyEventDelta::zero);
+        action_result.body_event =
+            combine_body_event(action_result.body_event, applied_care);
         let final_thermal = self.thermal_contact_severity_at(world_entity_id, final_position);
         let (body_event, relief) = self
             .thermal_interval_event(action_result.body_event, initial_thermal.max(final_thermal));
         action_result.body_event = body_event;
         self.last_action_result = Some(action_result.clone());
+        let care_biology_before = *self
+            .organism_registry
+            .get(command.organism_id)
+            .ok_or(ScaffoldContractError::InvalidId)?
+            .biochemistry();
         self.advance_biology_with_thermal_candidate(
             command.organism_id,
             outcome_tick,
@@ -5379,6 +5489,13 @@ impl HeadlessWorld {
         if biology_after.tick != outcome_tick || action_result.command != *command {
             return Err(ScaffoldContractError::InvalidActionDecision);
         }
+        self.record_player_care_receipt(
+            command.organism_id,
+            applied_care,
+            outcome_tick,
+            &care_biology_before,
+            &biology_after,
+        );
         #[cfg(test)]
         if self.injected_post_action_failure {
             return Err(ScaffoldContractError::InvalidDecisionEvidence);
