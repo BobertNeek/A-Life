@@ -90,15 +90,28 @@ impl Policy {
                 .map(|i| x[i]),
         );
         let (cat, cat_log) = dist(&cx);
-        let mut pair = vec![];
+        // Center exact contrasts before temperature scaling. Each operand begins
+        // as f32, but even f64 loses a small base term beside a large potential.
+        let mut terms = Vec::with_capacity(l.len() * o.len());
         for (a, &i) in l.iter().enumerate() {
             for (b, &j) in o.iter().enumerate() {
-                pair.push(
-                    (base[i] as f64 + base[j] as f64 + potential[a * o.len() + b] as f64)
-                        / temp as f64,
-                )
+                terms.push([
+                    f64::from(base[i]),
+                    f64::from(base[j]),
+                    f64::from(potential[a * o.len() + b]),
+                ]);
             }
         }
+        let mut maximum = 0;
+        for k in 1..terms.len() {
+            if pair_contrast(terms[k], terms[maximum]) > 0. {
+                maximum = k;
+            }
+        }
+        let pair = terms
+            .iter()
+            .map(|&v| pair_contrast(v, terms[maximum]) / f64::from(temp))
+            .collect::<Vec<_>>();
         let (q, qlog) = dist(&pair);
         Ok(Self {
             base: base.to_vec(),
@@ -248,4 +261,32 @@ pub fn old_global(logits: &[f32], temp: f32, random: f32) -> Result<usize, &'sta
         }
     }
     Ok(selected)
+}
+
+/// Error-free expansion of the six finite original terms. Intermediate sums
+/// cannot overflow f64: operands are finite f32 and there are only six terms.
+/// Small terms survive cancellation in an exact expansion. Its f64 collapse
+/// may differ from the correctly rounded exact total by an ulp.
+fn pair_contrast(a: [f64; 3], b: [f64; 3]) -> f64 {
+    let mut partials = [0.; 6];
+    let mut count = 0;
+    for mut x in [a[0], a[1], a[2], -b[0], -b[1], -b[2]] {
+        let mut next = 0;
+        for k in 0..count {
+            let mut y: f64 = partials[k];
+            if x.abs() < y.abs() {
+                std::mem::swap(&mut x, &mut y);
+            }
+            let hi = x + y;
+            let lo = y - (hi - x);
+            if lo != 0. {
+                partials[next] = lo;
+                next += 1;
+            }
+            x = hi;
+        }
+        partials[next] = x;
+        count = next + 1;
+    }
+    partials[..count].iter().rev().sum()
 }
