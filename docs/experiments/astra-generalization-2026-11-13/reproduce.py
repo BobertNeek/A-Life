@@ -33,6 +33,14 @@ with a.output.open('x') as f:
     json.dump(value, f, separators=(',', ':'))
 def outcomes(v):
     return [{k: x for k, x in t.items() if k not in ('trace', 'target_motion')} for t in v['trials']]
-print(json.dumps({'candidate_digest_matches': value['candidate_digest'] == record['result']['candidate_digest'],
-                  'trial_metrics_match': outcomes(value) == outcomes(record['result']),
+expected = outcomes(record['result'])
+actual = outcomes(value)
+metrics_match = len(actual) == len(expected) and all(
+    all(k in got and got[k] == x for k, x in want.items())
+    for got, want in zip(actual, expected))
+digest_matches = value['candidate_digest'] == record['result']['candidate_digest']
+print(json.dumps({'candidate_digest_matches': digest_matches,
+                  'trial_metrics_match': metrics_match,
                   'seconds': value['seconds'], 'output': str(a.output)}))
+if not digest_matches or not metrics_match:
+    raise SystemExit(1)
