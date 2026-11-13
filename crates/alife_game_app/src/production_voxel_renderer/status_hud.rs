@@ -1,7 +1,9 @@
 //! Wordless selected-creature identity, physiology, possession and playback readout.
 //! Icon meters show measured quantities, not six interchangeable needs or health scores.
 use super::*;
-use alife_world::{HeadlessWorld, WorldObject};
+use alife_world::{
+    HeadlessWorld, PlayerCareKind, PlayerCareReceipt, PresentationEvidence, WorldObject,
+};
 use bevy::a11y::AccessibilityNode;
 use bevy::image::{CompressedImageFormats, ImageSampler, ImageType};
 use bevy::prelude::*;
@@ -91,6 +93,7 @@ struct Readout {
     name: Option<String>,
     values: [Option<f32>; 6],
     holding_food: bool,
+    care: PresentationEvidence<PlayerCareReceipt>,
 }
 impl Readout {
     fn from_row<'a>(
@@ -111,7 +114,38 @@ impl Readout {
                         && !object.consumed
                         && object.carried_by == Some(organism_id)
                 }),
+            care: row.map_or(PresentationEvidence::Unknown, |row| {
+                row.last_player_care.clone()
+            }),
         }
+    }
+}
+
+/// One line of inspector text for the selected creature's last observed
+/// player care. Only the kind-relevant channel is shown: praise moves the
+/// praise signal, touch moves loneliness. No receipt means no response has
+/// been observed yet — the game says so instead of inventing one.
+fn care_line(care: &PresentationEvidence<PlayerCareReceipt>) -> String {
+    match care {
+        PresentationEvidence::Unknown => "No touch or praise felt yet.".to_string(),
+        PresentationEvidence::Observed { value, .. } => match value.kind {
+            PlayerCareKind::Touch => format!(
+                "Touched, felt at tick {}, loneliness {:.2} to {:.2}",
+                value.applied_tick.raw(),
+                value.loneliness_before,
+                value.loneliness_after
+            ),
+            PlayerCareKind::Praise => format!(
+                "Praised, felt at tick {}, praise {:.2} to {:.2}",
+                value.applied_tick.raw(),
+                value.praise_signal_before,
+                value.praise_signal_after
+            ),
+            PlayerCareKind::TouchAndPraise => format!(
+                "Touched and praised, felt at tick {}",
+                value.applied_tick.raw()
+            ),
+        },
     }
 }
 fn valid_row(
@@ -139,6 +173,8 @@ struct Identity;
 struct IdentityHeader;
 #[derive(Component)]
 struct CreatureName;
+#[derive(Component)]
+struct CareResponse;
 /// Pointer and accessibility entry point for the shared naming composer.
 #[derive(Component)]
 pub(crate) struct RenameButton;
@@ -168,6 +204,7 @@ const PANEL: Color = Color::srgb(0.075, 0.115, 0.135);
 const CARD: Color = Color::srgb(0.050, 0.075, 0.090);
 const INK: Color = Color::srgb(0.98, 0.96, 0.84);
 const HEADER_HEIGHT: f32 = 36.0;
+const CARE_LINE_HEIGHT: f32 = 18.0;
 const EMBEDDED: [(&str, &[u8]); 13] = [
     (
         "holding_food",
@@ -478,6 +515,27 @@ pub(super) fn spawn(world: &mut World) {
             ChildOf(pencil),
         ));
     }
+    world.spawn((
+        Name::new("Last observed player care response"),
+        Text::new(""),
+        TextFont {
+            font_size: 12.0,
+            ..default()
+        },
+        TextColor(INK),
+        TextLayout::new_with_linebreak(bevy::text::LineBreak::NoWrap),
+        Node {
+            width: Val::Percent(100.0),
+            min_width: Val::Px(0.0),
+            height: Val::Px(CARE_LINE_HEIGHT),
+            overflow: Overflow::clip(),
+            flex_shrink: 0.0,
+            ..default()
+        },
+        CareResponse,
+        AccessibilityNode(accesskit::Node::new(accesskit::Role::Label)),
+        ChildOf(root),
+    ));
     let grid = world
         .spawn((
             QuantityGrid,
@@ -633,6 +691,17 @@ fn set_readout(world: &mut World, readout: Option<&Readout>, debug: bool) {
         }
         // The complete canonical name remains available when the line clips.
         accessible.set_label(next);
+    }
+    for (mut text, mut accessible) in world
+        .query_filtered::<(&mut Text, &mut AccessibilityNode), With<CareResponse>>()
+        .iter_mut(world)
+    {
+        let next = readout.map_or_else(String::new, |r| care_line(&r.care));
+        // The complete line remains available when it clips.
+        accessible.set_label(next.as_str());
+        if text.0 != next {
+            text.0 = next;
+        }
     }
     for (mut visible, mut pickable, mut focus, mut interaction, mut border, mut accessible) in world
         .query_filtered::<(
@@ -794,6 +863,7 @@ fn selected_readout(world: &World, stable_id: WorldEntityId) -> Readout {
             name: None,
             values: [None; 6],
             holding_food: false,
+            care: PresentationEvidence::Unknown,
         },
         |organism_id| {
             let mut readout = Readout::from_row(
@@ -885,6 +955,7 @@ fn panel_bottom(size: Vec2) -> f32 {
     76.0 + 18.0
         + HEADER_HEIGHT
         + 4.0
+        + CARE_LINE_HEIGHT + 4.0
         + rows as f32 * if size.y < 300.0 { 48.0 } else { 68.0 }
         + (rows - 1) as f32 * 6.0
 }
