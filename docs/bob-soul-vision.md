@@ -116,7 +116,10 @@ Missing or unproven — the game around the simulation is thin:
   observable, truthful creature response: a world-owned social event the
   creature perceives, with an inspector-visible acknowledgement. Fixes the
   dock's own warning that queued stimuli don't establish a response.
-  Touches `alife_world` + `alife_game_app`; needs a design note first.
+  Touches `alife_world` + `alife_game_app`. Design:
+  `docs/bob-soul-slice2-care-response.md`. Status: implemented in this
+  pass — world-owned receipt + HUD acknowledgement; tests written for
+  Codex/CI.
 - **Slice 3 — Half-life chemistry.** Add per-species half-life to the
   biochemical graph (Creatures-style), with conversion from the current
   `decay_retention` and unit tests. Needs a semantics decision: how
