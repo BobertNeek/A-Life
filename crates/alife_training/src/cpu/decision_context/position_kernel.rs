@@ -201,8 +201,8 @@ fn restore(b: &[u8]) -> Result<(Model, State), &'static str> {
         return Err("version/shape");
     };
     let mut v = [0.; 10];
-    for (j, c) in b[4..].chunks_exact(4).enumerate() {
-        v[j] = f32::from_le_bytes(c.try_into().unwrap())
+    for (j, c) in b[4..].as_chunks::<4>().0.iter().enumerate() {
+        v[j] = f32::from_le_bytes(*c)
     }
     if v.iter().any(|x| !x.is_finite())
         || v[6..8].iter().any(|x| x.abs() > 1.)
@@ -459,13 +459,13 @@ mod tests {
         let (_, ts) = run(&m);
         let (g, initial) = backward(&ts, [0.7, -0.4]);
         assert_eq!(initial, [0., 0.]);
-        for j in 0..6 {
+        for (j, expected) in g.iter().enumerate() {
             let mut hi = m;
             let mut lo = m;
             hi.weights[j] += 1e-3;
             lo.weights[j] -= 1e-3;
             let fd = (run(&hi).0 - run(&lo).0) / 2e-3;
-            assert!((fd - g[j]).abs() < 1e-4, "{j}: {fd} != {}", g[j]);
+            assert!((fd - expected).abs() < 1e-4, "{j}: {fd} != {expected}");
         }
     }
     #[test]
@@ -601,7 +601,7 @@ mod moretests {
         };
         let (_, t) = run(base);
         let a = input_backward(&m, &[t], [0.7, -0.4])[0];
-        for j in 0..7 {
+        for (j, expected) in a.iter().enumerate() {
             let mut hi = base;
             let mut lo = base;
             let perturb = |i: &mut Input, d: f32| {
@@ -619,7 +619,7 @@ mod moretests {
             perturb(&mut hi, 0.001);
             perturb(&mut lo, -0.001);
             let fd = (run(hi).0 - run(lo).0) / 0.002;
-            assert!((fd - a[j]).abs() < 1e-4, "{j}: {fd} {}", a[j]);
+            assert!((fd - expected).abs() < 1e-4, "{j}: {fd} {expected}");
         }
     }
     #[test]
@@ -706,7 +706,7 @@ mod state_gradient_tests {
         };
         let (_, t) = run(base);
         let (g, _) = full_state_backward(&m, &t, [0.7, -0.4, 0.2, 0.3]);
-        for j in 0..4 {
+        for (j, expected) in g.iter().enumerate() {
             let mut hi = base;
             let mut lo = base;
             let perturb = |s: &mut State, d: f32| match j {
@@ -718,7 +718,7 @@ mod state_gradient_tests {
             perturb(&mut hi, 0.001);
             perturb(&mut lo, -0.001);
             let fd = (run(hi).0 - run(lo).0) / 0.002;
-            assert!((fd - g[j]).abs() < 1e-4);
+            assert!((fd - expected).abs() < 1e-4);
         }
     }
     #[test]
