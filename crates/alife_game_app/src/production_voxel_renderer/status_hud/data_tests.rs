@@ -437,3 +437,45 @@ fn food_badge_rebinds_on_selection_frame_identity_and_load_changes() {
         .remove::<Fvr04ProductionCreatureVisualMarker>();
     assert!(!selected_readout(&world, stable).holding_food);
 }
+
+
+#[test]
+fn debug_care_line_reports_the_last_observed_response_and_marks_unknown_as_unknown() {
+    // No receipt is unknown, never a definite absence: an old save with no
+    // recorded receipt reads exactly like a creature never yet cared for.
+    assert_eq!(
+        debug_care_line(&PresentationEvidence::Unknown),
+        "care: unknown (no receipt recorded)"
+    );
+    let observed = |kind: PlayerCareKind| PresentationEvidence::Observed {
+        value: PlayerCareReceipt {
+            kind,
+            applied_tick: Tick::new(7),
+            praise_signal_before: 0.10,
+            praise_signal_after: 0.42,
+            loneliness_before: 0.61,
+            loneliness_after: 0.55,
+        },
+        tick: Tick::new(7),
+    };
+    assert_eq!(
+        debug_care_line(&observed(PlayerCareKind::Pet)),
+        "Petted, felt at tick 7, loneliness 0.61 to 0.55"
+    );
+    assert_eq!(
+        debug_care_line(&observed(PlayerCareKind::Praise)),
+        "Praised, felt at tick 7, praise 0.10 to 0.42"
+    );
+    assert_eq!(
+        debug_care_line(&observed(PlayerCareKind::Scold)),
+        "Scolded, felt at tick 7, praise 0.10 to 0.42"
+    );
+    assert_eq!(
+        debug_care_line(&observed(PlayerCareKind::Slap)),
+        "Slapped, felt at tick 7, loneliness 0.61 to 0.55"
+    );
+    assert_eq!(
+        debug_care_line(&observed(PlayerCareKind::PetAndPraise)),
+        "Petted and praised, felt at tick 7"
+    );
+}

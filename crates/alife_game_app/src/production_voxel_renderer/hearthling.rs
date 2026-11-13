@@ -15,6 +15,15 @@ const WALK_CLIP_START: f32 = 1.0 / 24.0;
 const WALK_CLIP_SECONDS: f32 = 3.0;
 const INGESTION_FEEDBACK_SECONDS: f32 = 0.60;
 const SPEECH_FEEDBACK_SECONDS: f32 = 0.45;
+// One smooth, bounded acknowledgement of a player-care dose, as short as
+// the eating nod: the response is visibly tied to the moment the dose was
+// felt, not a lingering label. Positive care nods; negative care flinches
+// (head back, ears flattened), mirroring the afraid expression at a
+// smaller amplitude.
+const CARE_FEEDBACK_SECONDS: f32 = 0.60;
+const CARE_NOD_HEAD: f32 = 0.15;
+const CARE_FLINCH_HEAD: f32 = -0.10;
+const CARE_FLINCH_EAR: f32 = -0.15;
 const HUNGRY_EAR_ANGLE: f32 = 0.15;
 const HUNGRY_EAR_BLEND_SECONDS: f32 = 0.25;
 
@@ -79,8 +88,11 @@ const COAT_MATERIAL_NAMES: [&str; 2] = [
 struct OutcomeFeedback {
     last_ingestion_tick: Option<u64>,
     last_utterance_id: Option<u64>,
+    last_care_tick: Option<u64>,
+    last_care_kind: Option<alife_world::PlayerCareKind>,
     ingestion_remaining: f32,
     speech_remaining: f32,
+    care_remaining: f32,
 }
 
 impl OutcomeFeedback {
@@ -88,10 +100,16 @@ impl OutcomeFeedback {
         if !paused {
             self.ingestion_remaining = (self.ingestion_remaining - seconds).max(0.0);
             self.speech_remaining = (self.speech_remaining - seconds).max(0.0);
+            self.care_remaining = (self.care_remaining - seconds).max(0.0);
         }
     }
 
-    fn observe(&mut self, ingestion_tick: Option<u64>, utterance_id: Option<u64>) {
+    fn observe(
+        &mut self,
+        ingestion_tick: Option<u64>,
+        utterance_id: Option<u64>,
+        care: Option<(u64, alife_world::PlayerCareKind)>,
+    ) {
         if let Some(tick) =
             ingestion_tick.filter(|tick| self.last_ingestion_tick.is_none_or(|last| *tick > last))
         {
@@ -103,6 +121,17 @@ impl OutcomeFeedback {
         {
             self.last_utterance_id = Some(id);
             self.speech_remaining = SPEECH_FEEDBACK_SECONDS;
+        }
+        // The receipt is the authority: a care pulse fires only for a newer
+        // applied tick than the last one shown. No receipt means no pulse —
+        // unknown is never rendered as a nod, a flinch, or a "nothing felt"
+        // pose.
+        if let Some((tick, kind)) =
+            care.filter(|(tick, _)| self.last_care_tick.is_none_or(|last| *tick > last))
+        {
+            self.last_care_tick = Some(tick);
+            self.last_care_kind = Some(kind);
+            self.care_remaining = CARE_FEEDBACK_SECONDS;
         }
     }
 }
@@ -201,12 +230,17 @@ impl HearthlingVisual {
         serde_json::json!({
             "last_confirmed_ingestion_tick": self.feedback.last_ingestion_tick,
             "last_emitted_utterance_id": self.feedback.last_utterance_id,
+            "last_care_tick": self.feedback.last_care_tick,
+            "last_care_kind": self.feedback.last_care_kind.map(|kind| format!("{kind:?}")),
             "ingestion_remaining_seconds": self.feedback.ingestion_remaining,
             "speech_remaining_seconds": self.feedback.speech_remaining,
+            "care_remaining_seconds": self.feedback.care_remaining,
             "ingestion_duration_seconds": INGESTION_FEEDBACK_SECONDS,
             "speech_duration_seconds": SPEECH_FEEDBACK_SECONDS,
+            "care_duration_seconds": CARE_FEEDBACK_SECONDS,
             "ingestion_source": "sealed_matching_organism_manipulation_eat_consumed_receipt",
             "speech_source": "active_nonempty_creature_audible_utterance_matching_speaker",
+            "care_source": "observed_player_care_receipt_on_matching_organism_row",
         })
     }
 }
@@ -342,12 +376,25 @@ fn outcome_rotation(
     };
     let ate = pulse(feedback.ingestion_remaining, INGESTION_FEEDBACK_SECONDS);
     let spoke = pulse(feedback.speech_remaining, SPEECH_FEEDBACK_SECONDS);
-    if ate == 0.0 && spoke == 0.0 {
+    let care = pulse(feedback.care_remaining, CARE_FEEDBACK_SECONDS);
+    if ate == 0.0 && spoke == 0.0 && care == 0.0 {
         return sampled;
     }
+    // The care pulse's direction is the receipt kind's valence: a nod for
+    // praise/pet, a flinch for scold/slap. The word above the creature
+    // (live_care_feedback) names what it thinks just happened; the posture
+    // carries whether it was good or bad.
+    let (care_head, care_ear) = match feedback.last_care_kind {
+        Some(kind) if kind.is_negative() => (CARE_FLINCH_HEAD, CARE_FLINCH_EAR),
+        _ => (CARE_NOD_HEAD, 0.0),
+    };
     match part {
-        ExpressionBone::Head => sampled * Quat::from_rotation_x(0.20 * ate - 0.08 * spoke),
-        ExpressionBone::Ear(_) => sampled * Quat::from_rotation_x(0.10 * spoke),
+        ExpressionBone::Head => {
+            sampled * Quat::from_rotation_x(0.20 * ate - 0.08 * spoke + care_head * care)
+        }
+        ExpressionBone::Ear(_) => {
+            sampled * Quat::from_rotation_x(0.10 * spoke + care_ear * care)
+        }
         ExpressionBone::Lid(_) => sampled,
     }
 }
@@ -605,7 +652,20 @@ pub(super) fn animate(
                     })
                     .max();
                 let utterance = emitted_utterance_id(&utterances, marker.organism_id, tick);
-                visual.feedback.observe(ingestion, utterance);
+                // The receipt is the authority: the nod/flinch fires only
+                // for a receipt this row actually carries. No receipt means
+                // no pulse — unknown stays unrendered, never a "nothing
+                // felt" pose.
+                let care = frame
+                    .current
+                    .organism(marker.stable_id)
+                    .and_then(|row| match &row.last_player_care {
+                        alife_world::PresentationEvidence::Observed { value, .. } => {
+                            Some((value.applied_tick.raw(), value.kind))
+                        }
+                        alife_world::PresentationEvidence::Unknown => None,
+                    });
+                visual.feedback.observe(ingestion, utterance, care);
             }
         }
         // World ticks supply targets; render frames supply the visible stride.
@@ -858,12 +918,12 @@ mod tests {
             CreatureAnimationState::Idle
         )
         .abs_diff_eq(sampled, 1e-6));
-        feedback.observe(Some(10), Some(20));
+        feedback.observe(Some(10), Some(20), None);
         feedback.advance(0.15, false);
         let ingestion = feedback.ingestion_remaining;
         let speech = feedback.speech_remaining;
-        feedback.observe(Some(10), Some(20));
-        feedback.observe(Some(9), Some(19));
+        feedback.observe(Some(10), Some(20), None);
+        feedback.observe(Some(9), Some(19), None);
         assert_eq!(feedback.ingestion_remaining, ingestion);
         assert_eq!(feedback.speech_remaining, speech);
         feedback.advance(10.0, true);
@@ -893,9 +953,97 @@ mod tests {
             CreatureAnimationState::Idle
         )
         .abs_diff_eq(sampled, 1e-6));
-        feedback.observe(Some(11), Some(21));
+        feedback.observe(Some(11), Some(21), None);
         assert_eq!(feedback.ingestion_remaining, INGESTION_FEEDBACK_SECONDS);
         assert_eq!(feedback.speech_remaining, SPEECH_FEEDBACK_SECONDS);
+    }
+
+    #[test]
+    fn care_feedback_nods_for_positive_kinds_flinches_for_negative_ones_and_never_fires_without_a_receipt() {
+        use alife_world::PlayerCareKind;
+        let sampled = Quat::from_rotation_y(0.3);
+        // The sampled rotation is a pure yaw, so the added pitch reads off
+        // the quaternion's x/w pair exactly (both scale by cos(yaw / 2)).
+        let pitch = |rotation: Quat| 2.0 * rotation.x.atan2(rotation.w);
+        // No receipt, no pulse: the creature's pose says nothing about
+        // care it may or may not have felt. Unknown stays unrendered.
+        let mut feedback = OutcomeFeedback::default();
+        feedback.observe(None, None, None);
+        feedback.advance(0.15, false);
+        assert_eq!(feedback.care_remaining, 0.0);
+        assert!(outcome_rotation(
+            sampled,
+            ExpressionBone::Head,
+            &feedback,
+            CreatureAnimationState::Idle
+        )
+        .abs_diff_eq(sampled, 1e-6));
+        // A pet nods the head forward and leaves the ears alone.
+        feedback.observe(None, None, Some((3, PlayerCareKind::Pet)));
+        feedback.advance(0.15, false);
+        assert_eq!(feedback.care_remaining, CARE_FEEDBACK_SECONDS);
+        assert_eq!(feedback.last_care_tick, Some(3));
+        assert_eq!(feedback.last_care_kind, Some(PlayerCareKind::Pet));
+        let head = outcome_rotation(
+            sampled,
+            ExpressionBone::Head,
+            &feedback,
+            CreatureAnimationState::Idle,
+        );
+        assert!(pitch(head) - pitch(sampled) > 0.0);
+        let ear = outcome_rotation(
+            sampled,
+            ExpressionBone::Ear(1.0),
+            &feedback,
+            CreatureAnimationState::Idle,
+        );
+        assert!((pitch(ear) - pitch(sampled)).abs() < 1e-6);
+        // The same receipt twice does not re-trigger; an older tick does not.
+        let remaining = feedback.care_remaining;
+        feedback.observe(None, None, Some((3, PlayerCareKind::Pet)));
+        feedback.observe(None, None, Some((2, PlayerCareKind::Praise)));
+        assert_eq!(feedback.care_remaining, remaining);
+        assert_eq!(feedback.last_care_tick, Some(3));
+        // A slap flinches: head back, ears flattened. A scold flinches too.
+        feedback.observe(None, None, Some((4, PlayerCareKind::Slap)));
+        feedback.advance(0.15, false);
+        let head = outcome_rotation(
+            sampled,
+            ExpressionBone::Head,
+            &feedback,
+            CreatureAnimationState::Idle,
+        );
+        assert!(pitch(head) - pitch(sampled) < 0.0);
+        let ear = outcome_rotation(
+            sampled,
+            ExpressionBone::Ear(1.0),
+            &feedback,
+            CreatureAnimationState::Idle,
+        );
+        assert!(pitch(ear) - pitch(sampled) < 0.0);
+        feedback.observe(None, None, Some((5, PlayerCareKind::Scold)));
+        feedback.advance(0.15, false);
+        let head = outcome_rotation(
+            sampled,
+            ExpressionBone::Head,
+            &feedback,
+            CreatureAnimationState::Idle,
+        );
+        assert!(pitch(head) - pitch(sampled) < 0.0);
+        assert_eq!(feedback.last_care_tick, Some(5));
+        assert_eq!(feedback.last_care_kind, Some(PlayerCareKind::Scold));
+        // Pause freezes the pulse; it returns to the sampled pose after.
+        let remaining = feedback.care_remaining;
+        feedback.advance(10.0, true);
+        assert_eq!(feedback.care_remaining, remaining);
+        feedback.advance(10.0, false);
+        assert!(outcome_rotation(
+            sampled,
+            ExpressionBone::Head,
+            &feedback,
+            CreatureAnimationState::Idle
+        )
+        .abs_diff_eq(sampled, 1e-6));
     }
 
     #[test]

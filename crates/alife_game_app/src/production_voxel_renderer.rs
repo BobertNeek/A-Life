@@ -72,6 +72,7 @@ mod hearthling;
 mod hearthling_asset_retirement_tests;
 mod island;
 mod landscape;
+mod live_care_feedback;
 mod live_creature_projection;
 mod live_food_projection;
 mod live_sleep_feedback;
@@ -2068,6 +2069,7 @@ pub fn spawn_fvr03_production_voxel_scene(
             god_hand::highlight,
             god_hand::animate.after(island::constrain_camera),
             live_sleep_feedback::sync.after(god_hand::animate),
+            live_care_feedback::sync.after(god_hand::animate),
             sync_fvr11_creature_contact_shadows,
             sync_fvr04_camera_follow,
             island::constrain_camera.after(sync_fvr04_camera_follow),
@@ -4638,7 +4640,7 @@ fn spawn_fvr05_production_ux_ui(app: &mut App) {
 }
 
 const V0_PLAYER_CONTROL_HINTS: &str =
-    "Click Select | Hold Carry | Wheel Zoom | Edges Pan | E Food | C Touch | J Play | K Praise | Enter Speak | Space Pause | F1 Help";
+    "Click Select | Hold Carry | Wheel Zoom | Edges Pan | E Food | C Pet | J Play | K Praise | Enter Speak | Space Pause | F1 Help";
 
 fn spawn_v0_player_experience_ui(app: &mut App) {
     status_hud::spawn(app.world_mut());
@@ -4689,7 +4691,7 @@ fn sync_v0_player_control_strip(
         return;
     }
     let mut text = if ux.show_help {
-        "F1 Close help | Space Pause | 1 1x | 2 Max | 3 Headless max (closes window) | S Save | L Load\nClick Select | E Food on ground | G Move food | C Gentle touch | J Offer play | K Praise reward\nEnter Speak | Y Lineage | Arrows/Edges Pan | Home Find creature | F Follow | PgUp/PgDn Next creature | R Reset view\nF6 Speech text | F7 Narration | F8 Translation | F3 Debug".to_string()
+        "F1 Close help | Space Pause | 1 1x | 2 Max | 3 Headless max (closes window) | S Save | L Load\nClick Select | E Food on ground | G Move food | C Pet | J Offer play | K Praise reward\nEnter Speak | Y Lineage | Arrows/Edges Pan | Home Find creature | F Follow | PgUp/PgDn Next creature | R Reset view\nF6 Speech text | F7 Narration | F8 Translation | F3 Debug".to_string()
     } else {
         V0_PLAYER_CONTROL_HINTS.to_string()
     };
@@ -4753,15 +4755,15 @@ fn sync_v0_player_control_strip(
             text.push_str("\nFood moved.");
         } else if ux.last_action == "Food move cancelled" {
             text.push_str("\nFood move cancelled.");
-        } else if ux.last_action == care_dock::Action::Touch.queued_status() {
-            text.push_str("\nGentle touch queued.");
+        } else if ux.last_action == care_dock::Action::Pet.queued_status() {
+            text.push_str("\nPet queued.");
         } else if ux.last_action == care_dock::Action::Praise.queued_status() {
             text.push_str("\nPraise queued.");
         } else if ux.last_action.starts_with("Plaything offered") {
             text.push_str("\nPlaything offered. The creature can investigate or ignore it.");
         }
         if ux.settings.paused
-            && [care_dock::Action::Touch, care_dock::Action::Praise]
+            && [care_dock::Action::Pet, care_dock::Action::Praise]
                 .into_iter()
                 .any(|action| ux.last_action == action.queued_status())
         {

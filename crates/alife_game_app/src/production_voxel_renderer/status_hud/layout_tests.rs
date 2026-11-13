@@ -211,9 +211,9 @@ fn assert_layout(world: &mut World, size: Vec2) {
         .unwrap()
         .iter()
         .collect::<Vec<_>>();
-    // The identity header and quantity grid must fit and be disjoint. Badge
-    // overlays are contained, but deliberately not treated as separate tiles.
-    // Text node boxes are measured; text glyphs are not.
+    // The identity header and quantity grid must fit and be
+    // disjoint. Badge overlays are contained, but deliberately not treated
+    // as separate tiles. Text node boxes are measured; text glyphs are not.
     assert_eq!(tiles.len(), 2);
     for (index, &tile) in tiles.iter().enumerate() {
         let bounds = Box2::of(world, tile);

@@ -326,11 +326,6 @@ mod device_oracle {
         descriptor.backends = backends;
         if !software {
             assert_eq!(std::env::var("ALIFE_GPU_BACKEND").as_deref(), Ok("vulkan"));
-            assert_eq!(
-                std::env::var("ALIFE_GPU_DX12_COMPILER").as_deref(),
-                Ok("fxc")
-            );
-            // Explicit Vulkan harness: DX12 compiler configuration is inapplicable.
         }
         let instance = wgpu::Instance::new(descriptor);
         let adapter = pollster::block_on(instance.enumerate_adapters(backends))
@@ -665,3 +660,4 @@ mod device_oracle {
         run(false);
     }
 }
+

@@ -1,7 +1,9 @@
 //! Wordless selected-creature identity, physiology, possession and playback readout.
 //! Icon meters show measured quantities, not six interchangeable needs or health scores.
 use super::*;
-use alife_world::{HeadlessWorld, WorldObject};
+use alife_world::{
+    HeadlessWorld, PlayerCareKind, PlayerCareReceipt, PresentationEvidence, WorldObject,
+};
 use bevy::a11y::AccessibilityNode;
 use bevy::image::{CompressedImageFormats, ImageSampler, ImageType};
 use bevy::prelude::*;
@@ -112,6 +114,51 @@ impl Readout {
                         && object.carried_by == Some(organism_id)
                 }),
         }
+    }
+}
+
+/// DEBUG-ONLY inspector line for the selected creature's last observed
+/// player care. Never wired into the user-facing HUD: the game shows the
+/// creature's response (a nod or flinch, and its own word above it), not
+/// ticks and decimals. Only the kind-relevant channel is shown: praise
+/// and scold move the praise signal, pet and slap move loneliness. No
+/// receipt is UNKNOWN, never a definite absence — a save from before
+/// receipts existed reads exactly the same way, so the line says
+/// "unknown" and never "none yet" or "felt nothing".
+#[allow(dead_code)]
+fn debug_care_line(care: &PresentationEvidence<PlayerCareReceipt>) -> String {
+    match care {
+        PresentationEvidence::Unknown => "care: unknown (no receipt recorded)".to_string(),
+        PresentationEvidence::Observed { value, .. } => match value.kind {
+            PlayerCareKind::Pet => format!(
+                "Petted, felt at tick {}, loneliness {:.2} to {:.2}",
+                value.applied_tick.raw(),
+                value.loneliness_before,
+                value.loneliness_after
+            ),
+            PlayerCareKind::Praise => format!(
+                "Praised, felt at tick {}, praise {:.2} to {:.2}",
+                value.applied_tick.raw(),
+                value.praise_signal_before,
+                value.praise_signal_after
+            ),
+            PlayerCareKind::Scold => format!(
+                "Scolded, felt at tick {}, praise {:.2} to {:.2}",
+                value.applied_tick.raw(),
+                value.praise_signal_before,
+                value.praise_signal_after
+            ),
+            PlayerCareKind::Slap => format!(
+                "Slapped, felt at tick {}, loneliness {:.2} to {:.2}",
+                value.applied_tick.raw(),
+                value.loneliness_before,
+                value.loneliness_after
+            ),
+            PlayerCareKind::PetAndPraise => format!(
+                "Petted and praised, felt at tick {}",
+                value.applied_tick.raw()
+            ),
+        },
     }
 }
 fn valid_row(
