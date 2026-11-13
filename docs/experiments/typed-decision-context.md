@@ -82,3 +82,40 @@ At fixed base, base-global f32 operation ordering and every Other representative
 `JointHead2056` supplies a detached bounded hidden feature followed by a signed output amplitude, with3 signed effect coefficients and separately aged4-coordinate transactional Adam. Inputs are positional context4 and nominal effects6 (translation, body delta, gaze delta), not raw vision or privileged future coordinates. Caller-supplied values are not collector-authenticated. The private tape is bound to the exact forward parameter bits. Zero amplitude leaves the amplitude gradient live; updates do not touch existing heads or learned state. Standalone cold bytes are not a host checkpoint migration.
 
 Both remain under the existing default-off `experimental-decision-context` feature. No host/collector/PPO/World/GPU route, model-binding revision, ATP/work admission, or full recurrent training is provided. Physical outcomes, learned desirability and null calibration require separate qualification. No existing candidate or trained life is promoted.
+
+## Detached own-command feedback
+
+`own_feedback` adds an explicit f64 numerical module behind the same default-off
+feature. Its `State` retains a measured stride estimate and temporal references;
+`Event` contains caller-supplied historical nominal translation/body/gaze and
+measured displacement/body/gaze directions. The six vectors must share a common
+reference frame. Sequence checks reject duplicates and older active events, but
+do not authenticate a collector or actuator. Inactive/unissued events return
+zero context and unchanged state without inspecting unused event data.
+
+`forward` returns seven signed tanh residual channels plus direct normalized
+shortfall `e = max(0, gain * (prior_stride - projected_displacement) / prior_stride)`
+when calibrated and moving. First calibration, Stop and off events have `e=0`.
+A negative finite gain is legal. This is command-compliance evidence, not a
+Blocked classifier, progress-to-goal signal, food value, failure reward, memory
+validity gate or map. Successful detours and moving obstacles can change it.
+
+`backward` differentiates all seven outputs, next stride and direct `e` jointly;
+the tape binds exact historical parameter bits, including signed zero. It never
+recovers `e` by inverting a saturated tanh. The positive-part kink has derivative
+zero. Numerical support requires finite intermediate forward arithmetic; tiny
+compensating gains do not rescue an overflowing normalized ratio. Active reverse
+products avoid unused overflowing prefixes; genuinely nonrepresentable returned
+adjoints reject. Parameter and vector adjoints are local/ambient derivatives,
+not derivatives through the World or physical unit-vector admission.
+
+`Model` preserves five independent signed coefficients, moments and integer ages
+with transactional per-coordinate Adam. Standalone cold-bit identities 2076/1
+and direct-feedback2083 remain unchanged; these are not host checkpoint versions
+or migrations. The original organism brain, acquired weights, existing heads,
+optimizers and production defaults are untouched. `forward_operations` counts
+selected actual successful-forward nonlinear evaluations only; it is explicitly
+not a complete work price or ATP debit. Queue/collector authenticity, admitted
+host work, CPU/GPU parity, physical behavior and policy integration remain outside
+this detached layer. Related experimental physical comparisons are not proof of
+an overall navigation improvement and are not promoted by exposing these APIs.
