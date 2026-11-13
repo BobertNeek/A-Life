@@ -1300,14 +1300,10 @@ pub struct HeadlessActionBiologyReceipt {
 /// Which player-care dose the world applied. The four decided actions
 /// (Cassidy + Bob prime, Nov 13, 2026): praise and pet are positive,
 /// scold and slap are negative. Praise/scold are social feedback (the
-/// player-reward channel); pet/slap are distinct physical interactions
-/// (the social-contact channel). Both can be queued before one tick, so
-/// both-positive is its own kind. Scold and slap are not producible yet:
-/// no dock action queues them and `BodyEventDelta` validation holds the
-/// two channels in [0, 1], so no negative dose can reach the recorder
-/// until the scold/slap slice permits one. The kinds exist here so the
-/// presentation (nod/flinch, word, debug line) is already built for all
-/// four and the follow-up slice only has to produce the dose.
+/// player-reward / social-disapproval channels); pet/slap are distinct
+/// physical interactions (the social-contact / damage channels). All four
+/// are producible now: the dock queues them through
+/// `queue_player_interaction_v1`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PlayerCareKind {
     /// Positive physical interaction. Was `Touch` in slice 2; the serde
@@ -1317,9 +1313,6 @@ pub enum PlayerCareKind {
     Praise,
     Scold,
     Slap,
-    /// Both positive doses queued before one tick. Was `TouchAndPraise`.
-    #[serde(alias = "TouchAndPraise")]
-    PetAndPraise,
 }
 
 impl PlayerCareKind {
@@ -1327,6 +1320,160 @@ impl PlayerCareKind {
     /// presentation flinches for these and nods for the positive kinds.
     pub fn is_negative(self) -> bool {
         matches!(self, Self::Scold | Self::Slap)
+    }
+}
+
+/// The set of player-care kinds actually applied in one consumed dose.
+/// A receipt records every kind the dose carried, not a single exclusive
+/// label: a pet and a praise queued before one tick arrive together, and
+/// so can a scold with a slap. The bits are an implementation detail and
+/// are never serialized raw: serde writes the set as a sequence of kind
+/// names, and reads either a sequence or one old single-kind string.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct PlayerCareKindSet {
+    bits: u8,
+}
+
+impl PlayerCareKindSet {
+    const PET: u8 = 1 << 0;
+    const PRAISE: u8 = 1 << 1;
+    const SCOLD: u8 = 1 << 2;
+    const SLAP: u8 = 1 << 3;
+
+    pub fn empty() -> Self {
+        Self::default()
+    }
+
+    pub fn single(kind: PlayerCareKind) -> Self {
+        let mut set = Self::empty();
+        set.insert(kind);
+        set
+    }
+
+    pub fn insert(&mut self, kind: PlayerCareKind) {
+        self.bits |= match kind {
+            PlayerCareKind::Pet => Self::PET,
+            PlayerCareKind::Praise => Self::PRAISE,
+            PlayerCareKind::Scold => Self::SCOLD,
+            PlayerCareKind::Slap => Self::SLAP,
+        };
+    }
+
+    pub fn contains(self, kind: PlayerCareKind) -> bool {
+        self.bits
+            & match kind {
+                PlayerCareKind::Pet => Self::PET,
+                PlayerCareKind::Praise => Self::PRAISE,
+                PlayerCareKind::Scold => Self::SCOLD,
+                PlayerCareKind::Slap => Self::SLAP,
+            }
+            != 0
+    }
+
+    pub fn is_empty(self) -> bool {
+        self.bits == 0
+    }
+
+    /// The kinds in the set, in fixed order (pet, praise, scold, slap),
+    /// for deterministic rendering and tests.
+    pub fn iter(self) -> impl Iterator<Item = PlayerCareKind> {
+        [
+            PlayerCareKind::Pet,
+            PlayerCareKind::Praise,
+            PlayerCareKind::Scold,
+            PlayerCareKind::Slap,
+        ]
+        .into_iter()
+        .filter(move |kind| self.contains(*kind))
+    }
+
+    /// Whether any kind in the set is a negative judgement. Under the
+    /// display rule below, a set containing a negative kind always
+    /// displays as one, so this agrees with the display kind.
+    pub fn is_negative(self) -> bool {
+        self.contains(PlayerCareKind::Scold) || self.contains(PlayerCareKind::Slap)
+    }
+
+    /// The one kind the presentation answers with. Interpretive, not a
+    /// measurement: negative dominates (a slap outranks a scold, either
+    /// outranks a pet or praise), and among positives a pet outranks
+    /// praise — the pair the follow-up slice pinned as "play". The debug
+    /// readout, not the display, carries the full set.
+    pub fn display_kind(self) -> Option<PlayerCareKind> {
+        if self.contains(PlayerCareKind::Slap) {
+            Some(PlayerCareKind::Slap)
+        } else if self.contains(PlayerCareKind::Scold) {
+            Some(PlayerCareKind::Scold)
+        } else if self.contains(PlayerCareKind::Pet) {
+            Some(PlayerCareKind::Pet)
+        } else if self.contains(PlayerCareKind::Praise) {
+            Some(PlayerCareKind::Praise)
+        } else {
+            None
+        }
+    }
+
+    /// One kind name as it appears in an old single-kind receipt
+    /// (`"Pet"`, `"Touch"`, `"Praise"`, `"Scold"`, `"Slap"`) or the
+    /// removed pair (`"PetAndPraise"`, `"TouchAndPraise"` -> pet +
+    /// praise). Unknown names are rejected, never silently mapped.
+    fn from_single_name(name: &str) -> Option<Self> {
+        match name {
+            "Pet" | "Touch" => Some(Self::single(PlayerCareKind::Pet)),
+            "Praise" => Some(Self::single(PlayerCareKind::Praise)),
+            "Scold" => Some(Self::single(PlayerCareKind::Scold)),
+            "Slap" => Some(Self::single(PlayerCareKind::Slap)),
+            "PetAndPraise" | "TouchAndPraise" => {
+                let mut set = Self::empty();
+                set.insert(PlayerCareKind::Pet);
+                set.insert(PlayerCareKind::Praise);
+                Some(set)
+            }
+            _ => None,
+        }
+    }
+}
+
+impl Serialize for PlayerCareKindSet {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeSeq;
+        let mut seq = serializer.serialize_seq(Some(self.iter().count()))?;
+        for kind in self.iter() {
+            seq.serialize_element(&kind)?;
+        }
+        seq.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for PlayerCareKindSet {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct SetVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for SetVisitor {
+            type Value = PlayerCareKindSet;
+
+            fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                f.write_str("a player-care kind name or a sequence of kind names")
+            }
+
+            fn visit_str<E: serde::de::Error>(self, value: &str) -> Result<Self::Value, E> {
+                Self::Value::from_single_name(value)
+                    .ok_or_else(|| E::custom(format!("unknown player-care kind: {value}")))
+            }
+
+            fn visit_seq<A: serde::de::SeqAccess<'de>>(
+                self,
+                mut seq: A,
+            ) -> Result<Self::Value, A::Error> {
+                let mut set = PlayerCareKindSet::empty();
+                while let Some(kind) = seq.next_element::<PlayerCareKind>()? {
+                    set.insert(kind);
+                }
+                Ok(set)
+            }
+        }
+
+        deserializer.deserialize_any(SetVisitor)
     }
 }
 
@@ -1340,12 +1487,25 @@ impl PlayerCareKind {
 /// creature's response, not these numbers.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct PlayerCareReceipt {
-    pub kind: PlayerCareKind,
+    /// The kinds actually applied. Serialized as `kinds`; receipts from
+    /// the slice-2 follow-up stored a single `kind` string and still load
+    /// (see `PlayerCareKindSet`).
+    #[serde(alias = "kind")]
+    pub kinds: PlayerCareKindSet,
     pub applied_tick: Tick,
     pub praise_signal_before: f32,
     pub praise_signal_after: f32,
     pub loneliness_before: f32,
     pub loneliness_after: f32,
+}
+
+impl PlayerCareReceipt {
+    /// The one kind the presentation answers with (see
+    /// `PlayerCareKindSet::display_kind`). `None` only for an empty set,
+    /// which the recorder never stores.
+    pub fn display_kind(self) -> Option<PlayerCareKind> {
+        self.kinds.display_kind()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1788,6 +1948,27 @@ impl HeadlessWorld {
         source: Vec3f,
         praise: bool,
     ) -> Result<(), ScaffoldContractError> {
+        self.queue_player_interaction_v1(
+            organism,
+            source,
+            if praise {
+                crate::PlayerInteractionV1::Praise
+            } else {
+                crate::PlayerInteractionV1::Pet
+            },
+        )
+        .map(|_| ())
+    }
+
+    /// Queue a bounded local experience. Delivery is at the next biological
+    /// boundary, not an authenticated verdict on a previous action.
+    pub fn queue_player_interaction_v1(
+        &mut self,
+        organism: OrganismId,
+        source: Vec3f,
+        kind: crate::PlayerInteractionV1,
+    ) -> Result<crate::PlayerInteractionQueueOutcomeV1, ScaffoldContractError> {
+        let praise = kind.is_social();
         source.validate()?;
         let record = self
             .organism_registry
@@ -1813,16 +1994,24 @@ impl HeadlessWorld {
         {
             return Err(ScaffoldContractError::InvalidActionDecision);
         }
+        // New vocal disapproval reaches biology only through actual hearing.
+        // Zero hearing is an accepted but unperceived input, not psychic stress.
+        let received_social = record
+            .embodiment()
+            .sensor_gain(SensorCapability::Hearing)
+            .clamp(0.0, 1.0);
+        if kind == crate::PlayerInteractionV1::Scold && received_social == 0.0 {
+            return Ok(crate::PlayerInteractionQueueOutcomeV1::NoReceivedDose);
+        }
         let event = self
             .pending_player_care
             .entry(organism.raw())
             .or_insert_with(BodyEventDelta::zero);
-        if praise {
-            event.player_reward = 1.0;
-        } else {
-            event.social_contact = 0.25;
+        kind.apply(event);
+        if kind == crate::PlayerInteractionV1::Scold {
+            event.social_disapproval_v1 = received_social;
         }
-        Ok(())
+        Ok(crate::PlayerInteractionQueueOutcomeV1::Queued)
     }
 
     /// The last player-care dose this organism actually felt, if any.
@@ -1847,41 +2036,36 @@ impl HeadlessWorld {
         before: &BiochemistryState,
         after: &BiochemistryState,
     ) {
-        // The kind comes from the applied dose's signs, not from which
-        // button was pressed: only an actually-consumed dose is recorded.
-        // Negative doses are not producible yet (see PlayerCareKind), so
-        // the scold/slap arms are the slot the follow-up slice fills; they
-        // are reachable the moment a negative dose is permitted. A
-        // both-negative or mixed-sign dose is ambiguous — which single kind
-        // the creature felt is a decision for that slice, not a guess here
-        // — so it records nothing rather than misattribute the moment.
-        // (The dose is validated finite upstream, so NaN cannot reach the
-        // comparisons below.)
-        let kind = match (
-            applied.player_reward.partial_cmp(&0.0),
-            applied.social_contact.partial_cmp(&0.0),
-        ) {
-            (Some(std::cmp::Ordering::Greater), Some(std::cmp::Ordering::Greater)) => {
-                PlayerCareKind::PetAndPraise
-            }
-            (Some(std::cmp::Ordering::Greater), Some(std::cmp::Ordering::Equal)) => {
-                PlayerCareKind::Praise
-            }
-            (Some(std::cmp::Ordering::Equal), Some(std::cmp::Ordering::Greater)) => {
-                PlayerCareKind::Pet
-            }
-            (Some(std::cmp::Ordering::Less), Some(std::cmp::Ordering::Equal)) => {
-                PlayerCareKind::Scold
-            }
-            (Some(std::cmp::Ordering::Equal), Some(std::cmp::Ordering::Less)) => {
-                PlayerCareKind::Slap
-            }
-            _ => return,
-        };
+        // The kinds come from the four fields of the player-only dose
+        // that was actually consumed, never from which button was pressed
+        // and never from the merged body event: a collision's damage is
+        // not a slap, and a peer's touch is not a pet. Each field maps to
+        // exactly one kind (see `PlayerInteractionV1::apply`), so a mixed
+        // dose records the set of kinds it carried — no dose is
+        // unattributable, and the old both-negative/mixed-sign ambiguity
+        // is gone. A zero dose records nothing: the dose never arrived,
+        // so there is no response to report. (The dose is validated
+        // finite upstream, so NaN cannot reach the comparisons below.)
+        let mut kinds = PlayerCareKindSet::empty();
+        if applied.player_reward > 0.0 {
+            kinds.insert(PlayerCareKind::Praise);
+        }
+        if applied.social_contact > 0.0 {
+            kinds.insert(PlayerCareKind::Pet);
+        }
+        if applied.social_disapproval_v1 > 0.0 {
+            kinds.insert(PlayerCareKind::Scold);
+        }
+        if applied.damage > 0.0 {
+            kinds.insert(PlayerCareKind::Slap);
+        }
+        if kinds.is_empty() {
+            return;
+        }
         self.last_player_care.insert(
             organism.raw(),
             PlayerCareReceipt {
-                kind,
+                kinds,
                 applied_tick: tick,
                 praise_signal_before: before.homeostasis.hormones.extension[0],
                 praise_signal_after: after.homeostasis.hormones.extension[0],
@@ -3960,7 +4144,7 @@ impl HeadlessWorld {
                 .get(OrganismId(*id))
                 .is_some_and(|record| record.lifecycle().is_alive())
                 || event.energy != 0.0
-                || event.damage != 0.0
+                || (event.damage != 0.0 && event.damage != 0.02)
                 || event.temperature_stress != 0.0
                 || event.nutrition != 0.0
                 || event.play_stimulation != 0.0
@@ -4260,6 +4444,19 @@ impl HeadlessWorld {
                         )?;
                     }
                 }
+                // Player cues are present in every grounded profile. Environmental touch
+                // is already calibrated by the terrain helper; calibrate each
+                // player touch once, then max-mix without attenuating that contact.
+                // Praise retains its legacy received-dose contract (no extra hearing gain).
+                if let Some(event) = self.pending_player_care.get(&organism_id.raw()) {
+                    sensory.channels.auditory_acoustic[1] = event.player_reward;
+                    sensory.channels.auditory_acoustic[2] = event.social_disapproval_v1;
+                    let touch_gain =
+                        embodiment.map_or(1.0, |body| body.sensor_gain(SensorCapability::Touch));
+                    sensory.channels.tactile_contact[0] = sensory.channels.tactile_contact[0]
+                        .max((event.social_contact * touch_gain).clamp(0.0, 1.0))
+                        .max((event.damage * touch_gain).clamp(0.0, 1.0));
+                }
                 let heard = self
                     .speech
                     .heard_tokens(organism_id, body.pose.translation, tick)?;
@@ -4442,13 +4639,6 @@ impl HeadlessWorld {
         let gain =
             |capability| record.map_or(1.0, |record| record.embodiment().sensor_gain(capability));
         let yaw = observer.body_yaw + observer.head_yaw;
-        if let Some(event) = observer
-            .organism_id
-            .and_then(|id| self.pending_player_care.get(&id.raw()))
-        {
-            sensory.channels.tactile_contact[0] = event.social_contact;
-            sensory.channels.auditory_acoustic[1] = event.player_reward;
-        }
         let lateral = Vec3f::new(-yaw.sin() * 0.25, 0.0, yaw.cos() * 0.25);
         let samples = [
             add(observer.position, lateral),
@@ -8312,6 +8502,7 @@ fn combine_body_event(total: BodyEventDelta, event: BodyEventDelta) -> BodyEvent
         // Contact is exposure in this interval, not a count of reporting channels.
         social_contact: total.social_contact.max(event.social_contact),
         player_reward: (total.player_reward + event.player_reward).clamp(0.0, 1.0),
+        social_disapproval_v1: total.social_disapproval_v1.max(event.social_disapproval_v1),
         play_stimulation: (total.play_stimulation + event.play_stimulation).clamp(0.0, 1.0),
         perceived_novelty: (total.perceived_novelty + event.perceived_novelty).clamp(0.0, 1.0),
         investigation: (total.investigation + event.investigation).clamp(0.0, 1.0),
@@ -12382,6 +12573,7 @@ mod task_6_factorized_motor_tests {
             nutrition: 0.04,
             social_contact: 0.05,
             player_reward: 0.06,
+            social_disapproval_v1: 0.0,
             play_stimulation: 0.07,
             perceived_novelty: 0.08,
             investigation: 0.09,
@@ -15332,3 +15524,6 @@ fn motion_sphere_entry(start: Vec3f, end: Vec3f, center: Vec3f, radius: f32) -> 
 mod body_clearance_tests;
 
 mod translation_budget;
+
+#[cfg(test)]
+mod player_interaction_v1_tests;
