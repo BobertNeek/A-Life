@@ -11,14 +11,14 @@ use bevy::ui::{BorderColor, BorderRadius, FocusPolicy, UiRect};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Component)]
 pub(super) enum Action {
     Food,
-    Touch,
+    Pet,
     Toy,
     Praise,
     Speech,
 }
 pub(super) const ACTIONS: [Action; 5] = [
     Action::Food,
-    Action::Touch,
+    Action::Pet,
     Action::Toy,
     Action::Praise,
     Action::Speech,
@@ -30,7 +30,8 @@ impl Action {
     fn icon(self) -> &'static str {
         match self {
             Self::Food => "food",
-            Self::Touch => "touch",
+            // The pet glyph asset keeps its legacy filename.
+            Self::Pet => "touch",
             Self::Toy => "toy",
             Self::Praise => "praise",
             Self::Speech => "speech",
@@ -39,7 +40,7 @@ impl Action {
     pub(super) fn key(self) -> KeyCode {
         match self {
             Self::Food => KeyCode::KeyE,
-            Self::Touch => KeyCode::KeyC,
+            Self::Pet => KeyCode::KeyC,
             Self::Toy => KeyCode::KeyJ,
             Self::Praise => KeyCode::KeyK,
             Self::Speech => KeyCode::Enter,
@@ -48,7 +49,7 @@ impl Action {
     fn label(self) -> &'static str {
         match self {
             Self::Food => "Food placement",
-            Self::Touch => "Gentle touch",
+            Self::Pet => "Pet",
             Self::Toy => "Toy offer",
             Self::Praise => "Praise offer",
             Self::Speech => "Speech",
@@ -57,7 +58,7 @@ impl Action {
     fn accessible_label(self) -> &'static str {
         match self {
             Self::Food => "Place food. Select ground first. E.",
-            Self::Touch => "Offer gentle touch. Select a living creature first. C.",
+            Self::Pet => "Offer a pet. Select a living creature first. C.",
             Self::Toy => "Offer a toy. Select a living creature first. J.",
             Self::Praise => "Offer praise. Select a living creature first. K.",
             Self::Speech => "Open speech composer. Enter.",
