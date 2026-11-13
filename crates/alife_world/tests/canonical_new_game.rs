@@ -135,25 +135,27 @@ fn player_care_is_local_gene_controlled_and_survives_pending_save() {
 }
 
 #[test]
-fn player_care_receipt_records_touch_and_praise_on_tick_and_survives_save() {
+fn player_care_receipt_records_pet_and_praise_on_tick_and_survives_save() {
     use alife_world::{PlayerCareKind, PresentationEvidence};
     let game = phase3_game(1);
     let mut world = game.world;
     let (organism, entity) = world.organism_entity_ids()[0];
     let position = world.entity(entity).unwrap().position;
+    // No receipt before any care is unknown, not a confirmed absence:
+    // a save from before receipts existed reads exactly the same way.
     assert_eq!(world.last_player_care(organism), None);
     assert!(matches!(
         world.presentation_snapshot().organisms.remove(0).last_player_care,
         PresentationEvidence::Unknown
     ));
-    // A touch is felt on the tick that consumes it, not on the queue.
+    // A pet is felt on the tick that consumes it, not on the queue.
     let mut control = world.clone();
     world.queue_player_care(organism, position, false).unwrap();
     assert_eq!(world.last_player_care(organism), None);
     let tick = world.try_advance_tick().unwrap();
     control.try_advance_tick().unwrap();
-    let receipt = world.last_player_care(organism).expect("touch receipt");
-    assert_eq!(receipt.kind, PlayerCareKind::Touch);
+    let receipt = world.last_player_care(organism).expect("pet receipt");
+    assert_eq!(receipt.kind, PlayerCareKind::Pet);
     assert_eq!(receipt.applied_tick, tick);
     let untouched_loneliness = control
         .organism_registry()
@@ -174,20 +176,20 @@ fn player_care_receipt_records_touch_and_praise_on_tick_and_survives_save() {
         }
         PresentationEvidence::Unknown => panic!("expected an observed care receipt"),
     }
-    // A praise overwrites the touch receipt: last only.
+    // A praise overwrites the pet receipt: last only.
     world.queue_player_care(organism, position, true).unwrap();
     let tick = world.try_advance_tick().unwrap();
     let receipt = world.last_player_care(organism).expect("praise receipt");
     assert_eq!(receipt.kind, PlayerCareKind::Praise);
     assert_eq!(receipt.applied_tick, tick);
     assert!(receipt.praise_signal_after > receipt.praise_signal_before);
-    // Both queued before one tick record TouchAndPraise.
+    // Both queued before one tick record PetAndPraise.
     world.queue_player_care(organism, position, false).unwrap();
     world.queue_player_care(organism, position, true).unwrap();
     world.try_advance_tick().unwrap();
     assert_eq!(
         world.last_player_care(organism).unwrap().kind,
-        PlayerCareKind::TouchAndPraise
+        PlayerCareKind::PetAndPraise
     );
     // A rejected queue records nothing and leaves the last receipt alone.
     let before = world.last_player_care(organism).unwrap();
