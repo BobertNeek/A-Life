@@ -35,6 +35,7 @@ pub enum CpuHostError {
 }
 #[derive(Clone)]
 struct Resident {
+    joint_comparison_mode: Option<u16>,
     memory_readout: Option<FrozenMemoryReadoutConstructionV1>,
     memory_readout_digest: Option<[u64; 4]>,
     #[cfg(test)]
@@ -111,6 +112,8 @@ pub struct CpuResidentCheckpoint {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CpuCanonicalCheckpoint {
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub joint_membership2177: Option<u16>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub terminal_context2135: Option<TerminalContextConfig2135>,
     pub schema_version: u16,
     pub phenotype_hash: PhenotypeHash,
@@ -128,6 +131,9 @@ pub struct CpuCanonicalCheckpoint {
 /// chemistry, memories, predictor, neural traces, sleep, sequence and RNG counter.
 #[derive(Clone)]
 pub struct CpuCanonicalHost {
+    #[cfg(test)]
+    fail_joint_membership_after_admission: bool,
+    joint_membership2177: Option<u16>,
     terminal_context2135: Option<TerminalContextConfig2135>,
     world: HeadlessWorld,
     creatures: Vec<CreatureSaveState>,
@@ -139,6 +145,8 @@ pub struct CpuCanonicalHost {
 }
 #[derive(Clone, serde::Deserialize)]
 pub struct CpuCollectedDecision {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub joint_membership2177: Option<JointMembershipLiveReceipt2177>,
     // Test-only capture from the exact call which charges this real native step.
     // Not persisted, imported, reported as component-specific physiology, or
     // included in diagnostic serialization.
@@ -171,6 +179,48 @@ pub struct CpuCollectedDecision {
     pub biological_reward: f32,
     pub patch: ExperiencePatch,
 }
+/// Shared-event research context and actual/reserved work, not isolated credit.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct JointMembershipLiveReceipt2177 {
+    pub schema_version: u16,
+    pub sources: Vec<alife_core::memory::JointMembershipSourceV1>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub comparison: Option<JointMembershipComparison2182>,
+    pub query_work: u64,
+    pub admission_planning_work: u64,
+    pub admission_reserved_work: u64,
+    pub admission_actual_work: u64,
+}
+
+/// Queried evidence is not necessarily applied to the decision context.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct JointMembershipComparison2182 {
+    pub apply: bool,
+    pub queried_sources: Vec<alife_core::memory::JointMembershipSourceV1>,
+}
+
+fn charge_joint_membership_work(
+    activity: &mut CpuActivityBudget,
+    work: u64,
+) -> Result<(), CpuHostError> {
+    activity.work.memory_context_ops = activity
+        .work
+        .memory_context_ops
+        .checked_add(work)
+        .ok_or(CpuHostError::State("joint membership work overflow"))?;
+    let policy = BrainActivityPolicyV1::production_v1();
+    activity.debit_atp_q16 = policy
+        .cost
+        .q24_to_atp_q16_round_half_up(policy.cost.neural_cost_q24(&activity.work)?)?;
+    activity.affordable = activity.debit_atp_q16 <= activity.available_atp_q16;
+    if !activity.affordable {
+        return Err(CpuHostError::State("joint membership work exceeds ATP"));
+    }
+    Ok(())
+}
+
 fn execution_work_is_zero(work: &u64) -> bool {
     *work == 0
 }
@@ -184,6 +234,8 @@ impl serde::Serialize for CpuCollectedDecision {
         // resident-derived arrays. Enabled rows are diagnostic-only envelopes.
         #[derive(serde::Serialize)]
         struct Flat<'a> {
+            #[serde(skip_serializing_if = "Option::is_none")]
+            joint_membership2177: &'a Option<JointMembershipLiveReceipt2177>,
             #[serde(skip_serializing_if = "Option::is_none")]
             executed_action_recall: &'a Option<Vec<Option<alife_core::ExecutedActionRecallV1>>>,
             #[serde(skip_serializing_if = "execution_work_is_zero")]
@@ -204,6 +256,7 @@ impl serde::Serialize for CpuCollectedDecision {
             patch: &'a ExperiencePatch,
         }
         let flat = Flat {
+            joint_membership2177: &self.joint_membership2177,
             executed_action_recall: &self.executed_action_recall,
             executed_action_recall_work: self.executed_action_recall_work,
             memory_readout_research: &self.memory_readout_research,
@@ -218,7 +271,29 @@ impl serde::Serialize for CpuCollectedDecision {
             biological_reward: &self.biological_reward,
             patch: &self.patch,
         };
-        if self.memory_readout_research.is_some() {
+        if self
+            .joint_membership2177
+            .as_ref()
+            .is_some_and(|r| r.comparison.is_some())
+        {
+            #[derive(serde::Serialize)]
+            struct ComparisonEnvelope<'a, T> {
+                joint_membership2182_comparison_record_v1: &'a T,
+            }
+            ComparisonEnvelope {
+                joint_membership2182_comparison_record_v1: &flat,
+            }
+            .serialize(serializer)
+        } else if self.joint_membership2177.is_some() {
+            #[derive(serde::Serialize)]
+            struct Envelope<'a, T> {
+                joint_membership2177_research_record_v1: &'a T,
+            }
+            Envelope {
+                joint_membership2177_research_record_v1: &flat,
+            }
+            .serialize(serializer)
+        } else if self.memory_readout_research.is_some() {
             super::memory_binding::serialize_research_row(&flat, serializer)
         } else {
             terminal_row_wire::serialize(&flat, self.terminal_context2135.is_some(), serializer)
@@ -297,6 +372,7 @@ impl CpuCanonicalHost {
             residents.insert(
                 id.raw(),
                 Resident {
+                    joint_comparison_mode: None,
                     memory_readout: None,
                     memory_readout_digest: None,
                     #[cfg(test)]
@@ -335,6 +411,9 @@ impl CpuCanonicalHost {
             ));
         }
         let mut host = Self {
+            #[cfg(test)]
+            fail_joint_membership_after_admission: false,
+            joint_membership2177: None,
             terminal_context2135: None,
             world,
             creatures,
@@ -432,6 +511,59 @@ impl CpuCanonicalHost {
         }
         Ok(result)
     }
+    /// Fresh CPU research opt-in. It does not migrate an acquired life.
+    pub fn enable_joint_membership2177(
+        &mut self,
+        founder: &CpuFoundationTrainer,
+    ) -> Result<(), CpuHostError> {
+        self.validate_joint_membership_enable(founder)?;
+        let mut next = self.clone();
+        next.joint_membership2177 = Some(1);
+        for resident in next.residents.values_mut() {
+            resident.joint_comparison_mode = Some(1);
+        }
+        next.seal_all_residents()?;
+        *self = next;
+        Ok(())
+    }
+
+    fn validate_joint_membership_enable(
+        &self,
+        founder: &CpuFoundationTrainer,
+    ) -> Result<(), CpuHostError> {
+        self.validate_founder(founder)?;
+        if self.sampling_counter != 0
+            || self.joint_membership2177.is_some()
+            || self.terminal_context2135.is_some()
+            || self
+                .residents
+                .values()
+                .any(|r| r.next_sequence != 1 || r.memory_readout.is_some())
+        {
+            return Err(CpuHostError::State(
+                "joint membership requires fresh exclusive construction",
+            ));
+        }
+        Ok(())
+    }
+
+    /// Fresh equal-work route control; mode 2 applies and mode 3 withholds.
+    pub fn enable_joint_membership_comparison2182(
+        &mut self,
+        founder: &CpuFoundationTrainer,
+        apply: bool,
+    ) -> Result<(), CpuHostError> {
+        let mut next = self.clone();
+        next.validate_joint_membership_enable(founder)?;
+        next.joint_membership2177 = Some(if apply { 2 } else { 3 });
+        for resident in next.residents.values_mut() {
+            resident.joint_comparison_mode = next.joint_membership2177;
+        }
+        next.seal_all_residents()?;
+        *self = next;
+        Ok(())
+    }
+
     pub fn world(&self) -> &HeadlessWorld {
         &self.world
     }
@@ -459,6 +591,7 @@ impl CpuCanonicalHost {
         founder: &CpuFoundationTrainer,
     ) -> Result<(), CpuHostError> {
         if self.sampling_counter != 0
+            || self.joint_membership2177.is_some()
             || self.terminal_context2135.is_some()
             || self.residents.values().any(|r| {
                 r.memory_readout.is_some()
@@ -494,6 +627,7 @@ impl CpuCanonicalHost {
         founder: &CpuFoundationTrainer,
     ) -> Result<(), CpuHostError> {
         if self.sampling_counter != 0
+            || self.joint_membership2177.is_some()
             || self.terminal_context2135.is_some()
             || self.residents.values().any(|r| r.memory_readout.is_some())
         {
@@ -624,8 +758,15 @@ impl CpuCanonicalHost {
             })
             .collect::<Result<_, CpuHostError>>()?;
         Ok(CpuCanonicalCheckpoint {
+            joint_membership2177: self.joint_membership2177,
             terminal_context2135: self.terminal_context2135.clone(),
-            schema_version: if self.residents.values().any(|r| r.memory_readout.is_some()) {
+            schema_version: if self.joint_membership2177.is_some() {
+                if self.joint_membership2177 == Some(1) {
+                    8
+                } else {
+                    7
+                }
+            } else if self.residents.values().any(|r| r.memory_readout.is_some()) {
                 5
             } else {
                 terminal_host_checkpoint_schema2135(self.terminal_context2135.is_some())
@@ -656,7 +797,17 @@ impl CpuCanonicalHost {
             .residents
             .iter()
             .any(|r| r.memory_readout.is_some());
-        if has_readout {
+        if let Some(version) = checkpoint.joint_membership2177 {
+            if !matches!(version, 1..=3)
+                || checkpoint.schema_version != if version == 1 { 8 } else { 7 }
+                || has_readout
+                || checkpoint.terminal_context2135.is_some()
+            {
+                return Err(CpuHostError::State(
+                    "invalid joint membership research checkpoint",
+                ));
+            }
+        } else if has_readout {
             if checkpoint.schema_version != 5 || checkpoint.terminal_context2135.is_some() {
                 return Err(CpuHostError::State(
                     "unsupported combined/legacy memory readout checkpoint",
@@ -788,6 +939,7 @@ impl CpuCanonicalHost {
                 }
             }
             let mut resident = Resident {
+                joint_comparison_mode: checkpoint.joint_membership2177,
                 memory_readout_digest: r.memory_readout.as_ref().map(|c| c.digest()).transpose()?,
                 memory_readout: r.memory_readout,
                 #[cfg(test)]
@@ -797,12 +949,11 @@ impl CpuCanonicalHost {
                 v11: GpuV11CausalState::restore(r.neural_topology)?,
                 neural: CpuOrganismState::from_checkpoint(p, r.neural)?,
                 activity: r.activity,
-                memory: MemorySidecarState::restore_portable(
-                    profile,
-                    r.memory_compaction,
-                    r.memory,
-                    r.staged_memory,
-                )?,
+                memory: (if checkpoint.joint_membership2177.is_some() {
+                    MemorySidecarState::restore_portable_with_joint_membership
+                } else {
+                    MemorySidecarState::restore_portable
+                })(profile, r.memory_compaction, r.memory, r.staged_memory)?,
                 topology: TopologySidecar::restore_portable(r.topology)?,
                 predictor: r.predictor,
                 sleep,
@@ -831,6 +982,9 @@ impl CpuCanonicalHost {
             }
         }
         let host = Self {
+            #[cfg(test)]
+            fail_joint_membership_after_admission: false,
+            joint_membership2177: checkpoint.joint_membership2177,
             terminal_context2135: checkpoint.terminal_context2135.clone(),
             world,
             creatures,
@@ -1112,7 +1266,13 @@ impl CpuCanonicalHost {
                     "semantic preparation changed ordinary perception",
                 ));
             }
-            let prepare_frame = if r.memory_readout.is_some() {
+            let prepare_frame = if self.joint_membership2177 == Some(2) {
+                prepare_canonical_frame_joint_applied
+            } else if self.joint_membership2177 == Some(3) {
+                prepare_canonical_frame_joint_withheld
+            } else if self.joint_membership2177.is_some() {
+                prepare_canonical_frame_with_joint_membership
+            } else if r.memory_readout.is_some() {
                 prepare_canonical_frame_with_family_sources
             } else {
                 prepare_canonical_frame
@@ -1153,6 +1313,29 @@ impl CpuCanonicalHost {
                 return Err(CpuHostError::State(
                     "CPU neural work exceeds canonical ATP availability",
                 ));
+            }
+            let mut joint_membership2177 =
+                self.joint_membership2177
+                    .map(|_| JointMembershipLiveReceipt2177 {
+                        schema_version: if self.joint_membership2177 == Some(1) {
+                            1
+                        } else {
+                            2
+                        },
+                        sources: recall.receipt().joint_membership_sources.clone(),
+                        comparison: prepared.joint_comparison_sources.map(|queried_sources| {
+                            JointMembershipComparison2182 {
+                                apply: self.joint_membership2177 == Some(2),
+                                queried_sources,
+                            }
+                        }),
+                        query_work: recall.receipt().execution_evidence_work,
+                        admission_planning_work: 0,
+                        admission_reserved_work: 0,
+                        admission_actual_work: 0,
+                    });
+            if let Some(receipt) = &joint_membership2177 {
+                charge_joint_membership_work(&mut activity, receipt.query_work)?;
             }
             // Reserve the versioned worst-case research work before exporting
             // the bank or running any additional query. Default-off does none.
@@ -1381,6 +1564,19 @@ impl CpuCanonicalHost {
                     &object_novelty,
                 )
                 .map_err(|_| CpuHostError::State("canonical motor transaction rejected"))?;
+            if let Some(evidence) = &mut joint_membership2177 {
+                let (planning, reserved) = r.memory.reserve_joint_membership_admission_work(
+                    &frame,
+                    &bundle,
+                    &receipt.joint,
+                    sequence,
+                    receipt.outcome_tick,
+                )?;
+                charge_joint_membership_work(&mut activity, planning + reserved)?;
+                evidence.admission_planning_work = planning;
+                evidence.admission_reserved_work = reserved;
+                r.activity.remaining_atp_q16 = activity.available_atp_q16 - activity.debit_atp_q16;
+            }
             let successor = grounded_successor_state(
                 &self.world,
                 record.world_entity_id(),
@@ -1444,7 +1640,10 @@ impl CpuCanonicalHost {
                     + terminal_context2135
                         .as_ref()
                         .map_or(0, |r| r.reserved_work_units)
-                    + readout_work,
+                    + readout_work
+                    + joint_membership2177
+                        .as_ref()
+                        .map_or(0, |r| r.admission_planning_work + r.admission_reserved_work),
                 cognitive.concept.active_concepts.len() as u64,
                 cognitive.gap.active_gaps.len() as u64,
                 prediction.error.len() as u64,
@@ -1514,7 +1713,25 @@ impl CpuCanonicalHost {
                 after.phenotype().brain_genome.plasticity_parameters(),
             )?;
             r.language_grounding.observe_sealed(&patch)?;
-            r.memory.observe_sealed_patch(&patch)?;
+            if let Some(evidence) = &mut joint_membership2177 {
+                let admission = r
+                    .memory
+                    .observe_sealed_patch_with_joint_membership(&patch)?;
+                evidence.admission_actual_work = admission.joint_membership_admission_work;
+                #[cfg(test)]
+                if self.fail_joint_membership_after_admission {
+                    return Err(CpuHostError::State(
+                        "test failure after actual membership admission",
+                    ));
+                }
+                if evidence.admission_actual_work > evidence.admission_reserved_work {
+                    return Err(CpuHostError::State(
+                        "joint membership admission exceeded reservation",
+                    ));
+                }
+            } else {
+                r.memory.observe_sealed_patch(&patch)?;
+            }
             if let Some(channels) = &mut r.terminal_channel2135 {
                 let observation = terminal_context2135
                     .as_mut()
@@ -1601,6 +1818,7 @@ impl CpuCanonicalHost {
                         additional_work_ops: readout_work,
                     });
             decisions.push(CpuCollectedDecision {
+                joint_membership2177,
                 #[cfg(test)]
                 cognitive_cost_capture,
                 executed_action_recall_work: memory.execution_evidence_work,
@@ -1769,6 +1987,10 @@ fn resident_digest(
             sampling_counter,
         ),
     )?;
+    let ordinary = match r.joint_comparison_mode {
+        None => ordinary,
+        Some(mode) => json_digest(b"ALIFE-CPU-JOINT-COMPARISON-PRIVATE-V1", &(ordinary, mode))?,
+    };
     let ordinary = match r.memory_readout_digest {
         None => ordinary,
         Some(digest) => json_digest(
@@ -1880,3 +2102,7 @@ fn structural_sleep_evidence(
     }
     structural_evidence
 }
+
+#[cfg(test)]
+#[path = "joint_membership_native_tests.rs"]
+mod joint_membership_native_tests;
