@@ -1,0 +1,69 @@
+--- a/crates/alife_core/src/phenotype/memory_channel.rs
++++ b/crates/alife_core/src/phenotype/memory_channel.rs
+@@ -37,7 +37,7 @@
+             decoder_input_stride: CANDIDATE_FEATURE_COUNT as u32
+                 + Self::TARGET_LATENT_WIDTH
+                 + Self::FAMILY_VALUE_WIDTH,
+-            max_candidate_gain: 0.5,
++            max_candidate_gain: 8.0,
+             memory_decoder_synapse_count,
+             canonical_digest: [0; 4],
+         };
+@@ -86,7 +86,7 @@
+             || self.family_value_lane_start
+                 != self.target_latent_lane_start + Self::TARGET_LATENT_WIDTH
+             || self.decoder_input_stride != self.target_latent_lane_start + lane_width
+-            || self.max_candidate_gain.to_bits() != 0.5_f32.to_bits()
++            || self.max_candidate_gain.to_bits() != 8.0_f32.to_bits()
+             || self.memory_decoder_synapse_count < Self::MINIMUM_SYNAPSE_COUNT
+             || !self
+                 .memory_decoder_synapse_count
+--- a/crates/alife_training/examples/evolve_pursuit.rs
++++ b/crates/alife_training/examples/evolve_pursuit.rs
+@@ -675,6 +675,37 @@
+         .nth(1)
+         .ok_or("usage: evolve_pursuit <experimental-foundation>; JSON requests on stdin")?;
+     let base = FoundationWeightAsset::decode_canonical(&std::fs::read(path)?)?;
++    if std::env::args().nth(2).as_deref() == Some("--rebind-context") {
++        let path = std::env::args().nth(3).ok_or("context JSON required")?;
++        let evidence: serde_json::Value = serde_json::from_slice(&std::fs::read(path)?)?;
++        let (genome, dev): (BrainGenome, DevelopmentState) =
++            serde_json::from_value(evidence["construction_context"].clone())?;
++        let fresh = PhenotypeCompiler::compile_n2048_anchored_v2_graph(
++            genome,
++            dev,
++            base.manifest().sensor_profile(),
++        )?
++        .0;
++        let coordinates=fresh.synapses().iter().map(|s|json!({"source":s.source(),"target":s.target(),"kind":s.kind(),"route":s.route_index()})).collect::<Vec<_>>();
++        assert_eq!(serde_json::to_value(coordinates)?, evidence["synapses"]);
++        let rebound = FoundationWeightAsset::from_trained_weights(
++            &fresh,
++            base.weights().to_vec(),
++            base.manifest().training_stage(),
++        )?;
++        assert_eq!(rebound.weights(), base.weights());
++        let destination = std::env::args().nth(4).ok_or("new output path required")?;
++        std::fs::OpenOptions::new()
++            .write(true)
++            .create_new(true)
++            .open(destination)?
++            .write_all(&rebound.encode_canonical()?)?;
++        eprintln!(
++            "rebound {} unchanged genetic weights to experimental memory cap",
++            rebound.weights().len()
++        );
++        return Ok(());
++    }
+     let p = phenotype(&base)?;
+     eprintln!(
+         "ready: {:?}, {} neurons, {} synapses",
+@@ -710,7 +741,7 @@
+ 
+     fn base() -> FoundationWeightAsset {
+         FoundationWeightAsset::decode_canonical(include_bytes!(
+-            "../../../assets/foundations/experimental-anchored-v2-research.alife-foundation"
++            "../../../docs/experiments/astra-generalization-2026-11-13/pursuit-memory16-cap8.alife-foundation"
+         ))
+         .unwrap()
+     }

@@ -1,0 +1,75 @@
+{
+  "scene_id": 209000000,
+  "case": "FamiliarApertureSweet-pair0-minus",
+  "condition": "FamiliarApertureSweet",
+  "mirror": -1,
+  "seed_pair": 0,
+  "arm": "CoupledHigh",
+  "world_seed": 20261113209000,
+  "sampling_seed": 2090000,
+  "steps": 96,
+  "confidence_decay": 0.98,
+  "inner_gains": [
+    1.0,
+    1.0
+  ],
+  "motion_multipliers": [
+    1.0,
+    1.0
+  ],
+  "motion_coefficients": [
+    0.03125,
+    0.03125
+  ],
+  "policy_profile": "OwnFeedback2086",
+  "scalar_output_amplitudes": [
+    1.0,
+    1.0
+  ],
+  "joint_coefficients": [
+    1.0,
+    1.0,
+    1.0
+  ],
+  "joint_amplitude": 1024.0,
+  "scalar_output_active": false,
+  "old_r_coefficients": "zero_preserved",
+  "current_self_coefficient": 0.0,
+  "wall_half_span": 0.35,
+  "target_kind": "Food",
+  "target_chemistry": [
+    0.85,
+    0.0,
+    0.0
+  ],
+  "target_nutrition": 0.6,
+  "target_hazard_pain": 0.0,
+  "starting_energy": 0.4,
+  "target_color": [
+    0.75,
+    0.25,
+    0.75
+  ],
+  "target_shape": [
+    0.25,
+    0.75,
+    0.25
+  ],
+  "target_material": [
+    0.3,
+    0.7,
+    0.2
+  ],
+  "angular_couplings": [
+    1.0,
+    1.0
+  ],
+  "own_model_parameters": [
+    0.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0
+  ],
+  "initial_body_yaw": 0.0
+}

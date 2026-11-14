@@ -46,6 +46,11 @@ def main():
     parser.add_argument("--search-seed", type=int, default=13)
     parser.add_argument("--scenes", default="contact,stationary,receding,crossing,toy")
     parser.add_argument("--start-params", default="0,0,0,0,0,0")
+    parser.add_argument("--memory-aversion", type=float, default=0)
+    parser.add_argument("--bearing-gain", type=float, default=0)
+    parser.add_argument("--motor-heads", type=int, choices=range(1, 5), default=1)
+    parser.add_argument("--readout-scale", default="1,1")
+    parser.add_argument("--variation", default="{}", help="JSON angle/speed/appearance settings")
     parser.add_argument("--stop-file", type=pathlib.Path)
     parser.add_argument("--allowance-file", type=pathlib.Path,
                         help='Parent-maintained JSON {"remaining_percent": number}; stop at <=40')
@@ -58,6 +63,10 @@ def main():
     center = torch.tensor([float(x) for x in args.start_params.split(",")])
     if center.shape != (6,) or not torch.isfinite(center).all():
         parser.error("six finite starting parameters required")
+    readout_scale = [float(x) for x in args.readout_scale.split(",")]
+    if len(readout_scale) != 2:
+        parser.error("two readout scales required")
+    variation = json.loads(args.variation)
     scale = torch.tensor([1., 3., 3., 6., 6., .5])
     stop_reason = None
 
@@ -82,7 +91,10 @@ def main():
     def evaluate(params, label):
         nonlocal counter
         request = {"params": params.tolist(), "seed_start": args.seed_start, "seeds": args.seeds,
-                   "ticks": args.ticks, "scenes": args.scenes.split(","), "trace": False}
+                   "ticks": args.ticks, "scenes": args.scenes.split(","), "trace": False,
+                   "memory_aversion": args.memory_aversion, "bearing_gain": args.bearing_gain,
+                   "motor_heads": args.motor_heads,
+                   "readout_scale": readout_scale, "variation": variation}
         proc.stdin.write(json.dumps(request) + "\n")
         proc.stdin.flush()
         raw = proc.stdout.readline()
