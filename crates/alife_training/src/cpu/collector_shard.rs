@@ -368,7 +368,7 @@ fn validate_decision(
 ) -> Result<(), TrainingError> {
     // The optional research head is not part of the legacy PPO replay ABI.
     // Never admit such a row as if its ordinary replay logits selected the action.
-    if decision.terminal_context2135.is_some() {
+    if decision.joint_membership2177.is_some() || decision.terminal_context2135.is_some() {
         return Err(invalid());
     }
     let sequence = TrainingSequence {

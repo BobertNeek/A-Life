@@ -156,6 +156,52 @@ fn matches(a: &CandidateMemoryQueryV2, b: &CandidateMemoryQueryV2) -> bool {
         && a.action_id() == b.action_id()
 }
 impl MemoryBank {
+    /// Bound prospective event admission from actual executed facts, without
+    /// manufacturing physiological values or a provisional sealed patch.
+    /// The returned tariff includes the planning pass and a reserved admission
+    /// ceiling. It is deliberately not a claim that all reserved work executed.
+    pub fn reserve_joint_membership_admission_work(
+        &self,
+        frame: &PerceptionFrame,
+        bundle: &crate::MotorCommandBundle,
+        joint: &crate::JointPhysicalOutcome,
+        sequence: ExperienceSequenceId,
+        event_tick: Tick,
+    ) -> Result<(u64, u64), ScaffoldContractError> {
+        let n = self.candidate_store.records.len() as u64;
+        let comparisons = u64::from((n + 1).ilog2()) + 2;
+        let Some(facts) =
+            executed_action::from_execution(frame, bundle, joint, sequence, event_tick)?
+        else {
+            // An unknown new event may still merge into a record retaining an
+            // earlier event, so reserve removal/reinsertion of that old index.
+            return Ok((
+                1 + joint.channel_outcomes.len() as u64,
+                crate::motor::MAX_MOTOR_CHANNELS as u64 * (2 * n + comparisons + 5),
+            ));
+        };
+        let members =
+            serde_json::to_vec(&facts).map_err(|_| ScaffoldContractError::InvalidMemoryQuery)?;
+        // Exact serialized member bytes, plus a ceiling for fixed JSON keys,
+        // four u64 digest limbs and five finite f32 scalars. 512 exceeds their
+        // maximum JSON text length and does not depend on the eventual values.
+        let event_bytes = members
+            .len()
+            .checked_add(512)
+            .ok_or(ScaffoldContractError::InvalidMemoryQuery)?;
+        let count = facts.facts().len() as u64;
+        // At most one old record removed and one new/merged record inserted.
+        // An old event can have at most MAX_MOTOR_CHANNELS members.
+        let index_bound =
+            crate::motor::MAX_MOTOR_CHANNELS as u64 * (n + 2) + count * (n + comparisons + 3);
+        let admission = 2 * event_bytes.div_ceil(32) as u64 + count + index_bound;
+        let planning = 2 * members.len().div_ceil(32) as u64
+            + count
+            + 1
+            + frame.candidates().len() as u64 * joint.channel_outcomes.len() as u64;
+        Ok((planning, admission))
+    }
+
     /// Capture one exact joint consequence with its authenticated executed members.
     /// Does not alter neural eligibility/biology or manufacture member-local outcomes.
     pub fn observe_sealed_patch_with_joint_membership(
@@ -171,7 +217,75 @@ impl MemoryBank {
         &self,
         draft: &PerceptionFrameDraft,
     ) -> Result<PreparedMemoryRecall, ScaffoldContractError> {
-        let mut p = self.recall_frame(draft)?;
+        self.apply_joint_membership(self.recall_frame(draft)?, draft)
+    }
+
+    /// Cost-matched research comparison: ordinary recall is computed once, then
+    /// the same membership search executes whether its family values are applied
+    /// or withheld. Returned sources describe the query, not necessarily the
+    /// context used. The context receipt lists only applied sources.
+    pub fn recall_frame_joint_comparison(
+        &self,
+        draft: &PerceptionFrameDraft,
+        apply: bool,
+    ) -> Result<(PreparedMemoryRecall, Vec<JointMembershipSourceV1>), ScaffoldContractError> {
+        let ordinary = self.recall_frame(draft)?;
+        let families: Vec<_> = ordinary
+            .context
+            .candidates
+            .iter()
+            .map(|c| {
+                (
+                    c.family_value,
+                    c.family_confidence,
+                    c.family_source_count,
+                    c.best_family_source,
+                )
+            })
+            .collect();
+        let mut p = self.apply_joint_membership(ordinary, draft)?;
+        let queried = p.receipt.joint_membership_sources.clone();
+        for (c, old) in p.context.candidates.iter_mut().zip(families) {
+            let chosen = if apply {
+                (
+                    c.family_value,
+                    c.family_confidence,
+                    c.family_source_count,
+                    c.best_family_source,
+                )
+            } else {
+                old
+            };
+            c.family_value = chosen.0;
+            c.family_confidence = chosen.1;
+            c.family_source_count = chosen.2;
+            c.best_family_source = chosen.3;
+        }
+        // Equal declared comparison tariff: save and assign seven family scalar
+        // fields per candidate, plus copy each queried source receipt and re-encode/hash the context. This is a
+        // logical work metric, not measured machine instructions or wall time.
+        let comparison_work = 14 * p.context.candidates.len() as u64
+            + queried.len() as u64
+            + 2 * p.encoded_context.values().len() as u64;
+        p.receipt.execution_evidence_work = p
+            .receipt
+            .execution_evidence_work
+            .checked_add(comparison_work)
+            .ok_or(ScaffoldContractError::ScalarOutOfRange)?;
+        if !apply {
+            p.receipt.joint_membership_sources.clear();
+        }
+        p.encoded_context = p.context.to_perception_context_block()?;
+        p.receipt.context_digest = p.encoded_context.canonical_digest();
+        p.validate_for_draft(draft)?;
+        Ok((p, queried))
+    }
+
+    fn apply_joint_membership(
+        &self,
+        mut p: PreparedMemoryRecall,
+        draft: &PerceptionFrameDraft,
+    ) -> Result<PreparedMemoryRecall, ScaffoldContractError> {
         p.receipt.schema_version = RECORD_SCHEMA;
         let mut work = 0u64;
         for (i, q) in p.candidate_queries.iter().enumerate() {

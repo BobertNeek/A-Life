@@ -39,7 +39,8 @@ pub fn cpu_training_windows(
     }
     let terminal = terminal_record.map(|r| *r.biochemistry());
     if decisions.iter().any(|d| {
-        d.terminal_context2135.is_some()
+        d.joint_membership2177.is_some()
+            || d.terminal_context2135.is_some()
             || d.memory_readout_research.is_some()
             || has_research_memory_readout(&d.replay_tick)
     }) {

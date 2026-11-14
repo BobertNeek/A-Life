@@ -900,3 +900,29 @@ fn joint_zero_search_keeps_existing_bounded_recent_search_policy() {
     assert!(recall.receipt().joint_membership_sources.is_empty());
     assert_eq!(recall.receipt().execution_evidence_work, 129);
 }
+
+#[test]
+fn joint_comparison_has_equal_work_and_truthful_applied_sources() {
+    for confidence in [0.0, 0.6, f32::from_bits(1)] {
+        let bank = joint_confidence_fixture(confidence);
+        let probe = probe_for_object(3, slot(0, 72, 0.4, [0., 0.8, 0.9]));
+        let ordinary = bank.recall_frame(&probe).unwrap();
+        let joint = bank.recall_frame_with_joint_membership(&probe).unwrap();
+        let (applied, queried_a) = bank.recall_frame_joint_comparison(&probe, true).unwrap();
+        let (withheld, queried_b) = bank.recall_frame_joint_comparison(&probe, false).unwrap();
+        assert_eq!(queried_a, queried_b);
+        assert_eq!(applied.context(), joint.context());
+        assert_eq!(withheld.context(), ordinary.context());
+        assert_eq!(applied.receipt().joint_membership_sources, queried_a);
+        assert!(withheld.receipt().joint_membership_sources.is_empty());
+        assert_eq!(
+            applied.receipt().execution_evidence_work,
+            withheld.receipt().execution_evidence_work
+        );
+        assert!(
+            applied.receipt().execution_evidence_work > joint.receipt().execution_evidence_work
+        );
+        applied.finalize(probe.clone()).unwrap();
+        withheld.finalize(probe).unwrap();
+    }
+}
