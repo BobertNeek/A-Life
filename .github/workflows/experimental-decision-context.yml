@@ -19,8 +19,10 @@ jobs:
       CARGO_PROFILE_DEV_DEBUG: '0'
       RUST_TEST_THREADS: '1'
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master; stable toolchain
+        with:
+          toolchain: stable
       - name: Detached local kernels and controls, not body admission
         run: cargo test --locked -p alife_training --features experimental-decision-context --lib decision_context
       - name: Default feature set remains valid

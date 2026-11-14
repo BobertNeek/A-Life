@@ -57,10 +57,11 @@ jobs:
       RUST_TEST_THREADS: '1'
     steps:
       - name: Checkout exact qualification source
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master; stable toolchain
         with:
+          toolchain: stable
           components: rustfmt, clippy
       - name: Check group50 CLI
         run: cargo check --locked -p alife_game_app --features foundation-training --lib --bin train_n2048_group50
