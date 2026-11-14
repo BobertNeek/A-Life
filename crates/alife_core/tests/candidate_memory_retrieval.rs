@@ -2596,3 +2596,6 @@ fn retained_context_encoding_preserves_populated_audited_and_cached_runtime_fram
         assert_eq!(serde_json::to_value(&bank).unwrap(), bank_before);
     }
 }
+
+#[path = "candidate_memory_retrieval/executed_actions.rs"]
+mod executed_actions;

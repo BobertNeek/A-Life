@@ -1179,10 +1179,81 @@ impl Validate for PhysicalActionOutcome {
     }
 }
 
+/// Provenance from one actually executed World channel. These are inputs to
+/// the shared biology transaction, NOT a counterfactual per-channel physiology
+/// delta, object-causal reward, or a partition of the final joint outcome.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct ExecutedChannelEvidenceV1 {
+    pub schema_version: u16,
+    pub primitive: crate::ActionId,
+    pub command_target: Option<crate::WorldEntityId>,
+    pub succeeded: bool,
+    pub body_inputs: crate::BodyEventDelta,
+}
+impl ExecutedChannelEvidenceV1 {
+    pub fn new(
+        primitive: crate::ActionId,
+        command_target: Option<crate::WorldEntityId>,
+        succeeded: bool,
+        body_inputs: crate::BodyEventDelta,
+    ) -> Result<Self, ScaffoldContractError> {
+        let evidence = Self {
+            schema_version: 1,
+            primitive,
+            command_target,
+            succeeded,
+            body_inputs,
+        };
+        evidence.validate_contract()?;
+        Ok(evidence)
+    }
+    pub fn write_canonical(
+        &self,
+        builder: &mut CanonicalDigestBuilder,
+    ) -> Result<(), ScaffoldContractError> {
+        self.validate_contract()?;
+        builder.write_u16(self.schema_version);
+        builder.write_u32(self.primitive.raw());
+        builder.write_u64(self.command_target.map_or(0, |id| id.raw()));
+        builder.write_u8(u8::from(self.succeeded));
+        let b = self.body_inputs;
+        for value in [
+            b.energy,
+            b.damage,
+            b.temperature_stress,
+            b.nutrition,
+            b.social_contact,
+            b.player_reward,
+            b.social_disapproval_v1,
+            b.play_stimulation,
+            b.perceived_novelty,
+            b.investigation,
+            b.sleep_recovery,
+            b.mating_opportunity,
+        ] {
+            builder.write_f32(value)?;
+        }
+        Ok(())
+    }
+}
+impl Validate for ExecutedChannelEvidenceV1 {
+    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        if self.schema_version != 1 {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
+        self.primitive.validate()?;
+        validate_optional_target(self.command_target)?;
+        self.body_inputs.validate_contract()
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct ChannelPhysicalOutcome {
     pub channel: MotorChannel,
     pub physical: PhysicalActionOutcome,
+    /// Missing in legacy recordings: unknown, never reconstructed from aggregate biology.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_evidence: Option<ExecutedChannelEvidenceV1>,
 }
 
 impl ChannelPhysicalOutcome {
@@ -1190,15 +1261,38 @@ impl ChannelPhysicalOutcome {
         channel: MotorChannel,
         physical: PhysicalActionOutcome,
     ) -> Result<Self, ScaffoldContractError> {
-        let outcome = Self { channel, physical };
+        let outcome = Self {
+            channel,
+            physical,
+            execution_evidence: None,
+        };
         outcome.validate_contract()?;
         Ok(outcome)
+    }
+    pub fn with_execution_evidence(
+        mut self,
+        evidence: ExecutedChannelEvidenceV1,
+    ) -> Result<Self, ScaffoldContractError> {
+        self.execution_evidence = Some(evidence);
+        self.validate_contract()?;
+        Ok(self)
     }
 }
 
 impl Validate for ChannelPhysicalOutcome {
     fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
-        self.physical.validate_contract()
+        self.physical.validate_contract()?;
+        if let Some(evidence) = self.execution_evidence {
+            evidence.validate_contract()?;
+            if self.physical.contact == PhysicalContactKind::Consumed
+                && (!evidence.succeeded
+                    || evidence.command_target.is_none()
+                    || evidence.command_target != self.physical.target_entity)
+            {
+                return Err(ScaffoldContractError::InvalidDecisionEvidence);
+            }
+        }
+        Ok(())
     }
 }
 
@@ -2180,6 +2274,20 @@ fn validate_joint_channel_outcomes_against_bundle(
     if actual != expected {
         return Err(ScaffoldContractError::InvalidDecisionEvidence);
     }
+    for outcome in &joint.channel_outcomes {
+        if let Some(evidence) = outcome.execution_evidence {
+            let command = bundle
+                .channels
+                .iter()
+                .find(|c| c.channel == outcome.channel)
+                .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
+            if evidence.primitive != command.primitive
+                || evidence.command_target != command.target.and_then(|t| t.entity)
+            {
+                return Err(ScaffoldContractError::InvalidDecisionEvidence);
+            }
+        }
+    }
     Ok(())
 }
 
@@ -2776,6 +2884,26 @@ fn write_joint_channel_observations(
         for outcome in &joint.channel_outcomes {
             builder.write_u16(outcome.channel.canonical_key());
             write_physical_outcome(builder, outcome.physical)?;
+        }
+        // Append only for new evidence; legacy receipt digests remain exact.
+        if joint
+            .channel_outcomes
+            .iter()
+            .any(|o| o.execution_evidence.is_some())
+        {
+            let domain = b"ALIFE-EXECUTED-CHANNEL-EVIDENCE-V1";
+            builder.write_sequence_len(domain.len());
+            for byte in domain {
+                builder.write_u8(*byte);
+            }
+            builder.write_sequence_len(joint.channel_outcomes.len());
+            for outcome in &joint.channel_outcomes {
+                builder.write_u16(outcome.channel.canonical_key());
+                builder.write_u8(u8::from(outcome.execution_evidence.is_some()));
+                if let Some(evidence) = outcome.execution_evidence {
+                    evidence.write_canonical(builder)?;
+                }
+            }
         }
     }
     Ok(())

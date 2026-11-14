@@ -4431,7 +4431,8 @@ fn cognitive_work_receipt(
 ) -> Result<CognitiveWorkReceipt, ScaffoldContractError> {
     let memory_ops = u64::from(memory.exact_bucket_reads)
         .saturating_add(u64::from(memory.neighbor_bucket_reads))
-        .saturating_add(u64::from(memory.similarity_evaluations));
+        .saturating_add(u64::from(memory.similarity_evaluations))
+        .saturating_add(memory.execution_evidence_work);
     cognitive_work_receipt_from_subsystems(
         neural_work,
         v11_work,
@@ -10674,6 +10675,43 @@ mod tests {
     }
 
     #[test]
+    fn factual_execution_recall_is_charged_once_in_game_work_receipt() {
+        let context =
+            CognitiveContextFrame::empty(OrganismId(1), ExperienceSequenceId(1), Tick::ZERO)
+                .unwrap();
+        let mut memory = MemoryRecallReceipt {
+            runtime_approximate: false,
+            schema_version: 1,
+            organism_id_raw: 1,
+            input_generation: 1,
+            bank_digest: [0; 4],
+            base_frame_digest: alife_core::PerceptionBaseDigest([0; 4]),
+            context_digest: alife_core::PerceptionContextDigest([0; 4]),
+            candidate_count: 0,
+            exact_bucket_reads: 3,
+            neighbor_bucket_reads: 5,
+            similarity_evaluations: 7,
+            execution_evidence_work: 0,
+            candidates: Vec::new(),
+            degradations: Vec::new(),
+        };
+        let neural = BrainWorkCounters::default();
+        let v11 = GpuV11WorkReceipt::default();
+        let legacy = cognitive_work_receipt(&context, &memory, &neural, &v11, 0).unwrap();
+        assert_eq!(legacy.memory_ops, 3 + 5 + 7);
+        memory.execution_evidence_work = 11;
+        for runtime_approximate in [false, true] {
+            memory.runtime_approximate = runtime_approximate;
+            let charged = cognitive_work_receipt(&context, &memory, &neural, &v11, 0).unwrap();
+            assert_eq!(charged.memory_ops, legacy.memory_ops + 11);
+            assert_eq!(charged.weighted_total, legacy.weighted_total + 11);
+        }
+        // Saturation must not wrap factual work into an artificially cheap receipt.
+        memory.execution_evidence_work = u64::MAX;
+        assert!(cognitive_work_receipt(&context, &memory, &neural, &v11, 0).is_err());
+    }
+
+    #[test]
     fn object_bound_concepts_and_gaps_change_predecision_focus_selectively() {
         let organism_id = OrganismId(1);
         let sequence_id = ExperienceSequenceId(1);
@@ -13610,6 +13648,7 @@ mod tests {
             exact_bucket_reads: 0,
             neighbor_bucket_reads: 0,
             similarity_evaluations: 0,
+            execution_evidence_work: 0,
             candidates: Vec::new(),
             degradations: Vec::new(),
         };

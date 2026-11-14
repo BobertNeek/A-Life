@@ -35,6 +35,8 @@ pub struct PortableMemoryRecordV2 {
     pub canonical_digest: [u64; 4],
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub outcome_contact: Option<PhysicalContactKind>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub executed_actions_json: Option<Vec<u8>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -433,6 +435,47 @@ impl MemorySidecarState {
             return Err(ScaffoldContractError::SensorProfileMismatch);
         }
         self.bank.recall_frame(draft)
+    }
+
+    pub fn recall_frame_with_execution_evidence(
+        &self,
+        draft: &PerceptionFrameDraft,
+    ) -> Result<PreparedMemoryRecall, ScaffoldContractError> {
+        if draft.organism_id() != self.organism_id
+            || draft.profile_provenance().identity() != self.profile
+        {
+            return Err(ScaffoldContractError::BrainOwnershipMismatch);
+        }
+        self.bank.recall_frame_with_execution_evidence(draft)
+    }
+
+    pub fn recall_frame_runtime_with_execution_evidence(
+        &self,
+        draft: &PerceptionFrameDraft,
+        cache: &RuntimeMemoryRecallCache,
+        refresh: bool,
+    ) -> Result<(PreparedMemoryRecall, Option<RuntimeMemoryRecallCache>), ScaffoldContractError>
+    {
+        if draft.organism_id() != self.organism_id
+            || draft.profile_provenance().identity() != self.profile
+        {
+            return Err(ScaffoldContractError::BrainOwnershipMismatch);
+        }
+        self.bank
+            .recall_frame_runtime_with_execution_evidence(draft, cache, refresh)
+    }
+
+    /// Offboard diagnostics only; reported work never changes cognitive debt.
+    pub fn inspect_execution_evidence(
+        &self,
+        recall: &FinalizedMemoryRecall,
+    ) -> Result<ExecutionEvidenceInspectionV1, ScaffoldContractError> {
+        if recall.receipt.organism_id_raw != self.organism_id.raw()
+            || recall.context.profile != self.profile
+        {
+            return Err(ScaffoldContractError::BrainOwnershipMismatch);
+        }
+        self.bank.inspect_execution_evidence(recall)
     }
 
     pub fn recall_frame_with_family_sources(
@@ -886,6 +929,15 @@ impl MemorySidecarState {
 
 impl PortableMemoryRecordV2 {
     pub fn recompute_canonical_digest(&self) -> Result<[u64; 4], ScaffoldContractError> {
+        self.recompute_digest_with_checked_facts(None)
+    }
+
+    // Only internal immutable facts qualify as a proof, and their exact bytes
+    // must match this portable record. Public callers always take the cold path.
+    fn recompute_digest_with_checked_facts(
+        &self,
+        checked: Option<&Option<executed_action::CheckedExecutionFacts>>,
+    ) -> Result<[u64; 4], ScaffoldContractError> {
         let mut digest = CanonicalDigestBuilder::new(PORTABLE_MEMORY_RECORD_DOMAIN);
         digest.write_u16(self.schema_version);
         digest.write_u64(self.memory_id_raw);
@@ -911,6 +963,15 @@ impl PortableMemoryRecordV2 {
         digest.write_u16(self.salience_q16);
         digest.write_u32(self.observation_count);
         candidate_index::write_outcome_provenance(&mut digest, self.outcome_contact);
+        if let Some(checked) = checked {
+            if self.executed_actions_json.as_deref() != checked.as_ref().map(|facts| facts.bytes())
+            {
+                return Err(ScaffoldContractError::InvalidMemoryQuery);
+            }
+            executed_action::write_cached_digest(&mut digest, checked);
+        } else {
+            executed_action::write_digest(&mut digest, &self.executed_actions_json)?;
+        }
         Ok(digest.finish256())
     }
 
@@ -918,6 +979,15 @@ impl PortableMemoryRecordV2 {
         &self,
         organism_id_raw: u64,
         profile: crate::SensorProfileIdentity,
+    ) -> Result<(), ScaffoldContractError> {
+        self.validate_with_checked_facts(organism_id_raw, profile, None)
+    }
+
+    fn validate_with_checked_facts(
+        &self,
+        organism_id_raw: u64,
+        profile: crate::SensorProfileIdentity,
+        checked: Option<&Option<executed_action::CheckedExecutionFacts>>,
     ) -> Result<(), ScaffoldContractError> {
         let record_profile = crate::SensorProfileIdentity {
             profile_id: crate::SensorProfileId(self.profile_id_raw),
@@ -951,7 +1021,7 @@ impl PortableMemoryRecordV2 {
             || (self.outcome_contact.is_some()
                 && (self.tracked_object_id_raw == 0 || family != CandidateActionFamily::Ingest))
             || !(0.0..=1.0).contains(&confidence)
-            || self.canonical_digest != self.recompute_canonical_digest()?
+            || self.canonical_digest != self.recompute_digest_with_checked_facts(checked)?
         {
             return Err(ScaffoldContractError::InvalidMemoryQuery);
         }
@@ -990,6 +1060,13 @@ impl PortableMemoryBankAssetV2 {
     }
 
     pub fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        self.validate_with_checked_store(None)
+    }
+
+    fn validate_with_checked_store(
+        &self,
+        checked: Option<&CandidateMemoryStoreV2>,
+    ) -> Result<(), ScaffoldContractError> {
         self.profile
             .validate_contract()
             .map_err(|_| ScaffoldContractError::InvalidMemoryQuery)?;
@@ -1004,7 +1081,19 @@ impl PortableMemoryBankAssetV2 {
         }
         let mut previous_id = 0;
         for record in &self.records {
-            record.validate_for(self.organism_id_raw, self.profile)?;
+            if let Some(store) = checked {
+                let original = store
+                    .records
+                    .get(&record.memory_id_raw)
+                    .ok_or(ScaffoldContractError::InvalidMemoryQuery)?;
+                record.validate_with_checked_facts(
+                    self.organism_id_raw,
+                    self.profile,
+                    Some(&original.executed_actions_json),
+                )?;
+            } else {
+                record.validate_for(self.organism_id_raw, self.profile)?;
+            }
             if record.memory_id_raw <= previous_id
                 || record.memory_id_raw >= self.next_memory_id_raw
                 || record.sealed_sequence_id_raw > self.last_observed_sequence_id_raw
@@ -1071,9 +1160,18 @@ fn portable_bank_from_memory(
             observation_count: record.observation_count,
             canonical_digest: [0; 4],
             outcome_contact: record.outcome_contact,
+            executed_actions_json: record
+                .executed_actions_json
+                .as_ref()
+                .map(|facts| facts.bytes().to_vec()),
         };
-        portable.canonical_digest = portable.recompute_canonical_digest()?;
-        portable.validate_for(organism_id.raw(), profile)?;
+        portable.canonical_digest =
+            portable.recompute_digest_with_checked_facts(Some(&record.executed_actions_json))?;
+        portable.validate_with_checked_facts(
+            organism_id.raw(),
+            profile,
+            Some(&record.executed_actions_json),
+        )?;
         records.push(portable);
     }
     let last_observed_sequence_id_raw = bank
@@ -1109,7 +1207,7 @@ fn portable_bank_from_memory(
         canonical_digest: [0; 4],
     };
     asset.canonical_digest = asset.recompute_canonical_digest()?;
-    asset.validate_contract()?;
+    asset.validate_with_checked_store(Some(&bank.candidate_store))?;
     Ok(asset)
 }
 
@@ -1153,6 +1251,11 @@ fn memory_bank_from_portable(
             salience_q16: portable.salience_q16,
             observation_count: portable.observation_count,
             outcome_contact: portable.outcome_contact,
+            executed_actions_json: portable
+                .executed_actions_json
+                .clone()
+                .map(executed_action::CheckedExecutionFacts::from_bytes)
+                .transpose()?,
         };
         record.validate_contract()?;
         records.insert(record.memory_id.raw(), record);
@@ -1169,6 +1272,7 @@ fn memory_bank_from_portable(
         eviction_count: asset.eviction_count,
         records,
         last_sequence_by_organism,
+        execution_index: std::collections::BTreeMap::new(),
         family_index: std::collections::BTreeMap::new(),
         target_index: std::collections::BTreeMap::new(),
         family_namespace_index: std::collections::BTreeMap::new(),

@@ -486,6 +486,7 @@ mod tests {
                 .with_channel_outcomes(vec![alife_core::experience::ChannelPhysicalOutcome {
                     channel: MotorChannel::Manipulation,
                     physical: outcome.physical,
+                    execution_evidence: None,
                 }])
                 .unwrap(),
         );

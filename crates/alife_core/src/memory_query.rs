@@ -518,7 +518,7 @@ impl MemoryQueryEncoderV2 {
         )
     }
 
-    fn encode_from_frame(
+    pub(crate) fn encode_from_frame(
         frame: &PerceptionFrame,
         candidate: &ActionCandidate,
     ) -> Result<CandidateMemoryQueryV2, ScaffoldContractError> {
