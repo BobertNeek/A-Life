@@ -349,6 +349,58 @@ It deliberately changes the compiler's expected memory identity and is **not** a
 compatible global update for existing builtins/saves. Its focused tests use the
 rebound research fixture. No production/default cap change is included.
 
+## Phase-aware release circuit
+
+`release-circuit-study.json` preserves the next additive experiment. A PyTorch
+reconstruction of all 2,048 neurons over both native microsteps matched two
+local replay boundaries within 2.98e-8. The pain relay changes substantially
+inside a decision: fitting only its final activation had hidden a high-gain
+oscillation. This is intended cadence behavior, not a demonstrated runtime bug.
+`audit_circuit_replay.py` reproduces the forward check from local v12 `--inspect`
+and trace output; raw neural/replay state is not published.
+
+The exported `pursuit-twohead-contact20-release16x24` research candidate changes
+20 genetic weights: 15 positive Inspect priors scale to one eighth, two recurrent
+weights recruit Contact motor 1809 from pain and a tonic reference, and three
+readout weights favor releasing a held object, then leaving manipulation idle.
+It uses the existing Grab/release and no-manipulation candidates. All other
+weights, all 32,768 coordinates and the rest of the construction genome match
+Contact20. Reloading the asset plus its genome reproduces all 14 pilot outcomes.
+Contact20 remains the common working parent; this candidate is not a default.
+
+Ten fresh seeds, varied headings, appearances, object properties, distances and
+speeds, with 14 scenes per arm and 256 intervals, gave:
+
+| Measure | Contact20 | Inspect prior only | Release circuit |
+|---|---:|---:|---:|
+| Ordinary meals | 98/110 | 98/110 | 98/110 |
+| Hazard deaths | 7/20 | 0/20 | 0/20 |
+| Mixed hazard/food meals | 1/10 | 2/10 | 2/10 |
+| Failed Ingest bundles | 3,703 | 3,560 | 2,274 |
+| Steps summed over the same 98 meals | 5,810 | 5,918 | 6,112 |
+
+The ordinary success sets are identical. The release candidate loses the one
+baseline mixed-food success and wins two different cases; it is not uniformly
+better. Its ordinary meals take 5.2% more intervals in total. In three separate
+1,024-interval lone-hazard tests it survives all three versus zero for Contact20,
+and eats in all three mixed hazard/food cases versus zero. These are small
+physical comparisons, not a statistical-significance or general-IQ claim.
+
+The long trace reveals the limit: after the first 256 intervals it almost stops
+handling the hazard, but stays within reach. Reduced injury is not escape or
+learned hazard identity. Subsequent Avoid-motor experiments remain separate
+research descendants. Final injury is measured at each trial's endpoint; meals
+end trials early, so it must not be presented as equal-duration cumulative harm.
+
+Assay v11 exposes effective recurrent weights; v12 optionally retains one full
+local replay boundary at interval 32 and includes cadence metadata in inspection.
+Nine native example tests, strict Clippy and the release build passed. The first
+export trace comparison mistakenly included trace-only target-motion rows;
+correcting that comparison showed exact physical metrics without rerunning the
+life. The failed comparison and two rejected negative-MotorProposal proposals
+remain recorded. No runtime, cadence, biology, production brain or GPU change
+is included.
+
 ## Evidence and reproduction
 
 `results.jsonl.gz` contains completed requests and compact native outcomes,

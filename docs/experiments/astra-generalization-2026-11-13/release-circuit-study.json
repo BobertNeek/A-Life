@@ -1,0 +1,4292 @@
+{
+  "source": "bbb071ad03f0594cea2fda6a3197fd54a6c85de5",
+  "binary_sha256": "5614c1b1374c39d29fbcb20c6526ed3b23b21ee874648eaeda9c5df3452742c7",
+  "backend": "native CPU, ordinary waking plasticity active",
+  "parent": "Contact20, unchanged shared parent",
+  "candidate": "pursuit-twohead-contact20-release16x24, research comparison candidate",
+  "paper": "https://rikiyat.github.io/blog/weight-space-programming/",
+  "method": "PyTorch reconstruction of native cadence-aware microsteps, followed by additive genetic-weight edits and native physical selection. This is feedback-driven hill climbing, not replication of the paper one-shot restrictions.",
+  "audit": {
+    "torch": "2.15.0+cpu",
+    "results": [
+      {
+        "scene": "toy",
+        "tick": 32,
+        "max_activation_error": 7.450580596923828e-09,
+        "expected_retained_max_error": 0.0
+      },
+      {
+        "scene": "hazard",
+        "tick": 32,
+        "max_activation_error": 2.9802322387695312e-08,
+        "expected_retained_max_error": 0.0
+      }
+    ]
+  },
+  "phase_fit": {
+    "method": "Scalar native leak/Tanh/metabolic equations over frozen two-phase source traces; b solves painless final activation0.02. Other weak inputs and future plasticity/body feedback are omitted, so native physical tests remain necessary.",
+    "fits": [
+      {
+        "pain_gain": 4.0,
+        "reference_gain": 0.4296434223651886,
+        "toy_final": 0.020000001415610313,
+        "hazard_final": 0.13890497386455536
+      },
+      {
+        "pain_gain": 8.0,
+        "reference_gain": 2.013740301132202,
+        "toy_final": 0.019999992102384567,
+        "hazard_final": 0.23118674755096436
+      },
+      {
+        "pain_gain": 16.0,
+        "reference_gain": 5.198683738708496,
+        "toy_final": 0.019999943673610687,
+        "hazard_final": 0.33476722240448
+      },
+      {
+        "pain_gain": 32.0,
+        "reference_gain": 11.883387565612793,
+        "toy_final": 0.019999966025352478,
+        "hazard_final": 0.33985012769699097
+      }
+    ]
+  },
+  "prior_screen_plan": {
+    "parent_sha256": "d83a995e802e41b8e17799b0871f75d9ede35f95850049777323112e636654d1",
+    "binary_sha256": "73cd9ee3eaff9ff9945b04987152ace7641d8dab57f957d75a56673e62400195",
+    "torch": "2.15.0+cpu",
+    "source": "402570686c718203d1ea09f2646777599d88776f",
+    "variants": [
+      [
+        "base",
+        []
+      ],
+      [
+        "pain32",
+        [
+          [
+            9552,
+            64
+          ],
+          [
+            10419,
+            23
+          ],
+          [
+            25713,
+            -32
+          ]
+        ]
+      ],
+      [
+        "prior0.0",
+        [
+          [
+            25440,
+            -0.6747460961341858
+          ],
+          [
+            25446,
+            -0.5
+          ],
+          [
+            25455,
+            -2.5
+          ],
+          [
+            25456,
+            -0.6747460961341858
+          ],
+          [
+            25462,
+            -0.5
+          ],
+          [
+            25471,
+            -2.5
+          ],
+          [
+            25472,
+            -0.6747460961341858
+          ],
+          [
+            25478,
+            -0.5
+          ],
+          [
+            25487,
+            -2.5
+          ],
+          [
+            25488,
+            -0.6747460961341858
+          ],
+          [
+            25504,
+            -0.6747460961341858
+          ],
+          [
+            25520,
+            -0.6747460961341858
+          ],
+          [
+            25536,
+            -0.6747460961341858
+          ],
+          [
+            25552,
+            -0.6747460961341858
+          ],
+          [
+            25568,
+            -0.6747460961341858
+          ]
+        ]
+      ],
+      [
+        "prior0.125",
+        [
+          [
+            25440,
+            -0.5904028415679932
+          ],
+          [
+            25446,
+            -0.4375
+          ],
+          [
+            25455,
+            -2.1875
+          ],
+          [
+            25456,
+            -0.5904028415679932
+          ],
+          [
+            25462,
+            -0.4375
+          ],
+          [
+            25471,
+            -2.1875
+          ],
+          [
+            25472,
+            -0.5904028415679932
+          ],
+          [
+            25478,
+            -0.4375
+          ],
+          [
+            25487,
+            -2.1875
+          ],
+          [
+            25488,
+            -0.5904028415679932
+          ],
+          [
+            25504,
+            -0.5904028415679932
+          ],
+          [
+            25520,
+            -0.5904028415679932
+          ],
+          [
+            25536,
+            -0.5904028415679932
+          ],
+          [
+            25552,
+            -0.5904028415679932
+          ],
+          [
+            25568,
+            -0.5904028415679932
+          ]
+        ]
+      ],
+      [
+        "prior0.25",
+        [
+          [
+            25440,
+            -0.5060595870018005
+          ],
+          [
+            25446,
+            -0.375
+          ],
+          [
+            25455,
+            -1.875
+          ],
+          [
+            25456,
+            -0.5060595870018005
+          ],
+          [
+            25462,
+            -0.375
+          ],
+          [
+            25471,
+            -1.875
+          ],
+          [
+            25472,
+            -0.5060595870018005
+          ],
+          [
+            25478,
+            -0.375
+          ],
+          [
+            25487,
+            -1.875
+          ],
+          [
+            25488,
+            -0.5060595870018005
+          ],
+          [
+            25504,
+            -0.5060595870018005
+          ],
+          [
+            25520,
+            -0.5060595870018005
+          ],
+          [
+            25536,
+            -0.5060595870018005
+          ],
+          [
+            25552,
+            -0.5060595870018005
+          ],
+          [
+            25568,
+            -0.5060595870018005
+          ]
+        ]
+      ],
+      [
+        "tonic0",
+        [
+          [
+            25455,
+            -2.5
+          ],
+          [
+            25471,
+            -2.5
+          ],
+          [
+            25487,
+            -2.5
+          ]
+        ]
+      ]
+    ],
+    "seeds": "2026114300-4302",
+    "terrain": [
+      0,
+      0.25,
+      1
+    ],
+    "ticks": 256,
+    "goal": "Reduce the existing positive Inspect prior across object properties while preserving ordinary meals. Prior0 is an ablation control, not automatic preferred policy. Compare against Contact20 and the previously frozen pain candidate; no shared-parent promotion."
+  },
+  "prior_screen": {
+    "base": {
+      "lives": 42,
+      "ordinary_meals": 29,
+      "ordinary_cases": 33,
+      "ordinary_successes": [
+        [
+          2026114300,
+          "contact"
+        ],
+        [
+          2026114300,
+          "stationary"
+        ],
+        [
+          2026114300,
+          "receding"
+        ],
+        [
+          2026114300,
+          "crossing"
+        ],
+        [
+          2026114300,
+          "zigzag"
+        ],
+        [
+          2026114300,
+          "orbiting"
+        ],
+        [
+          2026114300,
+          "fleeing"
+        ],
+        [
+          2026114300,
+          "partial-obstacle"
+        ],
+        [
+          2026114300,
+          "moving-obstacle"
+        ],
+        [
+          2026114300,
+          "choice"
+        ],
+        [
+          2026114300,
+          "toy-then-food"
+        ],
+        [
+          2026114301,
+          "contact"
+        ],
+        [
+          2026114301,
+          "stationary"
+        ],
+        [
+          2026114301,
+          "receding"
+        ],
+        [
+          2026114301,
+          "crossing"
+        ],
+        [
+          2026114301,
+          "zigzag"
+        ],
+        [
+          2026114301,
+          "orbiting"
+        ],
+        [
+          2026114301,
+          "fleeing"
+        ],
+        [
+          2026114301,
+          "moving-obstacle"
+        ],
+        [
+          2026114301,
+          "toy-then-food"
+        ],
+        [
+          2026114302,
+          "contact"
+        ],
+        [
+          2026114302,
+          "stationary"
+        ],
+        [
+          2026114302,
+          "receding"
+        ],
+        [
+          2026114302,
+          "crossing"
+        ],
+        [
+          2026114302,
+          "zigzag"
+        ],
+        [
+          2026114302,
+          "orbiting"
+        ],
+        [
+          2026114302,
+          "fleeing"
+        ],
+        [
+          2026114302,
+          "moving-obstacle"
+        ],
+        [
+          2026114302,
+          "toy-then-food"
+        ]
+      ],
+      "ordinary_meal_intervals": 1682,
+      "deaths": 2,
+      "mixed_meals": 0,
+      "final_hazard_injury_sum": 5.083934664726257,
+      "failed_ingest_bundles": 1122,
+      "toy_failed_ingests": 265
+    },
+    "pain32": {
+      "lives": 42,
+      "ordinary_meals": 29,
+      "ordinary_cases": 33,
+      "ordinary_successes": [
+        [
+          2026114300,
+          "contact"
+        ],
+        [
+          2026114300,
+          "stationary"
+        ],
+        [
+          2026114300,
+          "receding"
+        ],
+        [
+          2026114300,
+          "crossing"
+        ],
+        [
+          2026114300,
+          "zigzag"
+        ],
+        [
+          2026114300,
+          "orbiting"
+        ],
+        [
+          2026114300,
+          "fleeing"
+        ],
+        [
+          2026114300,
+          "partial-obstacle"
+        ],
+        [
+          2026114300,
+          "moving-obstacle"
+        ],
+        [
+          2026114300,
+          "choice"
+        ],
+        [
+          2026114300,
+          "toy-then-food"
+        ],
+        [
+          2026114301,
+          "contact"
+        ],
+        [
+          2026114301,
+          "stationary"
+        ],
+        [
+          2026114301,
+          "receding"
+        ],
+        [
+          2026114301,
+          "crossing"
+        ],
+        [
+          2026114301,
+          "zigzag"
+        ],
+        [
+          2026114301,
+          "orbiting"
+        ],
+        [
+          2026114301,
+          "fleeing"
+        ],
+        [
+          2026114301,
+          "moving-obstacle"
+        ],
+        [
+          2026114301,
+          "toy-then-food"
+        ],
+        [
+          2026114302,
+          "contact"
+        ],
+        [
+          2026114302,
+          "stationary"
+        ],
+        [
+          2026114302,
+          "receding"
+        ],
+        [
+          2026114302,
+          "crossing"
+        ],
+        [
+          2026114302,
+          "zigzag"
+        ],
+        [
+          2026114302,
+          "orbiting"
+        ],
+        [
+          2026114302,
+          "fleeing"
+        ],
+        [
+          2026114302,
+          "moving-obstacle"
+        ],
+        [
+          2026114302,
+          "toy-then-food"
+        ]
+      ],
+      "ordinary_meal_intervals": 1655,
+      "deaths": 0,
+      "mixed_meals": 0,
+      "final_hazard_injury_sum": 4.183302819728851,
+      "failed_ingest_bundles": 1094,
+      "toy_failed_ingests": 247
+    },
+    "prior0.0": {
+      "lives": 42,
+      "ordinary_meals": 29,
+      "ordinary_cases": 33,
+      "ordinary_successes": [
+        [
+          2026114300,
+          "contact"
+        ],
+        [
+          2026114300,
+          "stationary"
+        ],
+        [
+          2026114300,
+          "receding"
+        ],
+        [
+          2026114300,
+          "crossing"
+        ],
+        [
+          2026114300,
+          "zigzag"
+        ],
+        [
+          2026114300,
+          "orbiting"
+        ],
+        [
+          2026114300,
+          "fleeing"
+        ],
+        [
+          2026114300,
+          "partial-obstacle"
+        ],
+        [
+          2026114300,
+          "moving-obstacle"
+        ],
+        [
+          2026114300,
+          "choice"
+        ],
+        [
+          2026114300,
+          "toy-then-food"
+        ],
+        [
+          2026114301,
+          "contact"
+        ],
+        [
+          2026114301,
+          "stationary"
+        ],
+        [
+          2026114301,
+          "receding"
+        ],
+        [
+          2026114301,
+          "crossing"
+        ],
+        [
+          2026114301,
+          "zigzag"
+        ],
+        [
+          2026114301,
+          "orbiting"
+        ],
+        [
+          2026114301,
+          "fleeing"
+        ],
+        [
+          2026114301,
+          "moving-obstacle"
+        ],
+        [
+          2026114301,
+          "toy-then-food"
+        ],
+        [
+          2026114302,
+          "contact"
+        ],
+        [
+          2026114302,
+          "stationary"
+        ],
+        [
+          2026114302,
+          "receding"
+        ],
+        [
+          2026114302,
+          "crossing"
+        ],
+        [
+          2026114302,
+          "zigzag"
+        ],
+        [
+          2026114302,
+          "orbiting"
+        ],
+        [
+          2026114302,
+          "fleeing"
+        ],
+        [
+          2026114302,
+          "moving-obstacle"
+        ],
+        [
+          2026114302,
+          "toy-then-food"
+        ]
+      ],
+      "ordinary_meal_intervals": 1671,
+      "deaths": 0,
+      "mixed_meals": 0,
+      "final_hazard_injury_sum": 4.072406053543091,
+      "failed_ingest_bundles": 1118,
+      "toy_failed_ingests": 265
+    },
+    "prior0.125": {
+      "lives": 42,
+      "ordinary_meals": 29,
+      "ordinary_cases": 33,
+      "ordinary_successes": [
+        [
+          2026114300,
+          "contact"
+        ],
+        [
+          2026114300,
+          "stationary"
+        ],
+        [
+          2026114300,
+          "receding"
+        ],
+        [
+          2026114300,
+          "crossing"
+        ],
+        [
+          2026114300,
+          "zigzag"
+        ],
+        [
+          2026114300,
+          "orbiting"
+        ],
+        [
+          2026114300,
+          "fleeing"
+        ],
+        [
+          2026114300,
+          "partial-obstacle"
+        ],
+        [
+          2026114300,
+          "moving-obstacle"
+        ],
+        [
+          2026114300,
+          "choice"
+        ],
+        [
+          2026114300,
+          "toy-then-food"
+        ],
+        [
+          2026114301,
+          "contact"
+        ],
+        [
+          2026114301,
+          "stationary"
+        ],
+        [
+          2026114301,
+          "receding"
+        ],
+        [
+          2026114301,
+          "crossing"
+        ],
+        [
+          2026114301,
+          "zigzag"
+        ],
+        [
+          2026114301,
+          "orbiting"
+        ],
+        [
+          2026114301,
+          "fleeing"
+        ],
+        [
+          2026114301,
+          "moving-obstacle"
+        ],
+        [
+          2026114301,
+          "toy-then-food"
+        ],
+        [
+          2026114302,
+          "contact"
+        ],
+        [
+          2026114302,
+          "stationary"
+        ],
+        [
+          2026114302,
+          "receding"
+        ],
+        [
+          2026114302,
+          "crossing"
+        ],
+        [
+          2026114302,
+          "zigzag"
+        ],
+        [
+          2026114302,
+          "orbiting"
+        ],
+        [
+          2026114302,
+          "fleeing"
+        ],
+        [
+          2026114302,
+          "moving-obstacle"
+        ],
+        [
+          2026114302,
+          "toy-then-food"
+        ]
+      ],
+      "ordinary_meal_intervals": 1685,
+      "deaths": 0,
+      "mixed_meals": 0,
+      "final_hazard_injury_sum": 4.2086873054504395,
+      "failed_ingest_bundles": 1111,
+      "toy_failed_ingests": 253
+    },
+    "prior0.25": {
+      "lives": 42,
+      "ordinary_meals": 29,
+      "ordinary_cases": 33,
+      "ordinary_successes": [
+        [
+          2026114300,
+          "contact"
+        ],
+        [
+          2026114300,
+          "stationary"
+        ],
+        [
+          2026114300,
+          "receding"
+        ],
+        [
+          2026114300,
+          "crossing"
+        ],
+        [
+          2026114300,
+          "zigzag"
+        ],
+        [
+          2026114300,
+          "orbiting"
+        ],
+        [
+          2026114300,
+          "fleeing"
+        ],
+        [
+          2026114300,
+          "partial-obstacle"
+        ],
+        [
+          2026114300,
+          "moving-obstacle"
+        ],
+        [
+          2026114300,
+          "choice"
+        ],
+        [
+          2026114300,
+          "toy-then-food"
+        ],
+        [
+          2026114301,
+          "contact"
+        ],
+        [
+          2026114301,
+          "stationary"
+        ],
+        [
+          2026114301,
+          "receding"
+        ],
+        [
+          2026114301,
+          "crossing"
+        ],
+        [
+          2026114301,
+          "zigzag"
+        ],
+        [
+          2026114301,
+          "orbiting"
+        ],
+        [
+          2026114301,
+          "fleeing"
+        ],
+        [
+          2026114301,
+          "moving-obstacle"
+        ],
+        [
+          2026114301,
+          "toy-then-food"
+        ],
+        [
+          2026114302,
+          "contact"
+        ],
+        [
+          2026114302,
+          "stationary"
+        ],
+        [
+          2026114302,
+          "receding"
+        ],
+        [
+          2026114302,
+          "crossing"
+        ],
+        [
+          2026114302,
+          "zigzag"
+        ],
+        [
+          2026114302,
+          "orbiting"
+        ],
+        [
+          2026114302,
+          "fleeing"
+        ],
+        [
+          2026114302,
+          "moving-obstacle"
+        ],
+        [
+          2026114302,
+          "toy-then-food"
+        ]
+      ],
+      "ordinary_meal_intervals": 1715,
+      "deaths": 0,
+      "mixed_meals": 0,
+      "final_hazard_injury_sum": 4.297684848308563,
+      "failed_ingest_bundles": 1092,
+      "toy_failed_ingests": 243
+    },
+    "tonic0": {
+      "lives": 42,
+      "ordinary_meals": 29,
+      "ordinary_cases": 33,
+      "ordinary_successes": [
+        [
+          2026114300,
+          "contact"
+        ],
+        [
+          2026114300,
+          "stationary"
+        ],
+        [
+          2026114300,
+          "receding"
+        ],
+        [
+          2026114300,
+          "crossing"
+        ],
+        [
+          2026114300,
+          "zigzag"
+        ],
+        [
+          2026114300,
+          "orbiting"
+        ],
+        [
+          2026114300,
+          "fleeing"
+        ],
+        [
+          2026114300,
+          "partial-obstacle"
+        ],
+        [
+          2026114300,
+          "moving-obstacle"
+        ],
+        [
+          2026114300,
+          "choice"
+        ],
+        [
+          2026114300,
+          "toy-then-food"
+        ],
+        [
+          2026114301,
+          "contact"
+        ],
+        [
+          2026114301,
+          "stationary"
+        ],
+        [
+          2026114301,
+          "receding"
+        ],
+        [
+          2026114301,
+          "crossing"
+        ],
+        [
+          2026114301,
+          "zigzag"
+        ],
+        [
+          2026114301,
+          "orbiting"
+        ],
+        [
+          2026114301,
+          "fleeing"
+        ],
+        [
+          2026114301,
+          "moving-obstacle"
+        ],
+        [
+          2026114301,
+          "toy-then-food"
+        ],
+        [
+          2026114302,
+          "contact"
+        ],
+        [
+          2026114302,
+          "stationary"
+        ],
+        [
+          2026114302,
+          "receding"
+        ],
+        [
+          2026114302,
+          "crossing"
+        ],
+        [
+          2026114302,
+          "zigzag"
+        ],
+        [
+          2026114302,
+          "orbiting"
+        ],
+        [
+          2026114302,
+          "fleeing"
+        ],
+        [
+          2026114302,
+          "moving-obstacle"
+        ],
+        [
+          2026114302,
+          "toy-then-food"
+        ]
+      ],
+      "ordinary_meal_intervals": 1656,
+      "deaths": 1,
+      "mixed_meals": 0,
+      "final_hazard_injury_sum": 4.771395325660706,
+      "failed_ingest_bundles": 1132,
+      "toy_failed_ingests": 256
+    }
+  },
+  "release_pilot_plan": {
+    "goal": "Phase-aware pain motor recruits existing release then suppresses reacquisition. Experimental child of Contact20 with prior0.125; no World/runtime change or parent promotion.",
+    "variants": [
+      [
+        "base",
+        []
+      ],
+      [
+        "prior",
+        [
+          [
+            25440,
+            -0.5904028415679932
+          ],
+          [
+            25446,
+            -0.4375
+          ],
+          [
+            25455,
+            -2.1875
+          ],
+          [
+            25456,
+            -0.5904028415679932
+          ],
+          [
+            25462,
+            -0.4375
+          ],
+          [
+            25471,
+            -2.1875
+          ],
+          [
+            25472,
+            -0.5904028415679932
+          ],
+          [
+            25478,
+            -0.4375
+          ],
+          [
+            25487,
+            -2.1875
+          ],
+          [
+            25488,
+            -0.5904028415679932
+          ],
+          [
+            25504,
+            -0.5904028415679932
+          ],
+          [
+            25520,
+            -0.5904028415679932
+          ],
+          [
+            25536,
+            -0.5904028415679932
+          ],
+          [
+            25552,
+            -0.5904028415679932
+          ],
+          [
+            25568,
+            -0.5904028415679932
+          ]
+        ]
+      ],
+      [
+        "g8r2",
+        [
+          [
+            25440,
+            -0.5904028415679932
+          ],
+          [
+            25446,
+            -0.4375
+          ],
+          [
+            25455,
+            -2.1875
+          ],
+          [
+            25456,
+            -0.5904028415679932
+          ],
+          [
+            25462,
+            -0.4375
+          ],
+          [
+            25471,
+            -2.1875
+          ],
+          [
+            25472,
+            -0.5904028415679932
+          ],
+          [
+            25478,
+            -0.4375
+          ],
+          [
+            25487,
+            -2.1875
+          ],
+          [
+            25488,
+            -0.5904028415679932
+          ],
+          [
+            25504,
+            -0.5904028415679932
+          ],
+          [
+            25520,
+            -0.5904028415679932
+          ],
+          [
+            25536,
+            -0.5904028415679932
+          ],
+          [
+            25552,
+            -0.5904028415679932
+          ],
+          [
+            25568,
+            -0.5904028415679932
+          ],
+          [
+            9567,
+            8.0
+          ],
+          [
+            10431,
+            2.013740301132202
+          ],
+          [
+            26529,
+            -64.0
+          ],
+          [
+            26785,
+            8.0
+          ],
+          [
+            26865,
+            2.0
+          ]
+        ]
+      ],
+      [
+        "g8r8",
+        [
+          [
+            25440,
+            -0.5904028415679932
+          ],
+          [
+            25446,
+            -0.4375
+          ],
+          [
+            25455,
+            -2.1875
+          ],
+          [
+            25456,
+            -0.5904028415679932
+          ],
+          [
+            25462,
+            -0.4375
+          ],
+          [
+            25471,
+            -2.1875
+          ],
+          [
+            25472,
+            -0.5904028415679932
+          ],
+          [
+            25478,
+            -0.4375
+          ],
+          [
+            25487,
+            -2.1875
+          ],
+          [
+            25488,
+            -0.5904028415679932
+          ],
+          [
+            25504,
+            -0.5904028415679932
+          ],
+          [
+            25520,
+            -0.5904028415679932
+          ],
+          [
+            25536,
+            -0.5904028415679932
+          ],
+          [
+            25552,
+            -0.5904028415679932
+          ],
+          [
+            25568,
+            -0.5904028415679932
+          ],
+          [
+            9567,
+            8.0
+          ],
+          [
+            10431,
+            2.013740301132202
+          ],
+          [
+            26529,
+            -256.0
+          ],
+          [
+            26785,
+            32.0
+          ],
+          [
+            26865,
+            8.0
+          ]
+        ]
+      ],
+      [
+        "g8r24",
+        [
+          [
+            25440,
+            -0.5904028415679932
+          ],
+          [
+            25446,
+            -0.4375
+          ],
+          [
+            25455,
+            -2.1875
+          ],
+          [
+            25456,
+            -0.5904028415679932
+          ],
+          [
+            25462,
+            -0.4375
+          ],
+          [
+            25471,
+            -2.1875
+          ],
+          [
+            25472,
+            -0.5904028415679932
+          ],
+          [
+            25478,
+            -0.4375
+          ],
+          [
+            25487,
+            -2.1875
+          ],
+          [
+            25488,
+            -0.5904028415679932
+          ],
+          [
+            25504,
+            -0.5904028415679932
+          ],
+          [
+            25520,
+            -0.5904028415679932
+          ],
+          [
+            25536,
+            -0.5904028415679932
+          ],
+          [
+            25552,
+            -0.5904028415679932
+          ],
+          [
+            25568,
+            -0.5904028415679932
+          ],
+          [
+            9567,
+            8.0
+          ],
+          [
+            10431,
+            2.013740301132202
+          ],
+          [
+            26529,
+            -768.0
+          ],
+          [
+            26785,
+            96.0
+          ],
+          [
+            26865,
+            24.0
+          ]
+        ]
+      ],
+      [
+        "g16r2",
+        [
+          [
+            25440,
+            -0.5904028415679932
+          ],
+          [
+            25446,
+            -0.4375
+          ],
+          [
+            25455,
+            -2.1875
+          ],
+          [
+            25456,
+            -0.5904028415679932
+          ],
+          [
+            25462,
+            -0.4375
+          ],
+          [
+            25471,
+            -2.1875
+          ],
+          [
+            25472,
+            -0.5904028415679932
+          ],
+          [
+            25478,
+            -0.4375
+          ],
+          [
+            25487,
+            -2.1875
+          ],
+          [
+            25488,
+            -0.5904028415679932
+          ],
+          [
+            25504,
+            -0.5904028415679932
+          ],
+          [
+            25520,
+            -0.5904028415679932
+          ],
+          [
+            25536,
+            -0.5904028415679932
+          ],
+          [
+            25552,
+            -0.5904028415679932
+          ],
+          [
+            25568,
+            -0.5904028415679932
+          ],
+          [
+            9567,
+            16.0
+          ],
+          [
+            10431,
+            5.198683738708496
+          ],
+          [
+            26529,
+            -64.0
+          ],
+          [
+            26785,
+            8.0
+          ],
+          [
+            26865,
+            2.0
+          ]
+        ]
+      ],
+      [
+        "g16r8",
+        [
+          [
+            25440,
+            -0.5904028415679932
+          ],
+          [
+            25446,
+            -0.4375
+          ],
+          [
+            25455,
+            -2.1875
+          ],
+          [
+            25456,
+            -0.5904028415679932
+          ],
+          [
+            25462,
+            -0.4375
+          ],
+          [
+            25471,
+            -2.1875
+          ],
+          [
+            25472,
+            -0.5904028415679932
+          ],
+          [
+            25478,
+            -0.4375
+          ],
+          [
+            25487,
+            -2.1875
+          ],
+          [
+            25488,
+            -0.5904028415679932
+          ],
+          [
+            25504,
+            -0.5904028415679932
+          ],
+          [
+            25520,
+            -0.5904028415679932
+          ],
+          [
+            25536,
+            -0.5904028415679932
+          ],
+          [
+            25552,
+            -0.5904028415679932
+          ],
+          [
+            25568,
+            -0.5904028415679932
+          ],
+          [
+            9567,
+            16.0
+          ],
+          [
+            10431,
+            5.198683738708496
+          ],
+          [
+            26529,
+            -256.0
+          ],
+          [
+            26785,
+            32.0
+          ],
+          [
+            26865,
+            8.0
+          ]
+        ]
+      ],
+      [
+        "g16r24",
+        [
+          [
+            25440,
+            -0.5904028415679932
+          ],
+          [
+            25446,
+            -0.4375
+          ],
+          [
+            25455,
+            -2.1875
+          ],
+          [
+            25456,
+            -0.5904028415679932
+          ],
+          [
+            25462,
+            -0.4375
+          ],
+          [
+            25471,
+            -2.1875
+          ],
+          [
+            25472,
+            -0.5904028415679932
+          ],
+          [
+            25478,
+            -0.4375
+          ],
+          [
+            25487,
+            -2.1875
+          ],
+          [
+            25488,
+            -0.5904028415679932
+          ],
+          [
+            25504,
+            -0.5904028415679932
+          ],
+          [
+            25520,
+            -0.5904028415679932
+          ],
+          [
+            25536,
+            -0.5904028415679932
+          ],
+          [
+            25552,
+            -0.5904028415679932
+          ],
+          [
+            25568,
+            -0.5904028415679932
+          ],
+          [
+            9567,
+            16.0
+          ],
+          [
+            10431,
+            5.198683738708496
+          ],
+          [
+            26529,
+            -768.0
+          ],
+          [
+            26785,
+            96.0
+          ],
+          [
+            26865,
+            24.0
+          ]
+        ]
+      ]
+    ],
+    "seed": 2026114500,
+    "ticks": 256,
+    "source": "bbb071ad03f0594cea2fda6a3197fd54a6c85de5",
+    "binary_sha256": "5614c1b1374c39d29fbcb20c6526ed3b23b21ee874648eaeda9c5df3452742c7",
+    "parent_sha256": "d83a995e802e41b8e17799b0871f75d9ede35f95850049777323112e636654d1"
+  },
+  "release_pilot": {
+    "base": {
+      "lives": 14,
+      "ordinary_meals": 11,
+      "ordinary_cases": 11,
+      "ordinary_successes": [
+        [
+          2026114500,
+          "contact"
+        ],
+        [
+          2026114500,
+          "stationary"
+        ],
+        [
+          2026114500,
+          "receding"
+        ],
+        [
+          2026114500,
+          "crossing"
+        ],
+        [
+          2026114500,
+          "zigzag"
+        ],
+        [
+          2026114500,
+          "orbiting"
+        ],
+        [
+          2026114500,
+          "fleeing"
+        ],
+        [
+          2026114500,
+          "partial-obstacle"
+        ],
+        [
+          2026114500,
+          "moving-obstacle"
+        ],
+        [
+          2026114500,
+          "choice"
+        ],
+        [
+          2026114500,
+          "toy-then-food"
+        ]
+      ],
+      "ordinary_meal_intervals": 504,
+      "deaths": 1,
+      "mixed_meals": 1,
+      "final_hazard_injury_sum": 1.2562275826931,
+      "failed_ingest_bundles": 298,
+      "toy_failed_ingests": 104
+    },
+    "prior": {
+      "lives": 14,
+      "ordinary_meals": 11,
+      "ordinary_cases": 11,
+      "ordinary_successes": [
+        [
+          2026114500,
+          "contact"
+        ],
+        [
+          2026114500,
+          "stationary"
+        ],
+        [
+          2026114500,
+          "receding"
+        ],
+        [
+          2026114500,
+          "crossing"
+        ],
+        [
+          2026114500,
+          "zigzag"
+        ],
+        [
+          2026114500,
+          "orbiting"
+        ],
+        [
+          2026114500,
+          "fleeing"
+        ],
+        [
+          2026114500,
+          "partial-obstacle"
+        ],
+        [
+          2026114500,
+          "moving-obstacle"
+        ],
+        [
+          2026114500,
+          "choice"
+        ],
+        [
+          2026114500,
+          "toy-then-food"
+        ]
+      ],
+      "ordinary_meal_intervals": 528,
+      "deaths": 0,
+      "mixed_meals": 1,
+      "final_hazard_injury_sum": 0.9530487954616547,
+      "failed_ingest_bundles": 256,
+      "toy_failed_ingests": 88
+    },
+    "g8r2": {
+      "lives": 14,
+      "ordinary_meals": 11,
+      "ordinary_cases": 11,
+      "ordinary_successes": [
+        [
+          2026114500,
+          "contact"
+        ],
+        [
+          2026114500,
+          "stationary"
+        ],
+        [
+          2026114500,
+          "receding"
+        ],
+        [
+          2026114500,
+          "crossing"
+        ],
+        [
+          2026114500,
+          "zigzag"
+        ],
+        [
+          2026114500,
+          "orbiting"
+        ],
+        [
+          2026114500,
+          "fleeing"
+        ],
+        [
+          2026114500,
+          "partial-obstacle"
+        ],
+        [
+          2026114500,
+          "moving-obstacle"
+        ],
+        [
+          2026114500,
+          "choice"
+        ],
+        [
+          2026114500,
+          "toy-then-food"
+        ]
+      ],
+      "ordinary_meal_intervals": 499,
+      "deaths": 0,
+      "mixed_meals": 0,
+      "final_hazard_injury_sum": 1.2962819933891296,
+      "failed_ingest_bundles": 283,
+      "toy_failed_ingests": 86
+    },
+    "g8r8": {
+      "lives": 14,
+      "ordinary_meals": 11,
+      "ordinary_cases": 11,
+      "ordinary_successes": [
+        [
+          2026114500,
+          "contact"
+        ],
+        [
+          2026114500,
+          "stationary"
+        ],
+        [
+          2026114500,
+          "receding"
+        ],
+        [
+          2026114500,
+          "crossing"
+        ],
+        [
+          2026114500,
+          "zigzag"
+        ],
+        [
+          2026114500,
+          "orbiting"
+        ],
+        [
+          2026114500,
+          "fleeing"
+        ],
+        [
+          2026114500,
+          "partial-obstacle"
+        ],
+        [
+          2026114500,
+          "moving-obstacle"
+        ],
+        [
+          2026114500,
+          "choice"
+        ],
+        [
+          2026114500,
+          "toy-then-food"
+        ]
+      ],
+      "ordinary_meal_intervals": 532,
+      "deaths": 0,
+      "mixed_meals": 1,
+      "final_hazard_injury_sum": 0.8967197239398956,
+      "failed_ingest_bundles": 203,
+      "toy_failed_ingests": 84
+    },
+    "g8r24": {
+      "lives": 14,
+      "ordinary_meals": 11,
+      "ordinary_cases": 11,
+      "ordinary_successes": [
+        [
+          2026114500,
+          "contact"
+        ],
+        [
+          2026114500,
+          "stationary"
+        ],
+        [
+          2026114500,
+          "receding"
+        ],
+        [
+          2026114500,
+          "crossing"
+        ],
+        [
+          2026114500,
+          "zigzag"
+        ],
+        [
+          2026114500,
+          "orbiting"
+        ],
+        [
+          2026114500,
+          "fleeing"
+        ],
+        [
+          2026114500,
+          "partial-obstacle"
+        ],
+        [
+          2026114500,
+          "moving-obstacle"
+        ],
+        [
+          2026114500,
+          "choice"
+        ],
+        [
+          2026114500,
+          "toy-then-food"
+        ]
+      ],
+      "ordinary_meal_intervals": 613,
+      "deaths": 0,
+      "mixed_meals": 0,
+      "final_hazard_injury_sum": 0.9864626824855804,
+      "failed_ingest_bundles": 173,
+      "toy_failed_ingests": 65
+    },
+    "g16r2": {
+      "lives": 14,
+      "ordinary_meals": 11,
+      "ordinary_cases": 11,
+      "ordinary_successes": [
+        [
+          2026114500,
+          "contact"
+        ],
+        [
+          2026114500,
+          "stationary"
+        ],
+        [
+          2026114500,
+          "receding"
+        ],
+        [
+          2026114500,
+          "crossing"
+        ],
+        [
+          2026114500,
+          "zigzag"
+        ],
+        [
+          2026114500,
+          "orbiting"
+        ],
+        [
+          2026114500,
+          "fleeing"
+        ],
+        [
+          2026114500,
+          "partial-obstacle"
+        ],
+        [
+          2026114500,
+          "moving-obstacle"
+        ],
+        [
+          2026114500,
+          "choice"
+        ],
+        [
+          2026114500,
+          "toy-then-food"
+        ]
+      ],
+      "ordinary_meal_intervals": 499,
+      "deaths": 0,
+      "mixed_meals": 0,
+      "final_hazard_injury_sum": 1.242404043674469,
+      "failed_ingest_bundles": 281,
+      "toy_failed_ingests": 88
+    },
+    "g16r8": {
+      "lives": 14,
+      "ordinary_meals": 11,
+      "ordinary_cases": 11,
+      "ordinary_successes": [
+        [
+          2026114500,
+          "contact"
+        ],
+        [
+          2026114500,
+          "stationary"
+        ],
+        [
+          2026114500,
+          "receding"
+        ],
+        [
+          2026114500,
+          "crossing"
+        ],
+        [
+          2026114500,
+          "zigzag"
+        ],
+        [
+          2026114500,
+          "orbiting"
+        ],
+        [
+          2026114500,
+          "fleeing"
+        ],
+        [
+          2026114500,
+          "partial-obstacle"
+        ],
+        [
+          2026114500,
+          "moving-obstacle"
+        ],
+        [
+          2026114500,
+          "choice"
+        ],
+        [
+          2026114500,
+          "toy-then-food"
+        ]
+      ],
+      "ordinary_meal_intervals": 511,
+      "deaths": 0,
+      "mixed_meals": 1,
+      "final_hazard_injury_sum": 0.9829892516136169,
+      "failed_ingest_bundles": 209,
+      "toy_failed_ingests": 87
+    },
+    "g16r24": {
+      "lives": 14,
+      "ordinary_meals": 11,
+      "ordinary_cases": 11,
+      "ordinary_successes": [
+        [
+          2026114500,
+          "contact"
+        ],
+        [
+          2026114500,
+          "stationary"
+        ],
+        [
+          2026114500,
+          "receding"
+        ],
+        [
+          2026114500,
+          "crossing"
+        ],
+        [
+          2026114500,
+          "zigzag"
+        ],
+        [
+          2026114500,
+          "orbiting"
+        ],
+        [
+          2026114500,
+          "fleeing"
+        ],
+        [
+          2026114500,
+          "partial-obstacle"
+        ],
+        [
+          2026114500,
+          "moving-obstacle"
+        ],
+        [
+          2026114500,
+          "choice"
+        ],
+        [
+          2026114500,
+          "toy-then-food"
+        ]
+      ],
+      "ordinary_meal_intervals": 597,
+      "deaths": 0,
+      "mixed_meals": 0,
+      "final_hazard_injury_sum": 0.9444445967674255,
+      "failed_ingest_bundles": 177,
+      "toy_failed_ingests": 87
+    }
+  },
+  "long_plan": {
+    "variants": [
+      [
+        "base",
+        []
+      ],
+      [
+        "prior",
+        [
+          [
+            25440,
+            -0.5904028415679932
+          ],
+          [
+            25446,
+            -0.4375
+          ],
+          [
+            25455,
+            -2.1875
+          ],
+          [
+            25456,
+            -0.5904028415679932
+          ],
+          [
+            25462,
+            -0.4375
+          ],
+          [
+            25471,
+            -2.1875
+          ],
+          [
+            25472,
+            -0.5904028415679932
+          ],
+          [
+            25478,
+            -0.4375
+          ],
+          [
+            25487,
+            -2.1875
+          ],
+          [
+            25488,
+            -0.5904028415679932
+          ],
+          [
+            25504,
+            -0.5904028415679932
+          ],
+          [
+            25520,
+            -0.5904028415679932
+          ],
+          [
+            25536,
+            -0.5904028415679932
+          ],
+          [
+            25552,
+            -0.5904028415679932
+          ],
+          [
+            25568,
+            -0.5904028415679932
+          ]
+        ]
+      ],
+      [
+        "g8r8",
+        [
+          [
+            25440,
+            -0.5904028415679932
+          ],
+          [
+            25446,
+            -0.4375
+          ],
+          [
+            25455,
+            -2.1875
+          ],
+          [
+            25456,
+            -0.5904028415679932
+          ],
+          [
+            25462,
+            -0.4375
+          ],
+          [
+            25471,
+            -2.1875
+          ],
+          [
+            25472,
+            -0.5904028415679932
+          ],
+          [
+            25478,
+            -0.4375
+          ],
+          [
+            25487,
+            -2.1875
+          ],
+          [
+            25488,
+            -0.5904028415679932
+          ],
+          [
+            25504,
+            -0.5904028415679932
+          ],
+          [
+            25520,
+            -0.5904028415679932
+          ],
+          [
+            25536,
+            -0.5904028415679932
+          ],
+          [
+            25552,
+            -0.5904028415679932
+          ],
+          [
+            25568,
+            -0.5904028415679932
+          ],
+          [
+            9567,
+            8.0
+          ],
+          [
+            10431,
+            2.013740301132202
+          ],
+          [
+            26529,
+            -256.0
+          ],
+          [
+            26785,
+            32.0
+          ],
+          [
+            26865,
+            8.0
+          ]
+        ]
+      ],
+      [
+        "g16r24",
+        [
+          [
+            25440,
+            -0.5904028415679932
+          ],
+          [
+            25446,
+            -0.4375
+          ],
+          [
+            25455,
+            -2.1875
+          ],
+          [
+            25456,
+            -0.5904028415679932
+          ],
+          [
+            25462,
+            -0.4375
+          ],
+          [
+            25471,
+            -2.1875
+          ],
+          [
+            25472,
+            -0.5904028415679932
+          ],
+          [
+            25478,
+            -0.4375
+          ],
+          [
+            25487,
+            -2.1875
+          ],
+          [
+            25488,
+            -0.5904028415679932
+          ],
+          [
+            25504,
+            -0.5904028415679932
+          ],
+          [
+            25520,
+            -0.5904028415679932
+          ],
+          [
+            25536,
+            -0.5904028415679932
+          ],
+          [
+            25552,
+            -0.5904028415679932
+          ],
+          [
+            25568,
+            -0.5904028415679932
+          ],
+          [
+            9567,
+            16.0
+          ],
+          [
+            10431,
+            5.198683738708496
+          ],
+          [
+            26529,
+            -768.0
+          ],
+          [
+            26785,
+            96.0
+          ],
+          [
+            26865,
+            24.0
+          ]
+        ]
+      ]
+    ],
+    "seeds": [
+      2026114600,
+      2026114601,
+      2026114602
+    ],
+    "ticks": 1024,
+    "scenes": [
+      "toy-then-food",
+      "hazard",
+      "hazard-choice"
+    ],
+    "goal": "Reject short-horizon survival if it merely delays death. g8r8 retained pilot food; g16r24 is an explicit lower-injury/missed-food tradeoff control. No parent promotion."
+  },
+  "long": {
+    "base": {
+      "lives": 9,
+      "ordinary_meals": 3,
+      "ordinary_cases": 3,
+      "ordinary_successes": [
+        [
+          2026114600,
+          "toy-then-food"
+        ],
+        [
+          2026114601,
+          "toy-then-food"
+        ],
+        [
+          2026114602,
+          "toy-then-food"
+        ]
+      ],
+      "ordinary_meal_intervals": 200,
+      "deaths": 6,
+      "mixed_meals": 0,
+      "final_hazard_injury_sum": 6.0,
+      "failed_ingest_bundles": 955,
+      "toy_failed_ingests": 0
+    },
+    "prior": {
+      "lives": 9,
+      "ordinary_meals": 3,
+      "ordinary_cases": 3,
+      "ordinary_successes": [
+        [
+          2026114600,
+          "toy-then-food"
+        ],
+        [
+          2026114601,
+          "toy-then-food"
+        ],
+        [
+          2026114602,
+          "toy-then-food"
+        ]
+      ],
+      "ordinary_meal_intervals": 201,
+      "deaths": 5,
+      "mixed_meals": 1,
+      "final_hazard_injury_sum": 5.350545257329941,
+      "failed_ingest_bundles": 1121,
+      "toy_failed_ingests": 0
+    },
+    "g8r8": {
+      "lives": 9,
+      "ordinary_meals": 3,
+      "ordinary_cases": 3,
+      "ordinary_successes": [
+        [
+          2026114600,
+          "toy-then-food"
+        ],
+        [
+          2026114601,
+          "toy-then-food"
+        ],
+        [
+          2026114602,
+          "toy-then-food"
+        ]
+      ],
+      "ordinary_meal_intervals": 201,
+      "deaths": 0,
+      "mixed_meals": 0,
+      "final_hazard_injury_sum": 5.175549209117889,
+      "failed_ingest_bundles": 961,
+      "toy_failed_ingests": 0
+    },
+    "g16r24": {
+      "lives": 9,
+      "ordinary_meals": 3,
+      "ordinary_cases": 3,
+      "ordinary_successes": [
+        [
+          2026114600,
+          "toy-then-food"
+        ],
+        [
+          2026114601,
+          "toy-then-food"
+        ],
+        [
+          2026114602,
+          "toy-then-food"
+        ]
+      ],
+      "ordinary_meal_intervals": 201,
+      "deaths": 0,
+      "mixed_meals": 3,
+      "final_hazard_injury_sum": 2.6353087723255157,
+      "failed_ingest_bundles": 150,
+      "toy_failed_ingests": 0
+    }
+  },
+  "heldout_plan": {
+    "variants": [
+      [
+        "base",
+        []
+      ],
+      [
+        "prior",
+        [
+          [
+            25440,
+            -0.5904028415679932
+          ],
+          [
+            25446,
+            -0.4375
+          ],
+          [
+            25455,
+            -2.1875
+          ],
+          [
+            25456,
+            -0.5904028415679932
+          ],
+          [
+            25462,
+            -0.4375
+          ],
+          [
+            25471,
+            -2.1875
+          ],
+          [
+            25472,
+            -0.5904028415679932
+          ],
+          [
+            25478,
+            -0.4375
+          ],
+          [
+            25487,
+            -2.1875
+          ],
+          [
+            25488,
+            -0.5904028415679932
+          ],
+          [
+            25504,
+            -0.5904028415679932
+          ],
+          [
+            25520,
+            -0.5904028415679932
+          ],
+          [
+            25536,
+            -0.5904028415679932
+          ],
+          [
+            25552,
+            -0.5904028415679932
+          ],
+          [
+            25568,
+            -0.5904028415679932
+          ]
+        ]
+      ],
+      [
+        "g16r24",
+        [
+          [
+            25440,
+            -0.5904028415679932
+          ],
+          [
+            25446,
+            -0.4375
+          ],
+          [
+            25455,
+            -2.1875
+          ],
+          [
+            25456,
+            -0.5904028415679932
+          ],
+          [
+            25462,
+            -0.4375
+          ],
+          [
+            25471,
+            -2.1875
+          ],
+          [
+            25472,
+            -0.5904028415679932
+          ],
+          [
+            25478,
+            -0.4375
+          ],
+          [
+            25487,
+            -2.1875
+          ],
+          [
+            25488,
+            -0.5904028415679932
+          ],
+          [
+            25504,
+            -0.5904028415679932
+          ],
+          [
+            25520,
+            -0.5904028415679932
+          ],
+          [
+            25536,
+            -0.5904028415679932
+          ],
+          [
+            25552,
+            -0.5904028415679932
+          ],
+          [
+            25568,
+            -0.5904028415679932
+          ],
+          [
+            9567,
+            16.0
+          ],
+          [
+            10431,
+            5.198683738708496
+          ],
+          [
+            26529,
+            -768.0
+          ],
+          [
+            26785,
+            96.0
+          ],
+          [
+            26865,
+            24.0
+          ]
+        ]
+      ]
+    ],
+    "seeds": [
+      2026114700,
+      2026114701,
+      2026114702,
+      2026114703,
+      2026114704,
+      2026114705,
+      2026114706,
+      2026114707,
+      2026114708,
+      2026114709
+    ],
+    "ticks": 256,
+    "selection": "g16r24 kept all 11 ordinary pilot meals and survived/eat all three long hazard/mixed cases. It missed the single short pilot mixed meal, which remains a declared limitation. Freeze all weights before fresh held-out controls. Contact20 remains common parent.",
+    "source": "bbb071ad",
+    "terrain": [
+      [
+        0.5,
+        0.0
+      ],
+      [
+        0.25,
+        0.25
+      ],
+      [
+        0.0,
+        0.5
+      ],
+      [
+        1.0,
+        1.0
+      ]
+    ],
+    "angles": "0.61 + i*2*pi/10",
+    "speeds": "0.7 + (i%4)*0.25",
+    "distance": "0.85 + (i%3)*0.2"
+  },
+  "heldout": {
+    "base": {
+      "lives": 140,
+      "ordinary_meals": 98,
+      "ordinary_cases": 110,
+      "ordinary_successes": [
+        [
+          2026114700,
+          "contact"
+        ],
+        [
+          2026114700,
+          "stationary"
+        ],
+        [
+          2026114700,
+          "receding"
+        ],
+        [
+          2026114700,
+          "crossing"
+        ],
+        [
+          2026114700,
+          "zigzag"
+        ],
+        [
+          2026114700,
+          "orbiting"
+        ],
+        [
+          2026114700,
+          "fleeing"
+        ],
+        [
+          2026114700,
+          "partial-obstacle"
+        ],
+        [
+          2026114700,
+          "moving-obstacle"
+        ],
+        [
+          2026114700,
+          "choice"
+        ],
+        [
+          2026114700,
+          "toy-then-food"
+        ],
+        [
+          2026114701,
+          "contact"
+        ],
+        [
+          2026114701,
+          "stationary"
+        ],
+        [
+          2026114701,
+          "receding"
+        ],
+        [
+          2026114701,
+          "crossing"
+        ],
+        [
+          2026114701,
+          "zigzag"
+        ],
+        [
+          2026114701,
+          "orbiting"
+        ],
+        [
+          2026114701,
+          "fleeing"
+        ],
+        [
+          2026114701,
+          "partial-obstacle"
+        ],
+        [
+          2026114701,
+          "moving-obstacle"
+        ],
+        [
+          2026114701,
+          "choice"
+        ],
+        [
+          2026114701,
+          "toy-then-food"
+        ],
+        [
+          2026114702,
+          "contact"
+        ],
+        [
+          2026114702,
+          "stationary"
+        ],
+        [
+          2026114702,
+          "receding"
+        ],
+        [
+          2026114702,
+          "crossing"
+        ],
+        [
+          2026114702,
+          "zigzag"
+        ],
+        [
+          2026114702,
+          "orbiting"
+        ],
+        [
+          2026114702,
+          "fleeing"
+        ],
+        [
+          2026114702,
+          "partial-obstacle"
+        ],
+        [
+          2026114702,
+          "toy-then-food"
+        ],
+        [
+          2026114703,
+          "contact"
+        ],
+        [
+          2026114703,
+          "stationary"
+        ],
+        [
+          2026114703,
+          "receding"
+        ],
+        [
+          2026114703,
+          "crossing"
+        ],
+        [
+          2026114703,
+          "zigzag"
+        ],
+        [
+          2026114703,
+          "orbiting"
+        ],
+        [
+          2026114703,
+          "fleeing"
+        ],
+        [
+          2026114703,
+          "moving-obstacle"
+        ],
+        [
+          2026114703,
+          "toy-then-food"
+        ],
+        [
+          2026114704,
+          "contact"
+        ],
+        [
+          2026114704,
+          "stationary"
+        ],
+        [
+          2026114704,
+          "receding"
+        ],
+        [
+          2026114704,
+          "crossing"
+        ],
+        [
+          2026114704,
+          "zigzag"
+        ],
+        [
+          2026114704,
+          "orbiting"
+        ],
+        [
+          2026114704,
+          "fleeing"
+        ],
+        [
+          2026114704,
+          "toy-then-food"
+        ],
+        [
+          2026114705,
+          "contact"
+        ],
+        [
+          2026114705,
+          "stationary"
+        ],
+        [
+          2026114705,
+          "receding"
+        ],
+        [
+          2026114705,
+          "crossing"
+        ],
+        [
+          2026114705,
+          "zigzag"
+        ],
+        [
+          2026114705,
+          "orbiting"
+        ],
+        [
+          2026114705,
+          "fleeing"
+        ],
+        [
+          2026114705,
+          "toy-then-food"
+        ],
+        [
+          2026114706,
+          "contact"
+        ],
+        [
+          2026114706,
+          "stationary"
+        ],
+        [
+          2026114706,
+          "receding"
+        ],
+        [
+          2026114706,
+          "crossing"
+        ],
+        [
+          2026114706,
+          "zigzag"
+        ],
+        [
+          2026114706,
+          "orbiting"
+        ],
+        [
+          2026114706,
+          "fleeing"
+        ],
+        [
+          2026114706,
+          "moving-obstacle"
+        ],
+        [
+          2026114706,
+          "choice"
+        ],
+        [
+          2026114706,
+          "toy-then-food"
+        ],
+        [
+          2026114707,
+          "contact"
+        ],
+        [
+          2026114707,
+          "stationary"
+        ],
+        [
+          2026114707,
+          "receding"
+        ],
+        [
+          2026114707,
+          "crossing"
+        ],
+        [
+          2026114707,
+          "zigzag"
+        ],
+        [
+          2026114707,
+          "orbiting"
+        ],
+        [
+          2026114707,
+          "fleeing"
+        ],
+        [
+          2026114707,
+          "partial-obstacle"
+        ],
+        [
+          2026114707,
+          "choice"
+        ],
+        [
+          2026114707,
+          "toy-then-food"
+        ],
+        [
+          2026114708,
+          "contact"
+        ],
+        [
+          2026114708,
+          "stationary"
+        ],
+        [
+          2026114708,
+          "receding"
+        ],
+        [
+          2026114708,
+          "crossing"
+        ],
+        [
+          2026114708,
+          "zigzag"
+        ],
+        [
+          2026114708,
+          "orbiting"
+        ],
+        [
+          2026114708,
+          "fleeing"
+        ],
+        [
+          2026114708,
+          "partial-obstacle"
+        ],
+        [
+          2026114708,
+          "moving-obstacle"
+        ],
+        [
+          2026114708,
+          "choice"
+        ],
+        [
+          2026114708,
+          "toy-then-food"
+        ],
+        [
+          2026114709,
+          "contact"
+        ],
+        [
+          2026114709,
+          "stationary"
+        ],
+        [
+          2026114709,
+          "receding"
+        ],
+        [
+          2026114709,
+          "crossing"
+        ],
+        [
+          2026114709,
+          "zigzag"
+        ],
+        [
+          2026114709,
+          "orbiting"
+        ],
+        [
+          2026114709,
+          "fleeing"
+        ],
+        [
+          2026114709,
+          "partial-obstacle"
+        ],
+        [
+          2026114709,
+          "moving-obstacle"
+        ],
+        [
+          2026114709,
+          "choice"
+        ],
+        [
+          2026114709,
+          "toy-then-food"
+        ]
+      ],
+      "ordinary_meal_intervals": 5810,
+      "deaths": 7,
+      "mixed_meals": 1,
+      "final_hazard_injury_sum": 16.239483885467052,
+      "failed_ingest_bundles": 3703,
+      "toy_failed_ingests": 874,
+      "same_ordinary_success_set_as_base": true
+    },
+    "prior": {
+      "lives": 140,
+      "ordinary_meals": 98,
+      "ordinary_cases": 110,
+      "ordinary_successes": [
+        [
+          2026114700,
+          "contact"
+        ],
+        [
+          2026114700,
+          "stationary"
+        ],
+        [
+          2026114700,
+          "receding"
+        ],
+        [
+          2026114700,
+          "crossing"
+        ],
+        [
+          2026114700,
+          "zigzag"
+        ],
+        [
+          2026114700,
+          "orbiting"
+        ],
+        [
+          2026114700,
+          "fleeing"
+        ],
+        [
+          2026114700,
+          "partial-obstacle"
+        ],
+        [
+          2026114700,
+          "moving-obstacle"
+        ],
+        [
+          2026114700,
+          "choice"
+        ],
+        [
+          2026114700,
+          "toy-then-food"
+        ],
+        [
+          2026114701,
+          "contact"
+        ],
+        [
+          2026114701,
+          "stationary"
+        ],
+        [
+          2026114701,
+          "receding"
+        ],
+        [
+          2026114701,
+          "crossing"
+        ],
+        [
+          2026114701,
+          "zigzag"
+        ],
+        [
+          2026114701,
+          "orbiting"
+        ],
+        [
+          2026114701,
+          "fleeing"
+        ],
+        [
+          2026114701,
+          "partial-obstacle"
+        ],
+        [
+          2026114701,
+          "moving-obstacle"
+        ],
+        [
+          2026114701,
+          "choice"
+        ],
+        [
+          2026114701,
+          "toy-then-food"
+        ],
+        [
+          2026114702,
+          "contact"
+        ],
+        [
+          2026114702,
+          "stationary"
+        ],
+        [
+          2026114702,
+          "receding"
+        ],
+        [
+          2026114702,
+          "crossing"
+        ],
+        [
+          2026114702,
+          "zigzag"
+        ],
+        [
+          2026114702,
+          "orbiting"
+        ],
+        [
+          2026114702,
+          "fleeing"
+        ],
+        [
+          2026114702,
+          "partial-obstacle"
+        ],
+        [
+          2026114702,
+          "toy-then-food"
+        ],
+        [
+          2026114703,
+          "contact"
+        ],
+        [
+          2026114703,
+          "stationary"
+        ],
+        [
+          2026114703,
+          "receding"
+        ],
+        [
+          2026114703,
+          "crossing"
+        ],
+        [
+          2026114703,
+          "zigzag"
+        ],
+        [
+          2026114703,
+          "orbiting"
+        ],
+        [
+          2026114703,
+          "fleeing"
+        ],
+        [
+          2026114703,
+          "moving-obstacle"
+        ],
+        [
+          2026114703,
+          "toy-then-food"
+        ],
+        [
+          2026114704,
+          "contact"
+        ],
+        [
+          2026114704,
+          "stationary"
+        ],
+        [
+          2026114704,
+          "receding"
+        ],
+        [
+          2026114704,
+          "crossing"
+        ],
+        [
+          2026114704,
+          "zigzag"
+        ],
+        [
+          2026114704,
+          "orbiting"
+        ],
+        [
+          2026114704,
+          "fleeing"
+        ],
+        [
+          2026114704,
+          "toy-then-food"
+        ],
+        [
+          2026114705,
+          "contact"
+        ],
+        [
+          2026114705,
+          "stationary"
+        ],
+        [
+          2026114705,
+          "receding"
+        ],
+        [
+          2026114705,
+          "crossing"
+        ],
+        [
+          2026114705,
+          "zigzag"
+        ],
+        [
+          2026114705,
+          "orbiting"
+        ],
+        [
+          2026114705,
+          "fleeing"
+        ],
+        [
+          2026114705,
+          "toy-then-food"
+        ],
+        [
+          2026114706,
+          "contact"
+        ],
+        [
+          2026114706,
+          "stationary"
+        ],
+        [
+          2026114706,
+          "receding"
+        ],
+        [
+          2026114706,
+          "crossing"
+        ],
+        [
+          2026114706,
+          "zigzag"
+        ],
+        [
+          2026114706,
+          "orbiting"
+        ],
+        [
+          2026114706,
+          "fleeing"
+        ],
+        [
+          2026114706,
+          "moving-obstacle"
+        ],
+        [
+          2026114706,
+          "choice"
+        ],
+        [
+          2026114706,
+          "toy-then-food"
+        ],
+        [
+          2026114707,
+          "contact"
+        ],
+        [
+          2026114707,
+          "stationary"
+        ],
+        [
+          2026114707,
+          "receding"
+        ],
+        [
+          2026114707,
+          "crossing"
+        ],
+        [
+          2026114707,
+          "zigzag"
+        ],
+        [
+          2026114707,
+          "orbiting"
+        ],
+        [
+          2026114707,
+          "fleeing"
+        ],
+        [
+          2026114707,
+          "partial-obstacle"
+        ],
+        [
+          2026114707,
+          "choice"
+        ],
+        [
+          2026114707,
+          "toy-then-food"
+        ],
+        [
+          2026114708,
+          "contact"
+        ],
+        [
+          2026114708,
+          "stationary"
+        ],
+        [
+          2026114708,
+          "receding"
+        ],
+        [
+          2026114708,
+          "crossing"
+        ],
+        [
+          2026114708,
+          "zigzag"
+        ],
+        [
+          2026114708,
+          "orbiting"
+        ],
+        [
+          2026114708,
+          "fleeing"
+        ],
+        [
+          2026114708,
+          "partial-obstacle"
+        ],
+        [
+          2026114708,
+          "moving-obstacle"
+        ],
+        [
+          2026114708,
+          "choice"
+        ],
+        [
+          2026114708,
+          "toy-then-food"
+        ],
+        [
+          2026114709,
+          "contact"
+        ],
+        [
+          2026114709,
+          "stationary"
+        ],
+        [
+          2026114709,
+          "receding"
+        ],
+        [
+          2026114709,
+          "crossing"
+        ],
+        [
+          2026114709,
+          "zigzag"
+        ],
+        [
+          2026114709,
+          "orbiting"
+        ],
+        [
+          2026114709,
+          "fleeing"
+        ],
+        [
+          2026114709,
+          "partial-obstacle"
+        ],
+        [
+          2026114709,
+          "moving-obstacle"
+        ],
+        [
+          2026114709,
+          "choice"
+        ],
+        [
+          2026114709,
+          "toy-then-food"
+        ]
+      ],
+      "ordinary_meal_intervals": 5918,
+      "deaths": 0,
+      "mixed_meals": 2,
+      "final_hazard_injury_sum": 13.108237020671368,
+      "failed_ingest_bundles": 3560,
+      "toy_failed_ingests": 825,
+      "same_ordinary_success_set_as_base": true
+    },
+    "g16r24": {
+      "lives": 140,
+      "ordinary_meals": 98,
+      "ordinary_cases": 110,
+      "ordinary_successes": [
+        [
+          2026114700,
+          "contact"
+        ],
+        [
+          2026114700,
+          "stationary"
+        ],
+        [
+          2026114700,
+          "receding"
+        ],
+        [
+          2026114700,
+          "crossing"
+        ],
+        [
+          2026114700,
+          "zigzag"
+        ],
+        [
+          2026114700,
+          "orbiting"
+        ],
+        [
+          2026114700,
+          "fleeing"
+        ],
+        [
+          2026114700,
+          "partial-obstacle"
+        ],
+        [
+          2026114700,
+          "moving-obstacle"
+        ],
+        [
+          2026114700,
+          "choice"
+        ],
+        [
+          2026114700,
+          "toy-then-food"
+        ],
+        [
+          2026114701,
+          "contact"
+        ],
+        [
+          2026114701,
+          "stationary"
+        ],
+        [
+          2026114701,
+          "receding"
+        ],
+        [
+          2026114701,
+          "crossing"
+        ],
+        [
+          2026114701,
+          "zigzag"
+        ],
+        [
+          2026114701,
+          "orbiting"
+        ],
+        [
+          2026114701,
+          "fleeing"
+        ],
+        [
+          2026114701,
+          "partial-obstacle"
+        ],
+        [
+          2026114701,
+          "moving-obstacle"
+        ],
+        [
+          2026114701,
+          "choice"
+        ],
+        [
+          2026114701,
+          "toy-then-food"
+        ],
+        [
+          2026114702,
+          "contact"
+        ],
+        [
+          2026114702,
+          "stationary"
+        ],
+        [
+          2026114702,
+          "receding"
+        ],
+        [
+          2026114702,
+          "crossing"
+        ],
+        [
+          2026114702,
+          "zigzag"
+        ],
+        [
+          2026114702,
+          "orbiting"
+        ],
+        [
+          2026114702,
+          "fleeing"
+        ],
+        [
+          2026114702,
+          "partial-obstacle"
+        ],
+        [
+          2026114702,
+          "toy-then-food"
+        ],
+        [
+          2026114703,
+          "contact"
+        ],
+        [
+          2026114703,
+          "stationary"
+        ],
+        [
+          2026114703,
+          "receding"
+        ],
+        [
+          2026114703,
+          "crossing"
+        ],
+        [
+          2026114703,
+          "zigzag"
+        ],
+        [
+          2026114703,
+          "orbiting"
+        ],
+        [
+          2026114703,
+          "fleeing"
+        ],
+        [
+          2026114703,
+          "moving-obstacle"
+        ],
+        [
+          2026114703,
+          "toy-then-food"
+        ],
+        [
+          2026114704,
+          "contact"
+        ],
+        [
+          2026114704,
+          "stationary"
+        ],
+        [
+          2026114704,
+          "receding"
+        ],
+        [
+          2026114704,
+          "crossing"
+        ],
+        [
+          2026114704,
+          "zigzag"
+        ],
+        [
+          2026114704,
+          "orbiting"
+        ],
+        [
+          2026114704,
+          "fleeing"
+        ],
+        [
+          2026114704,
+          "toy-then-food"
+        ],
+        [
+          2026114705,
+          "contact"
+        ],
+        [
+          2026114705,
+          "stationary"
+        ],
+        [
+          2026114705,
+          "receding"
+        ],
+        [
+          2026114705,
+          "crossing"
+        ],
+        [
+          2026114705,
+          "zigzag"
+        ],
+        [
+          2026114705,
+          "orbiting"
+        ],
+        [
+          2026114705,
+          "fleeing"
+        ],
+        [
+          2026114705,
+          "toy-then-food"
+        ],
+        [
+          2026114706,
+          "contact"
+        ],
+        [
+          2026114706,
+          "stationary"
+        ],
+        [
+          2026114706,
+          "receding"
+        ],
+        [
+          2026114706,
+          "crossing"
+        ],
+        [
+          2026114706,
+          "zigzag"
+        ],
+        [
+          2026114706,
+          "orbiting"
+        ],
+        [
+          2026114706,
+          "fleeing"
+        ],
+        [
+          2026114706,
+          "moving-obstacle"
+        ],
+        [
+          2026114706,
+          "choice"
+        ],
+        [
+          2026114706,
+          "toy-then-food"
+        ],
+        [
+          2026114707,
+          "contact"
+        ],
+        [
+          2026114707,
+          "stationary"
+        ],
+        [
+          2026114707,
+          "receding"
+        ],
+        [
+          2026114707,
+          "crossing"
+        ],
+        [
+          2026114707,
+          "zigzag"
+        ],
+        [
+          2026114707,
+          "orbiting"
+        ],
+        [
+          2026114707,
+          "fleeing"
+        ],
+        [
+          2026114707,
+          "partial-obstacle"
+        ],
+        [
+          2026114707,
+          "choice"
+        ],
+        [
+          2026114707,
+          "toy-then-food"
+        ],
+        [
+          2026114708,
+          "contact"
+        ],
+        [
+          2026114708,
+          "stationary"
+        ],
+        [
+          2026114708,
+          "receding"
+        ],
+        [
+          2026114708,
+          "crossing"
+        ],
+        [
+          2026114708,
+          "zigzag"
+        ],
+        [
+          2026114708,
+          "orbiting"
+        ],
+        [
+          2026114708,
+          "fleeing"
+        ],
+        [
+          2026114708,
+          "partial-obstacle"
+        ],
+        [
+          2026114708,
+          "moving-obstacle"
+        ],
+        [
+          2026114708,
+          "choice"
+        ],
+        [
+          2026114708,
+          "toy-then-food"
+        ],
+        [
+          2026114709,
+          "contact"
+        ],
+        [
+          2026114709,
+          "stationary"
+        ],
+        [
+          2026114709,
+          "receding"
+        ],
+        [
+          2026114709,
+          "crossing"
+        ],
+        [
+          2026114709,
+          "zigzag"
+        ],
+        [
+          2026114709,
+          "orbiting"
+        ],
+        [
+          2026114709,
+          "fleeing"
+        ],
+        [
+          2026114709,
+          "partial-obstacle"
+        ],
+        [
+          2026114709,
+          "moving-obstacle"
+        ],
+        [
+          2026114709,
+          "choice"
+        ],
+        [
+          2026114709,
+          "toy-then-food"
+        ]
+      ],
+      "ordinary_meal_intervals": 6112,
+      "deaths": 0,
+      "mixed_meals": 2,
+      "final_hazard_injury_sum": 9.727347671985626,
+      "failed_ingest_bundles": 2274,
+      "toy_failed_ingests": 783,
+      "same_ordinary_success_set_as_base": true
+    }
+  },
+  "short_release_trace": {
+    "prior": {
+      "decisions": 256,
+      "injury": 0.683302640914917,
+      "alive": true,
+      "held_decisions": 146,
+      "contact_decisions": 148,
+      "release_ticks": [
+        3,
+        10,
+        12,
+        20,
+        28,
+        32,
+        34,
+        40,
+        44,
+        52,
+        54,
+        59,
+        72,
+        84,
+        86,
+        97,
+        103,
+        116,
+        122,
+        124,
+        134,
+        139,
+        153,
+        175,
+        182,
+        189,
+        210,
+        212,
+        225,
+        234,
+        238,
+        249,
+        252
+      ],
+      "acquire_ticks": [
+        2,
+        5,
+        11,
+        14,
+        26,
+        29,
+        33,
+        38,
+        42,
+        46,
+        53,
+        58,
+        63,
+        79,
+        85,
+        87,
+        99,
+        113,
+        121,
+        123,
+        125,
+        138,
+        145,
+        157,
+        177,
+        183,
+        192,
+        211,
+        224,
+        228,
+        237,
+        244,
+        250
+      ],
+      "manipulation_counts": {
+        "210": 74,
+        "212": 56,
+        "211": 66,
+        "213": 60
+      },
+      "outside_reach_decisions": 0,
+      "max_post_distance": 0.5201442084253,
+      "pain_start": 0.0,
+      "pain_end": 0.23716433346271515
+    },
+    "g8r8": {
+      "decisions": 256,
+      "injury": 0.5865692496299744,
+      "alive": true,
+      "held_decisions": 64,
+      "contact_decisions": 66,
+      "release_ticks": [
+        12,
+        26,
+        34,
+        39,
+        44,
+        52,
+        54,
+        59,
+        65,
+        72,
+        89,
+        101,
+        103,
+        132,
+        139,
+        145,
+        153,
+        157,
+        166,
+        175,
+        185,
+        227,
+        238,
+        243
+      ],
+      "acquire_ticks": [
+        2,
+        25,
+        31,
+        38,
+        43,
+        46,
+        53,
+        58,
+        63,
+        67,
+        87,
+        99,
+        102,
+        125,
+        138,
+        141,
+        148,
+        156,
+        165,
+        174,
+        182,
+        225,
+        237,
+        241
+      ],
+      "manipulation_counts": {
+        "210": 50,
+        "213": 52,
+        "211": 48,
+        "212": 106
+      },
+      "outside_reach_decisions": 0,
+      "max_post_distance": 0.5501147892700546,
+      "pain_start": 0.0,
+      "pain_end": 0.4549577832221985
+    }
+  },
+  "long_release_trace": [
+    {
+      "start": 0,
+      "end": 256,
+      "decisions": 256,
+      "held": 14,
+      "releases": 5,
+      "acquires": 5,
+      "outside_reach": 0,
+      "max_distance": 0.616347794095554,
+      "manipulation_counts": {
+        "210": 25,
+        "213": 32,
+        "211": 10,
+        "212": 189
+      },
+      "injury_end": 0.4934737980365753,
+      "pain_end": 0.24090959131717682
+    },
+    {
+      "start": 256,
+      "end": 512,
+      "decisions": 256,
+      "held": 0,
+      "releases": 0,
+      "acquires": 0,
+      "outside_reach": 0,
+      "max_distance": 0.49961272551231073,
+      "manipulation_counts": {
+        "212": 252,
+        "213": 1,
+        "210": 3
+      },
+      "injury_end": 0.5031840205192566,
+      "pain_end": 0.2757747769355774
+    },
+    {
+      "start": 512,
+      "end": 768,
+      "decisions": 256,
+      "held": 0,
+      "releases": 0,
+      "acquires": 0,
+      "outside_reach": 0,
+      "max_distance": 0.49701361935829985,
+      "manipulation_counts": {
+        "212": 253,
+        "210": 3
+      },
+      "injury_end": 0.5124666094779968,
+      "pain_end": 0.2866261601448059
+    },
+    {
+      "start": 768,
+      "end": 1024,
+      "decisions": 256,
+      "held": 0,
+      "releases": 0,
+      "acquires": 0,
+      "outside_reach": 0,
+      "max_distance": 0.4953849194235704,
+      "manipulation_counts": {
+        "212": 253,
+        "210": 3
+      },
+      "injury_end": 0.521717369556427,
+      "pain_end": 0.3065668046474457
+    }
+  ],
+  "export": {
+    "name": "pursuit-twohead-contact20-release16x24",
+    "foundation_sha256": "40f844bc55b578965e629a629c620a170a09f39b0f33fb05b1f7b1db0feabfa0",
+    "genome_sha256": "b5242f7b447acb0ccdff584371e767501e76f053bb367a803d187a19cb63aacb",
+    "matched_reload_trials": 14,
+    "candidate_digest": [
+      183,
+      75,
+      170,
+      40,
+      214,
+      58,
+      60,
+      78,
+      153,
+      216,
+      158,
+      51,
+      160,
+      32,
+      237,
+      171,
+      242,
+      115,
+      95,
+      105,
+      96,
+      100,
+      62,
+      181,
+      78,
+      152,
+      160,
+      206,
+      212,
+      162,
+      82,
+      226
+    ],
+    "long_trace_physical_metrics_exact": true,
+    "validation_note": "First comparison incorrectly included trace-only target_motion; original AssertionError retained. Comparison corrected without rerunning that life. All physical metrics exact."
+  },
+  "genetic_diff": {
+    "coordinates_equal": true,
+    "weights_total": 32768,
+    "changed_weight_indices": [
+      9567,
+      10431,
+      25440,
+      25446,
+      25455,
+      25456,
+      25462,
+      25471,
+      25472,
+      25478,
+      25487,
+      25488,
+      25504,
+      25520,
+      25536,
+      25552,
+      25568,
+      26529,
+      26785,
+      26865
+    ],
+    "changed_weight_count": 20,
+    "all_other_weights_exact": true,
+    "genome_changed_fields": [
+      "n2048_foundation_candidate"
+    ]
+  },
+  "rejected_compile_controls": [
+    {
+      "name": "crisis14-release-signal-rectified26",
+      "request": {
+        "params": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "motor_heads": 2,
+        "weight_edits": [
+          [
+            9567,
+            64
+          ],
+          [
+            10431,
+            26
+          ],
+          [
+            10488,
+            -64
+          ]
+        ],
+        "seed_start": 2026114400,
+        "seeds": 1,
+        "ticks": 128,
+        "scenes": [
+          "contact",
+          "toy",
+          "hazard",
+          "hazard-choice"
+        ],
+        "trace": true
+      },
+      "result": {
+        "error": "phenotype compilation failed"
+      }
+    },
+    {
+      "name": "crisis14-release-signal-rectified28",
+      "request": {
+        "params": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "motor_heads": 2,
+        "weight_edits": [
+          [
+            9567,
+            64
+          ],
+          [
+            10431,
+            28
+          ],
+          [
+            10488,
+            -64
+          ]
+        ],
+        "seed_start": 2026114400,
+        "seeds": 1,
+        "ticks": 128,
+        "scenes": [
+          "contact",
+          "toy",
+          "hazard",
+          "hazard-choice"
+        ],
+        "trace": true
+      },
+      "result": {
+        "error": "phenotype compilation failed"
+      }
+    }
+  ],
+  "limits": [
+    "All food targets are ordinary Food objects, including moving targets; no living-prey kill or consumption capability is claimed.",
+    "The release candidate largely stops handling the hazard after the first256 intervals but remains within reach; this is reduced harmful handling, not learned escape.",
+    "Ordinary meal total intervals rise from5810 to6112 on the identical98 successful cases (5.20%).",
+    "Mixed hazard/food successes are2/10 versus1/10 baseline, but the baseline successful seed is lost; there is no universal dominance.",
+    "Final injury uses each life terminal endpoint; meals end a trial early, so it is not equal-duration cumulative injury.",
+    "No hosted CI, GPU behavior, acquired checkpoint migration, general intelligence or statistical significance claim.",
+    "Two local replay boundaries establish forward parity only; neither broad gradient equivalence nor whole training parity is implied.",
+    "Negative MotorProposal test weights failed compilation before lives; sign constraints and runtime scheduling were not changed."
+  ]
+}
