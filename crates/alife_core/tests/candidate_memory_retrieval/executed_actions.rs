@@ -226,7 +226,7 @@ fn execution_lookup_is_lazy_and_offboard_inspection_never_debits_or_mutates() {
 #[test]
 fn offboard_sidecar_inspection_checks_owner_and_does_not_change_legacy_bank() {
     let config = MemoryBankConfig::new(8, 64, 4, 0.72, Confidence::new(0.).unwrap()).unwrap();
-    let sidecar = grounded_sidecar(config.clone());
+    let sidecar = grounded_sidecar(config);
     let draft = probe_for_object(3, slot(0, 72, 0.4, [0., 0.8, 0.9]));
     let (_, finalized) = sidecar
         .recall_frame(&draft)
@@ -735,4 +735,168 @@ fn joint_portable_roundtrip_and_rehashed_duplicate_event_fail_closed() {
         .unwrap()
         .push(b' ');
     assert!(corrupt.validate_contract().is_err());
+}
+
+fn joint_confidence_fixture(confidence: f32) -> MemoryBank {
+    let mut wire = serde_json::to_value(joint_fixture()).unwrap();
+    let bytes: Vec<u8> =
+        serde_json::from_value(wire["candidate_store"]["records"]["1"]["joint_event"].clone())
+            .unwrap();
+    let mut event: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    event["event_confidence"] = serde_json::json!(confidence);
+    wire["candidate_store"]["records"]["1"]["joint_event"] =
+        serde_json::json!(serde_json::to_vec(&event).unwrap());
+    serde_json::from_value(wire).unwrap()
+}
+
+#[test]
+fn joint_zero_confidence_secondary_preserves_ordinary_recall() {
+    let bank = joint_confidence_fixture(0.0);
+    let probe = probe_for_object(3, slot(0, 72, 0.4, [0., 0.8, 0.9]));
+    let ordinary = bank.recall_frame(&probe).unwrap();
+    let recall = bank.recall_frame_with_joint_membership(&probe).unwrap();
+    assert_eq!(recall.context(), ordinary.context());
+    assert!(recall.receipt().joint_membership_sources.is_empty());
+    assert!(recall.receipt().execution_evidence_work > 0);
+    recall.finalize(probe).unwrap();
+}
+
+fn joint_confidence_population(confidences: &[f32]) -> MemoryBank {
+    let template = serde_json::to_value(joint_fixture()).unwrap();
+    let config = MemoryBankConfig::new(128, 64, 4, 0.72, Confidence::new(0.).unwrap()).unwrap();
+    let mut wire = serde_json::to_value(MemoryBank::new(config).unwrap()).unwrap();
+    wire["candidate_store"] = template["candidate_store"].clone();
+    for (i, confidence) in confidences.iter().enumerate() {
+        let id = (i + 1) as u64;
+        let mut row = template["candidate_store"]["records"]["1"].clone();
+        row["memory_id"] = serde_json::json!(id);
+        row["source_sequence_id"] = serde_json::json!(id);
+        let bytes: Vec<u8> = serde_json::from_value(row["joint_event"].clone()).unwrap();
+        let mut event: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        event["event_confidence"] = serde_json::json!(confidence);
+        event["members"] =
+            serde_json::json!(serde_json::to_vec(&vec![fact(id, 72, true)]).unwrap());
+        row["joint_event"] = serde_json::json!(serde_json::to_vec(&event).unwrap());
+        wire["candidate_store"]["records"][id.to_string()] = row;
+    }
+    wire["candidate_store"]["next_memory_id"] = serde_json::json!(confidences.len() + 1);
+    wire["candidate_store"]["last_sequence_by_organism"][ORGANISM.raw().to_string()] =
+        serde_json::json!(confidences.len());
+    serde_json::from_value(wire).unwrap()
+}
+
+#[test]
+fn joint_subnormal_support_and_retention_use_representability_not_epsilon() {
+    let tiny = f32::from_bits(1);
+    for (confidence, tick, usable) in [
+        (tiny, 3, true),
+        (tiny, 1_000_000, false),
+        (f32::from_bits(16), 1_000_000, true),
+        (f32::MIN_POSITIVE, 1_000_000, true),
+    ] {
+        let bank = joint_confidence_fixture(confidence);
+        let bytes = serde_json::to_vec(&bank).unwrap();
+        let cold: MemoryBank = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(serde_json::to_vec(&cold).unwrap(), bytes);
+        let probe = probe_for_object(tick, slot(0, 72, 0.4, [0., 0.8, 0.9]));
+        let plain = bank.recall_frame(&probe).unwrap();
+        let explicit = cold.recall_frame_with_joint_membership(&probe).unwrap();
+        assert_eq!(
+            !explicit.receipt().joint_membership_sources.is_empty(),
+            usable
+        );
+        if usable {
+            assert!(explicit.context().candidates[0].family_confidence.raw() > 0.0);
+        } else {
+            assert_eq!(explicit.context(), plain.context());
+        }
+        explicit.finalize(probe).unwrap();
+    }
+}
+
+#[test]
+fn joint_unusable_new_events_do_not_crowd_positive_top_k() {
+    let mut values = vec![0.3];
+    values.extend([
+        0.,
+        f32::from_bits(1),
+        0.,
+        f32::from_bits(1),
+        0.,
+        f32::from_bits(1),
+    ]);
+    let bank = joint_confidence_population(&values);
+    let probe = probe_for_object(1_000_000, slot(0, 72, 0.4, [0., 0.8, 0.9]));
+    let recall = bank.recall_frame_with_joint_membership(&probe).unwrap();
+    assert_eq!(recall.receipt().joint_membership_sources.len(), 1);
+    assert_eq!(
+        recall.receipt().joint_membership_sources[0].source_sequence_id,
+        ExperienceSequenceId(1)
+    );
+    assert_eq!(recall.context().candidates[0].family_source_count, 1);
+    assert!(recall.receipt().execution_evidence_work > 2 * values.len() as u64);
+    recall.finalize(probe).unwrap();
+}
+
+#[test]
+fn joint_four_smallest_positive_events_avoid_weighting_underflow() {
+    let bank = joint_confidence_population(&[f32::from_bits(1); 4]);
+    let probe = probe_for_object(3, slot(0, 72, 0.4, [0., 0.8, 0.9]));
+    let recall = bank.recall_frame_with_joint_membership(&probe).unwrap();
+    assert_eq!(recall.receipt().joint_membership_sources.len(), 4);
+    assert_eq!(
+        recall.context().candidates[0].family_confidence.raw(),
+        f32::from_bits(1)
+    );
+    recall.finalize(probe).unwrap();
+}
+
+#[test]
+fn joint_zero_event_survives_merge_and_fallback_without_storage_rewrite() {
+    let mut bank = joint_confidence_fixture(0.);
+    bank.observe_sealed_patch(&sequenced_patch(2, 2, 71, 0.4, 0.8, 0.))
+        .unwrap();
+    let before = serde_json::to_vec(&bank).unwrap();
+    let probe = probe_for_object(3, slot(0, 72, 0.4, [0., 0.8, 0.9]));
+    let plain = bank.recall_frame(&probe).unwrap();
+    let explicit = bank.recall_frame_with_joint_membership(&probe).unwrap();
+    assert_eq!(plain.context(), explicit.context());
+    assert_eq!(explicit.receipt().execution_evidence_work, 3);
+    assert!(explicit.receipt().joint_membership_sources.is_empty());
+    assert_eq!(serde_json::to_vec(&bank).unwrap(), before);
+    explicit.finalize(probe).unwrap();
+}
+
+#[test]
+fn joint_positive_sources_order_and_context_digest_are_deterministic() {
+    let bank = joint_confidence_population(&[0.2, 0.3, 0.4, 0.5, 0.6]);
+    let probe = probe_for_object(3, slot(0, 72, 0.4, [0., 0.8, 0.9]));
+    let a = bank.recall_frame_with_joint_membership(&probe).unwrap();
+    let bytes = serde_json::to_vec(&bank).unwrap();
+    let cold: MemoryBank = serde_json::from_slice(&bytes).unwrap();
+    let b = cold.recall_frame_with_joint_membership(&probe).unwrap();
+    assert_eq!(a.context(), b.context());
+    assert_eq!(a.receipt(), b.receipt());
+    assert_eq!(
+        a.receipt()
+            .joint_membership_sources
+            .iter()
+            .map(|x| x.source_sequence_id.raw())
+            .collect::<Vec<_>>(),
+        vec![5, 4, 3, 2]
+    );
+    a.finalize(probe).unwrap();
+}
+
+#[test]
+fn joint_zero_search_keeps_existing_bounded_recent_search_policy() {
+    let mut values = vec![0.3];
+    values.extend([0.; 64]);
+    let bank = joint_confidence_population(&values);
+    let probe = probe_for_object(3, slot(0, 72, 0.4, [0., 0.8, 0.9]));
+    let ordinary = bank.recall_frame(&probe).unwrap();
+    let recall = bank.recall_frame_with_joint_membership(&probe).unwrap();
+    assert_eq!(recall.context(), ordinary.context());
+    assert!(recall.receipt().joint_membership_sources.is_empty());
+    assert_eq!(recall.receipt().execution_evidence_work, 129);
 }

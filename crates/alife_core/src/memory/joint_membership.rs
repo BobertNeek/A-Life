@@ -212,9 +212,21 @@ impl MemoryBank {
                     if similarity < MEMORY_MIN_SIMILARITY {
                         continue;
                     }
+                    let age = q.tick().raw().saturating_sub(first.event_tick.raw()) as f32;
+                    let retention = (1.0 / (1.0 + age / 16384.0)).max(0.05);
+                    // Confidence is ultimately a f32. Compute its unnormalized
+                    // support in f64 so intermediate weighting cannot erase a
+                    // usable subnormal. This is representability, not a biological
+                    // confidence floor. Unusable events must not occupy top-K.
+                    let support = f64::from(e.event.event_confidence)
+                        * f64::from(similarity)
+                        * f64::from(retention);
+                    if support as f32 <= 0.0 {
+                        continue;
+                    }
                     let key = (f.query.organism_id().raw(), f.source_sequence_id.raw());
                     if seen.insert(key) {
-                        selected.push((record.memory_id, e, similarity));
+                        selected.push((record.memory_id, e, similarity, support));
                     }
                 }
             }
@@ -230,15 +242,20 @@ impl MemoryBank {
             }
             let total: f32 = selected.iter().map(|x| x.2).sum();
             let mut values = [0.0; MEMORY_VALUE_V1_COUNT];
-            let mut confidence = 0.0;
-            for (id, e, score) in &selected {
+            // Algebraically the old normalized confidence is the mean of
+            // confidence * similarity * retention. Delay rounding until after
+            // that mean; dividing each f32 subnormal by K can round it to zero.
+            let confidence =
+                (selected.iter().map(|x| x.3).sum::<f64>() / selected.len() as f64) as f32;
+            if confidence <= 0.0 {
+                continue;
+            }
+            let family_confidence = Confidence::new(confidence.clamp(0.0, 1.0))?;
+            for (id, e, score, _) in &selected {
                 let f = &e.event.members.facts()[0];
-                let age = q.tick().raw().saturating_sub(f.event_tick.raw()) as f32;
-                let retention = (1.0 / (1.0 + age / 16384.0)).max(0.05);
                 for (v, source) in values.iter_mut().zip(e.event.shared_family_value) {
                     *v += source * (*score / total);
                 }
-                confidence += e.event.event_confidence * (*score / total) * retention;
                 p.receipt
                     .joint_membership_sources
                     .push(JointMembershipSourceV1 {
@@ -251,8 +268,7 @@ impl MemoryBank {
             }
             let c = &mut p.context.candidates[i];
             c.family_value = values.map(|v| v.clamp(-1.0, 1.0));
-            c.family_confidence =
-                Confidence::new((confidence * total / selected.len() as f32).clamp(0.0, 1.0))?;
+            c.family_confidence = family_confidence;
             c.family_source_count = selected.len() as u16;
             c.best_family_source = Some(selected[0].0);
         }
