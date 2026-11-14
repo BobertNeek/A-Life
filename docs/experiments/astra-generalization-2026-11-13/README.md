@@ -814,3 +814,21 @@ available and no production/default/shared-parent replacement is performed.
 control's full identity and outcomes, explicitly referencing the reused
 24 descendant lives. These are the same nativeCPU v17 source and dependency
 pins as the preceding studies.
+
+For transfer audits, the withdrawal extension is distinct from Paired16's
+Contact-head circuit. Its four added genetic weights are recurrent
+`898 -> 1794 = +2`, `911 -> 1792 = +2`, and Avoid decoder lane18 coefficients
+`1792 = -1024`, `1794 = +1024`. The additional genetic readout term is
+`1024 * (activation[1794] - activation[1792]) * observed_contact`; it is not the
+entire logit or an unconditional reflex. Existing neural dynamics, plastic
+weight offsets and competing candidates still matter.
+
+The upstream neuron257 receives Homeostasis lane3 (`DriveSnapshot.pain`), not
+the separate sensory `pain_signal`; reference neuron273 has no direct encoder
+assignment. In GroundedObjectSlotV1, candidate lane18 is contact (the older
+headless feature layout differs). This pathway does not require chemical0,
+but it also does not identify which contacting object caused pain. A zero
+sensory `pain_signal` alone therefore does not prove it is inactive. Agent
+contact transfer has not been tested here; use the complete exported genotype
+and inspect actual candidates/contact/encoded pain before attributing failure
+to a missing withdrawal pathway.
