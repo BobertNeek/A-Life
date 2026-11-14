@@ -12,6 +12,7 @@ pub use awake_translation::{
     AwakeTranslationIntervalReceipt, TranslationTimeMetric, VoluntaryTimeProvenance,
 };
 
+use serde::{Deserialize, Serialize};
 use std::{
     cell::{Ref, RefCell},
     collections::{BTreeMap, BTreeSet},
@@ -1299,6 +1300,218 @@ pub struct HeadlessActionBiologyReceipt {
     pub biology_after: BiochemistryState,
 }
 
+/// Which player-care dose the world applied. The four decided actions
+/// (Cassidy + Bob prime, Nov 13, 2026): praise and pet are positive,
+/// scold and slap are negative. Praise/scold are social feedback (the
+/// player-reward / social-disapproval channels); pet/slap are distinct
+/// physical interactions (the social-contact / damage channels). All four
+/// are producible now: the dock queues them through
+/// `queue_player_interaction_v1`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PlayerCareKind {
+    /// Positive physical interaction. Was `Touch` in slice 2; the serde
+    /// alias keeps branch-era saves loading.
+    #[serde(alias = "Touch")]
+    Pet,
+    Praise,
+    Scold,
+    Slap,
+}
+
+impl PlayerCareKind {
+    /// Whether the dose was a negative judgement (scold/slap). The
+    /// presentation flinches for these and nods for the positive kinds.
+    pub fn is_negative(self) -> bool {
+        matches!(self, Self::Scold | Self::Slap)
+    }
+}
+
+/// The set of player-care kinds actually applied in one consumed dose.
+/// A receipt records every kind the dose carried, not a single exclusive
+/// label: a pet and a praise queued before one tick arrive together, and
+/// so can a scold with a slap. The bits are an implementation detail and
+/// are never serialized raw: serde writes the set as a sequence of kind
+/// names, and reads either a sequence or one old single-kind string.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct PlayerCareKindSet {
+    bits: u8,
+}
+
+impl PlayerCareKindSet {
+    const PET: u8 = 1 << 0;
+    const PRAISE: u8 = 1 << 1;
+    const SCOLD: u8 = 1 << 2;
+    const SLAP: u8 = 1 << 3;
+
+    pub fn empty() -> Self {
+        Self::default()
+    }
+
+    pub fn single(kind: PlayerCareKind) -> Self {
+        let mut set = Self::empty();
+        set.insert(kind);
+        set
+    }
+
+    pub fn insert(&mut self, kind: PlayerCareKind) {
+        self.bits |= match kind {
+            PlayerCareKind::Pet => Self::PET,
+            PlayerCareKind::Praise => Self::PRAISE,
+            PlayerCareKind::Scold => Self::SCOLD,
+            PlayerCareKind::Slap => Self::SLAP,
+        };
+    }
+
+    pub fn contains(self, kind: PlayerCareKind) -> bool {
+        self.bits
+            & match kind {
+                PlayerCareKind::Pet => Self::PET,
+                PlayerCareKind::Praise => Self::PRAISE,
+                PlayerCareKind::Scold => Self::SCOLD,
+                PlayerCareKind::Slap => Self::SLAP,
+            }
+            != 0
+    }
+
+    pub fn is_empty(self) -> bool {
+        self.bits == 0
+    }
+
+    /// The kinds in the set, in fixed order (pet, praise, scold, slap),
+    /// for deterministic rendering and tests.
+    pub fn iter(self) -> impl Iterator<Item = PlayerCareKind> {
+        [
+            PlayerCareKind::Pet,
+            PlayerCareKind::Praise,
+            PlayerCareKind::Scold,
+            PlayerCareKind::Slap,
+        ]
+        .into_iter()
+        .filter(move |kind| self.contains(*kind))
+    }
+
+    /// Whether any kind in the set is a negative judgement. Under the
+    /// display rule below, a set containing a negative kind always
+    /// displays as one, so this agrees with the display kind.
+    pub fn is_negative(self) -> bool {
+        self.contains(PlayerCareKind::Scold) || self.contains(PlayerCareKind::Slap)
+    }
+
+    /// The one kind the presentation answers with. Interpretive, not a
+    /// measurement: negative dominates (a slap outranks a scold, either
+    /// outranks a pet or praise), and among positives a pet outranks
+    /// praise — the pair the follow-up slice pinned as "play". The debug
+    /// readout, not the display, carries the full set.
+    pub fn display_kind(self) -> Option<PlayerCareKind> {
+        if self.contains(PlayerCareKind::Slap) {
+            Some(PlayerCareKind::Slap)
+        } else if self.contains(PlayerCareKind::Scold) {
+            Some(PlayerCareKind::Scold)
+        } else if self.contains(PlayerCareKind::Pet) {
+            Some(PlayerCareKind::Pet)
+        } else if self.contains(PlayerCareKind::Praise) {
+            Some(PlayerCareKind::Praise)
+        } else {
+            None
+        }
+    }
+
+    /// One kind name as it appears in an old single-kind receipt
+    /// (`"Pet"`, `"Touch"`, `"Praise"`, `"Scold"`, `"Slap"`) or the
+    /// removed pair (`"PetAndPraise"`, `"TouchAndPraise"` -> pet +
+    /// praise). Unknown names are rejected, never silently mapped.
+    fn from_single_name(name: &str) -> Option<Self> {
+        match name {
+            "Pet" | "Touch" => Some(Self::single(PlayerCareKind::Pet)),
+            "Praise" => Some(Self::single(PlayerCareKind::Praise)),
+            "Scold" => Some(Self::single(PlayerCareKind::Scold)),
+            "Slap" => Some(Self::single(PlayerCareKind::Slap)),
+            "PetAndPraise" | "TouchAndPraise" => {
+                let mut set = Self::empty();
+                set.insert(PlayerCareKind::Pet);
+                set.insert(PlayerCareKind::Praise);
+                Some(set)
+            }
+            _ => None,
+        }
+    }
+}
+
+impl Serialize for PlayerCareKindSet {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeSeq;
+        let mut seq = serializer.serialize_seq(Some(self.iter().count()))?;
+        for kind in self.iter() {
+            seq.serialize_element(&kind)?;
+        }
+        seq.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for PlayerCareKindSet {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct SetVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for SetVisitor {
+            type Value = PlayerCareKindSet;
+
+            fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                f.write_str("a player-care kind name or a sequence of kind names")
+            }
+
+            fn visit_str<E: serde::de::Error>(self, value: &str) -> Result<Self::Value, E> {
+                Self::Value::from_single_name(value)
+                    .ok_or_else(|| E::custom(format!("unknown player-care kind: {value}")))
+            }
+
+            fn visit_seq<A: serde::de::SeqAccess<'de>>(
+                self,
+                mut seq: A,
+            ) -> Result<Self::Value, A::Error> {
+                let mut set = PlayerCareKindSet::empty();
+                while let Some(kind) = seq.next_element::<PlayerCareKind>()? {
+                    set.insert(kind);
+                }
+                Ok(set)
+            }
+        }
+
+        deserializer.deserialize_any(SetVisitor)
+    }
+}
+
+/// World-owned record that a queued player-care dose was actually applied to
+/// a creature's biology. This is the creature's response as a fact: the dose
+/// entered its biochemistry and its sensory frame on the same tick boundary.
+/// The before/after values are whole-tick snapshots around the biology
+/// advance that consumed the dose, not isolated causal effects of player
+/// care. The debug readout shows praise/loneliness snapshots only when the
+/// dose includes the corresponding positive kind; no negative-response
+/// channel is measured here. The user-facing game shows a receipt-driven
+/// interpretive response, not these numbers.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct PlayerCareReceipt {
+    /// The kinds actually applied. Serialized as `kinds`; receipts from
+    /// the slice-2 follow-up stored a single `kind` string and still load
+    /// (see `PlayerCareKindSet`).
+    #[serde(alias = "kind")]
+    pub kinds: PlayerCareKindSet,
+    pub applied_tick: Tick,
+    pub praise_signal_before: f32,
+    pub praise_signal_after: f32,
+    pub loneliness_before: f32,
+    pub loneliness_after: f32,
+}
+
+impl PlayerCareReceipt {
+    /// The one kind the presentation answers with (see
+    /// `PlayerCareKindSet::display_kind`). `None` only for an empty set,
+    /// which the recorder never stores.
+    pub fn display_kind(self) -> Option<PlayerCareKind> {
+        self.kinds.display_kind()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct HeadlessMotorChannelReceipt {
     pub command: ChannelCommand,
@@ -1456,6 +1669,9 @@ pub struct HeadlessWorld {
     speech: SpatialSpeechBus,
     last_creature_utterance_ticks: BTreeMap<u64, Tick>,
     pending_player_care: BTreeMap<u64, BodyEventDelta>,
+    /// Last applied player-care receipt per organism. Last-only history, not
+    /// a pending obligation: a rejected queue never erases it.
+    last_player_care: BTreeMap<u64, PlayerCareReceipt>,
     player_hold: Option<player_hand::PlayerHold>,
     tracked_objects: TrackedObjectRegistry,
     habitats: HabitatAuthority,
@@ -1681,6 +1897,7 @@ impl HeadlessWorld {
             speech: SpatialSpeechBus::default(),
             last_creature_utterance_ticks: BTreeMap::new(),
             pending_player_care: BTreeMap::new(),
+            last_player_care: BTreeMap::new(),
             player_hold: None,
             tracked_objects: TrackedObjectRegistry::new(
                 seed,
@@ -1799,6 +2016,67 @@ impl HeadlessWorld {
             event.social_disapproval_v1 = received_social;
         }
         Ok(crate::PlayerInteractionQueueOutcomeV1::Queued)
+    }
+
+    /// The last player-care dose this organism actually felt, if any.
+    /// `None` means the world holds no recorded receipt for it — unknown,
+    /// not a confirmed absence. A save from before receipts existed and a
+    /// creature never yet cared for both read as `None`; neither may be
+    /// presented as "this creature felt nothing".
+    pub fn last_player_care(&self, organism: OrganismId) -> Option<PlayerCareReceipt> {
+        self.last_player_care.get(&organism.raw()).copied()
+    }
+
+    /// Record that a queued player-care dose was applied to this organism's
+    /// biology on `tick`. Call immediately after the biology advance that
+    /// consumed the dose; `before`/`after` are the biochemistry states around
+    /// that advance. A zero applied delta records nothing: the dose never
+    /// arrived, so there is no response to report.
+    fn record_player_care_receipt(
+        &mut self,
+        organism: OrganismId,
+        applied: BodyEventDelta,
+        tick: Tick,
+        before: &BiochemistryState,
+        after: &BiochemistryState,
+    ) {
+        // The kinds come from the four fields of the player-only dose
+        // that was actually consumed, never from which button was pressed
+        // and never from the merged body event: a collision's damage is
+        // not a slap, and a peer's touch is not a pet. Each field maps to
+        // exactly one kind (see `PlayerInteractionV1::apply`), so a mixed
+        // dose records the set of kinds it carried — no dose is
+        // unattributable, and the old both-negative/mixed-sign ambiguity
+        // is gone. A zero dose records nothing: the dose never arrived,
+        // so there is no response to report. (The dose is validated
+        // finite upstream, so NaN cannot reach the comparisons below.)
+        let mut kinds = PlayerCareKindSet::empty();
+        if applied.player_reward > 0.0 {
+            kinds.insert(PlayerCareKind::Praise);
+        }
+        if applied.social_contact > 0.0 {
+            kinds.insert(PlayerCareKind::Pet);
+        }
+        if applied.social_disapproval_v1 > 0.0 {
+            kinds.insert(PlayerCareKind::Scold);
+        }
+        if applied.damage > 0.0 {
+            kinds.insert(PlayerCareKind::Slap);
+        }
+        if kinds.is_empty() {
+            return;
+        }
+        self.last_player_care.insert(
+            organism.raw(),
+            PlayerCareReceipt {
+                kinds,
+                applied_tick: tick,
+                praise_signal_before: before.homeostasis.hormones.extension[0],
+                praise_signal_after: after.homeostasis.hormones.extension[0],
+                loneliness_before: before.homeostasis.drives.loneliness,
+                loneliness_after: after.homeostasis.drives.loneliness,
+            },
+        );
     }
 
     pub fn habitat_authority(&self) -> &HabitatAuthority {
@@ -2073,13 +2351,11 @@ impl HeadlessWorld {
                             .copied()
                             .unwrap_or_else(BodyEventDelta::zero),
                     );
-                    let body_event = combine_body_event(
-                        body_event,
-                        candidate
-                            .pending_player_care
-                            .remove(&organism_id.raw())
-                            .unwrap_or_else(BodyEventDelta::zero),
-                    );
+                    let applied_care = candidate
+                        .pending_player_care
+                        .remove(&organism_id.raw())
+                        .unwrap_or_else(BodyEventDelta::zero);
+                    let body_event = combine_body_event(body_event, applied_care);
                     let unlocalized_damage = body_event.damage;
                     // Stationary/body-only intervals receive the same actual
                     // surface-contact dose as action intervals, exactly once.
@@ -2117,6 +2393,11 @@ impl HeadlessWorld {
                         response.applied_body_event = body_event;
                         responses.push(response);
                     }
+                    let care_biology_before = *candidate
+                        .organism_registry
+                        .get(organism_id)
+                        .ok_or(ScaffoldContractError::InvalidId)?
+                        .biochemistry();
                     candidate.advance_biology_with_thermal_candidate(
                         organism_id,
                         next_tick,
@@ -2124,6 +2405,18 @@ impl HeadlessWorld {
                         None,
                         relief,
                     )?;
+                    let care_biology_after = *candidate
+                        .organism_registry
+                        .get(organism_id)
+                        .ok_or(ScaffoldContractError::InvalidId)?
+                        .biochemistry();
+                    candidate.record_player_care_receipt(
+                        organism_id,
+                        applied_care,
+                        next_tick,
+                        &care_biology_before,
+                        &care_biology_after,
+                    );
                     #[cfg(test)]
                     {
                         advanced_organism = true;
@@ -2904,6 +3197,13 @@ impl HeadlessWorld {
             digest.write_bytes(b"player-care-v1");
             digest.write_bytes(
                 &serde_json::to_vec(&self.pending_player_care)
+                    .map_err(|_| ScaffoldContractError::InvalidId)?,
+            );
+        }
+        if !self.last_player_care.is_empty() {
+            digest.write_bytes(b"player-care-receipt-v1");
+            digest.write_bytes(
+                &serde_json::to_vec(&self.last_player_care)
                     .map_err(|_| ScaffoldContractError::InvalidId)?,
             );
         }
@@ -3711,6 +4011,7 @@ impl HeadlessWorld {
             ecology: self.ecology.clone(),
             audible_utterances: self.speech.snapshot(),
             pending_player_care: self.pending_player_care.clone(),
+            last_player_care: self.last_player_care.clone(),
             ingestion_observations: self.ingestion_observations.clone(),
             player_hold: self.player_hold.clone(),
             last_creature_utterance_ticks: self
@@ -3877,6 +4178,7 @@ impl HeadlessWorld {
             ecology: state.ecology.clone(),
             speech: SpatialSpeechBus::restore(state.audible_utterances.clone(), state.tick)?,
             pending_player_care: state.pending_player_care.clone(),
+            last_player_care: state.last_player_care.clone(),
             player_hold: state.player_hold.clone(),
             last_creature_utterance_ticks: state
                 .last_creature_utterance_ticks
@@ -5110,12 +5412,11 @@ impl HeadlessWorld {
             ..BodyEventDelta::zero()
         };
         let body_event = combine_body_event(ambient_event, action_and_hazard_event);
-        let mut body_event = combine_body_event(
-            body_event,
-            self.pending_player_care
-                .remove(&bundle.organism_id.raw())
-                .unwrap_or_else(BodyEventDelta::zero),
-        );
+        let applied_care = self
+            .pending_player_care
+            .remove(&bundle.organism_id.raw())
+            .unwrap_or_else(BodyEventDelta::zero);
+        let mut body_event = combine_body_event(body_event, applied_care);
         if let Some((novelty, _)) = novelty {
             body_event.perceived_novelty = novelty;
         }
@@ -5159,6 +5460,11 @@ impl HeadlessWorld {
         let (body_event, relief) =
             self.thermal_interval_event(body_event, initial_thermal.max(final_thermal));
         body_event.validate_contract()?;
+        let care_biology_before = *self
+            .organism_registry
+            .get(bundle.organism_id)
+            .ok_or(ScaffoldContractError::InvalidId)?
+            .biochemistry();
         if let Some(recovery) = awake_rest {
             // The typed entry validated the inherited recipe and neutral posture.
             // Every realized segment counts, including cancelled net paths. Fresh
@@ -5205,6 +5511,13 @@ impl HeadlessWorld {
             .get(bundle.organism_id)
             .ok_or(ScaffoldContractError::InvalidId)?
             .biochemistry();
+        self.record_player_care_receipt(
+            bundle.organism_id,
+            applied_care,
+            outcome_tick,
+            &care_biology_before,
+            &biology_after,
+        );
 
         let mut touched = BTreeSet::new();
         let mut channel_observations = Vec::new();
@@ -5415,17 +5728,21 @@ impl HeadlessWorld {
         };
         action_result.body_event.social_contact =
             peer_touch_dose(initial_peer_touch || final_peer_touch);
-        action_result.body_event = combine_body_event(
-            action_result.body_event,
-            self.pending_player_care
-                .remove(&command.organism_id.raw())
-                .unwrap_or_else(BodyEventDelta::zero),
-        );
+        let applied_care = self
+            .pending_player_care
+            .remove(&command.organism_id.raw())
+            .unwrap_or_else(BodyEventDelta::zero);
+        action_result.body_event = combine_body_event(action_result.body_event, applied_care);
         let final_thermal = self.thermal_contact_severity_at(world_entity_id, final_position);
         let (body_event, relief) = self
             .thermal_interval_event(action_result.body_event, initial_thermal.max(final_thermal));
         action_result.body_event = body_event;
         self.last_action_result = Some(action_result.clone());
+        let care_biology_before = *self
+            .organism_registry
+            .get(command.organism_id)
+            .ok_or(ScaffoldContractError::InvalidId)?
+            .biochemistry();
         self.advance_biology_with_thermal_candidate(
             command.organism_id,
             outcome_tick,
@@ -5442,6 +5759,13 @@ impl HeadlessWorld {
         if biology_after.tick != outcome_tick || action_result.command != *command {
             return Err(ScaffoldContractError::InvalidActionDecision);
         }
+        self.record_player_care_receipt(
+            command.organism_id,
+            applied_care,
+            outcome_tick,
+            &care_biology_before,
+            &biology_after,
+        );
         #[cfg(test)]
         if self.injected_post_action_failure {
             return Err(ScaffoldContractError::InvalidDecisionEvidence);
@@ -9247,7 +9571,16 @@ mod task_6_factorized_motor_tests {
         assert!(actual.voluntary_path > 0.04);
         assert!(actual.voluntary_execution_altered);
         assert!(actual.withdrawal.is_some());
-        eprintln!("CURVED_PREFIX_DIAGNOSTIC chord_x={} grounded_y={} projected_source_distance={} radius={} legal_later_x={} legal_later_source_distance={} ordinary_x={}", chord.x, grounded.y, distance(grounded,center), radius, later.x, distance(later,center), expected.joint.execution.displacement.x);
+        eprintln!(
+            "CURVED_PREFIX_DIAGNOSTIC chord_x={} grounded_y={} projected_source_distance={} radius={} legal_later_x={} legal_later_source_distance={} ordinary_x={}",
+            chord.x,
+            grounded.y,
+            distance(grounded, center),
+            radius,
+            later.x,
+            distance(later, center),
+            expected.joint.execution.displacement.x
+        );
     }
 
     #[test]
@@ -9265,15 +9598,15 @@ mod task_6_factorized_motor_tests {
             .unwrap()
             .grounded_move_segments(start, end)
             .unwrap();
-        assert!(segments
-            .iter()
-            .all(|segment| grounded_path::grounded_segment_sphere_entry(
+        assert!(segments.iter().all(|segment| {
+            grounded_path::grounded_segment_sphere_entry(
                 segment.start,
                 segment.end,
                 Vec3f::new(0.05, 0.0, 0.0),
-                0.002
+                0.002,
             )
-            .is_none()));
+            .is_none()
+        }));
         let mut ordinary = world.clone();
         let expected = ordinary
             .apply_registered_motor_bundle(&bundle, agent)
@@ -9357,15 +9690,15 @@ mod task_6_factorized_motor_tests {
             .unwrap()
             .grounded_move_segments(start, Vec3f::new(0.1, 0.0, 0.0))
             .unwrap();
-        assert!(segments
-            .iter()
-            .all(|segment| grounded_path::grounded_segment_sphere_entry(
+        assert!(segments.iter().all(|segment| {
+            grounded_path::grounded_segment_sphere_entry(
                 segment.start,
                 segment.end,
                 actual_center,
-                radius
+                radius,
             )
-            .is_none()));
+            .is_none()
+        }));
         assert!(
             distance(prefix, actual_center) > radius
                 && distance(prefix, actual_center) <= radius + 1e-5
@@ -9467,7 +9800,10 @@ mod task_6_factorized_motor_tests {
                         .unwrap()
                         .sources
                         .contains(&hazard));
-                    eprintln!("GROUNDED_POINT_TIME origin={origin} concave={concave} diagonal={diagonal} planar={planar} time={}",actual.voluntary_time_allocated);
+                    eprintln!(
+                        "GROUNDED_POINT_TIME origin={origin} concave={concave} diagonal={diagonal} planar={planar} time={}",
+                        actual.voluntary_time_allocated
+                    );
                 }
             }
         }
@@ -10407,7 +10743,10 @@ mod task_6_factorized_motor_tests {
         assert!((receipt.voluntary_time_allocated - 0.5).abs() < 1e-4);
         assert!((receipt.reflex_time_allocated - 0.5).abs() < 1e-4);
         assert!((receipt.voluntary_path - step * 0.5).abs() < 1e-5);
-        println!("AWAKE_SHARED_ADAPTER_RATES effector={effector} proprioception={proprioception} voluntary_factor={voluntary_factor} voluntary_rate={step} reflex_rate={reflex_rate} actual_reflex_path={}", receipt.reflex_path);
+        println!(
+            "AWAKE_SHARED_ADAPTER_RATES effector={effector} proprioception={proprioception} voluntary_factor={voluntary_factor} voluntary_rate={step} reflex_rate={reflex_rate} actual_reflex_path={}",
+            receipt.reflex_path
+        );
         assert!((receipt.reflex_path - reflex_rate * 0.5).abs() < 1e-5);
         assert!(receipt.voluntary_path + receipt.reflex_path <= physical_step + 1e-5);
     }
