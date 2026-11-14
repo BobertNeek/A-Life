@@ -690,3 +690,45 @@ mean lone-hazard injury was 0.4991, so its stronger feeding result has a cost.
 It was selected only for a new frozen comparison, not adopted as the shared
 parent. The exact recipes, outcomes and limits are in
 `corrected-circuit-screen-study.json` and its result archive.
+
+
+### Two-weight pain-input descendant: fresh comparison
+
+The exported `pursuit-twohead-contact20-momentum128-withdraw1024-pain8`
+research founder changes exactly two recurrent coefficients, indices 6665 and
+6799, from 2 to 8. Synapse coordinates and the complete construction genome are
+unchanged except its foundation identity. It inherits Withdraw1024, including
+all earlier pursuit, release and withdrawal edits; it is not a fresh brain.
+
+Forty fresh native CPU lives compared this child with Withdraw1024 on four
+fixed conditions and five scenes, each continuing for 1,024 intervals. The
+conditions include both biology-only preparation and 600 actual host decisions,
+with observed two-, three- and four-microstep intervals rather than an assumed
+constant neural phase.
+
+| Fresh outcome | Withdraw1024 | Pain8 |
+|---|---:|---:|
+| Ordinary meals and survival | 12/12 | 12/12 |
+| Mixed food/hazard meals and survival | 1/4 | 3/4 |
+| All survival | 20/20 | 20/20 |
+| Mean lone-hazard injury | 0.4578 | 0.5091 |
+| Mean mixed-case injury | 0.4490 | 0.4980 |
+
+All twelve ordinary meal times match; nine full trial summaries are identical.
+The other three differ slightly in action counts, positions or physiology.
+The child keeps the parent's mixed meal, reaches two additional meals, and
+still misses one. This is a useful small generalization result with increased
+injury, not statistical certainty, reliable attribution of pain to a target,
+or a common-parent change. Contact20 remains the shared parent pending broader
+integration decisions.
+
+A reload from the exported foundation plus genome reproduces the full
+1,024-interval hazard result exactly. Two separate 128-interval diagnostic
+repeats preserve their corresponding meal outcomes; independent PyTorch
+recomputation of their actual three-microstep recurrent/dendritic calculation
+matches native activations within 5.97e-8. Those repeats are not additional
+heldouts. Increased input coefficients change nonlinear saturation; do not
+interpret them as a simple increase in pain sensitivity. Full traces remain
+local. `pain8-fresh-study.json` pins the assets, source, tests, aggregate evidence
+and limits; `pain8-fresh-results.jsonl.gz` contains all forty sanitized requests
+and results. These runs still use source `87fecd7d`, before security `bd132fe7`.
