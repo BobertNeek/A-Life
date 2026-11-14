@@ -557,6 +557,10 @@ fn trial(
         )?;
     }
     let hunter = host.world().entity_id("hunter").unwrap();
+    let initial_distance = distance(
+        host.world().entity(hunter).unwrap().position,
+        host.world().entity(target).unwrap().position,
+    );
     let body = host
         .world()
         .organism_registry()
@@ -578,8 +582,8 @@ fn trial(
         consumed: false,
         caught_tick: None,
         consumed_tick: None,
-        min_distance: distance(Vec3f::ZERO, initial),
-        final_distance: distance(Vec3f::ZERO, initial),
+        min_distance: initial_distance,
+        final_distance: initial_distance,
         initial_energy: body.energy,
         final_energy: body.energy,
         initial_drives,
@@ -1092,6 +1096,18 @@ mod tests {
         let (asset, p, game) = prepare_founder(base(), 2).unwrap();
         let mask = StageTrainableMask::recurrent_only(&p).unwrap();
         let trainer = CpuFoundationTrainer::new(p, asset, mask, AdamWConfig::default()).unwrap();
+        let before_arrival = trial(
+            &game,
+            &trainer,
+            2026114900,
+            "delayed-hazard",
+            64,
+            false,
+            Variation::default(),
+        )
+        .unwrap();
+        assert!(before_arrival.min_distance > 90.0);
+        assert_eq!(before_arrival.injury, 0.0);
         let result = trial(
             &game,
             &trainer,
