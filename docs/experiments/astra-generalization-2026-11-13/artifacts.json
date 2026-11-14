@@ -29,6 +29,22 @@
     "pursuit-twohead-contact20-hold4.alife-foundation.genome.json": {
       "sha256": "3a435806b81dad31764d0f26f9490ce766824a2b10b25f278c932196d9c521ba",
       "bytes": 205948
+    },
+    "pursuit-twohead-contact20-pain-inspect32.alife-foundation": {
+      "sha256": "d0d71022d06bd8327bd0496c74792eeb5588a004a38241c4c2c60183b04074d1",
+      "bytes": 131581
+    },
+    "pursuit-twohead-contact20-pain-inspect32.alife-foundation.genome.json": {
+      "sha256": "2ccb9f2ec3f5af0363ee7d49a7632036d54ca8536273ebdd7d6326d7b93a418c",
+      "bytes": 205961
+    },
+    "pursuit-twohead-contact20-inspect24.alife-foundation": {
+      "sha256": "69f0cc8a473e7fa3f6e9d06529b3136f0bcde116c07a73a2f0be1328005d7c7d",
+      "bytes": 131581
+    },
+    "pursuit-twohead-contact20-inspect24.alife-foundation.genome.json": {
+      "sha256": "2db3323128adc84230f77ed08e1c8decb98125977c583e3648a8f586b480bdea",
+      "bytes": 205947
     }
   },
   "working_best": {
@@ -69,5 +85,43 @@
     },
     "validation": "hold-heldout cases2026113300..3309 and full12-scene exported reload",
     "status": "measured tradeoff; pending shared-parent coordination"
-  }
+  },
+  "inspection_candidates": [
+    {
+      "foundation": "pursuit-twohead-contact20-pain-inspect32.alife-foundation",
+      "genome": "pursuit-twohead-contact20-pain-inspect32.alife-foundation.genome.json",
+      "parent": "pursuit-twohead-contact20.alife-foundation",
+      "weight_edits": [
+        [
+          9552,
+          64.0
+        ],
+        [
+          10419,
+          23.0
+        ],
+        [
+          25713,
+          -32.0
+        ],
+        [
+          25727,
+          0.0
+        ]
+      ],
+      "status": "research comparison; not common-parent promotion; sustained lone-hazard avoidance remains unsolved"
+    },
+    {
+      "foundation": "pursuit-twohead-contact20-inspect24.alife-foundation",
+      "genome": "pursuit-twohead-contact20-inspect24.alife-foundation.genome.json",
+      "parent": "pursuit-twohead-contact20.alife-foundation",
+      "weight_edits": [
+        [
+          25727,
+          -24.0
+        ]
+      ],
+      "status": "research comparison; not common-parent promotion; sustained lone-hazard avoidance remains unsolved"
+    }
+  ]
 }

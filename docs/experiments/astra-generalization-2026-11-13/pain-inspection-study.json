@@ -1,0 +1,2227 @@
+{
+  "parent": "pursuit-twohead-contact20.alife-foundation",
+  "parent_sha256": "d83a995e802e41b8e17799b0871f75d9ede35f95850049777323112e636654d1",
+  "source_v9": "90dc545920f62232310324a811066751e4fe1e00",
+  "source_v10": "402570686c718203d1ea09f2646777599d88776f",
+  "binary_v9_sha256": "3c02d540a374856cbbf8ca371aa029b1dc5b1917b1c1f35dbb36057f9686569b",
+  "binary_v10_sha256": "73cd9ee3eaff9ff9945b04987152ace7641d8dab57f957d75a56673e62400195",
+  "signal_audit": {
+    "torch": "2.15.0+cpu",
+    "signal": {
+      "base": {
+        "contact": {
+          "decisions": 7,
+          "steady_decisions": 0,
+          "motor_min": 0.4277609884738922,
+          "motor_max": 0.9426519870758057,
+          "steady_mean": null
+        },
+        "toy": {
+          "decisions": 128,
+          "steady_decisions": 96,
+          "motor_min": 0.4277609884738922,
+          "motor_max": 0.9524762034416199,
+          "steady_mean": [
+            0.0,
+            0.08790297557910283,
+            0.9524722900241613,
+            0.952542981132865
+          ]
+        },
+        "hazard": {
+          "decisions": 115,
+          "steady_decisions": 83,
+          "motor_min": 0.4277609884738922,
+          "motor_max": 0.952468752861023,
+          "steady_mean": [
+            0.8137787585427244,
+            0.15052975085844478,
+            0.9524502969649901,
+            0.9525205141090485
+          ]
+        },
+        "hazard-choice": {
+          "decisions": 128,
+          "steady_decisions": 96,
+          "motor_min": 0.4277609884738922,
+          "motor_max": 0.9524754285812378,
+          "steady_mean": [
+            0.6352950458725294,
+            0.1440011222536365,
+            0.9524717554450035,
+            0.9525422174483538
+          ]
+        }
+      },
+      "relay": {
+        "contact": {
+          "decisions": 7,
+          "steady_decisions": 0,
+          "motor_min": 0.4266290068626404,
+          "motor_max": 0.9447131752967834,
+          "steady_mean": null
+        },
+        "toy": {
+          "decisions": 128,
+          "steady_decisions": 96,
+          "motor_min": 0.4266290068626404,
+          "motor_max": 0.9732227325439453,
+          "steady_mean": [
+            0.0,
+            0.08790297557910283,
+            0.9721984652181467,
+            0.952542981132865
+          ]
+        },
+        "hazard": {
+          "decisions": 115,
+          "steady_decisions": 83,
+          "motor_min": 0.4266290068626404,
+          "motor_max": 0.9795979857444763,
+          "steady_mean": [
+            0.8137787585427244,
+            0.15052975085844478,
+            0.9790350744523197,
+            0.9525205141090485
+          ]
+        },
+        "hazard-choice": {
+          "decisions": 128,
+          "steady_decisions": 96,
+          "motor_min": 0.4266290068626404,
+          "motor_max": 0.97931969165802,
+          "steady_mean": [
+            0.6352950458725294,
+            0.1440011222536365,
+            0.9784102638562521,
+            0.9525422174483538
+          ]
+        }
+      },
+      "balanced32": {
+        "contact": {
+          "decisions": 7,
+          "steady_decisions": 0,
+          "motor_min": -0.5882043838500977,
+          "motor_max": 0.35636454820632935,
+          "steady_mean": null
+        },
+        "toy": {
+          "decisions": 128,
+          "steady_decisions": 96,
+          "motor_min": -0.5881987810134888,
+          "motor_max": 0.7971060872077942,
+          "steady_mean": [
+            0.0,
+            0.08790297557910283,
+            0.7072322182357311,
+            0.952542981132865
+          ]
+        },
+        "hazard": {
+          "decisions": 115,
+          "steady_decisions": 83,
+          "motor_min": -0.5809023380279541,
+          "motor_max": 0.914300799369812,
+          "steady_mean": [
+            0.8137787585427244,
+            0.15052975085844478,
+            0.9040228595216591,
+            0.9525205141090485
+          ]
+        },
+        "hazard-choice": {
+          "decisions": 128,
+          "steady_decisions": 96,
+          "motor_min": -0.5818876028060913,
+          "motor_max": 0.9147348403930664,
+          "steady_mean": [
+            0.6352950458725294,
+            0.1440011222536365,
+            0.8904806822538376,
+            0.9525422174483538
+          ]
+        }
+      },
+      "balanced64": {
+        "contact": {
+          "decisions": 7,
+          "steady_decisions": 0,
+          "motor_min": -0.874305248260498,
+          "motor_max": 0.08513056486845016,
+          "steady_mean": null
+        },
+        "toy": {
+          "decisions": 128,
+          "steady_decisions": 96,
+          "motor_min": -0.8743040561676025,
+          "motor_max": 0.8361784815788269,
+          "steady_mean": [
+            0.0,
+            0.08790297557910283,
+            0.7006167763223251,
+            0.952542981132865
+          ]
+        },
+        "hazard": {
+          "decisions": 115,
+          "steady_decisions": 83,
+          "motor_min": -0.8724279403686523,
+          "motor_max": 0.9849703907966614,
+          "steady_mean": [
+            0.8137787585427244,
+            0.15052975085844478,
+            0.9790794425700085,
+            0.9525205141090485
+          ]
+        },
+        "hazard-choice": {
+          "decisions": 128,
+          "steady_decisions": 96,
+          "motor_min": -0.8727245330810547,
+          "motor_max": 0.9843710064888,
+          "steady_mean": [
+            0.6352950458725294,
+            0.1440011222536365,
+            0.9700645220776399,
+            0.9525422174483538
+          ]
+        }
+      }
+    },
+    "frozen_genetic_inspect_score_deltas": {
+      "16:0.73": {
+        "contact": {
+          "min": 1.8170795440673828,
+          "max": 12.330741882324219,
+          "mean": 8.756833553314209
+        },
+        "toy": {
+          "min": -1.1268839836120605,
+          "max": 12.330732345581055,
+          "mean": 0.41861899197101593
+        },
+        "hazard": {
+          "min": -2.317021369934082,
+          "max": 12.315723419189453,
+          "mean": -1.4104485387387482
+        },
+        "hazard-choice": {
+          "min": -2.3121471405029297,
+          "max": 12.318096160888672,
+          "mean": -1.4408478680998087
+        }
+      },
+      "32:0.73": {
+        "contact": {
+          "min": 3.6341590881347656,
+          "max": 24.661483764648438,
+          "mean": 17.513667106628418
+        },
+        "toy": {
+          "min": -2.253767967224121,
+          "max": 24.66146469116211,
+          "mean": 0.8372379839420319
+        },
+        "hazard": {
+          "min": -4.634042739868164,
+          "max": 24.631446838378906,
+          "mean": -2.8208970774774964
+        },
+        "hazard-choice": {
+          "min": -4.624294281005859,
+          "max": 24.636192321777344,
+          "mean": -2.8816957361996174
+        }
+      },
+      "64:0.73": {
+        "contact": {
+          "min": 7.268318176269531,
+          "max": 49.322967529296875,
+          "mean": 35.027334213256836
+        },
+        "toy": {
+          "min": -4.507535934448242,
+          "max": 49.32292938232422,
+          "mean": 1.6744759678840637
+        },
+        "hazard": {
+          "min": -9.268085479736328,
+          "max": 49.26289367675781,
+          "mean": -5.641794154954993
+        },
+        "hazard-choice": {
+          "min": -9.248588562011719,
+          "max": 49.27238464355469,
+          "mean": -5.763391472399235
+        }
+      },
+      "32:0": {
+        "contact": {
+          "min": -1.3620890378952026,
+          "max": 13.988883972167969,
+          "mean": 8.220677256584167
+        },
+        "toy": {
+          "min": -13.37885570526123,
+          "max": 13.98886489868164,
+          "mean": -10.187300317920744
+        },
+        "hazard": {
+          "min": -15.759526252746582,
+          "max": 13.958847045898438,
+          "mean": -13.833809076184812
+        },
+        "hazard-choice": {
+          "min": -15.7499361038208,
+          "max": 13.963592529296875,
+          "mean": -13.906225609593093
+        }
+      },
+      "32:0.85": {
+        "contact": {
+          "min": 4.455460548400879,
+          "max": 26.41588592529297,
+          "mean": 19.041281836373464
+        },
+        "toy": {
+          "min": -0.4249868392944336,
+          "max": 26.41586685180664,
+          "mean": 2.6494908407330513
+        },
+        "hazard": {
+          "min": -2.8051958084106445,
+          "max": 26.385848999023438,
+          "mean": -1.0105553502621858
+        },
+        "hazard-choice": {
+          "min": -2.795421600341797,
+          "max": 26.390592575073242,
+          "mean": -1.0694442354142666
+        }
+      }
+    },
+    "interpretation": "Native signal-only states; Torch calculates direct genetic readout deltas on frozen rows. These are not dynamic behavior predictions or causal learned pain meanings. No optimization on held-out physical cases."
+  },
+  "pilot": {
+    "variants": [
+      {
+        "label": "base",
+        "edits": [],
+        "food": 30,
+        "food_trials": 33,
+        "hazard_food": 0,
+        "injury": 5.205407202243805,
+        "deaths": 2,
+        "toy_ingest": 297,
+        "meal_ticks": 1723,
+        "scenes": {
+          "contact": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "stationary": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "receding": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "crossing": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "zigzag": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "orbiting": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "fleeing": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "partial-obstacle": {
+            "consumed": 1,
+            "injury": 0.0
+          },
+          "moving-obstacle": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "choice": {
+            "consumed": 2,
+            "injury": 0.0
+          },
+          "toy": {
+            "consumed": 0,
+            "injury": 0.0
+          },
+          "toy-then-food": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "hazard": {
+            "consumed": 0,
+            "injury": 2.864813983440399
+          },
+          "hazard-choice": {
+            "consumed": 0,
+            "injury": 2.3405932188034058
+          }
+        }
+      },
+      {
+        "label": "balanced-g16-r0.73",
+        "edits": [
+          [
+            9552,
+            64
+          ],
+          [
+            10419,
+            23
+          ],
+          [
+            25713,
+            -16
+          ],
+          [
+            25727,
+            11.68
+          ]
+        ],
+        "food": 30,
+        "food_trials": 33,
+        "hazard_food": 0,
+        "injury": 4.8628382086753845,
+        "deaths": 2,
+        "toy_ingest": 296,
+        "meal_ticks": 1713,
+        "scenes": {
+          "contact": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "stationary": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "receding": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "crossing": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "zigzag": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "orbiting": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "fleeing": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "partial-obstacle": {
+            "consumed": 1,
+            "injury": 0.0
+          },
+          "moving-obstacle": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "choice": {
+            "consumed": 2,
+            "injury": 0.0
+          },
+          "toy": {
+            "consumed": 0,
+            "injury": 0.0
+          },
+          "toy-then-food": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "hazard": {
+            "consumed": 0,
+            "injury": 2.7626216411590576
+          },
+          "hazard-choice": {
+            "consumed": 0,
+            "injury": 2.100216567516327
+          }
+        }
+      },
+      {
+        "label": "balanced-g32-r0.73",
+        "edits": [
+          [
+            9552,
+            64
+          ],
+          [
+            10419,
+            23
+          ],
+          [
+            25713,
+            -32
+          ],
+          [
+            25727,
+            23.36
+          ]
+        ],
+        "food": 30,
+        "food_trials": 33,
+        "hazard_food": 1,
+        "injury": 4.435263782739639,
+        "deaths": 1,
+        "toy_ingest": 297,
+        "meal_ticks": 1713,
+        "scenes": {
+          "contact": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "stationary": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "receding": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "crossing": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "zigzag": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "orbiting": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "fleeing": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "partial-obstacle": {
+            "consumed": 1,
+            "injury": 0.0
+          },
+          "moving-obstacle": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "choice": {
+            "consumed": 2,
+            "injury": 0.0
+          },
+          "toy": {
+            "consumed": 0,
+            "injury": 0.0
+          },
+          "toy-then-food": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "hazard": {
+            "consumed": 0,
+            "injury": 2.664327919483185
+          },
+          "hazard-choice": {
+            "consumed": 1,
+            "injury": 1.7709358632564545
+          }
+        }
+      },
+      {
+        "label": "balanced-g64-r0.73",
+        "edits": [
+          [
+            9552,
+            64
+          ],
+          [
+            10419,
+            23
+          ],
+          [
+            25713,
+            -64
+          ],
+          [
+            25727,
+            46.72
+          ]
+        ],
+        "food": 30,
+        "food_trials": 33,
+        "hazard_food": 0,
+        "injury": 4.198581159114838,
+        "deaths": 0,
+        "toy_ingest": 266,
+        "meal_ticks": 1705,
+        "scenes": {
+          "contact": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "stationary": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "receding": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "crossing": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "zigzag": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "orbiting": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "fleeing": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "partial-obstacle": {
+            "consumed": 1,
+            "injury": 0.0
+          },
+          "moving-obstacle": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "choice": {
+            "consumed": 2,
+            "injury": 0.0
+          },
+          "toy": {
+            "consumed": 0,
+            "injury": 0.0
+          },
+          "toy-then-food": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "hazard": {
+            "consumed": 0,
+            "injury": 2.355167031288147
+          },
+          "hazard-choice": {
+            "consumed": 0,
+            "injury": 1.8434141278266907
+          }
+        }
+      },
+      {
+        "label": "balanced-g32-r0",
+        "edits": [
+          [
+            9552,
+            64
+          ],
+          [
+            10419,
+            23
+          ],
+          [
+            25713,
+            -32
+          ],
+          [
+            25727,
+            0
+          ]
+        ],
+        "food": 30,
+        "food_trials": 33,
+        "hazard_food": 2,
+        "injury": 3.4869313538074493,
+        "deaths": 0,
+        "toy_ingest": 281,
+        "meal_ticks": 1716,
+        "scenes": {
+          "contact": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "stationary": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "receding": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "crossing": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "zigzag": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "orbiting": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "fleeing": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "partial-obstacle": {
+            "consumed": 1,
+            "injury": 0.0
+          },
+          "moving-obstacle": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "choice": {
+            "consumed": 2,
+            "injury": 0.0
+          },
+          "toy": {
+            "consumed": 0,
+            "injury": 0.0
+          },
+          "toy-then-food": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "hazard": {
+            "consumed": 0,
+            "injury": 2.1479357481002808
+          },
+          "hazard-choice": {
+            "consumed": 2,
+            "injury": 1.3389956057071686
+          }
+        }
+      },
+      {
+        "label": "balanced-g32-r0.85",
+        "edits": [
+          [
+            9552,
+            64
+          ],
+          [
+            10419,
+            23
+          ],
+          [
+            25713,
+            -32
+          ],
+          [
+            25727,
+            27.2
+          ]
+        ],
+        "food": 30,
+        "food_trials": 33,
+        "hazard_food": 0,
+        "injury": 4.784640192985535,
+        "deaths": 1,
+        "toy_ingest": 297,
+        "meal_ticks": 1851,
+        "scenes": {
+          "contact": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "stationary": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "receding": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "crossing": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "zigzag": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "orbiting": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "fleeing": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "partial-obstacle": {
+            "consumed": 1,
+            "injury": 0.0
+          },
+          "moving-obstacle": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "choice": {
+            "consumed": 2,
+            "injury": 0.0
+          },
+          "toy": {
+            "consumed": 0,
+            "injury": 0.0
+          },
+          "toy-then-food": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "hazard": {
+            "consumed": 0,
+            "injury": 2.783819615840912
+          },
+          "hazard-choice": {
+            "consumed": 0,
+            "injury": 2.000820577144623
+          }
+        }
+      },
+      {
+        "label": "static-inspect-minus4",
+        "edits": [
+          [
+            25727,
+            -4
+          ]
+        ],
+        "food": 30,
+        "food_trials": 33,
+        "hazard_food": 1,
+        "injury": 4.710126876831055,
+        "deaths": 2,
+        "toy_ingest": 295,
+        "meal_ticks": 1678,
+        "scenes": {
+          "contact": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "stationary": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "receding": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "crossing": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "zigzag": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "orbiting": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "fleeing": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "partial-obstacle": {
+            "consumed": 1,
+            "injury": 0.0
+          },
+          "moving-obstacle": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "choice": {
+            "consumed": 2,
+            "injury": 0.0
+          },
+          "toy": {
+            "consumed": 0,
+            "injury": 0.0
+          },
+          "toy-then-food": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "hazard": {
+            "consumed": 0,
+            "injury": 2.743077576160431
+          },
+          "hazard-choice": {
+            "consumed": 1,
+            "injury": 1.9670493006706238
+          }
+        }
+      },
+      {
+        "label": "static-inspect-minus24",
+        "edits": [
+          [
+            25727,
+            -24
+          ]
+        ],
+        "food": 30,
+        "food_trials": 33,
+        "hazard_food": 2,
+        "injury": 3.4720232784748077,
+        "deaths": 0,
+        "toy_ingest": 276,
+        "meal_ticks": 1719,
+        "scenes": {
+          "contact": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "stationary": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "receding": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "crossing": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "zigzag": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "orbiting": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "fleeing": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "partial-obstacle": {
+            "consumed": 1,
+            "injury": 0.0
+          },
+          "moving-obstacle": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "choice": {
+            "consumed": 2,
+            "injury": 0.0
+          },
+          "toy": {
+            "consumed": 0,
+            "injury": 0.0
+          },
+          "toy-then-food": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "hazard": {
+            "consumed": 0,
+            "injury": 2.076656997203827
+          },
+          "hazard-choice": {
+            "consumed": 2,
+            "injury": 1.3953662812709808
+          }
+        }
+      },
+      {
+        "label": "static-inspect-minus32",
+        "edits": [
+          [
+            25727,
+            -32
+          ]
+        ],
+        "food": 30,
+        "food_trials": 33,
+        "hazard_food": 2,
+        "injury": 3.4720541536808014,
+        "deaths": 0,
+        "toy_ingest": 279,
+        "meal_ticks": 1725,
+        "scenes": {
+          "contact": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "stationary": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "receding": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "crossing": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "zigzag": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "orbiting": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "fleeing": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "partial-obstacle": {
+            "consumed": 1,
+            "injury": 0.0
+          },
+          "moving-obstacle": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "choice": {
+            "consumed": 2,
+            "injury": 0.0
+          },
+          "toy": {
+            "consumed": 0,
+            "injury": 0.0
+          },
+          "toy-then-food": {
+            "consumed": 3,
+            "injury": 0.0
+          },
+          "hazard": {
+            "consumed": 0,
+            "injury": 2.0766878724098206
+          },
+          "hazard-choice": {
+            "consumed": 2,
+            "injury": 1.3953662812709808
+          }
+        }
+      }
+    ],
+    "life_count": 378,
+    "selected": [
+      "balanced-g32-r0",
+      "static-inspect-minus24"
+    ],
+    "note": "The static comparator is a genetic Inspect source1775/input23 edit, with no pain relay. Its effect still depends on the native motor activation and object terrain[1], which is0.5 in these fixtures; it is not a universal additive policy bias."
+  },
+  "heldout": {
+    "plan": {
+      "labels": [
+        "base",
+        "balanced-g32-r0",
+        "static-inspect-minus24"
+      ],
+      "seeds": "2026114000-4009",
+      "cases": 10,
+      "ticks": 256,
+      "variation": "angle i*pi/5+.43; speed .7/1/1.3; appearance i%4; distance .85/1/1.3",
+      "selection": "Pilot survivors retaining30/33 standard foods: compare best pain circuit against one-weight static matched suppression and exact Contact20. Freeze all weights before fresh outcomes. Report all outcomes, not significance or production promotion."
+    },
+    "summary": {
+      "base": {
+        "lives": 140,
+        "ordinary_food": 97,
+        "ordinary_food_trials": 110,
+        "hazard_food": 1,
+        "hazard_trials": 20,
+        "deaths": 9,
+        "hazard_injury": 16.26010501384735,
+        "toy_ingest": 915,
+        "failed_ingests": 3540,
+        "ordinary_meal_ticks": 5824,
+        "per_scene": {
+          "choice": {
+            "n": 10,
+            "consumed": 6,
+            "deaths": 0,
+            "injury": 0.0,
+            "inspect": 456,
+            "ingest": 280
+          },
+          "contact": {
+            "n": 10,
+            "consumed": 10,
+            "deaths": 0,
+            "injury": 0.0,
+            "inspect": 33,
+            "ingest": 21
+          },
+          "crossing": {
+            "n": 10,
+            "consumed": 10,
+            "deaths": 0,
+            "injury": 0.0,
+            "inspect": 130,
+            "ingest": 27
+          },
+          "fleeing": {
+            "n": 10,
+            "consumed": 10,
+            "deaths": 0,
+            "injury": 0.0,
+            "inspect": 165,
+            "ingest": 38
+          },
+          "hazard": {
+            "n": 10,
+            "consumed": 0,
+            "deaths": 7,
+            "injury": 9.30094712972641,
+            "inspect": 1181,
+            "ingest": 787
+          },
+          "hazard-choice": {
+            "n": 10,
+            "consumed": 1,
+            "deaths": 2,
+            "injury": 6.959157884120941,
+            "inspect": 410,
+            "ingest": 585
+          },
+          "moving-obstacle": {
+            "n": 10,
+            "consumed": 5,
+            "deaths": 0,
+            "injury": 0.0,
+            "inspect": 323,
+            "ingest": 221
+          },
+          "orbiting": {
+            "n": 10,
+            "consumed": 10,
+            "deaths": 0,
+            "injury": 0.0,
+            "inspect": 89,
+            "ingest": 23
+          },
+          "partial-obstacle": {
+            "n": 10,
+            "consumed": 6,
+            "deaths": 0,
+            "injury": 0.0,
+            "inspect": 633,
+            "ingest": 338
+          },
+          "receding": {
+            "n": 10,
+            "consumed": 10,
+            "deaths": 0,
+            "injury": 0.0,
+            "inspect": 182,
+            "ingest": 38
+          },
+          "stationary": {
+            "n": 10,
+            "consumed": 10,
+            "deaths": 0,
+            "injury": 0.0,
+            "inspect": 118,
+            "ingest": 30
+          },
+          "toy": {
+            "n": 10,
+            "consumed": 0,
+            "deaths": 0,
+            "injury": 0.0,
+            "inspect": 1773,
+            "ingest": 915
+          },
+          "toy-then-food": {
+            "n": 10,
+            "consumed": 10,
+            "deaths": 0,
+            "injury": 0.0,
+            "inspect": 476,
+            "ingest": 273
+          },
+          "zigzag": {
+            "n": 10,
+            "consumed": 10,
+            "deaths": 0,
+            "injury": 0.0,
+            "inspect": 127,
+            "ingest": 35
+          }
+        }
+      },
+      "balanced-g32-r0": {
+        "lives": 140,
+        "ordinary_food": 97,
+        "ordinary_food_trials": 110,
+        "hazard_food": 3,
+        "hazard_trials": 20,
+        "deaths": 0,
+        "hazard_injury": 12.114743784070015,
+        "toy_ingest": 802,
+        "failed_ingests": 3230,
+        "ordinary_meal_ticks": 5803,
+        "per_scene": {
+          "choice": {
+            "n": 10,
+            "consumed": 6,
+            "deaths": 0,
+            "injury": 0.0,
+            "inspect": 50,
+            "ingest": 277
+          },
+          "contact": {
+            "n": 10,
+            "consumed": 10,
+            "deaths": 0,
+            "injury": 0.0,
+            "inspect": 27,
+            "ingest": 23
+          },
+          "crossing": {
+            "n": 10,
+            "consumed": 10,
+            "deaths": 0,
+            "injury": 0.0,
+            "inspect": 40,
+            "ingest": 29
+          },
+          "fleeing": {
+            "n": 10,
+            "consumed": 10,
+            "deaths": 0,
+            "injury": 0.0,
+            "inspect": 45,
+            "ingest": 37
+          },
+          "hazard": {
+            "n": 10,
+            "consumed": 0,
+            "deaths": 0,
+            "injury": 6.7607115507125854,
+            "inspect": 68,
+            "ingest": 798
+          },
+          "hazard-choice": {
+            "n": 10,
+            "consumed": 3,
+            "deaths": 0,
+            "injury": 5.3540322333574295,
+            "inspect": 48,
+            "ingest": 496
+          },
+          "moving-obstacle": {
+            "n": 10,
+            "consumed": 5,
+            "deaths": 0,
+            "injury": 0.0,
+            "inspect": 48,
+            "ingest": 214
+          },
+          "orbiting": {
+            "n": 10,
+            "consumed": 10,
+            "deaths": 0,
+            "injury": 0.0,
+            "inspect": 47,
+            "ingest": 23
+          },
+          "partial-obstacle": {
+            "n": 10,
+            "consumed": 6,
+            "deaths": 0,
+            "injury": 0.0,
+            "inspect": 47,
+            "ingest": 343
+          },
+          "receding": {
+            "n": 10,
+            "consumed": 10,
+            "deaths": 0,
+            "injury": 0.0,
+            "inspect": 45,
+            "ingest": 38
+          },
+          "stationary": {
+            "n": 10,
+            "consumed": 10,
+            "deaths": 0,
+            "injury": 0.0,
+            "inspect": 47,
+            "ingest": 29
+          },
+          "toy": {
+            "n": 10,
+            "consumed": 0,
+            "deaths": 0,
+            "injury": 0.0,
+            "inspect": 70,
+            "ingest": 802
+          },
+          "toy-then-food": {
+            "n": 10,
+            "consumed": 10,
+            "deaths": 0,
+            "injury": 0.0,
+            "inspect": 68,
+            "ingest": 222
+          },
+          "zigzag": {
+            "n": 10,
+            "consumed": 10,
+            "deaths": 0,
+            "injury": 0.0,
+            "inspect": 47,
+            "ingest": 37
+          }
+        }
+      },
+      "static-inspect-minus24": {
+        "lives": 140,
+        "ordinary_food": 97,
+        "ordinary_food_trials": 110,
+        "hazard_food": 4,
+        "hazard_trials": 20,
+        "deaths": 0,
+        "hazard_injury": 11.558742418885231,
+        "toy_ingest": 802,
+        "failed_ingests": 3156,
+        "ordinary_meal_ticks": 5981,
+        "per_scene": {
+          "choice": {
+            "n": 10,
+            "consumed": 6,
+            "deaths": 0,
+            "injury": 0.0,
+            "inspect": 0,
+            "ingest": 266
+          },
+          "contact": {
+            "n": 10,
+            "consumed": 10,
+            "deaths": 0,
+            "injury": 0.0,
+            "inspect": 0,
+            "ingest": 24
+          },
+          "crossing": {
+            "n": 10,
+            "consumed": 10,
+            "deaths": 0,
+            "injury": 0.0,
+            "inspect": 0,
+            "ingest": 29
+          },
+          "fleeing": {
+            "n": 10,
+            "consumed": 10,
+            "deaths": 0,
+            "injury": 0.0,
+            "inspect": 0,
+            "ingest": 37
+          },
+          "hazard": {
+            "n": 10,
+            "consumed": 0,
+            "deaths": 0,
+            "injury": 6.538835644721985,
+            "inspect": 1,
+            "ingest": 786
+          },
+          "hazard-choice": {
+            "n": 10,
+            "consumed": 4,
+            "deaths": 0,
+            "injury": 5.019906774163246,
+            "inspect": 0,
+            "ingest": 444
+          },
+          "moving-obstacle": {
+            "n": 10,
+            "consumed": 5,
+            "deaths": 0,
+            "injury": 0.0,
+            "inspect": 0,
+            "ingest": 221
+          },
+          "orbiting": {
+            "n": 10,
+            "consumed": 10,
+            "deaths": 0,
+            "injury": 0.0,
+            "inspect": 0,
+            "ingest": 23
+          },
+          "partial-obstacle": {
+            "n": 10,
+            "consumed": 6,
+            "deaths": 0,
+            "injury": 0.0,
+            "inspect": 0,
+            "ingest": 346
+          },
+          "receding": {
+            "n": 10,
+            "consumed": 10,
+            "deaths": 0,
+            "injury": 0.0,
+            "inspect": 0,
+            "ingest": 38
+          },
+          "stationary": {
+            "n": 10,
+            "consumed": 10,
+            "deaths": 0,
+            "injury": 0.0,
+            "inspect": 0,
+            "ingest": 31
+          },
+          "toy": {
+            "n": 10,
+            "consumed": 0,
+            "deaths": 0,
+            "injury": 0.0,
+            "inspect": 1,
+            "ingest": 802
+          },
+          "toy-then-food": {
+            "n": 10,
+            "consumed": 10,
+            "deaths": 0,
+            "injury": 0.0,
+            "inspect": 0,
+            "ingest": 222
+          },
+          "zigzag": {
+            "n": 10,
+            "consumed": 10,
+            "deaths": 0,
+            "injury": 0.0,
+            "inspect": 0,
+            "ingest": 38
+          }
+        }
+      }
+    },
+    "paired": {
+      "balanced-g32-r0": {
+        "ordinary_wins": [],
+        "ordinary_losses": [],
+        "matched_meals": 97,
+        "matched_meal_ticks_base": 5824,
+        "matched_meal_ticks_candidate": 5803,
+        "hazard_pairs": [
+          {
+            "seed": 2026114000,
+            "scene": "hazard",
+            "base": 1.0,
+            "candidate": 0.6292206048965454,
+            "base_alive": false,
+            "candidate_alive": true
+          },
+          {
+            "seed": 2026114000,
+            "scene": "hazard-choice",
+            "base": 0.6093043684959412,
+            "candidate": 0.17525023221969604,
+            "base_alive": true,
+            "candidate_alive": true
+          },
+          {
+            "seed": 2026114001,
+            "scene": "hazard",
+            "base": 0.7757108807563782,
+            "candidate": 0.6833416819572449,
+            "base_alive": true,
+            "candidate_alive": true
+          },
+          {
+            "seed": 2026114001,
+            "scene": "hazard-choice",
+            "base": 0.6016312837600708,
+            "candidate": 0.6208427548408508,
+            "base_alive": true,
+            "candidate_alive": true
+          },
+          {
+            "seed": 2026114002,
+            "scene": "hazard",
+            "base": 1.0,
+            "candidate": 0.644554078578949,
+            "base_alive": false,
+            "candidate_alive": true
+          },
+          {
+            "seed": 2026114002,
+            "scene": "hazard-choice",
+            "base": 0.7603123784065247,
+            "candidate": 0.5668833255767822,
+            "base_alive": true,
+            "candidate_alive": true
+          },
+          {
+            "seed": 2026114003,
+            "scene": "hazard",
+            "base": 1.0,
+            "candidate": 0.6833455562591553,
+            "base_alive": false,
+            "candidate_alive": true
+          },
+          {
+            "seed": 2026114003,
+            "scene": "hazard-choice",
+            "base": 1.0,
+            "candidate": 0.7667226791381836,
+            "base_alive": false,
+            "candidate_alive": true
+          },
+          {
+            "seed": 2026114004,
+            "scene": "hazard",
+            "base": 1.0,
+            "candidate": 0.6676004528999329,
+            "base_alive": false,
+            "candidate_alive": true
+          },
+          {
+            "seed": 2026114004,
+            "scene": "hazard-choice",
+            "base": 0.7841477394104004,
+            "candidate": 0.5940296053886414,
+            "base_alive": true,
+            "candidate_alive": true
+          },
+          {
+            "seed": 2026114005,
+            "scene": "hazard",
+            "base": 0.7713257670402527,
+            "candidate": 0.6561756134033203,
+            "base_alive": true,
+            "candidate_alive": true
+          },
+          {
+            "seed": 2026114005,
+            "scene": "hazard-choice",
+            "base": 0.5863677859306335,
+            "candidate": 0.242124542593956,
+            "base_alive": true,
+            "candidate_alive": true
+          },
+          {
+            "seed": 2026114006,
+            "scene": "hazard",
+            "base": 1.0,
+            "candidate": 0.7101552486419678,
+            "base_alive": false,
+            "candidate_alive": true
+          },
+          {
+            "seed": 2026114006,
+            "scene": "hazard-choice",
+            "base": 1.0,
+            "candidate": 0.8688201904296875,
+            "base_alive": false,
+            "candidate_alive": true
+          },
+          {
+            "seed": 2026114007,
+            "scene": "hazard",
+            "base": 1.0,
+            "candidate": 0.6987102627754211,
+            "base_alive": false,
+            "candidate_alive": true
+          },
+          {
+            "seed": 2026114007,
+            "scene": "hazard-choice",
+            "base": 0.7189719080924988,
+            "candidate": 0.6632607579231262,
+            "base_alive": true,
+            "candidate_alive": true
+          },
+          {
+            "seed": 2026114008,
+            "scene": "hazard",
+            "base": 1.0,
+            "candidate": 0.7430384755134583,
+            "base_alive": false,
+            "candidate_alive": true
+          },
+          {
+            "seed": 2026114008,
+            "scene": "hazard-choice",
+            "base": 0.6555266976356506,
+            "candidate": 0.5862481594085693,
+            "base_alive": true,
+            "candidate_alive": true
+          },
+          {
+            "seed": 2026114009,
+            "scene": "hazard",
+            "base": 0.753910481929779,
+            "candidate": 0.6445695757865906,
+            "base_alive": true,
+            "candidate_alive": true
+          },
+          {
+            "seed": 2026114009,
+            "scene": "hazard-choice",
+            "base": 0.2428957223892212,
+            "candidate": 0.2698499858379364,
+            "base_alive": true,
+            "candidate_alive": true
+          }
+        ]
+      },
+      "static-inspect-minus24": {
+        "ordinary_wins": [],
+        "ordinary_losses": [],
+        "matched_meals": 97,
+        "matched_meal_ticks_base": 5824,
+        "matched_meal_ticks_candidate": 5981,
+        "hazard_pairs": [
+          {
+            "seed": 2026114000,
+            "scene": "hazard",
+            "base": 1.0,
+            "candidate": 0.6330896019935608,
+            "base_alive": false,
+            "candidate_alive": true
+          },
+          {
+            "seed": 2026114000,
+            "scene": "hazard-choice",
+            "base": 0.6093043684959412,
+            "candidate": 0.597751796245575,
+            "base_alive": true,
+            "candidate_alive": true
+          },
+          {
+            "seed": 2026114001,
+            "scene": "hazard",
+            "base": 0.7757108807563782,
+            "candidate": 0.629208505153656,
+            "base_alive": true,
+            "candidate_alive": true
+          },
+          {
+            "seed": 2026114001,
+            "scene": "hazard-choice",
+            "base": 0.6016312837600708,
+            "candidate": 0.6016312837600708,
+            "base_alive": true,
+            "candidate_alive": true
+          },
+          {
+            "seed": 2026114002,
+            "scene": "hazard",
+            "base": 1.0,
+            "candidate": 0.667729377746582,
+            "base_alive": false,
+            "candidate_alive": true
+          },
+          {
+            "seed": 2026114002,
+            "scene": "hazard-choice",
+            "base": 0.7603123784065247,
+            "candidate": 0.5939288139343262,
+            "base_alive": true,
+            "candidate_alive": true
+          },
+          {
+            "seed": 2026114003,
+            "scene": "hazard",
+            "base": 1.0,
+            "candidate": 0.6832640767097473,
+            "base_alive": false,
+            "candidate_alive": true
+          },
+          {
+            "seed": 2026114003,
+            "scene": "hazard-choice",
+            "base": 1.0,
+            "candidate": 0.3641330301761627,
+            "base_alive": false,
+            "candidate_alive": true
+          },
+          {
+            "seed": 2026114004,
+            "scene": "hazard",
+            "base": 1.0,
+            "candidate": 0.6252554059028625,
+            "base_alive": false,
+            "candidate_alive": true
+          },
+          {
+            "seed": 2026114004,
+            "scene": "hazard-choice",
+            "base": 0.7841477394104004,
+            "candidate": 0.6285446882247925,
+            "base_alive": true,
+            "candidate_alive": true
+          },
+          {
+            "seed": 2026114005,
+            "scene": "hazard",
+            "base": 0.7713257670402527,
+            "candidate": 0.6291829943656921,
+            "base_alive": true,
+            "candidate_alive": true
+          },
+          {
+            "seed": 2026114005,
+            "scene": "hazard-choice",
+            "base": 0.5863677859306335,
+            "candidate": 0.3771917521953583,
+            "base_alive": true,
+            "candidate_alive": true
+          },
+          {
+            "seed": 2026114006,
+            "scene": "hazard",
+            "base": 1.0,
+            "candidate": 0.6986014246940613,
+            "base_alive": false,
+            "candidate_alive": true
+          },
+          {
+            "seed": 2026114006,
+            "scene": "hazard-choice",
+            "base": 1.0,
+            "candidate": 0.21589015424251556,
+            "base_alive": false,
+            "candidate_alive": true
+          },
+          {
+            "seed": 2026114007,
+            "scene": "hazard",
+            "base": 1.0,
+            "candidate": 0.6910449862480164,
+            "base_alive": false,
+            "candidate_alive": true
+          },
+          {
+            "seed": 2026114007,
+            "scene": "hazard-choice",
+            "base": 0.7189719080924988,
+            "candidate": 0.6207255721092224,
+            "base_alive": true,
+            "candidate_alive": true
+          },
+          {
+            "seed": 2026114008,
+            "scene": "hazard",
+            "base": 1.0,
+            "candidate": 0.6716402173042297,
+            "base_alive": false,
+            "candidate_alive": true
+          },
+          {
+            "seed": 2026114008,
+            "scene": "hazard-choice",
+            "base": 0.6555266976356506,
+            "candidate": 0.6555266976356506,
+            "base_alive": true,
+            "candidate_alive": true
+          },
+          {
+            "seed": 2026114009,
+            "scene": "hazard",
+            "base": 0.753910481929779,
+            "candidate": 0.6098190546035767,
+            "base_alive": true,
+            "candidate_alive": true
+          },
+          {
+            "seed": 2026114009,
+            "scene": "hazard-choice",
+            "base": 0.2428957223892212,
+            "candidate": 0.36458298563957214,
+            "base_alive": true,
+            "candidate_alive": true
+          }
+        ]
+      }
+    }
+  },
+  "long_plan": {
+    "labels": [
+      "base",
+      "balanced-g32-r0",
+      "static-inspect-minus24"
+    ],
+    "seeds": "2026114100-4102",
+    "ticks": 1024,
+    "scenes": [
+      "hazard",
+      "hazard-choice"
+    ],
+    "goal": "Check whether256-interval survival improvement persists four times longer; frozen candidates, no retuning."
+  },
+  "long_results": {
+    "base": [
+      {
+        "seed": 2026114100,
+        "scene": "hazard",
+        "alive": false,
+        "consumed": false,
+        "decisions": 406,
+        "sleeping_steps": 0,
+        "injury": 1.0,
+        "consumed_tick": null
+      },
+      {
+        "seed": 2026114100,
+        "scene": "hazard-choice",
+        "alive": true,
+        "consumed": true,
+        "decisions": 85,
+        "sleeping_steps": 0,
+        "injury": 0.3641108572483063,
+        "consumed_tick": 84
+      },
+      {
+        "seed": 2026114101,
+        "scene": "hazard",
+        "alive": false,
+        "consumed": false,
+        "decisions": 174,
+        "sleeping_steps": 52,
+        "injury": 1.0,
+        "consumed_tick": null
+      },
+      {
+        "seed": 2026114101,
+        "scene": "hazard-choice",
+        "alive": false,
+        "consumed": false,
+        "decisions": 297,
+        "sleeping_steps": 0,
+        "injury": 1.0,
+        "consumed_tick": null
+      },
+      {
+        "seed": 2026114102,
+        "scene": "hazard",
+        "alive": false,
+        "consumed": false,
+        "decisions": 185,
+        "sleeping_steps": 52,
+        "injury": 1.0,
+        "consumed_tick": null
+      },
+      {
+        "seed": 2026114102,
+        "scene": "hazard-choice",
+        "alive": false,
+        "consumed": false,
+        "decisions": 711,
+        "sleeping_steps": 0,
+        "injury": 1.0,
+        "consumed_tick": null
+      }
+    ],
+    "balanced-g32-r0": [
+      {
+        "seed": 2026114100,
+        "scene": "hazard",
+        "alive": false,
+        "consumed": false,
+        "decisions": 604,
+        "sleeping_steps": 0,
+        "injury": 1.0,
+        "consumed_tick": null
+      },
+      {
+        "seed": 2026114100,
+        "scene": "hazard-choice",
+        "alive": false,
+        "consumed": false,
+        "decisions": 732,
+        "sleeping_steps": 0,
+        "injury": 1.0,
+        "consumed_tick": null
+      },
+      {
+        "seed": 2026114101,
+        "scene": "hazard",
+        "alive": false,
+        "consumed": false,
+        "decisions": 615,
+        "sleeping_steps": 0,
+        "injury": 1.0,
+        "consumed_tick": null
+      },
+      {
+        "seed": 2026114101,
+        "scene": "hazard-choice",
+        "alive": true,
+        "consumed": true,
+        "decisions": 89,
+        "sleeping_steps": 0,
+        "injury": 0.2693954408168793,
+        "consumed_tick": 88
+      },
+      {
+        "seed": 2026114102,
+        "scene": "hazard",
+        "alive": false,
+        "consumed": false,
+        "decisions": 663,
+        "sleeping_steps": 0,
+        "injury": 1.0,
+        "consumed_tick": null
+      },
+      {
+        "seed": 2026114102,
+        "scene": "hazard-choice",
+        "alive": true,
+        "consumed": true,
+        "decisions": 131,
+        "sleeping_steps": 0,
+        "injury": 0.47147682309150696,
+        "consumed_tick": 130
+      }
+    ],
+    "static-inspect-minus24": [
+      {
+        "seed": 2026114100,
+        "scene": "hazard",
+        "alive": false,
+        "consumed": false,
+        "decisions": 635,
+        "sleeping_steps": 0,
+        "injury": 1.0,
+        "consumed_tick": null
+      },
+      {
+        "seed": 2026114100,
+        "scene": "hazard-choice",
+        "alive": true,
+        "consumed": true,
+        "decisions": 85,
+        "sleeping_steps": 0,
+        "injury": 0.3641108572483063,
+        "consumed_tick": 84
+      },
+      {
+        "seed": 2026114101,
+        "scene": "hazard",
+        "alive": false,
+        "consumed": false,
+        "decisions": 652,
+        "sleeping_steps": 0,
+        "injury": 1.0,
+        "consumed_tick": null
+      },
+      {
+        "seed": 2026114101,
+        "scene": "hazard-choice",
+        "alive": false,
+        "consumed": false,
+        "decisions": 728,
+        "sleeping_steps": 0,
+        "injury": 1.0,
+        "consumed_tick": null
+      },
+      {
+        "seed": 2026114102,
+        "scene": "hazard",
+        "alive": false,
+        "consumed": false,
+        "decisions": 657,
+        "sleeping_steps": 0,
+        "injury": 1.0,
+        "consumed_tick": null
+      },
+      {
+        "seed": 2026114102,
+        "scene": "hazard-choice",
+        "alive": false,
+        "consumed": false,
+        "decisions": 763,
+        "sleeping_steps": 0,
+        "injury": 1.0,
+        "consumed_tick": null
+      }
+    ]
+  },
+  "property_plan": {
+    "labels": [
+      "base",
+      "balanced-g32-r0",
+      "static-inspect-minus24"
+    ],
+    "seeds": "2026114200-4201",
+    "terrain_second": [
+      0,
+      0.25,
+      1
+    ],
+    "first_terrain": 0.5,
+    "ticks": 256,
+    "scenes": [
+      "contact",
+      "toy",
+      "hazard",
+      "hazard-choice"
+    ],
+    "goal": "Native matched object-property controls of the input23 dependency; no parameter tuning or champion promotion."
+  },
+  "property_results": {
+    "base": {
+      "0.0": {
+        "lives": 8,
+        "deaths": 2,
+        "ordinary_food": 2,
+        "hazard_food": 1,
+        "summed_final_injury": 3.249187707901001
+      },
+      "0.25": {
+        "lives": 8,
+        "deaths": 2,
+        "ordinary_food": 2,
+        "hazard_food": 1,
+        "summed_final_injury": 3.249187707901001
+      },
+      "1.0": {
+        "lives": 8,
+        "deaths": 2,
+        "ordinary_food": 2,
+        "hazard_food": 1,
+        "summed_final_injury": 3.249187707901001
+      }
+    },
+    "balanced-g32-r0": {
+      "0.0": {
+        "lives": 8,
+        "deaths": 2,
+        "ordinary_food": 2,
+        "hazard_food": 1,
+        "summed_final_injury": 3.249187707901001
+      },
+      "0.25": {
+        "lives": 8,
+        "deaths": 0,
+        "ordinary_food": 2,
+        "hazard_food": 1,
+        "summed_final_injury": 2.470710664987564
+      },
+      "1.0": {
+        "lives": 8,
+        "deaths": 0,
+        "ordinary_food": 2,
+        "hazard_food": 0,
+        "summed_final_injury": 2.5544559359550476
+      }
+    },
+    "static-inspect-minus24": {
+      "0.0": {
+        "lives": 8,
+        "deaths": 2,
+        "ordinary_food": 2,
+        "hazard_food": 1,
+        "summed_final_injury": 3.249187707901001
+      },
+      "0.25": {
+        "lives": 8,
+        "deaths": 0,
+        "ordinary_food": 2,
+        "hazard_food": 1,
+        "summed_final_injury": 2.5444182455539703
+      },
+      "1.0": {
+        "lives": 8,
+        "deaths": 0,
+        "ordinary_food": 2,
+        "hazard_food": 1,
+        "summed_final_injury": 2.3416885435581207
+      }
+    }
+  },
+  "zero_property_all_metrics_match_parent": {
+    "balanced-g32-r0": false,
+    "static-inspect-minus24": true
+  },
+  "zero_property_note": "Static edit matches all eight trials exactly. Pain circuit matches seven exactly; one mixed life changes one Inspect/Contact selection and small distance/energy/drive values. All survival, consumption and final injury outcomes match. Direct input23 contribution is zero, but recurrent edits need not leave every dynamic metric unchanged.",
+  "exports": [
+    {
+      "name": "pursuit-twohead-contact20-pain-inspect32",
+      "foundation_sha256": "d0d71022d06bd8327bd0496c74792eeb5588a004a38241c4c2c60183b04074d1",
+      "genome_sha256": "2ccb9f2ec3f5af0363ee7d49a7632036d54ca8536273ebdd7d6326d7b93a418c",
+      "candidate_digest": [
+        71,
+        39,
+        125,
+        49,
+        230,
+        107,
+        203,
+        152,
+        81,
+        79,
+        154,
+        242,
+        249,
+        215,
+        216,
+        230,
+        186,
+        153,
+        59,
+        235,
+        51,
+        190,
+        2,
+        41,
+        172,
+        38,
+        227,
+        252,
+        130,
+        226,
+        184,
+        113
+      ],
+      "matched_trials": 14,
+      "edits": [
+        [
+          9552,
+          64.0
+        ],
+        [
+          10419,
+          23.0
+        ],
+        [
+          25713,
+          -32.0
+        ],
+        [
+          25727,
+          0.0
+        ]
+      ],
+      "genome_changed_top_level_fields": [
+        "n2048_foundation_candidate"
+      ]
+    },
+    {
+      "name": "pursuit-twohead-contact20-inspect24",
+      "foundation_sha256": "69f0cc8a473e7fa3f6e9d06529b3136f0bcde116c07a73a2f0be1328005d7c7d",
+      "genome_sha256": "2db3323128adc84230f77ed08e1c8decb98125977c583e3648a8f586b480bdea",
+      "candidate_digest": [
+        166,
+        62,
+        165,
+        59,
+        58,
+        122,
+        217,
+        156,
+        172,
+        205,
+        94,
+        102,
+        238,
+        50,
+        163,
+        210,
+        242,
+        33,
+        20,
+        20,
+        79,
+        175,
+        160,
+        19,
+        91,
+        21,
+        137,
+        80,
+        9,
+        153,
+        79,
+        60
+      ],
+      "matched_trials": 14,
+      "edits": [
+        [
+          25727,
+          -24.0
+        ]
+      ],
+      "genome_changed_top_level_fields": [
+        "n2048_foundation_candidate"
+      ]
+    }
+  ],
+  "validation": {
+    "native_tests": 9,
+    "strict_release_clippy": true,
+    "default_v8_v9_parity_trials": 12,
+    "default_v9_v10_parity_trials": 14,
+    "export_reload_trials_each": 14
+  },
+  "conclusion": "Both candidates improve256-interval hazard survival without losing any of97 ordinary meals. Neither solves1024-interval lone-hazard survival; the input23 benefit disappears at zero terrain[1]. Contact20 remains common. No learned hazard-identity, live-prey, GPU or production-default claim.",
+  "genetic_diff_verification": [
+    {
+      "name": "pursuit-twohead-contact20-pain-inspect32",
+      "coordinate_count": 32768,
+      "changed": [
+        [
+          9552,
+          0.0,
+          64.0
+        ],
+        [
+          10419,
+          0.0,
+          23.0
+        ],
+        [
+          25713,
+          0.0,
+          -32.0
+        ]
+      ],
+      "all_other_weights_and_coordinates_equal": true
+    },
+    {
+      "name": "pursuit-twohead-contact20-inspect24",
+      "coordinate_count": 32768,
+      "changed": [
+        [
+          25727,
+          0.0,
+          -24.0
+        ]
+      ],
+      "all_other_weights_and_coordinates_equal": true
+    }
+  ]
+}
