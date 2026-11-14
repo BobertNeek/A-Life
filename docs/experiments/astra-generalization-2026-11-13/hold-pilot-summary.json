@@ -1,0 +1,101 @@
+{
+  "base": {
+    "food_success": 18,
+    "food_trials": 21,
+    "failed_ingest_bundles": 633,
+    "toy_ingest": 312,
+    "toy_no_manipulation": 158,
+    "toy_object_contact": 149,
+    "successful_meal_intervals": 982
+  },
+  "hold2": {
+    "food_success": 18,
+    "food_trials": 21,
+    "failed_ingest_bundles": 732,
+    "toy_ingest": 369,
+    "toy_no_manipulation": 106,
+    "toy_object_contact": 119,
+    "successful_meal_intervals": 958
+  },
+  "hold8": {
+    "food_success": 18,
+    "food_trials": 21,
+    "failed_ingest_bundles": 920,
+    "toy_ingest": 461,
+    "toy_no_manipulation": 22,
+    "toy_object_contact": 71,
+    "successful_meal_intervals": 957
+  },
+  "hold16": {
+    "food_success": 18,
+    "food_trials": 21,
+    "failed_ingest_bundles": 1028,
+    "toy_ingest": 503,
+    "toy_no_manipulation": 1,
+    "toy_object_contact": 29,
+    "successful_meal_intervals": 954
+  },
+  "contrast8": {
+    "food_success": 18,
+    "food_trials": 21,
+    "failed_ingest_bundles": 796,
+    "toy_ingest": 365,
+    "toy_no_manipulation": 18,
+    "toy_object_contact": 206,
+    "successful_meal_intervals": 1024
+  },
+  "contrast16": {
+    "food_success": 17,
+    "food_trials": 21,
+    "failed_ingest_bundles": 833,
+    "toy_ingest": 322,
+    "toy_no_manipulation": 1,
+    "toy_object_contact": 284,
+    "successful_meal_intervals": 1118
+  },
+  "negative05": {
+    "food_success": 18,
+    "food_trials": 21,
+    "failed_ingest_bundles": 623,
+    "toy_ingest": 305,
+    "toy_no_manipulation": 172,
+    "toy_object_contact": 148,
+    "successful_meal_intervals": 985
+  },
+  "negative1": {
+    "food_success": 18,
+    "food_trials": 21,
+    "failed_ingest_bundles": 595,
+    "toy_ingest": 296,
+    "toy_no_manipulation": 185,
+    "toy_object_contact": 149,
+    "successful_meal_intervals": 987
+  },
+  "negative2": {
+    "food_success": 18,
+    "food_trials": 21,
+    "failed_ingest_bundles": 538,
+    "toy_ingest": 260,
+    "toy_no_manipulation": 226,
+    "toy_object_contact": 161,
+    "successful_meal_intervals": 989
+  },
+  "negative4": {
+    "food_success": 18,
+    "food_trials": 21,
+    "failed_ingest_bundles": 410,
+    "toy_ingest": 207,
+    "toy_no_manipulation": 302,
+    "toy_object_contact": 176,
+    "successful_meal_intervals": 1000
+  },
+  "contrast-negative2": {
+    "food_success": 18,
+    "food_trials": 21,
+    "failed_ingest_bundles": 566,
+    "toy_ingest": 282,
+    "toy_no_manipulation": 237,
+    "toy_object_contact": 131,
+    "successful_meal_intervals": 979
+  }
+}
