@@ -25,8 +25,11 @@ impl N2048ExperimentalGraphV1 {
             foundation_bytes: None,
         })
     }
+    /// Fresh opt-in anchored graph using an explicitly selected physical profile.
+    /// Existing SlotsV1 is unchanged; terrain profiles add their existing sensing
+    /// ports without replacing the anchored weight-coordinate recipe.
     pub fn fresh_anchored_v2(sensor_profile: SensorProfile) -> Result<Self, ScaffoldContractError> {
-        if sensor_profile != SensorProfile::GroundedObjectSlotsV1 {
+        if !Self::supports_anchored_profile(sensor_profile) {
             return Err(ScaffoldContractError::PhenotypeCompile);
         }
         let mut v = Self::fresh(sensor_profile)?;
@@ -38,6 +41,10 @@ impl N2048ExperimentalGraphV1 {
     pub fn fresh_signed_motor_v3(
         sensor_profile: SensorProfile,
     ) -> Result<Self, ScaffoldContractError> {
+        // Signed-motor V3 remains its original SlotsV1-only contract.
+        if sensor_profile != SensorProfile::GroundedObjectSlotsV1 {
+            return Err(ScaffoldContractError::PhenotypeCompile);
+        }
         let mut value = Self::fresh_anchored_v2(sensor_profile)?;
         value.schema_version = 3;
         value.recipe_digest = Self::signed_motor_recipe_digest();
@@ -53,6 +60,14 @@ impl N2048ExperimentalGraphV1 {
     }
     pub const fn is_signed_motor_v3(&self) -> bool {
         self.schema_version == 3
+    }
+    pub(crate) const fn supports_anchored_profile(profile: SensorProfile) -> bool {
+        matches!(
+            profile,
+            SensorProfile::GroundedObjectSlotsV1
+                | SensorProfile::GroundedTerrainVisionV1
+                | SensorProfile::GroundedTerrainObjectPortsV2
+        )
     }
     pub const fn uses_anchored_sensor_layout(&self) -> bool {
         self.is_anchored_v2() || self.is_signed_motor_v3()
@@ -126,8 +141,8 @@ impl N2048ExperimentalGraphV1 {
                 && self.recipe_digest == Self::signed_motor_recipe_digest()))
             || capacity.id() != BrainCapacityClass::N2048_ID
             || self.sensor_profile != profile
-            || (self.uses_anchored_sensor_layout()
-                && profile != SensorProfile::GroundedObjectSlotsV1)
+            || (self.is_anchored_v2() && !Self::supports_anchored_profile(profile))
+            || (self.is_signed_motor_v3() && profile != SensorProfile::GroundedObjectSlotsV1)
         {
             return Err(ScaffoldContractError::PhenotypeCompile);
         }
@@ -157,5 +172,42 @@ impl N2048ExperimentalGraphV1 {
             }
             None => d.write_none(),
         }
+    }
+}
+
+#[cfg(test)]
+mod profile_transfer_tests {
+    use super::*;
+    #[test]
+    fn anchored_profile_transfer_is_explicit_and_signed_motor_stays_slots_only() {
+        let capacity = BrainCapacityClass::n2048();
+        for profile in [
+            SensorProfile::GroundedObjectSlotsV1,
+            SensorProfile::GroundedTerrainVisionV1,
+            SensorProfile::GroundedTerrainObjectPortsV2,
+        ] {
+            let graph = N2048ExperimentalGraphV1::fresh_anchored_v2(profile).unwrap();
+            graph.validate_against(&capacity, profile).unwrap();
+            assert_eq!(
+                graph.selected_recipe_digest(),
+                N2048ExperimentalGraphV1::anchored_recipe_digest()
+            );
+            assert!(graph
+                .validate_against(&capacity, SensorProfile::PrivilegedAffordanceV1)
+                .is_err());
+            if profile != SensorProfile::GroundedObjectSlotsV1 {
+                assert!(N2048ExperimentalGraphV1::fresh_signed_motor_v3(profile).is_err());
+                let mut forged = N2048ExperimentalGraphV1::fresh_signed_motor_v3(
+                    SensorProfile::GroundedObjectSlotsV1,
+                )
+                .unwrap();
+                forged.sensor_profile = profile;
+                assert!(forged.validate_against(&capacity, profile).is_err());
+            }
+        }
+        assert!(
+            N2048ExperimentalGraphV1::fresh_anchored_v2(SensorProfile::PrivilegedAffordanceV1)
+                .is_err()
+        );
     }
 }

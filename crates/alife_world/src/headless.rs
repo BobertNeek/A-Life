@@ -13231,7 +13231,7 @@ mod task_6_factorized_motor_tests {
             );
             assert_eq!(receipt.body_event.social_contact, queued.social_contact);
             assert!(receipt.body_event.damage >= queued.damage);
-            assert!(world.pending_player_care.get(&ORGANISM_ID.raw()).is_none());
+            assert!(!world.pending_player_care.contains_key(&ORGANISM_ID.raw()));
             // Shared biological advance and full harm remain once and unchanged.
             let expected = before
                 .biochemistry()
@@ -15836,3 +15836,167 @@ mod translation_budget;
 
 #[cfg(test)]
 mod player_interaction_v1_tests;
+
+#[cfg(test)]
+mod profile_transfer_geometry2183_tests {
+    use super::*;
+    #[test]
+    fn profile_transfer_calibrates_gaze_bearings_fov_and_world_velocity() {
+        for yaw in [0.0_f32, 0.8] {
+            for lateral in [-0.7_f32, 0.7] {
+                for profile in [
+                    SensorProfile::GroundedObjectSlotsV1,
+                    SensorProfile::GroundedTerrainVisionV1,
+                    SensorProfile::GroundedTerrainObjectPortsV2,
+                ] {
+                    let (s, c) = yaw.sin_cos();
+                    let origin = Vec3f::new(3., 0., -2.);
+                    let ahead = Vec3f::new(
+                        origin.x + 4. * c - lateral * s,
+                        0.,
+                        origin.z + 4. * s + lateral * c,
+                    );
+                    let rear = Vec3f::new(origin.x - 4. * c, 0., origin.z - 4. * s);
+                    let mut world = HeadlessScenarioBuilder::new(2183)
+                        .agent("observer", OrganismId(1), origin)
+                        .food("ahead", ahead, 0.6)
+                        .food("rear", rear, 0.6)
+                        .build()
+                        .unwrap();
+                    let actor = world.entity_id("observer").unwrap();
+                    world.objects.get_mut(&actor.raw()).unwrap().body_yaw = yaw * 0.6;
+                    world.objects.get_mut(&actor.raw()).unwrap().head_yaw = yaw * 0.4;
+                    let ahead_id = world.entity_id("ahead").unwrap();
+                    let rear_id = world.entity_id("rear").unwrap();
+                    world
+                        .objects
+                        .get_mut(&ahead_id.raw())
+                        .unwrap()
+                        .grounded_physical
+                        .velocity = Vec3f::new(0.25, 0., 0.5);
+                    let frame = world
+                        .perception_frame(
+                            OrganismId(1),
+                            Tick::ZERO,
+                            profile,
+                            HomeostaticSnapshot::baseline(Tick::ZERO),
+                        )
+                        .unwrap();
+                    let candidate = frame
+                        .candidates()
+                        .iter()
+                        .find(|x| x.target.entity == Some(ahead_id))
+                        .unwrap();
+                    let radius = 4.0_f32.hypot(lateral);
+                    let expected = if profile.has_terrain_vision() {
+                        [lateral / radius, 4. / radius]
+                    } else {
+                        [(ahead.z - origin.z) / radius, (ahead.x - origin.x) / radius]
+                    };
+                    assert!((candidate.features.0[0] - expected[0]).abs() < 1e-6);
+                    assert!((candidate.features.0[1] - expected[1]).abs() < 1e-6);
+                    assert_eq!(
+                        frame
+                            .candidates()
+                            .iter()
+                            .any(|x| x.target.entity == Some(rear_id)),
+                        !profile.has_terrain_vision()
+                    );
+                    // Velocity components remain world-axis even for gaze-relative bearings.
+                    assert!(candidate.features.0[3] > 0.0);
+                    assert!((candidate.features.0[5] / candidate.features.0[3] - 2.).abs() < 1e-6);
+                }
+            }
+        }
+    }
+    #[test]
+    fn profile_transfer_keeps_four_cues_in_present_perception_not_memory() {
+        use crate::{create_canonical_new_game, CanonicalNewGameConfig, PlayerInteractionV1};
+        let asset = alife_core::FoundationWeightAsset::builtin_nano512_v1(
+            SensorProfile::GroundedObjectSlotsV1,
+        )
+        .unwrap();
+        let game =
+            create_canonical_new_game(&CanonicalNewGameConfig::phase3(2183, 1).unwrap(), &asset)
+                .unwrap();
+        for profile in [
+            SensorProfile::GroundedObjectSlotsV1,
+            SensorProfile::GroundedTerrainVisionV1,
+            SensorProfile::GroundedTerrainObjectPortsV2,
+        ] {
+            for cue in [
+                PlayerInteractionV1::Praise,
+                PlayerInteractionV1::Scold,
+                PlayerInteractionV1::Pet,
+                PlayerInteractionV1::Slap,
+            ] {
+                // Fresh registered observer fixture, without ecology resources or
+                // ambient contacts. Never bypass protected ecology removal.
+                let source = game.world.organism_registry().iter().next().unwrap();
+                let id = source.organism_id();
+                let mut world = HeadlessScenarioBuilder::new(2183)
+                    .agent("observer", id, Vec3f::ZERO)
+                    .build()
+                    .unwrap();
+                let actor = world.entity_id("observer").unwrap();
+                world
+                    .register_organism_record(
+                        crate::WorldOrganismRecord::new(
+                            id,
+                            actor,
+                            source.genome().clone(),
+                            source.phenotype().clone(),
+                            *source.biochemistry(),
+                            source.birth_tick(),
+                        )
+                        .unwrap(),
+                    )
+                    .unwrap();
+                let position = world.entity(actor).unwrap().position;
+                let record = world.organism_registry().get(id).unwrap();
+                let touch = record.embodiment().sensor_gain(SensorCapability::Touch);
+                let home = record.biochemistry().homeostasis;
+                let before = serde_json::to_vec(record).unwrap();
+                world
+                    .queue_player_interaction_v1(id, position, cue)
+                    .unwrap();
+                let pending = world.pending_player_care.clone();
+                let dose = pending[&id.raw()];
+                let frame = world
+                    .perception_frame(id, Tick::ZERO, profile, home)
+                    .unwrap();
+                let c = &frame.sensory().channels;
+                assert_eq!(c.auditory_acoustic[1], dose.player_reward);
+                assert_eq!(c.auditory_acoustic[2], dose.social_disapproval_v1);
+                assert_eq!(
+                    c.tactile_contact[0],
+                    (dose.social_contact.max(dose.damage) * touch).clamp(0., 1.)
+                );
+                match cue {
+                    PlayerInteractionV1::Praise => {
+                        assert!(c.auditory_acoustic[1] > 0.);
+                        assert_eq!(c.auditory_acoustic[2], 0.);
+                        assert_eq!(c.tactile_contact[0], 0.);
+                    }
+                    PlayerInteractionV1::Scold => {
+                        assert!(c.auditory_acoustic[2] > 0.);
+                        assert_eq!(c.auditory_acoustic[1], 0.);
+                        assert_eq!(c.tactile_contact[0], 0.);
+                    }
+                    PlayerInteractionV1::Pet | PlayerInteractionV1::Slap => {
+                        assert!(c.tactile_contact[0] > 0.);
+                        assert_eq!(c.auditory_acoustic[1], 0.);
+                        assert_eq!(c.auditory_acoustic[2], 0.);
+                    }
+                }
+                assert!(frame.context().values().is_empty());
+                assert_eq!(world.pending_player_care, pending);
+                assert_eq!(
+                    serde_json::to_vec(world.organism_registry().get(id).unwrap()).unwrap(),
+                    before
+                );
+                assert_eq!(world.tick(), Tick::ZERO);
+            }
+        }
+    }
+}
