@@ -1,0 +1,4328 @@
+{
+  "schema": "terminal_physical_safe_aggregate_v1",
+  "parent_sha256": "d83a995e802e41b8e17799b0871f75d9ede35f95850049777323112e636654d1",
+  "fresh_target_definition": "different world entity from the consumed source; newly arrived food is reported separately",
+  "construction_genome_sha256": "557da394c045d0b4353009c842825677aa7505f636d6252b20f67bfe0c3a5189",
+  "complete": true,
+  "cases": [
+    {
+      "seed": 2026111803,
+      "reverse_appearance": false,
+      "alias": false,
+      "food_nutrition": 0.6,
+      "complete": true,
+      "followup_gate": true,
+      "arms": [
+        {
+          "evidence_id": "r3-2026111803-active-standard-v1",
+          "arm": "active",
+          "seed": 2026111803,
+          "completed": true,
+          "actual_recipe_gain": 16.0,
+          "mask_new_context": false,
+          "compiled_phenotype_hash": [
+            2492320278980643385,
+            12818529853968497949,
+            13620620114224192972,
+            16745773506267535591
+          ],
+          "compiler_inputs_digest": [
+            16701586347669242714,
+            16876662679357424260,
+            4700980492957098419,
+            7473245055121920825
+          ],
+          "trace_intervals": 256,
+          "decisions": 256,
+          "first_consumption": {
+            "host_interval_zero_based": 123,
+            "sequence_id": 124,
+            "elapsed_host_intervals": 124,
+            "target_entity": 3,
+            "representative_family": "Inspect",
+            "representative_action_id": 4,
+            "manipulation_action_id": 210,
+            "hunger_delta": -0.18352848291397095
+          },
+          "meals": 1,
+          "meal_intervals": [
+            123
+          ],
+          "first_authenticated_source": {
+            "host_interval_zero_based": 123,
+            "sequence_id": 124,
+            "target_entity": 3,
+            "tracked_object_id": 202937542181177,
+            "action_id": 210,
+            "observation_digest": [
+              15267870723448779469,
+              16288138014627980233,
+              10061515242830779745,
+              14081755947768071448
+            ],
+            "representative_family": "Inspect"
+          },
+          "authenticated_sources": 1,
+          "first_source_use": {
+            "host_interval_zero_based": 128,
+            "sequence_id": 129,
+            "source_sequence_id": 124,
+            "target_entity": 4,
+            "fresh_target": true,
+            "target_arrival_interval": 128,
+            "new_scheduled_food_target": true,
+            "desirability": 0.04481278359889984,
+            "delta": 0.44624263048171997
+          },
+          "first_fresh_target_source_use": {
+            "host_interval_zero_based": 128,
+            "sequence_id": 129,
+            "source_sequence_id": 124,
+            "target_entity": 4,
+            "fresh_target": true,
+            "target_arrival_interval": 128,
+            "new_scheduled_food_target": true,
+            "desirability": 0.04481278359889984,
+            "delta": 0.44624263048171997
+          },
+          "first_new_scheduled_food_target_source_use": {
+            "host_interval_zero_based": 128,
+            "sequence_id": 129,
+            "source_sequence_id": 124,
+            "target_entity": 4,
+            "fresh_target": true,
+            "target_arrival_interval": 128,
+            "new_scheduled_food_target": true,
+            "desirability": 0.04481278359889984,
+            "delta": 0.44624263048171997
+          },
+          "new_scheduled_food_target_source_uses": 27,
+          "fresh_target_source_uses": 27,
+          "source_uses": 27,
+          "first_nonzero_head_contribution": {
+            "host_interval_zero_based": 128,
+            "sequence_id": 129,
+            "delta": 0.44624263048171997
+          },
+          "nonzero_candidate_contributions": 27,
+          "max_abs_delta": 0.4614136219024658,
+          "first_capacity_rejection": null,
+          "last_capacity_rejection": null,
+          "read_admission": {
+            "Admitted": 155,
+            "InsufficientAtp": 101
+          },
+          "observation_admission": {
+            "Admitted": 256
+          },
+          "unfunded_checks_atp_q16": 0,
+          "reserved_research_work_units": 40520858,
+          "ingest_commands": 46,
+          "failed_ingest_containing_bundles": 45,
+          "toy_ingest_commands": 40,
+          "toy_manipulation_commands": 120,
+          "toy_physical_contacts": 73,
+          "initial_energy": 0.24939455,
+          "initial_atp": 0.37470844,
+          "initial_hunger": 0.81293726,
+          "record_without_consumption": 0,
+          "invalid_source_uses": 0,
+          "source_provenance": "dd8897485b79f564f9e68f8879a95d7e0b7cac1f",
+          "food_opportunities": [
+            {
+              "target_entity": 3,
+              "arrival_interval": 64,
+              "consumed_interval": 123,
+              "censored": false,
+              "time_to_meal_or_censor": 59
+            },
+            {
+              "target_entity": 4,
+              "arrival_interval": 128,
+              "consumed_interval": null,
+              "censored": true,
+              "time_to_meal_or_censor": 128
+            },
+            {
+              "target_entity": 5,
+              "arrival_interval": 192,
+              "consumed_interval": null,
+              "censored": true,
+              "time_to_meal_or_censor": 64
+            }
+          ],
+          "censor_horizon_host_intervals": 256,
+          "summed_time_to_meal_or_censor": 251,
+          "final_energy": 0.25945193,
+          "final_atp": 0.38330656,
+          "final_health": 1.0,
+          "founder_optimizer_unchanged": true,
+          "founder_checkpoint_sha256": "ac58c2defaaa98ef0e0b386881a45ab1d6bc2cc0fa0c6632bb48b5c3d710f264",
+          "cold_exact": true,
+          "final_channel_observations": 1,
+          "ordinary_learning": {
+            "fast_changed_coordinates": 28600,
+            "eligibility_changed_coordinates": 28600,
+            "lifetime_changed_coordinates": 0
+          },
+          "summary": {
+            "alias": false,
+            "arm": "active",
+            "capacity_rejected": 0,
+            "construction_genome_sha256": "557da394c045d0b4353009c842825677aa7505f636d6252b20f67bfe0c3a5189",
+            "consumed_food": 1,
+            "context_rows": 256,
+            "decision_target": 256,
+            "decisions": 256,
+            "elapsed_host_intervals": 256,
+            "failed_ingest_containing_bundles": 45,
+            "first_hunger": 0.8129372596740723,
+            "food_nutrition": 0.6000000238418579,
+            "gain": 16.0,
+            "head_fixed_in_life": true,
+            "hunger_max": 0.8532997369766235,
+            "hunger_min": 0.6697712540626526,
+            "insufficient_atp": 101,
+            "leadin": 600,
+            "long_ppo_calls": 0,
+            "meal_hunger_deltas": [
+              -0.18352848291397095
+            ],
+            "meals": 1,
+            "motor_head_count": 2,
+            "nonzero_deltas": 27,
+            "parent_sha256": "d83a995e802e41b8e17799b0871f75d9ede35f95850049777323112e636654d1",
+            "parent_weights_exact": true,
+            "reserved_work_units": 40520858,
+            "reverse_appearance": false,
+            "schema": 2135,
+            "seed": 2026111803,
+            "sourced_candidates": 27,
+            "spawned_food": 3,
+            "ticks": 512,
+            "typed_cold_exact": true,
+            "unfunded_admission_checks_atp_q16": 0
+          },
+          "decisions_after_first_capacity_rejection": null
+        },
+        {
+          "evidence_id": "r3-2026111803-mask-standard-v1",
+          "arm": "mask",
+          "seed": 2026111803,
+          "completed": true,
+          "actual_recipe_gain": 16.0,
+          "mask_new_context": true,
+          "compiled_phenotype_hash": [
+            2492320278980643385,
+            12818529853968497949,
+            13620620114224192972,
+            16745773506267535591
+          ],
+          "compiler_inputs_digest": [
+            16701586347669242714,
+            16876662679357424260,
+            4700980492957098419,
+            7473245055121920825
+          ],
+          "trace_intervals": 256,
+          "decisions": 256,
+          "first_consumption": {
+            "host_interval_zero_based": 123,
+            "sequence_id": 124,
+            "elapsed_host_intervals": 124,
+            "target_entity": 3,
+            "representative_family": "Inspect",
+            "representative_action_id": 4,
+            "manipulation_action_id": 210,
+            "hunger_delta": -0.18352848291397095
+          },
+          "meals": 1,
+          "meal_intervals": [
+            123
+          ],
+          "first_authenticated_source": {
+            "host_interval_zero_based": 123,
+            "sequence_id": 124,
+            "target_entity": 3,
+            "tracked_object_id": 202937542181177,
+            "action_id": 210,
+            "observation_digest": [
+              15267870723448779469,
+              16288138014627980233,
+              10061515242830779745,
+              14081755947768071448
+            ],
+            "representative_family": "Inspect"
+          },
+          "authenticated_sources": 1,
+          "first_source_use": {
+            "host_interval_zero_based": 128,
+            "sequence_id": 129,
+            "source_sequence_id": 124,
+            "target_entity": 4,
+            "fresh_target": true,
+            "target_arrival_interval": 128,
+            "new_scheduled_food_target": true,
+            "desirability": 0.04481278359889984,
+            "delta": 0.0
+          },
+          "first_fresh_target_source_use": {
+            "host_interval_zero_based": 128,
+            "sequence_id": 129,
+            "source_sequence_id": 124,
+            "target_entity": 4,
+            "fresh_target": true,
+            "target_arrival_interval": 128,
+            "new_scheduled_food_target": true,
+            "desirability": 0.04481278359889984,
+            "delta": 0.0
+          },
+          "first_new_scheduled_food_target_source_use": {
+            "host_interval_zero_based": 128,
+            "sequence_id": 129,
+            "source_sequence_id": 124,
+            "target_entity": 4,
+            "fresh_target": true,
+            "target_arrival_interval": 128,
+            "new_scheduled_food_target": true,
+            "desirability": 0.04481278359889984,
+            "delta": 0.0
+          },
+          "new_scheduled_food_target_source_uses": 20,
+          "fresh_target_source_uses": 20,
+          "source_uses": 20,
+          "first_nonzero_head_contribution": null,
+          "nonzero_candidate_contributions": 0,
+          "max_abs_delta": 0.0,
+          "first_capacity_rejection": {
+            "host_interval_zero_based": 243,
+            "sequence_id": 244,
+            "limit": 64,
+            "records": 65
+          },
+          "last_capacity_rejection": {
+            "host_interval_zero_based": 255,
+            "sequence_id": 256,
+            "limit": 64,
+            "records": 66
+          },
+          "read_admission": {
+            "Admitted": 148,
+            "InsufficientAtp": 95,
+            "BankCapacityExceeded": 13
+          },
+          "observation_admission": {
+            "Admitted": 256
+          },
+          "unfunded_checks_atp_q16": 0,
+          "reserved_research_work_units": 38190360,
+          "ingest_commands": 45,
+          "failed_ingest_containing_bundles": 44,
+          "toy_ingest_commands": 40,
+          "toy_manipulation_commands": 122,
+          "toy_physical_contacts": 73,
+          "initial_energy": 0.24939455,
+          "initial_atp": 0.37470844,
+          "initial_hunger": 0.81293726,
+          "record_without_consumption": 0,
+          "invalid_source_uses": 0,
+          "source_provenance": "dd8897485b79f564f9e68f8879a95d7e0b7cac1f",
+          "food_opportunities": [
+            {
+              "target_entity": 3,
+              "arrival_interval": 64,
+              "consumed_interval": 123,
+              "censored": false,
+              "time_to_meal_or_censor": 59
+            },
+            {
+              "target_entity": 4,
+              "arrival_interval": 128,
+              "consumed_interval": null,
+              "censored": true,
+              "time_to_meal_or_censor": 128
+            },
+            {
+              "target_entity": 5,
+              "arrival_interval": 192,
+              "consumed_interval": null,
+              "censored": true,
+              "time_to_meal_or_censor": 64
+            }
+          ],
+          "censor_horizon_host_intervals": 256,
+          "summed_time_to_meal_or_censor": 251,
+          "final_energy": 0.2652481,
+          "final_atp": 0.38615966,
+          "final_health": 1.0,
+          "founder_optimizer_unchanged": true,
+          "founder_checkpoint_sha256": "ac58c2defaaa98ef0e0b386881a45ab1d6bc2cc0fa0c6632bb48b5c3d710f264",
+          "cold_exact": true,
+          "final_channel_observations": 1,
+          "ordinary_learning": {
+            "fast_changed_coordinates": 28600,
+            "eligibility_changed_coordinates": 28600,
+            "lifetime_changed_coordinates": 0
+          },
+          "summary": {
+            "alias": false,
+            "arm": "mask",
+            "capacity_rejected": 13,
+            "construction_genome_sha256": "557da394c045d0b4353009c842825677aa7505f636d6252b20f67bfe0c3a5189",
+            "consumed_food": 1,
+            "context_rows": 256,
+            "decision_target": 256,
+            "decisions": 256,
+            "elapsed_host_intervals": 256,
+            "failed_ingest_containing_bundles": 44,
+            "first_hunger": 0.8129372596740723,
+            "food_nutrition": 0.6000000238418579,
+            "gain": 16.0,
+            "head_fixed_in_life": true,
+            "hunger_max": 0.8532997369766235,
+            "hunger_min": 0.6697712540626526,
+            "insufficient_atp": 95,
+            "leadin": 600,
+            "long_ppo_calls": 0,
+            "meal_hunger_deltas": [
+              -0.18352848291397095
+            ],
+            "meals": 1,
+            "motor_head_count": 2,
+            "nonzero_deltas": 0,
+            "parent_sha256": "d83a995e802e41b8e17799b0871f75d9ede35f95850049777323112e636654d1",
+            "parent_weights_exact": true,
+            "reserved_work_units": 38190360,
+            "reverse_appearance": false,
+            "schema": 2135,
+            "seed": 2026111803,
+            "sourced_candidates": 20,
+            "spawned_food": 3,
+            "ticks": 512,
+            "typed_cold_exact": true,
+            "unfunded_admission_checks_atp_q16": 0
+          },
+          "decisions_after_first_capacity_rejection": 12
+        },
+        {
+          "evidence_id": "r3-2026111803-off-standard-v1",
+          "arm": "off",
+          "seed": 2026111803,
+          "completed": true,
+          "actual_recipe_gain": null,
+          "mask_new_context": null,
+          "compiled_phenotype_hash": null,
+          "compiler_inputs_digest": null,
+          "trace_intervals": 256,
+          "decisions": 256,
+          "first_consumption": {
+            "host_interval_zero_based": 116,
+            "sequence_id": 117,
+            "elapsed_host_intervals": 117,
+            "target_entity": 3,
+            "representative_family": "Inspect",
+            "representative_action_id": 4,
+            "manipulation_action_id": 210,
+            "hunger_delta": -0.18405789136886597
+          },
+          "meals": 1,
+          "meal_intervals": [
+            116
+          ],
+          "first_authenticated_source": null,
+          "authenticated_sources": 0,
+          "first_source_use": null,
+          "first_fresh_target_source_use": null,
+          "first_new_scheduled_food_target_source_use": null,
+          "new_scheduled_food_target_source_uses": 0,
+          "fresh_target_source_uses": 0,
+          "source_uses": 0,
+          "first_nonzero_head_contribution": null,
+          "nonzero_candidate_contributions": 0,
+          "max_abs_delta": 0.0,
+          "first_capacity_rejection": null,
+          "last_capacity_rejection": null,
+          "read_admission": {},
+          "observation_admission": {},
+          "unfunded_checks_atp_q16": 0,
+          "reserved_research_work_units": 0,
+          "ingest_commands": 44,
+          "failed_ingest_containing_bundles": 44,
+          "toy_ingest_commands": 40,
+          "toy_manipulation_commands": 137,
+          "toy_physical_contacts": 73,
+          "initial_energy": 0.24939455,
+          "initial_atp": 0.37470844,
+          "initial_hunger": 0.81293726,
+          "record_without_consumption": 0,
+          "invalid_source_uses": 0,
+          "source_provenance": "dd8897485b79f564f9e68f8879a95d7e0b7cac1f",
+          "food_opportunities": [
+            {
+              "target_entity": 3,
+              "arrival_interval": 64,
+              "consumed_interval": 116,
+              "censored": false,
+              "time_to_meal_or_censor": 52
+            },
+            {
+              "target_entity": 4,
+              "arrival_interval": 128,
+              "consumed_interval": null,
+              "censored": true,
+              "time_to_meal_or_censor": 128
+            },
+            {
+              "target_entity": 5,
+              "arrival_interval": 192,
+              "consumed_interval": null,
+              "censored": true,
+              "time_to_meal_or_censor": 64
+            }
+          ],
+          "censor_horizon_host_intervals": 256,
+          "summed_time_to_meal_or_censor": 244,
+          "final_energy": 0.35989228,
+          "final_atp": 0.43202952,
+          "final_health": 1.0,
+          "founder_optimizer_unchanged": true,
+          "founder_checkpoint_sha256": "ac58c2defaaa98ef0e0b386881a45ab1d6bc2cc0fa0c6632bb48b5c3d710f264",
+          "cold_exact": true,
+          "final_channel_observations": 0,
+          "ordinary_learning": {
+            "fast_changed_coordinates": 28600,
+            "eligibility_changed_coordinates": 28600,
+            "lifetime_changed_coordinates": 0
+          },
+          "summary": {
+            "alias": false,
+            "arm": "off",
+            "capacity_rejected": 0,
+            "construction_genome_sha256": "557da394c045d0b4353009c842825677aa7505f636d6252b20f67bfe0c3a5189",
+            "consumed_food": 1,
+            "context_rows": 0,
+            "decision_target": 256,
+            "decisions": 256,
+            "elapsed_host_intervals": 256,
+            "failed_ingest_containing_bundles": 44,
+            "first_hunger": 0.8129372596740723,
+            "food_nutrition": 0.6000000238418579,
+            "gain": 16.0,
+            "head_fixed_in_life": true,
+            "hunger_max": 0.8193514943122864,
+            "hunger_min": 0.6352936029434204,
+            "insufficient_atp": 0,
+            "leadin": 600,
+            "long_ppo_calls": 0,
+            "meal_hunger_deltas": [
+              -0.18405789136886597
+            ],
+            "meals": 1,
+            "motor_head_count": 2,
+            "nonzero_deltas": 0,
+            "parent_sha256": "d83a995e802e41b8e17799b0871f75d9ede35f95850049777323112e636654d1",
+            "parent_weights_exact": true,
+            "reserved_work_units": 0,
+            "reverse_appearance": false,
+            "schema": 2135,
+            "seed": 2026111803,
+            "sourced_candidates": 0,
+            "spawned_food": 3,
+            "ticks": 512,
+            "typed_cold_exact": true,
+            "unfunded_admission_checks_atp_q16": 0
+          },
+          "decisions_after_first_capacity_rejection": null
+        },
+        {
+          "evidence_id": "r3-2026111803-zero-standard-v1",
+          "arm": "zero",
+          "seed": 2026111803,
+          "completed": true,
+          "actual_recipe_gain": 0.0,
+          "mask_new_context": false,
+          "compiled_phenotype_hash": [
+            2492320278980643385,
+            12818529853968497949,
+            13620620114224192972,
+            16745773506267535591
+          ],
+          "compiler_inputs_digest": [
+            16701586347669242714,
+            16876662679357424260,
+            4700980492957098419,
+            7473245055121920825
+          ],
+          "trace_intervals": 256,
+          "decisions": 256,
+          "first_consumption": {
+            "host_interval_zero_based": 123,
+            "sequence_id": 124,
+            "elapsed_host_intervals": 124,
+            "target_entity": 3,
+            "representative_family": "Inspect",
+            "representative_action_id": 4,
+            "manipulation_action_id": 210,
+            "hunger_delta": -0.18352848291397095
+          },
+          "meals": 1,
+          "meal_intervals": [
+            123
+          ],
+          "first_authenticated_source": {
+            "host_interval_zero_based": 123,
+            "sequence_id": 124,
+            "target_entity": 3,
+            "tracked_object_id": 202937542181177,
+            "action_id": 210,
+            "observation_digest": [
+              15267870723448779469,
+              16288138014627980233,
+              10061515242830779745,
+              14081755947768071448
+            ],
+            "representative_family": "Inspect"
+          },
+          "authenticated_sources": 1,
+          "first_source_use": {
+            "host_interval_zero_based": 128,
+            "sequence_id": 129,
+            "source_sequence_id": 124,
+            "target_entity": 4,
+            "fresh_target": true,
+            "target_arrival_interval": 128,
+            "new_scheduled_food_target": true,
+            "desirability": 0.04481278359889984,
+            "delta": 0.0
+          },
+          "first_fresh_target_source_use": {
+            "host_interval_zero_based": 128,
+            "sequence_id": 129,
+            "source_sequence_id": 124,
+            "target_entity": 4,
+            "fresh_target": true,
+            "target_arrival_interval": 128,
+            "new_scheduled_food_target": true,
+            "desirability": 0.04481278359889984,
+            "delta": 0.0
+          },
+          "first_new_scheduled_food_target_source_use": {
+            "host_interval_zero_based": 128,
+            "sequence_id": 129,
+            "source_sequence_id": 124,
+            "target_entity": 4,
+            "fresh_target": true,
+            "target_arrival_interval": 128,
+            "new_scheduled_food_target": true,
+            "desirability": 0.04481278359889984,
+            "delta": 0.0
+          },
+          "new_scheduled_food_target_source_uses": 20,
+          "fresh_target_source_uses": 20,
+          "source_uses": 20,
+          "first_nonzero_head_contribution": null,
+          "nonzero_candidate_contributions": 0,
+          "max_abs_delta": 0.0,
+          "first_capacity_rejection": {
+            "host_interval_zero_based": 243,
+            "sequence_id": 244,
+            "limit": 64,
+            "records": 65
+          },
+          "last_capacity_rejection": {
+            "host_interval_zero_based": 255,
+            "sequence_id": 256,
+            "limit": 64,
+            "records": 66
+          },
+          "read_admission": {
+            "Admitted": 148,
+            "InsufficientAtp": 95,
+            "BankCapacityExceeded": 13
+          },
+          "observation_admission": {
+            "Admitted": 256
+          },
+          "unfunded_checks_atp_q16": 0,
+          "reserved_research_work_units": 38190360,
+          "ingest_commands": 45,
+          "failed_ingest_containing_bundles": 44,
+          "toy_ingest_commands": 40,
+          "toy_manipulation_commands": 122,
+          "toy_physical_contacts": 73,
+          "initial_energy": 0.24939455,
+          "initial_atp": 0.37470844,
+          "initial_hunger": 0.81293726,
+          "record_without_consumption": 0,
+          "invalid_source_uses": 0,
+          "source_provenance": "dd8897485b79f564f9e68f8879a95d7e0b7cac1f",
+          "food_opportunities": [
+            {
+              "target_entity": 3,
+              "arrival_interval": 64,
+              "consumed_interval": 123,
+              "censored": false,
+              "time_to_meal_or_censor": 59
+            },
+            {
+              "target_entity": 4,
+              "arrival_interval": 128,
+              "consumed_interval": null,
+              "censored": true,
+              "time_to_meal_or_censor": 128
+            },
+            {
+              "target_entity": 5,
+              "arrival_interval": 192,
+              "consumed_interval": null,
+              "censored": true,
+              "time_to_meal_or_censor": 64
+            }
+          ],
+          "censor_horizon_host_intervals": 256,
+          "summed_time_to_meal_or_censor": 251,
+          "final_energy": 0.2652481,
+          "final_atp": 0.38615966,
+          "final_health": 1.0,
+          "founder_optimizer_unchanged": true,
+          "founder_checkpoint_sha256": "ac58c2defaaa98ef0e0b386881a45ab1d6bc2cc0fa0c6632bb48b5c3d710f264",
+          "cold_exact": true,
+          "final_channel_observations": 1,
+          "ordinary_learning": {
+            "fast_changed_coordinates": 28600,
+            "eligibility_changed_coordinates": 28600,
+            "lifetime_changed_coordinates": 0
+          },
+          "summary": {
+            "alias": false,
+            "arm": "zero",
+            "capacity_rejected": 13,
+            "construction_genome_sha256": "557da394c045d0b4353009c842825677aa7505f636d6252b20f67bfe0c3a5189",
+            "consumed_food": 1,
+            "context_rows": 256,
+            "decision_target": 256,
+            "decisions": 256,
+            "elapsed_host_intervals": 256,
+            "failed_ingest_containing_bundles": 44,
+            "first_hunger": 0.8129372596740723,
+            "food_nutrition": 0.6000000238418579,
+            "gain": 16.0,
+            "head_fixed_in_life": true,
+            "hunger_max": 0.8532997369766235,
+            "hunger_min": 0.6697712540626526,
+            "insufficient_atp": 95,
+            "leadin": 600,
+            "long_ppo_calls": 0,
+            "meal_hunger_deltas": [
+              -0.18352848291397095
+            ],
+            "meals": 1,
+            "motor_head_count": 2,
+            "nonzero_deltas": 0,
+            "parent_sha256": "d83a995e802e41b8e17799b0871f75d9ede35f95850049777323112e636654d1",
+            "parent_weights_exact": true,
+            "reserved_work_units": 38190360,
+            "reverse_appearance": false,
+            "schema": 2135,
+            "seed": 2026111803,
+            "sourced_candidates": 20,
+            "spawned_food": 3,
+            "ticks": 512,
+            "typed_cold_exact": true,
+            "unfunded_admission_checks_atp_q16": 0
+          },
+          "decisions_after_first_capacity_rejection": 12
+        }
+      ],
+      "comparisons": [
+        {
+          "arms": [
+            "zero",
+            "mask"
+          ],
+          "common_intervals": 256,
+          "first_source_boundary": 123,
+          "differences": {
+            "state": {
+              "count": 0,
+              "first_interval": null,
+              "before_first_source": 0
+            },
+            "actions": {
+              "count": 0,
+              "first_interval": null,
+              "before_first_source": 0
+            },
+            "representative_choice": {
+              "count": 0,
+              "first_interval": null,
+              "before_first_source": 0
+            },
+            "committed_bundle_details": {
+              "count": 0,
+              "first_interval": null,
+              "before_first_source": 0
+            },
+            "log_probability": {
+              "count": 0,
+              "first_interval": null,
+              "before_first_source": 0
+            },
+            "representative_logit": {
+              "count": 0,
+              "first_interval": null,
+              "before_first_source": 0
+            }
+          }
+        },
+        {
+          "arms": [
+            "active",
+            "zero"
+          ],
+          "common_intervals": 256,
+          "first_source_boundary": 123,
+          "differences": {
+            "state": {
+              "count": 127,
+              "first_interval": 129,
+              "before_first_source": 0
+            },
+            "actions": {
+              "count": 11,
+              "first_interval": 129,
+              "before_first_source": 0
+            },
+            "representative_choice": {
+              "count": 7,
+              "first_interval": 129,
+              "before_first_source": 0
+            },
+            "committed_bundle_details": {
+              "count": 125,
+              "first_interval": 129,
+              "before_first_source": 0
+            },
+            "log_probability": {
+              "count": 128,
+              "first_interval": 128,
+              "before_first_source": 0
+            },
+            "representative_logit": {
+              "count": 128,
+              "first_interval": 128,
+              "before_first_source": 0
+            }
+          }
+        },
+        {
+          "arms": [
+            "active",
+            "mask"
+          ],
+          "common_intervals": 256,
+          "first_source_boundary": 123,
+          "differences": {
+            "state": {
+              "count": 127,
+              "first_interval": 129,
+              "before_first_source": 0
+            },
+            "actions": {
+              "count": 11,
+              "first_interval": 129,
+              "before_first_source": 0
+            },
+            "representative_choice": {
+              "count": 7,
+              "first_interval": 129,
+              "before_first_source": 0
+            },
+            "committed_bundle_details": {
+              "count": 125,
+              "first_interval": 129,
+              "before_first_source": 0
+            },
+            "log_probability": {
+              "count": 128,
+              "first_interval": 128,
+              "before_first_source": 0
+            },
+            "representative_logit": {
+              "count": 128,
+              "first_interval": 128,
+              "before_first_source": 0
+            }
+          }
+        },
+        {
+          "arms": [
+            "off",
+            "zero"
+          ],
+          "common_intervals": 256,
+          "first_source_boundary": 123,
+          "differences": {
+            "state": {
+              "count": 256,
+              "first_interval": 0,
+              "before_first_source": 123
+            },
+            "actions": {
+              "count": 96,
+              "first_interval": 73,
+              "before_first_source": 14
+            },
+            "representative_choice": {
+              "count": 52,
+              "first_interval": 116,
+              "before_first_source": 7
+            },
+            "committed_bundle_details": {
+              "count": 252,
+              "first_interval": 2,
+              "before_first_source": 119
+            },
+            "log_probability": {
+              "count": 254,
+              "first_interval": 2,
+              "before_first_source": 121
+            },
+            "representative_logit": {
+              "count": 254,
+              "first_interval": 2,
+              "before_first_source": 121
+            }
+          }
+        }
+      ]
+    },
+    {
+      "seed": 2026111803,
+      "reverse_appearance": true,
+      "alias": false,
+      "food_nutrition": 0.6,
+      "complete": true,
+      "followup_gate": true,
+      "arms": [
+        {
+          "evidence_id": "r3-2026111803-active-reversed-v1",
+          "arm": "active",
+          "seed": 2026111803,
+          "completed": true,
+          "actual_recipe_gain": 16.0,
+          "mask_new_context": false,
+          "compiled_phenotype_hash": [
+            2492320278980643385,
+            12818529853968497949,
+            13620620114224192972,
+            16745773506267535591
+          ],
+          "compiler_inputs_digest": [
+            16701586347669242714,
+            16876662679357424260,
+            4700980492957098419,
+            7473245055121920825
+          ],
+          "trace_intervals": 256,
+          "decisions": 256,
+          "first_consumption": {
+            "host_interval_zero_based": 127,
+            "sequence_id": 128,
+            "elapsed_host_intervals": 128,
+            "target_entity": 3,
+            "representative_family": "Inspect",
+            "representative_action_id": 4,
+            "manipulation_action_id": 210,
+            "hunger_delta": -0.1836169958114624
+          },
+          "meals": 1,
+          "meal_intervals": [
+            127
+          ],
+          "first_authenticated_source": {
+            "host_interval_zero_based": 127,
+            "sequence_id": 128,
+            "target_entity": 3,
+            "tracked_object_id": 202937542181177,
+            "action_id": 210,
+            "observation_digest": [
+              165917410069381048,
+              8779761590638937809,
+              5093191700963710607,
+              9675717541013222734
+            ],
+            "representative_family": "Inspect"
+          },
+          "authenticated_sources": 1,
+          "first_source_use": {
+            "host_interval_zero_based": 128,
+            "sequence_id": 129,
+            "source_sequence_id": 128,
+            "target_entity": 4,
+            "fresh_target": true,
+            "target_arrival_interval": 128,
+            "new_scheduled_food_target": true,
+            "desirability": 0.05726024508476257,
+            "delta": 0.4750266671180725
+          },
+          "first_fresh_target_source_use": {
+            "host_interval_zero_based": 128,
+            "sequence_id": 129,
+            "source_sequence_id": 128,
+            "target_entity": 4,
+            "fresh_target": true,
+            "target_arrival_interval": 128,
+            "new_scheduled_food_target": true,
+            "desirability": 0.05726024508476257,
+            "delta": 0.4750266671180725
+          },
+          "first_new_scheduled_food_target_source_use": {
+            "host_interval_zero_based": 128,
+            "sequence_id": 129,
+            "source_sequence_id": 128,
+            "target_entity": 4,
+            "fresh_target": true,
+            "target_arrival_interval": 128,
+            "new_scheduled_food_target": true,
+            "desirability": 0.05726024508476257,
+            "delta": 0.4750266671180725
+          },
+          "new_scheduled_food_target_source_uses": 41,
+          "fresh_target_source_uses": 41,
+          "source_uses": 41,
+          "first_nonzero_head_contribution": {
+            "host_interval_zero_based": 128,
+            "sequence_id": 129,
+            "delta": 0.4750266671180725
+          },
+          "nonzero_candidate_contributions": 41,
+          "max_abs_delta": 0.4847002625465393,
+          "first_capacity_rejection": null,
+          "last_capacity_rejection": null,
+          "read_admission": {
+            "Admitted": 169,
+            "InsufficientAtp": 87
+          },
+          "observation_admission": {
+            "Admitted": 256
+          },
+          "unfunded_checks_atp_q16": 0,
+          "reserved_research_work_units": 39335838,
+          "ingest_commands": 49,
+          "failed_ingest_containing_bundles": 48,
+          "toy_ingest_commands": 44,
+          "toy_manipulation_commands": 126,
+          "toy_physical_contacts": 73,
+          "initial_energy": 0.24939455,
+          "initial_atp": 0.37470844,
+          "initial_hunger": 0.81293726,
+          "record_without_consumption": 0,
+          "invalid_source_uses": 0,
+          "source_provenance": "dd8897485b79f564f9e68f8879a95d7e0b7cac1f",
+          "food_opportunities": [
+            {
+              "target_entity": 3,
+              "arrival_interval": 64,
+              "consumed_interval": 127,
+              "censored": false,
+              "time_to_meal_or_censor": 63
+            },
+            {
+              "target_entity": 4,
+              "arrival_interval": 128,
+              "consumed_interval": null,
+              "censored": true,
+              "time_to_meal_or_censor": 128
+            },
+            {
+              "target_entity": 5,
+              "arrival_interval": 192,
+              "consumed_interval": null,
+              "censored": true,
+              "time_to_meal_or_censor": 64
+            }
+          ],
+          "censor_horizon_host_intervals": 256,
+          "summed_time_to_meal_or_censor": 255,
+          "final_energy": 0.26232788,
+          "final_atp": 0.38506746,
+          "final_health": 1.0,
+          "founder_optimizer_unchanged": true,
+          "founder_checkpoint_sha256": "ac58c2defaaa98ef0e0b386881a45ab1d6bc2cc0fa0c6632bb48b5c3d710f264",
+          "cold_exact": true,
+          "final_channel_observations": 1,
+          "ordinary_learning": {
+            "fast_changed_coordinates": 28144,
+            "eligibility_changed_coordinates": 28144,
+            "lifetime_changed_coordinates": 0
+          },
+          "summary": {
+            "alias": false,
+            "arm": "active",
+            "capacity_rejected": 0,
+            "construction_genome_sha256": "557da394c045d0b4353009c842825677aa7505f636d6252b20f67bfe0c3a5189",
+            "consumed_food": 1,
+            "context_rows": 256,
+            "decision_target": 256,
+            "decisions": 256,
+            "elapsed_host_intervals": 256,
+            "failed_ingest_containing_bundles": 48,
+            "first_hunger": 0.8129372596740723,
+            "food_nutrition": 0.6000000238418579,
+            "gain": 16.0,
+            "head_fixed_in_life": true,
+            "hunger_max": 0.8488887548446655,
+            "hunger_min": 0.6652717590332031,
+            "insufficient_atp": 87,
+            "leadin": 600,
+            "long_ppo_calls": 0,
+            "meal_hunger_deltas": [
+              -0.1836169958114624
+            ],
+            "meals": 1,
+            "motor_head_count": 2,
+            "nonzero_deltas": 41,
+            "parent_sha256": "d83a995e802e41b8e17799b0871f75d9ede35f95850049777323112e636654d1",
+            "parent_weights_exact": true,
+            "reserved_work_units": 39335838,
+            "reverse_appearance": true,
+            "schema": 2135,
+            "seed": 2026111803,
+            "sourced_candidates": 41,
+            "spawned_food": 3,
+            "ticks": 512,
+            "typed_cold_exact": true,
+            "unfunded_admission_checks_atp_q16": 0
+          },
+          "decisions_after_first_capacity_rejection": null
+        },
+        {
+          "evidence_id": "r3-2026111803-mask-reversed-v1",
+          "arm": "mask",
+          "seed": 2026111803,
+          "completed": true,
+          "actual_recipe_gain": 16.0,
+          "mask_new_context": true,
+          "compiled_phenotype_hash": [
+            2492320278980643385,
+            12818529853968497949,
+            13620620114224192972,
+            16745773506267535591
+          ],
+          "compiler_inputs_digest": [
+            16701586347669242714,
+            16876662679357424260,
+            4700980492957098419,
+            7473245055121920825
+          ],
+          "trace_intervals": 256,
+          "decisions": 256,
+          "first_consumption": {
+            "host_interval_zero_based": 127,
+            "sequence_id": 128,
+            "elapsed_host_intervals": 128,
+            "target_entity": 3,
+            "representative_family": "Inspect",
+            "representative_action_id": 4,
+            "manipulation_action_id": 210,
+            "hunger_delta": -0.1836169958114624
+          },
+          "meals": 1,
+          "meal_intervals": [
+            127
+          ],
+          "first_authenticated_source": {
+            "host_interval_zero_based": 127,
+            "sequence_id": 128,
+            "target_entity": 3,
+            "tracked_object_id": 202937542181177,
+            "action_id": 210,
+            "observation_digest": [
+              165917410069381048,
+              8779761590638937809,
+              5093191700963710607,
+              9675717541013222734
+            ],
+            "representative_family": "Inspect"
+          },
+          "authenticated_sources": 1,
+          "first_source_use": {
+            "host_interval_zero_based": 128,
+            "sequence_id": 129,
+            "source_sequence_id": 128,
+            "target_entity": 4,
+            "fresh_target": true,
+            "target_arrival_interval": 128,
+            "new_scheduled_food_target": true,
+            "desirability": 0.05726024508476257,
+            "delta": 0.0
+          },
+          "first_fresh_target_source_use": {
+            "host_interval_zero_based": 128,
+            "sequence_id": 129,
+            "source_sequence_id": 128,
+            "target_entity": 4,
+            "fresh_target": true,
+            "target_arrival_interval": 128,
+            "new_scheduled_food_target": true,
+            "desirability": 0.05726024508476257,
+            "delta": 0.0
+          },
+          "first_new_scheduled_food_target_source_use": {
+            "host_interval_zero_based": 128,
+            "sequence_id": 129,
+            "source_sequence_id": 128,
+            "target_entity": 4,
+            "fresh_target": true,
+            "target_arrival_interval": 128,
+            "new_scheduled_food_target": true,
+            "desirability": 0.05726024508476257,
+            "delta": 0.0
+          },
+          "new_scheduled_food_target_source_uses": 37,
+          "fresh_target_source_uses": 37,
+          "source_uses": 37,
+          "first_nonzero_head_contribution": null,
+          "nonzero_candidate_contributions": 0,
+          "max_abs_delta": 0.0,
+          "first_capacity_rejection": null,
+          "last_capacity_rejection": null,
+          "read_admission": {
+            "Admitted": 165,
+            "InsufficientAtp": 91
+          },
+          "observation_admission": {
+            "Admitted": 256
+          },
+          "unfunded_checks_atp_q16": 0,
+          "reserved_research_work_units": 38111206,
+          "ingest_commands": 49,
+          "failed_ingest_containing_bundles": 48,
+          "toy_ingest_commands": 44,
+          "toy_manipulation_commands": 126,
+          "toy_physical_contacts": 74,
+          "initial_energy": 0.24939455,
+          "initial_atp": 0.37470844,
+          "initial_hunger": 0.81293726,
+          "record_without_consumption": 0,
+          "invalid_source_uses": 0,
+          "source_provenance": "dd8897485b79f564f9e68f8879a95d7e0b7cac1f",
+          "food_opportunities": [
+            {
+              "target_entity": 3,
+              "arrival_interval": 64,
+              "consumed_interval": 127,
+              "censored": false,
+              "time_to_meal_or_censor": 63
+            },
+            {
+              "target_entity": 4,
+              "arrival_interval": 128,
+              "consumed_interval": null,
+              "censored": true,
+              "time_to_meal_or_censor": 128
+            },
+            {
+              "target_entity": 5,
+              "arrival_interval": 192,
+              "consumed_interval": null,
+              "censored": true,
+              "time_to_meal_or_censor": 64
+            }
+          ],
+          "censor_horizon_host_intervals": 256,
+          "summed_time_to_meal_or_censor": 255,
+          "final_energy": 0.2653559,
+          "final_atp": 0.38653517,
+          "final_health": 1.0,
+          "founder_optimizer_unchanged": true,
+          "founder_checkpoint_sha256": "ac58c2defaaa98ef0e0b386881a45ab1d6bc2cc0fa0c6632bb48b5c3d710f264",
+          "cold_exact": true,
+          "final_channel_observations": 1,
+          "ordinary_learning": {
+            "fast_changed_coordinates": 28112,
+            "eligibility_changed_coordinates": 28112,
+            "lifetime_changed_coordinates": 0
+          },
+          "summary": {
+            "alias": false,
+            "arm": "mask",
+            "capacity_rejected": 0,
+            "construction_genome_sha256": "557da394c045d0b4353009c842825677aa7505f636d6252b20f67bfe0c3a5189",
+            "consumed_food": 1,
+            "context_rows": 256,
+            "decision_target": 256,
+            "decisions": 256,
+            "elapsed_host_intervals": 256,
+            "failed_ingest_containing_bundles": 48,
+            "first_hunger": 0.8129372596740723,
+            "food_nutrition": 0.6000000238418579,
+            "gain": 16.0,
+            "head_fixed_in_life": true,
+            "hunger_max": 0.8488887548446655,
+            "hunger_min": 0.6652717590332031,
+            "insufficient_atp": 91,
+            "leadin": 600,
+            "long_ppo_calls": 0,
+            "meal_hunger_deltas": [
+              -0.1836169958114624
+            ],
+            "meals": 1,
+            "motor_head_count": 2,
+            "nonzero_deltas": 0,
+            "parent_sha256": "d83a995e802e41b8e17799b0871f75d9ede35f95850049777323112e636654d1",
+            "parent_weights_exact": true,
+            "reserved_work_units": 38111206,
+            "reverse_appearance": true,
+            "schema": 2135,
+            "seed": 2026111803,
+            "sourced_candidates": 37,
+            "spawned_food": 3,
+            "ticks": 512,
+            "typed_cold_exact": true,
+            "unfunded_admission_checks_atp_q16": 0
+          },
+          "decisions_after_first_capacity_rejection": null
+        },
+        {
+          "evidence_id": "r3-2026111803-off-reversed-v1",
+          "arm": "off",
+          "seed": 2026111803,
+          "completed": true,
+          "actual_recipe_gain": null,
+          "mask_new_context": null,
+          "compiled_phenotype_hash": null,
+          "compiler_inputs_digest": null,
+          "trace_intervals": 256,
+          "decisions": 256,
+          "first_consumption": {
+            "host_interval_zero_based": 116,
+            "sequence_id": 117,
+            "elapsed_host_intervals": 117,
+            "target_entity": 3,
+            "representative_family": "Inspect",
+            "representative_action_id": 4,
+            "manipulation_action_id": 210,
+            "hunger_delta": -0.18405747413635254
+          },
+          "meals": 2,
+          "meal_intervals": [
+            116,
+            188
+          ],
+          "first_authenticated_source": null,
+          "authenticated_sources": 0,
+          "first_source_use": null,
+          "first_fresh_target_source_use": null,
+          "first_new_scheduled_food_target_source_use": null,
+          "new_scheduled_food_target_source_uses": 0,
+          "fresh_target_source_uses": 0,
+          "source_uses": 0,
+          "first_nonzero_head_contribution": null,
+          "nonzero_candidate_contributions": 0,
+          "max_abs_delta": 0.0,
+          "first_capacity_rejection": null,
+          "last_capacity_rejection": null,
+          "read_admission": {},
+          "observation_admission": {},
+          "unfunded_checks_atp_q16": 0,
+          "reserved_research_work_units": 0,
+          "ingest_commands": 49,
+          "failed_ingest_containing_bundles": 47,
+          "toy_ingest_commands": 45,
+          "toy_manipulation_commands": 142,
+          "toy_physical_contacts": 90,
+          "initial_energy": 0.24939455,
+          "initial_atp": 0.37470844,
+          "initial_hunger": 0.81293726,
+          "record_without_consumption": 0,
+          "invalid_source_uses": 0,
+          "source_provenance": "dd8897485b79f564f9e68f8879a95d7e0b7cac1f",
+          "food_opportunities": [
+            {
+              "target_entity": 3,
+              "arrival_interval": 64,
+              "consumed_interval": 116,
+              "censored": false,
+              "time_to_meal_or_censor": 52
+            },
+            {
+              "target_entity": 4,
+              "arrival_interval": 128,
+              "consumed_interval": 188,
+              "censored": false,
+              "time_to_meal_or_censor": 60
+            },
+            {
+              "target_entity": 5,
+              "arrival_interval": 192,
+              "consumed_interval": null,
+              "censored": true,
+              "time_to_meal_or_censor": 64
+            }
+          ],
+          "censor_horizon_host_intervals": 256,
+          "summed_time_to_meal_or_censor": 176,
+          "final_energy": 0.49217865,
+          "final_atp": 0.51586306,
+          "final_health": 1.0,
+          "founder_optimizer_unchanged": true,
+          "founder_checkpoint_sha256": "ac58c2defaaa98ef0e0b386881a45ab1d6bc2cc0fa0c6632bb48b5c3d710f264",
+          "cold_exact": true,
+          "final_channel_observations": 0,
+          "ordinary_learning": {
+            "fast_changed_coordinates": 28264,
+            "eligibility_changed_coordinates": 28264,
+            "lifetime_changed_coordinates": 0
+          },
+          "summary": {
+            "alias": false,
+            "arm": "off",
+            "capacity_rejected": 0,
+            "construction_genome_sha256": "557da394c045d0b4353009c842825677aa7505f636d6252b20f67bfe0c3a5189",
+            "consumed_food": 2,
+            "context_rows": 0,
+            "decision_target": 256,
+            "decisions": 256,
+            "elapsed_host_intervals": 256,
+            "failed_ingest_containing_bundles": 47,
+            "first_hunger": 0.8129372596740723,
+            "food_nutrition": 0.6000000238418579,
+            "gain": 16.0,
+            "head_fixed_in_life": true,
+            "hunger_max": 0.8194290399551392,
+            "hunger_min": 0.5348516702651978,
+            "insufficient_atp": 0,
+            "leadin": 600,
+            "long_ppo_calls": 0,
+            "meal_hunger_deltas": [
+              -0.18405747413635254,
+              -0.18386781215667725
+            ],
+            "meals": 2,
+            "motor_head_count": 2,
+            "nonzero_deltas": 0,
+            "parent_sha256": "d83a995e802e41b8e17799b0871f75d9ede35f95850049777323112e636654d1",
+            "parent_weights_exact": true,
+            "reserved_work_units": 0,
+            "reverse_appearance": true,
+            "schema": 2135,
+            "seed": 2026111803,
+            "sourced_candidates": 0,
+            "spawned_food": 3,
+            "ticks": 512,
+            "typed_cold_exact": true,
+            "unfunded_admission_checks_atp_q16": 0
+          },
+          "decisions_after_first_capacity_rejection": null
+        },
+        {
+          "evidence_id": "r3-2026111803-zero-reversed-v1",
+          "arm": "zero",
+          "seed": 2026111803,
+          "completed": true,
+          "actual_recipe_gain": 0.0,
+          "mask_new_context": false,
+          "compiled_phenotype_hash": [
+            2492320278980643385,
+            12818529853968497949,
+            13620620114224192972,
+            16745773506267535591
+          ],
+          "compiler_inputs_digest": [
+            16701586347669242714,
+            16876662679357424260,
+            4700980492957098419,
+            7473245055121920825
+          ],
+          "trace_intervals": 256,
+          "decisions": 256,
+          "first_consumption": {
+            "host_interval_zero_based": 127,
+            "sequence_id": 128,
+            "elapsed_host_intervals": 128,
+            "target_entity": 3,
+            "representative_family": "Inspect",
+            "representative_action_id": 4,
+            "manipulation_action_id": 210,
+            "hunger_delta": -0.1836169958114624
+          },
+          "meals": 1,
+          "meal_intervals": [
+            127
+          ],
+          "first_authenticated_source": {
+            "host_interval_zero_based": 127,
+            "sequence_id": 128,
+            "target_entity": 3,
+            "tracked_object_id": 202937542181177,
+            "action_id": 210,
+            "observation_digest": [
+              165917410069381048,
+              8779761590638937809,
+              5093191700963710607,
+              9675717541013222734
+            ],
+            "representative_family": "Inspect"
+          },
+          "authenticated_sources": 1,
+          "first_source_use": {
+            "host_interval_zero_based": 128,
+            "sequence_id": 129,
+            "source_sequence_id": 128,
+            "target_entity": 4,
+            "fresh_target": true,
+            "target_arrival_interval": 128,
+            "new_scheduled_food_target": true,
+            "desirability": 0.05726024508476257,
+            "delta": 0.0
+          },
+          "first_fresh_target_source_use": {
+            "host_interval_zero_based": 128,
+            "sequence_id": 129,
+            "source_sequence_id": 128,
+            "target_entity": 4,
+            "fresh_target": true,
+            "target_arrival_interval": 128,
+            "new_scheduled_food_target": true,
+            "desirability": 0.05726024508476257,
+            "delta": 0.0
+          },
+          "first_new_scheduled_food_target_source_use": {
+            "host_interval_zero_based": 128,
+            "sequence_id": 129,
+            "source_sequence_id": 128,
+            "target_entity": 4,
+            "fresh_target": true,
+            "target_arrival_interval": 128,
+            "new_scheduled_food_target": true,
+            "desirability": 0.05726024508476257,
+            "delta": 0.0
+          },
+          "new_scheduled_food_target_source_uses": 37,
+          "fresh_target_source_uses": 37,
+          "source_uses": 37,
+          "first_nonzero_head_contribution": null,
+          "nonzero_candidate_contributions": 0,
+          "max_abs_delta": 0.0,
+          "first_capacity_rejection": null,
+          "last_capacity_rejection": null,
+          "read_admission": {
+            "Admitted": 165,
+            "InsufficientAtp": 91
+          },
+          "observation_admission": {
+            "Admitted": 256
+          },
+          "unfunded_checks_atp_q16": 0,
+          "reserved_research_work_units": 38111206,
+          "ingest_commands": 49,
+          "failed_ingest_containing_bundles": 48,
+          "toy_ingest_commands": 44,
+          "toy_manipulation_commands": 126,
+          "toy_physical_contacts": 74,
+          "initial_energy": 0.24939455,
+          "initial_atp": 0.37470844,
+          "initial_hunger": 0.81293726,
+          "record_without_consumption": 0,
+          "invalid_source_uses": 0,
+          "source_provenance": "dd8897485b79f564f9e68f8879a95d7e0b7cac1f",
+          "food_opportunities": [
+            {
+              "target_entity": 3,
+              "arrival_interval": 64,
+              "consumed_interval": 127,
+              "censored": false,
+              "time_to_meal_or_censor": 63
+            },
+            {
+              "target_entity": 4,
+              "arrival_interval": 128,
+              "consumed_interval": null,
+              "censored": true,
+              "time_to_meal_or_censor": 128
+            },
+            {
+              "target_entity": 5,
+              "arrival_interval": 192,
+              "consumed_interval": null,
+              "censored": true,
+              "time_to_meal_or_censor": 64
+            }
+          ],
+          "censor_horizon_host_intervals": 256,
+          "summed_time_to_meal_or_censor": 255,
+          "final_energy": 0.2653559,
+          "final_atp": 0.38653517,
+          "final_health": 1.0,
+          "founder_optimizer_unchanged": true,
+          "founder_checkpoint_sha256": "ac58c2defaaa98ef0e0b386881a45ab1d6bc2cc0fa0c6632bb48b5c3d710f264",
+          "cold_exact": true,
+          "final_channel_observations": 1,
+          "ordinary_learning": {
+            "fast_changed_coordinates": 28112,
+            "eligibility_changed_coordinates": 28112,
+            "lifetime_changed_coordinates": 0
+          },
+          "summary": {
+            "alias": false,
+            "arm": "zero",
+            "capacity_rejected": 0,
+            "construction_genome_sha256": "557da394c045d0b4353009c842825677aa7505f636d6252b20f67bfe0c3a5189",
+            "consumed_food": 1,
+            "context_rows": 256,
+            "decision_target": 256,
+            "decisions": 256,
+            "elapsed_host_intervals": 256,
+            "failed_ingest_containing_bundles": 48,
+            "first_hunger": 0.8129372596740723,
+            "food_nutrition": 0.6000000238418579,
+            "gain": 16.0,
+            "head_fixed_in_life": true,
+            "hunger_max": 0.8488887548446655,
+            "hunger_min": 0.6652717590332031,
+            "insufficient_atp": 91,
+            "leadin": 600,
+            "long_ppo_calls": 0,
+            "meal_hunger_deltas": [
+              -0.1836169958114624
+            ],
+            "meals": 1,
+            "motor_head_count": 2,
+            "nonzero_deltas": 0,
+            "parent_sha256": "d83a995e802e41b8e17799b0871f75d9ede35f95850049777323112e636654d1",
+            "parent_weights_exact": true,
+            "reserved_work_units": 38111206,
+            "reverse_appearance": true,
+            "schema": 2135,
+            "seed": 2026111803,
+            "sourced_candidates": 37,
+            "spawned_food": 3,
+            "ticks": 512,
+            "typed_cold_exact": true,
+            "unfunded_admission_checks_atp_q16": 0
+          },
+          "decisions_after_first_capacity_rejection": null
+        }
+      ],
+      "comparisons": [
+        {
+          "arms": [
+            "zero",
+            "mask"
+          ],
+          "common_intervals": 256,
+          "first_source_boundary": 127,
+          "differences": {
+            "state": {
+              "count": 0,
+              "first_interval": null,
+              "before_first_source": 0
+            },
+            "actions": {
+              "count": 0,
+              "first_interval": null,
+              "before_first_source": 0
+            },
+            "representative_choice": {
+              "count": 0,
+              "first_interval": null,
+              "before_first_source": 0
+            },
+            "committed_bundle_details": {
+              "count": 0,
+              "first_interval": null,
+              "before_first_source": 0
+            },
+            "log_probability": {
+              "count": 0,
+              "first_interval": null,
+              "before_first_source": 0
+            },
+            "representative_logit": {
+              "count": 0,
+              "first_interval": null,
+              "before_first_source": 0
+            }
+          }
+        },
+        {
+          "arms": [
+            "active",
+            "zero"
+          ],
+          "common_intervals": 256,
+          "first_source_boundary": 127,
+          "differences": {
+            "state": {
+              "count": 123,
+              "first_interval": 133,
+              "before_first_source": 0
+            },
+            "actions": {
+              "count": 9,
+              "first_interval": 133,
+              "before_first_source": 0
+            },
+            "representative_choice": {
+              "count": 7,
+              "first_interval": 133,
+              "before_first_source": 0
+            },
+            "committed_bundle_details": {
+              "count": 121,
+              "first_interval": 133,
+              "before_first_source": 0
+            },
+            "log_probability": {
+              "count": 128,
+              "first_interval": 128,
+              "before_first_source": 0
+            },
+            "representative_logit": {
+              "count": 128,
+              "first_interval": 128,
+              "before_first_source": 0
+            }
+          }
+        },
+        {
+          "arms": [
+            "active",
+            "mask"
+          ],
+          "common_intervals": 256,
+          "first_source_boundary": 127,
+          "differences": {
+            "state": {
+              "count": 123,
+              "first_interval": 133,
+              "before_first_source": 0
+            },
+            "actions": {
+              "count": 9,
+              "first_interval": 133,
+              "before_first_source": 0
+            },
+            "representative_choice": {
+              "count": 7,
+              "first_interval": 133,
+              "before_first_source": 0
+            },
+            "committed_bundle_details": {
+              "count": 121,
+              "first_interval": 133,
+              "before_first_source": 0
+            },
+            "log_probability": {
+              "count": 128,
+              "first_interval": 128,
+              "before_first_source": 0
+            },
+            "representative_logit": {
+              "count": 128,
+              "first_interval": 128,
+              "before_first_source": 0
+            }
+          }
+        },
+        {
+          "arms": [
+            "off",
+            "zero"
+          ],
+          "common_intervals": 256,
+          "first_source_boundary": 127,
+          "differences": {
+            "state": {
+              "count": 256,
+              "first_interval": 0,
+              "before_first_source": 127
+            },
+            "actions": {
+              "count": 88,
+              "first_interval": 38,
+              "before_first_source": 19
+            },
+            "representative_choice": {
+              "count": 54,
+              "first_interval": 59,
+              "before_first_source": 9
+            },
+            "committed_bundle_details": {
+              "count": 254,
+              "first_interval": 2,
+              "before_first_source": 125
+            },
+            "log_probability": {
+              "count": 254,
+              "first_interval": 2,
+              "before_first_source": 125
+            },
+            "representative_logit": {
+              "count": 254,
+              "first_interval": 2,
+              "before_first_source": 125
+            }
+          }
+        }
+      ]
+    },
+    {
+      "seed": 2026111804,
+      "reverse_appearance": false,
+      "alias": false,
+      "food_nutrition": 0.6,
+      "complete": true,
+      "followup_gate": false,
+      "arms": [
+        {
+          "evidence_id": "r3-2026111804-active-standard-v1",
+          "arm": "active",
+          "seed": 2026111804,
+          "completed": true,
+          "actual_recipe_gain": 16.0,
+          "mask_new_context": false,
+          "compiled_phenotype_hash": [
+            2492320278980643385,
+            12818529853968497949,
+            13620620114224192972,
+            16745773506267535591
+          ],
+          "compiler_inputs_digest": [
+            16701586347669242714,
+            16876662679357424260,
+            4700980492957098419,
+            7473245055121920825
+          ],
+          "trace_intervals": 256,
+          "decisions": 256,
+          "first_consumption": {
+            "host_interval_zero_based": 134,
+            "sequence_id": 135,
+            "elapsed_host_intervals": 135,
+            "target_entity": 3,
+            "representative_family": "Approach",
+            "representative_action_id": 101,
+            "manipulation_action_id": 210,
+            "hunger_delta": -0.18369215726852417
+          },
+          "meals": 1,
+          "meal_intervals": [
+            134
+          ],
+          "first_authenticated_source": {
+            "host_interval_zero_based": 134,
+            "sequence_id": 135,
+            "target_entity": 3,
+            "tracked_object_id": 101100288751228,
+            "action_id": 210,
+            "observation_digest": [
+              6730334038771243335,
+              18124065801355801374,
+              11662433785253317838,
+              9475323132258901371
+            ],
+            "representative_family": "Approach"
+          },
+          "authenticated_sources": 1,
+          "first_source_use": {
+            "host_interval_zero_based": 135,
+            "sequence_id": 136,
+            "source_sequence_id": 135,
+            "target_entity": 4,
+            "fresh_target": true,
+            "target_arrival_interval": 128,
+            "new_scheduled_food_target": false,
+            "desirability": 0.05752693861722946,
+            "delta": 0.4754389226436615
+          },
+          "first_fresh_target_source_use": {
+            "host_interval_zero_based": 135,
+            "sequence_id": 136,
+            "source_sequence_id": 135,
+            "target_entity": 4,
+            "fresh_target": true,
+            "target_arrival_interval": 128,
+            "new_scheduled_food_target": false,
+            "desirability": 0.05752693861722946,
+            "delta": 0.4754389226436615
+          },
+          "first_new_scheduled_food_target_source_use": null,
+          "new_scheduled_food_target_source_uses": 0,
+          "fresh_target_source_uses": 31,
+          "source_uses": 31,
+          "first_nonzero_head_contribution": {
+            "host_interval_zero_based": 135,
+            "sequence_id": 136,
+            "delta": 0.4754389226436615
+          },
+          "nonzero_candidate_contributions": 31,
+          "max_abs_delta": 0.4835818409919739,
+          "first_capacity_rejection": null,
+          "last_capacity_rejection": null,
+          "read_admission": {
+            "Admitted": 160,
+            "InsufficientAtp": 96
+          },
+          "observation_admission": {
+            "Admitted": 256
+          },
+          "unfunded_checks_atp_q16": 0,
+          "reserved_research_work_units": 36446564,
+          "ingest_commands": 52,
+          "failed_ingest_containing_bundles": 51,
+          "toy_ingest_commands": 47,
+          "toy_manipulation_commands": 123,
+          "toy_physical_contacts": 66,
+          "initial_energy": 0.24939455,
+          "initial_atp": 0.37470844,
+          "initial_hunger": 0.81293726,
+          "record_without_consumption": 0,
+          "invalid_source_uses": 0,
+          "source_provenance": "dd8897485b79f564f9e68f8879a95d7e0b7cac1f",
+          "food_opportunities": [
+            {
+              "target_entity": 3,
+              "arrival_interval": 64,
+              "consumed_interval": 134,
+              "censored": false,
+              "time_to_meal_or_censor": 70
+            },
+            {
+              "target_entity": 4,
+              "arrival_interval": 128,
+              "consumed_interval": null,
+              "censored": true,
+              "time_to_meal_or_censor": 128
+            },
+            {
+              "target_entity": 5,
+              "arrival_interval": 192,
+              "consumed_interval": null,
+              "censored": true,
+              "time_to_meal_or_censor": 64
+            }
+          ],
+          "censor_horizon_host_intervals": 256,
+          "summed_time_to_meal_or_censor": 262,
+          "final_energy": 0.26978385,
+          "final_atp": 0.38920292,
+          "final_health": 1.0,
+          "founder_optimizer_unchanged": true,
+          "founder_checkpoint_sha256": "ac58c2defaaa98ef0e0b386881a45ab1d6bc2cc0fa0c6632bb48b5c3d710f264",
+          "cold_exact": true,
+          "final_channel_observations": 1,
+          "ordinary_learning": {
+            "fast_changed_coordinates": 28320,
+            "eligibility_changed_coordinates": 28320,
+            "lifetime_changed_coordinates": 0
+          },
+          "summary": {
+            "alias": false,
+            "arm": "active",
+            "capacity_rejected": 0,
+            "construction_genome_sha256": "557da394c045d0b4353009c842825677aa7505f636d6252b20f67bfe0c3a5189",
+            "consumed_food": 1,
+            "context_rows": 256,
+            "decision_target": 256,
+            "decisions": 256,
+            "elapsed_host_intervals": 256,
+            "failed_ingest_containing_bundles": 51,
+            "first_hunger": 0.8129372596740723,
+            "food_nutrition": 0.6000000238418579,
+            "gain": 16.0,
+            "head_fixed_in_life": true,
+            "hunger_max": 0.8517889380455017,
+            "hunger_min": 0.6680967807769775,
+            "insufficient_atp": 96,
+            "leadin": 600,
+            "long_ppo_calls": 0,
+            "meal_hunger_deltas": [
+              -0.18369215726852417
+            ],
+            "meals": 1,
+            "motor_head_count": 2,
+            "nonzero_deltas": 31,
+            "parent_sha256": "d83a995e802e41b8e17799b0871f75d9ede35f95850049777323112e636654d1",
+            "parent_weights_exact": true,
+            "reserved_work_units": 36446564,
+            "reverse_appearance": false,
+            "schema": 2135,
+            "seed": 2026111804,
+            "sourced_candidates": 31,
+            "spawned_food": 3,
+            "ticks": 512,
+            "typed_cold_exact": true,
+            "unfunded_admission_checks_atp_q16": 0
+          },
+          "decisions_after_first_capacity_rejection": null
+        },
+        {
+          "evidence_id": "r3-2026111804-mask-standard-v1",
+          "arm": "mask",
+          "seed": 2026111804,
+          "completed": true,
+          "actual_recipe_gain": 16.0,
+          "mask_new_context": true,
+          "compiled_phenotype_hash": [
+            2492320278980643385,
+            12818529853968497949,
+            13620620114224192972,
+            16745773506267535591
+          ],
+          "compiler_inputs_digest": [
+            16701586347669242714,
+            16876662679357424260,
+            4700980492957098419,
+            7473245055121920825
+          ],
+          "trace_intervals": 256,
+          "decisions": 256,
+          "first_consumption": {
+            "host_interval_zero_based": 134,
+            "sequence_id": 135,
+            "elapsed_host_intervals": 135,
+            "target_entity": 3,
+            "representative_family": "Approach",
+            "representative_action_id": 101,
+            "manipulation_action_id": 210,
+            "hunger_delta": -0.18369215726852417
+          },
+          "meals": 2,
+          "meal_intervals": [
+            134,
+            239
+          ],
+          "first_authenticated_source": {
+            "host_interval_zero_based": 134,
+            "sequence_id": 135,
+            "target_entity": 3,
+            "tracked_object_id": 101100288751228,
+            "action_id": 210,
+            "observation_digest": [
+              6730334038771243335,
+              18124065801355801374,
+              11662433785253317838,
+              9475323132258901371
+            ],
+            "representative_family": "Approach"
+          },
+          "authenticated_sources": 2,
+          "first_source_use": {
+            "host_interval_zero_based": 135,
+            "sequence_id": 136,
+            "source_sequence_id": 135,
+            "target_entity": 4,
+            "fresh_target": true,
+            "target_arrival_interval": 128,
+            "new_scheduled_food_target": false,
+            "desirability": 0.05752693861722946,
+            "delta": 0.0
+          },
+          "first_fresh_target_source_use": {
+            "host_interval_zero_based": 135,
+            "sequence_id": 136,
+            "source_sequence_id": 135,
+            "target_entity": 4,
+            "fresh_target": true,
+            "target_arrival_interval": 128,
+            "new_scheduled_food_target": false,
+            "desirability": 0.05752693861722946,
+            "delta": 0.0
+          },
+          "first_new_scheduled_food_target_source_use": null,
+          "new_scheduled_food_target_source_uses": 0,
+          "fresh_target_source_uses": 29,
+          "source_uses": 29,
+          "first_nonzero_head_contribution": null,
+          "nonzero_candidate_contributions": 0,
+          "max_abs_delta": 0.0,
+          "first_capacity_rejection": {
+            "host_interval_zero_based": 252,
+            "sequence_id": 253,
+            "limit": 64,
+            "records": 65
+          },
+          "last_capacity_rejection": {
+            "host_interval_zero_based": 255,
+            "sequence_id": 256,
+            "limit": 64,
+            "records": 66
+          },
+          "read_admission": {
+            "Admitted": 158,
+            "InsufficientAtp": 94,
+            "BankCapacityExceeded": 4
+          },
+          "observation_admission": {
+            "Admitted": 256
+          },
+          "unfunded_checks_atp_q16": 0,
+          "reserved_research_work_units": 35856680,
+          "ingest_commands": 52,
+          "failed_ingest_containing_bundles": 51,
+          "toy_ingest_commands": 48,
+          "toy_manipulation_commands": 121,
+          "toy_physical_contacts": 70,
+          "initial_energy": 0.24939455,
+          "initial_atp": 0.37470844,
+          "initial_hunger": 0.81293726,
+          "record_without_consumption": 0,
+          "invalid_source_uses": 0,
+          "source_provenance": "dd8897485b79f564f9e68f8879a95d7e0b7cac1f",
+          "food_opportunities": [
+            {
+              "target_entity": 3,
+              "arrival_interval": 64,
+              "consumed_interval": 134,
+              "censored": false,
+              "time_to_meal_or_censor": 70
+            },
+            {
+              "target_entity": 4,
+              "arrival_interval": 128,
+              "consumed_interval": 239,
+              "censored": false,
+              "time_to_meal_or_censor": 111
+            },
+            {
+              "target_entity": 5,
+              "arrival_interval": 192,
+              "consumed_interval": null,
+              "censored": true,
+              "time_to_meal_or_censor": 64
+            }
+          ],
+          "censor_horizon_host_intervals": 256,
+          "summed_time_to_meal_or_censor": 245,
+          "final_energy": 0.40760228,
+          "final_atp": 0.5930666,
+          "final_health": 1.0,
+          "founder_optimizer_unchanged": true,
+          "founder_checkpoint_sha256": "ac58c2defaaa98ef0e0b386881a45ab1d6bc2cc0fa0c6632bb48b5c3d710f264",
+          "cold_exact": true,
+          "final_channel_observations": 2,
+          "ordinary_learning": {
+            "fast_changed_coordinates": 28320,
+            "eligibility_changed_coordinates": 28320,
+            "lifetime_changed_coordinates": 0
+          },
+          "summary": {
+            "alias": false,
+            "arm": "mask",
+            "capacity_rejected": 4,
+            "construction_genome_sha256": "557da394c045d0b4353009c842825677aa7505f636d6252b20f67bfe0c3a5189",
+            "consumed_food": 2,
+            "context_rows": 256,
+            "decision_target": 256,
+            "decisions": 256,
+            "elapsed_host_intervals": 256,
+            "failed_ingest_containing_bundles": 51,
+            "first_hunger": 0.8129372596740723,
+            "food_nutrition": 0.6000000238418579,
+            "gain": 16.0,
+            "head_fixed_in_life": true,
+            "hunger_max": 0.8517889380455017,
+            "hunger_min": 0.6051987409591675,
+            "insufficient_atp": 94,
+            "leadin": 600,
+            "long_ppo_calls": 0,
+            "meal_hunger_deltas": [
+              -0.18369215726852417,
+              -0.18392062187194824
+            ],
+            "meals": 2,
+            "motor_head_count": 2,
+            "nonzero_deltas": 0,
+            "parent_sha256": "d83a995e802e41b8e17799b0871f75d9ede35f95850049777323112e636654d1",
+            "parent_weights_exact": true,
+            "reserved_work_units": 35856680,
+            "reverse_appearance": false,
+            "schema": 2135,
+            "seed": 2026111804,
+            "sourced_candidates": 29,
+            "spawned_food": 3,
+            "ticks": 512,
+            "typed_cold_exact": true,
+            "unfunded_admission_checks_atp_q16": 0
+          },
+          "decisions_after_first_capacity_rejection": 3
+        },
+        {
+          "evidence_id": "r3-2026111804-off-standard-v1",
+          "arm": "off",
+          "seed": 2026111804,
+          "completed": true,
+          "actual_recipe_gain": null,
+          "mask_new_context": null,
+          "compiled_phenotype_hash": null,
+          "compiler_inputs_digest": null,
+          "trace_intervals": 256,
+          "decisions": 256,
+          "first_consumption": {
+            "host_interval_zero_based": 119,
+            "sequence_id": 120,
+            "elapsed_host_intervals": 120,
+            "target_entity": 3,
+            "representative_family": "Inspect",
+            "representative_action_id": 4,
+            "manipulation_action_id": 210,
+            "hunger_delta": -0.18405741453170776
+          },
+          "meals": 1,
+          "meal_intervals": [
+            119
+          ],
+          "first_authenticated_source": null,
+          "authenticated_sources": 0,
+          "first_source_use": null,
+          "first_fresh_target_source_use": null,
+          "first_new_scheduled_food_target_source_use": null,
+          "new_scheduled_food_target_source_uses": 0,
+          "fresh_target_source_uses": 0,
+          "source_uses": 0,
+          "first_nonzero_head_contribution": null,
+          "nonzero_candidate_contributions": 0,
+          "max_abs_delta": 0.0,
+          "first_capacity_rejection": null,
+          "last_capacity_rejection": null,
+          "read_admission": {},
+          "observation_admission": {},
+          "unfunded_checks_atp_q16": 0,
+          "reserved_research_work_units": 0,
+          "ingest_commands": 53,
+          "failed_ingest_containing_bundles": 51,
+          "toy_ingest_commands": 47,
+          "toy_manipulation_commands": 131,
+          "toy_physical_contacts": 75,
+          "initial_energy": 0.24939455,
+          "initial_atp": 0.37470844,
+          "initial_hunger": 0.81293726,
+          "record_without_consumption": 0,
+          "invalid_source_uses": 0,
+          "source_provenance": "dd8897485b79f564f9e68f8879a95d7e0b7cac1f",
+          "food_opportunities": [
+            {
+              "target_entity": 3,
+              "arrival_interval": 64,
+              "consumed_interval": 119,
+              "censored": false,
+              "time_to_meal_or_censor": 55
+            },
+            {
+              "target_entity": 4,
+              "arrival_interval": 128,
+              "consumed_interval": null,
+              "censored": true,
+              "time_to_meal_or_censor": 128
+            },
+            {
+              "target_entity": 5,
+              "arrival_interval": 192,
+              "consumed_interval": null,
+              "censored": true,
+              "time_to_meal_or_censor": 64
+            }
+          ],
+          "censor_horizon_host_intervals": 256,
+          "summed_time_to_meal_or_censor": 247,
+          "final_energy": 0.36005697,
+          "final_atp": 0.43221697,
+          "final_health": 1.0,
+          "founder_optimizer_unchanged": true,
+          "founder_checkpoint_sha256": "ac58c2defaaa98ef0e0b386881a45ab1d6bc2cc0fa0c6632bb48b5c3d710f264",
+          "cold_exact": true,
+          "final_channel_observations": 0,
+          "ordinary_learning": {
+            "fast_changed_coordinates": 28512,
+            "eligibility_changed_coordinates": 28512,
+            "lifetime_changed_coordinates": 0
+          },
+          "summary": {
+            "alias": false,
+            "arm": "off",
+            "capacity_rejected": 0,
+            "construction_genome_sha256": "557da394c045d0b4353009c842825677aa7505f636d6252b20f67bfe0c3a5189",
+            "consumed_food": 1,
+            "context_rows": 0,
+            "decision_target": 256,
+            "decisions": 256,
+            "elapsed_host_intervals": 256,
+            "failed_ingest_containing_bundles": 51,
+            "first_hunger": 0.8129372596740723,
+            "food_nutrition": 0.6000000238418579,
+            "gain": 16.0,
+            "head_fixed_in_life": true,
+            "hunger_max": 0.819519579410553,
+            "hunger_min": 0.6354621648788452,
+            "insufficient_atp": 0,
+            "leadin": 600,
+            "long_ppo_calls": 0,
+            "meal_hunger_deltas": [
+              -0.18405741453170776
+            ],
+            "meals": 1,
+            "motor_head_count": 2,
+            "nonzero_deltas": 0,
+            "parent_sha256": "d83a995e802e41b8e17799b0871f75d9ede35f95850049777323112e636654d1",
+            "parent_weights_exact": true,
+            "reserved_work_units": 0,
+            "reverse_appearance": false,
+            "schema": 2135,
+            "seed": 2026111804,
+            "sourced_candidates": 0,
+            "spawned_food": 3,
+            "ticks": 512,
+            "typed_cold_exact": true,
+            "unfunded_admission_checks_atp_q16": 0
+          },
+          "decisions_after_first_capacity_rejection": null
+        },
+        {
+          "evidence_id": "r3-2026111804-zero-standard-v1",
+          "arm": "zero",
+          "seed": 2026111804,
+          "completed": true,
+          "actual_recipe_gain": 0.0,
+          "mask_new_context": false,
+          "compiled_phenotype_hash": [
+            2492320278980643385,
+            12818529853968497949,
+            13620620114224192972,
+            16745773506267535591
+          ],
+          "compiler_inputs_digest": [
+            16701586347669242714,
+            16876662679357424260,
+            4700980492957098419,
+            7473245055121920825
+          ],
+          "trace_intervals": 256,
+          "decisions": 256,
+          "first_consumption": {
+            "host_interval_zero_based": 134,
+            "sequence_id": 135,
+            "elapsed_host_intervals": 135,
+            "target_entity": 3,
+            "representative_family": "Approach",
+            "representative_action_id": 101,
+            "manipulation_action_id": 210,
+            "hunger_delta": -0.18369215726852417
+          },
+          "meals": 2,
+          "meal_intervals": [
+            134,
+            239
+          ],
+          "first_authenticated_source": {
+            "host_interval_zero_based": 134,
+            "sequence_id": 135,
+            "target_entity": 3,
+            "tracked_object_id": 101100288751228,
+            "action_id": 210,
+            "observation_digest": [
+              6730334038771243335,
+              18124065801355801374,
+              11662433785253317838,
+              9475323132258901371
+            ],
+            "representative_family": "Approach"
+          },
+          "authenticated_sources": 2,
+          "first_source_use": {
+            "host_interval_zero_based": 135,
+            "sequence_id": 136,
+            "source_sequence_id": 135,
+            "target_entity": 4,
+            "fresh_target": true,
+            "target_arrival_interval": 128,
+            "new_scheduled_food_target": false,
+            "desirability": 0.05752693861722946,
+            "delta": 0.0
+          },
+          "first_fresh_target_source_use": {
+            "host_interval_zero_based": 135,
+            "sequence_id": 136,
+            "source_sequence_id": 135,
+            "target_entity": 4,
+            "fresh_target": true,
+            "target_arrival_interval": 128,
+            "new_scheduled_food_target": false,
+            "desirability": 0.05752693861722946,
+            "delta": 0.0
+          },
+          "first_new_scheduled_food_target_source_use": null,
+          "new_scheduled_food_target_source_uses": 0,
+          "fresh_target_source_uses": 29,
+          "source_uses": 29,
+          "first_nonzero_head_contribution": null,
+          "nonzero_candidate_contributions": 0,
+          "max_abs_delta": 0.0,
+          "first_capacity_rejection": {
+            "host_interval_zero_based": 252,
+            "sequence_id": 253,
+            "limit": 64,
+            "records": 65
+          },
+          "last_capacity_rejection": {
+            "host_interval_zero_based": 255,
+            "sequence_id": 256,
+            "limit": 64,
+            "records": 66
+          },
+          "read_admission": {
+            "Admitted": 158,
+            "InsufficientAtp": 94,
+            "BankCapacityExceeded": 4
+          },
+          "observation_admission": {
+            "Admitted": 256
+          },
+          "unfunded_checks_atp_q16": 0,
+          "reserved_research_work_units": 35856680,
+          "ingest_commands": 52,
+          "failed_ingest_containing_bundles": 51,
+          "toy_ingest_commands": 48,
+          "toy_manipulation_commands": 121,
+          "toy_physical_contacts": 70,
+          "initial_energy": 0.24939455,
+          "initial_atp": 0.37470844,
+          "initial_hunger": 0.81293726,
+          "record_without_consumption": 0,
+          "invalid_source_uses": 0,
+          "source_provenance": "dd8897485b79f564f9e68f8879a95d7e0b7cac1f",
+          "food_opportunities": [
+            {
+              "target_entity": 3,
+              "arrival_interval": 64,
+              "consumed_interval": 134,
+              "censored": false,
+              "time_to_meal_or_censor": 70
+            },
+            {
+              "target_entity": 4,
+              "arrival_interval": 128,
+              "consumed_interval": 239,
+              "censored": false,
+              "time_to_meal_or_censor": 111
+            },
+            {
+              "target_entity": 5,
+              "arrival_interval": 192,
+              "consumed_interval": null,
+              "censored": true,
+              "time_to_meal_or_censor": 64
+            }
+          ],
+          "censor_horizon_host_intervals": 256,
+          "summed_time_to_meal_or_censor": 245,
+          "final_energy": 0.40760228,
+          "final_atp": 0.5930666,
+          "final_health": 1.0,
+          "founder_optimizer_unchanged": true,
+          "founder_checkpoint_sha256": "ac58c2defaaa98ef0e0b386881a45ab1d6bc2cc0fa0c6632bb48b5c3d710f264",
+          "cold_exact": true,
+          "final_channel_observations": 2,
+          "ordinary_learning": {
+            "fast_changed_coordinates": 28320,
+            "eligibility_changed_coordinates": 28320,
+            "lifetime_changed_coordinates": 0
+          },
+          "summary": {
+            "alias": false,
+            "arm": "zero",
+            "capacity_rejected": 4,
+            "construction_genome_sha256": "557da394c045d0b4353009c842825677aa7505f636d6252b20f67bfe0c3a5189",
+            "consumed_food": 2,
+            "context_rows": 256,
+            "decision_target": 256,
+            "decisions": 256,
+            "elapsed_host_intervals": 256,
+            "failed_ingest_containing_bundles": 51,
+            "first_hunger": 0.8129372596740723,
+            "food_nutrition": 0.6000000238418579,
+            "gain": 16.0,
+            "head_fixed_in_life": true,
+            "hunger_max": 0.8517889380455017,
+            "hunger_min": 0.6051987409591675,
+            "insufficient_atp": 94,
+            "leadin": 600,
+            "long_ppo_calls": 0,
+            "meal_hunger_deltas": [
+              -0.18369215726852417,
+              -0.18392062187194824
+            ],
+            "meals": 2,
+            "motor_head_count": 2,
+            "nonzero_deltas": 0,
+            "parent_sha256": "d83a995e802e41b8e17799b0871f75d9ede35f95850049777323112e636654d1",
+            "parent_weights_exact": true,
+            "reserved_work_units": 35856680,
+            "reverse_appearance": false,
+            "schema": 2135,
+            "seed": 2026111804,
+            "sourced_candidates": 29,
+            "spawned_food": 3,
+            "ticks": 512,
+            "typed_cold_exact": true,
+            "unfunded_admission_checks_atp_q16": 0
+          },
+          "decisions_after_first_capacity_rejection": 3
+        }
+      ],
+      "comparisons": [
+        {
+          "arms": [
+            "zero",
+            "mask"
+          ],
+          "common_intervals": 256,
+          "first_source_boundary": 134,
+          "differences": {
+            "state": {
+              "count": 0,
+              "first_interval": null,
+              "before_first_source": 0
+            },
+            "actions": {
+              "count": 0,
+              "first_interval": null,
+              "before_first_source": 0
+            },
+            "representative_choice": {
+              "count": 0,
+              "first_interval": null,
+              "before_first_source": 0
+            },
+            "committed_bundle_details": {
+              "count": 0,
+              "first_interval": null,
+              "before_first_source": 0
+            },
+            "log_probability": {
+              "count": 0,
+              "first_interval": null,
+              "before_first_source": 0
+            },
+            "representative_logit": {
+              "count": 0,
+              "first_interval": null,
+              "before_first_source": 0
+            }
+          }
+        },
+        {
+          "arms": [
+            "active",
+            "zero"
+          ],
+          "common_intervals": 256,
+          "first_source_boundary": 134,
+          "differences": {
+            "state": {
+              "count": 119,
+              "first_interval": 137,
+              "before_first_source": 0
+            },
+            "actions": {
+              "count": 47,
+              "first_interval": 137,
+              "before_first_source": 0
+            },
+            "representative_choice": {
+              "count": 41,
+              "first_interval": 137,
+              "before_first_source": 0
+            },
+            "committed_bundle_details": {
+              "count": 117,
+              "first_interval": 137,
+              "before_first_source": 0
+            },
+            "log_probability": {
+              "count": 121,
+              "first_interval": 135,
+              "before_first_source": 0
+            },
+            "representative_logit": {
+              "count": 121,
+              "first_interval": 135,
+              "before_first_source": 0
+            }
+          }
+        },
+        {
+          "arms": [
+            "active",
+            "mask"
+          ],
+          "common_intervals": 256,
+          "first_source_boundary": 134,
+          "differences": {
+            "state": {
+              "count": 119,
+              "first_interval": 137,
+              "before_first_source": 0
+            },
+            "actions": {
+              "count": 47,
+              "first_interval": 137,
+              "before_first_source": 0
+            },
+            "representative_choice": {
+              "count": 41,
+              "first_interval": 137,
+              "before_first_source": 0
+            },
+            "committed_bundle_details": {
+              "count": 117,
+              "first_interval": 137,
+              "before_first_source": 0
+            },
+            "log_probability": {
+              "count": 121,
+              "first_interval": 135,
+              "before_first_source": 0
+            },
+            "representative_logit": {
+              "count": 121,
+              "first_interval": 135,
+              "before_first_source": 0
+            }
+          }
+        },
+        {
+          "arms": [
+            "off",
+            "zero"
+          ],
+          "common_intervals": 256,
+          "first_source_boundary": 134,
+          "differences": {
+            "state": {
+              "count": 256,
+              "first_interval": 0,
+              "before_first_source": 134
+            },
+            "actions": {
+              "count": 129,
+              "first_interval": 78,
+              "before_first_source": 23
+            },
+            "representative_choice": {
+              "count": 94,
+              "first_interval": 115,
+              "before_first_source": 15
+            },
+            "committed_bundle_details": {
+              "count": 249,
+              "first_interval": 7,
+              "before_first_source": 127
+            },
+            "log_probability": {
+              "count": 254,
+              "first_interval": 2,
+              "before_first_source": 132
+            },
+            "representative_logit": {
+              "count": 253,
+              "first_interval": 2,
+              "before_first_source": 131
+            }
+          }
+        }
+      ]
+    },
+    {
+      "seed": 2026111804,
+      "reverse_appearance": false,
+      "alias": true,
+      "food_nutrition": 0.15,
+      "complete": true,
+      "followup_gate": false,
+      "arms": [
+        {
+          "evidence_id": "r3-2026111804-active-alias-low-diet-v1",
+          "arm": "active",
+          "seed": 2026111804,
+          "completed": true,
+          "actual_recipe_gain": 16.0,
+          "mask_new_context": false,
+          "compiled_phenotype_hash": [
+            2492320278980643385,
+            12818529853968497949,
+            13620620114224192972,
+            16745773506267535591
+          ],
+          "compiler_inputs_digest": [
+            16701586347669242714,
+            16876662679357424260,
+            4700980492957098419,
+            7473245055121920825
+          ],
+          "trace_intervals": 256,
+          "decisions": 256,
+          "first_consumption": {
+            "host_interval_zero_based": 134,
+            "sequence_id": 135,
+            "elapsed_host_intervals": 135,
+            "target_entity": 3,
+            "representative_family": "Approach",
+            "representative_action_id": 101,
+            "manipulation_action_id": 210,
+            "hunger_delta": -0.04559588432312012
+          },
+          "meals": 1,
+          "meal_intervals": [
+            134
+          ],
+          "first_authenticated_source": {
+            "host_interval_zero_based": 134,
+            "sequence_id": 135,
+            "target_entity": 3,
+            "tracked_object_id": 101100288751228,
+            "action_id": 210,
+            "observation_digest": [
+              9188190499441660827,
+              419876794849943401,
+              9769246193042435488,
+              7485325185133370461
+            ],
+            "representative_family": "Approach"
+          },
+          "authenticated_sources": 1,
+          "first_source_use": {
+            "host_interval_zero_based": 135,
+            "sequence_id": 136,
+            "source_sequence_id": 135,
+            "target_entity": 4,
+            "fresh_target": true,
+            "target_arrival_interval": 128,
+            "new_scheduled_food_target": false,
+            "desirability": 0.017230834811925888,
+            "delta": 0.250779390335083
+          },
+          "first_fresh_target_source_use": {
+            "host_interval_zero_based": 135,
+            "sequence_id": 136,
+            "source_sequence_id": 135,
+            "target_entity": 4,
+            "fresh_target": true,
+            "target_arrival_interval": 128,
+            "new_scheduled_food_target": false,
+            "desirability": 0.017230834811925888,
+            "delta": 0.250779390335083
+          },
+          "first_new_scheduled_food_target_source_use": null,
+          "new_scheduled_food_target_source_uses": 0,
+          "fresh_target_source_uses": 48,
+          "source_uses": 48,
+          "first_nonzero_head_contribution": {
+            "host_interval_zero_based": 135,
+            "sequence_id": 136,
+            "delta": 0.250779390335083
+          },
+          "nonzero_candidate_contributions": 48,
+          "max_abs_delta": 0.25684091448783875,
+          "first_capacity_rejection": null,
+          "last_capacity_rejection": null,
+          "read_admission": {
+            "Admitted": 153,
+            "InsufficientAtp": 103
+          },
+          "observation_admission": {
+            "Admitted": 256
+          },
+          "unfunded_checks_atp_q16": 0,
+          "reserved_research_work_units": 32432610,
+          "ingest_commands": 55,
+          "failed_ingest_containing_bundles": 54,
+          "toy_ingest_commands": 49,
+          "toy_manipulation_commands": 124,
+          "toy_physical_contacts": 71,
+          "initial_energy": 0.24939455,
+          "initial_atp": 0.37470844,
+          "initial_hunger": 0.81293726,
+          "record_without_consumption": 0,
+          "invalid_source_uses": 0,
+          "source_provenance": "dd8897485b79f564f9e68f8879a95d7e0b7cac1f",
+          "food_opportunities": [
+            {
+              "target_entity": 3,
+              "arrival_interval": 64,
+              "consumed_interval": 134,
+              "censored": false,
+              "time_to_meal_or_censor": 70
+            },
+            {
+              "target_entity": 4,
+              "arrival_interval": 128,
+              "consumed_interval": null,
+              "censored": true,
+              "time_to_meal_or_censor": 128
+            },
+            {
+              "target_entity": 5,
+              "arrival_interval": 192,
+              "consumed_interval": null,
+              "censored": true,
+              "time_to_meal_or_censor": 64
+            }
+          ],
+          "censor_horizon_host_intervals": 256,
+          "summed_time_to_meal_or_censor": 262,
+          "final_energy": 0.1788034,
+          "final_atp": 0.34219614,
+          "final_health": 1.0,
+          "founder_optimizer_unchanged": true,
+          "founder_checkpoint_sha256": "ac58c2defaaa98ef0e0b386881a45ab1d6bc2cc0fa0c6632bb48b5c3d710f264",
+          "cold_exact": true,
+          "final_channel_observations": 1,
+          "ordinary_learning": {
+            "fast_changed_coordinates": 17944,
+            "eligibility_changed_coordinates": 17944,
+            "lifetime_changed_coordinates": 0
+          },
+          "summary": {
+            "alias": true,
+            "arm": "active",
+            "capacity_rejected": 0,
+            "construction_genome_sha256": "557da394c045d0b4353009c842825677aa7505f636d6252b20f67bfe0c3a5189",
+            "consumed_food": 1,
+            "context_rows": 256,
+            "decision_target": 256,
+            "decisions": 256,
+            "elapsed_host_intervals": 256,
+            "failed_ingest_containing_bundles": 54,
+            "first_hunger": 0.8129372596740723,
+            "food_nutrition": 0.15000000596046448,
+            "gain": 16.0,
+            "head_fixed_in_life": true,
+            "hunger_max": 0.8621077537536621,
+            "hunger_min": 0.8061937093734741,
+            "insufficient_atp": 103,
+            "leadin": 600,
+            "long_ppo_calls": 0,
+            "meal_hunger_deltas": [
+              -0.04559588432312012
+            ],
+            "meals": 1,
+            "motor_head_count": 2,
+            "nonzero_deltas": 48,
+            "parent_sha256": "d83a995e802e41b8e17799b0871f75d9ede35f95850049777323112e636654d1",
+            "parent_weights_exact": true,
+            "reserved_work_units": 32432610,
+            "reverse_appearance": false,
+            "schema": 2135,
+            "seed": 2026111804,
+            "sourced_candidates": 48,
+            "spawned_food": 3,
+            "ticks": 512,
+            "typed_cold_exact": true,
+            "unfunded_admission_checks_atp_q16": 0
+          },
+          "decisions_after_first_capacity_rejection": null
+        },
+        {
+          "evidence_id": "r3-2026111804-mask-alias-low-diet-v1",
+          "arm": "mask",
+          "seed": 2026111804,
+          "completed": true,
+          "actual_recipe_gain": 16.0,
+          "mask_new_context": true,
+          "compiled_phenotype_hash": [
+            2492320278980643385,
+            12818529853968497949,
+            13620620114224192972,
+            16745773506267535591
+          ],
+          "compiler_inputs_digest": [
+            16701586347669242714,
+            16876662679357424260,
+            4700980492957098419,
+            7473245055121920825
+          ],
+          "trace_intervals": 256,
+          "decisions": 256,
+          "first_consumption": {
+            "host_interval_zero_based": 134,
+            "sequence_id": 135,
+            "elapsed_host_intervals": 135,
+            "target_entity": 3,
+            "representative_family": "Approach",
+            "representative_action_id": 101,
+            "manipulation_action_id": 210,
+            "hunger_delta": -0.04559588432312012
+          },
+          "meals": 1,
+          "meal_intervals": [
+            134
+          ],
+          "first_authenticated_source": {
+            "host_interval_zero_based": 134,
+            "sequence_id": 135,
+            "target_entity": 3,
+            "tracked_object_id": 101100288751228,
+            "action_id": 210,
+            "observation_digest": [
+              9188190499441660827,
+              419876794849943401,
+              9769246193042435488,
+              7485325185133370461
+            ],
+            "representative_family": "Approach"
+          },
+          "authenticated_sources": 1,
+          "first_source_use": {
+            "host_interval_zero_based": 135,
+            "sequence_id": 136,
+            "source_sequence_id": 135,
+            "target_entity": 4,
+            "fresh_target": true,
+            "target_arrival_interval": 128,
+            "new_scheduled_food_target": false,
+            "desirability": 0.017230834811925888,
+            "delta": 0.0
+          },
+          "first_fresh_target_source_use": {
+            "host_interval_zero_based": 135,
+            "sequence_id": 136,
+            "source_sequence_id": 135,
+            "target_entity": 4,
+            "fresh_target": true,
+            "target_arrival_interval": 128,
+            "new_scheduled_food_target": false,
+            "desirability": 0.017230834811925888,
+            "delta": 0.0
+          },
+          "first_new_scheduled_food_target_source_use": null,
+          "new_scheduled_food_target_source_uses": 0,
+          "fresh_target_source_uses": 48,
+          "source_uses": 48,
+          "first_nonzero_head_contribution": null,
+          "nonzero_candidate_contributions": 0,
+          "max_abs_delta": 0.0,
+          "first_capacity_rejection": null,
+          "last_capacity_rejection": null,
+          "read_admission": {
+            "Admitted": 153,
+            "InsufficientAtp": 103
+          },
+          "observation_admission": {
+            "Admitted": 256
+          },
+          "unfunded_checks_atp_q16": 0,
+          "reserved_research_work_units": 32432610,
+          "ingest_commands": 55,
+          "failed_ingest_containing_bundles": 54,
+          "toy_ingest_commands": 49,
+          "toy_manipulation_commands": 124,
+          "toy_physical_contacts": 71,
+          "initial_energy": 0.24939455,
+          "initial_atp": 0.37470844,
+          "initial_hunger": 0.81293726,
+          "record_without_consumption": 0,
+          "invalid_source_uses": 0,
+          "source_provenance": "dd8897485b79f564f9e68f8879a95d7e0b7cac1f",
+          "food_opportunities": [
+            {
+              "target_entity": 3,
+              "arrival_interval": 64,
+              "consumed_interval": 134,
+              "censored": false,
+              "time_to_meal_or_censor": 70
+            },
+            {
+              "target_entity": 4,
+              "arrival_interval": 128,
+              "consumed_interval": null,
+              "censored": true,
+              "time_to_meal_or_censor": 128
+            },
+            {
+              "target_entity": 5,
+              "arrival_interval": 192,
+              "consumed_interval": null,
+              "censored": true,
+              "time_to_meal_or_censor": 64
+            }
+          ],
+          "censor_horizon_host_intervals": 256,
+          "summed_time_to_meal_or_censor": 262,
+          "final_energy": 0.1788034,
+          "final_atp": 0.34219614,
+          "final_health": 1.0,
+          "founder_optimizer_unchanged": true,
+          "founder_checkpoint_sha256": "ac58c2defaaa98ef0e0b386881a45ab1d6bc2cc0fa0c6632bb48b5c3d710f264",
+          "cold_exact": true,
+          "final_channel_observations": 1,
+          "ordinary_learning": {
+            "fast_changed_coordinates": 17944,
+            "eligibility_changed_coordinates": 17944,
+            "lifetime_changed_coordinates": 0
+          },
+          "summary": {
+            "alias": true,
+            "arm": "mask",
+            "capacity_rejected": 0,
+            "construction_genome_sha256": "557da394c045d0b4353009c842825677aa7505f636d6252b20f67bfe0c3a5189",
+            "consumed_food": 1,
+            "context_rows": 256,
+            "decision_target": 256,
+            "decisions": 256,
+            "elapsed_host_intervals": 256,
+            "failed_ingest_containing_bundles": 54,
+            "first_hunger": 0.8129372596740723,
+            "food_nutrition": 0.15000000596046448,
+            "gain": 16.0,
+            "head_fixed_in_life": true,
+            "hunger_max": 0.8621077537536621,
+            "hunger_min": 0.8061937093734741,
+            "insufficient_atp": 103,
+            "leadin": 600,
+            "long_ppo_calls": 0,
+            "meal_hunger_deltas": [
+              -0.04559588432312012
+            ],
+            "meals": 1,
+            "motor_head_count": 2,
+            "nonzero_deltas": 0,
+            "parent_sha256": "d83a995e802e41b8e17799b0871f75d9ede35f95850049777323112e636654d1",
+            "parent_weights_exact": true,
+            "reserved_work_units": 32432610,
+            "reverse_appearance": false,
+            "schema": 2135,
+            "seed": 2026111804,
+            "sourced_candidates": 48,
+            "spawned_food": 3,
+            "ticks": 512,
+            "typed_cold_exact": true,
+            "unfunded_admission_checks_atp_q16": 0
+          },
+          "decisions_after_first_capacity_rejection": null
+        },
+        {
+          "evidence_id": "r3-2026111804-off-alias-low-diet-v1",
+          "arm": "off",
+          "seed": 2026111804,
+          "completed": true,
+          "actual_recipe_gain": null,
+          "mask_new_context": null,
+          "compiled_phenotype_hash": null,
+          "compiler_inputs_digest": null,
+          "trace_intervals": 256,
+          "decisions": 256,
+          "first_consumption": {
+            "host_interval_zero_based": 119,
+            "sequence_id": 120,
+            "elapsed_host_intervals": 120,
+            "target_entity": 3,
+            "representative_family": "Inspect",
+            "representative_action_id": 4,
+            "manipulation_action_id": 210,
+            "hunger_delta": -0.04596138000488281
+          },
+          "meals": 1,
+          "meal_intervals": [
+            119
+          ],
+          "first_authenticated_source": null,
+          "authenticated_sources": 0,
+          "first_source_use": null,
+          "first_fresh_target_source_use": null,
+          "first_new_scheduled_food_target_source_use": null,
+          "new_scheduled_food_target_source_uses": 0,
+          "fresh_target_source_uses": 0,
+          "source_uses": 0,
+          "first_nonzero_head_contribution": null,
+          "nonzero_candidate_contributions": 0,
+          "max_abs_delta": 0.0,
+          "first_capacity_rejection": null,
+          "last_capacity_rejection": null,
+          "read_admission": {},
+          "observation_admission": {},
+          "unfunded_checks_atp_q16": 0,
+          "reserved_research_work_units": 0,
+          "ingest_commands": 55,
+          "failed_ingest_containing_bundles": 52,
+          "toy_ingest_commands": 48,
+          "toy_manipulation_commands": 124,
+          "toy_physical_contacts": 73,
+          "initial_energy": 0.24939455,
+          "initial_atp": 0.37470844,
+          "initial_hunger": 0.81293726,
+          "record_without_consumption": 0,
+          "invalid_source_uses": 0,
+          "source_provenance": "dd8897485b79f564f9e68f8879a95d7e0b7cac1f",
+          "food_opportunities": [
+            {
+              "target_entity": 3,
+              "arrival_interval": 64,
+              "consumed_interval": 119,
+              "censored": false,
+              "time_to_meal_or_censor": 55
+            },
+            {
+              "target_entity": 4,
+              "arrival_interval": 128,
+              "consumed_interval": null,
+              "censored": true,
+              "time_to_meal_or_censor": 128
+            },
+            {
+              "target_entity": 5,
+              "arrival_interval": 192,
+              "consumed_interval": null,
+              "censored": true,
+              "time_to_meal_or_censor": 64
+            }
+          ],
+          "censor_horizon_host_intervals": 256,
+          "summed_time_to_meal_or_censor": 247,
+          "final_energy": 0.2598328,
+          "final_atp": 0.3813224,
+          "final_health": 1.0,
+          "founder_optimizer_unchanged": true,
+          "founder_checkpoint_sha256": "ac58c2defaaa98ef0e0b386881a45ab1d6bc2cc0fa0c6632bb48b5c3d710f264",
+          "cold_exact": true,
+          "final_channel_observations": 0,
+          "ordinary_learning": {
+            "fast_changed_coordinates": 18016,
+            "eligibility_changed_coordinates": 18016,
+            "lifetime_changed_coordinates": 0
+          },
+          "summary": {
+            "alias": true,
+            "arm": "off",
+            "capacity_rejected": 0,
+            "construction_genome_sha256": "557da394c045d0b4353009c842825677aa7505f636d6252b20f67bfe0c3a5189",
+            "consumed_food": 1,
+            "context_rows": 0,
+            "decision_target": 256,
+            "decisions": 256,
+            "elapsed_host_intervals": 256,
+            "failed_ingest_containing_bundles": 52,
+            "first_hunger": 0.8129372596740723,
+            "food_nutrition": 0.15000000596046448,
+            "gain": 16.0,
+            "head_fixed_in_life": true,
+            "hunger_max": 0.8195195198059082,
+            "hunger_min": 0.7735581398010254,
+            "insufficient_atp": 0,
+            "leadin": 600,
+            "long_ppo_calls": 0,
+            "meal_hunger_deltas": [
+              -0.04596138000488281
+            ],
+            "meals": 1,
+            "motor_head_count": 2,
+            "nonzero_deltas": 0,
+            "parent_sha256": "d83a995e802e41b8e17799b0871f75d9ede35f95850049777323112e636654d1",
+            "parent_weights_exact": true,
+            "reserved_work_units": 0,
+            "reverse_appearance": false,
+            "schema": 2135,
+            "seed": 2026111804,
+            "sourced_candidates": 0,
+            "spawned_food": 3,
+            "ticks": 512,
+            "typed_cold_exact": true,
+            "unfunded_admission_checks_atp_q16": 0
+          },
+          "decisions_after_first_capacity_rejection": null
+        },
+        {
+          "evidence_id": "r3-2026111804-zero-alias-low-diet-v1",
+          "arm": "zero",
+          "seed": 2026111804,
+          "completed": true,
+          "actual_recipe_gain": 0.0,
+          "mask_new_context": false,
+          "compiled_phenotype_hash": [
+            2492320278980643385,
+            12818529853968497949,
+            13620620114224192972,
+            16745773506267535591
+          ],
+          "compiler_inputs_digest": [
+            16701586347669242714,
+            16876662679357424260,
+            4700980492957098419,
+            7473245055121920825
+          ],
+          "trace_intervals": 256,
+          "decisions": 256,
+          "first_consumption": {
+            "host_interval_zero_based": 134,
+            "sequence_id": 135,
+            "elapsed_host_intervals": 135,
+            "target_entity": 3,
+            "representative_family": "Approach",
+            "representative_action_id": 101,
+            "manipulation_action_id": 210,
+            "hunger_delta": -0.04559588432312012
+          },
+          "meals": 1,
+          "meal_intervals": [
+            134
+          ],
+          "first_authenticated_source": {
+            "host_interval_zero_based": 134,
+            "sequence_id": 135,
+            "target_entity": 3,
+            "tracked_object_id": 101100288751228,
+            "action_id": 210,
+            "observation_digest": [
+              9188190499441660827,
+              419876794849943401,
+              9769246193042435488,
+              7485325185133370461
+            ],
+            "representative_family": "Approach"
+          },
+          "authenticated_sources": 1,
+          "first_source_use": {
+            "host_interval_zero_based": 135,
+            "sequence_id": 136,
+            "source_sequence_id": 135,
+            "target_entity": 4,
+            "fresh_target": true,
+            "target_arrival_interval": 128,
+            "new_scheduled_food_target": false,
+            "desirability": 0.017230834811925888,
+            "delta": 0.0
+          },
+          "first_fresh_target_source_use": {
+            "host_interval_zero_based": 135,
+            "sequence_id": 136,
+            "source_sequence_id": 135,
+            "target_entity": 4,
+            "fresh_target": true,
+            "target_arrival_interval": 128,
+            "new_scheduled_food_target": false,
+            "desirability": 0.017230834811925888,
+            "delta": 0.0
+          },
+          "first_new_scheduled_food_target_source_use": null,
+          "new_scheduled_food_target_source_uses": 0,
+          "fresh_target_source_uses": 48,
+          "source_uses": 48,
+          "first_nonzero_head_contribution": null,
+          "nonzero_candidate_contributions": 0,
+          "max_abs_delta": 0.0,
+          "first_capacity_rejection": null,
+          "last_capacity_rejection": null,
+          "read_admission": {
+            "Admitted": 153,
+            "InsufficientAtp": 103
+          },
+          "observation_admission": {
+            "Admitted": 256
+          },
+          "unfunded_checks_atp_q16": 0,
+          "reserved_research_work_units": 32432610,
+          "ingest_commands": 55,
+          "failed_ingest_containing_bundles": 54,
+          "toy_ingest_commands": 49,
+          "toy_manipulation_commands": 124,
+          "toy_physical_contacts": 71,
+          "initial_energy": 0.24939455,
+          "initial_atp": 0.37470844,
+          "initial_hunger": 0.81293726,
+          "record_without_consumption": 0,
+          "invalid_source_uses": 0,
+          "source_provenance": "dd8897485b79f564f9e68f8879a95d7e0b7cac1f",
+          "food_opportunities": [
+            {
+              "target_entity": 3,
+              "arrival_interval": 64,
+              "consumed_interval": 134,
+              "censored": false,
+              "time_to_meal_or_censor": 70
+            },
+            {
+              "target_entity": 4,
+              "arrival_interval": 128,
+              "consumed_interval": null,
+              "censored": true,
+              "time_to_meal_or_censor": 128
+            },
+            {
+              "target_entity": 5,
+              "arrival_interval": 192,
+              "consumed_interval": null,
+              "censored": true,
+              "time_to_meal_or_censor": 64
+            }
+          ],
+          "censor_horizon_host_intervals": 256,
+          "summed_time_to_meal_or_censor": 262,
+          "final_energy": 0.1788034,
+          "final_atp": 0.34219614,
+          "final_health": 1.0,
+          "founder_optimizer_unchanged": true,
+          "founder_checkpoint_sha256": "ac58c2defaaa98ef0e0b386881a45ab1d6bc2cc0fa0c6632bb48b5c3d710f264",
+          "cold_exact": true,
+          "final_channel_observations": 1,
+          "ordinary_learning": {
+            "fast_changed_coordinates": 17944,
+            "eligibility_changed_coordinates": 17944,
+            "lifetime_changed_coordinates": 0
+          },
+          "summary": {
+            "alias": true,
+            "arm": "zero",
+            "capacity_rejected": 0,
+            "construction_genome_sha256": "557da394c045d0b4353009c842825677aa7505f636d6252b20f67bfe0c3a5189",
+            "consumed_food": 1,
+            "context_rows": 256,
+            "decision_target": 256,
+            "decisions": 256,
+            "elapsed_host_intervals": 256,
+            "failed_ingest_containing_bundles": 54,
+            "first_hunger": 0.8129372596740723,
+            "food_nutrition": 0.15000000596046448,
+            "gain": 16.0,
+            "head_fixed_in_life": true,
+            "hunger_max": 0.8621077537536621,
+            "hunger_min": 0.8061937093734741,
+            "insufficient_atp": 103,
+            "leadin": 600,
+            "long_ppo_calls": 0,
+            "meal_hunger_deltas": [
+              -0.04559588432312012
+            ],
+            "meals": 1,
+            "motor_head_count": 2,
+            "nonzero_deltas": 0,
+            "parent_sha256": "d83a995e802e41b8e17799b0871f75d9ede35f95850049777323112e636654d1",
+            "parent_weights_exact": true,
+            "reserved_work_units": 32432610,
+            "reverse_appearance": false,
+            "schema": 2135,
+            "seed": 2026111804,
+            "sourced_candidates": 48,
+            "spawned_food": 3,
+            "ticks": 512,
+            "typed_cold_exact": true,
+            "unfunded_admission_checks_atp_q16": 0
+          },
+          "decisions_after_first_capacity_rejection": null
+        }
+      ],
+      "comparisons": [
+        {
+          "arms": [
+            "zero",
+            "mask"
+          ],
+          "common_intervals": 256,
+          "first_source_boundary": 134,
+          "differences": {
+            "state": {
+              "count": 0,
+              "first_interval": null,
+              "before_first_source": 0
+            },
+            "actions": {
+              "count": 0,
+              "first_interval": null,
+              "before_first_source": 0
+            },
+            "representative_choice": {
+              "count": 0,
+              "first_interval": null,
+              "before_first_source": 0
+            },
+            "committed_bundle_details": {
+              "count": 0,
+              "first_interval": null,
+              "before_first_source": 0
+            },
+            "log_probability": {
+              "count": 0,
+              "first_interval": null,
+              "before_first_source": 0
+            },
+            "representative_logit": {
+              "count": 0,
+              "first_interval": null,
+              "before_first_source": 0
+            }
+          }
+        },
+        {
+          "arms": [
+            "active",
+            "zero"
+          ],
+          "common_intervals": 256,
+          "first_source_boundary": 134,
+          "differences": {
+            "state": {
+              "count": 0,
+              "first_interval": null,
+              "before_first_source": 0
+            },
+            "actions": {
+              "count": 0,
+              "first_interval": null,
+              "before_first_source": 0
+            },
+            "representative_choice": {
+              "count": 0,
+              "first_interval": null,
+              "before_first_source": 0
+            },
+            "committed_bundle_details": {
+              "count": 0,
+              "first_interval": null,
+              "before_first_source": 0
+            },
+            "log_probability": {
+              "count": 24,
+              "first_interval": 135,
+              "before_first_source": 0
+            },
+            "representative_logit": {
+              "count": 22,
+              "first_interval": 135,
+              "before_first_source": 0
+            }
+          }
+        },
+        {
+          "arms": [
+            "active",
+            "mask"
+          ],
+          "common_intervals": 256,
+          "first_source_boundary": 134,
+          "differences": {
+            "state": {
+              "count": 0,
+              "first_interval": null,
+              "before_first_source": 0
+            },
+            "actions": {
+              "count": 0,
+              "first_interval": null,
+              "before_first_source": 0
+            },
+            "representative_choice": {
+              "count": 0,
+              "first_interval": null,
+              "before_first_source": 0
+            },
+            "committed_bundle_details": {
+              "count": 0,
+              "first_interval": null,
+              "before_first_source": 0
+            },
+            "log_probability": {
+              "count": 24,
+              "first_interval": 135,
+              "before_first_source": 0
+            },
+            "representative_logit": {
+              "count": 22,
+              "first_interval": 135,
+              "before_first_source": 0
+            }
+          }
+        },
+        {
+          "arms": [
+            "off",
+            "zero"
+          ],
+          "common_intervals": 256,
+          "first_source_boundary": 134,
+          "differences": {
+            "state": {
+              "count": 256,
+              "first_interval": 0,
+              "before_first_source": 134
+            },
+            "actions": {
+              "count": 113,
+              "first_interval": 78,
+              "before_first_source": 23
+            },
+            "representative_choice": {
+              "count": 78,
+              "first_interval": 115,
+              "before_first_source": 15
+            },
+            "committed_bundle_details": {
+              "count": 249,
+              "first_interval": 7,
+              "before_first_source": 127
+            },
+            "log_probability": {
+              "count": 254,
+              "first_interval": 2,
+              "before_first_source": 132
+            },
+            "representative_logit": {
+              "count": 253,
+              "first_interval": 2,
+              "before_first_source": 131
+            }
+          }
+        }
+      ]
+    },
+    {
+      "seed": 2026111804,
+      "reverse_appearance": false,
+      "alias": true,
+      "food_nutrition": 0.6,
+      "complete": true,
+      "followup_gate": false,
+      "arms": [
+        {
+          "evidence_id": "r3-2026111804-active-alias-v1",
+          "arm": "active",
+          "seed": 2026111804,
+          "completed": true,
+          "actual_recipe_gain": 16.0,
+          "mask_new_context": false,
+          "compiled_phenotype_hash": [
+            2492320278980643385,
+            12818529853968497949,
+            13620620114224192972,
+            16745773506267535591
+          ],
+          "compiler_inputs_digest": [
+            16701586347669242714,
+            16876662679357424260,
+            4700980492957098419,
+            7473245055121920825
+          ],
+          "trace_intervals": 256,
+          "decisions": 256,
+          "first_consumption": {
+            "host_interval_zero_based": 134,
+            "sequence_id": 135,
+            "elapsed_host_intervals": 135,
+            "target_entity": 3,
+            "representative_family": "Approach",
+            "representative_action_id": 101,
+            "manipulation_action_id": 210,
+            "hunger_delta": -0.18369215726852417
+          },
+          "meals": 1,
+          "meal_intervals": [
+            134
+          ],
+          "first_authenticated_source": {
+            "host_interval_zero_based": 134,
+            "sequence_id": 135,
+            "target_entity": 3,
+            "tracked_object_id": 101100288751228,
+            "action_id": 210,
+            "observation_digest": [
+              9608009014149211965,
+              10835256391813566760,
+              16069614992365315805,
+              8841197687771637519
+            ],
+            "representative_family": "Approach"
+          },
+          "authenticated_sources": 1,
+          "first_source_use": {
+            "host_interval_zero_based": 135,
+            "sequence_id": 136,
+            "source_sequence_id": 135,
+            "target_entity": 4,
+            "fresh_target": true,
+            "target_arrival_interval": 128,
+            "new_scheduled_food_target": false,
+            "desirability": 0.05752699449658394,
+            "delta": 0.4754389822483063
+          },
+          "first_fresh_target_source_use": {
+            "host_interval_zero_based": 135,
+            "sequence_id": 136,
+            "source_sequence_id": 135,
+            "target_entity": 4,
+            "fresh_target": true,
+            "target_arrival_interval": 128,
+            "new_scheduled_food_target": false,
+            "desirability": 0.05752699449658394,
+            "delta": 0.4754389822483063
+          },
+          "first_new_scheduled_food_target_source_use": null,
+          "new_scheduled_food_target_source_uses": 0,
+          "fresh_target_source_uses": 66,
+          "source_uses": 66,
+          "first_nonzero_head_contribution": {
+            "host_interval_zero_based": 135,
+            "sequence_id": 136,
+            "delta": 0.4754389822483063
+          },
+          "nonzero_candidate_contributions": 66,
+          "max_abs_delta": 0.48381513357162476,
+          "first_capacity_rejection": null,
+          "last_capacity_rejection": null,
+          "read_admission": {
+            "Admitted": 162,
+            "InsufficientAtp": 94
+          },
+          "observation_admission": {
+            "Admitted": 256
+          },
+          "unfunded_checks_atp_q16": 0,
+          "reserved_research_work_units": 36487488,
+          "ingest_commands": 51,
+          "failed_ingest_containing_bundles": 50,
+          "toy_ingest_commands": 46,
+          "toy_manipulation_commands": 124,
+          "toy_physical_contacts": 70,
+          "initial_energy": 0.24939455,
+          "initial_atp": 0.37470844,
+          "initial_hunger": 0.81293726,
+          "record_without_consumption": 0,
+          "invalid_source_uses": 0,
+          "source_provenance": "dd8897485b79f564f9e68f8879a95d7e0b7cac1f",
+          "food_opportunities": [
+            {
+              "target_entity": 3,
+              "arrival_interval": 64,
+              "consumed_interval": 134,
+              "censored": false,
+              "time_to_meal_or_censor": 70
+            },
+            {
+              "target_entity": 4,
+              "arrival_interval": 128,
+              "consumed_interval": null,
+              "censored": true,
+              "time_to_meal_or_censor": 128
+            },
+            {
+              "target_entity": 5,
+              "arrival_interval": 192,
+              "consumed_interval": null,
+              "censored": true,
+              "time_to_meal_or_censor": 64
+            }
+          ],
+          "censor_horizon_host_intervals": 256,
+          "summed_time_to_meal_or_censor": 262,
+          "final_energy": 0.26979807,
+          "final_atp": 0.38921064,
+          "final_health": 1.0,
+          "founder_optimizer_unchanged": true,
+          "founder_checkpoint_sha256": "ac58c2defaaa98ef0e0b386881a45ab1d6bc2cc0fa0c6632bb48b5c3d710f264",
+          "cold_exact": true,
+          "final_channel_observations": 1,
+          "ordinary_learning": {
+            "fast_changed_coordinates": 28320,
+            "eligibility_changed_coordinates": 28320,
+            "lifetime_changed_coordinates": 0
+          },
+          "summary": {
+            "alias": true,
+            "arm": "active",
+            "capacity_rejected": 0,
+            "construction_genome_sha256": "557da394c045d0b4353009c842825677aa7505f636d6252b20f67bfe0c3a5189",
+            "consumed_food": 1,
+            "context_rows": 256,
+            "decision_target": 256,
+            "decisions": 256,
+            "elapsed_host_intervals": 256,
+            "failed_ingest_containing_bundles": 50,
+            "first_hunger": 0.8129372596740723,
+            "food_nutrition": 0.6000000238418579,
+            "gain": 16.0,
+            "head_fixed_in_life": true,
+            "hunger_max": 0.8517895936965942,
+            "hunger_min": 0.6680974364280701,
+            "insufficient_atp": 94,
+            "leadin": 600,
+            "long_ppo_calls": 0,
+            "meal_hunger_deltas": [
+              -0.18369215726852417
+            ],
+            "meals": 1,
+            "motor_head_count": 2,
+            "nonzero_deltas": 66,
+            "parent_sha256": "d83a995e802e41b8e17799b0871f75d9ede35f95850049777323112e636654d1",
+            "parent_weights_exact": true,
+            "reserved_work_units": 36487488,
+            "reverse_appearance": false,
+            "schema": 2135,
+            "seed": 2026111804,
+            "sourced_candidates": 66,
+            "spawned_food": 3,
+            "ticks": 512,
+            "typed_cold_exact": true,
+            "unfunded_admission_checks_atp_q16": 0
+          },
+          "decisions_after_first_capacity_rejection": null
+        },
+        {
+          "evidence_id": "r3-2026111804-mask-alias-v1",
+          "arm": "mask",
+          "seed": 2026111804,
+          "completed": true,
+          "actual_recipe_gain": 16.0,
+          "mask_new_context": true,
+          "compiled_phenotype_hash": [
+            2492320278980643385,
+            12818529853968497949,
+            13620620114224192972,
+            16745773506267535591
+          ],
+          "compiler_inputs_digest": [
+            16701586347669242714,
+            16876662679357424260,
+            4700980492957098419,
+            7473245055121920825
+          ],
+          "trace_intervals": 256,
+          "decisions": 256,
+          "first_consumption": {
+            "host_interval_zero_based": 134,
+            "sequence_id": 135,
+            "elapsed_host_intervals": 135,
+            "target_entity": 3,
+            "representative_family": "Approach",
+            "representative_action_id": 101,
+            "manipulation_action_id": 210,
+            "hunger_delta": -0.18369215726852417
+          },
+          "meals": 1,
+          "meal_intervals": [
+            134
+          ],
+          "first_authenticated_source": {
+            "host_interval_zero_based": 134,
+            "sequence_id": 135,
+            "target_entity": 3,
+            "tracked_object_id": 101100288751228,
+            "action_id": 210,
+            "observation_digest": [
+              9608009014149211965,
+              10835256391813566760,
+              16069614992365315805,
+              8841197687771637519
+            ],
+            "representative_family": "Approach"
+          },
+          "authenticated_sources": 1,
+          "first_source_use": {
+            "host_interval_zero_based": 135,
+            "sequence_id": 136,
+            "source_sequence_id": 135,
+            "target_entity": 4,
+            "fresh_target": true,
+            "target_arrival_interval": 128,
+            "new_scheduled_food_target": false,
+            "desirability": 0.05752699449658394,
+            "delta": 0.0
+          },
+          "first_fresh_target_source_use": {
+            "host_interval_zero_based": 135,
+            "sequence_id": 136,
+            "source_sequence_id": 135,
+            "target_entity": 4,
+            "fresh_target": true,
+            "target_arrival_interval": 128,
+            "new_scheduled_food_target": false,
+            "desirability": 0.05752699449658394,
+            "delta": 0.0
+          },
+          "first_new_scheduled_food_target_source_use": null,
+          "new_scheduled_food_target_source_uses": 0,
+          "fresh_target_source_uses": 66,
+          "source_uses": 66,
+          "first_nonzero_head_contribution": null,
+          "nonzero_candidate_contributions": 0,
+          "max_abs_delta": 0.0,
+          "first_capacity_rejection": null,
+          "last_capacity_rejection": null,
+          "read_admission": {
+            "Admitted": 162,
+            "InsufficientAtp": 94
+          },
+          "observation_admission": {
+            "Admitted": 256
+          },
+          "unfunded_checks_atp_q16": 0,
+          "reserved_research_work_units": 36438336,
+          "ingest_commands": 51,
+          "failed_ingest_containing_bundles": 50,
+          "toy_ingest_commands": 47,
+          "toy_manipulation_commands": 123,
+          "toy_physical_contacts": 70,
+          "initial_energy": 0.24939455,
+          "initial_atp": 0.37470844,
+          "initial_hunger": 0.81293726,
+          "record_without_consumption": 0,
+          "invalid_source_uses": 0,
+          "source_provenance": "dd8897485b79f564f9e68f8879a95d7e0b7cac1f",
+          "food_opportunities": [
+            {
+              "target_entity": 3,
+              "arrival_interval": 64,
+              "consumed_interval": 134,
+              "censored": false,
+              "time_to_meal_or_censor": 70
+            },
+            {
+              "target_entity": 4,
+              "arrival_interval": 128,
+              "consumed_interval": null,
+              "censored": true,
+              "time_to_meal_or_censor": 128
+            },
+            {
+              "target_entity": 5,
+              "arrival_interval": 192,
+              "consumed_interval": null,
+              "censored": true,
+              "time_to_meal_or_censor": 64
+            }
+          ],
+          "censor_horizon_host_intervals": 256,
+          "summed_time_to_meal_or_censor": 262,
+          "final_energy": 0.2699056,
+          "final_atp": 0.38926387,
+          "final_health": 1.0,
+          "founder_optimizer_unchanged": true,
+          "founder_checkpoint_sha256": "ac58c2defaaa98ef0e0b386881a45ab1d6bc2cc0fa0c6632bb48b5c3d710f264",
+          "cold_exact": true,
+          "final_channel_observations": 1,
+          "ordinary_learning": {
+            "fast_changed_coordinates": 28440,
+            "eligibility_changed_coordinates": 28440,
+            "lifetime_changed_coordinates": 0
+          },
+          "summary": {
+            "alias": true,
+            "arm": "mask",
+            "capacity_rejected": 0,
+            "construction_genome_sha256": "557da394c045d0b4353009c842825677aa7505f636d6252b20f67bfe0c3a5189",
+            "consumed_food": 1,
+            "context_rows": 256,
+            "decision_target": 256,
+            "decisions": 256,
+            "elapsed_host_intervals": 256,
+            "failed_ingest_containing_bundles": 50,
+            "first_hunger": 0.8129372596740723,
+            "food_nutrition": 0.6000000238418579,
+            "gain": 16.0,
+            "head_fixed_in_life": true,
+            "hunger_max": 0.8517895936965942,
+            "hunger_min": 0.6680974364280701,
+            "insufficient_atp": 94,
+            "leadin": 600,
+            "long_ppo_calls": 0,
+            "meal_hunger_deltas": [
+              -0.18369215726852417
+            ],
+            "meals": 1,
+            "motor_head_count": 2,
+            "nonzero_deltas": 0,
+            "parent_sha256": "d83a995e802e41b8e17799b0871f75d9ede35f95850049777323112e636654d1",
+            "parent_weights_exact": true,
+            "reserved_work_units": 36438336,
+            "reverse_appearance": false,
+            "schema": 2135,
+            "seed": 2026111804,
+            "sourced_candidates": 66,
+            "spawned_food": 3,
+            "ticks": 512,
+            "typed_cold_exact": true,
+            "unfunded_admission_checks_atp_q16": 0
+          },
+          "decisions_after_first_capacity_rejection": null
+        },
+        {
+          "evidence_id": "r3-2026111804-off-alias-v1",
+          "arm": "off",
+          "seed": 2026111804,
+          "completed": true,
+          "actual_recipe_gain": null,
+          "mask_new_context": null,
+          "compiled_phenotype_hash": null,
+          "compiler_inputs_digest": null,
+          "trace_intervals": 256,
+          "decisions": 256,
+          "first_consumption": {
+            "host_interval_zero_based": 119,
+            "sequence_id": 120,
+            "elapsed_host_intervals": 120,
+            "target_entity": 3,
+            "representative_family": "Inspect",
+            "representative_action_id": 4,
+            "manipulation_action_id": 210,
+            "hunger_delta": -0.18405765295028687
+          },
+          "meals": 1,
+          "meal_intervals": [
+            119
+          ],
+          "first_authenticated_source": null,
+          "authenticated_sources": 0,
+          "first_source_use": null,
+          "first_fresh_target_source_use": null,
+          "first_new_scheduled_food_target_source_use": null,
+          "new_scheduled_food_target_source_uses": 0,
+          "fresh_target_source_uses": 0,
+          "source_uses": 0,
+          "first_nonzero_head_contribution": null,
+          "nonzero_candidate_contributions": 0,
+          "max_abs_delta": 0.0,
+          "first_capacity_rejection": null,
+          "last_capacity_rejection": null,
+          "read_admission": {},
+          "observation_admission": {},
+          "unfunded_checks_atp_q16": 0,
+          "reserved_research_work_units": 0,
+          "ingest_commands": 51,
+          "failed_ingest_containing_bundles": 48,
+          "toy_ingest_commands": 46,
+          "toy_manipulation_commands": 127,
+          "toy_physical_contacts": 78,
+          "initial_energy": 0.24939455,
+          "initial_atp": 0.37470844,
+          "initial_hunger": 0.81293726,
+          "record_without_consumption": 0,
+          "invalid_source_uses": 0,
+          "source_provenance": "dd8897485b79f564f9e68f8879a95d7e0b7cac1f",
+          "food_opportunities": [
+            {
+              "target_entity": 3,
+              "arrival_interval": 64,
+              "consumed_interval": 119,
+              "censored": false,
+              "time_to_meal_or_censor": 55
+            },
+            {
+              "target_entity": 4,
+              "arrival_interval": 128,
+              "consumed_interval": null,
+              "censored": true,
+              "time_to_meal_or_censor": 128
+            },
+            {
+              "target_entity": 5,
+              "arrival_interval": 192,
+              "consumed_interval": null,
+              "censored": true,
+              "time_to_meal_or_censor": 64
+            }
+          ],
+          "censor_horizon_host_intervals": 256,
+          "summed_time_to_meal_or_censor": 247,
+          "final_energy": 0.36025932,
+          "final_atp": 0.4323029,
+          "final_health": 1.0,
+          "founder_optimizer_unchanged": true,
+          "founder_checkpoint_sha256": "ac58c2defaaa98ef0e0b386881a45ab1d6bc2cc0fa0c6632bb48b5c3d710f264",
+          "cold_exact": true,
+          "final_channel_observations": 0,
+          "ordinary_learning": {
+            "fast_changed_coordinates": 28512,
+            "eligibility_changed_coordinates": 28512,
+            "lifetime_changed_coordinates": 0
+          },
+          "summary": {
+            "alias": true,
+            "arm": "off",
+            "capacity_rejected": 0,
+            "construction_genome_sha256": "557da394c045d0b4353009c842825677aa7505f636d6252b20f67bfe0c3a5189",
+            "consumed_food": 1,
+            "context_rows": 0,
+            "decision_target": 256,
+            "decisions": 256,
+            "elapsed_host_intervals": 256,
+            "failed_ingest_containing_bundles": 48,
+            "first_hunger": 0.8129372596740723,
+            "food_nutrition": 0.6000000238418579,
+            "gain": 16.0,
+            "head_fixed_in_life": true,
+            "hunger_max": 0.8195195198059082,
+            "hunger_min": 0.6354618668556213,
+            "insufficient_atp": 0,
+            "leadin": 600,
+            "long_ppo_calls": 0,
+            "meal_hunger_deltas": [
+              -0.18405765295028687
+            ],
+            "meals": 1,
+            "motor_head_count": 2,
+            "nonzero_deltas": 0,
+            "parent_sha256": "d83a995e802e41b8e17799b0871f75d9ede35f95850049777323112e636654d1",
+            "parent_weights_exact": true,
+            "reserved_work_units": 0,
+            "reverse_appearance": false,
+            "schema": 2135,
+            "seed": 2026111804,
+            "sourced_candidates": 0,
+            "spawned_food": 3,
+            "ticks": 512,
+            "typed_cold_exact": true,
+            "unfunded_admission_checks_atp_q16": 0
+          },
+          "decisions_after_first_capacity_rejection": null
+        },
+        {
+          "evidence_id": "r3-2026111804-zero-alias-v1",
+          "arm": "zero",
+          "seed": 2026111804,
+          "completed": true,
+          "actual_recipe_gain": 0.0,
+          "mask_new_context": false,
+          "compiled_phenotype_hash": [
+            2492320278980643385,
+            12818529853968497949,
+            13620620114224192972,
+            16745773506267535591
+          ],
+          "compiler_inputs_digest": [
+            16701586347669242714,
+            16876662679357424260,
+            4700980492957098419,
+            7473245055121920825
+          ],
+          "trace_intervals": 256,
+          "decisions": 256,
+          "first_consumption": {
+            "host_interval_zero_based": 134,
+            "sequence_id": 135,
+            "elapsed_host_intervals": 135,
+            "target_entity": 3,
+            "representative_family": "Approach",
+            "representative_action_id": 101,
+            "manipulation_action_id": 210,
+            "hunger_delta": -0.18369215726852417
+          },
+          "meals": 1,
+          "meal_intervals": [
+            134
+          ],
+          "first_authenticated_source": {
+            "host_interval_zero_based": 134,
+            "sequence_id": 135,
+            "target_entity": 3,
+            "tracked_object_id": 101100288751228,
+            "action_id": 210,
+            "observation_digest": [
+              9608009014149211965,
+              10835256391813566760,
+              16069614992365315805,
+              8841197687771637519
+            ],
+            "representative_family": "Approach"
+          },
+          "authenticated_sources": 1,
+          "first_source_use": {
+            "host_interval_zero_based": 135,
+            "sequence_id": 136,
+            "source_sequence_id": 135,
+            "target_entity": 4,
+            "fresh_target": true,
+            "target_arrival_interval": 128,
+            "new_scheduled_food_target": false,
+            "desirability": 0.05752699449658394,
+            "delta": 0.0
+          },
+          "first_fresh_target_source_use": {
+            "host_interval_zero_based": 135,
+            "sequence_id": 136,
+            "source_sequence_id": 135,
+            "target_entity": 4,
+            "fresh_target": true,
+            "target_arrival_interval": 128,
+            "new_scheduled_food_target": false,
+            "desirability": 0.05752699449658394,
+            "delta": 0.0
+          },
+          "first_new_scheduled_food_target_source_use": null,
+          "new_scheduled_food_target_source_uses": 0,
+          "fresh_target_source_uses": 66,
+          "source_uses": 66,
+          "first_nonzero_head_contribution": null,
+          "nonzero_candidate_contributions": 0,
+          "max_abs_delta": 0.0,
+          "first_capacity_rejection": null,
+          "last_capacity_rejection": null,
+          "read_admission": {
+            "Admitted": 162,
+            "InsufficientAtp": 94
+          },
+          "observation_admission": {
+            "Admitted": 256
+          },
+          "unfunded_checks_atp_q16": 0,
+          "reserved_research_work_units": 36438336,
+          "ingest_commands": 51,
+          "failed_ingest_containing_bundles": 50,
+          "toy_ingest_commands": 47,
+          "toy_manipulation_commands": 123,
+          "toy_physical_contacts": 70,
+          "initial_energy": 0.24939455,
+          "initial_atp": 0.37470844,
+          "initial_hunger": 0.81293726,
+          "record_without_consumption": 0,
+          "invalid_source_uses": 0,
+          "source_provenance": "dd8897485b79f564f9e68f8879a95d7e0b7cac1f",
+          "food_opportunities": [
+            {
+              "target_entity": 3,
+              "arrival_interval": 64,
+              "consumed_interval": 134,
+              "censored": false,
+              "time_to_meal_or_censor": 70
+            },
+            {
+              "target_entity": 4,
+              "arrival_interval": 128,
+              "consumed_interval": null,
+              "censored": true,
+              "time_to_meal_or_censor": 128
+            },
+            {
+              "target_entity": 5,
+              "arrival_interval": 192,
+              "consumed_interval": null,
+              "censored": true,
+              "time_to_meal_or_censor": 64
+            }
+          ],
+          "censor_horizon_host_intervals": 256,
+          "summed_time_to_meal_or_censor": 262,
+          "final_energy": 0.2699056,
+          "final_atp": 0.38926387,
+          "final_health": 1.0,
+          "founder_optimizer_unchanged": true,
+          "founder_checkpoint_sha256": "ac58c2defaaa98ef0e0b386881a45ab1d6bc2cc0fa0c6632bb48b5c3d710f264",
+          "cold_exact": true,
+          "final_channel_observations": 1,
+          "ordinary_learning": {
+            "fast_changed_coordinates": 28440,
+            "eligibility_changed_coordinates": 28440,
+            "lifetime_changed_coordinates": 0
+          },
+          "summary": {
+            "alias": true,
+            "arm": "zero",
+            "capacity_rejected": 0,
+            "construction_genome_sha256": "557da394c045d0b4353009c842825677aa7505f636d6252b20f67bfe0c3a5189",
+            "consumed_food": 1,
+            "context_rows": 256,
+            "decision_target": 256,
+            "decisions": 256,
+            "elapsed_host_intervals": 256,
+            "failed_ingest_containing_bundles": 50,
+            "first_hunger": 0.8129372596740723,
+            "food_nutrition": 0.6000000238418579,
+            "gain": 16.0,
+            "head_fixed_in_life": true,
+            "hunger_max": 0.8517895936965942,
+            "hunger_min": 0.6680974364280701,
+            "insufficient_atp": 94,
+            "leadin": 600,
+            "long_ppo_calls": 0,
+            "meal_hunger_deltas": [
+              -0.18369215726852417
+            ],
+            "meals": 1,
+            "motor_head_count": 2,
+            "nonzero_deltas": 0,
+            "parent_sha256": "d83a995e802e41b8e17799b0871f75d9ede35f95850049777323112e636654d1",
+            "parent_weights_exact": true,
+            "reserved_work_units": 36438336,
+            "reverse_appearance": false,
+            "schema": 2135,
+            "seed": 2026111804,
+            "sourced_candidates": 66,
+            "spawned_food": 3,
+            "ticks": 512,
+            "typed_cold_exact": true,
+            "unfunded_admission_checks_atp_q16": 0
+          },
+          "decisions_after_first_capacity_rejection": null
+        }
+      ],
+      "comparisons": [
+        {
+          "arms": [
+            "zero",
+            "mask"
+          ],
+          "common_intervals": 256,
+          "first_source_boundary": 134,
+          "differences": {
+            "state": {
+              "count": 0,
+              "first_interval": null,
+              "before_first_source": 0
+            },
+            "actions": {
+              "count": 0,
+              "first_interval": null,
+              "before_first_source": 0
+            },
+            "representative_choice": {
+              "count": 0,
+              "first_interval": null,
+              "before_first_source": 0
+            },
+            "committed_bundle_details": {
+              "count": 0,
+              "first_interval": null,
+              "before_first_source": 0
+            },
+            "log_probability": {
+              "count": 0,
+              "first_interval": null,
+              "before_first_source": 0
+            },
+            "representative_logit": {
+              "count": 0,
+              "first_interval": null,
+              "before_first_source": 0
+            }
+          }
+        },
+        {
+          "arms": [
+            "active",
+            "zero"
+          ],
+          "common_intervals": 256,
+          "first_source_boundary": 134,
+          "differences": {
+            "state": {
+              "count": 97,
+              "first_interval": 159,
+              "before_first_source": 0
+            },
+            "actions": {
+              "count": 8,
+              "first_interval": 159,
+              "before_first_source": 0
+            },
+            "representative_choice": {
+              "count": 6,
+              "first_interval": 159,
+              "before_first_source": 0
+            },
+            "committed_bundle_details": {
+              "count": 95,
+              "first_interval": 159,
+              "before_first_source": 0
+            },
+            "log_probability": {
+              "count": 121,
+              "first_interval": 135,
+              "before_first_source": 0
+            },
+            "representative_logit": {
+              "count": 118,
+              "first_interval": 135,
+              "before_first_source": 0
+            }
+          }
+        },
+        {
+          "arms": [
+            "active",
+            "mask"
+          ],
+          "common_intervals": 256,
+          "first_source_boundary": 134,
+          "differences": {
+            "state": {
+              "count": 97,
+              "first_interval": 159,
+              "before_first_source": 0
+            },
+            "actions": {
+              "count": 8,
+              "first_interval": 159,
+              "before_first_source": 0
+            },
+            "representative_choice": {
+              "count": 6,
+              "first_interval": 159,
+              "before_first_source": 0
+            },
+            "committed_bundle_details": {
+              "count": 95,
+              "first_interval": 159,
+              "before_first_source": 0
+            },
+            "log_probability": {
+              "count": 121,
+              "first_interval": 135,
+              "before_first_source": 0
+            },
+            "representative_logit": {
+              "count": 118,
+              "first_interval": 135,
+              "before_first_source": 0
+            }
+          }
+        },
+        {
+          "arms": [
+            "off",
+            "zero"
+          ],
+          "common_intervals": 256,
+          "first_source_boundary": 134,
+          "differences": {
+            "state": {
+              "count": 256,
+              "first_interval": 0,
+              "before_first_source": 134
+            },
+            "actions": {
+              "count": 77,
+              "first_interval": 78,
+              "before_first_source": 23
+            },
+            "representative_choice": {
+              "count": 48,
+              "first_interval": 115,
+              "before_first_source": 15
+            },
+            "committed_bundle_details": {
+              "count": 249,
+              "first_interval": 7,
+              "before_first_source": 127
+            },
+            "log_probability": {
+              "count": 254,
+              "first_interval": 2,
+              "before_first_source": 132
+            },
+            "representative_logit": {
+              "count": 253,
+              "first_interval": 2,
+              "before_first_source": 131
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "expected_runs": 20,
+  "analyzed_runs": 20,
+  "provenance": {
+    "assay_commit": "dd8897485b79f564f9e68f8879a95d7e0b7cac1f",
+    "host_base": "8f0aa8473c3115c94e93b6a9ee4d448bdcfa151d",
+    "binary_sha256": "c404f0765092b13f7c19e7ea2f444d9bce9f4d53e71b74f03761b9e49aafe8c1",
+    "profile": "release",
+    "requests_sha256": "c0a5e8968673dcfeacfca364d1cee54017918c125fb42ba19b4a0a1d56c1ec40"
+  }
+}
