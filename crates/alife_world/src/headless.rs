@@ -1441,6 +1441,8 @@ pub struct HeadlessWorld {
     seed: u64,
     disable_age_death: bool,
     thermal_contact_candidate: Option<ThermalContactCandidate>,
+    // Exists only inside the atomic, explicitly requested paired executor.
+    live_bite_pair_v1: Option<live_bite_v1::LiveBitePairContextV1>,
     terrain: Option<crate::WorldTerrain>,
     tick: Tick,
     next_entity_id: u64,
@@ -1464,7 +1466,12 @@ pub struct HeadlessWorld {
     injected_post_action_failure: bool,
     #[cfg(test)]
     injected_tick_late_failure_after_first_organism: bool,
+    #[cfg(test)]
+    injected_live_bite_late_failure: bool,
 }
+
+mod live_bite_v1;
+pub use live_bite_v1::{LiveBitePairReceiptV1, LiveBiteTransferV1};
 
 mod awake_rest_research;
 pub use awake_rest_research::{AwakeRestReceiptV1, AwakeRestRequestV1};
@@ -1666,6 +1673,7 @@ impl HeadlessWorld {
             seed,
             disable_age_death: false,
             thermal_contact_candidate: None,
+            live_bite_pair_v1: None,
             terrain: None,
             tick: Tick::ZERO,
             next_entity_id: DEFAULT_ENTITY_ID_START,
@@ -1693,6 +1701,8 @@ impl HeadlessWorld {
             injected_post_action_failure: false,
             #[cfg(test)]
             injected_tick_late_failure_after_first_organism: false,
+            #[cfg(test)]
+            injected_live_bite_late_failure: false,
         }
     }
 
@@ -3861,6 +3871,7 @@ impl HeadlessWorld {
         }
         let world = Self {
             thermal_contact_candidate: None,
+            live_bite_pair_v1: None,
             seed: state.seed,
             disable_age_death: state.disable_age_death,
             terrain,
@@ -3893,6 +3904,8 @@ impl HeadlessWorld {
             injected_post_action_failure: false,
             #[cfg(test)]
             injected_tick_late_failure_after_first_organism: false,
+            #[cfg(test)]
+            injected_live_bite_late_failure: false,
         };
         if has_authoritative_organism_records {
             world.validate_complete_organism_bindings(true)?;
@@ -5116,6 +5129,13 @@ impl HeadlessWorld {
                 .remove(&bundle.organism_id.raw())
                 .unwrap_or_else(BodyEventDelta::zero),
         );
+        if let Some(incoming) = self.take_live_bite_recipient_event_v1(bundle.organism_id) {
+            body_event = combine_body_event(body_event, incoming);
+            // A fresh wound interrupts this interval's requested recovery.
+            if incoming.damage > 0.0 {
+                body_event.sleep_recovery = 0.0;
+            }
+        }
         if let Some((novelty, _)) = novelty {
             body_event.perceived_novelty = novelty;
         }
@@ -6205,6 +6225,9 @@ impl HeadlessWorld {
             );
         }
         let agent_id = self.agent_entity_id(command.organism_id)?;
+        if let Some(result) = self.execute_live_bite_v1(command, target)? {
+            return Ok(result);
+        }
         if self.objects[&target.raw()].kind == WorldObjectKind::Food {
             if let Some(preparation) = self.prepare_hands_on(command, agent_id, target, true)? {
                 return Ok(preparation);
