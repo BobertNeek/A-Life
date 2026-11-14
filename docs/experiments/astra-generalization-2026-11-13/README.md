@@ -44,6 +44,60 @@ Assay v5 records survival and stops at death. Seven focused native tests and
 strict Clippy pass, including actual hazard exposure after preparation. The older six-test statements
 below describe the already-merged first stage.
 
+## Existing manipulation no-op: one-weight successor candidate
+
+`pursuit-twohead-contact20-hold4` is a measured successor **candidate** to contact20;
+shared-parent adoption is pending coordination. Contact20 remains the manifest's
+working parent until that decision. The complete candidate includes its exported
+construction genome. It preserves every chromosome and weight except the embedded
+foundation and one genetic decoder coordinate: index26879, Contact source1823,
+input lane23, weight0→−4. All32768 synapse coordinates remain identical. Neither
+production defaults nor acquired lives are changed.
+
+NO_MANIPULATION already exists. This experiment changes its ordinary Contact
+readout rather than adding another action or host gate. Its lane23 intrinsic basis
+is1; real Contact candidates share that lane with physical terrain information,
+so both effects must be measured. Native-state inspection and a frozen-row PyTorch
+calculation showed source1823 is negative in the inspected contexts: positive
+weights suppress the no-op. Positive2/8/16 variants accordingly increased wasted
+Ingest attempts. Negative weights encourage it. Frozen-row calculations predict
+immediate score changes only, not entire future trajectories.
+
+Eleven three-case variants (264 lives) preceded a ten-case comparison on fresh
+seeds2026113300–3309: twelve scenes each, full-circle rotations, three speeds,
+four appearances,256 intervals, unchanged600-tick biological preparation.
+
+| Metric | contact20 | hold−2 | hold−4 |
+|---|---:|---:|---:|
+| Food consumed |98/110|97/110|98/110|
+| Failed Ingest-containing bundles |2272|1919|1488|
+| Toy Ingest selections |919|740|556|
+| Toy no-manipulation selections |584|839|1096|
+| Toy object-Contact selections |520|575|582|
+| Sum of successful meal intervals |5545|5579|6001|
+
+Hold−4 matches the same98 successful lives and every per-scene success count:
+all seven basic food/pursuit scenes and toy→food10/10; partial obstacle,
+moving obstacle and food/toy choice6/10 each. It reduces failed Ingest bundles
+34.5% and toy Ingest selections39.5%, while ordinary toy Contact rises11.9%.
+Combined toy Ingest+object-Contact selections fall20.9%. The cost is8.2% more
+intervals to complete the same98 meals. All120 organisms in each arm survive.
+This is a concrete tradeoff, not universal superiority or a significance claim.
+Hold−2 loses one partial-obstacle success and is not the proposed successor.
+
+An independent full12-scene reload of the exported hold−4 asset matches the
+edited candidate digest and all native metrics exactly. A zero-edit v6/v5
+comparison matches the prior digest and all prior metrics on eight scenes.
+The seven assay tests and strict release Clippy pass. Assay v6 adds two optional
+hold-readout deltas and counts genuine no-ops separately from object contacts;
+older requests default to zero deltas and retain their behavior.
+
+`hold-pilot-summary.json`, `hold-heldout-summary.json`, `hold4-export.json` and
+the archived requests retain the evidence. Reproduce `hold-heldout-hold-negative4-0`
+against contact20 with the v6 evaluator, or `hold4-export-reload` against the
+exported hold4 pair. These remain native CPU moving-Food experiments, not a
+live-prey attack/kill implementation or trained-PC migration.
+
 ## Verified improvement
 
 Ten fresh paired cases (sampling seeds 2026112500–2509), four appearances, five

@@ -21,6 +21,14 @@
     "pursuit-twohead-contact20.alife-foundation.genome.json": {
       "sha256": "557da394c045d0b4353009c842825677aa7505f636d6252b20f67bfe0c3a5189",
       "bytes": 205951
+    },
+    "pursuit-twohead-contact20-hold4.alife-foundation": {
+      "sha256": "a02ed9ef294673048a57145c6d11f220fff33059834fe379a2254667aa79ff3d",
+      "bytes": 131581
+    },
+    "pursuit-twohead-contact20-hold4.alife-foundation.genome.json": {
+      "sha256": "3a435806b81dad31764d0f26f9490ce766824a2b10b25f278c932196d9c521ba",
+      "bytes": 205948
     }
   },
   "working_best": {
@@ -39,5 +47,27 @@
       "motor_heads": 2
     },
     "validation": "contact-heldout cases 2026112700..2709; additional short hazard controls"
+  },
+  "successor_candidate": {
+    "foundation": "pursuit-twohead-contact20-hold4.alife-foundation",
+    "genome": "pursuit-twohead-contact20-hold4.alife-foundation.genome.json",
+    "parent": "pursuit-twohead-contact20.alife-foundation",
+    "delta": {
+      "params": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "hold_readout": [
+        -4,
+        0
+      ],
+      "motor_heads": 2
+    },
+    "validation": "hold-heldout cases2026113300..3309 and full12-scene exported reload",
+    "status": "measured tradeoff; pending shared-parent coordination"
   }
 }
