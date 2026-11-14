@@ -142,7 +142,7 @@ fn hungry_ears_ecs_fresh_samples_leave_gaze_markers_and_feedback_intact() {
         hungry_ears: HungryEars { blend: 1.0 },
         hungry_ears_eligible: true,
     };
-    visual.feedback.observe(Some(8), Some(9));
+    visual.feedback.observe(Some(8), Some(9), None);
     visual.feedback.advance(0.15, false);
     let feedback_before = visual.capture_feedback();
     let mut app = App::new();

@@ -2924,14 +2924,18 @@ pub(crate) fn speech_composer_height(
     composer::composer_height(world, size)
 }
 
-pub(crate) fn speech_composer_bottom(world: &bevy::prelude::World) -> f32 {
+pub(crate) fn speech_composer_bottom(
+    world: &bevy::prelude::World,
+    size: bevy::prelude::Vec2,
+) -> f32 {
+    let dock_height = crate::production_voxel_renderer::care_dock::dock_size(size).y;
     if world
         .get_resource::<Fvr05ProductionUxStateResource>()
         .is_some_and(|u| u.last_error.is_some())
     {
-        108.0
+        dock_height + 36.0
     } else {
-        92.0
+        dock_height + 20.0
     }
 }
 /// Keep controls fixed while the clipped draft follows its end caret.

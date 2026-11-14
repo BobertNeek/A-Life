@@ -1,7 +1,9 @@
 //! Wordless selected-creature identity, physiology, possession and playback readout.
 //! Icon meters show measured quantities, not six interchangeable needs or health scores.
 use super::*;
-use alife_world::{HeadlessWorld, WorldObject};
+use alife_world::{
+    HeadlessWorld, PlayerCareKind, PlayerCareReceipt, PresentationEvidence, WorldObject,
+};
 use bevy::a11y::AccessibilityNode;
 use bevy::image::{CompressedImageFormats, ImageSampler, ImageType};
 use bevy::prelude::*;
@@ -111,6 +113,58 @@ impl Readout {
                         && !object.consumed
                         && object.carried_by == Some(organism_id)
                 }),
+        }
+    }
+}
+
+/// DEBUG-ONLY inspector line for the selected creature's last observed
+/// player care. Never wired into the user-facing HUD: the game shows the
+/// creature's response (a nod or flinch, and its own word above it), not
+/// ticks and decimals. One kind shows only its kind-relevant channel:
+/// praise and scold move the praise signal, pet and slap move loneliness.
+/// A mixed set names every kind and shows both channels — the debug line
+/// is where the exact set lives. No receipt is UNKNOWN, never a definite
+/// absence — a save from before receipts existed reads exactly the same
+/// way, so the line says "unknown" and never "none yet" or "felt nothing".
+#[allow(dead_code)]
+fn debug_care_line(care: &PresentationEvidence<PlayerCareReceipt>) -> String {
+    match care {
+        PresentationEvidence::Unknown => "care: unknown (no receipt recorded)".to_string(),
+        PresentationEvidence::Observed { value, .. } => {
+            let words: Vec<&str> = value
+                .kinds
+                .iter()
+                .map(|kind| match kind {
+                    PlayerCareKind::Pet => "Petted",
+                    PlayerCareKind::Praise => "Praised",
+                    PlayerCareKind::Scold => "Scolded",
+                    PlayerCareKind::Slap => "Slapped",
+                })
+                .collect();
+            let label = words.join(" and ");
+            let mut channels = Vec::new();
+            if value.kinds.contains(PlayerCareKind::Praise) {
+                channels.push(format!(
+                    "praise {:.2} to {:.2}",
+                    value.praise_signal_before, value.praise_signal_after
+                ));
+            }
+            if value.kinds.contains(PlayerCareKind::Pet) {
+                channels.push(format!(
+                    "loneliness {:.2} to {:.2}",
+                    value.loneliness_before, value.loneliness_after
+                ));
+            }
+            let applied = format!("{label}, applied at tick {}", value.applied_tick.raw());
+            // These are whole-tick observations, not isolated causal effects
+            // of player care. The receipt does not measure the negative
+            // channels (disapproval/fear or damage/pain), so do not substitute
+            // praise or loneliness as a scold/slap response.
+            if channels.is_empty() {
+                applied
+            } else {
+                format!("{applied}, whole-tick snapshots: {}", channels.join(", "))
+            }
         }
     }
 }
