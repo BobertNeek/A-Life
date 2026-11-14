@@ -23,7 +23,7 @@ smallvec = "1.15.1"
 thiserror = "2.0.18"
 wgpu = "29.0.3"
 rusqlite = { version = "0.41.0", features = ["bundled", "fallible_uint"] }
-zstd = "0.13.3"
+zstd = "0.13.5"
 
 # Real-hardware brain acceptance runs execute tens of thousands of neural,
 # memory, topology, and evidence operations. Keep debug assertions enabled but
