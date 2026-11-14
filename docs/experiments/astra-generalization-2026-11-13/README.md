@@ -669,3 +669,15 @@ source/binary pins. The archive contains aggregate outcomes and requests,
 including diagnostic repetitions, not independent populations or a claim of
 statistical significance. Raw neural traces and historical checkpoints remain
 local; no acquired neural or optimizer arrays are published.
+
+### Residual-pain offset follow-up
+
+A further 27-life, exposed-case screen changed only the negative reference
+coefficient in the withdrawal readout. Offsets of 64, 128 and 256 reduced the
+fixed-state score for fleeing harmless food after pain had declined, but also
+reduced early acute withdrawal scores. All nine stationary meals and all 27
+survivals remained. The smallest offset matched the parent's one mixed meal
+and survival out of three; larger offsets lost it. None is adopted. The frozen
+plan, complete aggregate requests/results and fixed-state sensitivity analysis
+are in `withdrawal-offset-study.json` and `withdrawal-offset-results.jsonl.gz`.
+The fixed-state calculation is not a counterfactual physical trajectory.

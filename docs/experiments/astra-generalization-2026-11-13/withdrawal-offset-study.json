@@ -1,0 +1,192 @@
+{
+  "plan": {
+    "source": "3827d874d105debe0dee0a15644f7eab5c432148",
+    "binary_sha256": "85f0b69af8a573f695e9edaf3d4a82dc4d2094477a5589489317104b10c7c55e",
+    "parent_sha256": "e732d29e6d3111307690b8dab08e189de4736678432f6c36f7d77ad62edf7b94",
+    "parent_genome_sha256": "b20b4b2539f21f8b0c24491ff768a3f38acda7709aecb31be7a627ad73c9c9d2",
+    "variants": [
+      [
+        "offset64",
+        64.0
+      ],
+      [
+        "offset128",
+        128.0
+      ],
+      [
+        "offset256",
+        256.0
+      ]
+    ],
+    "coordinate": 26400,
+    "base_weight": -1024.0,
+    "seeds": [
+      2026116200,
+      2026116201,
+      2026116202
+    ],
+    "scenes": [
+      "stationary",
+      "hazard",
+      "hazard-choice"
+    ],
+    "ticks": 1024,
+    "selection": "Exposed postmeal cases; retain all food and survival controls, improve mixed eating AND survival, then fresh followup before acceptance.",
+    "hypothesis": "Existing phase-neutral Avoid motor1792 is negative in the native witness. Reducing its contact-lane negative coefficient adds offset*m1792 to the score. This suppresses low residual-pain withdrawal while leaving large acute differential responses possible. Signed neural activity can vary with preparation; actual two/three-microstep lives test this rather than assuming a universal hard threshold. No new sensory cue, World gate, or MemoryContext edit.",
+    "frozen": true
+  },
+  "fixed_state_analysis": {
+    "kind": "Fixed-state score sensitivity, not a counterfactual physical trajectory",
+    "source": "trace-contact1024.json",
+    "formula": "new_logit=original_logit+offset*m1792*observed_contact",
+    "results": {
+      "0": {
+        "hazard": {
+          "contact_states": 7,
+          "positive_logits": 4,
+          "first": [
+            0,
+            0.0,
+            0.0
+          ],
+          "last": [
+            6,
+            18.56298828125,
+            0.2867211103439331
+          ]
+        },
+        "food": {
+          "contact_states": 14,
+          "positive_logits": 14,
+          "first": [
+            65,
+            131.8336944580078,
+            0.025790616869926453
+          ],
+          "last": [
+            107,
+            17.243236541748047,
+            0.004643580410629511
+          ]
+        }
+      },
+      "64": {
+        "hazard": {
+          "contact_states": 7,
+          "positive_logits": 0,
+          "first": [
+            0,
+            -7.010524749755859,
+            0.0
+          ],
+          "last": [
+            6,
+            -21.370155334472656,
+            0.2867211103439331
+          ]
+        },
+        "food": {
+          "contact_states": 14,
+          "positive_logits": 2,
+          "first": [
+            65,
+            74.81962203979492,
+            0.025790616869926453
+          ],
+          "last": [
+            107,
+            -39.85039138793945,
+            0.004643580410629511
+          ]
+        }
+      },
+      "128": {
+        "hazard": {
+          "contact_states": 7,
+          "positive_logits": 0,
+          "first": [
+            0,
+            -14.021049499511719,
+            0.0
+          ],
+          "last": [
+            6,
+            -61.30329895019531,
+            0.2867211103439331
+          ]
+        },
+        "food": {
+          "contact_states": 14,
+          "positive_logits": 1,
+          "first": [
+            65,
+            17.80554962158203,
+            0.025790616869926453
+          ],
+          "last": [
+            107,
+            -96.94401931762695,
+            0.004643580410629511
+          ]
+        }
+      },
+      "256": {
+        "hazard": {
+          "contact_states": 7,
+          "positive_logits": 0,
+          "first": [
+            0,
+            -28.042098999023438,
+            0.0
+          ],
+          "last": [
+            6,
+            -141.16958618164062,
+            0.2867211103439331
+          ]
+        },
+        "food": {
+          "contact_states": 14,
+          "positive_logits": 0,
+          "first": [
+            65,
+            -96.22259521484375,
+            0.025790616869926453
+          ],
+          "last": [
+            107,
+            -211.13127517700195,
+            0.004643580410629511
+          ]
+        }
+      }
+    }
+  },
+  "results": {
+    "offset64": {
+      "stationary_meals": 3,
+      "survivors": 9,
+      "mixed_meals_and_survival": 1,
+      "mean_lone_hazard_injury": 0.4494755764802297
+    },
+    "offset128": {
+      "stationary_meals": 3,
+      "survivors": 9,
+      "mixed_meals_and_survival": 0,
+      "mean_lone_hazard_injury": 0.45399906237920123
+    },
+    "offset256": {
+      "stationary_meals": 3,
+      "survivors": 9,
+      "mixed_meals_and_survival": 0,
+      "mean_lone_hazard_injury": 0.4501194953918457
+    }
+  },
+  "decision": "No candidate adopted. Offset64 matches the parent one-of-three mixed meal+survival result without a new success; larger offsets lose that meal. All27 lives survive and all9 stationary meals occur. Lower injury in one condition is a tradeoff, not a broad behavioral winner. Exposed diagnostic cases only; no heldout promotion.",
+  "archive": {
+    "file": "withdrawal-offset-results.jsonl.gz",
+    "sha256": "4b368b66f4da9a87a23025b92ea7d0adc52157f6d37ff447f8a8595eafdd7107",
+    "requests": 9,
+    "trials": 27
+  }
+}
