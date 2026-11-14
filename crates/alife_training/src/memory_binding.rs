@@ -112,6 +112,7 @@ pub(crate) mod wire {
     use super::*;
     use crate::TrainingReplayCandidate;
     #[derive(Serialize)]
+    #[serde(rename = "TrainingReplayCandidate")]
     struct LegacyRef<'a> {
         family: CandidateActionFamily,
         #[serde(with = "crate::types::decoder_input_array")]
@@ -119,7 +120,7 @@ pub(crate) mod wire {
         innate_bias: f32,
     }
     #[derive(Deserialize)]
-    #[serde(deny_unknown_fields)]
+    #[serde(rename = "TrainingReplayCandidate", deny_unknown_fields)]
     struct Legacy {
         family: CandidateActionFamily,
         #[serde(with = "crate::types::decoder_input_array")]
