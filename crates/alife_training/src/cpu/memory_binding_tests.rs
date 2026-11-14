@@ -55,6 +55,7 @@ fn memory_readout_native_cold_and_frozen_construction_are_exact() {
         &trainer,
     )
     .unwrap();
+    let mut collected = Vec::new();
     for index in 0..2 {
         let row = host.step(&trainer, 1.).unwrap();
         let twin = cold.step(&trainer, 1.).unwrap();
@@ -69,7 +70,9 @@ fn memory_readout_native_cold_and_frozen_construction_are_exact() {
         );
         save(&format!("COLD-{index}.rows.json"), &row.decisions);
         save(&format!("COLD-{index}.cp.json"), &cp);
+        collected.extend(row.decisions);
     }
+    check_research_collection_training_rejection(&host, &trainer, &collected);
     let cp = host.checkpoint(&trainer).unwrap();
     let mut altered = cp.clone();
     altered.residents[0]
@@ -89,6 +92,159 @@ fn memory_readout_native_cold_and_frozen_construction_are_exact() {
     legacy_schema.schema_version = 2;
     assert!(CpuCanonicalHost::from_checkpoint(legacy_schema, &trainer).is_err());
     assert_eq!(serde_json::to_vec(&trainer.checkpoint()).unwrap(), adam);
+}
+
+fn check_research_collection_training_rejection(
+    host: &CpuCanonicalHost,
+    trainer: &CpuFoundationTrainer,
+    decisions: &[CpuCollectedDecision],
+) {
+    assert_eq!(decisions.len(), 2);
+    assert!(decisions
+        .iter()
+        .all(|d| d.memory_readout_research.is_some()));
+    assert!(decisions.iter().all(|d| d
+        .replay_tick
+        .candidates
+        .iter()
+        .any(|c| c.memory_readout.is_some())));
+    let phenotype = host
+        .world()
+        .organism_registry()
+        .iter()
+        .next()
+        .unwrap()
+        .phenotype();
+    let value = hotpath_bench::value(trainer.phenotype());
+    let config = PpoConfig {
+        temperature: 1., // actual native collection temperature above
+        ..hotpath_bench::configuration()
+    };
+    let mut legacy = decisions.to_vec();
+    for row in &mut legacy {
+        row.memory_readout_research = None;
+        for candidate in &mut row.replay_tick.candidates {
+            candidate.memory_readout = None;
+        }
+    }
+    let windows = |rows: &[CpuCollectedDecision]| {
+        cpu_training_windows(rows, None, trainer, &value, phenotype, 7400, config, 2, 0)
+    };
+    // Removing both research markers is only a structural test control. It is
+    // never used as an admitted research trajectory or an optimizer input.
+    assert!(!windows(&legacy).unwrap().is_empty());
+    for (receipt, replay) in [(true, true), (true, false), (false, true)] {
+        let mut rows = legacy.clone();
+        // Even a research-only bootstrap row must prevent receipt loss.
+        if receipt {
+            rows[1].memory_readout_research = decisions[1].memory_readout_research.clone();
+        }
+        if replay {
+            rows[1].replay_tick = decisions[1].replay_tick.clone();
+        }
+        assert!(windows(&rows).is_err(), "receipt={receipt} replay={replay}");
+    }
+}
+
+#[test]
+fn memory_readout_residual_cohort_rejects_before_any_optimizer_mutation() {
+    check_research_cohort_rejection(true);
+}
+
+#[test]
+fn memory_readout_ppo_cohort_rejects_before_any_optimizer_mutation() {
+    check_research_cohort_rejection(false);
+}
+
+fn check_research_cohort_rejection(residual: bool) {
+    let (phenotype, source) = hotpath_bench::fixture();
+    let mut trainer = hotpath_bench::learner(&phenotype, &source);
+    let mut value = hotpath_bench::value(&phenotype);
+    let config = hotpath_bench::configuration();
+    let ordinary = hotpath_bench::window(&trainer, 3, 1);
+    super::cohort::validate_frozen_residual_window(&trainer, &value, &ordinary, config, 7400)
+        .unwrap();
+    let actor_before = trainer.checkpoint();
+    let critic_before = value.checkpoint();
+    // These retained fixtures have nonzero moments and exact ages above 2^24.
+    assert!(actor_before.first_moment.iter().any(|m| *m != 0.));
+    assert!(actor_before.second_moment.iter().any(|v| *v != 0.));
+    assert!(actor_before.update_ages.iter().any(|age| *age > 1 << 24));
+    for invalid_window in [0, 1] {
+        for tick_index in [0, 2] {
+            let mut research = ordinary.clone();
+            let tick = &mut research.actor.sequence.ticks[tick_index];
+            // A valid zero-source research term keeps all scores/probabilities
+            // unchanged, so rejection cannot be explained by stale PPO data.
+            tick.candidates[0].memory_readout = Some(Box::new(FrozenMemoryReadoutTermV1 {
+                schema_version: 1,
+                destination_family: CandidateActionFamily::Approach,
+                source_family: CandidateActionFamily::Ingest,
+                source_candidate_index: None,
+                organism_id: OrganismId(1),
+                current_entity: None,
+                current_tracked_target: None,
+                query_tick: Tick::new(1),
+                profile: SensorProfileIdentity {
+                    profile_id: phenotype.sensor_profile().into(),
+                    profile_schema_version: 1,
+                    sensory_abi_version: SensoryAbiVersion::CURRENT.raw(),
+                },
+                frame_digest: PerceptionFrameDigest([0; 4]),
+                source_confidence: 0.,
+                source_energy: 0.,
+                coefficient: 4.,
+                status: PreparedMemoryBindingStatusV1::NoTrackedTarget,
+                provenance: None,
+            }));
+            research.actor.sequence.validate_for(&phenotype).unwrap();
+            assert_eq!(
+                trainer.evaluate_replay(&research.actor.sequence).unwrap(),
+                trainer.evaluate_replay(&ordinary.actor.sequence).unwrap()
+            );
+            let adjoints = vec![vec![0.1; 16]; 2];
+            assert_eq!(
+                trainer
+                    .probe_replay_gradients(&research.actor.sequence, &adjoints)
+                    .unwrap(),
+                trainer
+                    .probe_replay_gradients(&ordinary.actor.sequence, &adjoints)
+                    .unwrap()
+            );
+            let load = |i| {
+                Ok(if i == invalid_window {
+                    research.clone()
+                } else {
+                    ordinary.clone()
+                })
+            };
+            let result = if residual {
+                train_cpu_residual_cohort(&mut trainer, &mut value, 2, 1, load, config, 7400)
+            } else {
+                train_cpu_ppo_cohort(
+                    &mut trainer,
+                    &mut value,
+                    2,
+                    1,
+                    |i| Ok(load(i)?.actor),
+                    config,
+                    7400,
+                )
+            };
+            assert!(
+                result.is_err(),
+                "residual={residual} window={invalid_window} tick={tick_index}"
+            );
+            let after = trainer.checkpoint();
+            assert_eq!(after.weights, actor_before.weights);
+            assert_eq!(after.first_moment, actor_before.first_moment);
+            assert_eq!(after.second_moment, actor_before.second_moment);
+            assert_eq!(after.update_ages, actor_before.update_ages);
+            assert_eq!(after.optimizer_step, actor_before.optimizer_step);
+            assert_eq!(after, actor_before);
+            assert_eq!(value.checkpoint(), critic_before);
+        }
+    }
 }
 #[test]
 fn memory_readout_fresh_no_memory_has_zero_influence_at_matched_tariff() {

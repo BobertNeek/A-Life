@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 """LOCAL CPU research readout audit. No training, world steps or raw-array output."""
+if not __debug__:
+    raise RuntimeError('optimized Python is unsupported: audit acceptance requires assertions')
+
 import argparse
 import copy
 import importlib.util

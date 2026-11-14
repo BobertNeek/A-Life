@@ -35,6 +35,13 @@ JSON envelopes, including zero coefficients. Ordinary collector readers and
 older paths reject those records. GPU replay rejects readout-bearing candidates;
 no matching GPU execution or production admission is implemented.
 
+Ordinary CPU window construction also rejects in-memory research receipts and
+readout-bearing replay ticks. Both mutating CPU cohort trainers check every
+window, including burn-in and later windows in mixed batches, before any actor,
+critic or Adam update, and check again when reloading. The public diagnostic
+`evaluate_replay` and `probe_replay_gradients` methods remain available; ordinary
+somatic learning is unchanged.
+
 The prototype charges a versioned logical operation tariff for source metadata,
 binding/admission checks, joins, readout arithmetic and bounded validation. It
 updates memory-context activity work and cognitive-memory work, and refuses

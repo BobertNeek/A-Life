@@ -1,7 +1,10 @@
 """Research auditor completeness guards; no neural or creature fixtures."""
 import importlib.util
 import json
+import os
 from pathlib import Path
+import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -12,6 +15,23 @@ spec.loader.exec_module(audit)
 
 
 class CompletenessTests(unittest.TestCase):
+    def test_optimized_execution_is_rejected_before_auditing(self):
+        script = Path(__file__).with_name('check_prepared_memory_readout.py')
+        with tempfile.TemporaryDirectory() as directory:
+            for flags, setting in [(['-O'], None), ([], '1')]:
+                with self.subTest(flags=flags, pythonoptimize=setting):
+                    env = dict(os.environ)
+                    env.pop('PYTHONOPTIMIZE', None)
+                    if setting is not None:
+                        env['PYTHONOPTIMIZE'] = setting
+                    result = subprocess.run(
+                        [sys.executable, *flags, str(script), directory],
+                        env=env, capture_output=True, text=True, check=False,
+                    )
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn('optimized Python is unsupported', result.stderr)
+                    self.assertEqual(list(Path(directory).iterdir()), [])
+
     def test_graph_only_never_reaches_evaluation_or_reports_success(self):
         for coefficient in (None, 0, 4):
             with self.subTest(coefficient=coefficient), tempfile.TemporaryDirectory() as directory:
