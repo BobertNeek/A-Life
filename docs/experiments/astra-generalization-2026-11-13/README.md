@@ -574,3 +574,8 @@ v13c physical metrics. Eleven native example tests, strict release Clippy,
 release build and formatting passed. Raw neural traces remain local; the archive
 contains only requests and aggregate trial outcomes, including diagnostic
 repeats rather than independent new samples.
+
+After integration with main `8502613d` (selective care UI), all eleven tests,
+strict Clippy, release build and formatting passed again on `dab9fa14`.
+A fresh 14-scene exported paired-child reload matched every result field except
+measured wall time against the earlier binary. No production default changed.

@@ -4330,5 +4330,12 @@
         }
       ]
     }
-  ]
+  ],
+  "combined_main_qualification": {
+    "all_non_wallclock_result_fields_exact": true,
+    "trials": 14,
+    "source": "dab9fa14a3cba07349b400664df334d84b6fc25f",
+    "binary_sha256": "e5d94d069e79ff98527ff018a964b4562e6744319aabce6ebf50c27e9f03da4f",
+    "note": "Initial whole-JSON assertion caught expected measured wall-clock difference; every other field exact. No repeated life."
+  }
 }
