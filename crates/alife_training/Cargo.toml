@@ -73,3 +73,7 @@ required-features = ["cpu-backend"]
 [[example]]
 name = "feedback_pet_contingency"
 required-features = ["cpu-backend"]
+
+[[example]]
+name = "memory_readout_population"
+required-features = ["cpu-backend"]
