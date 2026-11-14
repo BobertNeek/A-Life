@@ -167,5 +167,56 @@
       "long_trace_physical_metrics_exact": true,
       "validation_note": "First comparison incorrectly included trace-only target_motion; original AssertionError retained. Comparison corrected without rerunning that life. All physical metrics exact."
     }
+  ],
+  "release_hold_tradeoffs": [
+    {
+      "name": "pursuit-twohead-contact20-release16x24-hold4",
+      "role": "tradeoff control, not new champion",
+      "actual_export_parent": "pursuit-twohead-contact20-release16x24.alife-foundation",
+      "export_parent_sha256": "40f844bc55b578965e629a629c620a170a09f39b0f33fb05b1f7b1db0feabfa0",
+      "added_weight_edits": [
+        [
+          26879,
+          -4.0
+        ]
+      ],
+      "foundation_sha256": "c231d0ed4d1e6a5d89a737f1132c80586358ca2f6f842213bcd24025d59f13fd",
+      "genome_sha256": "b179c85fe1951646637326874ad795567666ffea370134f9b9c764ebee035cae",
+      "candidate_digest": [
+        157,
+        135,
+        210,
+        26,
+        212,
+        174,
+        139,
+        149,
+        108,
+        182,
+        140,
+        187,
+        225,
+        91,
+        184,
+        97,
+        15,
+        161,
+        31,
+        59,
+        154,
+        157,
+        53,
+        220,
+        210,
+        67,
+        113,
+        39,
+        164,
+        223,
+        255,
+        120
+      ],
+      "exact_reload_trials": 14
+    }
   ]
 }

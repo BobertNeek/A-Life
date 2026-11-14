@@ -419,14 +419,14 @@ fn trial(
     let own = old.organism_id();
     let mirror = if seed.is_multiple_of(2) { 1. } else { -1. };
     let mut initial_local = match scene {
-        "contact" | "toy" | "hazard" => Vec3f::new(0.25, 0., 0.),
+        "contact" | "toy" | "hazard" | "delayed-hazard" => Vec3f::new(0.25, 0., 0.),
         "toy-then-food" | "wait-then-food" => Vec3f::new(100., 0., 0.),
         "crossing" | "frozen-crossing" => Vec3f::new(2.5, 0., -mirror),
         _ => Vec3f::new(2.5, 0., 0.),
     };
     if !matches!(
         scene,
-        "contact" | "toy" | "hazard" | "toy-then-food" | "wait-then-food"
+        "contact" | "toy" | "hazard" | "delayed-hazard" | "toy-then-food" | "wait-then-food"
     ) {
         initial_local.x *= variation.distance_scale;
         initial_local.z *= variation.distance_scale;
@@ -439,21 +439,25 @@ fn trial(
         label: "target".into(),
         kind: match scene {
             "toy" => WorldObjectKind::ActivityToy,
-            "hazard" => WorldObjectKind::Hazard,
+            "hazard" | "delayed-hazard" => WorldObjectKind::Hazard,
             _ => WorldObjectKind::Food,
         },
         organism_id: None,
-        position: if scene == "hazard" {
+        position: if matches!(scene, "hazard" | "delayed-hazard") {
             Vec3f::new(100., 0., 0.)
         } else {
             initial
         },
-        nutrition: if matches!(scene, "toy" | "hazard") {
+        nutrition: if matches!(scene, "toy" | "hazard" | "delayed-hazard") {
             0.
         } else {
             0.6
         },
-        hazard_pain: if scene == "hazard" { 0.05 } else { 0. },
+        hazard_pain: if matches!(scene, "hazard" | "delayed-hazard") {
+            0.05
+        } else {
+            0.
+        },
         radius: 0.3,
         token_id: None,
     })?;
@@ -553,6 +557,10 @@ fn trial(
         )?;
     }
     let hunter = host.world().entity_id("hunter").unwrap();
+    let initial_distance = distance(
+        host.world().entity(hunter).unwrap().position,
+        host.world().entity(target).unwrap().position,
+    );
     let body = host
         .world()
         .organism_registry()
@@ -574,8 +582,8 @@ fn trial(
         consumed: false,
         caught_tick: None,
         consumed_tick: None,
-        min_distance: distance(Vec3f::ZERO, initial),
-        final_distance: distance(Vec3f::ZERO, initial),
+        min_distance: initial_distance,
+        final_distance: initial_distance,
         initial_energy: body.energy,
         final_energy: body.energy,
         initial_drives,
@@ -593,7 +601,7 @@ fn trial(
         target_motion: Vec::new(),
     };
     for tick in 0..ticks {
-        if tick == 64 && matches!(scene, "toy-then-food" | "wait-then-food") {
+        if tick == 64 && matches!(scene, "toy-then-food" | "wait-then-food" | "delayed-hazard") {
             if let Some(id) = distraction_id.take() {
                 host.world_mut().editor_remove_object(id)?;
             }
@@ -810,6 +818,7 @@ fn run(base: &FoundationWeightAsset, p: &BrainPhenotype, r: Request) -> Result<s
                 "toy-then-food",
                 "wait-then-food",
                 "hazard",
+                "delayed-hazard",
                 "hazard-choice",
             ]
             .contains(&s.as_str())
@@ -866,7 +875,7 @@ fn run(base: &FoundationWeightAsset, p: &BrainPhenotype, r: Request) -> Result<s
     }
     Ok(
         json!({"backend":"native-cpu", "memory_cap":trainer.phenotype().candidate_decoder().memory_channel().map(|m|m.max_candidate_gain()), "base_digest":base.digest(),"candidate_digest":asset.digest(),
-        "assay_version":12,"weight_edits":r.weight_edits,"hold_readout":r.hold_readout,"motor_heads":r.motor_heads,"variation":r.variation,"readout_scale":r.readout_scale,"bearing_gain":r.bearing_gain,"params":r.params,"memory_aversion":r.memory_aversion,"ticks":r.ticks,"seconds":start.elapsed().as_secs_f64(),"trials":trials}),
+        "assay_version":13,"weight_edits":r.weight_edits,"hold_readout":r.hold_readout,"motor_heads":r.motor_heads,"variation":r.variation,"readout_scale":r.readout_scale,"bearing_gain":r.bearing_gain,"params":r.params,"memory_aversion":r.memory_aversion,"ticks":r.ticks,"seconds":start.elapsed().as_secs_f64(),"trials":trials}),
     )
 }
 
@@ -1080,6 +1089,58 @@ mod tests {
         .unwrap();
         assert!(result.decisions > 0);
         assert!(result.injury > 0.);
+        assert!(!result.consumed);
+    }
+
+    #[test]
+    fn delayed_hazard_allows_neural_activity_before_real_pain_arrives() {
+        let original = base();
+        let before_arrival = run(
+            &original,
+            &phenotype(&original).unwrap(),
+            serde_json::from_value(json!({
+                "params": [0., 0., 0., 0., 0., 0.], "motor_heads": 2,
+                "seed_start": 2026114900_u64, "seeds": 1,
+                "scenes": ["delayed-hazard"], "ticks": 64
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        assert!(
+            before_arrival["trials"][0]["min_distance"]
+                .as_f64()
+                .unwrap()
+                > 90.0
+        );
+        assert_eq!(before_arrival["trials"][0]["injury"], 0.0);
+        let (asset, p, game) = prepare_founder(original, 2).unwrap();
+        let mask = StageTrainableMask::recurrent_only(&p).unwrap();
+        let trainer = CpuFoundationTrainer::new(p, asset, mask, AdamWConfig::default()).unwrap();
+        let result = trial(
+            &game,
+            &trainer,
+            2026114900,
+            "delayed-hazard",
+            72,
+            true,
+            Variation::default(),
+        )
+        .unwrap();
+        assert!(result.trace.iter().any(|r| r["tick"] == 64));
+        for row in result
+            .trace
+            .iter()
+            .filter(|r| r["tick"].as_u64().unwrap() < 64)
+        {
+            assert_eq!(row["pain_before"], 0.0);
+            assert_eq!(row["pain_after"], 0.0);
+            assert_eq!(row["objects_before"][0]["position"]["x"], 100.0);
+        }
+        assert!(result
+            .trace
+            .iter()
+            .any(|r| r["tick"].as_u64().unwrap() >= 64 && r["pain_after"].as_f64().unwrap() > 0.0));
+        assert!(result.injury > 0.0);
         assert!(!result.consumed);
     }
 

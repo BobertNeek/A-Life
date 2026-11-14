@@ -1,0 +1,967 @@
+{
+  "source": "8d1fc396",
+  "assay_version": 13,
+  "paper": "https://rikiyat.github.io/blog/weight-space-programming/",
+  "scope": "ActionCandidate pain/release/Avoid readouts only. No MemoryContext, terminal-head, World, physiology or production-default change.",
+  "working_parent": "Contact20 remains shared; release16x24 remains the stronger all-round research candidate from this lane.",
+  "first_escape_validation": {
+    "base": {
+      "lives": 140,
+      "ordinary_meals": 94,
+      "ordinary_cases": 110,
+      "ordinary_meal_intervals": 5987,
+      "mixed_meals": 2,
+      "deaths": 7,
+      "final_hazard_injury_sum": 15.995757937431335,
+      "failed_ingest_bundles": 3579,
+      "toy_ingest_choices": 860,
+      "toy_no_manipulations": 624,
+      "final_hazard_distance_over_reach": 8,
+      "lost_parent_food": [
+        [
+          2026114802,
+          "partial-obstacle"
+        ]
+      ],
+      "gained_parent_food": [],
+      "common_food_count": 94,
+      "parent_common_food_intervals": 6230,
+      "candidate_common_food_intervals": 5987
+    },
+    "release": {
+      "lives": 140,
+      "ordinary_meals": 95,
+      "ordinary_cases": 110,
+      "ordinary_meal_intervals": 6316,
+      "mixed_meals": 2,
+      "deaths": 0,
+      "final_hazard_injury_sum": 9.733622878789902,
+      "failed_ingest_bundles": 2217,
+      "toy_ingest_choices": 805,
+      "toy_no_manipulations": 604,
+      "final_hazard_distance_over_reach": 3,
+      "lost_parent_food": [],
+      "gained_parent_food": [],
+      "common_food_count": 95,
+      "parent_common_food_intervals": 6316,
+      "candidate_common_food_intervals": 6316
+    },
+    "flee128": {
+      "lives": 140,
+      "ordinary_meals": 69,
+      "ordinary_cases": 110,
+      "ordinary_meal_intervals": 5405,
+      "mixed_meals": 4,
+      "deaths": 0,
+      "final_hazard_injury_sum": 6.2148638516664505,
+      "failed_ingest_bundles": 1883,
+      "toy_ingest_choices": 453,
+      "toy_no_manipulations": 818,
+      "final_hazard_distance_over_reach": 12,
+      "lost_parent_food": [
+        [
+          2026114801,
+          "fleeing"
+        ],
+        [
+          2026114801,
+          "receding"
+        ],
+        [
+          2026114801,
+          "zigzag"
+        ],
+        [
+          2026114802,
+          "crossing"
+        ],
+        [
+          2026114802,
+          "fleeing"
+        ],
+        [
+          2026114802,
+          "orbiting"
+        ],
+        [
+          2026114802,
+          "partial-obstacle"
+        ],
+        [
+          2026114802,
+          "receding"
+        ],
+        [
+          2026114802,
+          "stationary"
+        ],
+        [
+          2026114802,
+          "zigzag"
+        ],
+        [
+          2026114803,
+          "crossing"
+        ],
+        [
+          2026114803,
+          "fleeing"
+        ],
+        [
+          2026114803,
+          "receding"
+        ],
+        [
+          2026114803,
+          "stationary"
+        ],
+        [
+          2026114803,
+          "zigzag"
+        ],
+        [
+          2026114805,
+          "crossing"
+        ],
+        [
+          2026114805,
+          "fleeing"
+        ],
+        [
+          2026114805,
+          "orbiting"
+        ],
+        [
+          2026114805,
+          "receding"
+        ],
+        [
+          2026114805,
+          "stationary"
+        ],
+        [
+          2026114805,
+          "zigzag"
+        ],
+        [
+          2026114806,
+          "fleeing"
+        ],
+        [
+          2026114806,
+          "moving-obstacle"
+        ],
+        [
+          2026114806,
+          "receding"
+        ],
+        [
+          2026114806,
+          "zigzag"
+        ],
+        [
+          2026114807,
+          "crossing"
+        ],
+        [
+          2026114809,
+          "partial-obstacle"
+        ]
+      ],
+      "gained_parent_food": [
+        [
+          2026114800,
+          "moving-obstacle"
+        ]
+      ],
+      "common_food_count": 68,
+      "parent_common_food_intervals": 3955,
+      "candidate_common_food_intervals": 5300
+    }
+  },
+  "false_alarm": {
+    "measured_food_pain_zero_throughout": true,
+    "forward_max_errors": [
+      0.0,
+      2.9802322387695312e-08
+    ],
+    "cause": "A positive painless motor baseline was amplified by the large Avoid readout. A signed distance term can also invert when the motor activation is negative. This is a circuit-design failure, not a runtime scheduling defect."
+  },
+  "threshold_fit": {
+    "method": "Frozen native two-phase recurrence; actual receding-food pain is exactly zero throughout. Fit a negative painless baseline and remove the signed distance term so negative activation cannot turn far objects into positive Flee scores. Predictions require physical validation.",
+    "fits": [
+      {
+        "target": -0.02,
+        "reference_gain": 2.20518159866333,
+        "painless_prediction": -0.020000044256448746,
+        "pain_prediction": 0.013836577534675598
+      },
+      {
+        "target": -0.06,
+        "reference_gain": 2.3819732666015625,
+        "painless_prediction": -0.05999995768070221,
+        "pain_prediction": -0.023320570588111877
+      }
+    ]
+  },
+  "balanced_fit": {
+    "method": "Same frozen native two-phase recurrence and measured no-pain / pain0.0553 traces. Fit negative baseline with stronger pain sensitivity. Predicted values are not physical outcomes.",
+    "fits": [
+      {
+        "pain_gain": 8.0,
+        "target": -0.06,
+        "reference_gain": 2.3819732666015625,
+        "painless_prediction": -0.05999995768070221,
+        "pain_prediction": -0.023320570588111877
+      },
+      {
+        "pain_gain": 16.0,
+        "target": -0.06,
+        "reference_gain": 5.616951942443848,
+        "painless_prediction": -0.059999942779541016,
+        "pain_prediction": 0.003165125846862793
+      },
+      {
+        "pain_gain": 32.0,
+        "target": -0.06,
+        "reference_gain": 12.600784301757812,
+        "painless_prediction": -0.059999942779541016,
+        "pain_prediction": 0.016171321272850037
+      }
+    ]
+  },
+  "balanced_selection": {
+    "base": {
+      "lives": 14,
+      "ordinary_meals": 7,
+      "ordinary_cases": 8,
+      "ordinary_meal_intervals": 746,
+      "mixed_meals": 0,
+      "deaths": 4,
+      "final_hazard_injury_sum": 5.728769779205322,
+      "failed_ingest_bundles": 529,
+      "toy_ingest_choices": 0,
+      "toy_no_manipulations": 0,
+      "final_hazard_distance_over_reach": 2
+    },
+    "release": {
+      "lives": 14,
+      "ordinary_meals": 7,
+      "ordinary_cases": 8,
+      "ordinary_meal_intervals": 739,
+      "mixed_meals": 0,
+      "deaths": 0,
+      "final_hazard_injury_sum": 2.9556285738945007,
+      "failed_ingest_bundles": 168,
+      "toy_ingest_choices": 0,
+      "toy_no_manipulations": 0,
+      "final_hazard_distance_over_reach": 1
+    },
+    "g8": {
+      "lives": 14,
+      "ordinary_meals": 7,
+      "ordinary_cases": 8,
+      "ordinary_meal_intervals": 694,
+      "mixed_meals": 0,
+      "deaths": 0,
+      "final_hazard_injury_sum": 3.049626797437668,
+      "failed_ingest_bundles": 214,
+      "toy_ingest_choices": 0,
+      "toy_no_manipulations": 0,
+      "final_hazard_distance_over_reach": 2
+    },
+    "g16": {
+      "lives": 14,
+      "ordinary_meals": 7,
+      "ordinary_cases": 8,
+      "ordinary_meal_intervals": 829,
+      "mixed_meals": 0,
+      "deaths": 0,
+      "final_hazard_injury_sum": 2.5398831963539124,
+      "failed_ingest_bundles": 207,
+      "toy_ingest_choices": 0,
+      "toy_no_manipulations": 0,
+      "final_hazard_distance_over_reach": 2
+    },
+    "g32": {
+      "lives": 14,
+      "ordinary_meals": 7,
+      "ordinary_cases": 8,
+      "ordinary_meal_intervals": 938,
+      "mixed_meals": 0,
+      "deaths": 0,
+      "final_hazard_injury_sum": 2.623460590839386,
+      "failed_ingest_bundles": 203,
+      "toy_ingest_choices": 0,
+      "toy_no_manipulations": 0,
+      "final_hazard_distance_over_reach": 4
+    }
+  },
+  "balanced_selection_source": "8d1fc396672dd2d884065762a6980fbc7b6654e9",
+  "final_validation_plan": {
+    "variants": [
+      [
+        "base",
+        []
+      ],
+      [
+        "release",
+        [
+          [
+            25440,
+            -0.5904028415679932
+          ],
+          [
+            25446,
+            -0.4375
+          ],
+          [
+            25455,
+            -2.1875
+          ],
+          [
+            25456,
+            -0.5904028415679932
+          ],
+          [
+            25462,
+            -0.4375
+          ],
+          [
+            25471,
+            -2.1875
+          ],
+          [
+            25472,
+            -0.5904028415679932
+          ],
+          [
+            25478,
+            -0.4375
+          ],
+          [
+            25487,
+            -2.1875
+          ],
+          [
+            25488,
+            -0.5904028415679932
+          ],
+          [
+            25504,
+            -0.5904028415679932
+          ],
+          [
+            25520,
+            -0.5904028415679932
+          ],
+          [
+            25536,
+            -0.5904028415679932
+          ],
+          [
+            25552,
+            -0.5904028415679932
+          ],
+          [
+            25568,
+            -0.5904028415679932
+          ],
+          [
+            9567,
+            16.0
+          ],
+          [
+            10431,
+            5.198683738708496
+          ],
+          [
+            26529,
+            -768.0
+          ],
+          [
+            26785,
+            96.0
+          ],
+          [
+            26865,
+            24.0
+          ]
+        ]
+      ],
+      [
+        "balanced32",
+        [
+          [
+            25440,
+            -0.5904028415679932
+          ],
+          [
+            25446,
+            -0.4375
+          ],
+          [
+            25455,
+            -2.1875
+          ],
+          [
+            25456,
+            -0.5904028415679932
+          ],
+          [
+            25462,
+            -0.4375
+          ],
+          [
+            25471,
+            -2.1875
+          ],
+          [
+            25472,
+            -0.5904028415679932
+          ],
+          [
+            25478,
+            -0.4375
+          ],
+          [
+            25487,
+            -2.1875
+          ],
+          [
+            25488,
+            -0.5904028415679932
+          ],
+          [
+            25504,
+            -0.5904028415679932
+          ],
+          [
+            25520,
+            -0.5904028415679932
+          ],
+          [
+            25536,
+            -0.5904028415679932
+          ],
+          [
+            25552,
+            -0.5904028415679932
+          ],
+          [
+            25568,
+            -0.5904028415679932
+          ],
+          [
+            9567,
+            16.0
+          ],
+          [
+            10431,
+            5.198683738708496
+          ],
+          [
+            26529,
+            -768.0
+          ],
+          [
+            26785,
+            96.0
+          ],
+          [
+            26865,
+            24.0
+          ],
+          [
+            9563,
+            32.0
+          ],
+          [
+            10484,
+            12.600784301757812
+          ],
+          [
+            26210,
+            128.0
+          ],
+          [
+            26226,
+            128.0
+          ],
+          [
+            26242,
+            128.0
+          ],
+          [
+            26258,
+            128.0
+          ],
+          [
+            26274,
+            128.0
+          ],
+          [
+            26290,
+            128.0
+          ],
+          [
+            26306,
+            128.0
+          ],
+          [
+            26322,
+            128.0
+          ],
+          [
+            26338,
+            128.0
+          ]
+        ]
+      ],
+      [
+        "release_hold4",
+        [
+          [
+            25440,
+            -0.5904028415679932
+          ],
+          [
+            25446,
+            -0.4375
+          ],
+          [
+            25455,
+            -2.1875
+          ],
+          [
+            25456,
+            -0.5904028415679932
+          ],
+          [
+            25462,
+            -0.4375
+          ],
+          [
+            25471,
+            -2.1875
+          ],
+          [
+            25472,
+            -0.5904028415679932
+          ],
+          [
+            25478,
+            -0.4375
+          ],
+          [
+            25487,
+            -2.1875
+          ],
+          [
+            25488,
+            -0.5904028415679932
+          ],
+          [
+            25504,
+            -0.5904028415679932
+          ],
+          [
+            25520,
+            -0.5904028415679932
+          ],
+          [
+            25536,
+            -0.5904028415679932
+          ],
+          [
+            25552,
+            -0.5904028415679932
+          ],
+          [
+            25568,
+            -0.5904028415679932
+          ],
+          [
+            9567,
+            16.0
+          ],
+          [
+            10431,
+            5.198683738708496
+          ],
+          [
+            26529,
+            -768.0
+          ],
+          [
+            26785,
+            96.0
+          ],
+          [
+            26865,
+            24.0
+          ],
+          [
+            26879,
+            -4.0
+          ]
+        ]
+      ]
+    ],
+    "seeds": [
+      2026115000,
+      2026115001,
+      2026115002,
+      2026115003,
+      2026115004,
+      2026115005,
+      2026115006,
+      2026115007,
+      2026115008,
+      2026115009
+    ],
+    "ticks": 256,
+    "delayed_ticks": 320,
+    "source": "8d1fc396",
+    "binary_sha256": "251878b3d28a13a4ff2b6a0e67d9d4fae6ba50e0af3b067bf237550195f639bb",
+    "selection": "Freeze the calibrated g32 Avoid child after restoring the seven matched ordinary pilot successes, with partial escape and reduced delayed-hazard injury. Independently combine prior Hold4 with release, one additional Contact readout weight, to test synergy. Neither changes the shared parent. Fresh seeds are unused for selection.",
+    "terrain": [
+      [
+        0.5,
+        0.0
+      ],
+      [
+        0.25,
+        0.25
+      ],
+      [
+        0.0,
+        0.5
+      ],
+      [
+        1.0,
+        1.0
+      ]
+    ],
+    "limits": "Cold and delayed hazard each have256 exposure intervals. Delayed condition has64 extra normal brain/body intervals beforehand, so it is not an isolated neural-state ablation."
+  },
+  "final_vs_release": {
+    "base": {
+      "lives": 140,
+      "ordinary_meals": 94,
+      "ordinary_cases": 110,
+      "ordinary_meal_intervals": 4997,
+      "mixed_meals": 4,
+      "deaths": 7,
+      "final_hazard_injury_sum": 15.026359781622887,
+      "failed_ingest_bundles": 3541,
+      "toy_ingest_choices": 865,
+      "toy_no_manipulations": 582,
+      "final_hazard_distance_over_reach": 6,
+      "lost_parent_food": [
+        [
+          2026115005,
+          "partial-obstacle"
+        ]
+      ],
+      "gained_parent_food": [],
+      "common_food_count": 94,
+      "parent_common_food_intervals": 5487,
+      "candidate_common_food_intervals": 4997
+    },
+    "release": {
+      "lives": 140,
+      "ordinary_meals": 95,
+      "ordinary_cases": 110,
+      "ordinary_meal_intervals": 5667,
+      "mixed_meals": 2,
+      "deaths": 0,
+      "final_hazard_injury_sum": 9.619209557771683,
+      "failed_ingest_bundles": 2239,
+      "toy_ingest_choices": 782,
+      "toy_no_manipulations": 584,
+      "final_hazard_distance_over_reach": 2,
+      "lost_parent_food": [],
+      "gained_parent_food": [],
+      "common_food_count": 95,
+      "parent_common_food_intervals": 5667,
+      "candidate_common_food_intervals": 5667
+    },
+    "balanced32": {
+      "lives": 140,
+      "ordinary_meals": 94,
+      "ordinary_cases": 110,
+      "ordinary_meal_intervals": 6610,
+      "mixed_meals": 3,
+      "deaths": 0,
+      "final_hazard_injury_sum": 8.640792980790138,
+      "failed_ingest_bundles": 2762,
+      "toy_ingest_choices": 1090,
+      "toy_no_manipulations": 552,
+      "final_hazard_distance_over_reach": 7,
+      "lost_parent_food": [
+        [
+          2026115005,
+          "partial-obstacle"
+        ]
+      ],
+      "gained_parent_food": [],
+      "common_food_count": 94,
+      "parent_common_food_intervals": 5487,
+      "candidate_common_food_intervals": 6610
+    },
+    "release_hold4": {
+      "lives": 140,
+      "ordinary_meals": 95,
+      "ordinary_cases": 110,
+      "ordinary_meal_intervals": 6327,
+      "mixed_meals": 1,
+      "deaths": 0,
+      "final_hazard_injury_sum": 9.373263210058212,
+      "failed_ingest_bundles": 1449,
+      "toy_ingest_choices": 510,
+      "toy_no_manipulations": 1115,
+      "final_hazard_distance_over_reach": 2,
+      "lost_parent_food": [],
+      "gained_parent_food": [],
+      "common_food_count": 95,
+      "parent_common_food_intervals": 5667,
+      "candidate_common_food_intervals": 6327
+    }
+  },
+  "final_vs_contact20": {
+    "base": {
+      "lives": 140,
+      "ordinary_meals": 94,
+      "ordinary_cases": 110,
+      "ordinary_meal_intervals": 4997,
+      "mixed_meals": 4,
+      "deaths": 7,
+      "final_hazard_injury_sum": 15.026359781622887,
+      "failed_ingest_bundles": 3541,
+      "toy_ingest_choices": 865,
+      "toy_no_manipulations": 582,
+      "final_hazard_distance_over_reach": 6,
+      "lost_parent_food": [],
+      "gained_parent_food": [],
+      "common_food_count": 94,
+      "parent_common_food_intervals": 4997,
+      "candidate_common_food_intervals": 4997
+    },
+    "release": {
+      "lives": 140,
+      "ordinary_meals": 95,
+      "ordinary_cases": 110,
+      "ordinary_meal_intervals": 5667,
+      "mixed_meals": 2,
+      "deaths": 0,
+      "final_hazard_injury_sum": 9.619209557771683,
+      "failed_ingest_bundles": 2239,
+      "toy_ingest_choices": 782,
+      "toy_no_manipulations": 584,
+      "final_hazard_distance_over_reach": 2,
+      "lost_parent_food": [],
+      "gained_parent_food": [
+        [
+          2026115005,
+          "partial-obstacle"
+        ]
+      ],
+      "common_food_count": 94,
+      "parent_common_food_intervals": 4997,
+      "candidate_common_food_intervals": 5487
+    },
+    "balanced32": {
+      "lives": 140,
+      "ordinary_meals": 94,
+      "ordinary_cases": 110,
+      "ordinary_meal_intervals": 6610,
+      "mixed_meals": 3,
+      "deaths": 0,
+      "final_hazard_injury_sum": 8.640792980790138,
+      "failed_ingest_bundles": 2762,
+      "toy_ingest_choices": 1090,
+      "toy_no_manipulations": 552,
+      "final_hazard_distance_over_reach": 7,
+      "lost_parent_food": [],
+      "gained_parent_food": [],
+      "common_food_count": 94,
+      "parent_common_food_intervals": 4997,
+      "candidate_common_food_intervals": 6610
+    },
+    "release_hold4": {
+      "lives": 140,
+      "ordinary_meals": 95,
+      "ordinary_cases": 110,
+      "ordinary_meal_intervals": 6327,
+      "mixed_meals": 1,
+      "deaths": 0,
+      "final_hazard_injury_sum": 9.373263210058212,
+      "failed_ingest_bundles": 1449,
+      "toy_ingest_choices": 510,
+      "toy_no_manipulations": 1115,
+      "final_hazard_distance_over_reach": 2,
+      "lost_parent_food": [],
+      "gained_parent_food": [
+        [
+          2026115005,
+          "partial-obstacle"
+        ]
+      ],
+      "common_food_count": 94,
+      "parent_common_food_intervals": 4997,
+      "candidate_common_food_intervals": 6141
+    }
+  },
+  "delayed_validation": {
+    "base": {
+      "lives": 10,
+      "ordinary_meals": 0,
+      "ordinary_cases": 0,
+      "ordinary_meal_intervals": 0,
+      "mixed_meals": 0,
+      "deaths": 7,
+      "final_hazard_injury_sum": 9.366000890731812,
+      "failed_ingest_bundles": 830,
+      "toy_ingest_choices": 0,
+      "toy_no_manipulations": 0,
+      "final_hazard_distance_over_reach": 0
+    },
+    "release": {
+      "lives": 10,
+      "ordinary_meals": 0,
+      "ordinary_cases": 0,
+      "ordinary_meal_intervals": 0,
+      "mixed_meals": 0,
+      "deaths": 0,
+      "final_hazard_injury_sum": 5.0716946721076965,
+      "failed_ingest_bundles": 251,
+      "toy_ingest_choices": 0,
+      "toy_no_manipulations": 0,
+      "final_hazard_distance_over_reach": 0
+    },
+    "balanced32": {
+      "lives": 10,
+      "ordinary_meals": 0,
+      "ordinary_cases": 0,
+      "ordinary_meal_intervals": 0,
+      "mixed_meals": 0,
+      "deaths": 0,
+      "final_hazard_injury_sum": 4.808932721614838,
+      "failed_ingest_bundles": 285,
+      "toy_ingest_choices": 0,
+      "toy_no_manipulations": 0,
+      "final_hazard_distance_over_reach": 0
+    },
+    "release_hold4": {
+      "lives": 10,
+      "ordinary_meals": 0,
+      "ordinary_cases": 0,
+      "ordinary_meal_intervals": 0,
+      "mixed_meals": 0,
+      "deaths": 0,
+      "final_hazard_injury_sum": 4.681719094514847,
+      "failed_ingest_bundles": 166,
+      "toy_ingest_choices": 0,
+      "toy_no_manipulations": 0,
+      "final_hazard_distance_over_reach": 0
+    }
+  },
+  "export": {
+    "name": "pursuit-twohead-contact20-release16x24-hold4",
+    "role": "tradeoff control, not new champion",
+    "actual_export_parent": "pursuit-twohead-contact20-release16x24.alife-foundation",
+    "export_parent_sha256": "40f844bc55b578965e629a629c620a170a09f39b0f33fb05b1f7b1db0feabfa0",
+    "added_weight_edits": [
+      [
+        26879,
+        -4.0
+      ]
+    ],
+    "foundation_sha256": "c231d0ed4d1e6a5d89a737f1132c80586358ca2f6f842213bcd24025d59f13fd",
+    "genome_sha256": "b179c85fe1951646637326874ad795567666ffea370134f9b9c764ebee035cae",
+    "candidate_digest": [
+      157,
+      135,
+      210,
+      26,
+      212,
+      174,
+      139,
+      149,
+      108,
+      182,
+      140,
+      187,
+      225,
+      91,
+      184,
+      97,
+      15,
+      161,
+      31,
+      59,
+      154,
+      157,
+      53,
+      220,
+      210,
+      67,
+      113,
+      39,
+      164,
+      223,
+      255,
+      120
+    ],
+    "exact_reload_trials": 14
+  },
+  "preflight_failures": [
+    {
+      "name": "crisis14-balanced-base-1",
+      "result": {
+        "error": "invalid trial dimensions or scene"
+      }
+    },
+    {
+      "name": "crisis14-balanced-g16-1",
+      "result": {
+        "error": "invalid trial dimensions or scene"
+      }
+    },
+    {
+      "name": "crisis14-balanced-g8-1",
+      "result": {
+        "error": "invalid trial dimensions or scene"
+      }
+    },
+    {
+      "name": "crisis14-balanced-release-1",
+      "result": {
+        "error": "invalid trial dimensions or scene"
+      }
+    }
+  ],
+  "limits": [
+    "The first strong escape child is rejected:69/110 ordinary meals versus95/110 release-only.",
+    "Balanced32 loses one release-only ordinary success and is20.5% slower on the94 shared successes. It is not promoted.",
+    "Release+Hold4 preserves95/110 ordinary success cases but takes11.6% more intervals, and mixed-food successes fall2/10 to1/10. Its34.8% reduction in toy Ingest choices accompanies more no-manipulation, not demonstrated learning of toy identity.",
+    "No delayed-hazard arm of the final candidate comparisons finishes beyond0.75m. Reduced handling/injury must not be described as reliable escape.",
+    "Cold and delayed hazards each have256 exposed intervals. Delayed lives have64 additional normal brain/body intervals, so this is not an isolated neural-state ablation.",
+    "Final injury uses each terminal endpoint; meal success ends trials early.",
+    "The old family action counters include several motor channels. Other is not automatically Play, and failed_ingest_bundles uses the representative outcome success flag.",
+    "Negative-weight compile failures and the delayed-scene request-admission failures occurred before new physical lives. The request-entry regression now tests admission and actual pre-arrival distance/pain.",
+    "The second release-only comparison retains95/110 ordinary meals versus Contact20 94/110, with no lost baseline successes, and0 versus7 deaths.",
+    "No new champion, whole-brain intelligence, live-prey hunting, GPU behavior or hosted-CI claim."
+  ],
+  "genetic_diff": {
+    "changed_indices": [
+      26879
+    ],
+    "changed_genome_fields": [
+      "n2048_foundation_candidate"
+    ],
+    "all_other_parent_weights_and_coordinates_exact": true,
+    "previous_20_edits_preserved": true
+  }
+}
