@@ -1,0 +1,630 @@
+{
+  "plan": {
+    "source": "87fecd7dfd980c6ace996bb4fc46bfca3b6648b3",
+    "binary_sha256": "ba5c3608614b0c3fae83ce1a7916489bda871eea3b037cb80d60bdbb59754316",
+    "parent_sha256": "e719360056636efa8804ef3dfca62e979aca4f3678a5f50d5fa71940924f4b77",
+    "parent_genome_sha256": "1207070d7371066083bf24d810967f02d68edd5c61eec4f2f0270ffecfa38010",
+    "variants": {
+      "pain8": [],
+      "pain10": [
+        [
+          6665,
+          2.0
+        ],
+        [
+          6799,
+          2.0
+        ]
+      ]
+    },
+    "seeds": [
+      2026116800,
+      2026116801,
+      2026116802,
+      2026116803
+    ],
+    "scenes": [
+      "moving-obstacle",
+      "toy-then-food",
+      "hazard",
+      "hazard-choice"
+    ],
+    "ticks": 1024,
+    "frozen": true,
+    "conditions": [
+      "low biology600",
+      "low biology600",
+      "high actualhost600",
+      "high actualhost600"
+    ],
+    "selection_basis": "Gain10 retained9/9screen survivors and improved mixed meals3/4to4/4 versusPain8, with higher meanhazardinjury. Compare againstPain8 on fresh fixed cases; require ordinarymeals/survival and no mixed regression, report injury/time costs. No promotion on a single winner or hidden seed rescue.",
+    "limits": "32new native CPU lives maximum. Samepre-security v17source. Eachlifesavesindependently and checks40%/STOP before launch. No sharedparent/default change; partialcompletionreportedexplicitly."
+  },
+  "summary": {
+    "pain8": {
+      "moving-obstacle": {
+        "lives": 4,
+        "survivors": 4,
+        "meals": 4,
+        "meal_and_survival": 4,
+        "meal_ticks": [
+          75,
+          62,
+          45,
+          36
+        ],
+        "mean_injury": 0.0,
+        "injuries": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "microsteps": [
+          {
+            "2": 988,
+            "3": 36
+          },
+          {
+            "2": 988,
+            "3": 36
+          },
+          {
+            "3": 996,
+            "4": 28
+          },
+          {
+            "3": 996,
+            "4": 28
+          }
+        ]
+      },
+      "toy-then-food": {
+        "lives": 4,
+        "survivors": 4,
+        "meals": 4,
+        "meal_and_survival": 4,
+        "meal_ticks": [
+          67,
+          80,
+          66,
+          66
+        ],
+        "mean_injury": 0.0,
+        "injuries": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "microsteps": [
+          {
+            "2": 988,
+            "3": 36
+          },
+          {
+            "2": 988,
+            "3": 36
+          },
+          {
+            "3": 996,
+            "4": 28
+          },
+          {
+            "3": 996,
+            "4": 28
+          }
+        ]
+      },
+      "hazard": {
+        "lives": 4,
+        "survivors": 4,
+        "meals": 0,
+        "meal_and_survival": 0,
+        "meal_ticks": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "mean_injury": 0.5046759247779846,
+        "injuries": [
+          0.5391519665718079,
+          0.4986813962459564,
+          0.490476131439209,
+          0.4903942048549652
+        ],
+        "microsteps": [
+          {
+            "2": 1024
+          },
+          {
+            "2": 1024
+          },
+          {
+            "3": 1024
+          },
+          {
+            "3": 1024
+          }
+        ]
+      },
+      "hazard-choice": {
+        "lives": 4,
+        "survivors": 4,
+        "meals": 3,
+        "meal_and_survival": 3,
+        "meal_ticks": [
+          69,
+          62,
+          81,
+          null
+        ],
+        "mean_injury": 0.4981313720345497,
+        "injuries": [
+          0.5065361857414246,
+          0.5020814538002014,
+          0.49443376064300537,
+          0.4894740879535675
+        ],
+        "microsteps": [
+          {
+            "2": 988,
+            "3": 36
+          },
+          {
+            "2": 988,
+            "3": 36
+          },
+          {
+            "3": 997,
+            "4": 27
+          },
+          {
+            "3": 1024
+          }
+        ]
+      }
+    },
+    "pain10": {
+      "moving-obstacle": {
+        "lives": 4,
+        "survivors": 4,
+        "meals": 4,
+        "meal_and_survival": 4,
+        "meal_ticks": [
+          75,
+          62,
+          45,
+          36
+        ],
+        "mean_injury": 0.0,
+        "injuries": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "microsteps": [
+          {
+            "2": 988,
+            "3": 36
+          },
+          {
+            "2": 988,
+            "3": 36
+          },
+          {
+            "3": 996,
+            "4": 28
+          },
+          {
+            "3": 996,
+            "4": 28
+          }
+        ]
+      },
+      "toy-then-food": {
+        "lives": 4,
+        "survivors": 4,
+        "meals": 4,
+        "meal_and_survival": 4,
+        "meal_ticks": [
+          67,
+          80,
+          66,
+          66
+        ],
+        "mean_injury": 0.0,
+        "injuries": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "microsteps": [
+          {
+            "2": 988,
+            "3": 36
+          },
+          {
+            "2": 988,
+            "3": 36
+          },
+          {
+            "3": 996,
+            "4": 28
+          },
+          {
+            "3": 996,
+            "4": 28
+          }
+        ]
+      },
+      "hazard": {
+        "lives": 4,
+        "survivors": 4,
+        "meals": 0,
+        "meal_and_survival": 0,
+        "meal_ticks": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "mean_injury": 0.52139613032341,
+        "injuries": [
+          0.5422647595405579,
+          0.5253507494926453,
+          0.5094713568687439,
+          0.5084976553916931
+        ],
+        "microsteps": [
+          {
+            "2": 1024
+          },
+          {
+            "2": 1024
+          },
+          {
+            "3": 1024
+          },
+          {
+            "3": 1024
+          }
+        ]
+      },
+      "hazard-choice": {
+        "lives": 4,
+        "survivors": 4,
+        "meals": 4,
+        "meal_and_survival": 4,
+        "meal_ticks": [
+          70,
+          89,
+          118,
+          110
+        ],
+        "mean_injury": 0.5282822847366333,
+        "injuries": [
+          0.5257291793823242,
+          0.5475851893424988,
+          0.5096500515937805,
+          0.5301647186279297
+        ],
+        "microsteps": [
+          {
+            "2": 988,
+            "3": 36
+          },
+          {
+            "2": 989,
+            "3": 35
+          },
+          {
+            "3": 998,
+            "4": 26
+          },
+          {
+            "3": 997,
+            "4": 27
+          }
+        ]
+      }
+    }
+  },
+  "pairs": [
+    {
+      "seed": 2026116800,
+      "scene": "moving-obstacle",
+      "changed_trial_fields": [],
+      "parent_meal": 75,
+      "child_meal": 75,
+      "parent_injury": 0.0,
+      "child_injury": 0.0,
+      "parent_alive": true,
+      "child_alive": true
+    },
+    {
+      "seed": 2026116800,
+      "scene": "toy-then-food",
+      "changed_trial_fields": [],
+      "parent_meal": 67,
+      "child_meal": 67,
+      "parent_injury": 0.0,
+      "child_injury": 0.0,
+      "parent_alive": true,
+      "child_alive": true
+    },
+    {
+      "seed": 2026116800,
+      "scene": "hazard",
+      "changed_trial_fields": [
+        "actions",
+        "final_energy",
+        "injury",
+        "failed_ingests",
+        "no_manipulations",
+        "contact_interactions",
+        "final_distance",
+        "final_drives"
+      ],
+      "parent_meal": null,
+      "child_meal": null,
+      "parent_injury": 0.5391519665718079,
+      "child_injury": 0.5422647595405579,
+      "parent_alive": true,
+      "child_alive": true
+    },
+    {
+      "seed": 2026116800,
+      "scene": "hazard-choice",
+      "changed_trial_fields": [
+        "actions",
+        "final_energy",
+        "injury",
+        "failed_ingests",
+        "min_distance",
+        "consumed_tick",
+        "no_manipulations",
+        "contact_interactions",
+        "caught_tick",
+        "final_distance",
+        "final_drives"
+      ],
+      "parent_meal": 69,
+      "child_meal": 70,
+      "parent_injury": 0.5065361857414246,
+      "child_injury": 0.5257291793823242,
+      "parent_alive": true,
+      "child_alive": true
+    },
+    {
+      "seed": 2026116801,
+      "scene": "moving-obstacle",
+      "changed_trial_fields": [],
+      "parent_meal": 62,
+      "child_meal": 62,
+      "parent_injury": 0.0,
+      "child_injury": 0.0,
+      "parent_alive": true,
+      "child_alive": true
+    },
+    {
+      "seed": 2026116801,
+      "scene": "toy-then-food",
+      "changed_trial_fields": [],
+      "parent_meal": 80,
+      "child_meal": 80,
+      "parent_injury": 0.0,
+      "child_injury": 0.0,
+      "parent_alive": true,
+      "child_alive": true
+    },
+    {
+      "seed": 2026116801,
+      "scene": "hazard",
+      "changed_trial_fields": [
+        "actions",
+        "final_energy",
+        "injury",
+        "failed_ingests",
+        "no_manipulations",
+        "contact_interactions",
+        "final_distance",
+        "final_drives"
+      ],
+      "parent_meal": null,
+      "child_meal": null,
+      "parent_injury": 0.4986813962459564,
+      "child_injury": 0.5253507494926453,
+      "parent_alive": true,
+      "child_alive": true
+    },
+    {
+      "seed": 2026116801,
+      "scene": "hazard-choice",
+      "changed_trial_fields": [
+        "actions",
+        "final_energy",
+        "injury",
+        "failed_ingests",
+        "microstep_counts",
+        "min_distance",
+        "consumed_tick",
+        "no_manipulations",
+        "contact_interactions",
+        "caught_tick",
+        "final_distance",
+        "final_drives"
+      ],
+      "parent_meal": 62,
+      "child_meal": 89,
+      "parent_injury": 0.5020814538002014,
+      "child_injury": 0.5475851893424988,
+      "parent_alive": true,
+      "child_alive": true
+    },
+    {
+      "seed": 2026116802,
+      "scene": "moving-obstacle",
+      "changed_trial_fields": [],
+      "parent_meal": 45,
+      "child_meal": 45,
+      "parent_injury": 0.0,
+      "child_injury": 0.0,
+      "parent_alive": true,
+      "child_alive": true
+    },
+    {
+      "seed": 2026116802,
+      "scene": "toy-then-food",
+      "changed_trial_fields": [],
+      "parent_meal": 66,
+      "child_meal": 66,
+      "parent_injury": 0.0,
+      "child_injury": 0.0,
+      "parent_alive": true,
+      "child_alive": true
+    },
+    {
+      "seed": 2026116802,
+      "scene": "hazard",
+      "changed_trial_fields": [
+        "actions",
+        "final_energy",
+        "injury",
+        "failed_ingests",
+        "no_manipulations",
+        "contact_interactions",
+        "final_distance",
+        "final_drives"
+      ],
+      "parent_meal": null,
+      "child_meal": null,
+      "parent_injury": 0.490476131439209,
+      "child_injury": 0.5094713568687439,
+      "parent_alive": true,
+      "child_alive": true
+    },
+    {
+      "seed": 2026116802,
+      "scene": "hazard-choice",
+      "changed_trial_fields": [
+        "actions",
+        "final_energy",
+        "injury",
+        "microstep_counts",
+        "min_distance",
+        "consumed_tick",
+        "no_manipulations",
+        "contact_interactions",
+        "caught_tick",
+        "final_distance",
+        "final_drives"
+      ],
+      "parent_meal": 81,
+      "child_meal": 118,
+      "parent_injury": 0.49443376064300537,
+      "child_injury": 0.5096500515937805,
+      "parent_alive": true,
+      "child_alive": true
+    },
+    {
+      "seed": 2026116803,
+      "scene": "moving-obstacle",
+      "changed_trial_fields": [],
+      "parent_meal": 36,
+      "child_meal": 36,
+      "parent_injury": 0.0,
+      "child_injury": 0.0,
+      "parent_alive": true,
+      "child_alive": true
+    },
+    {
+      "seed": 2026116803,
+      "scene": "toy-then-food",
+      "changed_trial_fields": [],
+      "parent_meal": 66,
+      "child_meal": 66,
+      "parent_injury": 0.0,
+      "child_injury": 0.0,
+      "parent_alive": true,
+      "child_alive": true
+    },
+    {
+      "seed": 2026116803,
+      "scene": "hazard",
+      "changed_trial_fields": [
+        "actions",
+        "final_energy",
+        "injury",
+        "failed_ingests",
+        "no_manipulations",
+        "final_distance",
+        "final_drives"
+      ],
+      "parent_meal": null,
+      "child_meal": null,
+      "parent_injury": 0.4903942048549652,
+      "child_injury": 0.5084976553916931,
+      "parent_alive": true,
+      "child_alive": true
+    },
+    {
+      "seed": 2026116803,
+      "scene": "hazard-choice",
+      "changed_trial_fields": [
+        "actions",
+        "final_energy",
+        "injury",
+        "failed_ingests",
+        "microstep_counts",
+        "min_distance",
+        "consumed_tick",
+        "no_manipulations",
+        "contact_interactions",
+        "caught_tick",
+        "final_distance",
+        "consumed",
+        "final_drives"
+      ],
+      "parent_meal": null,
+      "child_meal": 110,
+      "parent_injury": 0.4894740879535675,
+      "child_injury": 0.5301647186279297,
+      "parent_alive": true,
+      "child_alive": true
+    }
+  ],
+  "archive": {
+    "file": "pain10-fresh-results.jsonl.gz",
+    "sha256": "2721129a014a63f46a71db71ee5a01de052e604ee1708be5ef089220a5667e8b",
+    "requests": 32,
+    "trials": 32
+  },
+  "export_validation": {
+    "foundation_sha256": "482958ce059855a2bf8d8ac7e45788574046ada3ee186ffd8688efb8adf385d2",
+    "genome_sha256": "ce27cd39c902c5330ceefc0f83b1143327b016626be5ff40a3ede177544414b9",
+    "weight_changes": [
+      [
+        6665,
+        8.0,
+        10.0
+      ],
+      [
+        6799,
+        8.0,
+        10.0
+      ]
+    ],
+    "synapse_coordinates_equal": true,
+    "neuron_dynamics_equal": true,
+    "genome_changed_fields": [
+      "n2048_foundation_candidate"
+    ],
+    "source": "87fecd7dfd980c6ace996bb4fc46bfca3b6648b3"
+  },
+  "scope": "32new native CPU lives on corrected stationary-fixture v17; firstmeal time retained while biology continues1024intervals. Full genetic lineage is Pain8 plus two8to10coefficients. No sharedparent/default change. Dependencies predate security mainbd132fe7; noGPU orlivingpreyresult. Export nativeconstruction/hashaudit passed; no separate full physical reload repetition is claimed forPain10.",
+  "conclusion": "Gain10 improves mixedmeal+survival3/4to4/4 onfreshconditions; bothretain8/8ordinarymeals and16/16survival. Allthree sharedmixedmeals are later withGain10(69to70,62to89,81to118); theadditionalmeal is110. Meanhazardinjury0.504676to0.521396; mixed0.498131to0.528282. PreserveGain10asaresearchreliabilitycandidate, notunqualifieddominanceorcommonparentpromotion. Fourfreshmixedcasesremainasmallcheck."
+}

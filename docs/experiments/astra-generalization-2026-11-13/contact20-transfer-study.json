@@ -1,0 +1,212 @@
+{
+  "plan": {
+    "source": "87fecd7dfd980c6ace996bb4fc46bfca3b6648b3",
+    "binary_sha256": "ba5c3608614b0c3fae83ce1a7916489bda871eea3b037cb80d60bdbb59754316",
+    "foundation_sha256": "d83a995e802e41b8e17799b0871f75d9ede35f95850049777323112e636654d1",
+    "genome_sha256": "557da394c045d0b4353009c842825677aa7505f636d6252b20f67bfe0c3a5189",
+    "seeds": [
+      2026116800,
+      2026116801,
+      2026116802,
+      2026116803
+    ],
+    "scenes": [
+      "moving-obstacle",
+      "hazard",
+      "hazard-choice"
+    ],
+    "ticks": 1024,
+    "frozen": true,
+    "purpose": "Late ancestral-control comparison against exact sharedContact20 on allfour fixedPain8/Pain10conditions. No further mutation/selection and no new independent heldout claim: these cases have been observed in descendant comparison. Compare cumulativegeneticchange with commonparent, includingmeals,survival,injury,time.",
+    "limits": "12nativeCPUlives maximum; samev17presecuritysource andfullgenomes. Eachlifechecks40%/STOPbeforelaunch. Preserveallresults; no commonparent/default change withoutrootintegrationdecision."
+  },
+  "summary": {
+    "contact20": {
+      "moving-obstacle": {
+        "lives": 4,
+        "survivors": 4,
+        "meals": 4,
+        "meal_and_survival": 4,
+        "meal_ticks": [
+          75,
+          89,
+          49,
+          45
+        ],
+        "intervals": [
+          1024,
+          1024,
+          1024,
+          1024
+        ],
+        "mean_injury": 0.0
+      },
+      "hazard": {
+        "lives": 4,
+        "survivors": 0,
+        "meals": 0,
+        "meal_and_survival": 0,
+        "meal_ticks": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "intervals": [
+          246,
+          251,
+          220,
+          531
+        ],
+        "mean_injury": 1.0
+      },
+      "hazard-choice": {
+        "lives": 4,
+        "survivors": 0,
+        "meals": 2,
+        "meal_and_survival": 0,
+        "meal_ticks": [
+          100,
+          null,
+          null,
+          53
+        ],
+        "intervals": [
+          316,
+          394,
+          252,
+          500
+        ],
+        "mean_injury": 1.0
+      }
+    },
+    "pain8": {
+      "moving-obstacle": {
+        "lives": 4,
+        "survivors": 4,
+        "meals": 4,
+        "meal_and_survival": 4,
+        "meal_ticks": [
+          75,
+          62,
+          45,
+          36
+        ],
+        "intervals": [
+          1024,
+          1024,
+          1024,
+          1024
+        ],
+        "mean_injury": 0.0
+      },
+      "hazard": {
+        "lives": 4,
+        "survivors": 4,
+        "meals": 0,
+        "meal_and_survival": 0,
+        "meal_ticks": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "intervals": [
+          1024,
+          1024,
+          1024,
+          1024
+        ],
+        "mean_injury": 0.5046759247779846
+      },
+      "hazard-choice": {
+        "lives": 4,
+        "survivors": 4,
+        "meals": 3,
+        "meal_and_survival": 3,
+        "meal_ticks": [
+          69,
+          62,
+          81,
+          null
+        ],
+        "intervals": [
+          1024,
+          1024,
+          1024,
+          1024
+        ],
+        "mean_injury": 0.4981313720345497
+      }
+    },
+    "pain10": {
+      "moving-obstacle": {
+        "lives": 4,
+        "survivors": 4,
+        "meals": 4,
+        "meal_and_survival": 4,
+        "meal_ticks": [
+          75,
+          62,
+          45,
+          36
+        ],
+        "intervals": [
+          1024,
+          1024,
+          1024,
+          1024
+        ],
+        "mean_injury": 0.0
+      },
+      "hazard": {
+        "lives": 4,
+        "survivors": 4,
+        "meals": 0,
+        "meal_and_survival": 0,
+        "meal_ticks": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "intervals": [
+          1024,
+          1024,
+          1024,
+          1024
+        ],
+        "mean_injury": 0.52139613032341
+      },
+      "hazard-choice": {
+        "lives": 4,
+        "survivors": 4,
+        "meals": 4,
+        "meal_and_survival": 4,
+        "meal_ticks": [
+          70,
+          89,
+          118,
+          110
+        ],
+        "intervals": [
+          1024,
+          1024,
+          1024,
+          1024
+        ],
+        "mean_injury": 0.5282822847366333
+      }
+    }
+  },
+  "archive": {
+    "file": "contact20-transfer-results.jsonl.gz",
+    "sha256": "de317f688dab86959e320270902be6bc8a02907ad3971b862ac602c5c88c9846",
+    "requests": 12,
+    "trials": 12
+  },
+  "descendant_archive": "pain10-fresh-results.jsonl.gz",
+  "new_actual_lives": 12,
+  "reused_descendant_lives": 24,
+  "conclusion": "Contact20retains4/4moving-foodmeals butdiesinall8hazard-containinglives. It eatsin2mixedcasesbeforedeath:zeroof4mixedmealandsurvival. Pain8andPain10surviveall12matchedcasesandretain4/4moving-foodmeals; mixedmealandsurvival3/4and4/4respectively. Thislateancestralcontrolsupportsacumulativesurvival/feedinggaininthisfixturefamily, notfreshgeneticselection, universalself-careorrealpreyhunting. Noautomaticsharedparent/defaultchange; preserveallthreegenotypesandsecuritydependencyintegrationhold."
+}

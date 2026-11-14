@@ -749,3 +749,68 @@ reserve activity changes, while the Contact/Avoid endpoint pairs remain equal
 within each sampled three-microstep window. This supports treating the circuit
 as a dynamical system with delayed effects; it does not establish the complete
 cause of later closed-loop behavior. No raw neural traces are published.
+
+
+### Gain10 fresh transfer
+
+The next child starts from Pain8 and changes only coefficients 6665 and 6799
+from 8 to 10. Its foundation and full construction genome are exported as
+`pursuit-twohead-contact20-momentum128-withdraw1024-pain10`. Native inspection
+verifies those exact two differences, identical synapse coordinates and neuron
+dynamics, and no genome change except foundation identity.
+
+Thirty-two new lives compare Pain8 and Gain10 on four previously unopened
+conditions, each with moving food plus obstacles, toy-to-food transitions,
+lone hazards and food beside hazards. All continue for 1,024 intervals.
+
+| Fresh outcome | Pain8 | Gain10 |
+|---|---:|---:|
+| Ordinary meals and survival | 8/8 | 8/8 |
+| Mixed meals and survival | 3/4 | 4/4 |
+| All survival | 16/16 | 16/16 |
+| Mean lone-hazard injury | 0.5047 | 0.5214 |
+| Mean mixed injury | 0.4981 | 0.5283 |
+
+Ordinary meal times match. Gain10 reaches the extra mixed meal at tick110,
+but is slower in the three shared successes: 69 to70, 62 to89, and81 to118.
+Thus it improves measured feeding reliability while increasing injury and
+latency; it does not dominate Pain8 on every measure. Keep both as research
+candidates. Four new mixed cases do not establish statistical certainty or
+complete self-care competence. Contact20 remains the common parent until an
+explicit integration decision.
+
+`pain10-fresh-study.json` and its archive preserve all32 requests/results and
+exact genetic/source identities. Native construction inspection passed; a
+separate physical reload repeat is not claimed for Gain10. Its exported weights
+are genetic, not an acquired final life. The executed v17 source and pre-security
+dependency set remain unchanged, and #357's merge hold remains separate.
+
+
+### Direct comparison with the common Contact20 parent
+
+Twelve additional lives run the exact shared Contact20 founder on all four
+Gain10-comparison conditions for moving food with obstacles, lone hazards and
+food beside hazards. Descendant results are reused from the completed cohort;
+they are not rerun or counted as additional lives. This is a late ancestral
+control on observed conditions, not another unopened selection set.
+
+| Matched outcome | Contact20 | Pain8 | Gain10 |
+|---|---:|---:|---:|
+| Moving-food meal and survival | 4/4 | 4/4 | 4/4 |
+| Lone-hazard survival | 0/4 | 4/4 | 4/4 |
+| Mixed meal and survival | 0/4 | 3/4 | 4/4 |
+| Mixed survival | 0/4 | 4/4 | 4/4 |
+
+Contact20 eats in two mixed cases but subsequently dies; all eight of its
+hazard-containing lives end in death between intervals220 and531. Both
+descendants remain alive at1,024. Moving-food meal times for Contact20 are
+75/89/49/45 versus75/62/45/36 for both descendants. The cumulative edits therefore
+show a substantial survival-and-feeding gain in these fixtures, while the
+Pain8/Gain10 injury tradeoff remains real. This does not establish performance
+on every self-care task, a maze suite, or living prey. All genotypes remain
+available and no production/default/shared-parent replacement is performed.
+
+`contact20-transfer-study.json` and its twelve-record archive preserve the
+control's full identity and outcomes, explicitly referencing the reused
+24 descendant lives. These are the same nativeCPU v17 source and dependency
+pins as the preceding studies.
