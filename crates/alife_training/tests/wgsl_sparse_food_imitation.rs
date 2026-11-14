@@ -182,6 +182,7 @@ fn sparse_safe_food_gpu_objective_and_adam_match_cpu() {
         .into_iter()
         .zip([18.0, 0.0, 1000.0])
         .map(|(family, innate_bias)| TrainingReplayCandidate {
+            memory_readout: None,
             family,
             decoder_inputs: [0.1; 54],
             innate_bias,

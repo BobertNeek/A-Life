@@ -245,6 +245,7 @@ fn packed_checkpoint_matches_separate_captures_and_next_adam_after_shape_and_reb
         effective_weight_offsets: vec![0.0; phenotype.synapses().len()],
         structural_synapses: Vec::new(),
         candidates: vec![TrainingReplayCandidate {
+            memory_readout: None,
             family: CandidateActionFamily::Approach,
             decoder_inputs,
             innate_bias: 0.0,

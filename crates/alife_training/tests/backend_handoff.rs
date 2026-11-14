@@ -368,6 +368,7 @@ fn typed_cpu_handoff_restores_real_gpu_training_session_without_reset() {
             effective_weight_offsets: vec![0.; p.synapses().len()],
             structural_synapses: vec![],
             candidates: vec![TrainingReplayCandidate {
+                memory_readout: None,
                 family: CandidateActionFamily::Other,
                 decoder_inputs: [0.; 54],
                 innate_bias: 0.,

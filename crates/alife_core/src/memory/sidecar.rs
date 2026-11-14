@@ -435,6 +435,19 @@ impl MemorySidecarState {
         self.bank.recall_frame(draft)
     }
 
+    pub fn recall_frame_with_family_sources(
+        &self,
+        draft: &PerceptionFrameDraft,
+    ) -> Result<PreparedMemoryRecall, ScaffoldContractError> {
+        if draft.organism_id() != self.organism_id {
+            return Err(ScaffoldContractError::InvalidMemoryQuery);
+        }
+        if draft.profile_provenance().identity() != self.profile {
+            return Err(ScaffoldContractError::SensorProfileMismatch);
+        }
+        self.bank.recall_frame_with_family_sources(draft)
+    }
+
     pub fn recall_frame_runtime(
         &self,
         draft: &PerceptionFrameDraft,

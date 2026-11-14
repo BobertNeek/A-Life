@@ -280,6 +280,7 @@ impl MemoryBank {
         };
         Ok((
             PreparedMemoryRecall {
+                family_sources: None,
                 context,
                 encoded_context,
                 candidate_queries: queries,

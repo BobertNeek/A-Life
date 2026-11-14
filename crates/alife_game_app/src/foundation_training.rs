@@ -496,6 +496,7 @@ fn foundation_replay_sequence_with_invariants(
             let mut decoder_inputs = [0.0; 54];
             decoder_inputs[..inputs.len()].copy_from_slice(inputs);
             candidates.push(TrainingReplayCandidate {
+                memory_readout: None,
                 family: candidate.family,
                 decoder_inputs,
                 innate_bias: phenotype
@@ -5345,6 +5346,7 @@ mod held_food_lesson_tests {
                 let mut decoder_inputs = [0.0; 54];
                 decoder_inputs[..24].copy_from_slice(&choice.features.0);
                 let replay = alife_training::TrainingReplayCandidate {
+                    memory_readout: None,
                     family: choice.family,
                     decoder_inputs,
                     innate_bias: 0.0,
@@ -6713,6 +6715,7 @@ mod compact_replay_codec_tests {
             .enumerate()
             .map(
                 |(index, innate_bias)| alife_training::TrainingReplayCandidate {
+                    memory_readout: None,
                     family: alife_core::CandidateActionFamily::Idle,
                     decoder_inputs: std::array::from_fn(|lane| (index * 54 + lane) as f32 / 64.0),
                     innate_bias: *innate_bias,

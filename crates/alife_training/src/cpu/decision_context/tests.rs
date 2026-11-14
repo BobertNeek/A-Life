@@ -11,6 +11,7 @@ fn tick() -> TrainingReplayTick {
         effective_weight_offsets: vec![],
         structural_synapses: vec![],
         candidates: vec![TrainingReplayCandidate {
+            memory_readout: None,
             family: CandidateActionFamily::Inspect,
             decoder_inputs: [0.; 54],
             innate_bias: 0.,

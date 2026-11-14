@@ -168,6 +168,7 @@ fn n2048_exact_graph_adamw_step_changes_only_the_masked_weight_and_exports() {
         effective_weight_offsets: vec![0.01; phenotype.synapses().len()],
         structural_synapses: Vec::new(),
         candidates: vec![TrainingReplayCandidate {
+            memory_readout: None,
             family: candidate.family,
             decoder_inputs,
             innate_bias: 0.7,
@@ -617,6 +618,7 @@ fn verify_sampled_replay_gradients(
         effective_weight_offsets: offsets,
         structural_synapses: Vec::new(),
         candidates: vec![TrainingReplayCandidate {
+            memory_readout: None,
             family: CandidateActionFamily::Approach,
             decoder_inputs,
             innate_bias: 0.0,
@@ -822,6 +824,7 @@ fn n2048_speech_payload_head_trains_on_gpu_and_remains_exportable() {
         effective_weight_offsets: vec![0.01; phenotype.synapses().len()],
         structural_synapses: Vec::new(),
         candidates: vec![TrainingReplayCandidate {
+            memory_readout: None,
             family: CandidateActionFamily::Idle,
             decoder_inputs: [0.0; 54],
             innate_bias: 0.0,
@@ -1014,6 +1017,7 @@ fn n2048_ppo_and_imitation_gpu_objective_matches_joint_derivatives_and_partial_b
         let mut decoder_inputs = [0.0; 54];
         decoder_inputs[lane] = scale;
         TrainingReplayCandidate {
+            memory_readout: None,
             family,
             decoder_inputs,
             innate_bias: 0.0,

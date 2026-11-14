@@ -26,6 +26,9 @@ pub const MEMORY_MERGE_SIMILARITY: f32 = 0.98;
 
 const CANDIDATE_MEMORY_BANK_DOMAIN: &[u8] = b"ALIFE-CANDIDATE-MEMORY-BANK-V2";
 
+mod family_provenance;
+pub use family_provenance::{MemoryFamilySourceV1, MemoryFamilySourcesV1};
+
 mod channel_terminal;
 pub use channel_terminal::ChannelTerminalObservationV1;
 
@@ -149,6 +152,7 @@ impl MemoryRecallReceipt {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct PreparedMemoryRecall {
+    family_sources: Option<Vec<MemoryFamilySourcesV1>>,
     context: EpisodicRetrievalContextV1,
     // The episodic rows are private and immutable after either constructor.
     // Keep their exact encoding within this one preparation, then move it into
@@ -197,6 +201,7 @@ impl PreparedMemoryRecall {
             .map(|query| EpisodicDecisionKeyV2::try_new(query, context_digest, final_frame_digest))
             .collect::<Result<Vec<_>, _>>()?;
         let finalized = FinalizedMemoryRecall {
+            family_sources: self.family_sources,
             context: self.context,
             base_frame_digest: self.base_frame_digest,
             context_digest,
@@ -339,6 +344,7 @@ impl PreparedMemoryRecall {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct FinalizedMemoryRecall {
+    family_sources: Option<Vec<MemoryFamilySourcesV1>>,
     context: EpisodicRetrievalContextV1,
     base_frame_digest: PerceptionBaseDigest,
     context_digest: PerceptionContextDigest,
@@ -350,6 +356,11 @@ pub struct FinalizedMemoryRecall {
 }
 
 impl FinalizedMemoryRecall {
+    /// Present only when explicitly requested during existing audited recall.
+    /// Age is already reflected by native retention in family_confidence.
+    pub fn family_sources(&self) -> Option<&[MemoryFamilySourcesV1]> {
+        self.family_sources.as_deref()
+    }
     /// Learned positive social expectancy for a currently observed, attended
     /// individual. Derived from the frozen recall, never from the action winner.
     /// This is transient evidence; only its ordinary chemical consequence persists.
@@ -975,6 +986,23 @@ impl MemoryBank {
         &self,
         draft: &PerceptionFrameDraft,
     ) -> Result<PreparedMemoryRecall, ScaffoldContractError> {
+        self.recall_frame_impl(draft, false)
+    }
+
+    /// Capture source identity/phase while the same selected records are already
+    /// read for ordinary family aggregation. Rankings and encoded lanes agree.
+    pub fn recall_frame_with_family_sources(
+        &self,
+        draft: &PerceptionFrameDraft,
+    ) -> Result<PreparedMemoryRecall, ScaffoldContractError> {
+        self.recall_frame_impl(draft, true)
+    }
+
+    fn recall_frame_impl(
+        &self,
+        draft: &PerceptionFrameDraft,
+        collect_sources: bool,
+    ) -> Result<PreparedMemoryRecall, ScaffoldContractError> {
         self.config.validate_contract()?;
         if self.len != 0 {
             return Err(ScaffoldContractError::MemoryModeConflict);
@@ -998,6 +1026,8 @@ impl MemoryBank {
         }
         let mut target_cache = std::collections::BTreeMap::new();
         let mut family_cache = std::collections::BTreeMap::new();
+        let mut family_sources =
+            collect_sources.then(|| Vec::with_capacity(draft.candidates().len()));
         let mut candidate_queries = Vec::with_capacity(draft.candidates().len());
         let mut candidate_contexts = Vec::with_capacity(draft.candidates().len());
         let mut candidate_receipts = Vec::with_capacity(draft.candidates().len());
@@ -1044,8 +1074,17 @@ impl MemoryBank {
             {
                 Some((index, result)) => (Clone::clone(result), Some(*index)),
                 None => {
-                    let result =
-                        recall_family_channel(&self.candidate_store, &query, &family_bucket)?;
+                    let result = if collect_sources {
+                        candidate_recall::recall_family_channel_with_provenance(
+                            &self.candidate_store,
+                            &query,
+                            &family_bucket,
+                            MEMORY_FAMILY_SEARCH_CAP,
+                            true,
+                        )?
+                    } else {
+                        recall_family_channel(&self.candidate_store, &query, &family_bucket)?
+                    };
                     exact_bucket_reads = exact_bucket_reads.saturating_add(1);
                     neighbor_bucket_reads = neighbor_bucket_reads.saturating_add(
                         neighbor_family_keys(&family_bucket).len().saturating_sub(1) as u32
@@ -1081,6 +1120,14 @@ impl MemoryBank {
                 target.social_emission,
                 &mut social_recognition,
             )?;
+            if let Some(sources) = &mut family_sources {
+                sources.push(
+                    *family
+                        .provenance
+                        .clone()
+                        .ok_or(ScaffoldContractError::InvalidMemoryQuery)?,
+                );
+            }
             candidate_contexts.push(CandidateMemoryContextV1 {
                 candidate_index: candidate.candidate_index,
                 target_latent: target.values,
@@ -1130,6 +1177,7 @@ impl MemoryBank {
         };
         receipt.validate_contract()?;
         let prepared = PreparedMemoryRecall {
+            family_sources,
             context,
             encoded_context,
             candidate_queries,

@@ -152,6 +152,7 @@ fn sequence(p: &BrainPhenotype, motor: usize) -> TrainingSequence {
             effective_weight_offsets: vec![0.0; p.synapses().len()],
             structural_synapses: vec![],
             candidates: vec![TrainingReplayCandidate {
+                memory_readout: None,
                 family: readout.family(),
                 decoder_inputs,
                 innate_bias: 0.0,

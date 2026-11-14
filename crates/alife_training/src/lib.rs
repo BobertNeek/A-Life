@@ -15,11 +15,13 @@ pub mod cpu;
 mod founder_demonstrations;
 mod founder_merge;
 mod founder_readout;
+mod memory_binding;
 #[cfg(feature = "receipt-lineage")]
 pub mod native_receipt;
 mod ppo;
 mod trainer;
 mod types;
+pub use memory_binding::*;
 
 pub use backend_handoff::*;
 pub use founder_demonstrations::*;

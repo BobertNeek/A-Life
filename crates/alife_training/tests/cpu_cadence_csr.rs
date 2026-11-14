@@ -113,6 +113,7 @@ fn sequence(
                 }],
                 candidates: (0..16)
                     .map(|j| TrainingReplayCandidate {
+                        memory_readout: None,
                         family: families[j % 3],
                         decoder_inputs: [0.03; 54],
                         innate_bias: 0.04 + j as f32 * 0.003,

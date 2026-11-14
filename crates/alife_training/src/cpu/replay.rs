@@ -209,6 +209,9 @@ impl SparseGraph {
                         _ => {}
                     }
                 }
+                if let Some(binding) = &c.memory_readout {
+                    memory += binding.contribution();
+                }
                 logit += memory.clamp(-q.memory_candidate_gain, q.memory_candidate_gain)
                     + cognitive.clamp(-q.memory_candidate_gain, q.memory_candidate_gain);
                 logits.push(logit);

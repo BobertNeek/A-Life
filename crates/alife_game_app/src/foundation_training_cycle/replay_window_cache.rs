@@ -397,6 +397,7 @@ mod tests {
         value.sequence.ticks[0]
             .candidates
             .push(alife_training::TrainingReplayCandidate {
+                memory_readout: None,
                 family: alife_core::CandidateActionFamily::Inspect,
                 decoder_inputs: [f32::from_bits(1); 54],
                 innate_bias: -0.0,
