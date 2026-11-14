@@ -491,7 +491,7 @@ pub(crate) fn composer_height(world: &World, size: Vec2) -> Option<f32> {
     let state = world.get_resource::<ProductionConversationLineageUiState>()?;
     state
         .input_open
-        .then(|| height(state, size, speech_composer_bottom(world)))
+        .then(|| height(state, size, speech_composer_bottom(world, size)))
 }
 pub(crate) fn adapt(world: &mut World) {
     naming::sync_ime_window(world);
@@ -539,7 +539,7 @@ pub(crate) fn adapt(world: &mut World) {
         .map_or(Vec2::new(1280.0, 720.0), |w| {
             Vec2::new(w.width(), w.height())
         });
-    let bottom = speech_composer_bottom(world);
+    let bottom = speech_composer_bottom(world, size);
     let state = world.resource::<ProductionConversationLineageUiState>();
     let open = state.input_open;
     let help = state.input_help_open;

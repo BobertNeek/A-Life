@@ -1,6 +1,6 @@
 use super::*;
 use alife_core::{BrainCapacityClass, CreatureGenome, FoundationGeneticIdentity};
-use alife_world::{HeadlessScenarioBuilder, HeadlessWorld, WorldOrganismRecord};
+use alife_world::{HeadlessScenarioBuilder, HeadlessWorld, PlayerCareKindSet, WorldOrganismRecord};
 fn authoritative_world() -> HeadlessWorld {
     authoritative_world_with_energy(None)
 }
@@ -436,4 +436,65 @@ fn food_badge_rebinds_on_selection_frame_identity_and_load_changes() {
         .entity_mut(entity)
         .remove::<Fvr04ProductionCreatureVisualMarker>();
     assert!(!selected_readout(&world, stable).holding_food);
+}
+
+#[test]
+fn debug_care_line_reports_the_last_observed_response_and_marks_unknown_as_unknown() {
+    // No receipt is unknown, never a definite absence: an old save with no
+    // recorded receipt reads exactly like a creature never yet cared for.
+    assert_eq!(
+        debug_care_line(&PresentationEvidence::Unknown),
+        "care: unknown (no receipt recorded)"
+    );
+    let observed = |kinds: PlayerCareKindSet| PresentationEvidence::Observed {
+        value: PlayerCareReceipt {
+            kinds,
+            applied_tick: Tick::new(7),
+            praise_signal_before: 0.10,
+            praise_signal_after: 0.42,
+            loneliness_before: 0.61,
+            loneliness_after: 0.55,
+        },
+        tick: Tick::new(7),
+    };
+    let single = |kind: PlayerCareKind| PlayerCareKindSet::single(kind);
+    assert_eq!(
+        debug_care_line(&observed(single(PlayerCareKind::Pet))),
+        "Petted, applied at tick 7, whole-tick snapshots: loneliness 0.61 to 0.55"
+    );
+    assert_eq!(
+        debug_care_line(&observed(single(PlayerCareKind::Praise))),
+        "Praised, applied at tick 7, whole-tick snapshots: praise 0.10 to 0.42"
+    );
+    assert_eq!(
+        debug_care_line(&observed(single(PlayerCareKind::Scold))),
+        "Scolded, applied at tick 7"
+    );
+    assert_eq!(
+        debug_care_line(&observed(single(PlayerCareKind::Slap))),
+        "Slapped, applied at tick 7"
+    );
+    // Mixed sets name every kind; only positive channels with recorded
+    // snapshots are shown, explicitly as whole-tick observations.
+    let mut pet_and_praise = PlayerCareKindSet::empty();
+    pet_and_praise.insert(PlayerCareKind::Pet);
+    pet_and_praise.insert(PlayerCareKind::Praise);
+    assert_eq!(
+        debug_care_line(&observed(pet_and_praise)),
+        "Petted and Praised, applied at tick 7, whole-tick snapshots: praise 0.10 to 0.42, loneliness 0.61 to 0.55"
+    );
+    let mut scold_and_slap = PlayerCareKindSet::empty();
+    scold_and_slap.insert(PlayerCareKind::Scold);
+    scold_and_slap.insert(PlayerCareKind::Slap);
+    assert_eq!(
+        debug_care_line(&observed(scold_and_slap)),
+        "Scolded and Slapped, applied at tick 7"
+    );
+    let mut pet_and_scold = PlayerCareKindSet::empty();
+    pet_and_scold.insert(PlayerCareKind::Pet);
+    pet_and_scold.insert(PlayerCareKind::Scold);
+    assert_eq!(
+        debug_care_line(&observed(pet_and_scold)),
+        "Petted and Scolded, applied at tick 7, whole-tick snapshots: loneliness 0.61 to 0.55"
+    );
 }
