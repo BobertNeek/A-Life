@@ -236,7 +236,7 @@ pub(super) fn compile_anchored_encoder_v2(
     layout: &LobeLayout,
     profile: SensorProfile,
 ) -> Result<SensorEncoderPlan, ScaffoldContractError> {
-    if profile != SensorProfile::GroundedObjectSlotsV1 {
+    if !crate::N2048ExperimentalGraphV1::supports_anchored_profile(profile) {
         return Err(compile_error());
     }
     let mut anchored_genome = genome.clone();
