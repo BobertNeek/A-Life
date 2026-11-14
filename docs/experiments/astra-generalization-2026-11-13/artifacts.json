@@ -13,6 +13,31 @@
     "pursuit-twohead-bearing4.alife-foundation.genome.json": {
       "sha256": "5c63a675c89be9195de6b2bdedfc51a0f6f95fa11917ef8db6b75492bba025f7",
       "bytes": 205948
+    },
+    "pursuit-twohead-contact20.alife-foundation": {
+      "sha256": "d83a995e802e41b8e17799b0871f75d9ede35f95850049777323112e636654d1",
+      "bytes": 131581
+    },
+    "pursuit-twohead-contact20.alife-foundation.genome.json": {
+      "sha256": "557da394c045d0b4353009c842825677aa7505f636d6252b20f67bfe0c3a5189",
+      "bytes": 205951
     }
+  },
+  "working_best": {
+    "foundation": "pursuit-twohead-contact20.alife-foundation",
+    "genome": "pursuit-twohead-contact20.alife-foundation.genome.json",
+    "parent": "pursuit-twohead-bearing4.alife-foundation",
+    "delta": {
+      "params": [
+        0,
+        0,
+        0,
+        20,
+        0,
+        0
+      ],
+      "motor_heads": 2
+    },
+    "validation": "contact-heldout cases 2026112700..2709; additional short hazard controls"
   }
 }
