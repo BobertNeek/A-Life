@@ -32,6 +32,8 @@ struct Request {
     bearing_gain: f32,
     #[serde(default = "one_head")]
     motor_heads: u8,
+    #[serde(default)]
+    hold_readout: [f32; 2],
 }
 
 fn one_head() -> u8 {
@@ -88,6 +90,8 @@ struct Trial {
     alive: bool,
     decisions: usize,
     failed_ingests: usize,
+    no_manipulations: usize,
+    contact_interactions: usize,
     actions: std::collections::BTreeMap<String, usize>,
     trace: Vec<serde_json::Value>,
     target_motion: Vec<serde_json::Value>,
@@ -212,6 +216,41 @@ fn scale_readouts(
 
 fn distance(a: Vec3f, b: Vec3f) -> f32 {
     ((a.x - b.x).powi(2) + (a.z - b.z).powi(2)).sqrt()
+}
+
+// Existing NO_MANIPULATION uses Contact lane23=1, lane18=0. Object Contact
+// candidates share these lanes; measure both effects, with no host action gate.
+fn hold_candidate(
+    base: FoundationWeightAsset,
+    p: &BrainPhenotype,
+    delta: [f32; 2],
+) -> Result<FoundationWeightAsset> {
+    if delta.iter().any(|v| !v.is_finite() || v.abs() > 64.) {
+        return Err("hold readout deltas must be finite within +/-64".into());
+    }
+    if delta == [0.; 2] {
+        return Ok(base);
+    }
+    let mut weights = base.weights().to_vec();
+    for (i, s) in p.synapses().iter().enumerate() {
+        if let CompiledSynapseKind::Decoder(c) = s.kind() {
+            if c.head() == DecoderHeadKind::ActionCandidate
+                && c.family() == CandidateActionFamily::Contact
+                && s.source() == 1823
+            {
+                match c.input_lane() {
+                    23 => weights[i] += delta[0],
+                    18 => weights[i] += delta[1],
+                    _ => {}
+                }
+            }
+        }
+    }
+    Ok(FoundationWeightAsset::from_trained_weights(
+        p,
+        weights,
+        base.manifest().training_stage(),
+    )?)
 }
 
 fn memory_candidate(
@@ -494,6 +533,8 @@ fn trial(
         alive: true,
         decisions: 0,
         failed_ingests: 0,
+        no_manipulations: 0,
+        contact_interactions: 0,
         actions: Default::default(),
         trace: Vec::new(),
         target_motion: Vec::new(),
@@ -559,6 +600,11 @@ fn trial(
             for &index in row.action.motor_candidates.iter().flatten() {
                 if let Some(c) = frame.candidates().get(index as usize) {
                     *result.actions.entry(format!("{:?}", c.family)).or_default() += 1;
+                    if c.action_id == HeadlessActionIds::NO_MANIPULATION {
+                        result.no_manipulations += 1;
+                    } else if c.family == CandidateActionFamily::Contact {
+                        result.contact_interactions += 1;
+                    }
                     if c.family == CandidateActionFamily::Ingest && !row.patch.outcome().success {
                         result.failed_ingests += 1;
                     }
@@ -673,6 +719,7 @@ fn run(base: &FoundationWeightAsset, p: &BrainPhenotype, r: Request) -> Result<s
         r.readout_scale,
         r.bearing_gain,
     )?;
+    let asset = hold_candidate(asset, p, r.hold_readout)?;
     let (asset, compiled, template) = prepare_founder(asset, r.motor_heads)?;
     assert!(compiled
         .synapses()
@@ -713,7 +760,7 @@ fn run(base: &FoundationWeightAsset, p: &BrainPhenotype, r: Request) -> Result<s
     }
     Ok(
         json!({"backend":"native-cpu", "memory_cap":trainer.phenotype().candidate_decoder().memory_channel().map(|m|m.max_candidate_gain()), "base_digest":base.digest(),"candidate_digest":asset.digest(),
-        "assay_version":5,"motor_heads":r.motor_heads,"variation":r.variation,"readout_scale":r.readout_scale,"bearing_gain":r.bearing_gain,"params":r.params,"memory_aversion":r.memory_aversion,"ticks":r.ticks,"seconds":start.elapsed().as_secs_f64(),"trials":trials}),
+        "assay_version":6,"hold_readout":r.hold_readout,"motor_heads":r.motor_heads,"variation":r.variation,"readout_scale":r.readout_scale,"bearing_gain":r.bearing_gain,"params":r.params,"memory_aversion":r.memory_aversion,"ticks":r.ticks,"seconds":start.elapsed().as_secs_f64(),"trials":trials}),
     )
 }
 

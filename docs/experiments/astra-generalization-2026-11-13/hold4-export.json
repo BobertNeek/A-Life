@@ -1,0 +1,152 @@
+{
+  "request": {
+    "params": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "hold_readout": [
+      -4,
+      0
+    ],
+    "motor_heads": 2,
+    "seed_start": 2026113300,
+    "seeds": 1,
+    "ticks": 4,
+    "scenes": [
+      "contact"
+    ],
+    "export": "/workspace/alife-astra/docs/experiments/astra-generalization-2026-11-13/pursuit-twohead-contact20-hold4.alife-foundation"
+  },
+  "result": {
+    "assay_version": 6,
+    "backend": "native-cpu",
+    "base_digest": [
+      235,
+      43,
+      176,
+      241,
+      168,
+      193,
+      151,
+      76,
+      63,
+      89,
+      158,
+      72,
+      93,
+      108,
+      154,
+      211,
+      15,
+      251,
+      88,
+      243,
+      163,
+      49,
+      52,
+      122,
+      113,
+      227,
+      246,
+      238,
+      4,
+      13,
+      120,
+      65
+    ],
+    "bearing_gain": 0.0,
+    "candidate_digest": [
+      22,
+      163,
+      94,
+      132,
+      251,
+      74,
+      59,
+      173,
+      2,
+      69,
+      53,
+      166,
+      68,
+      250,
+      223,
+      110,
+      240,
+      12,
+      255,
+      193,
+      5,
+      241,
+      159,
+      20,
+      177,
+      30,
+      227,
+      49,
+      102,
+      101,
+      188,
+      22
+    ],
+    "hold_readout": [
+      -4.0,
+      0.0
+    ],
+    "memory_aversion": 0.0,
+    "memory_cap": 0.5,
+    "motor_heads": 2,
+    "params": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "readout_scale": [
+      1.0,
+      1.0
+    ],
+    "seconds": 0.525877218,
+    "ticks": 4,
+    "trials": [
+      {
+        "actions": {
+          "Approach": 1,
+          "Avoid": 3,
+          "Contact": 2,
+          "Ingest": 1,
+          "Inspect": 4,
+          "Other": 1
+        },
+        "alive": true,
+        "caught_tick": 2,
+        "consumed": true,
+        "consumed_tick": 3,
+        "contact_interactions": 1,
+        "decisions": 4,
+        "failed_ingests": 1,
+        "final_distance": 0.5,
+        "final_energy": 0.38663533329963684,
+        "initial_energy": 0.24939455091953278,
+        "injury": 0.0,
+        "min_distance": 0.25,
+        "no_manipulations": 1,
+        "scene": "contact",
+        "seed": 2026113300,
+        "target_motion": [],
+        "trace": []
+      }
+    ],
+    "variation": {
+      "angle": 0.0,
+      "appearance": 0,
+      "speed": 1.0
+    }
+  }
+}

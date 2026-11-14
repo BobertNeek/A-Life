@@ -1,0 +1,83 @@
+{
+  "base": {
+    "food_success": 98,
+    "food_trials": 110,
+    "failed_ingest_bundles": 2272,
+    "toy_ingest": 919,
+    "toy_no_manipulation": 584,
+    "toy_object_contact": 520,
+    "successful_meal_intervals": 5545,
+    "paired_successes": 98,
+    "paired_base_meal_intervals": 5545,
+    "paired_child_meal_intervals": 5545,
+    "scene_success": {
+      "contact": 10,
+      "stationary": 10,
+      "receding": 10,
+      "crossing": 10,
+      "zigzag": 10,
+      "orbiting": 10,
+      "fleeing": 10,
+      "partial-obstacle": 6,
+      "moving-obstacle": 6,
+      "choice": 6,
+      "toy-then-food": 10
+    },
+    "alive": 120,
+    "total_trials": 120
+  },
+  "hold-negative2": {
+    "food_success": 97,
+    "food_trials": 110,
+    "failed_ingest_bundles": 1919,
+    "toy_ingest": 740,
+    "toy_no_manipulation": 839,
+    "toy_object_contact": 575,
+    "successful_meal_intervals": 5579,
+    "paired_successes": 97,
+    "paired_base_meal_intervals": 5465,
+    "paired_child_meal_intervals": 5579,
+    "scene_success": {
+      "contact": 10,
+      "stationary": 10,
+      "receding": 10,
+      "crossing": 10,
+      "zigzag": 10,
+      "orbiting": 10,
+      "fleeing": 10,
+      "partial-obstacle": 5,
+      "moving-obstacle": 6,
+      "choice": 6,
+      "toy-then-food": 10
+    },
+    "alive": 120,
+    "total_trials": 120
+  },
+  "hold-negative4": {
+    "food_success": 98,
+    "food_trials": 110,
+    "failed_ingest_bundles": 1488,
+    "toy_ingest": 556,
+    "toy_no_manipulation": 1096,
+    "toy_object_contact": 582,
+    "successful_meal_intervals": 6001,
+    "paired_successes": 98,
+    "paired_base_meal_intervals": 5545,
+    "paired_child_meal_intervals": 6001,
+    "scene_success": {
+      "contact": 10,
+      "stationary": 10,
+      "receding": 10,
+      "crossing": 10,
+      "zigzag": 10,
+      "orbiting": 10,
+      "fleeing": 10,
+      "partial-obstacle": 6,
+      "moving-obstacle": 6,
+      "choice": 6,
+      "toy-then-food": 10
+    },
+    "alive": 120,
+    "total_trials": 120
+  }
+}
