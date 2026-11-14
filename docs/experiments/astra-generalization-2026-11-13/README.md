@@ -1,6 +1,6 @@
 # Cumulative pursuit, motor channels and memory
 
-The common parent is the PR341 `pursuit-memory16` foundation, SHA-256
+This lineage starts with the PR341 `pursuit-memory16` foundation, SHA-256
 `8f84afd6ac2ec575a8df61d18a0a18ac17296615a9ef7af7d22df416b3dd0ad7`.
 Every later candidate below edits that parent, or the explicitly exported winner.
 Original checkpoints and founders remain intact. These are fresh research lives
@@ -102,7 +102,76 @@ against contact20 with the v6 evaluator, or `hold4-export-reload` against the
 exported hold4 pair. These remain native CPU moving-Food experiments, not a
 live-prey attack/kill implementation or trained-PC migration.
 
-## Verified improvement
+## November 14: cumulative search and wider controls
+
+Contact20 remains the coordinated common parent. Hold4 remains a tradeoff
+candidate, and the further descendant below was rejected. No acquired life,
+optimizer, production default, or other agent's recording code was changed.
+
+Starting from the complete exported hold4 candidate, PyTorch generated three
+generations of eight antithetic proposals over seven existing decoder coordinates:
+Approach distance/contact, Ingest contact/distance, bearing, and Contact basis/contact.
+Each generation used the preceding pilot winner. Four directed Approach-contact
+variants followed. These 29 evaluations used the same three rotated pilot cases
+and twelve scenes (1,044 lives). The fixed score prioritized meals, then fewer
+toy ingestion attempts and lower censored meal latency; loss in any basic pursuit
+scene excluded a pilot winner. This is feedback-driven evolutionary selection,
+not the paper's one-shot protocol.
+
+The selected seven-weight descendant retained30/33 pilot meals, reduced toy
+Ingest170→149 and meal intervals1799→1764. It was frozen before fresh validation.
+
+| Ten fresh cases, twelve scenes each | Contact20 | Hold4 | Descendant |
+|---|---:|---:|---:|
+| Food consumed |98/110|98/110|98/110|
+| Toy Ingest selections |896|547|515|
+| Toy object-Contact selections |533|587|520|
+| Failed Ingest-containing bundles |2219|1394|1415|
+| Same98 meals, summed intervals |5569|5728|5743|
+
+The same per-scene food success counts held in all three arms. Six additional
+cases varied starting distance to0.7/1.25/1.6 times the original range and motion
+speed to0.5/1.2/1.8, without tuning on their results. Contact20 and Hold4 both
+ate51/66 foods; the descendant ate50/66, losing one moving-obstacle meal. All
+organisms survived. The small extra reduction in toy attempts did not outweigh
+that loss and the lack of a standard food gain, so the seven edits were not promoted.
+Hold4's food-preserving/nonfood-reducing tradeoff replicated on both new sets;
+that evidence is available for the shared-parent decision, not a silent adoption.
+
+`selection14-study.json` retains every pilot proposal, selection rule, source and
+binary pins, and complete aggregates. The requests/outcomes are in the existing
+archive. Reproduce `selection14-heldout-descendant-0` against hold4, or the
+corresponding `contact20`/`hold4` record against its named asset. Assayv7 introduced
+default-one distance scaling and a trace-only Contact motor observation; v8 adds
+default0.25 initial energy, drive/sleep aggregates and trace-only object ownership
+and pain. Seven native tests, strict Clippy and full twelve-scene default parity
+against v6 pass. The archive now holds521 requests and5,720 trials.
+
+### Release diagnostic
+
+The original hazard aggregates contained no traces. A fresh v8 diagnostic on
+exact Contact20 reproduced their outcomes and measured the existing release route.
+In the hazard-only life, held-target Grab211 was present and in the Manipulation
+mask on all67 held decisions. Eleven selections caused eleven held→unheld
+transitions, followed by reacquisition1–9 ticks later. In the mixed hazard/food
+life it was available on all43 held decisions, selected/released four times, with
+one later release while switching to food. No new Drop executor is needed.
+
+These hazards have radius0.3; release leaves them around0.5m away, outside their
+ambient damage radius but still within0.75m action reach. Grounded object contact
+clears on the next observation, yet repeated Inspect/Ingest attempts can hurt the
+creature again. The problem is repeated harmful interaction and reacquisition,
+not absent release. `release-diagnostic.json` records the measured transitions;
+it does not claim a captured `GripTransferKind::Released` event because
+`CpuCanonicalStep` does not expose that receipt. Raw traces remain local.
+
+An Approach memory-habituation idea was not implemented: source inspection found
+the old contact-valued target latent uses the aggregate joint outcome, which can
+refer to a different target than the representative query. That concern was sent
+to the channel-observation owner rather than tuning a supposedly authenticated
+target memory or duplicating its fix.
+
+## Earlier verified improvement
 
 Ten fresh paired cases (sampling seeds 2026112500–2509), four appearances, five
 headings and three motion speeds, 256 decision intervals each. There are eleven
