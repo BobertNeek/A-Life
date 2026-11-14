@@ -248,8 +248,15 @@ fn assert_layout(world: &mut World, size: Vec2) {
         .unwrap();
     let dock = Box2::of(world, root);
     assert!(viewport.contains(dock), "dock outside {size:?}: {dock:?}");
-    assert!((dock.size().x - WIDTH).abs() < EPSILON && (dock.size().y - HEIGHT).abs() < EPSILON);
-    assert!((dock.min.x - (size.x - WIDTH) * 0.5).abs() < EPSILON);
+    let expected = if size.x < 432.0 && size.y < 320.0 {
+        Vec2::new(308.0, 56.0)
+    } else if size.x < 432.0 {
+        Vec2::new(240.0, 128.0)
+    } else {
+        Vec2::new(408.0, 72.0)
+    };
+    assert!((dock.size() - expected).abs().max_element() < EPSILON);
+    assert!((dock.min.x - (size.x - expected.x) * 0.5).abs() < EPSILON);
     assert!((dock.max.y - (size.y - BOTTOM)).abs() < EPSILON);
     let buttons = world
         .query::<(Entity, &Action)>()
@@ -266,9 +273,9 @@ fn assert_layout(world: &mut World, size: Vec2) {
         .iter(world)
         .map(|(e, m)| (e, m.0))
         .collect::<Vec<_>>();
-    assert_eq!(buttons.len(), 5);
-    assert_eq!(glyphs.len(), 5);
-    assert_eq!(markers.len(), 5);
+    assert_eq!(buttons.len(), ACTIONS.len());
+    assert_eq!(glyphs.len(), ACTIONS.len());
+    assert_eq!(markers.len(), ACTIONS.len());
     assert_eq!(
         world
             .get::<Children>(root)
@@ -280,18 +287,39 @@ fn assert_layout(world: &mut World, size: Vec2) {
     );
     for (index, &(button, action)) in buttons.iter().enumerate() {
         let bounds = Box2::of(world, button);
-        assert_size(bounds, 48.0);
+        assert_size(
+            bounds,
+            if size.x < 432.0 && size.y < 320.0 {
+                40.0
+            } else {
+                48.0
+            },
+        );
         assert!(dock.contains(bounds));
         for &(other, _) in &buttons[index + 1..] {
             assert!(!bounds.overlaps(Box2::of(world, other)), "buttons overlap");
         }
         let glyph = glyphs.iter().find(|(_, a)| *a == action).unwrap().0;
         let glyph_box = Box2::of(world, glyph);
-        assert_size(glyph_box, 32.0);
+        assert_size(
+            glyph_box,
+            if size.x < 432.0 && size.y < 320.0 {
+                24.0
+            } else {
+                32.0
+            },
+        );
         assert!(bounds.contains(glyph_box));
         let marker = markers.iter().find(|(_, a)| *a == action).unwrap().0;
         let marker_box = Box2::of(world, marker);
-        assert_size(marker_box, 16.0);
+        assert_size(
+            marker_box,
+            if size.x < 432.0 && size.y < 320.0 {
+                8.0
+            } else {
+                16.0
+            },
+        );
         assert!(
             dock.contains(marker_box),
             "{action:?} marker outside dock at {size:?}: {marker_box:?}"
@@ -1436,7 +1464,7 @@ fn composer_fixtures() -> Vec<Value> {
             assert_eq!(node.overflow.y, bevy::ui::OverflowAxis::Scroll);
             assert_eq!(
                 app.world().get::<Node>(bounds).unwrap().bottom,
-                Val::Px(if error { 108.0 } else { 92.0 })
+                Val::Px(dock.size().y + if error { 36.0 } else { 20.0 })
             );
             assert!(occupied_top(app.world_mut(), size) <= composer.min.y + EPSILON);
             fixtures.push(json!({"case":case, "viewport":[size.x,size.y], "error":error,

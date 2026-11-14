@@ -19,6 +19,34 @@ fn cared_game() -> HeadlessWorld {
 }
 
 fn cared_population(population: u16) -> HeadlessWorld {
+    if population > alife_world::PHASE3_MAX_POPULATION {
+        let mut builder = HeadlessScenarioBuilder::new(240_824);
+        for i in 1..=population {
+            builder = builder.agent(
+                &format!("agent-{i}"),
+                OrganismId(u64::from(i)),
+                Vec3f::new(f32::from(i) * 3.0, 0.0, 0.0),
+            );
+        }
+        let mut world = builder.build().unwrap();
+        for (id, entity) in world.organism_entity_ids() {
+            let genome = CreatureGenome::early_mammal_founder(
+                240_824 + id.raw(),
+                FoundationGeneticIdentity::new(10 + id.raw(), 1, 7, BrainCapacityClass::N512_ID)
+                    .unwrap(),
+            )
+            .unwrap();
+            let phenotype = genome.express().unwrap();
+            let chemistry = alife_core::BiochemistryState::new(&phenotype, Tick::ZERO).unwrap();
+            world
+                .register_organism_record(
+                    WorldOrganismRecord::new(id, entity, genome, phenotype, chemistry, Tick::ZERO)
+                        .unwrap(),
+                )
+                .unwrap();
+        }
+        return world;
+    }
     let foundation =
         FoundationWeightAsset::builtin_nano512_v1(SensorProfile::GroundedObjectSlotsV1).unwrap();
     create_canonical_new_game(

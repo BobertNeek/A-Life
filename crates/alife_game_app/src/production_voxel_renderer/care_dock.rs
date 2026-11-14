@@ -151,6 +151,15 @@ fn decoration_accessibility() -> AccessibilityNode {
 const HEIGHT: f32 = 72.0;
 const BOTTOM: f32 = 12.0;
 const WIDTH: f32 = 408.0;
+pub(crate) fn dock_size(viewport: Vec2) -> Vec2 {
+    if viewport.x < WIDTH + 24.0 && viewport.y < 320.0 {
+        Vec2::new(308.0, 56.0)
+    } else if viewport.x < WIDTH + 24.0 {
+        Vec2::new(240.0, 128.0)
+    } else {
+        Vec2::new(WIDTH, HEIGHT)
+    }
+}
 const EMBEDDED: [(&str, &[u8]); 11] = [
     (
         "food",
@@ -239,6 +248,9 @@ pub(super) fn spawn(world: &mut World) {
                 border: UiRect::all(Val::Px(4.0)),
                 border_radius: BorderRadius::all(Val::Px(22.0)),
                 column_gap: Val::Px(8.0),
+                row_gap: Val::Px(8.0),
+                flex_wrap: FlexWrap::Wrap,
+                align_content: AlignContent::Center,
                 align_items: AlignItems::Center,
                 ..default()
             },
@@ -616,7 +628,7 @@ pub(super) fn dispatch(
 /// Bottom controls retain priority over readouts in short viewports. The
 /// composer budget conservatively includes its preserved typed-text wrapping.
 pub(super) fn occupied_top(world: &mut World, size: Vec2) -> f32 {
-    let mut top = size.y - BOTTOM - HEIGHT;
+    let mut top = size.y - BOTTOM - dock_size(size).y;
     if world
         .get_resource::<Fvr05ProductionUxStateResource>()
         .is_some_and(|u| u.last_error.is_some())
@@ -627,7 +639,7 @@ pub(super) fn occupied_top(world: &mut World, size: Vec2) -> f32 {
     if let Some(height) =
         crate::production_conversation_lineage_ui::speech_composer_height(world, size)
     {
-        let bottom = crate::production_conversation_lineage_ui::speech_composer_bottom(world);
+        let bottom = crate::production_conversation_lineage_ui::speech_composer_bottom(world, size);
         top = top.min((size.y - bottom - height).max(0.0));
     }
     for (text, font, node, visibility, computed) in world
@@ -674,7 +686,13 @@ pub(super) fn sync(world: &mut World) {
         .query_filtered::<(&mut Node, &mut Visibility, &mut AccessibilityNode), With<DockRoot>>()
         .iter_mut(world)
     {
-        node.left = Val::Px(((size.x - WIDTH) / 2.0).max(0.0));
+        let dock = dock_size(size);
+        let compact = dock.y == 56.0;
+        node.padding = UiRect::all(Val::Px(if compact { 4.0 } else { 8.0 }));
+        node.column_gap = Val::Px(if compact { 2.0 } else { 8.0 });
+        node.width = Val::Px(dock.x);
+        node.height = Val::Px(dock.y);
+        node.left = Val::Px(((size.x - dock.x) / 2.0).max(0.0));
         if debug {
             accessible.set_hidden();
         } else {
@@ -685,6 +703,37 @@ pub(super) fn sync(world: &mut World) {
         } else {
             Visibility::Inherited
         };
+    }
+    let button_size = if dock_size(size).y == 56.0 {
+        40.0
+    } else {
+        48.0
+    };
+    for mut node in world
+        .query_filtered::<&mut Node, With<Action>>()
+        .iter_mut(world)
+    {
+        node.width = Val::Px(button_size);
+        node.height = Val::Px(button_size);
+    }
+    for mut node in world
+        .query_filtered::<&mut Node, With<Glyph>>()
+        .iter_mut(world)
+    {
+        let glyph_size = if button_size == 40.0 { 24.0 } else { 32.0 };
+        node.width = Val::Px(glyph_size);
+        node.height = Val::Px(glyph_size);
+    }
+    for mut node in world
+        .query_filtered::<&mut Node, With<Marker>>()
+        .iter_mut(world)
+    {
+        let compact = button_size == 40.0;
+        let marker_size = if compact { 8.0 } else { 16.0 };
+        node.width = Val::Px(marker_size);
+        node.height = Val::Px(marker_size);
+        node.right = Val::Px(if compact { -3.0 } else { -11.0 });
+        node.bottom = Val::Px(if compact { -3.0 } else { -11.0 });
     }
     #[cfg(feature = "gpu-runtime")]
     let availability = world
