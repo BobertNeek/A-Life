@@ -101,12 +101,75 @@ struct Trial {
     injury: f32,
     alive: bool,
     decisions: usize,
+    /// Legacy: selected Ingest with shared bundle success=false, NOT execution failure.
     failed_ingests: usize,
+    ingest_execution: IngestExecutionCounts,
     no_manipulations: usize,
     contact_interactions: usize,
     actions: std::collections::BTreeMap<String, usize>,
     trace: Vec<serde_json::Value>,
     target_motion: Vec<serde_json::Value>,
+}
+
+/// Diagnostic phase counts only; not measured nutrition or action-specific credit.
+#[derive(Default, Debug, PartialEq, Serialize)]
+struct IngestExecutionCounts {
+    successes: usize,
+    failures: usize,
+    unknown: usize,
+    consumed_receipts: usize,
+}
+impl IngestExecutionCounts {
+    fn observe(
+        &mut self,
+        primitive: ActionId,
+        target: Option<WorldEntityId>,
+        outcomes: &[alife_core::experience::ChannelPhysicalOutcome],
+    ) {
+        // Require exactly one manipulation receipt, rather than selecting a
+        // convenient match from ambiguous/duplicated evidence.
+        let mut channels = outcomes
+            .iter()
+            .filter(|r| r.channel == MotorChannel::Manipulation);
+        let matched = channels
+            .next()
+            .filter(|_| channels.next().is_none())
+            .filter(|r| r.validate_contract().is_ok())
+            .and_then(|r| {
+                r.execution_evidence
+                    .as_ref()
+                    .filter(|e| e.primitive == primitive && e.command_target == target)
+                    .map(|e| (r, e))
+            });
+        match matched {
+            Some((r, e)) => {
+                if e.succeeded {
+                    self.successes += 1;
+                } else {
+                    self.failures += 1;
+                }
+                if r.physical.contact == PhysicalContactKind::Consumed {
+                    self.consumed_receipts += 1;
+                }
+            }
+            None => self.unknown += 1,
+        }
+    }
+}
+
+fn record_ingest_metrics(
+    legacy_failed: &mut usize,
+    typed: &mut IngestExecutionCounts,
+    bundle_success: bool,
+    primitive: ActionId,
+    target: Option<WorldEntityId>,
+    outcomes: &[alife_core::experience::ChannelPhysicalOutcome],
+) {
+    // Preserve the historical whole-bundle counter exactly for old comparisons.
+    if !bundle_success {
+        *legacy_failed += 1;
+    }
+    typed.observe(primitive, target, outcomes);
 }
 
 fn config(asset: &FoundationWeightAsset) -> Result<CanonicalNewGameConfig> {
@@ -594,6 +657,7 @@ fn trial(
         alive: true,
         decisions: 0,
         failed_ingests: 0,
+        ingest_execution: IngestExecutionCounts::default(),
         no_manipulations: 0,
         contact_interactions: 0,
         actions: Default::default(),
@@ -682,8 +746,19 @@ fn trial(
                     } else if c.family == CandidateActionFamily::Contact {
                         result.contact_interactions += 1;
                     }
-                    if c.family == CandidateActionFamily::Ingest && !row.patch.outcome().success {
-                        result.failed_ingests += 1;
+                    if c.family == CandidateActionFamily::Ingest {
+                        record_ingest_metrics(
+                            &mut result.failed_ingests,
+                            &mut result.ingest_execution,
+                            row.patch.outcome().success,
+                            c.action_id,
+                            c.target.entity,
+                            row.patch
+                                .outcome()
+                                .joint
+                                .as_ref()
+                                .map_or(&[], |j| j.channel_outcomes.as_slice()),
+                        );
                     }
                 }
             }
@@ -1260,5 +1335,120 @@ mod tests {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod ingest_metric_tests {
+    use super::*;
+    use alife_core::experience::{ChannelPhysicalOutcome, ExecutedChannelEvidenceV1};
+    fn receipt(success: bool, contact: PhysicalContactKind) -> ChannelPhysicalOutcome {
+        ChannelPhysicalOutcome::new(
+            MotorChannel::Manipulation,
+            PhysicalActionOutcome {
+                contact,
+                target_entity: Some(WorldEntityId(7)),
+                displacement: Vec3f::ZERO,
+                collision_normal: None,
+                energy_cost: NormalizedScalar::ZERO,
+            },
+        )
+        .unwrap()
+        .with_execution_evidence(
+            ExecutedChannelEvidenceV1::new(
+                ActionId(101),
+                Some(WorldEntityId(7)),
+                success,
+                BodyEventDelta::zero(),
+            )
+            .unwrap(),
+        )
+        .unwrap()
+    }
+    fn count(r: &[ChannelPhysicalOutcome]) -> IngestExecutionCounts {
+        let mut c = IngestExecutionCounts::default();
+        c.observe(ActionId(101), Some(WorldEntityId(7)), r);
+        c
+    }
+    #[test]
+    fn typed_ingest_success_is_independent_of_shared_bundle_failure() {
+        let mut legacy = 0;
+        let mut typed = IngestExecutionCounts::default();
+        record_ingest_metrics(
+            &mut legacy,
+            &mut typed,
+            false,
+            ActionId(101),
+            Some(WorldEntityId(7)),
+            &[receipt(true, PhysicalContactKind::Consumed)],
+        );
+        assert_eq!(legacy, 1);
+        assert_eq!(
+            typed,
+            IngestExecutionCounts {
+                successes: 1,
+                consumed_receipts: 1,
+                ..Default::default()
+            }
+        );
+    }
+    #[test]
+    fn typed_ingest_failure_is_independent_of_shared_bundle_success() {
+        let mut legacy = 0;
+        let mut typed = IngestExecutionCounts::default();
+        record_ingest_metrics(
+            &mut legacy,
+            &mut typed,
+            true,
+            ActionId(101),
+            Some(WorldEntityId(7)),
+            &[receipt(false, PhysicalContactKind::Blocked)],
+        );
+        assert_eq!(legacy, 0);
+        assert_eq!(
+            typed,
+            IngestExecutionCounts {
+                failures: 1,
+                ..Default::default()
+            }
+        );
+    }
+    #[test]
+    fn missing_mismatched_or_ambiguous_execution_is_unknown() {
+        let good = receipt(true, PhysicalContactKind::Touch);
+        let mut missing = good;
+        missing.execution_evidence = None;
+        let mut primitive = good;
+        primitive.execution_evidence.as_mut().unwrap().primitive = ActionId(102);
+        let mut target = good;
+        target.execution_evidence.as_mut().unwrap().command_target = Some(WorldEntityId(8));
+        let mut channel = good;
+        channel.channel = MotorChannel::Locomotion;
+        for rows in [
+            vec![],
+            vec![missing],
+            vec![primitive],
+            vec![target],
+            vec![channel],
+            vec![good, good],
+        ] {
+            assert_eq!(
+                count(&rows),
+                IngestExecutionCounts {
+                    unknown: 1,
+                    ..Default::default()
+                }
+            );
+        }
+    }
+    #[test]
+    fn successful_touch_is_not_consumption() {
+        assert_eq!(
+            count(&[receipt(true, PhysicalContactKind::Touch)]),
+            IngestExecutionCounts {
+                successes: 1,
+                ..Default::default()
+            }
+        );
     }
 }
