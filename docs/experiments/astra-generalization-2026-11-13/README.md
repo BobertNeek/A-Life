@@ -732,3 +732,20 @@ interpret them as a simple increase in pain sensitivity. Full traces remain
 local. `pain8-fresh-study.json` pins the assets, source, tests, aggregate evidence
 and limits; `pain8-fresh-results.jsonl.gz` contains all forty sanitized requests
 and results. These runs still use source `87fecd7d`, before security `bd132fe7`.
+
+
+A cumulative refinement starts from the exported Pain8 genotype and changes
+only those same two coefficients to 6 or 10. On the four now-exposed mixed and
+lone-hazard cases plus one stationary control (18 lives), both variants survive
+all nine lives and eat the stationary food. Gain6 reduces mean hazard injury to
+0.4770 but loses two of Pain8's meals (1/4 mixed success), so it is rejected.
+Gain10 reaches 4/4 mixed meals, with mean hazard injury 0.5214. It is selected
+only for a new comparison against Pain8, not promoted. The frozen plan and all
+results are in `pain8-refinement-study.json` and its archive.
+
+A local fixed-state PyTorch check also varies these inputs while keeping each
+saved tick's activations, metabolic load, offsets and routes fixed. Intermediate
+reserve activity changes, while the Contact/Avoid endpoint pairs remain equal
+within each sampled three-microstep window. This supports treating the circuit
+as a dynamical system with delayed effects; it does not establish the complete
+cause of later closed-loop behavior. No raw neural traces are published.

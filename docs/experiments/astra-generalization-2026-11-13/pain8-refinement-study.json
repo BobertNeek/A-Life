@@ -1,0 +1,118 @@
+{
+  "plan": {
+    "source": "87fecd7dfd980c6ace996bb4fc46bfca3b6648b3",
+    "binary_sha256": "ba5c3608614b0c3fae83ce1a7916489bda871eea3b037cb80d60bdbb59754316",
+    "parent_sha256": "e719360056636efa8804ef3dfca62e979aca4f3678a5f50d5fa71940924f4b77",
+    "parent_genome_sha256": "1207070d7371066083bf24d810967f02d68edd5c61eec4f2f0270ffecfa38010",
+    "variants": {
+      "input6": [
+        [
+          6665,
+          -2.0
+        ],
+        [
+          6799,
+          -2.0
+        ]
+      ],
+      "input10": [
+        [
+          6665,
+          2.0
+        ],
+        [
+          6799,
+          2.0
+        ]
+      ]
+    },
+    "seeds": [
+      2026116600,
+      2026116601,
+      2026116602,
+      2026116603
+    ],
+    "cases": [
+      {
+        "index": 0,
+        "scene": "hazard"
+      },
+      {
+        "index": 0,
+        "scene": "hazard-choice"
+      },
+      {
+        "index": 1,
+        "scene": "hazard"
+      },
+      {
+        "index": 1,
+        "scene": "hazard-choice"
+      },
+      {
+        "index": 2,
+        "scene": "hazard"
+      },
+      {
+        "index": 2,
+        "scene": "hazard-choice"
+      },
+      {
+        "index": 3,
+        "scene": "hazard"
+      },
+      {
+        "index": 3,
+        "scene": "hazard-choice"
+      },
+      {
+        "index": 3,
+        "scene": "stationary"
+      }
+    ],
+    "ticks": 1024,
+    "frozen": true,
+    "purpose": "Cumulative refinement of exported pain8 child. Its fresh3/4mixed success has higher injury. Native/Torch audit shows nonlinear saturation rather than monotonic pain sensitivity; bracket gain8 with6 and10 in the same two matched recurrent coefficients. All other weights/body unchanged.",
+    "selection": "Exposed selection only. Require stationary meal and all9survivals. Prefer4/4mixed meal+survival; otherwise retain all3pain8 mixed successes and lower mean hazard injury without new mixed failures. No adoption without new heldouts. Reject variants losing a pain8 meal. Preserve current pain8 asset/control.",
+    "limits": "18lives maximum, all cases now exposed. Same pre-security source/dependencies. Check40%/STOP before each life; preserve partial results and do not claim completion if interrupted."
+  },
+  "summary": {
+    "input6": {
+      "lives": 9,
+      "survivors": 9,
+      "stationary_meals": 1,
+      "mixed_meals": 1,
+      "mixed_ticks": [
+        232,
+        null,
+        null,
+        null
+      ],
+      "mean_hazard_injury": 0.47698795795440674,
+      "mean_mixed_injury": 0.48208530992269516
+    },
+    "input10": {
+      "lives": 9,
+      "survivors": 9,
+      "stationary_meals": 1,
+      "mixed_meals": 4,
+      "mixed_ticks": [
+        78,
+        72,
+        53,
+        172
+      ],
+      "mean_hazard_injury": 0.5214123725891113,
+      "mean_mixed_injury": 0.5191541910171509
+    }
+  },
+  "archive": {
+    "file": "pain8-refinement-results.jsonl.gz",
+    "sha256": "d2d5790422f0d925fd8c52b4e40d12204fdf4fd9c042ac2cadcbdfa84464a7b7",
+    "requests": 18,
+    "trials": 18
+  },
+  "scope": "18 actual native CPU lives on exposed cases, using full exportedPain8 as parent. Selection, not fresh generalization; no common-parent change. Binary/source/dependencies remain frozen87fecd7d. Any later descendant requires a new comparison.",
+  "fixed_state_torch": "Additional local mathematical check replayed both saved tick32 states with input gains2,6,8,10 and frozen activations/metabolism/offsets/routes. Intermediate reserve activity changed, but Contact/Avoid endpoint pairs were exactly unchanged within each sampled three-microstep window. This is not a physical trajectory or proof of the complete later behavioral mechanism; original native-weight rows matched within5.97e-8.",
+  "conclusion": "Rejectgain6:only1/4mixedmeals versusPain8three, despite lowerinjury. Gain10keeps9/9survivals andstationarymeal, reaches4/4mixedmeals, withhighermeanlonehazardinjury0.5214 versusPain8 0.5091. Selectgain10onlyfornewfixedheldoutsagainstPain8; noadoptionorcommonparentchange."
+}
