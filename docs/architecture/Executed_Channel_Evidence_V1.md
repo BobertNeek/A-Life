@@ -29,6 +29,11 @@ remain external interval inputs, not reinforcement causally assigned to the
 next Ingest or to an unsealed previous action. No object-kind label is used to
 infer causality.
 
+These are World execution/audit records, not a new sensory channel. A future
+cognition consumer must separately establish what is available through the
+organism's ordinary sensory, proprioceptive or biological pathways. Paying a
+lookup cost does not make hidden World parameters perceived knowledge.
+
 The existing aggregate measured physiology, biological credit and neural joint
 plasticity stay shared. In particular, existing channel-terminal measured
 hunger/danger fields retain their whole-bundle semantics; do not reinterpret
