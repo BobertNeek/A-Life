@@ -7,6 +7,12 @@ pub const MAX_SOURCES: usize = 4;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq)]
 pub struct Source {
+    /// None identifies an ordinary memory ID. Channel observations use their
+    /// sealed sequence as the collection-local ID and carry explicit provenance.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub channel: Option<alife_core::MotorChannel>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub observation_digest: Option<[u64; 4]>,
     pub memory_id: u64,
     pub sequence_id: u64,
     pub action_id: u32,
@@ -128,6 +134,8 @@ mod tests {
     use super::*;
     fn source(id: u64, appearance: [f32; 9], delta: f32) -> Source {
         Source {
+            channel: None,
+            observation_digest: None,
             memory_id: id,
             sequence_id: id,
             action_id: 210,

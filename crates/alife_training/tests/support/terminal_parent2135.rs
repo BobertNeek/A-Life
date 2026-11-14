@@ -18,8 +18,31 @@ pub fn fixture(atp: Option<f32>) -> (CpuCanonicalHost, CpuFoundationTrainer) {
         format!("{:x}", Sha256::digest(GENOME)),
         "5c63a675c89be9195de6b2bdedfc51a0f6f95fa11917ef8db6b75492bba025f7"
     );
-    let asset = FoundationWeightAsset::decode_canonical(ASSET).unwrap();
-    let genome: CreatureGenome = serde_json::from_slice(GENOME).unwrap();
+    from_pair(ASSET, GENOME, atp)
+}
+
+#[allow(dead_code)]
+pub fn contact20_fixture(atp: Option<f32>) -> (CpuCanonicalHost, CpuFoundationTrainer) {
+    let asset = include_bytes!("../../../../docs/experiments/astra-generalization-2026-11-13/pursuit-twohead-contact20.alife-foundation");
+    let genome = include_bytes!("../../../../docs/experiments/astra-generalization-2026-11-13/pursuit-twohead-contact20.alife-foundation.genome.json");
+    assert_eq!(
+        format!("{:x}", Sha256::digest(asset)),
+        "d83a995e802e41b8e17799b0871f75d9ede35f95850049777323112e636654d1"
+    );
+    assert_eq!(
+        format!("{:x}", Sha256::digest(genome)),
+        "557da394c045d0b4353009c842825677aa7505f636d6252b20f67bfe0c3a5189"
+    );
+    from_pair(asset, genome, atp)
+}
+
+fn from_pair(
+    asset_bytes: &[u8],
+    genome_bytes: &[u8],
+    atp: Option<f32>,
+) -> (CpuCanonicalHost, CpuFoundationTrainer) {
+    let asset = FoundationWeightAsset::decode_canonical(asset_bytes).unwrap();
+    let genome: CreatureGenome = serde_json::from_slice(genome_bytes).unwrap();
     assert!(
         genome
             .n2048_foundation_candidate
@@ -27,7 +50,7 @@ pub fn fixture(atp: Option<f32>) -> (CpuCanonicalHost, CpuFoundationTrainer) {
             .unwrap()
             .encode_canonical()
             .unwrap()
-            == ASSET
+            == asset_bytes
     );
     let mut config = CanonicalNewGameConfig::phase3(2026111701, 1).unwrap();
     config.brain_class = BrainScaleTier::Standard2048;

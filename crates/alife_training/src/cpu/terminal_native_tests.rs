@@ -1,0 +1,462 @@
+use super::*;
+use alife_world::*;
+#[path = "../../tests/support/terminal_parent2135.rs"]
+#[allow(dead_code)]
+mod parent;
+
+fn food_fixture(legacy: bool, near_is_food: bool) -> (CpuCanonicalHost, CpuFoundationTrainer) {
+    let (mut host, trainer) = if legacy {
+        parent::fixture(None)
+    } else {
+        parent::contact20_fixture(None)
+    };
+    let old = host
+        .world
+        .organism_registry()
+        .iter()
+        .next()
+        .unwrap()
+        .clone();
+    let own = old.organism_id();
+    // Fresh exact-parent fixture, matching the assay's native world construction.
+    // No existing individual is reset, and every subsequent action is sampled.
+    let mut world = HeadlessScenarioBuilder::new(213503)
+        .agent("subject", own, Vec3f::ZERO)
+        .build()
+        .unwrap();
+    let mut chemistry = *old.biochemistry();
+    chemistry.body.set_energy(0.25).unwrap();
+    world
+        .register_organism_record(
+            WorldOrganismRecord::new(
+                own,
+                world.entity_id("subject").unwrap(),
+                old.genome().clone(),
+                old.phenotype().clone(),
+                chemistry,
+                old.birth_tick(),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    for (label, x) in [("near-food", 0.25), ("far-food", 2.5)] {
+        let entity = world
+            .editor_spawn_object(WorldEditorSpawnSpec {
+                label: label.into(),
+                kind: if label == "near-food" && !near_is_food {
+                    WorldObjectKind::ActivityToy
+                } else {
+                    WorldObjectKind::Food
+                },
+                organism_id: None,
+                position: Vec3f::new(x, 0.0, 0.0),
+                nutrition: if label == "near-food" && !near_is_food {
+                    0.0
+                } else {
+                    0.6
+                },
+                hazard_pain: 0.0,
+                radius: 0.3,
+                token_id: None,
+            })
+            .unwrap();
+        world
+            .set_grounded_physical_properties(
+                entity,
+                GroundedPhysicalProperties {
+                    velocity: Vec3f::ZERO,
+                    color: [0.2, 0.7, 0.1],
+                    material: [0.2; 3],
+                    shape: [0.7, 0.2, 0.4],
+                    chemical: [0.0; 3],
+                    surface_temperature: 0.0,
+                    terrain: [0.5; 2],
+                },
+            )
+            .unwrap();
+    }
+    for _ in 0..64 {
+        world.try_advance_tick().unwrap();
+    }
+    host.world = world;
+    host.seal_all_residents().unwrap();
+    let config = if legacy {
+        TerminalContextConfig2135::legacy_v2(1.0)
+    } else {
+        TerminalContextConfig2135::for_parent(
+            &trainer.source_foundation,
+            old.genome(),
+            trainer.phenotype(),
+            1.0,
+        )
+    }
+    .unwrap();
+    host.enable_terminal_context2135(config, &trainer).unwrap();
+    (host, trainer)
+}
+
+#[test]
+fn real_nonrepresentative_consumption_is_recorded_once_and_survives_cold_continuation() {
+    let (mut host, trainer) = food_fixture(false, true);
+    let founder = serde_json::to_vec(&trainer.checkpoint()).unwrap();
+    for interval in 0..64 {
+        let step = host.step(&trainer, 1.0).unwrap();
+        for row in &step.decisions {
+            let resident = &host.residents[&row.organism_id.raw()];
+            let (recall, patch) = resident.last_terminal_capture.as_ref().unwrap();
+            let source = row
+                .terminal_context2135
+                .as_ref()
+                .unwrap()
+                .observation
+                .as_ref()
+                .unwrap();
+            if let Some(recorded) = &source.recorded {
+                let observation = resident
+                    .terminal_channel2135
+                    .as_ref()
+                    .unwrap()
+                    .observations
+                    .last()
+                    .unwrap();
+                assert_eq!(observation.channel(), MotorChannel::Manipulation);
+                assert_eq!(
+                    observation.query().action_family(),
+                    CandidateActionFamily::Ingest
+                );
+                assert_eq!(recorded.sequence_id, patch.header().sequence_id.raw());
+                assert_eq!(recorded.observation_digest, observation.canonical_digest());
+                assert_eq!(observation.patch_digest(), patch.causal_digest().unwrap());
+                assert_eq!(
+                    observation.bundle_digest(),
+                    patch.selected_bundle().unwrap().canonical_digest().unwrap()
+                );
+                let mut corrupt = serde_json::to_value(observation).unwrap();
+                corrupt["channel"] = serde_json::json!("Locomotion");
+                assert!(serde_json::from_value::<ChannelTerminalObservationV1>(corrupt).is_err());
+                assert_ne!(
+                    patch.decision().selected_action.action_id,
+                    observation.query().action_id(),
+                    "fixture must consume through a different representative"
+                );
+                assert_eq!(
+                    patch.decision().neural_evidence().unwrap().action_family,
+                    CandidateActionFamily::Approach
+                );
+                assert_eq!(
+                    resident
+                        .terminal_channel2135
+                        .as_ref()
+                        .unwrap()
+                        .observations
+                        .len(),
+                    1
+                );
+                // The ordinary observer keeps the actual representative family.
+                assert!(!resident
+                    .memory
+                    .export_active_bank()
+                    .unwrap()
+                    .records
+                    .iter()
+                    .any(|r| r.sealed_sequence_id_raw == recorded.sequence_id
+                        && r.family_raw == u16::from(CandidateActionFamily::Ingest.raw())));
+                let key = observation.key();
+                assert!(ChannelTerminalObservationV1::try_from_sealed_patch(
+                    patch,
+                    recall,
+                    key,
+                    MotorChannel::Locomotion
+                )
+                .is_err());
+                let wrong = recall
+                    .candidate_keys()
+                    .iter()
+                    .find(|k| {
+                        k.query().tracked_object_id().is_some()
+                            && k.query().tracked_object_id() != key.query().tracked_object_id()
+                    })
+                    .unwrap();
+                assert!(ChannelTerminalObservationV1::try_from_sealed_patch(
+                    patch,
+                    recall,
+                    wrong,
+                    MotorChannel::Manipulation
+                )
+                .is_err());
+                let mut duplicate = resident.terminal_channel2135.clone().unwrap();
+                let before = serde_json::to_vec(&duplicate).unwrap();
+                let mut admission =
+                    admit_terminal_observation2135(duplicate.observations.len(), 65535);
+                assert!(duplicate.observe(patch, recall, &mut admission).is_err());
+                assert!(serde_json::to_vec(&duplicate).unwrap() == before);
+                let bytes = serde_json::to_vec(&host.checkpoint(&trainer).unwrap()).unwrap();
+                let mut mode_receipts = Vec::new();
+                for (gain, mask) in [(1.0, false), (0.0, false), (1.0, true)] {
+                    let mut cp: CpuCanonicalCheckpoint = serde_json::from_slice(&bytes).unwrap();
+                    let config = cp.terminal_context2135.as_mut().unwrap();
+                    config.head_recipe = crate::cpu::terminal_context::head::Head::new(true, gain)
+                        .unwrap()
+                        .to_bytes();
+                    config.mask_new_context = mask;
+                    let mut branch = CpuCanonicalHost::from_checkpoint(cp, &trainer).unwrap();
+                    let row = branch.step(&trainer, 1.0).unwrap().decisions.remove(0);
+                    let mut value =
+                        serde_json::to_value(row.terminal_context2135.unwrap()).unwrap();
+                    value.as_object_mut().unwrap().remove("config");
+                    value["observation"]
+                        .as_object_mut()
+                        .unwrap()
+                        .remove("recorded");
+                    for c in value["candidates"].as_array_mut().unwrap() {
+                        c.as_object_mut().unwrap().remove("delta");
+                    }
+                    mode_receipts.push(value);
+                }
+                assert_eq!(mode_receipts[0], mode_receipts[1]);
+                assert_eq!(mode_receipts[0], mode_receipts[2]);
+                let mut cold = CpuCanonicalHost::from_checkpoint(
+                    serde_json::from_slice(&bytes).unwrap(),
+                    &trainer,
+                )
+                .unwrap();
+                assert!(serde_json::to_vec(&cold.checkpoint(&trainer).unwrap()).unwrap() == bytes);
+                let hot_step = host.step(&trainer, 1.0).unwrap();
+                let cold_step = cold.step(&trainer, 1.0).unwrap();
+                assert!(
+                    serde_json::to_vec(&hot_step.decisions).unwrap()
+                        == serde_json::to_vec(&cold_step.decisions).unwrap()
+                );
+                assert!(
+                    serde_json::to_vec(&host.checkpoint(&trainer).unwrap()).unwrap()
+                        == serde_json::to_vec(&cold.checkpoint(&trainer).unwrap()).unwrap()
+                );
+                assert!(hot_step
+                    .decisions
+                    .iter()
+                    .flat_map(|r| &r.terminal_context2135.as_ref().unwrap().candidates)
+                    .any(|c| !c.source_channel_observations.is_empty()));
+                assert!(serde_json::to_vec(&trainer.checkpoint()).unwrap() == founder);
+                eprintln!("native channel consumption: interval={interval}, sequence={}, representative=Approach, channel=Manipulation, recorded=1", recorded.sequence_id);
+                return;
+            }
+            if let Some(bundle) = patch.selected_bundle() {
+                if let Some(command) = bundle
+                    .channels
+                    .iter()
+                    .find(|c| c.channel == MotorChannel::Manipulation)
+                {
+                    if let Some(key) = recall.candidate_keys().iter().find(|k| {
+                        k.query().action_id() == command.primitive
+                            && k.query().action_family() == CandidateActionFamily::Ingest
+                    }) {
+                        assert!(ChannelTerminalObservationV1::try_from_sealed_patch(
+                            patch,
+                            recall,
+                            key,
+                            MotorChannel::Manipulation
+                        )
+                        .unwrap()
+                        .is_none());
+                    }
+                }
+            }
+        }
+    }
+    panic!("bounded native fixture did not consume through independent Manipulation");
+}
+
+#[test]
+#[ignore = "requires an actual recipe2 checkpoint captured before the observer change"]
+fn external_recipe2_checkpoint_keeps_exact_bytes_and_continuation() {
+    let (_, trainer) = parent::fixture(None);
+    let bytes = std::fs::read(std::env::var_os("ALIFE_NATIVE_LEGACY_CP").unwrap()).unwrap();
+    let mut host =
+        CpuCanonicalHost::from_checkpoint(serde_json::from_slice(&bytes).unwrap(), &trainer)
+            .unwrap();
+    assert_eq!(
+        host.terminal_context2135.as_ref().unwrap().schema_version,
+        2
+    );
+    assert!(host
+        .residents
+        .values()
+        .all(|r| r.terminal_channel2135.is_none()));
+    assert!(serde_json::to_vec(&host.checkpoint(&trainer).unwrap()).unwrap() == bytes);
+    let mut cold =
+        CpuCanonicalHost::from_checkpoint(serde_json::from_slice(&bytes).unwrap(), &trainer)
+            .unwrap();
+    let a = host.step(&trainer, 1.0).unwrap();
+    let b = cold.step(&trainer, 1.0).unwrap();
+    assert!(serde_json::to_vec(&a.decisions).unwrap() == serde_json::to_vec(&b.decisions).unwrap());
+    assert!(a.decisions.iter().all(|r| r
+        .terminal_context2135
+        .as_ref()
+        .unwrap()
+        .observation
+        .is_none()));
+}
+
+#[test]
+fn native_nonconsumed_toy_contact_never_creates_terminal_consumption() {
+    let (mut host, trainer) = food_fixture(false, false);
+    let toy = host.world.entity_id("near-food").unwrap();
+    for _ in 0..16 {
+        let step = host.step(&trainer, 1.0).unwrap();
+        for row in step.decisions {
+            let resident = &host.residents[&row.organism_id.raw()];
+            let (recall, patch) = resident.last_terminal_capture.as_ref().unwrap();
+            let Some(physical) = patch
+                .outcome()
+                .joint
+                .as_ref()
+                .unwrap()
+                .channel_outcomes
+                .iter()
+                .find(|c| {
+                    c.channel == MotorChannel::Manipulation && c.physical.target_entity == Some(toy)
+                })
+            else {
+                continue;
+            };
+            if !matches!(
+                physical.physical.contact,
+                PhysicalContactKind::Touch | PhysicalContactKind::Blocked
+            ) {
+                continue;
+            }
+            let command = patch
+                .selected_bundle()
+                .unwrap()
+                .channels
+                .iter()
+                .find(|c| c.channel == MotorChannel::Manipulation)
+                .unwrap();
+            let Some(key) = recall.candidate_keys().iter().find(|k| {
+                k.query().action_id() == command.primitive
+                    && k.query().action_family() == CandidateActionFamily::Ingest
+                    && patch.pre_action().perception().candidates()
+                        [k.query().candidate_index() as usize]
+                        .target
+                        .entity
+                        == Some(toy)
+            }) else {
+                continue;
+            };
+            assert!(ChannelTerminalObservationV1::try_from_sealed_patch(
+                patch,
+                recall,
+                key,
+                MotorChannel::Manipulation
+            )
+            .unwrap()
+            .is_none());
+            assert!(row
+                .terminal_context2135
+                .as_ref()
+                .unwrap()
+                .observation
+                .as_ref()
+                .unwrap()
+                .recorded
+                .is_none());
+            assert!(resident
+                .terminal_channel2135
+                .as_ref()
+                .unwrap()
+                .observations
+                .is_empty());
+            return;
+        }
+    }
+    panic!("native toy fixture did not produce a nonconsumed Ingest contact");
+}
+
+#[test]
+fn parent_bound_recipe_rejects_cross_parent_pairs() {
+    let (bearing, bearing_trainer) = parent::fixture(None);
+    let (contact, contact_trainer) = parent::contact20_fixture(None);
+    let old_genome = bearing
+        .world
+        .organism_registry()
+        .iter()
+        .next()
+        .unwrap()
+        .genome();
+    let genome = contact
+        .world
+        .organism_registry()
+        .iter()
+        .next()
+        .unwrap()
+        .genome();
+    let config = TerminalContextConfig2135::for_parent(
+        &contact_trainer.source_foundation,
+        genome,
+        contact_trainer.phenotype(),
+        1.0,
+    )
+    .unwrap();
+    assert_eq!(
+        config.parent_sha256,
+        "d83a995e802e41b8e17799b0871f75d9ede35f95850049777323112e636654d1"
+    );
+    assert!(config
+        .validate_parent(
+            &bearing_trainer.source_foundation,
+            bearing_trainer.phenotype()
+        )
+        .is_err());
+    assert!(TerminalContextConfig2135::for_parent(
+        &contact_trainer.source_foundation,
+        old_genome,
+        contact_trainer.phenotype(),
+        1.0
+    )
+    .is_err());
+    assert!(TerminalContextConfig2135::legacy_v2(1.0)
+        .unwrap()
+        .validate_parent(
+            &contact_trainer.source_foundation,
+            contact_trainer.phenotype()
+        )
+        .is_err());
+}
+
+#[test]
+fn recipe2_keeps_legacy_nonrepresentative_consumption_semantics() {
+    let (mut host, trainer) = food_fixture(true, true);
+    for _ in 0..16 {
+        for row in host.step(&trainer, 1.0).unwrap().decisions {
+            let joint = row.patch.outcome().joint.as_ref().unwrap();
+            if !joint.channel_outcomes.iter().any(|c| {
+                c.channel == MotorChannel::Manipulation
+                    && c.physical.contact == PhysicalContactKind::Consumed
+            }) {
+                continue;
+            }
+            assert_ne!(
+                row.patch
+                    .decision()
+                    .neural_evidence()
+                    .unwrap()
+                    .action_family,
+                CandidateActionFamily::Ingest
+            );
+            assert!(row
+                .terminal_context2135
+                .as_ref()
+                .unwrap()
+                .observation
+                .is_none());
+            let cp = host.checkpoint(&trainer).unwrap();
+            assert_eq!(cp.terminal_context2135.as_ref().unwrap().schema_version, 2);
+            assert!(cp.residents[0].terminal_channel2135.is_none());
+            assert!(!cp.residents[0].memory.records.iter().any(|r| r.family_raw
+                == u16::from(CandidateActionFamily::Ingest.raw())
+                && r.outcome_contact == Some(PhysicalContactKind::Consumed)));
+            return;
+        }
+    }
+    panic!("legacy native fixture did not reproduce independent consumption");
+}

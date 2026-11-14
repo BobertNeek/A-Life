@@ -35,6 +35,9 @@ pub enum CpuHostError {
 }
 #[derive(Clone)]
 struct Resident {
+    #[cfg(test)]
+    last_terminal_capture: Option<(FinalizedMemoryRecall, ExperiencePatch)>,
+    terminal_channel2135: Option<TerminalChannelState2135>,
     // Process-local proof of the last completed boundary. Private state is
     // invalidated before mutation and resealed before a staged host is committed.
     // Never restored from serialized data; cold admission recomputes the digest.
@@ -85,6 +88,8 @@ struct CpuReplayEvent {
 }
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CpuResidentCheckpoint {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub terminal_channel2135: Option<TerminalChannelState2135>,
     pub neural: CpuOrganismCheckpoint,
     pub activity: CpuActivityState,
     pub neural_topology: GpuV11Checkpoint,
@@ -254,6 +259,9 @@ impl CpuCanonicalHost {
             residents.insert(
                 id.raw(),
                 Resident {
+                    #[cfg(test)]
+                    last_terminal_capture: None,
+                    terminal_channel2135: None,
                     sealed_authority: None,
                     neural,
                     activity: CpuActivityState::default(),
@@ -416,18 +424,31 @@ impl CpuCanonicalHost {
             ));
         }
         config.validate().map_err(CpuHostError::Preparation)?;
-        verify_terminal_parent2135(&founder.source_foundation, founder.phenotype())
+        config
+            .validate_parent(&founder.source_foundation, founder.phenotype())
             .map_err(CpuHostError::Preparation)?;
         for record in self.world.organism_registry().iter() {
-            verify_terminal_genome2135(record.genome()).map_err(CpuHostError::Preparation)?;
+            config
+                .validate_genome(record.genome())
+                .map_err(CpuHostError::Preparation)?;
+        }
+        let channel_policy = config.schema_version == 3;
+        if channel_policy {
+            for (&id, resident) in &mut self.residents {
+                resident.terminal_channel2135 = Some(TerminalChannelState2135::new(OrganismId(id)));
+            }
         }
         self.terminal_context2135 = Some(config);
+        if channel_policy {
+            self.seal_all_residents()?;
+        }
         Ok(())
     }
     fn validate_founder(&self, founder: &CpuFoundationTrainer) -> Result<(), CpuHostError> {
         if let Some(config) = &self.terminal_context2135 {
             config.validate().map_err(CpuHostError::Preparation)?;
-            verify_terminal_parent2135(&founder.source_foundation, founder.phenotype())
+            config
+                .validate_parent(&founder.source_foundation, founder.phenotype())
                 .map_err(CpuHostError::Preparation)?;
         }
         if self.phenotype_hash != founder.phenotype().phenotype_hash()
@@ -501,6 +522,7 @@ impl CpuCanonicalHost {
             .values()
             .map(|r| {
                 Ok(CpuResidentCheckpoint {
+                    terminal_channel2135: r.terminal_channel2135.clone(),
                     neural: r.neural.checkpoint()?,
                     activity: r.activity.clone(),
                     neural_topology: r.v11.checkpoint(),
@@ -549,6 +571,10 @@ impl CpuCanonicalHost {
             checkpoint.terminal_context2135.is_some(),
         )
         .map_err(CpuHostError::State)?;
+        let channel_policy = checkpoint
+            .terminal_context2135
+            .as_ref()
+            .is_some_and(|c| c.schema_version == 3);
         if checkpoint.world.config.brain_policy.policy != PolicyBackend::NeuralClosedLoopCpu {
             return Err(CpuHostError::State(
                 "not a versioned offline CPU checkpoint",
@@ -636,7 +662,30 @@ impl CpuCanonicalHost {
             {
                 return Err(CpuHostError::State("neural topology checkpoint mismatch"));
             }
+            if r.terminal_channel2135.is_some() != channel_policy {
+                return Err(CpuHostError::State(
+                    "terminal observation recipe/state mismatch",
+                ));
+            }
+            if let Some(channels) = &r.terminal_channel2135 {
+                channels
+                    .validate(r.next_sequence)
+                    .map_err(CpuHostError::Preparation)?;
+                if channels.organism_id != id
+                    || channels
+                        .observations
+                        .iter()
+                        .any(|o| o.query().profile() != profile || o.outcome_tick() > world.tick())
+                {
+                    return Err(CpuHostError::State(
+                        "terminal observation owner/profile/clock mismatch",
+                    ));
+                }
+            }
             let mut resident = Resident {
+                #[cfg(test)]
+                last_terminal_capture: None,
+                terminal_channel2135: r.terminal_channel2135,
                 sealed_authority: None,
                 v11: GpuV11CausalState::restore(r.neural_topology)?,
                 neural: CpuOrganismState::from_checkpoint(p, r.neural)?,
@@ -685,9 +734,11 @@ impl CpuCanonicalHost {
             sampling_counter: checkpoint.sampling_counter,
         };
         host.validate_founder(founder)?;
-        if host.terminal_context2135.is_some() {
+        if let Some(config) = &host.terminal_context2135 {
             for record in host.world.organism_registry().iter() {
-                verify_terminal_genome2135(record.genome()).map_err(CpuHostError::Preparation)?;
+                config
+                    .validate_genome(record.genome())
+                    .map_err(CpuHostError::Preparation)?;
             }
         }
         Ok(host)
@@ -993,16 +1044,28 @@ impl CpuCanonicalHost {
             }
             // Reserve the versioned worst-case research work before exporting
             // the bank or running any additional query. Default-off does none.
-            let terminal_context2135 = if let Some(config) = &self.terminal_context2135 {
+            let mut terminal_context2135 = if let Some(config) = &self.terminal_context2135 {
                 Some(
-                    prepare_terminal2135(
-                        config,
-                        &r.memory,
-                        &recall,
-                        activity
-                            .available_atp_q16
-                            .saturating_sub(activity.debit_atp_q16),
-                    )
+                    if let Some(channels) = &r.terminal_channel2135 {
+                        prepare_terminal_channels2135(
+                            config,
+                            &r.memory,
+                            channels,
+                            &recall,
+                            activity
+                                .available_atp_q16
+                                .saturating_sub(activity.debit_atp_q16),
+                        )
+                    } else {
+                        prepare_terminal2135(
+                            config,
+                            &r.memory,
+                            &recall,
+                            activity
+                                .available_atp_q16
+                                .saturating_sub(activity.debit_atp_q16),
+                        )
+                    }
                     .map_err(CpuHostError::Preparation)?,
                 )
             } else {
@@ -1316,6 +1379,21 @@ impl CpuCanonicalHost {
             )?;
             r.language_grounding.observe_sealed(&patch)?;
             r.memory.observe_sealed_patch(&patch)?;
+            if let Some(channels) = &mut r.terminal_channel2135 {
+                let observation = terminal_context2135
+                    .as_mut()
+                    .and_then(|r| r.observation.as_mut())
+                    .ok_or(CpuHostError::State(
+                        "missing terminal observation admission",
+                    ))?;
+                channels
+                    .observe(&patch, &recall, observation)
+                    .map_err(CpuHostError::Preparation)?;
+                #[cfg(test)]
+                {
+                    r.last_terminal_capture = Some((recall.clone(), patch.clone()));
+                }
+            }
             let topology_receipt = r.topology.observe_sealed_patch(&patch);
             if topology_receipt.rejected_invalid || topology_receipt.replay_rejected {
                 return Err(CpuHostError::State("sealed topology observation rejected"));
@@ -1409,6 +1487,10 @@ impl CpuCanonicalHost {
         })
     }
 }
+
+#[cfg(test)]
+#[path = "terminal_native_tests.rs"]
+mod terminal_native_tests;
 fn replay_evidence(
     p: &BrainPhenotype,
     events: &[CpuReplayEvent],
@@ -1507,7 +1589,7 @@ fn resident_digest(
     sampling_seed: u32,
     sampling_counter: u32,
 ) -> Result<[u64; 4], CpuHostError> {
-    json_digest(
+    let ordinary = json_digest(
         b"ALIFE-CPU-CANONICAL-PRIVATE-STATE-V1",
         &(
             r.neural.checkpoint()?,
@@ -1526,7 +1608,14 @@ fn resident_digest(
             sampling_seed,
             sampling_counter,
         ),
-    )
+    )?;
+    match &r.terminal_channel2135 {
+        None => Ok(ordinary),
+        Some(channels) => json_digest(
+            b"ALIFE-CPU-CHANNEL-TERMINAL-PRIVATE-V1",
+            &(ordinary, channels),
+        ),
+    }
 }
 fn validate_resident_authority(
     record: &alife_world::WorldOrganismRecord,

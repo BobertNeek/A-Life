@@ -184,7 +184,11 @@ fn full_native_rows_reject_ordinary_readers_and_training_even_when_head_abstains
                     available_atp_q16,
                 } => {
                     assert!(required_atp_q16 > available_atp_q16);
-                    assert!(receipt.reserved_atp_q16 <= available_atp_q16);
+                    let observation_debit = receipt
+                        .observation
+                        .as_ref()
+                        .map_or(0, |r| r.reserved_atp_q16);
+                    assert!(receipt.reserved_atp_q16 - observation_debit <= available_atp_q16);
                     assert!(receipt.candidates.is_empty());
                     refusals += 1;
                 }
@@ -293,9 +297,22 @@ fn active_zero_and_mask_read_identical_native_state_and_charge_identical_work() 
         let mut branch = CpuCanonicalHost::from_checkpoint(branch, &trainer).unwrap();
         let row = branch.step(&trainer, 1.0).unwrap().decisions.remove(0);
         let receipt = row.terminal_context2135.unwrap();
-        assert_eq!(receipt.records, cp.residents[0].memory.records.len());
+        assert_eq!(
+            receipt.records,
+            cp.residents[0].memory.records.len()
+                + cp.residents[0]
+                    .terminal_channel2135
+                    .as_ref()
+                    .map_or(0, |s| s.observations.len())
+        );
         let mut value = serde_json::to_value(receipt).unwrap();
         value.as_object_mut().unwrap().remove("config");
+        if let Some(observation) = value
+            .get_mut("observation")
+            .and_then(serde_json::Value::as_object_mut)
+        {
+            observation.remove("recorded");
+        }
         for c in value["candidates"].as_array_mut().unwrap() {
             c.as_object_mut().unwrap().remove("delta");
         }

@@ -4,6 +4,10 @@
 pub mod head;
 #[path = "native_terminal.rs"]
 pub mod reader;
+use super::{
+    admit_terminal_observation2135, TerminalChannelSource2135, TerminalChannelState2135,
+    TerminalObservationReceipt2135,
+};
 use alife_core::*;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -50,6 +54,8 @@ pub(crate) fn validate_terminal_host_checkpoint_schema2135(
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct TerminalContextConfig2135 {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent_native_digest: Option<Blake3Digest>,
     pub schema_version: u16,
     pub parent_sha256: String,
     pub construction_genome_sha256: String,
@@ -60,9 +66,44 @@ pub struct TerminalContextConfig2135 {
     pub mask_new_context: bool,
 }
 impl TerminalContextConfig2135 {
+    /// Frozen bearing4 fixture. New accepted descendants should use `for_parent`.
     pub fn new(gain: f32) -> Result<Self, String> {
+        let mut config = Self::legacy_v2(gain)?;
+        config.schema_version = 3;
+        config.parent_native_digest = Some(Blake3Digest::from_bytes([
+            224, 252, 172, 202, 37, 120, 184, 145, 35, 70, 23, 108, 246, 112, 221, 152, 69, 131,
+            49, 17, 45, 92, 183, 43, 52, 64, 61, 151, 61, 176, 43, 91,
+        ]));
+        Ok(config)
+    }
+    /// Bind a fresh recipe3 life to the complete supplied parent instance.
+    pub fn for_parent(
+        asset: &FoundationWeightAsset,
+        genome: &CreatureGenome,
+        phenotype: &BrainPhenotype,
+        gain: f32,
+    ) -> Result<Self, String> {
+        let mut config = Self::new(gain)?;
+        config.parent_sha256 = format!(
+            "{:x}",
+            Sha256::digest(asset.encode_canonical().map_err(|e| e.to_string())?)
+        );
+        config.construction_genome_sha256 = format!(
+            "{:x}",
+            Sha256::digest(serde_json::to_vec(genome).map_err(|e| e.to_string())?)
+        );
+        config.compiled_phenotype_hash = phenotype.phenotype_hash().0;
+        config.compiler_inputs_digest = phenotype.compiler_inputs_digest();
+        config.parent_native_digest = Some(asset.digest());
+        config.validate_parent(asset, phenotype)?;
+        config.validate_genome(genome)?;
+        Ok(config)
+    }
+    /// Exact continuation policy of pre-channel-observation research lives.
+    pub fn legacy_v2(gain: f32) -> Result<Self, String> {
         let h = head::Head::new(true, gain).map_err(|_| "invalid terminal gain")?;
         Ok(Self {
+            parent_native_digest: None,
             schema_version: 2,
             parent_sha256: TERMINAL_PARENT_SHA256.into(),
             construction_genome_sha256: TERMINAL_GENOME_SHA256.into(),
@@ -74,12 +115,24 @@ impl TerminalContextConfig2135 {
         })
     }
     pub fn validate(&self) -> Result<(), String> {
-        if self.schema_version != 2
-            || self.parent_sha256 != TERMINAL_PARENT_SHA256
-            || self.construction_genome_sha256 != TERMINAL_GENOME_SHA256
+        let legacy_identity = self.parent_sha256 == TERMINAL_PARENT_SHA256
+            && self.construction_genome_sha256 == TERMINAL_GENOME_SHA256
+            && self.compiled_phenotype_hash == PARENT_PHENOTYPE
+            && self.compiler_inputs_digest == PARENT_COMPILER_INPUTS;
+        let digest_text = |s: &str| {
+            s.len() == 64
+                && s.bytes()
+                    .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
+        };
+        if !matches!(self.schema_version, 2 | 3)
+            || (self.schema_version == 2
+                && (!legacy_identity || self.parent_native_digest.is_some()))
+            || (self.schema_version == 3 && self.parent_native_digest.is_none())
+            || !digest_text(&self.parent_sha256)
+            || !digest_text(&self.construction_genome_sha256)
             || self.motor_head_count != 2
-            || self.compiled_phenotype_hash != PARENT_PHENOTYPE
-            || self.compiler_inputs_digest != PARENT_COMPILER_INPUTS
+            || self.compiled_phenotype_hash == [0; 4]
+            || self.compiler_inputs_digest == [0; 4]
         {
             return Err("terminal context recipe identity mismatch".into());
         }
@@ -87,6 +140,68 @@ impl TerminalContextConfig2135 {
             .map_err(|_| "invalid terminal head recipe")?;
         if !h.enabled() {
             return Err("off is None, not an enabled research recipe".into());
+        }
+        Ok(())
+    }
+    pub fn validate_parent(
+        &self,
+        asset: &FoundationWeightAsset,
+        p: &BrainPhenotype,
+    ) -> Result<(), String> {
+        self.validate()?;
+        if self.schema_version == 2 {
+            return verify_terminal_parent2135(asset, p);
+        }
+        // Constant-size hot-path binding. Full canonical SHA/genome checks run
+        // at construction/cold admission through validate_genome.
+        if self.parent_native_digest != Some(asset.digest())
+            || self.compiled_phenotype_hash != p.phenotype_hash().0
+            || self.compiler_inputs_digest != p.compiler_inputs_digest()
+            || p.sensor_profile() != SensorProfile::GroundedObjectSlotsV1
+            || p.candidate_decoder()
+                .factorized_motor_channels(p)
+                .map_err(|e| e.to_string())?
+                != [MotorChannel::Locomotion, MotorChannel::Manipulation]
+        {
+            return Err("terminal recipe parent/compiled construction mismatch".into());
+        }
+        Ok(())
+    }
+    pub fn validate_genome(&self, genome: &CreatureGenome) -> Result<(), String> {
+        self.validate()?;
+        if self.schema_version == 2 {
+            return verify_terminal_genome2135(genome);
+        }
+        genome.validate_contract().map_err(|e| e.to_string())?;
+        let asset = genome
+            .n2048_foundation_candidate
+            .as_ref()
+            .ok_or("terminal genome lacks foundation")?;
+        if self.construction_genome_sha256
+            != format!(
+                "{:x}",
+                Sha256::digest(serde_json::to_vec(genome).map_err(|e| e.to_string())?)
+            )
+            || self.parent_sha256
+                != format!(
+                    "{:x}",
+                    Sha256::digest(asset.encode_canonical().map_err(|e| e.to_string())?)
+                )
+            || self.parent_native_digest != Some(asset.digest())
+            || genome
+                .brain
+                .construction
+                .maternal_architecture
+                .motor_head_count()
+                != 2
+            || genome
+                .brain
+                .construction
+                .paternal_architecture
+                .motor_head_count()
+                != 2
+        {
+            return Err("terminal recipe construction genome mismatch".into());
         }
         Ok(())
     }
@@ -98,6 +213,8 @@ pub struct TerminalCandidateReceipt2135 {
     pub source_memory_ids: Vec<u64>,
     pub source_sequence_ids: Vec<u64>,
     pub source_action_ids: Vec<u32>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub source_channel_observations: Vec<TerminalChannelSource2135>,
     pub consumed_source_count: usize,
     pub hunger_now: f32,
     pub desirability: Option<f32>,
@@ -129,6 +246,8 @@ pub struct TerminalAdmissionPlan2135 {
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TerminalContextReceipt2135 {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub observation: Option<TerminalObservationReceipt2135>,
     pub schema_version: u16,
     pub config: TerminalContextConfig2135,
     pub bank_digest: [u64; 4],
@@ -259,8 +378,38 @@ pub fn prepare_terminal2135(
     recall: &FinalizedMemoryRecall,
     available_atp_q16: u32,
 ) -> Result<TerminalContextReceipt2135, String> {
+    prepare_terminal_inner2135(config, memory, None, recall, available_atp_q16)
+}
+pub fn prepare_terminal_channels2135(
+    config: &TerminalContextConfig2135,
+    memory: &MemorySidecarState,
+    channels: &TerminalChannelState2135,
+    recall: &FinalizedMemoryRecall,
+    available_atp_q16: u32,
+) -> Result<TerminalContextReceipt2135, String> {
+    prepare_terminal_inner2135(config, memory, Some(channels), recall, available_atp_q16)
+}
+fn prepare_terminal_inner2135(
+    config: &TerminalContextConfig2135,
+    memory: &MemorySidecarState,
+    channels: Option<&TerminalChannelState2135>,
+    recall: &FinalizedMemoryRecall,
+    available_atp_q16: u32,
+) -> Result<TerminalContextReceipt2135, String> {
     config.validate()?;
-    let records = memory.bank().len();
+    if (config.schema_version == 3) != channels.is_some() {
+        return Err("terminal observation policy/state mismatch".into());
+    }
+    let observation = channels
+        .map(|state| admit_terminal_observation2135(state.observations.len(), available_atp_q16));
+    let observation_debit = observation.as_ref().map_or(0, |r| r.reserved_atp_q16);
+    let observation_work = observation.as_ref().map_or(0, |r| r.reserved_work_units);
+    let observation_requested_work = observation.as_ref().map_or(0, |r| r.requested_work_units);
+    let observation_requested_atp = observation.as_ref().map_or(0, |r| r.requested_atp_q16);
+    let observation_unfunded = observation
+        .as_ref()
+        .map_or(0, |r| r.admission_check_unfunded_atp_q16);
+    let records = memory.bank().len() + channels.map_or(0, |s| s.observations.len());
     let keys = recall.candidate_keys();
     let approach_count = keys
         .iter()
@@ -269,21 +418,28 @@ pub fn prepare_terminal2135(
                 && k.query().tracked_object_id().is_some()
         })
         .count();
-    let plan = admit_terminal_work2135(records, keys.len(), approach_count, available_atp_q16)?;
+    let plan = admit_terminal_work2135(
+        records,
+        keys.len(),
+        approach_count,
+        available_atp_q16 - observation_debit,
+    )?;
     let mut result = TerminalContextReceipt2135 {
-        schema_version: 2,
+        observation,
+        schema_version: config.schema_version,
         config: config.clone(),
         bank_digest: [0; 4],
         bank_generation: 0,
         records,
         candidates: Vec::new(),
-        reserved_work_units: plan.charged_work_units,
-        reserved_atp_q16: plan.charged_atp_q16,
+        reserved_work_units: plan.charged_work_units + observation_work,
+        reserved_atp_q16: plan.charged_atp_q16 + observation_debit,
         capacity_rejected: records > 64,
         admission: plan.admission,
-        requested_work_units: plan.requested_work_units,
-        requested_atp_q16: plan.requested_atp_q16,
-        admission_check_unfunded_atp_q16: plan.admission_check_unfunded_atp_q16,
+        requested_work_units: plan.requested_work_units + observation_requested_work,
+        requested_atp_q16: plan.requested_atp_q16 + observation_requested_atp,
+        admission_check_unfunded_atp_q16: plan.admission_check_unfunded_atp_q16
+            + observation_unfunded,
     };
     if result.admission != TerminalAdmission2135::Admitted {
         // No bank export, record validation, appearance search or head execution.
@@ -301,8 +457,13 @@ pub fn prepare_terminal2135(
         {
             continue;
         }
-        let read = reader::read(reader::Policy::AppearanceOnlyConsumedV1, &bank, query)?
-            .ok_or("missing terminal read")?;
+        let read = if let Some(channels) = channels {
+            reader::read_channels(&bank, query, &channels.observations)?
+        } else {
+            reader::read(reader::Policy::AppearanceOnlyConsumedV1, &bank, query)?
+        }
+        .ok_or("missing terminal read")?;
+        result.bank_digest = read.bank_digest;
         let desirability = read.context.as_ref().map(|c| c.desirability);
         let work = head::Work::reader(
             read.records_examined as u32,
@@ -328,9 +489,25 @@ pub fn prepare_terminal2135(
         result.candidates.push(TerminalCandidateReceipt2135 {
             candidate_index: query.candidate_index(),
             query_digest: query.canonical_digest(),
-            source_memory_ids: sources.iter().map(|s| s.memory_id).collect(),
+            source_memory_ids: sources
+                .iter()
+                .filter(|s| s.channel.is_none())
+                .map(|s| s.memory_id)
+                .collect(),
             source_sequence_ids: sources.iter().map(|s| s.sequence_id).collect(),
             source_action_ids: sources.iter().map(|s| s.action_id).collect(),
+            source_channel_observations: sources
+                .iter()
+                .filter_map(|s| {
+                    Some(TerminalChannelSource2135 {
+                        sequence_id: s.sequence_id,
+                        channel: s.channel?,
+                        action_id: s.action_id,
+                        tracked_object_id: s.tracked_object_id,
+                        observation_digest: s.observation_digest?,
+                    })
+                })
+                .collect(),
             consumed_source_count: sources.len(),
             hunger_now: query.features()[12],
             desirability,
@@ -362,7 +539,7 @@ mod tests {
     use super::*;
     #[test]
     fn recipe_roundtrip_and_strict_identity() {
-        let c = TerminalContextConfig2135::new(16.0).unwrap();
+        let c = TerminalContextConfig2135::legacy_v2(16.0).unwrap();
         c.validate().unwrap();
         let bytes = serde_json::to_vec(&c).unwrap();
         let back: TerminalContextConfig2135 = serde_json::from_slice(&bytes).unwrap();
@@ -449,7 +626,7 @@ mod host_schema_tests {
     use super::*;
 
     // Minimal wire projection: same serde omission rule and old permissive reader.
-    // Full host/world cold restoration remains a remote qualification gate.
+    // Native host tests separately exercise full rows and cold restoration.
     #[derive(Serialize, Deserialize)]
     struct Envelope {
         #[serde(default, skip_serializing_if = "Option::is_none")]

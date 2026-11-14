@@ -38,7 +38,6 @@ fn prepare_parent(
     asset: &FoundationWeightAsset,
     genome: &CreatureGenome,
 ) -> Result<(BrainPhenotype, CanonicalNewGame)> {
-    verify_terminal_genome2135(genome)?;
     let embedded = genome
         .n2048_foundation_candidate
         .as_ref()
@@ -66,7 +65,7 @@ fn prepare_parent(
         dev,
         asset.clone(),
     )?;
-    verify_terminal_parent2135(asset, &compiled)?;
+    TerminalContextConfig2135::for_parent(asset, genome, &compiled, 0.0)?;
     if !compiled
         .synapses()
         .iter()
@@ -137,7 +136,8 @@ fn run(
     request: &Request,
     evidence: &mut LocalEvidence,
 ) -> Result<serde_json::Value> {
-    if request.parent != "pursuit-twohead-bearing4"
+    if request.parent.is_empty()
+        || request.parent.len() > 120
         || !["off", "active", "zero", "mask"].contains(&request.arm.as_str())
         || !(1..=512).contains(&request.ticks)
         || request.leadin > 2400
@@ -151,7 +151,7 @@ fn run(
     let founder_bytes = serde_json::to_vec(&trainer.checkpoint())?;
     evidence.save("FOUNDER-OPTIMIZER-BIRTH.json", &founder_bytes)?;
     evidence.save("PROVENANCE.json",&serde_json::to_vec_pretty(&json!({
-        "schema":2135,"revision":"v4-full-parent","parent_sha256":format!("{:x}",Sha256::digest(asset.encode_canonical()?)),
+        "schema":2135,"revision":"v5-channel-terminal-observation","parent_sha256":format!("{:x}",Sha256::digest(asset.encode_canonical()?)),
         "parent_native_digest":asset.digest(),"parent_manifest":asset.manifest(),
         "construction_genome_sha256":format!("{:x}",Sha256::digest(serde_json::to_vec(genome)?)),
         "motor_head_count":trainer.phenotype().cognitive_architecture().motor_head_count(),
@@ -161,7 +161,9 @@ fn run(
         "compiled_phenotype_hash":trainer.phenotype().phenotype_hash(),
         "source_hashes":{"assay":format!("{:x}",Sha256::digest(include_bytes!("terminal_context2135.rs"))),
             "evidence":format!("{:x}",Sha256::digest(include_bytes!("support/terminal_evidence2135.rs"))),
-            "head":format!("{:x}",Sha256::digest(include_bytes!("../src/cpu/terminal_head.rs")))},
+            "head":format!("{:x}",Sha256::digest(include_bytes!("../src/cpu/terminal_head.rs"))),
+            "channel_state":format!("{:x}",Sha256::digest(include_bytes!("../src/cpu/terminal_observation.rs"))),
+            "channel_proof":format!("{:x}",Sha256::digest(include_bytes!("../../alife_core/src/memory/channel_terminal.rs")))},
         "local_only":true,"automatic_retry":false,"compile_commit":option_env!("ALIFE_ASSAY_GIT_COMMIT")
     }))?)?;
     evidence.save(
@@ -206,11 +208,16 @@ fn run(
             Ok::<_, ScaffoldContractError>(())
         })?;
     if request.arm != "off" {
-        let mut c = TerminalContextConfig2135::new(if request.arm == "zero" {
-            0.
-        } else {
-            request.gain
-        })?;
+        let mut c = TerminalContextConfig2135::for_parent(
+            asset,
+            genome,
+            trainer.phenotype(),
+            if request.arm == "zero" {
+                0.
+            } else {
+                request.gain
+            },
+        )?;
         c.mask_new_context = request.arm == "mask";
         host.enable_terminal_context2135(c, &trainer)?;
     }
@@ -344,7 +351,7 @@ fn run(
         .filter(|id| host.world().entity(**id).unwrap().consumed)
         .count();
     Ok(
-        json!({"schema":2135,"parent_sha256":TERMINAL_PARENT_SHA256,"construction_genome_sha256":TERMINAL_GENOME_SHA256,"motor_head_count":2,"seed":request.seed,"arm":request.arm,"gain":request.gain,"ticks":request.ticks,"leadin":request.leadin,"reverse_appearance":request.reverse_appearance,"alias":request.alias,"first_hunger":first_hunger,"hunger_min":hunger_min,"hunger_max":hunger_max,"meals":meals,"consumed_food":consumed_food,"spawned_food":food.len(),"meal_hunger_deltas":meal_hunger_deltas,"failed_ingest_containing_bundles":failed_ingest_bundles,"decisions":decisions,"context_rows":context_rows,"sourced_candidates":sourced_rows,"nonzero_deltas":deltas,"reserved_work_units":work,"capacity_rejected":capacity_rejected,"insufficient_atp":insufficient_atp,"unfunded_admission_checks_atp_q16":unfunded_admission_checks,"typed_cold_exact":true,"parent_weights_exact":true,"head_fixed_in_life":true,"long_ppo_calls":0}),
+        json!({"schema":2135,"parent_sha256":format!("{:x}",Sha256::digest(asset.encode_canonical()?)),"construction_genome_sha256":format!("{:x}",Sha256::digest(serde_json::to_vec(genome)?)),"motor_head_count":2,"seed":request.seed,"arm":request.arm,"gain":request.gain,"ticks":request.ticks,"leadin":request.leadin,"reverse_appearance":request.reverse_appearance,"alias":request.alias,"first_hunger":first_hunger,"hunger_min":hunger_min,"hunger_max":hunger_max,"meals":meals,"consumed_food":consumed_food,"spawned_food":food.len(),"meal_hunger_deltas":meal_hunger_deltas,"failed_ingest_containing_bundles":failed_ingest_bundles,"decisions":decisions,"context_rows":context_rows,"sourced_candidates":sourced_rows,"nonzero_deltas":deltas,"reserved_work_units":work,"capacity_rejected":capacity_rejected,"insufficient_atp":insufficient_atp,"unfunded_admission_checks_atp_q16":unfunded_admission_checks,"typed_cold_exact":true,"parent_weights_exact":true,"head_fixed_in_life":true,"long_ppo_calls":0}),
     )
 }
 fn execute_request(
@@ -387,7 +394,7 @@ fn execute_request(
 fn main() -> Result<()> {
     let path = std::env::args()
         .nth(1)
-        .ok_or("exact two-head bearing4 foundation required")?;
+        .ok_or("exact parent foundation required")?;
     let genome_path = std::env::args()
         .nth(2)
         .ok_or("exact exported construction genome required")?;
@@ -396,14 +403,8 @@ fn main() -> Result<()> {
         .unwrap_or_else(|| "terminal-context2135-LOCAL".into());
     let asset_bytes = std::fs::read(path)?;
     let genome_bytes = std::fs::read(genome_path)?;
-    if format!("{:x}", Sha256::digest(&asset_bytes)) != TERMINAL_PARENT_SHA256
-        || format!("{:x}", Sha256::digest(&genome_bytes)) != TERMINAL_GENOME_SHA256
-    {
-        return Err("current parent asset/genome bytes differ from pinned main export".into());
-    }
     let asset = FoundationWeightAsset::decode_canonical(&asset_bytes)?;
     let genome: CreatureGenome = serde_json::from_slice(&genome_bytes)?;
-    verify_terminal_genome2135(&genome)?;
     for line in std::io::stdin().lock().lines() {
         let r = serde_json::from_str::<Request>(&line?)
             .map_err(Into::into)

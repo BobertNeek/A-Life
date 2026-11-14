@@ -1,9 +1,10 @@
-//! Opt-in diagnostic native-bank reader. Not yet admitted to organism execution.
-//! Core validates its own bank/query codecs. The off path performs no work.
+//! Opt-in terminal reader for legacy native-bank and recipe3 channel sources.
+//! Core validates source/query codecs; charged host admission owns dispatch.
 #[path = "terminal_kernel.rs"]
 mod terminal_kernel;
 use alife_core::{
-    CandidateActionFamily, CandidateMemoryQueryV2, PhysicalContactKind, PortableMemoryBankAssetV2,
+    CandidateActionFamily, CandidateMemoryQueryV2, CanonicalDigestBuilder,
+    ChannelTerminalObservationV1, PhysicalContactKind, PortableMemoryBankAssetV2,
 };
 use terminal_kernel::{Context, Error, Source, MAX_RECORDS};
 
@@ -26,20 +27,40 @@ pub struct Receipt {
     pub skipped_uncertain_appearance: usize,
 }
 
-/// Returned separately from ordinary family/target recall. Never installs a
-/// PerceptionContextBlock or changes current vision, immediate consequences,
-/// selected action, learner credit, checkpoint, or ATP. Caller must not insert
-/// this into live choice until a versioned charged admission route exists.
+/// Returned separately from ordinary family/target recall. This pure reader
+/// changes no sensory block, ordinary memory, physiology or neural credit.
+/// The versioned host reserves its work before using it in the optional head.
 pub fn read(
     policy: Policy,
     bank: &PortableMemoryBankAssetV2,
     query: &CandidateMemoryQueryV2,
 ) -> Result<Option<Receipt>, String> {
+    read_inner(policy, bank, query, None)
+}
+pub fn read_channels(
+    bank: &PortableMemoryBankAssetV2,
+    query: &CandidateMemoryQueryV2,
+    channels: &[ChannelTerminalObservationV1],
+) -> Result<Option<Receipt>, String> {
+    read_inner(
+        Policy::AppearanceOnlyConsumedV1,
+        bank,
+        query,
+        Some(channels),
+    )
+}
+fn read_inner(
+    policy: Policy,
+    bank: &PortableMemoryBankAssetV2,
+    query: &CandidateMemoryQueryV2,
+    channels: Option<&[ChannelTerminalObservationV1]>,
+) -> Result<Option<Receipt>, String> {
     if policy == Policy::Off {
         return Ok(None);
     }
     // Reject before hash/validation work; never silently truncate by record ID.
-    if bank.records.len() > MAX_RECORDS {
+    let record_count = bank.records.len() + channels.map_or(0, |s| s.len());
+    if record_count > MAX_RECORDS {
         return Err("terminal query record budget exceeded".into());
     }
     if !matches!(bank.profile.profile_id.raw(), 2..=4) {
@@ -61,6 +82,11 @@ pub fn read(
             && failed_contact(r.outcome_contact, f32::from_bits(r.family_value_bits[1]))
     });
     for r in &bank.records {
+        // Recipe3 gets positive consumption sources solely from authenticated
+        // channel observations. The ordinary bank still supplies contact vetoes.
+        if channels.is_some() {
+            continue;
+        }
         // Never infer consumption from success, valence or unknown legacy tags.
         if r.family_raw != u16::from(CandidateActionFamily::Ingest.raw())
             || r.outcome_contact != Some(PhysicalContactKind::Consumed)
@@ -80,6 +106,8 @@ pub fn read(
             continue;
         }
         sources.push(Source {
+            channel: None,
+            observation_digest: None,
             memory_id: r.memory_id_raw,
             sequence_id: r.sealed_sequence_id_raw,
             action_id: r.action_id_raw,
@@ -90,6 +118,44 @@ pub fn read(
             confidence: f32::from_bits(r.confidence_bits),
             appearance: std::array::from_fn(|i| f32::from_bits(r.query_feature_bits[63 + i])),
         });
+    }
+    let mut bank_digest = bank.canonical_digest;
+    if let Some(channels) = channels {
+        let mut digest = CanonicalDigestBuilder::new(b"ALIFE-TERMINAL-CHANNEL-READ-V1");
+        for word in bank.canonical_digest {
+            digest.write_u64(word);
+        }
+        for observation in channels {
+            observation.validate_contract().map_err(|e| e.to_string())?;
+            let source = observation.query();
+            if source.organism_id() != query.organism_id() || source.profile() != query.profile() {
+                return Err("terminal channel source owner/profile mismatch".into());
+            }
+            for word in observation.canonical_digest() {
+                digest.write_u64(word);
+            }
+            if source.tick() > query.tick() {
+                continue;
+            }
+            if q[11] <= 0.0 || source.features()[11] <= 0.0 {
+                skipped_uncertain_appearance += 1;
+                continue;
+            }
+            sources.push(Source {
+                channel: Some(observation.channel()),
+                observation_digest: Some(observation.canonical_digest()),
+                memory_id: observation.sequence_id().raw(),
+                sequence_id: observation.sequence_id().raw(),
+                action_id: source.action_id().raw(),
+                tracked_object_id: source.tracked_object_id().unwrap().raw(),
+                last_tick: source.tick().raw(),
+                observed_hunger_delta: observation.measured_hunger_delta(),
+                observed_danger: observation.danger(),
+                confidence: observation.confidence(),
+                appearance: std::array::from_fn(|i| source.features()[63 + i]),
+            });
+        }
+        bank_digest = digest.finish256();
     }
     let comparisons = sources.len() * 9;
     let mut context = terminal_kernel::summarize(appearance, q[12], &sources).map_err(|e| {
@@ -108,10 +174,10 @@ pub fn read(
         same_object_failed_contact,
         skipped_uncertain_appearance,
         bank_generation: bank.generation,
-        bank_digest: bank.canonical_digest,
+        bank_digest,
         query_digest: query.canonical_digest(),
-        records_validated: bank.records.len(),
-        records_examined: bank.records.len(),
+        records_validated: record_count,
+        records_examined: record_count,
         appearance_comparisons: comparisons,
         context,
     }))
