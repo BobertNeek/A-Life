@@ -160,9 +160,15 @@ Missing or unproven — the game around the simulation is thin:
   biochemical graph (Creatures-style), with conversion from the current
   `decay_retention` and unit tests. Needs a semantics decision: how
   half-life and decay_retention interact. Pure `alife_core`; CI-run tests.
+  Deprioritized Nov 13 by Cassidy's direction to focus on user-facing
+  work; slice 5 went first.
 - **Slice 5 — Familiarity record.** A first-class, observable disposition
   toward the player, built from interaction history (PlayerReward,
-  SocialContact, oxytocin, loneliness). Shown, never faked.
+  SocialContact, oxytocin, loneliness). Shown, never faked. Design:
+  `docs/bob-soul-slice5-familiarity.md`. Status: prepared in this pass;
+  tests written for Codex/CI. The disposition reads as a resting
+  head-and-ears carriage plus a seventh HUD meter; the greeting word is
+  deferred and approach/avoidance movement is a Codex question.
 - **Slice 6 — Village seed.** Smallest believable belief unit. Design
   with Cassidy before writing code — this one decides the shape of the
   god game.
