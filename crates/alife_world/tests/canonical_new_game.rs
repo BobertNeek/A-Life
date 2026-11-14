@@ -364,6 +364,206 @@ fn player_care_receipt_records_scold_and_slap_kinds_and_mixed_sets() {
 }
 
 #[test]
+fn player_familiarity_builds_on_pet_and_praise_erodes_on_scold_and_slap_and_survives_save() {
+    use alife_world::{
+        PlayerFamiliarityBand, PlayerInteractionV1, PresentationEvidence,
+    };
+    let game = phase3_game(1);
+    let mut world = game.world;
+    let (organism, entity) = world.organism_entity_ids()[0];
+    let position = world.entity(entity).unwrap().position;
+    // No record before any care is unknown, not a confirmed absence:
+    // a save from before familiarity existed reads exactly the same way.
+    assert_eq!(world.last_player_familiarity(organism), None);
+    assert!(matches!(
+        world.presentation_snapshot().organisms.remove(0).familiarity,
+        PresentationEvidence::Unknown
+    ));
+    // A pet is felt on the tick that consumes it, not on the queue.
+    world
+        .queue_player_interaction_v1(organism, position, PlayerInteractionV1::Pet)
+        .unwrap();
+    assert_eq!(world.last_player_familiarity(organism), None);
+    let tick = world.try_advance_tick().unwrap();
+    let record = world
+        .last_player_familiarity(organism)
+        .expect("pet familiarity");
+    // The ticks between interactions decay the stored value by ~1e-5
+    // per tick; the 1e-4 tolerance absorbs that without hiding a delta.
+    assert!((record.value - 0.06).abs() < 1e-4);
+    assert_eq!(record.last_interaction_tick, tick);
+    assert_eq!(record.interactions, 1);
+    assert_eq!(record.band(), PlayerFamiliarityBand::Stranger);
+    // Praise adds on top of the pet.
+    world
+        .queue_player_interaction_v1(organism, position, PlayerInteractionV1::Praise)
+        .unwrap();
+    world.try_advance_tick().unwrap();
+    let record = world
+        .last_player_familiarity(organism)
+        .expect("praise familiarity");
+    assert!((record.value - 0.10).abs() < 1e-4);
+    assert_eq!(record.interactions, 2);
+    // A scold costs more than a praise built: the asymmetry is the point.
+    world
+        .queue_player_interaction_v1(organism, position, PlayerInteractionV1::Scold)
+        .unwrap();
+    world.try_advance_tick().unwrap();
+    let record = world
+        .last_player_familiarity(organism)
+        .expect("scold familiarity");
+    assert!((record.value - 0.0).abs() < 1e-4);
+    assert_eq!(record.band(), PlayerFamiliarityBand::Stranger);
+    // A slap drives it negative. The snapshot carries the same record
+    // decayed to the snapshot tick (here the last interaction tick, so
+    // the value is unchanged) and stamps the last interaction, not the
+    // observation time.
+    world
+        .queue_player_interaction_v1(organism, position, PlayerInteractionV1::Slap)
+        .unwrap();
+    let tick = world.try_advance_tick().unwrap();
+    let record = world
+        .last_player_familiarity(organism)
+        .expect("slap familiarity");
+    assert!((record.value - -0.15).abs() < 1e-4);
+    assert_eq!(record.band(), PlayerFamiliarityBand::Uneasy);
+    assert_eq!(record.interactions, 4);
+    match world.presentation_snapshot().organisms.remove(0).familiarity {
+        PresentationEvidence::Observed { value, tick: observed_tick } => {
+            assert_eq!(value, record);
+            assert_eq!(observed_tick, record.last_interaction_tick);
+            assert_eq!(observed_tick, tick);
+        }
+        PresentationEvidence::Unknown => panic!("expected an observed familiarity record"),
+    }
+    // The record survives a save/load round trip with its tick and
+    // count intact.
+    let save = alife_world::PortableSaveFile::from_headless_world(
+        "familiarity",
+        &world,
+        alife_world::RuntimeConfig::deterministic_default(
+            world.seed(),
+            alife_core::BrainScaleTier::Nano512,
+        ),
+        alife_world::AssetManifest::empty(),
+        game.creatures,
+    )
+    .unwrap();
+    let restored = alife_world::PortableSaveFile::from_json_str(&serde_json::to_string(&save).unwrap())
+        .unwrap()
+        .restore_headless_world()
+        .unwrap();
+    assert_eq!(restored.last_player_familiarity(organism), Some(record));
+}
+
+#[test]
+fn player_familiarity_records_nothing_for_a_zero_hearing_scold() {
+    use alife_world::{PlayerInteractionQueueOutcomeV1, PlayerInteractionV1};
+    let game = deaf_game();
+    let mut world = game.world;
+    let (organism, entity) = world.organism_entity_ids()[0];
+    let position = world.entity(entity).unwrap().position;
+    assert_eq!(
+        world
+            .queue_player_interaction_v1(organism, position, PlayerInteractionV1::Scold)
+            .unwrap(),
+        PlayerInteractionQueueOutcomeV1::NoReceivedDose
+    );
+    world.try_advance_tick().unwrap();
+    assert_eq!(world.last_player_familiarity(organism), None);
+}
+
+#[test]
+fn player_familiarity_decays_toward_neutral_with_a_one_hour_half_life() {
+    use alife_world::PlayerFamiliarity;
+    let record = PlayerFamiliarity {
+        value: 0.8,
+        last_interaction_tick: Tick::new(100),
+        interactions: 3,
+    };
+    // No time passed: the value is current.
+    assert!((record.at_tick(Tick::new(100)).value - 0.8).abs() < 1e-6);
+    // One half-life later: halved, tick and count unchanged.
+    let halved = record.at_tick(Tick::new(100 + PlayerFamiliarity::HALF_LIFE_TICKS));
+    assert!((halved.value - 0.4).abs() < 1e-6);
+    assert_eq!(halved.last_interaction_tick, Tick::new(100));
+    assert_eq!(halved.interactions, 3);
+    // Two half-lives: quartered. Negative values decay toward zero too.
+    let quartered = record.at_tick(Tick::new(100 + 2 * PlayerFamiliarity::HALF_LIFE_TICKS));
+    assert!((quartered.value - 0.2).abs() < 1e-6);
+    let wary = PlayerFamiliarity {
+        value: -0.8,
+        last_interaction_tick: Tick::new(100),
+        interactions: 1,
+    };
+    assert!(
+        (wary
+            .at_tick(Tick::new(100 + PlayerFamiliarity::HALF_LIFE_TICKS))
+            .value
+            - -0.4)
+            .abs()
+            < 1e-6
+    );
+    // A tick before the last interaction never moves the value backwards.
+    assert!((record.at_tick(Tick::new(99)).value - 0.8).abs() < 1e-6);
+}
+
+#[test]
+fn player_familiarity_bands_split_trust_from_wariness_with_stranger_in_the_middle() {
+    use alife_world::{PlayerFamiliarity, PlayerFamiliarityBand};
+    let band = |value: f32| {
+        PlayerFamiliarity {
+            value,
+            last_interaction_tick: Tick::new(0),
+            interactions: 0,
+        }
+        .band()
+    };
+    assert_eq!(band(1.0), PlayerFamiliarityBand::Trusting);
+    assert_eq!(band(0.5), PlayerFamiliarityBand::Trusting);
+    assert_eq!(band(0.49), PlayerFamiliarityBand::Familiar);
+    assert_eq!(band(0.15), PlayerFamiliarityBand::Familiar);
+    assert_eq!(band(0.14), PlayerFamiliarityBand::Stranger);
+    assert_eq!(band(0.0), PlayerFamiliarityBand::Stranger);
+    assert_eq!(band(-0.14), PlayerFamiliarityBand::Stranger);
+    assert_eq!(band(-0.15), PlayerFamiliarityBand::Uneasy);
+    assert_eq!(band(-0.49), PlayerFamiliarityBand::Uneasy);
+    assert_eq!(band(-0.5), PlayerFamiliarityBand::Wary);
+    assert_eq!(band(-1.0), PlayerFamiliarityBand::Wary);
+}
+
+#[test]
+fn player_familiarity_clamps_at_both_ends_of_the_scale() {
+    use alife_world::PlayerInteractionV1;
+    let game = phase3_game(1);
+    let mut world = game.world;
+    let (organism, entity) = world.organism_entity_ids()[0];
+    let position = world.entity(entity).unwrap().position;
+    // Seventeen pets would build 1.02 without the clamp.
+    for _ in 0..17 {
+        world
+            .queue_player_interaction_v1(organism, position, PlayerInteractionV1::Pet)
+            .unwrap();
+        world.try_advance_tick().unwrap();
+    }
+    assert_eq!(
+        world.last_player_familiarity(organism).unwrap().value,
+        1.0
+    );
+    // Fourteen slaps from full trust would erode to -1.10.
+    for _ in 0..14 {
+        world
+            .queue_player_interaction_v1(organism, position, PlayerInteractionV1::Slap)
+            .unwrap();
+        world.try_advance_tick().unwrap();
+    }
+    assert_eq!(
+        world.last_player_familiarity(organism).unwrap().value,
+        -1.0
+    );
+}
+
+#[test]
 fn player_care_receipt_records_nothing_for_a_zero_hearing_scold() {
     use alife_world::{PlayerInteractionQueueOutcomeV1, PlayerInteractionV1};
     let game = deaf_game();
