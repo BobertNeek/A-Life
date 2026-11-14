@@ -698,6 +698,11 @@ fn trial(
                     "hold_motor_activation":row.final_features[1823],
                     "inspect_motor_activations":&row.final_features[1760..1776],
                     "action_motor_activations":&row.final_features[1728..1856],
+                    "diagnostic_recurrent_weights":trainer.phenotype().synapses().iter().enumerate()
+                        .filter(|(_,s)| s.kind()==CompiledSynapseKind::Recurrent && matches!(s.target(),1761|1809|1810))
+                        .map(|(i,s)| json!({"index":i,"source":s.source(),"target":s.target(),
+                            "genetic":s.genetic_weight(),"offset":row.replay_tick.effective_weight_offsets[i],
+                            "effective":s.genetic_weight()+row.replay_tick.effective_weight_offsets[i]})).collect::<Vec<_>>(),
                     "need_relay_activations":&row.final_features[896..912],
                     "objects_before":objects_before,
                     "objects_after":([Some(target),distraction_id].into_iter().flatten().map(|id| {
@@ -857,7 +862,7 @@ fn run(base: &FoundationWeightAsset, p: &BrainPhenotype, r: Request) -> Result<s
     }
     Ok(
         json!({"backend":"native-cpu", "memory_cap":trainer.phenotype().candidate_decoder().memory_channel().map(|m|m.max_candidate_gain()), "base_digest":base.digest(),"candidate_digest":asset.digest(),
-        "assay_version":10,"weight_edits":r.weight_edits,"hold_readout":r.hold_readout,"motor_heads":r.motor_heads,"variation":r.variation,"readout_scale":r.readout_scale,"bearing_gain":r.bearing_gain,"params":r.params,"memory_aversion":r.memory_aversion,"ticks":r.ticks,"seconds":start.elapsed().as_secs_f64(),"trials":trials}),
+        "assay_version":11,"weight_edits":r.weight_edits,"hold_readout":r.hold_readout,"motor_heads":r.motor_heads,"variation":r.variation,"readout_scale":r.readout_scale,"bearing_gain":r.bearing_gain,"params":r.params,"memory_aversion":r.memory_aversion,"ticks":r.ticks,"seconds":start.elapsed().as_secs_f64(),"trials":trials}),
     )
 }
 
