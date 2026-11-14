@@ -373,7 +373,21 @@ fn run(
                 q.angle,
                 q.appearance,
             )?;
+            e.save(
+                &format!("NUTRITION-CUE-{nutrition}-BIRTH.cp.json"),
+                &bytes(&diagnostic.checkpoint(&founder)?)?,
+            )?;
+            e.save(
+                &format!("NUTRITION-CUE-{nutrition}-ADAM.json"),
+                &bytes(&founder.checkpoint())?,
+            )?;
             let step = diagnostic.step(&founder, 1.0)?;
+            let diagnostic_post = bytes(&diagnostic.checkpoint(&founder)?)?;
+            e.save(
+                &format!("NUTRITION-CUE-{nutrition}-POST.cp.json"),
+                &diagnostic_post,
+            )?;
+            e.remember_valid(diagnostic_post);
             assert!(!diagnostic.world().entity(target).unwrap().consumed);
             assert_eq!(step.decisions.len(), 1);
             e.save(
