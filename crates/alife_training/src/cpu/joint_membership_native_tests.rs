@@ -114,7 +114,7 @@ fn joint_membership_mode_cold_work_and_default_boundaries() {
     assert!(admissions > 0);
     assert!(queries > 0);
     let cp = host.checkpoint(&trainer).unwrap();
-    assert_eq!(cp.schema_version, 6);
+    assert_eq!(cp.schema_version, 8);
     let mut cold = CpuCanonicalHost::from_checkpoint(cp.clone(), &trainer).unwrap();
     assert_eq!(
         serde_json::to_vec(&cp).unwrap(),
@@ -323,4 +323,97 @@ fn comparison_preserves_genetic_orientation_capability_and_cold_state() {
             serde_json::to_vec(&cold.checkpoint(&trainer).unwrap()).unwrap()
         );
     }
+}
+
+#[test]
+fn comparison_enable_failure_preserves_valid_cold_host() {
+    for mode in [1, 2, 3] {
+        let (mut host, trainer) = parent::contact20_fixture(None);
+        let record = host.world().organism_registry().iter().next().unwrap();
+        let mut value = serde_json::to_value(record).unwrap();
+        value["state_graph"]["transaction_revision"] = serde_json::json!(u64::MAX);
+        let record: WorldOrganismRecord = serde_json::from_value(value).unwrap();
+        record.validate_contract().unwrap();
+        host.world_mut()
+            .replace_organism_record_exact(record)
+            .unwrap();
+        let before = host.checkpoint(&trainer).unwrap();
+        let mut host = CpuCanonicalHost::from_checkpoint(before.clone(), &trainer).unwrap();
+        assert!(if mode == 1 {
+            host.enable_joint_membership2177(&trainer)
+        } else {
+            host.enable_joint_membership_comparison2182(&trainer, mode == 2)
+        }
+        .is_err());
+        assert!(
+            serde_json::to_vec(&before).unwrap()
+                == serde_json::to_vec(&host.checkpoint(&trainer).unwrap()).unwrap()
+        );
+    }
+}
+
+#[test]
+fn acquired_empty_joint_history_cannot_switch_mode_on_cold_restore() {
+    for enabled in [false, true] {
+        let (mut host, trainer) = parent::fixture(None);
+        if enabled {
+            host.enable_joint_membership2177(&trainer).unwrap();
+        }
+        host.step(&trainer, 1.0).unwrap();
+        let cp = host.checkpoint(&trainer).unwrap();
+        assert!(cp.sampling_counter > 0);
+        let cold = CpuCanonicalHost::from_checkpoint(cp.clone(), &trainer).unwrap();
+        assert_eq!(
+            serde_json::to_vec(&cp).unwrap(),
+            serde_json::to_vec(&cold.checkpoint(&trainer).unwrap()).unwrap()
+        );
+        let mut changed = cp;
+        changed.joint_membership2177 = if enabled { None } else { Some(1) };
+        changed.schema_version = if enabled { 2 } else { 8 };
+        assert!(
+            CpuCanonicalHost::from_checkpoint(changed, &trainer).is_err(),
+            "acquired route switch accepted: enabled={enabled}"
+        );
+    }
+}
+
+#[test]
+fn comparison_enable_success_preserves_prior_sealed_contract() {
+    for apply in [false, true] {
+        let (mut current, trainer) = parent::contact20_fixture(None);
+        let mut prior = current.clone();
+        // Exact prior successful comparison transition: assign mode, seal once.
+        prior.joint_membership2177 = Some(if apply { 2 } else { 3 });
+        for resident in prior.residents.values_mut() {
+            resident.joint_comparison_mode = prior.joint_membership2177;
+        }
+        prior.seal_all_residents().unwrap();
+        current
+            .enable_joint_membership_comparison2182(&trainer, apply)
+            .unwrap();
+        let old = prior.checkpoint(&trainer).unwrap();
+        assert_eq!(old.schema_version, 7);
+        assert!(
+            serde_json::to_vec(&old).unwrap()
+                == serde_json::to_vec(&current.checkpoint(&trainer).unwrap()).unwrap()
+        );
+        let mut restored = CpuCanonicalHost::from_checkpoint(old, &trainer).unwrap();
+        current.step(&trainer, 1.0).unwrap();
+        restored.step(&trainer, 1.0).unwrap();
+        assert!(
+            serde_json::to_vec(&restored.checkpoint(&trainer).unwrap()).unwrap()
+                == serde_json::to_vec(&current.checkpoint(&trainer).unwrap()).unwrap()
+        );
+    }
+}
+
+#[test]
+fn unbound_schema6_is_not_migrated_as_authenticated_mode1() {
+    let (mut prior, trainer) = parent::fixture(None);
+    // Construct the previous mode-1 boundary without a new mode seal.
+    prior.joint_membership2177 = Some(1);
+    prior.step(&trainer, 1.0).unwrap();
+    let mut old = prior.checkpoint(&trainer).unwrap();
+    old.schema_version = 6;
+    assert!(CpuCanonicalHost::from_checkpoint(old, &trainer).is_err());
 }

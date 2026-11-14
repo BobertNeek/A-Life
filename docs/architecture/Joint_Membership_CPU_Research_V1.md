@@ -4,7 +4,7 @@
 
 The source is the actual shared command outcome with authenticated participation, not isolated action causation. Ambient harm and praise/scold/pet/slap remain part of the genuine shared interval. No event is replayed and no reward is fabricated.
 
-Enabled checkpoints use schema6 and an explicit version1 mode field; ordinary checkpoints omit the field and keep their old schema. Enabled collected decisions use a diagnostic-only outer envelope, retaining replay inputs and a separate typed source/work receipt. Ordinary collector/PPO admission rejects enabled rows. These diagnostic replay inputs are not a qualified training dataset or a new learning ABI. GPU and combined research modes are unsupported.
+Enabled mode-1 checkpoints use schema8 and an explicit version1 mode field; ordinary checkpoints omit the field and keep their old schema. Enabled collected decisions use a diagnostic-only outer envelope, retaining replay inputs and a separate typed source/work receipt. Ordinary collector/PPO admission rejects enabled rows. These diagnostic replay inputs are not a qualified training dataset or a new learning ABI. GPU and combined research modes are unsupported.
 
 Query work is counted through the existing receipt. Before sealing the motor outcome, a planning pass binds actual executed facts and reserves admission encoding/index work using their size and current record count. This does not construct a hypothetical physiological patch. The reservation includes unused capacity and is deliberately reported separately from actual work, so comparisons must include that cost. The host charges the reservation once in the actual cognitive interval before measuring shared physiology; actual admission must fit or the whole staged host transaction fails without commit. Failure rolls back World, neural, memory and RNG state through the existing host clone transaction.
 
@@ -23,8 +23,10 @@ withheld query is not evidence that its estimate reached the neural decision.
 Both modes pay the declared logical save/assignment, source-copy and context
 re-encoding tariff; this is not a claim of identical machine instruction counts.
 
-Modes 2/3 are bound into the resident private-authority seal: changing the saved
-route while retaining acquired state is rejected. They persist in schema-7 checkpoints and a separately named collected-row
-envelope. Existing mode 1 remains schema 6. Ordinary dataset/PPO collectors
+All enabled modes are bound into the resident private-authority seal: changing the saved
+route while retaining acquired state is rejected. Modes 2/3 persist in schema-7 checkpoints and a separately named collected-row
+envelope. Mode 1 uses schema 8; prior unbound schema-6 research checkpoints are rejected by generic restore. Preserve those files and their original qualified executor for historical continuation; this change does not rewrite or automatically migrate acquired state. Ordinary dataset/PPO collectors
 remain unsupported and reject enabled rows. These are research-only CPU paths,
 not a qualified GPU/game behavior change or a claim of improved learning.
+
+Both fresh enable methods stage and seal a cloned host before committing it. A failed seal leaves the original world, resident state, mode and sampling state unchanged. Ordinary checkpoints and modes 2/3 retain their existing schemas and private-seal calculation.

@@ -516,6 +516,21 @@ impl CpuCanonicalHost {
         &mut self,
         founder: &CpuFoundationTrainer,
     ) -> Result<(), CpuHostError> {
+        self.validate_joint_membership_enable(founder)?;
+        let mut next = self.clone();
+        next.joint_membership2177 = Some(1);
+        for resident in next.residents.values_mut() {
+            resident.joint_comparison_mode = Some(1);
+        }
+        next.seal_all_residents()?;
+        *self = next;
+        Ok(())
+    }
+
+    fn validate_joint_membership_enable(
+        &self,
+        founder: &CpuFoundationTrainer,
+    ) -> Result<(), CpuHostError> {
         self.validate_founder(founder)?;
         if self.sampling_counter != 0
             || self.joint_membership2177.is_some()
@@ -529,7 +544,6 @@ impl CpuCanonicalHost {
                 "joint membership requires fresh exclusive construction",
             ));
         }
-        self.joint_membership2177 = Some(1);
         Ok(())
     }
 
@@ -539,12 +553,14 @@ impl CpuCanonicalHost {
         founder: &CpuFoundationTrainer,
         apply: bool,
     ) -> Result<(), CpuHostError> {
-        self.enable_joint_membership2177(founder)?;
-        self.joint_membership2177 = Some(if apply { 2 } else { 3 });
-        for resident in self.residents.values_mut() {
-            resident.joint_comparison_mode = self.joint_membership2177;
+        let mut next = self.clone();
+        next.validate_joint_membership_enable(founder)?;
+        next.joint_membership2177 = Some(if apply { 2 } else { 3 });
+        for resident in next.residents.values_mut() {
+            resident.joint_comparison_mode = next.joint_membership2177;
         }
-        self.seal_all_residents()?;
+        next.seal_all_residents()?;
+        *self = next;
         Ok(())
     }
 
@@ -746,7 +762,7 @@ impl CpuCanonicalHost {
             terminal_context2135: self.terminal_context2135.clone(),
             schema_version: if self.joint_membership2177.is_some() {
                 if self.joint_membership2177 == Some(1) {
-                    6
+                    8
                 } else {
                     7
                 }
@@ -783,7 +799,7 @@ impl CpuCanonicalHost {
             .any(|r| r.memory_readout.is_some());
         if let Some(version) = checkpoint.joint_membership2177 {
             if !matches!(version, 1..=3)
-                || checkpoint.schema_version != if version == 1 { 6 } else { 7 }
+                || checkpoint.schema_version != if version == 1 { 8 } else { 7 }
                 || has_readout
                 || checkpoint.terminal_context2135.is_some()
             {
@@ -923,7 +939,7 @@ impl CpuCanonicalHost {
                 }
             }
             let mut resident = Resident {
-                joint_comparison_mode: checkpoint.joint_membership2177.filter(|m| *m >= 2),
+                joint_comparison_mode: checkpoint.joint_membership2177,
                 memory_readout_digest: r.memory_readout.as_ref().map(|c| c.digest()).transpose()?,
                 memory_readout: r.memory_readout,
                 #[cfg(test)]
