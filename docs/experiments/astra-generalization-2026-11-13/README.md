@@ -673,3 +673,20 @@ build and formatting. Its dependency set predates security main `bd132fe7`;
 future integration must retain and requalify those dependency updates. Old
 results and binaries remain preserved. No acquired neural/optimizer arrays,
 GPU result or production-default change is included.
+
+### Corrected-fixture calibration screens
+
+Two small genetic screens used the three exposed postmeal cases, recording
+36 additional native lives. Reducing all 65 nonzero ActionCandidate weights to
+1/16 or 1/64 retained stationary eating but caused all three lone-hazard deaths
+in each arm and produced no mixed meals. Both reductions are rejected; this is
+not evidence that a smaller memory-to-policy score gap improves learning.
+
+A separate two-weight edit raised the matched pain/reference input coefficients
+from 2 to 8 or 16, leaving all downstream readouts and MemoryContext weights
+unchanged. Gain8 retained all nine survivals and achieved 3/3 mixed meals with
+survival, versus the parent's 1/3. Gain16 achieved 2/3 and more injury. Gain8's
+mean lone-hazard injury was 0.4991, so its stronger feeding result has a cost.
+It was selected only for a new frozen comparison, not adopted as the shared
+parent. The exact recipes, outcomes and limits are in
+`corrected-circuit-screen-study.json` and its result archive.
