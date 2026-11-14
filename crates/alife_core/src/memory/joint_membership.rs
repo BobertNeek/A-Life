@@ -229,6 +229,25 @@ impl MemoryBank {
         draft: &PerceptionFrameDraft,
         apply: bool,
     ) -> Result<(PreparedMemoryRecall, Vec<JointMembershipSourceV1>), ScaffoldContractError> {
+        self.recall_frame_joint_comparison_impl(draft, apply, false)
+    }
+
+    /// Contact-only application candidate. Search and declared comparison work
+    /// remain identical to the all-family comparison; no membership is removed.
+    pub fn recall_frame_joint_contact_comparison2266(
+        &self,
+        draft: &PerceptionFrameDraft,
+        apply: bool,
+    ) -> Result<(PreparedMemoryRecall, Vec<JointMembershipSourceV1>), ScaffoldContractError> {
+        self.recall_frame_joint_comparison_impl(draft, apply, true)
+    }
+
+    fn recall_frame_joint_comparison_impl(
+        &self,
+        draft: &PerceptionFrameDraft,
+        apply: bool,
+        contact_only: bool,
+    ) -> Result<(PreparedMemoryRecall, Vec<JointMembershipSourceV1>), ScaffoldContractError> {
         let ordinary = self.recall_frame(draft)?;
         let families: Vec<_> = ordinary
             .context
@@ -245,8 +264,16 @@ impl MemoryBank {
             .collect();
         let mut p = self.apply_joint_membership(ordinary, draft)?;
         let queried = p.receipt.joint_membership_sources.clone();
-        for (c, old) in p.context.candidates.iter_mut().zip(families) {
-            let chosen = if apply {
+        for ((c, q), old) in p
+            .context
+            .candidates
+            .iter_mut()
+            .zip(&p.candidate_queries)
+            .zip(families)
+        {
+            let chosen = if apply
+                && (!contact_only || q.action_family() == CandidateActionFamily::Contact)
+            {
                 (
                     c.family_value,
                     c.family_confidence,
@@ -272,7 +299,15 @@ impl MemoryBank {
             .execution_evidence_work
             .checked_add(comparison_work)
             .ok_or(ScaffoldContractError::ScalarOutOfRange)?;
-        if !apply {
+        if contact_only {
+            p.receipt.joint_membership_sources.retain(|source| {
+                apply
+                    && p.candidate_queries.iter().any(|q| {
+                        q.candidate_index() == source.candidate_index
+                            && q.action_family() == CandidateActionFamily::Contact
+                    })
+            });
+        } else if !apply {
             p.receipt.joint_membership_sources.clear();
         }
         p.encoded_context = p.context.to_perception_context_block()?;
