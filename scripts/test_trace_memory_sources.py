@@ -1,4 +1,6 @@
 import struct
+import subprocess
+import sys
 import unittest
 from unittest.mock import patch
 import trace_memory_sources as t
@@ -48,6 +50,20 @@ class TraceTests(unittest.TestCase):
             candidates,top=t.reconstruct(f,[r,other],9,e)
         self.assertEqual([x['memory_id'] for x in top],[1])
         self.assertEqual(len(candidates),1)
+
+    def test_optimized_python_rejects_bad_receipt(self):
+        code = "import trace_memory_sources as t; t.verify_result(0.0, [{'memory_id': 1}], {'target_latent': [1.0], 'best_target_source': 1})"
+        proc = subprocess.run([sys.executable, '-O', '-c', code], capture_output=True, text=True)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn('hunger mismatch', proc.stderr)
+
+    def test_match_count_is_post_top_four(self):
+        f,r,e=fixture()
+        records=[dict(r, memory_id_raw=i, tracked_object_id_raw=i) for i in range(1,7)]
+        e.update(target_eligible=6,target_searched=6,target_matches=4)
+        candidates,top=t.reconstruct(f,records,9,e)
+        self.assertEqual(len(candidates),6)
+        self.assertEqual([x['memory_id'] for x in top],[1,2,3,4])
 
     def test_rejects_truncated_bucket(self):
         f,r,e=fixture(); e['target_searched']=0
