@@ -566,7 +566,7 @@ fn trial(
     };
     for tick in 0..ticks {
         if tick == 64 && matches!(scene, "toy-then-food" | "wait-then-food") {
-            if let Some(id) = distraction_id {
+            if let Some(id) = distraction_id.take() {
                 host.world_mut().editor_remove_object(id)?;
             }
             let pose = host.world().entity(hunter).unwrap().position;
@@ -1002,6 +1002,50 @@ mod tests {
         assert!(result.decisions > 0);
         assert!(result.injury > 0.);
         assert!(!result.consumed);
+    }
+
+    #[test]
+    fn delayed_food_trace_drops_the_removed_toy_without_changing_behavior() {
+        let (asset, p, game) = prepare_founder(base(), 2).unwrap();
+        let mask = StageTrainableMask::recurrent_only(&p).unwrap();
+        let trainer = CpuFoundationTrainer::new(p, asset, mask, AdamWConfig::default()).unwrap();
+        let traced = trial(
+            &game,
+            &trainer,
+            2026113900,
+            "toy-then-food",
+            72,
+            true,
+            Variation::default(),
+        )
+        .unwrap();
+        assert!(traced.trace.iter().any(|r| r["tick"] == 64));
+        for row in &traced.trace {
+            let count = if row["tick"].as_u64().unwrap() < 64 {
+                2
+            } else {
+                1
+            };
+            assert_eq!(row["objects_before"].as_array().unwrap().len(), count);
+            assert_eq!(row["objects_after"].as_array().unwrap().len(), count);
+        }
+        let untraced = trial(
+            &game,
+            &trainer,
+            2026113900,
+            "toy-then-food",
+            72,
+            false,
+            Variation::default(),
+        )
+        .unwrap();
+        let mut traced = serde_json::to_value(traced).unwrap();
+        let mut untraced = serde_json::to_value(untraced).unwrap();
+        for value in [&mut traced, &mut untraced] {
+            value.as_object_mut().unwrap().remove("trace");
+            value.as_object_mut().unwrap().remove("target_motion");
+        }
+        assert_eq!(traced, untraced);
     }
 
     #[test]
