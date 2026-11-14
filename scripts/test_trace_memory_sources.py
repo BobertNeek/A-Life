@@ -1,6 +1,7 @@
 import struct
 import subprocess
 import sys
+from pathlib import Path
 import unittest
 from unittest.mock import patch
 import trace_memory_sources as t
@@ -53,7 +54,7 @@ class TraceTests(unittest.TestCase):
 
     def test_optimized_python_rejects_bad_receipt(self):
         code = "import trace_memory_sources as t; t.verify_result(0.0, [{'memory_id': 1}], {'target_latent': [1.0], 'best_target_source': 1})"
-        proc = subprocess.run([sys.executable, '-O', '-c', code], capture_output=True, text=True)
+        proc = subprocess.run([sys.executable, '-O', '-c', code], capture_output=True, text=True, cwd=Path(__file__).resolve().parent)
         self.assertNotEqual(proc.returncode, 0)
         self.assertIn('hunger mismatch', proc.stderr)
 
