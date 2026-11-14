@@ -1,0 +1,319 @@
+//! Opt-in joint-observed association, never isolated action physiology.
+use super::*;
+use std::collections::BTreeSet;
+
+pub(super) const RECORD_SCHEMA: u16 = 3;
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Event {
+    schema_version: u16,
+    sealed_causal_digest: [u64; 4],
+    members: executed_action::CheckedExecutionFacts,
+    shared_family_value: [f32; MEMORY_VALUE_V1_COUNT],
+    event_confidence: f32,
+}
+/// Immutable bytes/cache pair. New event values are captured before episode merge.
+#[derive(Debug, Clone, PartialEq)]
+pub(super) struct CheckedJointEvent {
+    bytes: Vec<u8>,
+    event: Event,
+}
+impl CheckedJointEvent {
+    pub(super) fn from_bytes(bytes: Vec<u8>) -> Result<Self, ScaffoldContractError> {
+        if bytes.len() > 131_072 {
+            return Err(ScaffoldContractError::InvalidMemoryQuery);
+        }
+        let event: Event = serde_json::from_slice(&bytes)
+            .map_err(|_| ScaffoldContractError::InvalidMemoryQuery)?;
+        if event.schema_version != 1
+            || event.sealed_causal_digest == [0; 4]
+            || !event.event_confidence.is_finite()
+            || !(0.0..=1.0).contains(&event.event_confidence)
+            || event
+                .shared_family_value
+                .iter()
+                .any(|v| !v.is_finite() || !(-1.0..=1.0).contains(v))
+        {
+            return Err(ScaffoldContractError::InvalidMemoryQuery);
+        }
+        let first = &event.members.facts()[0];
+        if event.members.facts().iter().any(|f| {
+            f.source_sequence_id != first.source_sequence_id
+                || f.event_tick != first.event_tick
+                || f.bundle_digest != first.bundle_digest
+                || f.query.organism_id() != first.query.organism_id()
+                || f.query.profile() != first.query.profile()
+                || f.query.tick() != first.query.tick()
+        }) {
+            return Err(ScaffoldContractError::InvalidMemoryQuery);
+        }
+        Ok(Self { bytes, event })
+    }
+    pub(super) fn capture(
+        record: &CandidateMemoryRecordV2,
+        patch: &ExperiencePatch,
+    ) -> Result<Option<Self>, ScaffoldContractError> {
+        let Some(members) = record.executed_actions_json.clone() else {
+            return Ok(None);
+        };
+        let event = Event {
+            schema_version: 1,
+            sealed_causal_digest: patch.causal_digest()?,
+            members,
+            shared_family_value: record.family_value,
+            event_confidence: record.confidence,
+        };
+        Self::from_bytes(
+            serde_json::to_vec(&event).map_err(|_| ScaffoldContractError::InvalidMemoryQuery)?,
+        )
+        .map(Some)
+    }
+    pub(super) fn validate_portable(
+        &self,
+        record: &PortableMemoryRecordV2,
+    ) -> Result<(), ScaffoldContractError> {
+        for f in self.event.members.facts() {
+            let q = &f.query;
+            if q.organism_id().raw() != record.organism_id_raw
+                || q.profile().profile_id.raw() != record.profile_id_raw
+                || q.profile().profile_schema_version != record.profile_schema_version
+                || q.profile().sensory_abi_version != record.sensory_abi_version_raw
+                || q.version().raw() != record.query_version_raw
+                || q.tick().raw() < record.first_tick_raw
+                || q.tick().raw() > record.last_tick_raw
+                || f.source_sequence_id.raw() > record.sealed_sequence_id_raw
+            {
+                return Err(ScaffoldContractError::InvalidMemoryQuery);
+            }
+        }
+        Ok(())
+    }
+    pub(super) fn admission_work(&self) -> u64 {
+        // Two passes (encoding + checked decoding), plus member validation and
+        // member validation. Index maintenance is counted separately. This is a declared logical work metric.
+        2 * self.bytes.len().div_ceil(32) as u64 + self.event.members.facts().len() as u64
+    }
+    pub(super) fn bytes(&self) -> &[u8] {
+        &self.bytes
+    }
+    pub(super) fn sequence(&self) -> u64 {
+        self.event.members.facts()[0].source_sequence_id.raw()
+    }
+    pub(super) fn validate_owner(
+        &self,
+        record: &CandidateMemoryRecordV2,
+    ) -> Result<(), ScaffoldContractError> {
+        for f in self.event.members.facts() {
+            let q = &f.query;
+            if q.organism_id().raw() != record.organism_id_raw
+                || q.profile().profile_id.raw() != record.profile_id_raw
+                || q.profile().profile_schema_version != record.profile_schema_version
+                || q.profile().sensory_abi_version != record.sensory_abi_version_raw
+                || q.version().raw() != record.query_version_raw
+                || q.tick() < record.first_tick
+                || q.tick() > record.last_tick
+                || f.source_sequence_id.raw() > record.source_sequence_id.raw()
+            {
+                return Err(ScaffoldContractError::InvalidMemoryQuery);
+            }
+        }
+        Ok(())
+    }
+}
+impl Serialize for CheckedJointEvent {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.bytes.serialize(serializer)
+    }
+}
+impl<'de> Deserialize<'de> for CheckedJointEvent {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        Self::from_bytes(Vec::<u8>::deserialize(d)?).map_err(serde::de::Error::custom)
+    }
+}
+pub(super) fn digest(d: &mut CanonicalDigestBuilder, event: &Option<CheckedJointEvent>) {
+    if let Some(e) = event {
+        d.write_bytes(b"ALIFE-JOINT-OBSERVED-EVENT-V1");
+        d.write_sequence_len(e.bytes.len());
+        d.write_bytes(&e.bytes);
+    }
+}
+/// Sources for an alternative family estimate. Values remain whole-joint outcomes.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct JointMembershipSourceV1 {
+    pub candidate_index: u16,
+    pub memory_id: MemoryId,
+    pub source_sequence_id: ExperienceSequenceId,
+    pub bundle_digest: [u64; 4],
+}
+fn matches(a: &CandidateMemoryQueryV2, b: &CandidateMemoryQueryV2) -> bool {
+    a.organism_id() == b.organism_id()
+        && a.profile() == b.profile()
+        && a.version() == b.version()
+        && a.tracked_object_id().is_some()
+        && a.tracked_object_id() == b.tracked_object_id()
+        && a.action_family() == b.action_family()
+        && a.action_id() == b.action_id()
+}
+impl MemoryBank {
+    /// Capture one exact joint consequence with its authenticated executed members.
+    /// Does not alter neural eligibility/biology or manufacture member-local outcomes.
+    pub fn observe_sealed_patch_with_joint_membership(
+        &mut self,
+        patch: &ExperiencePatch,
+    ) -> Result<MemoryUpdateReceipt, ScaffoldContractError> {
+        self.observe_sealed_patch_impl(patch, false, true)
+    }
+    /// Explicit alternative family estimator. Target recall is unchanged. Events
+    /// are not added to ordinary family estimates: matching event estimates replace
+    /// that candidate's scalar family estimate; absent evidence retains legacy recall.
+    pub fn recall_frame_with_joint_membership(
+        &self,
+        draft: &PerceptionFrameDraft,
+    ) -> Result<PreparedMemoryRecall, ScaffoldContractError> {
+        let mut p = self.recall_frame(draft)?;
+        p.receipt.schema_version = RECORD_SCHEMA;
+        let mut work = 0u64;
+        for (i, q) in p.candidate_queries.iter().enumerate() {
+            let mut seen = BTreeSet::new();
+            let mut selected = Vec::new();
+            let Some(key) = executed_action::key(q) else {
+                continue;
+            };
+            if self.candidate_store.joint_membership_index.is_empty() {
+                continue;
+            }
+            work += 1; // Exact member namespace index lookup.
+                       // Latest matching event sequences, not record IDs (merged IDs stay old).
+            for (_, id) in self
+                .candidate_store
+                .joint_membership_index
+                .get(&key)
+                .into_iter()
+                .flatten()
+                .rev()
+                .take(MEMORY_FAMILY_SEARCH_CAP)
+            {
+                work += 1;
+                let record = &self.candidate_store.records[&id.raw()];
+                let Some(e) = &record.joint_event else {
+                    continue;
+                };
+                let first = &e.event.members.facts()[0];
+                if first.event_tick > q.tick() {
+                    continue;
+                }
+                for f in e.event.members.facts() {
+                    work += 1;
+                    if !matches(&f.query, q) {
+                        continue;
+                    }
+                    let similarity = family_similarity(q.features(), f.query.features());
+                    if similarity < MEMORY_MIN_SIMILARITY {
+                        continue;
+                    }
+                    let key = (f.query.organism_id().raw(), f.source_sequence_id.raw());
+                    if seen.insert(key) {
+                        selected.push((record.memory_id, e, similarity));
+                    }
+                }
+            }
+            selected.sort_by(|a, b| {
+                work += 1; // Actual comparison in deterministic ranking.
+                b.2.total_cmp(&a.2)
+                    .then_with(|| b.1.sequence().cmp(&a.1.sequence()))
+                    .then_with(|| a.0.raw().cmp(&b.0.raw()))
+            });
+            selected.truncate(MEMORY_RECALL_TOP_K);
+            if selected.is_empty() {
+                continue;
+            }
+            let total: f32 = selected.iter().map(|x| x.2).sum();
+            let mut values = [0.0; MEMORY_VALUE_V1_COUNT];
+            let mut confidence = 0.0;
+            for (id, e, score) in &selected {
+                let f = &e.event.members.facts()[0];
+                let age = q.tick().raw().saturating_sub(f.event_tick.raw()) as f32;
+                let retention = (1.0 / (1.0 + age / 16384.0)).max(0.05);
+                for (v, source) in values.iter_mut().zip(e.event.shared_family_value) {
+                    *v += source * (*score / total);
+                }
+                confidence += e.event.event_confidence * (*score / total) * retention;
+                p.receipt
+                    .joint_membership_sources
+                    .push(JointMembershipSourceV1 {
+                        candidate_index: q.candidate_index(),
+                        memory_id: *id,
+                        source_sequence_id: f.source_sequence_id,
+                        bundle_digest: f.bundle_digest,
+                    });
+                work += 1;
+            }
+            let c = &mut p.context.candidates[i];
+            c.family_value = values.map(|v| v.clamp(-1.0, 1.0));
+            c.family_confidence =
+                Confidence::new((confidence * total / selected.len() as f32).clamp(0.0, 1.0))?;
+            c.family_source_count = selected.len() as u16;
+            c.best_family_source = Some(selected[0].0);
+        }
+        p.receipt.execution_evidence_work = p
+            .receipt
+            .execution_evidence_work
+            .checked_add(work)
+            .ok_or(ScaffoldContractError::ScalarOutOfRange)?;
+        p.encoded_context = p.context.to_perception_context_block()?;
+        p.receipt.context_digest = p.encoded_context.canonical_digest();
+        p.validate_for_draft(draft)?;
+        Ok(p)
+    }
+}
+
+pub(super) fn index_insert(
+    index: &mut std::collections::BTreeMap<executed_action::ExecutionKey, Vec<(u64, MemoryId)>>,
+    record: &CandidateMemoryRecordV2,
+) -> u64 {
+    let mut work = 0;
+    if let Some(event) = &record.joint_event {
+        for fact in event.event.members.facts() {
+            work += 1;
+            if let Some(key) = executed_action::key(&fact.query) {
+                work += 1;
+                let entries = index.entry(key).or_default();
+                let entry = (event.sequence(), record.memory_id);
+                let location = entries.binary_search_by(|e| {
+                    work += 1;
+                    (e.0, e.1.raw()).cmp(&(entry.0, entry.1.raw()))
+                });
+                if let Err(position) = location {
+                    work += (entries.len() - position + 1) as u64;
+                    entries.insert(position, entry);
+                }
+            }
+        }
+    }
+    work
+}
+pub(super) fn index_remove(
+    index: &mut std::collections::BTreeMap<executed_action::ExecutionKey, Vec<(u64, MemoryId)>>,
+    record: &CandidateMemoryRecordV2,
+) -> u64 {
+    let mut work = 0;
+    if let Some(event) = &record.joint_event {
+        for fact in event.event.members.facts() {
+            work += 1;
+            if let Some(key) = executed_action::key(&fact.query) {
+                work += 1;
+                if let Some(entries) = index.get_mut(&key) {
+                    entries.retain(|e| {
+                        work += 1;
+                        e.1 != record.memory_id
+                    });
+                    if entries.is_empty() {
+                        index.remove(&key);
+                    }
+                }
+            }
+        }
+    }
+    work
+}

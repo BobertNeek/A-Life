@@ -27,7 +27,7 @@ pub struct ExecutionEvidenceInspectionV1 {
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub(super) struct ExecutionKey(u64, u16, u16, u16, u64, u8, u32, u16);
-fn key(q: &CandidateMemoryQueryV2) -> Option<ExecutionKey> {
+pub(super) fn key(q: &CandidateMemoryQueryV2) -> Option<ExecutionKey> {
     let p = q.profile();
     Some(ExecutionKey(
         q.organism_id().raw(),

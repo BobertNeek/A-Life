@@ -497,3 +497,242 @@ fn cached_facts_survive_compaction_rebuild_and_leave_no_stale_index_after_evicti
         .executed_actions()[0]
         .is_none());
 }
+
+// Storage-only joint association fixtures; the native host regression separately
+// proves capture from actual sealed World execution, without editing saved lives.
+fn joint_fixture() -> MemoryBank {
+    let f = fact(1, 72, true);
+    let bank = fixture_with_secondary(&f);
+    let mut wire = serde_json::to_value(bank).unwrap();
+    let event = serde_json::json!({"schema_version":1,"sealed_causal_digest":[4,3,2,1],
+        "members":serde_json::to_vec(&vec![f]).unwrap(),
+        "shared_family_value":[-0.6,0.0,0.7,-0.1],"event_confidence":0.3});
+    wire["candidate_store"]["records"]["1"]["schema_version"] = serde_json::json!(3);
+    wire["candidate_store"]["records"]["1"]["joint_event"] =
+        serde_json::json!(serde_json::to_vec(&event).unwrap());
+    serde_json::from_value(wire).unwrap()
+}
+#[test]
+fn joint_membership_retrieves_event_not_averaged_representative_and_leaves_default_alone() {
+    let bank = joint_fixture();
+    let probe = probe_for_object(3, slot(0, 72, 0.4, [0., 0.8, 0.9]));
+    let plain = bank.recall_frame(&probe).unwrap();
+    let explicit = bank.recall_frame_with_joint_membership(&probe).unwrap();
+    assert_eq!(plain.receipt().schema_version, 2);
+    assert_eq!(explicit.receipt().schema_version, 3);
+    assert!(plain.receipt().joint_membership_sources.is_empty());
+    let c = &explicit.context().candidates[0];
+    assert_eq!(c.family_value, [-0.6, 0., 0.7, -0.1]);
+    assert!(c.family_confidence.raw() <= 0.3);
+    assert_eq!(c.family_source_count, 1);
+    assert_eq!(c.target_latent, plain.context().candidates[0].target_latent);
+    assert_eq!(
+        c.target_confidence,
+        plain.context().candidates[0].target_confidence
+    );
+    assert!(explicit.receipt().execution_evidence_work > 0);
+    explicit.finalize(probe).unwrap();
+    let wrong = bank
+        .recall_frame_with_joint_membership(&probe_for_object(3, slot(0, 71, 0.4, [0., 0.8, 0.9])))
+        .unwrap();
+    assert!(wrong.receipt().joint_membership_sources.is_empty());
+    let legacy = fixture_with_secondary(&fact(1, 72, true));
+    assert!(legacy
+        .recall_frame_with_joint_membership(&probe_for_object(3, slot(0, 72, 0.4, [0., 0.8, 0.9])))
+        .unwrap()
+        .receipt()
+        .joint_membership_sources
+        .is_empty());
+}
+#[test]
+fn joint_event_cold_roundtrip_and_merge_keep_exact_original_confidence_and_sequence() {
+    let mut bank = joint_fixture();
+    let raw = serde_json::to_vec(&bank).unwrap();
+    assert_eq!(
+        serde_json::to_vec(&serde_json::from_slice::<MemoryBank>(&raw).unwrap()).unwrap(),
+        raw
+    );
+    let before = serde_json::to_value(&bank).unwrap()["candidate_store"]["records"]["1"]
+        ["joint_event"]
+        .clone();
+    bank.observe_sealed_patch(&sequenced_patch(2, 2, 71, 0.4, 0.8, 0.))
+        .unwrap();
+    let wire = serde_json::to_value(&bank).unwrap();
+    assert_eq!(
+        wire["candidate_store"]["records"]["1"]["observation_count"],
+        2
+    );
+    assert_eq!(
+        wire["candidate_store"]["records"]["1"]["joint_event"],
+        before
+    );
+    let restored: MemoryBank = serde_json::from_value(wire).unwrap();
+    let recall = restored
+        .recall_frame_with_joint_membership(&probe_for_object(3, slot(0, 72, 0.4, [0., 0.8, 0.9])))
+        .unwrap();
+    assert_eq!(
+        recall.receipt().joint_membership_sources[0].source_sequence_id,
+        ExperienceSequenceId(1)
+    );
+    assert_eq!(
+        recall.context().candidates[0].family_value,
+        [-0.6, 0., 0.7, -0.1]
+    );
+}
+#[test]
+fn joint_event_invalid_owner_version_digest_and_duplicate_copy_are_rejected() {
+    let base = serde_json::to_value(joint_fixture()).unwrap();
+    let bytes: Vec<u8> =
+        serde_json::from_value(base["candidate_store"]["records"]["1"]["joint_event"].clone())
+            .unwrap();
+    let event: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    for name in ["version", "digest", "owner", "primitive"] {
+        let mut bad = event.clone();
+        match name {
+            "version" => bad["schema_version"] = serde_json::json!(9),
+            "digest" => bad["sealed_causal_digest"] = serde_json::json!([0, 0, 0, 0]),
+            _ => {
+                let m: Vec<u8> = serde_json::from_value(bad["members"].clone()).unwrap();
+                let mut members: Vec<ExecutedActionMemoryV1> = serde_json::from_slice(&m).unwrap();
+                if name == "primitive" {
+                    members[0]
+                        .receipt
+                        .execution_evidence
+                        .as_mut()
+                        .unwrap()
+                        .primitive = ActionId(999);
+                } else {
+                    members[0].source_sequence_id = ExperienceSequenceId(99);
+                }
+                bad["members"] = serde_json::json!(serde_json::to_vec(&members).unwrap());
+            }
+        }
+        let mut wire = base.clone();
+        wire["candidate_store"]["records"]["1"]["joint_event"] =
+            serde_json::json!(serde_json::to_vec(&bad).unwrap());
+        assert!(
+            serde_json::from_value::<MemoryBank>(wire).is_err(),
+            "{name}"
+        );
+    }
+    let mut downgrade = base.clone();
+    downgrade["candidate_store"]["records"]["1"]["schema_version"] = serde_json::json!(2);
+    assert!(serde_json::from_value::<MemoryBank>(downgrade).is_err());
+    for conflict in [false, true] {
+        let mut wire = base.clone();
+        let mut duplicate = wire["candidate_store"]["records"]["1"].clone();
+        duplicate["memory_id"] = serde_json::json!(2);
+        if conflict {
+            let mut bad = event.clone();
+            bad["shared_family_value"] = serde_json::json!([0.9, 1., 0., 0.1]);
+            duplicate["joint_event"] = serde_json::json!(serde_json::to_vec(&bad).unwrap());
+        }
+        wire["candidate_store"]["records"]["2"] = duplicate;
+        wire["candidate_store"]["next_memory_id"] = serde_json::json!(3);
+        assert!(serde_json::from_value::<MemoryBank>(wire).is_err());
+    }
+}
+
+#[test]
+fn joint_member_index_finds_old_record_id_behind_many_unrelated_new_records() {
+    let small = serde_json::to_value(joint_fixture()).unwrap();
+    let config = MemoryBankConfig::new(128, 64, 4, 0.72, Confidence::new(0.).unwrap()).unwrap();
+    let mut wire = serde_json::to_value(MemoryBank::new(config).unwrap()).unwrap();
+    wire["candidate_store"] = small["candidate_store"].clone();
+    let mut other = small["candidate_store"]["records"]["1"].clone();
+    other["schema_version"] = serde_json::json!(2);
+    other.as_object_mut().unwrap().remove("joint_event");
+    other
+        .as_object_mut()
+        .unwrap()
+        .remove("executed_actions_json");
+    for id in 2..=70 {
+        let mut row = other.clone();
+        row["memory_id"] = serde_json::json!(id);
+        row["tracked_object_id_raw"] = serde_json::json!(1000 + id);
+        wire["candidate_store"]["records"][id.to_string()] = row;
+    }
+    wire["candidate_store"]["next_memory_id"] = serde_json::json!(71);
+    let bank: MemoryBank = serde_json::from_value(wire).unwrap();
+    let recalled = bank
+        .recall_frame_with_joint_membership(&probe_for_object(3, slot(0, 72, 0.4, [0., 0.8, 0.9])))
+        .unwrap();
+    assert_eq!(recalled.receipt().joint_membership_sources.len(), 1);
+    assert_eq!(
+        recalled.receipt().joint_membership_sources[0]
+            .memory_id
+            .raw(),
+        1
+    );
+    assert_eq!(recalled.receipt().execution_evidence_work, 4); // lookup+record+member+projection
+}
+
+#[test]
+fn joint_portable_roundtrip_and_rehashed_duplicate_event_fail_closed() {
+    let config = MemoryBankConfig::new(8, 64, 4, 0.72, Confidence::new(0.).unwrap()).unwrap();
+    let mut source = grounded_sidecar(config);
+    source
+        .observe_sealed_patch(&sequenced_patch(1, 1, 71, 0.4, 0.8, 0.))
+        .unwrap();
+    let bank = joint_fixture();
+    let raw = serde_json::to_value(&bank).unwrap();
+    let mut portable = source.export_active_bank().unwrap();
+    portable.schema_version = 3;
+    portable.records[0].schema_version = 3;
+    portable.records[0].joint_event_json = Some(
+        serde_json::from_value(raw["candidate_store"]["records"]["1"]["joint_event"].clone())
+            .unwrap(),
+    );
+    portable.records[0].executed_actions_json = Some(
+        serde_json::from_value(
+            raw["candidate_store"]["records"]["1"]["executed_actions_json"].clone(),
+        )
+        .unwrap(),
+    );
+    portable.records[0].canonical_digest =
+        portable.records[0].recompute_canonical_digest().unwrap();
+    portable.active_bank_digest = bank
+        .recall_frame(&probe_for_object(3, slot(0, 72, 0.4, [0., 0.8, 0.9])))
+        .unwrap()
+        .receipt()
+        .bank_digest;
+    portable.canonical_digest = portable.recompute_canonical_digest().unwrap();
+    portable.validate_contract().unwrap();
+    let mut checkpoint = *source.compaction_checkpoint();
+    checkpoint.active_digest = portable.active_bank_digest;
+    assert!(MemorySidecarState::restore_portable(
+        source.profile(),
+        checkpoint,
+        portable.clone(),
+        None
+    )
+    .is_err());
+    let restored = MemorySidecarState::restore_portable_with_joint_membership(
+        source.profile(),
+        checkpoint,
+        portable.clone(),
+        None,
+    )
+    .unwrap();
+    assert!(restored.durable_founder_clone(OrganismId(99)).is_err());
+    assert_eq!(restored.export_active_bank().unwrap(), portable);
+    let mut duplicate = portable.clone();
+    let mut row = duplicate.records[0].clone();
+    row.memory_id_raw = 2;
+    row.canonical_digest = row.recompute_canonical_digest().unwrap();
+    duplicate.records.push(row);
+    duplicate.next_memory_id_raw = 3;
+    duplicate.canonical_digest = duplicate.recompute_canonical_digest().unwrap();
+    assert!(duplicate.validate_contract().is_err());
+    let mut downgraded = portable.clone();
+    downgraded.schema_version = 2;
+    downgraded.canonical_digest = downgraded.recompute_canonical_digest().unwrap();
+    assert!(downgraded.validate_contract().is_err());
+    let mut corrupt = portable;
+    corrupt.records[0]
+        .joint_event_json
+        .as_mut()
+        .unwrap()
+        .push(b' ');
+    assert!(corrupt.validate_contract().is_err());
+}

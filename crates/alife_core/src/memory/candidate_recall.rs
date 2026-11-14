@@ -76,6 +76,7 @@ pub(super) fn candidate_record_from_patch_runtime(
         observation_count: 1,
         outcome_contact: representative_outcome_contact(patch),
         executed_actions_json: executed_action::from_patch(patch)?,
+        joint_event: None,
     };
     record.validate_contract()?;
     Ok(record)
@@ -189,6 +190,16 @@ pub(super) fn merge_candidate_records(
     if observation_event > retained_event {
         merged.executed_actions_json = observation.executed_actions_json.clone();
     }
+    if observation.joint_event.as_ref().map_or(0, |e| e.sequence())
+        > retained.joint_event.as_ref().map_or(0, |e| e.sequence())
+    {
+        merged.joint_event = observation.joint_event.clone();
+    }
+    merged.schema_version = if merged.joint_event.is_some() {
+        joint_membership::RECORD_SCHEMA
+    } else {
+        MEMORY_RECALL_SCHEMA_VERSION
+    };
     merged.observation_count = new_count;
     merged.validate_contract()?;
     Ok(merged)

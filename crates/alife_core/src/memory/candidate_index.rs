@@ -67,6 +67,8 @@ pub(super) struct CandidateMemoryRecordV2 {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(super) outcome_contact: Option<PhysicalContactKind>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) joint_event: Option<joint_membership::CheckedJointEvent>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(super) executed_actions_json: Option<executed_action::CheckedExecutionFacts>,
 }
 
@@ -113,7 +115,12 @@ impl CandidateMemoryRecordV2 {
         }
     }
     pub(super) fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
-        if self.schema_version != MEMORY_RECALL_SCHEMA_VERSION
+        if self.schema_version
+            != if self.joint_event.is_some() {
+                joint_membership::RECORD_SCHEMA
+            } else {
+                MEMORY_RECALL_SCHEMA_VERSION
+            }
             || self.organism_id_raw == 0
             || self.query_version_raw != crate::MemoryQueryVersion::StateActionTargetV2.raw()
             || self.query_features.len() != crate::MEMORY_QUERY_V2_FEATURE_COUNT
@@ -145,6 +152,9 @@ impl CandidateMemoryRecordV2 {
             {
                 return Err(ScaffoldContractError::InvalidMemoryQuery);
             }
+        }
+        if let Some(event) = &self.joint_event {
+            event.validate_owner(self)?;
         }
         self.memory_id.validate()?;
         self.source_sequence_id.validate()?;
@@ -215,6 +225,9 @@ pub(super) struct CandidateMemoryStoreV2 {
     pub(super) eviction_count: u64,
     pub(super) records: BTreeMap<u64, CandidateMemoryRecordV2>,
     #[serde(skip, default)]
+    pub(super) joint_membership_index:
+        BTreeMap<executed_action::ExecutionKey, Vec<(u64, MemoryId)>>,
+    #[serde(skip, default)]
     pub(super) execution_index: BTreeMap<executed_action::ExecutionKey, Vec<(u64, MemoryId)>>,
     pub(super) last_sequence_by_organism: BTreeMap<u64, u64>,
     #[serde(skip, default)]
@@ -242,6 +255,7 @@ impl Default for CandidateMemoryStoreV2 {
             eviction_count: 0,
             records: BTreeMap::new(),
             last_sequence_by_organism: BTreeMap::new(),
+            joint_membership_index: BTreeMap::new(),
             execution_index: BTreeMap::new(),
             family_index: BTreeMap::new(),
             target_index: BTreeMap::new(),
@@ -304,6 +318,7 @@ impl<'de> Deserialize<'de> for CandidateMemoryStoreV2 {
             eviction_count: wire.eviction_count,
             records: wire.records,
             last_sequence_by_organism: wire.last_sequence_by_organism,
+            joint_membership_index: BTreeMap::new(),
             execution_index: BTreeMap::new(),
             family_index: BTreeMap::new(),
             target_index: BTreeMap::new(),
@@ -340,8 +355,14 @@ impl CandidateMemoryStoreV2 {
         {
             return Err(ScaffoldContractError::InvalidMemoryQuery);
         }
+        let mut joint_events = std::collections::BTreeSet::new();
         for record in self.records.values() {
             record.validate_contract()?;
+            if let Some(event) = &record.joint_event {
+                if !joint_events.insert((record.organism_id_raw, event.sequence())) {
+                    return Err(ScaffoldContractError::InvalidMemoryQuery);
+                }
+            }
             let last_sequence = self
                 .last_sequence_by_organism
                 .get(&record.organism_id_raw)
@@ -398,6 +419,7 @@ impl CandidateMemoryStoreV2 {
             digest.write_u32(record.observation_count);
             write_outcome_provenance(&mut digest, record.outcome_contact);
             executed_action::write_cached_digest(&mut digest, &record.executed_actions_json);
+            joint_membership::digest(&mut digest, &record.joint_event);
         }
         digest.write_sequence_len(self.last_sequence_by_organism.len());
         for (organism, sequence) in &self.last_sequence_by_organism {
@@ -407,12 +429,13 @@ impl CandidateMemoryStoreV2 {
         Ok(digest.finish256())
     }
 
-    pub(super) fn insert_record_into_indices(&mut self, memory_id: MemoryId) {
+    pub(super) fn insert_record_into_indices(&mut self, memory_id: MemoryId) -> u64 {
         let record = self
             .records
             .get(&memory_id.raw())
             .expect("validated candidate memory record exists");
         executed_action::index_insert(&mut self.execution_index, record);
+        let joint_work = joint_membership::index_insert(&mut self.joint_membership_index, record);
         let family_key = record.family_key();
         let target_key = record.target_key();
         let category_features = record.query_features.clone();
@@ -467,6 +490,7 @@ impl CandidateMemoryStoreV2 {
         }
         self.insert_family_index_id(family_key, memory_id);
         self.insert_target_index_id(target_key, memory_id);
+        joint_work
     }
 
     fn insert_family_index_id(&mut self, family_key: MemoryBucketKey, memory_id: MemoryId) {
@@ -529,8 +553,9 @@ impl CandidateMemoryStoreV2 {
         });
     }
 
-    pub(super) fn remove_record_from_indices(&mut self, record: &CandidateMemoryRecordV2) {
+    pub(super) fn remove_record_from_indices(&mut self, record: &CandidateMemoryRecordV2) -> u64 {
         executed_action::index_remove(&mut self.execution_index, record);
+        let joint_work = joint_membership::index_remove(&mut self.joint_membership_index, record);
         let family_key = record.family_key();
         let category = family_key.category_key(&record.query_features);
         if let Some(ids) = self.family_category_index.get_mut(&category) {
@@ -574,10 +599,12 @@ impl CandidateMemoryStoreV2 {
                 self.target_index.remove(&target_key);
             }
         }
+        joint_work
     }
 
     pub(super) fn rebuild_indices(&mut self) {
         self.execution_index.clear();
+        self.joint_membership_index.clear();
         self.family_index.clear();
         self.target_index.clear();
         self.family_namespace_index.clear();
