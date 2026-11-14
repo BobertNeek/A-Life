@@ -818,6 +818,7 @@ fn run(base: &FoundationWeightAsset, p: &BrainPhenotype, r: Request) -> Result<s
                 "toy-then-food",
                 "wait-then-food",
                 "hazard",
+                "delayed-hazard",
                 "hazard-choice",
             ]
             .contains(&s.as_str())
@@ -1093,21 +1094,28 @@ mod tests {
 
     #[test]
     fn delayed_hazard_allows_neural_activity_before_real_pain_arrives() {
-        let (asset, p, game) = prepare_founder(base(), 2).unwrap();
-        let mask = StageTrainableMask::recurrent_only(&p).unwrap();
-        let trainer = CpuFoundationTrainer::new(p, asset, mask, AdamWConfig::default()).unwrap();
-        let before_arrival = trial(
-            &game,
-            &trainer,
-            2026114900,
-            "delayed-hazard",
-            64,
-            false,
-            Variation::default(),
+        let original = base();
+        let before_arrival = run(
+            &original,
+            &phenotype(&original).unwrap(),
+            serde_json::from_value(json!({
+                "params": [0., 0., 0., 0., 0., 0.], "motor_heads": 2,
+                "seed_start": 2026114900_u64, "seeds": 1,
+                "scenes": ["delayed-hazard"], "ticks": 64
+            }))
+            .unwrap(),
         )
         .unwrap();
-        assert!(before_arrival.min_distance > 90.0);
-        assert_eq!(before_arrival.injury, 0.0);
+        assert!(
+            before_arrival["trials"][0]["min_distance"]
+                .as_f64()
+                .unwrap()
+                > 90.0
+        );
+        assert_eq!(before_arrival["trials"][0]["injury"], 0.0);
+        let (asset, p, game) = prepare_founder(original, 2).unwrap();
+        let mask = StageTrainableMask::recurrent_only(&p).unwrap();
+        let trainer = CpuFoundationTrainer::new(p, asset, mask, AdamWConfig::default()).unwrap();
         let result = trial(
             &game,
             &trainer,
