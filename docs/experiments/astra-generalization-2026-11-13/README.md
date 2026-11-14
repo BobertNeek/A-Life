@@ -401,6 +401,49 @@ life. The failed comparison and two rejected negative-MotorProposal proposals
 remain recorded. No runtime, cadence, biology, production brain or GPU change
 is included.
 
+## Escape and Hold4 follow-up
+
+`early-escape-study.json` records the rejected escape candidates and a second
+independent confirmation of release-only. A large Avoid readout initially made
+the creature flee food despite measured pain staying exactly zero. PyTorch
+matched that native forward state: the circuit amplified a positive painless
+baseline. Removing the signed distance term and calibrating a negative baseline
+recovered the exposed food failures, but did not yield a clear new winner.
+
+A fresh ten-seed comparison gave:
+
+| Measure | Contact20 | Release-only | Calibrated Avoid | Release + Hold4 |
+|---|---:|---:|---:|---:|
+| Ordinary meals | 94/110 | 95/110 | 94/110 | 95/110 |
+| Mixed hazard/food meals | 4/10 | 2/10 | 3/10 | 1/10 |
+| Toy Ingest choices | 865 | 782 | 1,090 | 510 |
+| Cold hazard deaths | 7/20 | 0/20 | 0/20 | 0/20 |
+| Delayed hazard deaths | 7/10 | 0/10 | 0/10 | 0/10 |
+
+The calibrated Avoid candidate loses the release-only partial-obstacle success
+and takes 20.5% longer over their 94 common meals. Hold4 preserves all 95 release
+successes and cuts toy Ingest choices by 34.8%, but takes 11.6% longer and loses
+one mixed-food meal. Its toy no-manipulation choices rise from 584 to 1,115;
+this is more restraint, not proof that it learned what toys are. The older
+family counters must not be treated as exact Play counts.
+
+The exported `pursuit-twohead-contact20-release16x24-hold4` is a tradeoff control.
+It was built directly from the release asset with one additional weight edit,
+index 26879 by -4. All 20 prior edits, other weights, coordinates and remaining
+genome fields are preserved; export reload matches all 14 selected trial
+outcomes exactly. No successor is promoted. Contact20 remains the shared
+parent and release-only remains this lane's stronger all-round research choice.
+
+Assay v13 adds `delayed-hazard`: the hazard arrives near the creature after
+64 ordinary neural/world intervals. Cold trials run for 256 intervals and the
+separate delayed trials for 320, providing 256 exposed intervals each. The
+extra normal intervals also change biology, so this is not an isolated neural
+startup ablation. None of the final delayed-hazard cases ends beyond 0.75 m;
+less injury still does not establish reliable escape. Ten native tests cover
+the request entry point, pre-arrival distance and absence of pain, and real
+injury after arrival. The initial CLI admission mistake rejected requests before
+any lives ran; those errors remain in the study rather than being erased.
+
 ## Evidence and reproduction
 
 `results.jsonl.gz` contains completed requests and compact native outcomes,
