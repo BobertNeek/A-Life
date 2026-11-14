@@ -89,3 +89,20 @@ That last probe does not claim consumed food remains visible. Neither a changed
 MemoryContext nor a fast-weight response alone proves improved learned behavior.
 
 Ordinary `MemorySidecarState::restore_portable` rejects schema-3 enriched banks. Explicit research restoration uses `restore_portable_with_joint_membership`; its caller owns work admission/accounting. The legacy founder-clone operation rejects enriched banks rather than rebinding authenticated event identity or discarding membership. Existing schema-2 restoration remains unchanged.
+
+## Numerically usable confidence
+
+Zero-confidence events remain valid stored evidence. Explicit joint recall only
+selects an event when its confidence times similarity times the existing age
+retention has a positive representable `f32` result. This check is made before
+top-K ranking; it is not a biological confidence floor. Intermediate products and
+the final mean are computed in `f64`, then rounded to the context's `f32` once,
+so individually usable subnormal support is not lost by dividing each term by K.
+A candidate with no usable positive result keeps its ordinary family context and
+has no joint source receipts. Searching rejected evidence still counts as work.
+
+The existing bounded recent-event search is unchanged: unusable events do not
+occupy top-K, but they still consume the search cap. Older support outside that
+cap is not searched. The wider arithmetic can change normal-positive confidence
+rounding; this is not a byte-identical recall promise. Storage bytes, event
+validation, ordinary recall, target recall and biological learning are unchanged.
