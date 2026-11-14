@@ -123,5 +123,49 @@
       ],
       "status": "research comparison; not common-parent promotion; sustained lone-hazard avoidance remains unsolved"
     }
+  ],
+  "release_candidates": [
+    {
+      "name": "pursuit-twohead-contact20-release16x24",
+      "foundation_sha256": "40f844bc55b578965e629a629c620a170a09f39b0f33fb05b1f7b1db0feabfa0",
+      "genome_sha256": "b5242f7b447acb0ccdff584371e767501e76f053bb367a803d187a19cb63aacb",
+      "matched_reload_trials": 14,
+      "candidate_digest": [
+        183,
+        75,
+        170,
+        40,
+        214,
+        58,
+        60,
+        78,
+        153,
+        216,
+        158,
+        51,
+        160,
+        32,
+        237,
+        171,
+        242,
+        115,
+        95,
+        105,
+        96,
+        100,
+        62,
+        181,
+        78,
+        152,
+        160,
+        206,
+        212,
+        162,
+        82,
+        226
+      ],
+      "long_trace_physical_metrics_exact": true,
+      "validation_note": "First comparison incorrectly included trace-only target_motion; original AssertionError retained. Comparison corrected without rerunning that life. All physical metrics exact."
+    }
   ]
 }
