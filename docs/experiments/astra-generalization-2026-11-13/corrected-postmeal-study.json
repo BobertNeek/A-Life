@@ -1,0 +1,140 @@
+{
+  "plan": {
+    "source": "87fecd7dfd980c6ace996bb4fc46bfca3b6648b3",
+    "binary_sha256": "ba5c3608614b0c3fae83ce1a7916489bda871eea3b037cb80d60bdbb59754316",
+    "fixture": "stationary-teleport-v1",
+    "assay": 17,
+    "genetic_asset_source": "492bb2ad153c72241ab7eb303da0adc72c64a2c1",
+    "assets": {
+      "contact20": {
+        "file": "pursuit-twohead-contact20.alife-foundation",
+        "sha256": "d83a995e802e41b8e17799b0871f75d9ede35f95850049777323112e636654d1",
+        "genome_sha256": "557da394c045d0b4353009c842825677aa7505f636d6252b20f67bfe0c3a5189"
+      },
+      "paired16": {
+        "file": "pursuit-twohead-contact20-momentum128-paired16.alife-foundation",
+        "sha256": "f9bd6da726f11a259936ee8564916aad7d22322543fd819731eb425cb05e21ae",
+        "genome_sha256": "3fa5498e5d209f8ec6a88f18599762beb5175e49bce00e1611cd3fc6f8528055"
+      },
+      "withdraw1024": {
+        "file": "pursuit-twohead-contact20-momentum128-paired16-withdraw1024.alife-foundation",
+        "sha256": "e732d29e6d3111307690b8dab08e189de4736678432f6c36f7d77ad62edf7b94",
+        "genome_sha256": "b20b4b2539f21f8b0c24491ff768a3f38acda7709aecb31be7a627ad73c9c9d2"
+      },
+      "relief50": {
+        "file": "pursuit-twohead-contact20-momentum128-withdraw1024-relief50.alife-foundation",
+        "sha256": "73eaf36c3eb66d3ab3abd9bf3d0d68943a36f575eac7986842e6c62c1c113900",
+        "genome_sha256": "25d28849ae83db8fc40acc484aa19765338eb1257e6a3fdb9c7c8c8e26833b60"
+      }
+    },
+    "seeds": [
+      2026116200,
+      2026116201,
+      2026116202
+    ],
+    "scenes": [
+      "stationary",
+      "hazard",
+      "hazard-choice"
+    ],
+    "ticks": 1024,
+    "conditions": [
+      "low biology600",
+      "high biology600",
+      "high actualhost600"
+    ],
+    "frozen": true,
+    "purpose": "Corrected-fixture continued-life qualification of the four already preserved founders. Reuse all three original postmeal cases, no new mutation or seed selection. Original v15 receipts remain old-fixture controls. One scene per request gives bounded per-life result retention and cutoff checks; scenes use independent native hosts and the same seed.",
+    "limits": "This is correction/transfer evidence on exposed cases, not independent heldout selection. No common-parent/default change, no new learning-head or World alteration. No postmeal food respawn.",
+    "old_source": "3827d874d105debe0dee0a15644f7eab5c432148"
+  },
+  "comparison": {
+    "summary": {
+      "contact20": {
+        "stationary_ate_and_survived": 3,
+        "hazard_survivors": 0,
+        "mixed_meals": 2,
+        "mixed_survivors": 0,
+        "mixed_ate_and_survived": 0
+      },
+      "paired16": {
+        "stationary_ate_and_survived": 3,
+        "hazard_survivors": 3,
+        "mixed_meals": 0,
+        "mixed_survivors": 3,
+        "mixed_ate_and_survived": 0
+      },
+      "withdraw1024": {
+        "stationary_ate_and_survived": 3,
+        "hazard_survivors": 3,
+        "mixed_meals": 1,
+        "mixed_survivors": 3,
+        "mixed_ate_and_survived": 1
+      },
+      "relief50": {
+        "stationary_ate_and_survived": 3,
+        "hazard_survivors": 3,
+        "mixed_meals": 0,
+        "mixed_survivors": 3,
+        "mixed_ate_and_survived": 0
+      }
+    },
+    "changed": [
+      {
+        "name": "contact20",
+        "condition": 1,
+        "scene": "hazard-choice",
+        "fields": [
+          "actions",
+          "failed_ingests",
+          "final_drives",
+          "final_energy"
+        ],
+        "old_meal": 31,
+        "new_meal": 31,
+        "old_alive": false,
+        "new_alive": false,
+        "old_injury": 1.0,
+        "new_injury": 1.0
+      },
+      {
+        "name": "relief50",
+        "condition": 0,
+        "scene": "hazard-choice",
+        "fields": [
+          "actions",
+          "caught_tick",
+          "contact_interactions",
+          "failed_ingests",
+          "final_distance",
+          "final_drives",
+          "final_energy",
+          "injury",
+          "min_distance",
+          "no_manipulations"
+        ],
+        "old_meal": null,
+        "new_meal": null,
+        "old_alive": true,
+        "new_alive": true,
+        "old_injury": 0.46779727935791016,
+        "new_injury": 0.4711199700832367
+      }
+    ]
+  },
+  "archive": {
+    "file": "corrected-postmeal-results.jsonl.gz",
+    "sha256": "74c7a1460f5ade3f184f67025909a8700a73029c003477070d3f43bef298a8cc",
+    "requests": 36,
+    "trials": 36
+  },
+  "common_parent_unchanged": "Contact20",
+  "qualification": {
+    "native_example_tests": 14,
+    "strict_release_clippy": true,
+    "release_build": true,
+    "formatting": true
+  },
+  "dependency_limit": "Executed source87fecd7d predates security mainbd132fe7833b68a6e8e8f97b00a481619b4c6172. These results do not qualify the updated Cargo dependency set. Future integration must preserve and check the security changes.",
+  "conclusion": "Meal/survival counts and meal times match the original exposed v15 cases for all four founders.34/36 full trial summaries match; two mixed-case summaries differ in action/physiological details. The corrected fixture preserves the measured survival benefit, but only Withdraw1024 both eats and survives one of three mixed cases. No candidate promotion, broad heldout claim or learning improvement is established."
+}

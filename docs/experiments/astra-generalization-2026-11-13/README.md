@@ -636,3 +636,40 @@ comparisons. Original archives, genetic assets and source pins are unchanged.
 Source `86003cc4` passed 13 pursuit tests plus six MemoryContext-example tests,
 strict release Clippy, release builds and formatting. All results are native CPU;
 no hosted-CI, GPU, living-prey or common-parent promotion is claimed.
+
+## Corrected-fixture postmeal research (separate v17 branch)
+
+Assay v17 combines the stationary-placement correction with the opt-in
+`variation.continue_after_consumption` experiment. Default-off retains the
+first-meal endpoint. Enabled lives keep their first meal time and continue
+ordinary biology to death or the limit; no food is respawned. A native regression
+checks exact first-meal trace-prefix equality and persistent consumption.
+This follow-up is separate from #357's approval and does not change its branch.
+
+The four previously preserved founders were tested on all three original
+postmeal cases for 1,024 intervals, with one independently recorded life per
+request. The withdrawal assets and their full genomes are pinned from commit
+`492bb2ad`; the manifest identifies their exact bytes rather than silently
+substituting a foundation without its construction genome.
+
+| Corrected outcome (three cases each) | Contact20 | Paired pain | Withdraw1024 | Relief50 |
+|---|---:|---:|---:|---:|
+| Stationary meal and survival | 3/3 | 3/3 | 3/3 | 3/3 |
+| Lone-hazard survival | 0/3 | 3/3 | 3/3 | 3/3 |
+| Mixed meal and survival | 0/3 | 0/3 | 1/3 | 0/3 |
+| Mixed survival | 0/3 | 3/3 | 3/3 | 3/3 |
+
+Contact20 ate in two mixed lives and subsequently died. Meal times and these
+outcome counts match the original v15 fixtures. Full trial summaries match in
+34/36 lives; Contact20's high-energy mixed case and Relief50's low-energy mixed
+case differ in action/physiological details. Relief50's latter injury changes
+from 0.4677973 to 0.4711200. This exposed-case correction confirms the measured
+survival advantage, not reliable feeding under pain or a new shared champion.
+
+`corrected-postmeal-study.json` and `corrected-postmeal-results.jsonl.gz` contain
+the frozen plan, exact source/binary/asset identities and all36 aggregate lives.
+Source `87fecd7d` passed14 native example tests, strict release Clippy, a release
+build and formatting. Its dependency set predates security main `bd132fe7`;
+future integration must retain and requalify those dependency updates. Old
+results and binaries remain preserved. No acquired neural/optimizer arrays,
+GPU result or production-default change is included.
