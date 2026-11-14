@@ -1,4 +1,4 @@
-//! Matched mixed toy→food lives on the exact exported two-head bearing4 asset+genome parent.
+//! Matched mixed toy→food lives on an exact exported two-head asset+genome pair.
 //! No action forcing, target motion, teleport, neural reset or fabricated reward.
 use alife_core::*;
 use alife_runtime::canonical_preparation::foundation_construction_development;
@@ -9,6 +9,8 @@ use sha2::{Digest, Sha256};
 use std::path::Path;
 #[path = "support/terminal_evidence2135.rs"]
 mod evidence;
+#[path = "support/terminal_trace2135.rs"]
+mod trace;
 use evidence::LocalEvidence;
 use serde_json::json;
 use std::io::{BufRead, Write};
@@ -25,6 +27,13 @@ struct Request {
     gain: f32,
     reverse_appearance: bool,
     alias: bool,
+    #[serde(default)]
+    trace: bool,
+    /// Environmental diet control; absent retains the original food schedule.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    food_nutrition: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    decision_target: Option<usize>,
 }
 fn config(asset: &FoundationWeightAsset) -> Result<CanonicalNewGameConfig> {
     let mut c = CanonicalNewGameConfig::phase3(2026111701, 1)?;
@@ -93,6 +102,7 @@ fn spawn(
     food: bool,
     position: Vec3f,
     appearance: bool,
+    nutrition: f32,
 ) -> Result<WorldEntityId> {
     let id = world.editor_spawn_object(WorldEditorSpawnSpec {
         label: label.into(),
@@ -103,7 +113,7 @@ fn spawn(
         },
         organism_id: None,
         position,
-        nutrition: if food { 0.6 } else { 0. },
+        nutrition: if food { nutrition } else { 0. },
         hazard_pain: 0.,
         radius: 0.3,
         token_id: None,
@@ -141,6 +151,12 @@ fn run(
         || !["off", "active", "zero", "mask"].contains(&request.arm.as_str())
         || !(1..=512).contains(&request.ticks)
         || request.leadin > 2400
+        || request
+            .decision_target
+            .is_some_and(|n| n == 0 || n > request.ticks)
+        || request
+            .food_nutrition
+            .is_some_and(|n| !n.is_finite() || !(0.0..=0.6).contains(&n))
     {
         return Err("invalid bounded assay request".into());
     }
@@ -151,7 +167,7 @@ fn run(
     let founder_bytes = serde_json::to_vec(&trainer.checkpoint())?;
     evidence.save("FOUNDER-OPTIMIZER-BIRTH.json", &founder_bytes)?;
     evidence.save("PROVENANCE.json",&serde_json::to_vec_pretty(&json!({
-        "schema":2135,"revision":"v5-channel-terminal-observation","parent_sha256":format!("{:x}",Sha256::digest(asset.encode_canonical()?)),
+        "schema":2135,"revision":"v6-local-physical-trace","parent_sha256":format!("{:x}",Sha256::digest(asset.encode_canonical()?)),
         "parent_native_digest":asset.digest(),"parent_manifest":asset.manifest(),
         "construction_genome_sha256":format!("{:x}",Sha256::digest(serde_json::to_vec(genome)?)),
         "motor_head_count":trainer.phenotype().cognitive_architecture().motor_head_count(),
@@ -163,7 +179,8 @@ fn run(
             "evidence":format!("{:x}",Sha256::digest(include_bytes!("support/terminal_evidence2135.rs"))),
             "head":format!("{:x}",Sha256::digest(include_bytes!("../src/cpu/terminal_head.rs"))),
             "channel_state":format!("{:x}",Sha256::digest(include_bytes!("../src/cpu/terminal_observation.rs"))),
-            "channel_proof":format!("{:x}",Sha256::digest(include_bytes!("../../alife_core/src/memory/channel_terminal.rs")))},
+            "channel_proof":format!("{:x}",Sha256::digest(include_bytes!("../../alife_core/src/memory/channel_terminal.rs"))),
+            "trace":format!("{:x}",Sha256::digest(include_bytes!("support/terminal_trace2135.rs")))},
         "local_only":true,"automatic_retry":false,"compile_commit":option_env!("ALIFE_ASSAY_GIT_COMMIT")
     }))?)?;
     evidence.save(
@@ -182,12 +199,13 @@ fn run(
         .agent("hunter", own, Vec3f::ZERO)
         .build()?;
     let toy_appearance = request.reverse_appearance;
-    let _toy = spawn(
+    let toy = spawn(
         &mut world,
         "toy",
         false,
         Vec3f::new(0.25, 0., 0.),
         toy_appearance,
+        0.0,
     )?;
     let mut biology = *old.biochemistry();
     biology.body.set_energy(0.25)?;
@@ -253,6 +271,7 @@ fn run(
     let mut insufficient_atp = 0;
     let mut unfunded_admission_checks = 0u64;
     let mut first_informative_saved = false;
+    let mut elapsed_host_intervals = 0;
     for tick in 0..request.ticks {
         // Prespecified environmental arrivals; never contingent on the selected action.
         if [64, 128, 192].contains(&tick) {
@@ -272,6 +291,7 @@ fn run(
                 } else {
                     !toy_appearance
                 },
+                request.food_nutrition.unwrap_or(0.6),
             )?);
         }
         // Retain the complete valid pre-step state after any declared arrival.
@@ -279,11 +299,28 @@ fn run(
         evidence.remember_valid(serde_json::to_vec(&host.checkpoint(&trainer)?)?);
         let step = host.step(&trainer, 1.)?;
         // Capture immediately after a committed step, before event serialization.
-        let committed_bytes = serde_json::to_vec(&host.checkpoint(&trainer)?)?;
+        let committed = host.checkpoint(&trainer)?;
+        let committed_bytes = serde_json::to_vec(&committed)?;
         evidence.remember_valid(committed_bytes.clone());
+        if request.trace {
+            trace::save(
+                evidence,
+                tick,
+                &step,
+                &committed,
+                &committed_bytes,
+                toy,
+                &food,
+            )?;
+        }
         for row in step.decisions {
             decisions += 1;
-            let consumed = row.patch.outcome().physical.contact == PhysicalContactKind::Consumed;
+            let consumed = row.patch.outcome().joint.as_ref().is_some_and(|j| {
+                j.channel_outcomes.iter().any(|c| {
+                    c.channel == MotorChannel::Manipulation
+                        && c.physical.contact == PhysicalContactKind::Consumed
+                })
+            });
             let informative = row.terminal_context2135.as_ref().is_some_and(|r| {
                 r.candidates.iter().any(|c| {
                     c.consumed_source_count > 0 && c.desirability.is_some_and(|v| v != 0.0)
@@ -310,7 +347,7 @@ fn run(
             {
                 failed_ingest_bundles += 1;
             }
-            if row.patch.outcome().physical.contact == PhysicalContactKind::Consumed {
+            if consumed {
                 meals += 1;
                 meal_hunger_deltas.push(row.patch.outcome().homeostatic_delta.drives.hunger);
             }
@@ -330,6 +367,13 @@ fn run(
                     .count();
                 deltas += r.candidates.iter().filter(|c| c.delta != 0.).count();
             }
+        }
+        elapsed_host_intervals += 1;
+        if request
+            .decision_target
+            .is_some_and(|target| decisions >= target)
+        {
+            break;
         }
     }
     let cp = host.checkpoint(&trainer)?;
@@ -351,7 +395,7 @@ fn run(
         .filter(|id| host.world().entity(**id).unwrap().consumed)
         .count();
     Ok(
-        json!({"schema":2135,"parent_sha256":format!("{:x}",Sha256::digest(asset.encode_canonical()?)),"construction_genome_sha256":format!("{:x}",Sha256::digest(serde_json::to_vec(genome)?)),"motor_head_count":2,"seed":request.seed,"arm":request.arm,"gain":request.gain,"ticks":request.ticks,"leadin":request.leadin,"reverse_appearance":request.reverse_appearance,"alias":request.alias,"first_hunger":first_hunger,"hunger_min":hunger_min,"hunger_max":hunger_max,"meals":meals,"consumed_food":consumed_food,"spawned_food":food.len(),"meal_hunger_deltas":meal_hunger_deltas,"failed_ingest_containing_bundles":failed_ingest_bundles,"decisions":decisions,"context_rows":context_rows,"sourced_candidates":sourced_rows,"nonzero_deltas":deltas,"reserved_work_units":work,"capacity_rejected":capacity_rejected,"insufficient_atp":insufficient_atp,"unfunded_admission_checks_atp_q16":unfunded_admission_checks,"typed_cold_exact":true,"parent_weights_exact":true,"head_fixed_in_life":true,"long_ppo_calls":0}),
+        json!({"schema":2135,"parent_sha256":format!("{:x}",Sha256::digest(asset.encode_canonical()?)),"construction_genome_sha256":format!("{:x}",Sha256::digest(serde_json::to_vec(genome)?)),"motor_head_count":2,"seed":request.seed,"arm":request.arm,"gain":request.gain,"ticks":request.ticks,"elapsed_host_intervals":elapsed_host_intervals,"decision_target":request.decision_target,"leadin":request.leadin,"reverse_appearance":request.reverse_appearance,"alias":request.alias,"food_nutrition":request.food_nutrition.unwrap_or(0.6),"first_hunger":first_hunger,"hunger_min":hunger_min,"hunger_max":hunger_max,"meals":meals,"consumed_food":consumed_food,"spawned_food":food.len(),"meal_hunger_deltas":meal_hunger_deltas,"failed_ingest_containing_bundles":failed_ingest_bundles,"decisions":decisions,"context_rows":context_rows,"sourced_candidates":sourced_rows,"nonzero_deltas":deltas,"reserved_work_units":work,"capacity_rejected":capacity_rejected,"insufficient_atp":insufficient_atp,"unfunded_admission_checks_atp_q16":unfunded_admission_checks,"typed_cold_exact":true,"parent_weights_exact":true,"head_fixed_in_life":true,"long_ppo_calls":0}),
     )
 }
 fn execute_request(
