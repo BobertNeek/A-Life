@@ -233,7 +233,7 @@ impl CandidateDecoderPlan {
         let width = architecture.motor_head_width();
         let channels: &[MotorChannel] = match architecture.schema_version() {
             1 => &FACTORIZED_MOTOR_CHANNELS,
-            2 => &ORIENTATION_MOTOR_CHANNELS_V2,
+            2 | 3 => &ORIENTATION_MOTOR_CHANNELS_V2,
             _ => return Err(ScaffoldContractError::PhenotypeCompile),
         };
         if head_count == 0

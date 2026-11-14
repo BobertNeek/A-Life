@@ -73,7 +73,8 @@ fn v2_supports_only_implemented_channel_prefixes_and_rejects_unknown_layout() {
     assert!(a.with_independent_orientation_v2(0).is_err());
     assert!(a.with_independent_orientation_v2(6).is_err());
     let mut j = serde_json::to_value(a).unwrap();
-    j["schema_version"] = 3.into();
+    // V3 is now an explicit supported repertoire; the next version remains unknown.
+    j["schema_version"] = 4.into();
     assert!(
         serde_json::from_value::<alife_core::genome::CognitiveArchitectureGenomeParameters>(j)
             .is_err()

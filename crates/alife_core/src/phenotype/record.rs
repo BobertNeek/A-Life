@@ -43,6 +43,9 @@ impl CognitiveArchitecturePlan {
     pub const fn schema_version(&self) -> u16 {
         self.parameters.schema_version()
     }
+    pub const fn grounded_orientation_repertoire(&self) -> bool {
+        self.parameters.grounded_orientation_repertoire()
+    }
     pub const fn attention_capacity(&self) -> u8 {
         self.parameters.attention_capacity()
     }
@@ -1155,6 +1158,63 @@ fn encode_budgets(d: &mut CanonicalDigestBuilder, budgets: &CompiledBudgets) {
 mod tests {
     use super::*;
     use crate::{BrainGenome, DevelopmentState, NormalizedScalar, PhenotypeCompiler, Tick};
+
+    #[test]
+    fn grounded_orientation_v3_keeps_v2_motor_prefix_and_graph_coordinates() {
+        let capacity = BrainCapacityClass::n2048();
+        let base = BrainGenome::scaffold(47_503, capacity.id());
+        for heads in 1..=5 {
+            let v2 = base
+                .clone()
+                .with_cognitive_architecture(
+                    base.cognitive_architecture()
+                        .with_independent_orientation_v2(heads)
+                        .unwrap(),
+                )
+                .unwrap();
+            let v3 = base
+                .clone()
+                .with_cognitive_architecture(
+                    base.cognitive_architecture()
+                        .with_grounded_orientation_v3(heads)
+                        .unwrap(),
+                )
+                .unwrap();
+            let development =
+                DevelopmentState::new(base.id, Tick::ZERO, NormalizedScalar::new(0.35).unwrap());
+            let old = PhenotypeCompiler::compile(
+                &v2,
+                &capacity,
+                &development,
+                SensorProfile::GroundedObjectSlotsV1,
+            )
+            .unwrap();
+            let new = PhenotypeCompiler::compile(
+                &v3,
+                &capacity,
+                &development,
+                SensorProfile::GroundedObjectSlotsV1,
+            )
+            .unwrap();
+            assert_eq!(
+                old.candidate_decoder()
+                    .factorized_motor_channels(&old)
+                    .unwrap(),
+                new.candidate_decoder()
+                    .factorized_motor_channels(&new)
+                    .unwrap()
+            );
+            assert_eq!(old.synapses(), new.synapses());
+            assert_eq!(old.candidate_decoder(), new.candidate_decoder());
+            assert_ne!(old.phenotype_hash(), new.phenotype_hash());
+            assert!(new
+                .cognitive_architecture()
+                .grounded_orientation_repertoire());
+            let restored: BrainPhenotype =
+                serde_json::from_slice(&serde_json::to_vec(&new).unwrap()).unwrap();
+            assert_eq!(restored.phenotype_hash(), new.phenotype_hash());
+        }
+    }
 
     #[test]
     fn deserialization_rejects_reordered_route_receipts() {

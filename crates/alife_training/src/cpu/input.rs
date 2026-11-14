@@ -17,6 +17,9 @@ pub fn encode_cpu_frame(
     effects.validate_contract()?;
     if effects.source_tick != frame.tick()
         || frame.sensor_profile() != p.sensor_profile()
+        || frame.grounded_orientation_repertoire()
+            != (p.sensor_profile() == SensorProfile::GroundedObjectSlotsV1
+                && p.cognitive_architecture().grounded_orientation_repertoire())
         || enabled_routes.len() != p.projections().len()
     {
         return Err(invalid());

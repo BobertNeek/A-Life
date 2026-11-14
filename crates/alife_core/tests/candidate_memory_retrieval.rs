@@ -2599,3 +2599,6 @@ fn retained_context_encoding_preserves_populated_audited_and_cached_runtime_fram
 
 #[path = "candidate_memory_retrieval/executed_actions.rs"]
 mod executed_actions;
+
+#[path = "candidate_memory_retrieval/orientation_repertoire.rs"]
+mod orientation_repertoire;

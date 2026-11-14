@@ -78,6 +78,7 @@ pub struct GroundedCandidateBinding {
     grounded: GroundedSensingFrame,
     profile: SensorProfile,
     active_contact: Option<WorldEntityId>,
+    grounded_orientation_v3: bool,
 }
 
 impl GroundedCandidateBinding {
@@ -85,11 +86,13 @@ impl GroundedCandidateBinding {
         grounded: GroundedSensingFrame,
         profile: SensorProfile,
         active_contact: Option<WorldEntityId>,
+        grounded_orientation_v3: bool,
     ) -> Self {
         Self {
             grounded,
             profile,
             active_contact,
+            grounded_orientation_v3,
         }
     }
 
@@ -103,18 +106,26 @@ impl GroundedCandidateBinding {
         if draft.organism_id() != self.grounded.sensory().organism_id
             || draft.tick() != self.grounded.sensory().tick
             || draft.sensor_profile() != self.profile
+            || draft.grounded_orientation_repertoire() != self.grounded_orientation_v3
             || draft.body() != self.grounded.body()
             || draft.grounded_object_slots() != self.grounded.slots()
             || draft.candidates()
-                != enumerate_grounded_candidates(&self.grounded, self.profile, self.active_contact)?
+                != enumerate_grounded_candidates_impl(
+                    &self.grounded,
+                    self.profile,
+                    self.active_contact,
+                    None,
+                    self.grounded_orientation_v3,
+                )?
         {
             return Err(ScaffoldContractError::InvalidPerceptionFrame);
         }
-        enumerate_grounded_candidates_with_focus(
+        enumerate_grounded_candidates_impl(
             &self.grounded,
             self.profile,
             self.active_contact,
             focal_object,
+            self.grounded_orientation_v3,
         )
     }
 }
@@ -186,6 +197,34 @@ pub fn enumerate_grounded_candidates_with_focus(
     active_contact: Option<WorldEntityId>,
     focal_object: Option<TrackedObjectId>,
 ) -> Result<Vec<ActionCandidate>, ScaffoldContractError> {
+    enumerate_grounded_candidates_impl(grounded, profile, active_contact, focal_object, false)
+}
+
+/// Fresh-genome V3 repertoire. This grants unscored body/head primitives, not
+/// terrain sensing or target labels. World callers bind architecture to owner.
+pub fn enumerate_grounded_candidates_with_orientation_v3(
+    grounded: &GroundedSensingFrame,
+    profile: SensorProfile,
+    active_contact: Option<WorldEntityId>,
+    focal_object: Option<TrackedObjectId>,
+    architecture: &alife_core::genome::CognitiveArchitectureGenomeParameters,
+) -> Result<Vec<ActionCandidate>, ScaffoldContractError> {
+    architecture.validate_contract()?;
+    if !architecture.grounded_orientation_repertoire()
+        || profile != SensorProfile::GroundedObjectSlotsV1
+    {
+        return Err(ScaffoldContractError::InvalidPerceptionFrame);
+    }
+    enumerate_grounded_candidates_impl(grounded, profile, active_contact, focal_object, true)
+}
+
+fn enumerate_grounded_candidates_impl(
+    grounded: &GroundedSensingFrame,
+    profile: SensorProfile,
+    active_contact: Option<WorldEntityId>,
+    focal_object: Option<TrackedObjectId>,
+    grounded_orientation_v3: bool,
+) -> Result<Vec<ActionCandidate>, ScaffoldContractError> {
     if !matches!(
         profile,
         SensorProfile::GroundedObjectSlotsV1
@@ -200,7 +239,7 @@ pub fn enumerate_grounded_candidates_with_focus(
         return Err(ScaffoldContractError::InvalidPerceptionFrame);
     }
 
-    let terrain_vision = profile.has_terrain_vision();
+    let terrain_vision = profile.has_terrain_vision() || grounded_orientation_v3;
     let object_limit = if terrain_vision {
         // Leave room for locomotion, body/head orientation, and an explicit
         // hold-gaze command within the frozen 32-candidate foundation ABI.

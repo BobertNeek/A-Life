@@ -501,8 +501,9 @@ impl GpuPhenotypeUpload {
             hash[index * 2 + 1] = (value >> 32) as u32;
         }
         Ok(Self {
-            joint_motor_mode: (if phenotype.cognitive_architecture().schema_version()
-                == alife_core::genome::COGNITIVE_ARCHITECTURE_ORIENTATION_SCHEMA_VERSION
+            joint_motor_mode: (if matches!(phenotype.cognitive_architecture().schema_version(),
+                    alife_core::genome::COGNITIVE_ARCHITECTURE_ORIENTATION_SCHEMA_VERSION
+                    | alife_core::genome::COGNITIVE_ARCHITECTURE_GROUNDED_ORIENTATION_SCHEMA_VERSION)
             {
                 super::GPU_ORIENTATION_LAYOUT_V2_MARKER
             } else {

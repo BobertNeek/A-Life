@@ -41,8 +41,32 @@ fn from_pair(
     genome_bytes: &[u8],
     atp: Option<f32>,
 ) -> (CpuCanonicalHost, CpuFoundationTrainer) {
+    from_pair_with_repertoire(asset_bytes, genome_bytes, atp, false)
+}
+
+pub fn grounded_orientation_fixture() -> (CpuCanonicalHost, CpuFoundationTrainer) {
+    from_pair_with_repertoire(
+        include_bytes!("../../../../docs/experiments/astra-generalization-2026-11-13/pursuit-twohead-contact20.alife-foundation"),
+        include_bytes!("../../../../docs/experiments/astra-generalization-2026-11-13/pursuit-twohead-contact20.alife-foundation.genome.json"),
+        None, true)
+}
+
+fn from_pair_with_repertoire(
+    asset_bytes: &[u8],
+    genome_bytes: &[u8],
+    atp: Option<f32>,
+    orientation: bool,
+) -> (CpuCanonicalHost, CpuFoundationTrainer) {
     let asset = FoundationWeightAsset::decode_canonical(asset_bytes).unwrap();
-    let genome: CreatureGenome = serde_json::from_slice(genome_bytes).unwrap();
+    let mut genome: CreatureGenome = serde_json::from_slice(genome_bytes).unwrap();
+    if orientation {
+        for architecture in [
+            &mut genome.brain.construction.maternal_architecture,
+            &mut genome.brain.construction.paternal_architecture,
+        ] {
+            *architecture = architecture.with_grounded_orientation_v3(3).unwrap();
+        }
+    }
     assert!(
         genome
             .n2048_foundation_candidate
@@ -79,7 +103,15 @@ fn from_pair(
     .unwrap();
     assert_eq!(
         p.candidate_decoder().factorized_motor_channels(&p).unwrap(),
-        [MotorChannel::Locomotion, MotorChannel::Manipulation]
+        if orientation {
+            vec![
+                MotorChannel::Locomotion,
+                MotorChannel::Orientation,
+                MotorChannel::Manipulation,
+            ]
+        } else {
+            vec![MotorChannel::Locomotion, MotorChannel::Manipulation]
+        }
     );
     assert!(p
         .synapses()

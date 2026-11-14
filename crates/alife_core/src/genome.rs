@@ -117,6 +117,7 @@ pub struct CognitiveArchitectureGenomeParameters {
 /// Legacy constructors and serialized genomes retain their exact v1 behavior.
 pub const COGNITIVE_ARCHITECTURE_SCHEMA_VERSION: u16 = 1;
 pub const COGNITIVE_ARCHITECTURE_ORIENTATION_SCHEMA_VERSION: u16 = 2;
+pub const COGNITIVE_ARCHITECTURE_GROUNDED_ORIENTATION_SCHEMA_VERSION: u16 = 3;
 
 impl CognitiveArchitectureGenomeParameters {
     /// Opt in a fresh genome to independent orientation. This is not a save migration.
@@ -132,8 +133,28 @@ impl CognitiveArchitectureGenomeParameters {
         Ok(self)
     }
 
+    /// Fresh-genome opt-in to grounded orientation candidates. This changes no
+    /// senses or learned state and retains the V2 five-channel motor layout.
+    pub fn with_grounded_orientation_v3(
+        mut self,
+        motor_head_count: u8,
+    ) -> Result<Self, ScaffoldContractError> {
+        self.schema_version = COGNITIVE_ARCHITECTURE_GROUNDED_ORIENTATION_SCHEMA_VERSION;
+        self.motor_head_count = motor_head_count;
+        self.validate_contract()?;
+        Ok(self)
+    }
+
+    pub const fn grounded_orientation_repertoire(&self) -> bool {
+        self.schema_version == COGNITIVE_ARCHITECTURE_GROUNDED_ORIENTATION_SCHEMA_VERSION
+    }
+
     fn motor_head_bound(&self) -> usize {
-        if self.schema_version == COGNITIVE_ARCHITECTURE_ORIENTATION_SCHEMA_VERSION {
+        if matches!(
+            self.schema_version,
+            COGNITIVE_ARCHITECTURE_ORIENTATION_SCHEMA_VERSION
+                | COGNITIVE_ARCHITECTURE_GROUNDED_ORIENTATION_SCHEMA_VERSION
+        ) {
             5
         } else {
             crate::motor::MAX_MOTOR_CHANNELS
@@ -425,6 +446,7 @@ impl CognitiveArchitectureGenomeParameters {
             self.schema_version,
             COGNITIVE_ARCHITECTURE_SCHEMA_VERSION
                 | COGNITIVE_ARCHITECTURE_ORIENTATION_SCHEMA_VERSION
+                | COGNITIVE_ARCHITECTURE_GROUNDED_ORIENTATION_SCHEMA_VERSION
         ) || self.attention_capacity == 0
             || usize::from(self.attention_capacity) > crate::attention::MAX_FOCAL_TARGETS
             || self.active_concept_limit == 0
@@ -2402,6 +2424,59 @@ fn derive_seed(species_seed: u64, brain_class_id: BrainClassId, salt: u64) -> u6
 #[cfg(test)]
 mod orientation_layout_inheritance_tests {
     use super::*;
+    #[test]
+    fn grounded_orientation_v3_is_explicit_bounded_and_roundtrips() {
+        let legacy = CognitiveArchitectureGenomeParameters::canonical_default();
+        let v2 = legacy.with_independent_orientation_v2(2).unwrap();
+        let v3 = legacy.with_grounded_orientation_v3(2).unwrap();
+        assert!(!legacy.grounded_orientation_repertoire());
+        assert!(!v2.grounded_orientation_repertoire());
+        assert!(v3.grounded_orientation_repertoire());
+        let mut expected = serde_json::to_value(v2).unwrap();
+        expected["schema_version"] = 3.into();
+        assert_eq!(serde_json::to_value(v3).unwrap(), expected);
+        for parameters in [legacy, v2, v3] {
+            let bytes = serde_json::to_vec(&parameters).unwrap();
+            let restored: CognitiveArchitectureGenomeParameters =
+                serde_json::from_slice(&bytes).unwrap();
+            assert_eq!(parameters, restored);
+            assert_eq!(bytes, serde_json::to_vec(&restored).unwrap());
+        }
+        for heads in 1..=5 {
+            assert!(legacy.with_grounded_orientation_v3(heads).is_ok());
+        }
+        for heads in [0, 6, 255] {
+            assert!(legacy.with_grounded_orientation_v3(heads).is_err());
+        }
+        let mut malformed = expected;
+        malformed["motor_head_count"] = 6.into();
+        assert!(
+            serde_json::from_value::<CognitiveArchitectureGenomeParameters>(malformed).is_err()
+        );
+        let class = crate::BrainCapacityClass::n2048().id();
+        for receiver in [legacy, v2, v3] {
+            let mut bounds = Vec::new();
+            let child = receiver
+                .map_inherited_parameters(&v3, class, |a, _, lo, hi| {
+                    bounds.push((lo, hi));
+                    Ok(a.clamp(lo, hi))
+                })
+                .unwrap();
+            assert_eq!(child, receiver);
+            assert_eq!(
+                bounds[4],
+                (
+                    1.,
+                    if receiver.schema_version() == 1 {
+                        6.
+                    } else {
+                        5.
+                    }
+                )
+            );
+        }
+    }
+
     #[test]
     fn orientation_layout_mutation_bounds_and_parent_policy_are_explicit() {
         let old = CognitiveArchitectureGenomeParameters::canonical_default();

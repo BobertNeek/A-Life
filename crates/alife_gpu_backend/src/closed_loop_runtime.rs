@@ -4776,6 +4776,8 @@ impl GpuClosedLoopBackend {
         if resident.ownership.organism_id != frame.organism_id()
             || handle.organism_id != frame.organism_id()
             || resident.ownership.sensor_profile != frame.sensor_profile()
+            || resident.brain_slot.grounded_orientation_repertoire()
+                != frame.grounded_orientation_repertoire()
         {
             return Err(ScaffoldContractError::BrainOwnershipMismatch);
         }

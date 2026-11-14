@@ -167,10 +167,16 @@ pub struct GpuBrainSlot {
     ranges: GpuSlotWordRanges,
     decoder_input_stride: u32,
     sensor_profile_raw: u32,
+    // Host-only immutable capability derived from the validated phenotype.
+    grounded_orientation_repertoire: bool,
     brain_slot_index: u32,
     bucket_ownership_token: u64,
 }
 impl GpuBrainSlot {
+    pub(crate) const fn grounded_orientation_repertoire(&self) -> bool {
+        self.grounded_orientation_repertoire
+    }
+
     pub const fn sensor_profile_raw(&self) -> u32 {
         self.sensor_profile_raw
     }
@@ -596,6 +602,10 @@ impl GpuClassBucketPlan {
             ranges,
             decoder_input_stride: upload.decoder_plans[0].flattened_input_lane_count,
             sensor_profile_raw: upload.encoder_plans[0].sensor_profile_raw,
+            grounded_orientation_repertoire: phenotype
+                .cognitive_architecture()
+                .grounded_orientation_repertoire()
+                && phenotype.sensor_profile() == alife_core::SensorProfile::GroundedObjectSlotsV1,
             brain_slot_index: slot,
             bucket_ownership_token: self.bucket_ownership_token,
         };
@@ -2847,6 +2857,10 @@ impl GpuFixedClassArenaPlan {
             ranges: ranges.layout.clone(),
             decoder_input_stride: upload.decoder_plans[0].flattened_input_lane_count,
             sensor_profile_raw: upload.encoder_plans[0].sensor_profile_raw,
+            grounded_orientation_repertoire: phenotype
+                .cognitive_architecture()
+                .grounded_orientation_repertoire()
+                && phenotype.sensor_profile() == alife_core::SensorProfile::GroundedObjectSlotsV1,
             brain_slot_index: slot,
             bucket_ownership_token: self.arena_ownership_token,
         };
@@ -2895,6 +2909,8 @@ impl GpuFixedSlotUpload {
         next: &Self,
     ) -> Result<Range<usize>, GpuClosedLoopError> {
         if self.ranges != next.ranges
+            || self.brain_slot.grounded_orientation_repertoire
+                != next.brain_slot.grounded_orientation_repertoire
             || self.record() != next.record()
             || self.immutable_plan_words != next.immutable_plan_words
             || self.mutable_state_words.len() != next.mutable_state_words.len()
@@ -4586,6 +4602,121 @@ mod fixed_arena_tests {
         BrainGenome, DevelopmentState, NormalizedScalar, PhenotypeCompiler, SensorProfile, Tick,
         MAX_REPLAY_CAPTURE_SYNAPSES,
     };
+
+    #[test]
+    fn orientation_repertoire_admission_is_bound_in_both_slot_constructors() {
+        use alife_core::{
+            ActionCandidate, ActionId, ActionKind, ActionTarget, BodySnapshot,
+            CandidateActionFamily, CandidateFeatureVector, CandidateObservationRef, Confidence,
+            DriveSnapshot, DurationTicks, EndocrineSnapshot, HomeostaticSnapshot, OrganismId,
+            PerceptionContextBlock, PerceptionFrameDraft, Pose, SensorProfileProvenance,
+            SensoryAbiVersion, SensoryChannels, SensorySnapshot, Vec3f, Velocity,
+        };
+        let capacity = BrainCapacityClass::n512();
+        let base = BrainGenome::scaffold(2176, capacity.id());
+        let organism = OrganismId(2176);
+        let profile = SensorProfile::GroundedObjectSlotsV1;
+        let candidate = ActionCandidate::new(
+            0,
+            ActionId(1),
+            ActionKind::Hold,
+            CandidateActionFamily::Other,
+            CandidateObservationRef::None,
+            ActionTarget::NONE,
+            CandidateFeatureVector::zero(),
+            Confidence::new(1.).unwrap(),
+            NormalizedScalar::new(0.).unwrap(),
+            DurationTicks::new(1),
+            DurationTicks::new(1),
+        )
+        .unwrap();
+        let sensory = SensorySnapshot::new(
+            organism,
+            Tick::ZERO,
+            Vec3f::ZERO,
+            SensoryChannels::ZERO,
+            Default::default(),
+        )
+        .unwrap();
+        let body = BodySnapshot {
+            pose: Pose::IDENTITY,
+            velocity: Velocity::ZERO,
+        };
+        let homeostasis = HomeostaticSnapshot::new(
+            Tick::ZERO,
+            DriveSnapshot::baseline(),
+            EndocrineSnapshot::baseline(),
+        )
+        .unwrap();
+        let provenance =
+            SensorProfileProvenance::new(profile, SensoryAbiVersion::CURRENT, Tick::ZERO).unwrap();
+        let legacy = PerceptionFrameDraft::new(
+            organism,
+            Tick::ZERO,
+            profile,
+            sensory.clone(),
+            body,
+            homeostasis,
+            vec![candidate],
+            provenance,
+            vec![],
+        )
+        .unwrap()
+        .finalize(PerceptionContextBlock::empty())
+        .unwrap();
+        let v3_parameters = base
+            .cognitive_architecture()
+            .with_grounded_orientation_v3(2)
+            .unwrap();
+        let opted = PerceptionFrameDraft::new_with_grounded_orientation_v3(
+            organism,
+            Tick::ZERO,
+            profile,
+            sensory,
+            body,
+            homeostasis,
+            vec![candidate],
+            provenance,
+            vec![],
+            &v3_parameters,
+        )
+        .unwrap()
+        .finalize(PerceptionContextBlock::empty())
+        .unwrap();
+        for version in [1, 2, 3] {
+            let parameters = match version {
+                1 => *base.cognitive_architecture(),
+                2 => base
+                    .cognitive_architecture()
+                    .with_independent_orientation_v2(2)
+                    .unwrap(),
+                _ => v3_parameters,
+            };
+            let genome = base
+                .clone()
+                .with_cognitive_architecture(parameters)
+                .unwrap();
+            let development =
+                DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(1.).unwrap());
+            let phenotype =
+                PhenotypeCompiler::compile(&genome, &capacity, &development, profile).unwrap();
+            let mut bucket = GpuClassBucketPlan::new(capacity, 1).unwrap();
+            let dynamic = bucket.insert_phenotype(0, 1, &phenotype).unwrap();
+            let arena = GpuFixedClassArenaPlan::new(capacity, 1, 512 * 1024 * 1024).unwrap();
+            let fixed = arena.prepare_slot_upload(0, 1, &phenotype).unwrap();
+            for slot in [&dynamic, fixed.brain_slot()] {
+                assert_eq!(slot.grounded_orientation_repertoire(), version == 3);
+                assert_eq!(
+                    super::super::GpuPerceptionUpload::try_from_frame(&legacy, slot, 0).is_ok(),
+                    version != 3
+                );
+                assert_eq!(
+                    super::super::GpuPerceptionUpload::try_from_frame(&opted, slot, 0).is_ok(),
+                    version == 3
+                );
+            }
+        }
+    }
 
     fn policy_uploads() -> (GpuFixedSlotUpload, GpuFixedSlotUpload) {
         use alife_core::{FoundationWeightAsset, N2048LivePolicyTransition, TrainingStageManifest};
