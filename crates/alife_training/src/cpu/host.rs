@@ -143,8 +143,46 @@ pub struct CpuCanonicalHost {
     sampling_seed: u32,
     sampling_counter: u32,
 }
-#[derive(Clone, serde::Deserialize)]
+#[derive(Clone)]
 pub struct CpuCollectedDecision {
+    /// Present only for the versioned plan-2 JSON wire; not an auxiliary reward.
+    pub memory_plan2242: Option<MemoryPlanRow2242>,
+    pub joint_membership2177: Option<JointMembershipLiveReceipt2177>,
+    // Test-only capture from the exact call which charges this real native step.
+    // Not persisted, imported, reported as component-specific physiology, or
+    // included in diagnostic serialization.
+    #[cfg(test)]
+    pub(super) cognitive_cost_capture: Option<(CognitiveWorkCostPolicy, f32, f32, f32)>,
+    /// Explicitly requested cognitive action-phase/input facts, candidate aligned.
+    /// Ordinary preparation does not request these for reporting. Offboard viewers
+    /// use MemorySidecarState::inspect_execution_evidence instead. These are not
+    /// isolated physiological effects or a policy override.
+    pub executed_action_recall: Option<Vec<Option<alife_core::ExecutedActionRecallV1>>>,
+    /// Already included once in patch cognitive memory_ops, not an extra debit.
+    pub executed_action_recall_work: u64,
+    pub memory_readout_research: Option<CpuMemoryReadoutReceiptV1>,
+    pub terminal_context2135: Option<TerminalContextReceipt2135>,
+    pub organism_id: OrganismId,
+    /// Exact native sampling counter. Older diagnostic rows lack this evidence;
+    /// they remain readable but cannot be admitted as cooperative shards.
+    pub sampling_counter: Option<u32>,
+    pub initial: crate::TrainingInitialState,
+    pub replay_tick: crate::TrainingReplayTick,
+    pub action: crate::PpoJointAction,
+    pub final_features: Vec<f32>,
+    pub brain_work: BrainWorkCounters,
+    pub biological_reward: f32,
+    pub patch: ExperiencePatch,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MemoryPlanRow2242 {
+    pub phenotype_hash: PhenotypeHash,
+    pub memory_bound: f32,
+}
+#[derive(Clone, serde::Deserialize)]
+struct CollectedDecisionFlat2242 {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub joint_membership2177: Option<JointMembershipLiveReceipt2177>,
     // Test-only capture from the exact call which charges this real native step.
@@ -179,6 +217,101 @@ pub struct CpuCollectedDecision {
     pub biological_reward: f32,
     pub patch: ExperiencePatch,
 }
+impl From<CollectedDecisionFlat2242> for CpuCollectedDecision {
+    fn from(flat: CollectedDecisionFlat2242) -> Self {
+        Self {
+            memory_plan2242: None,
+            joint_membership2177: flat.joint_membership2177,
+            #[cfg(test)]
+            cognitive_cost_capture: flat.cognitive_cost_capture,
+            executed_action_recall: flat.executed_action_recall,
+            executed_action_recall_work: flat.executed_action_recall_work,
+            memory_readout_research: flat.memory_readout_research,
+            terminal_context2135: flat.terminal_context2135,
+            organism_id: flat.organism_id,
+            sampling_counter: flat.sampling_counter,
+            initial: flat.initial,
+            replay_tick: flat.replay_tick,
+            action: flat.action,
+            final_features: flat.final_features,
+            brain_work: flat.brain_work,
+            biological_reward: flat.biological_reward,
+            patch: flat.patch,
+        }
+    }
+}
+impl CpuCollectedDecision {
+    pub(super) fn validate_memory_plan2242(
+        &self,
+        phenotype: &alife_core::BrainPhenotype,
+    ) -> Result<(), crate::TrainingError> {
+        self.patch.validate_contract()?;
+        if self.patch.decision().neural_evidence()?.phenotype_hash != phenotype.phenotype_hash() {
+            return Err(super::invalid());
+        }
+        match (
+            phenotype
+                .candidate_decoder()
+                .memory_channel()
+                .filter(|p| p.schema_version() == 2),
+            &self.memory_plan2242,
+        ) {
+            (Some(plan), Some(record))
+                if record.phenotype_hash == phenotype.phenotype_hash()
+                    && record.memory_bound.to_bits() == plan.max_candidate_gain().to_bits() =>
+            {
+                Ok(())
+            }
+            (None, None) => Ok(()),
+            _ => Err(super::invalid()),
+        }
+    }
+}
+impl<'de> serde::Deserialize<'de> for CpuCollectedDecision {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        if !d.is_human_readable() {
+            return CollectedDecisionFlat2242::deserialize(d).map(Into::into);
+        }
+        let value = serde_json::Value::deserialize(d)?;
+        if value.get("memory_plan2_record_v1").is_some() {
+            #[derive(serde::Deserialize)]
+            #[serde(deny_unknown_fields)]
+            struct Envelope {
+                memory_plan2_record_v1: Payload,
+            }
+            #[derive(serde::Deserialize)]
+            #[serde(deny_unknown_fields)]
+            struct Payload {
+                plan: MemoryPlanRow2242,
+                row: CollectedDecisionFlat2242,
+            }
+            let envelope: Envelope =
+                serde_json::from_value(value).map_err(serde::de::Error::custom)?;
+            let payload = envelope.memory_plan2_record_v1;
+            let mut row: Self = payload.row.into();
+            let neural = row
+                .patch
+                .decision()
+                .neural_evidence()
+                .map_err(serde::de::Error::custom)?;
+            if !payload.plan.memory_bound.is_finite()
+                || payload.plan.memory_bound < 0.0
+                || neural.phenotype_hash != payload.plan.phenotype_hash
+            {
+                return Err(serde::de::Error::custom(
+                    "invalid plan-2 collected row identity",
+                ));
+            }
+            row.memory_plan2242 = Some(payload.plan);
+            Ok(row)
+        } else {
+            serde_json::from_value::<CollectedDecisionFlat2242>(value)
+                .map(Into::into)
+                .map_err(serde::de::Error::custom)
+        }
+    }
+}
+
 /// Shared-event research context and actual/reserved work, not isolated credit.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -231,7 +364,8 @@ mod terminal_row_wire;
 impl serde::Serialize for CpuCollectedDecision {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         // Preserve the original flat field order and omissions without cloning
-        // resident-derived arrays. Enabled rows are diagnostic-only envelopes.
+        // resident-derived arrays. Plan-2 envelopes support matching-reader training;
+        // the existing auxiliary research modes remain diagnostic-only.
         #[derive(serde::Serialize)]
         struct Flat<'a> {
             #[serde(skip_serializing_if = "Option::is_none")]
@@ -271,6 +405,26 @@ impl serde::Serialize for CpuCollectedDecision {
             biological_reward: &self.biological_reward,
             patch: &self.patch,
         };
+        if let Some(plan) = &self.memory_plan2242 {
+            if !serializer.is_human_readable() {
+                return Err(serde::ser::Error::custom(
+                    "plan-2 collected rows require the versioned JSON envelope",
+                ));
+            }
+            #[derive(serde::Serialize)]
+            struct Payload<'a, T> {
+                plan: &'a MemoryPlanRow2242,
+                row: &'a T,
+            }
+            #[derive(serde::Serialize)]
+            struct Envelope<'a, T> {
+                memory_plan2_record_v1: Payload<'a, T>,
+            }
+            return Envelope {
+                memory_plan2_record_v1: Payload { plan, row: &flat },
+            }
+            .serialize(serializer);
+        }
         if self
             .joint_membership2177
             .as_ref()
@@ -1818,6 +1972,15 @@ impl CpuCanonicalHost {
                         additional_work_ops: readout_work,
                     });
             decisions.push(CpuCollectedDecision {
+                memory_plan2242: founder
+                    .phenotype()
+                    .candidate_decoder()
+                    .memory_channel()
+                    .filter(|p| p.schema_version() == 2)
+                    .map(|p| MemoryPlanRow2242 {
+                        phenotype_hash: founder.phenotype().phenotype_hash(),
+                        memory_bound: p.max_candidate_gain(),
+                    }),
                 joint_membership2177,
                 #[cfg(test)]
                 cognitive_cost_capture,

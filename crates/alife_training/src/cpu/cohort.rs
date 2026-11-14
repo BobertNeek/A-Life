@@ -28,6 +28,9 @@ pub fn cpu_training_windows(
     burn_in: usize,
 ) -> Result<Vec<CpuResidualTrainingWindow>, TrainingError> {
     config.validate()?;
+    for row in decisions {
+        row.validate_memory_plan2242(founder.phenotype())?;
+    }
     if let Some(record) = terminal_record {
         record.validate_contract()?;
         if record.lifecycle().is_alive()

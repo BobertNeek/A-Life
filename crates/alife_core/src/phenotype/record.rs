@@ -43,6 +43,12 @@ impl CognitiveArchitecturePlan {
     pub const fn schema_version(&self) -> u16 {
         self.parameters.schema_version()
     }
+    pub const fn motor_layout_schema_version(&self) -> u16 {
+        self.parameters.motor_layout_schema_version()
+    }
+    pub const fn memory_candidate_bound(&self) -> f32 {
+        self.parameters.memory_candidate_bound()
+    }
     pub const fn grounded_orientation_repertoire(&self) -> bool {
         self.parameters.grounded_orientation_repertoire()
     }

@@ -501,7 +501,7 @@ impl GpuPhenotypeUpload {
             hash[index * 2 + 1] = (value >> 32) as u32;
         }
         Ok(Self {
-            joint_motor_mode: (if matches!(phenotype.cognitive_architecture().schema_version(),
+            joint_motor_mode: (if matches!(phenotype.cognitive_architecture().motor_layout_schema_version(),
                     alife_core::genome::COGNITIVE_ARCHITECTURE_ORIENTATION_SCHEMA_VERSION
                     | alife_core::genome::COGNITIVE_ARCHITECTURE_GROUNDED_ORIENTATION_SCHEMA_VERSION)
             {
@@ -590,4 +590,49 @@ fn split_digest(values: [u64; 4]) -> [u32; 8] {
         split[index * 2 + 1] = (value >> 32) as u32;
     }
     split
+}
+
+#[cfg(test)]
+mod memory_bound_motor_layout_tests {
+    #[test]
+    fn wrapped_motor_layout_keeps_gpu_orientation_dispatch() {
+        use alife_core::{
+            BrainCapacityClass, BrainGenome, DevelopmentState, NormalizedScalar, PhenotypeCompiler,
+            SensorProfile, Tick,
+        };
+        for (layout, bound) in [(1, 0.5), (2, 1.0), (3, 0.0)] {
+            let capacity = BrainCapacityClass::n2048();
+            let genome = BrainGenome::scaffold(2242, capacity.id());
+            let architecture = *genome.cognitive_architecture();
+            let architecture = match layout {
+                2 => architecture.with_independent_orientation_v2(3).unwrap(),
+                3 => architecture.with_grounded_orientation_v3(3).unwrap(),
+                _ => architecture,
+            }
+            .with_memory_candidate_bound_v4(bound)
+            .unwrap();
+            let genome = genome.with_cognitive_architecture(architecture).unwrap();
+            let development =
+                DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(0.8).unwrap());
+            let phenotype = PhenotypeCompiler::compile(
+                &genome,
+                &capacity,
+                &development,
+                SensorProfile::GroundedObjectSlotsV1,
+            )
+            .unwrap();
+            let upload = super::GpuPhenotypeUpload::try_from(&phenotype).unwrap();
+            let marker = if layout == 1 {
+                super::super::GPU_JOINT_SELECTION_V1_MARKER
+            } else {
+                super::super::GPU_ORIENTATION_LAYOUT_V2_MARKER
+            };
+            assert_eq!(upload.joint_motor_mode & 0xffff_0000, marker);
+            assert_eq!(upload.memory_channel_plans[0].schema_version, 2);
+            assert_eq!(upload.memory_channel_plans[0].max_candidate_gain, bound);
+            let mut bucket = crate::GpuClassBucketPlan::new(capacity, 1).unwrap();
+            bucket.insert_phenotype(0, 1, &phenotype).unwrap();
+            bucket.validate().unwrap();
+        }
+    }
 }

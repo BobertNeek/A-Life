@@ -82,6 +82,11 @@ impl PhenotypeGrowthMigration {
         source: &BrainPhenotype,
         source_inputs: &PhenotypeCompilerInputs,
     ) -> Result<Self, ScaffoldContractError> {
+        // This frozen growth recipe creates a legacy scaffold target. It cannot
+        // silently discard an inherited memory-bound extension.
+        if source.cognitive_architecture().schema_version() == 4 {
+            return Err(ScaffoldContractError::PhenotypeCompile);
+        }
         let source_capacity = BrainCapacityClass::n2048();
         source_inputs.validate_against(&source_capacity)?;
         source.validate_against(&source_capacity)?;

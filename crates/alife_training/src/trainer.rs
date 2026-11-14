@@ -2564,6 +2564,14 @@ fn pack_training_sequence(
     Ok(words)
 }
 
+fn packed_trainer_schema(memory_plan_version: Option<u16>) -> u32 {
+    if memory_plan_version == Some(2) {
+        2
+    } else {
+        TRAINER_SCHEMA_VERSION
+    }
+}
+
 fn build_step_headers(
     phenotype: &BrainPhenotype,
     layout: PackedLayout,
@@ -2581,7 +2589,14 @@ fn build_step_headers(
     let mut headers = Vec::with_capacity(total_steps as usize * HEADER_WORDS);
     for step in 0..total_steps {
         let mut header = [0_u32; HEADER_WORDS];
-        header[0] = TRAINER_SCHEMA_VERSION;
+        // Version two separates cognition from the genetic memory-only bound.
+        // Legacy/no-channel headers retain their original bytes and semantics.
+        header[0] = packed_trainer_schema(
+            phenotype
+                .candidate_decoder()
+                .memory_channel()
+                .map(|p| p.schema_version()),
+        );
         header[1] = phenotype.neuron_count();
         header[2] = phenotype.synapses().len() as u32;
         header[3] = recurrent_count;
@@ -3069,6 +3084,87 @@ mod signed_motor_policy_tests {
                 assert_eq!(meta[layout.synapse_records as usize + i * 8 + 7], expected);
             }
             assert!(motors > 0);
+        }
+    }
+}
+
+#[cfg(test)]
+mod memory_bound_header_tests {
+    #[test]
+    fn versioned_bound_training_shader_parses_and_validates() {
+        let source = super::TRAINER_WGSL;
+        assert!(source.contains("select(bitcast<f32>(h(56u)), 0.5, h(0u) == 2u)"));
+        assert!(source.contains("select(bitcast<f32>(h(56u)), cognitive_limit(), head == 4u)"));
+        let module = naga::front::wgsl::parse_str(source).expect("training WGSL parses");
+        naga::valid::Validator::new(
+            naga::valid::ValidationFlags::all(),
+            naga::valid::Capabilities::all(),
+        )
+        .validate(&module)
+        .expect("training WGSL validates");
+        // Nonzero cognitive signal is explicit, not inferred from g1024's
+        // absent CognitiveContext edges. This is a scalar contract check.
+        for (schema, memory_bound, expected) in [
+            (1, 0.0_f32, 0.0),
+            (1, 0.5, 1.0),
+            (2, 0.0, 0.5),
+            (2, 1.0, 1.25),
+        ] {
+            let cognitive_bound = if schema == 2 { 0.5 } else { memory_bound };
+            assert_eq!(
+                0.75_f32.clamp(-memory_bound, memory_bound)
+                    + 0.75_f32.clamp(-cognitive_bound, cognitive_bound),
+                expected
+            );
+        }
+    }
+    #[test]
+    fn plan_two_overflow_guards_precede_optimizer_writes() {
+        let source = super::TRAINER_WGSL;
+        assert!(source.contains("!finite(logit) || !finite(memory) || !finite(cognitive) || !finite(with_memory) || !finite(composed)"));
+        assert!(source.contains("let with_memory = logit + clamp(memory, -limit, limit);"));
+        assert!(source.contains(
+            "let composed = with_memory + clamp(cognitive, -cognitive_limit(), cognitive_limit());"
+        ));
+        assert_eq!(
+            source
+                .matches("var invalid = select(0u, 1u, plan_two_forward_invalid(lane));")
+                .count(),
+            2
+        );
+        for function in ["accumulate_weight_gradients", "apply_adamw"] {
+            let body = source
+                .split(&format!("fn {function}("))
+                .nth(1)
+                .unwrap()
+                .split("\n}")
+                .next()
+                .unwrap();
+            assert!(body.contains("load_output_f32(h(29u) + 3u) != 1.0"));
+        }
+        assert!(source.contains("if (h(0u) != 2u) { return false; }"));
+        // Finite inputs may overflow before clamping or at final composition.
+        let raw = f32::MAX + f32::MAX;
+        assert!(!raw.is_finite());
+        assert!(raw.clamp(-1.0, 1.0).is_finite());
+        let with_memory = f32::MAX + f32::MAX;
+        assert!(!with_memory.is_finite());
+        // No biological upper ceiling: representable results at MAX remain valid.
+        assert!((0.0_f32 + f32::MAX).is_finite());
+    }
+    #[test]
+    fn legacy_and_opt_in_header_semantics() {
+        for (plan, gain, expected_schema, expected_cognition) in [
+            (None, 0.0_f32, 1, 0.0_f32),
+            (Some(1), 0.5, 1, 0.5),
+            (Some(2), 0.0, 2, 0.5),
+            (Some(2), 0.5, 2, 0.5),
+            (Some(2), 1.0, 2, 0.5),
+        ] {
+            let schema = super::packed_trainer_schema(plan);
+            assert_eq!(schema, expected_schema);
+            let cognitive = if schema == 2 { 0.5 } else { gain };
+            assert_eq!(cognitive, expected_cognition);
         }
     }
 }

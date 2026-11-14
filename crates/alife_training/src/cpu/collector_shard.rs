@@ -301,6 +301,7 @@ pub fn admit_cpu_collector_shards(
             for decision in &trajectory.decisions {
                 let counter = decision.sampling_counter.ok_or_else(invalid)?;
                 decision.patch.validate_contract()?;
+                decision.validate_memory_plan2242(trainer.phenotype())?;
                 let neural = decision.patch.decision().neural_evidence()?;
                 if decision.organism_id != id
                     || decision.patch.header().organism_id != id

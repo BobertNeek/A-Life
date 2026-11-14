@@ -1371,3 +1371,117 @@ fn signed_motor_v3_founder_merge_keeps_motor_sign_and_rejects_other_routes_and_f
         }
     }
 }
+
+#[test]
+fn inherited_memory_bound_controls_forward_adjoint_and_replay_identity() {
+    let capacity = BrainCapacityClass::n2048();
+    let source =
+        FoundationWeightAsset::builtin_n2048_v1(SensorProfile::GroundedObjectSlotsV1).unwrap();
+    for bound in [0.0_f32, 0.5, 1.0] {
+        let genome = BrainGenome::scaffold(2242, capacity.id());
+        let architecture = genome
+            .cognitive_architecture()
+            .with_memory_candidate_bound_v4(bound)
+            .unwrap();
+        let genome = genome.with_cognitive_architecture(architecture).unwrap();
+        let development =
+            DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(0.8).unwrap());
+        let p = PhenotypeCompiler::compile_from_foundation_asset(
+            &genome,
+            &capacity,
+            &development,
+            SensorProfile::GroundedObjectSlotsV1,
+            &source,
+        )
+        .unwrap();
+        let t = trainer(&p, &source);
+        let mut q = sequence(&p, 1, 0);
+        q.ticks[0].candidates.truncate(1);
+        q.ticks[0].candidates[0].decoder_inputs.fill(0.0);
+        let family = q.ticks[0].candidates[0].family;
+        let (id, lane) = p
+            .synapses()
+            .iter()
+            .enumerate()
+            .find_map(|(id, s)| match s.kind() {
+                CompiledSynapseKind::Decoder(c)
+                    if c.head() == DecoderHeadKind::MemoryContext && c.family() == family =>
+                {
+                    Some((id, c.input_lane() as usize))
+                }
+                _ => None,
+            })
+            .unwrap();
+        let weights = t.checkpoint().weights;
+        for (i, s) in p.synapses().iter().enumerate() {
+            if matches!(s.kind(), CompiledSynapseKind::Decoder(_)) {
+                q.ticks[0].effective_weight_offsets[i] = -weights[i];
+            }
+        }
+        q.ticks[0].candidates[0].decoder_inputs[lane] = 1.0;
+        let zero = t.evaluate_replay(&q).unwrap().candidate_logits[0][0];
+        q.ticks[0].effective_weight_offsets[id] = 0.75 - weights[id];
+        let actual = t.evaluate_replay(&q).unwrap().candidate_logits[0][0] - zero;
+        near(actual, 0.75_f32.min(bound), 1e-6, 1e-6);
+        let derivative = t
+            .probe_replay_gradients(&q, &[vec![1.0]])
+            .unwrap()
+            .gradients[id];
+        assert_eq!(derivative, if bound <= 0.5 { 0.0 } else { 1.0 });
+        q.memory_candidate_gain = if bound == 0.5 { 1.0 } else { 0.5 };
+        assert!(t.evaluate_replay(&q).is_err());
+    }
+}
+
+#[test]
+fn plan2_extreme_finite_bound_rejects_raw_and_final_overflow() {
+    let capacity = BrainCapacityClass::n2048();
+    let genome = BrainGenome::scaffold(2242, capacity.id());
+    let architecture = genome
+        .cognitive_architecture()
+        .with_memory_candidate_bound_v4(f32::MAX)
+        .unwrap();
+    let genome = genome.with_cognitive_architecture(architecture).unwrap();
+    let development =
+        DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(0.8).unwrap());
+    let source =
+        FoundationWeightAsset::builtin_n2048_v1(SensorProfile::GroundedObjectSlotsV1).unwrap();
+    let p = PhenotypeCompiler::compile_from_foundation_asset(
+        &genome,
+        &capacity,
+        &development,
+        SensorProfile::GroundedObjectSlotsV1,
+        &source,
+    )
+    .unwrap();
+    let t = trainer(&p, &source);
+    let mut q = sequence(&p, 1, 0);
+    q.ticks[0].candidates.truncate(1);
+    q.ticks[0].candidates[0].decoder_inputs.fill(0.0);
+    let family = q.ticks[0].candidates[0].family;
+    let weights = t.checkpoint().weights;
+    let mut memory_terms = Vec::new();
+    for (i, s) in p.synapses().iter().enumerate() {
+        if let CompiledSynapseKind::Decoder(c) = s.kind() {
+            q.ticks[0].effective_weight_offsets[i] = -weights[i];
+            if c.head() == DecoderHeadKind::MemoryContext && c.family() == family {
+                memory_terms.push((i, c.input_lane() as usize));
+            }
+        }
+    }
+    let (first, lane) = memory_terms[0];
+    q.ticks[0].effective_weight_offsets[first] = f32::MAX;
+    q.ticks[0].candidates[0].decoder_inputs[lane] = 1.0;
+    assert!(q.validate_for(&p).is_ok());
+    assert!(t.evaluate_replay(&q).is_ok()); // finite maximum is not banned
+    let mut raw_overflow = q.clone();
+    let (second, lane) = memory_terms[1];
+    raw_overflow.ticks[0].effective_weight_offsets[second] = f32::MAX;
+    raw_overflow.ticks[0].candidates[0].decoder_inputs[lane] = 1.0;
+    assert!(raw_overflow.validate_for(&p).is_ok());
+    assert!(t.evaluate_replay(&raw_overflow).is_err());
+    let mut final_overflow = q;
+    final_overflow.ticks[0].candidates[0].innate_bias = f32::MAX;
+    assert!(final_overflow.validate_for(&p).is_ok());
+    assert!(t.evaluate_replay(&final_overflow).is_err());
+}

@@ -624,6 +624,17 @@ pub struct GpuMemoryChannelPlan {
 }
 
 impl GpuMemoryChannelPlan {
+    /// Plan version is independent of the unchanged dynamic context ABI.
+    pub(crate) fn has_valid_gain_contract(&self) -> bool {
+        self.max_candidate_gain.is_finite()
+            && self.max_candidate_gain >= 0.0
+            && match self.schema_version {
+                1 => self.max_candidate_gain.to_bits() == 0.5_f32.to_bits(),
+                2 => true,
+                _ => false,
+            }
+    }
+
     pub fn words(&self) -> &[u32; GPU_MEMORY_CHANNEL_PLAN_WORDS] {
         bytemuck::cast_ref(self)
     }
@@ -660,3 +671,63 @@ impl TryFrom<&MemoryChannelPlan> for GpuMemoryChannelPlan {
 #[cfg(test)]
 #[path = "closed_loop_memory/tests.rs"]
 mod tests;
+
+#[cfg(test)]
+mod memory_gain_contract_tests {
+    use super::*;
+
+    fn plan(schema: u32, gain: f32) -> GpuMemoryChannelPlan {
+        GpuMemoryChannelPlan {
+            schema_version: schema,
+            target_latent_lane_start: 24,
+            family_value_lane_start: 32,
+            decoder_input_stride: 36,
+            max_candidate_gain: gain,
+            memory_decoder_synapse_count: 96,
+            reserved: [0; 2],
+        }
+    }
+
+    #[test]
+    fn memory_gain_plan_preserves_legacy_words_and_versioned_bounds() {
+        let legacy = plan(1, 0.5);
+        assert_eq!(
+            legacy.words(),
+            &[1, 24, 32, 36, 0.5_f32.to_bits(), 96, 0, 0]
+        );
+        assert!(legacy.has_valid_gain_contract());
+        for gain in [0.0, 0.5, 2.0, f32::MAX] {
+            let p = plan(2, gain);
+            let roundtrip = GpuMemoryChannelPlan::from_words(p.words()).unwrap();
+            assert_eq!(roundtrip.words(), p.words());
+            assert!(roundtrip.has_valid_gain_contract());
+        }
+        for gain in [-1.0, f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+            assert!(!plan(2, gain).has_valid_gain_contract());
+        }
+        assert!(!plan(1, 2.0).has_valid_gain_contract());
+        assert!(!plan(1, 0.0).has_valid_gain_contract());
+        assert!(!plan(3, 0.5).has_valid_gain_contract());
+    }
+
+    #[test]
+    fn memory_gain_shader_keeps_context_v1_and_cognition_half() {
+        let source = include_str!("../shaders/closed_loop_memory_context.wgsl");
+        assert!(source.contains("const MEMORY_SCHEMA_VERSION:u32 = 1u;"));
+        assert!(source.contains("plan.schema_version == 2u"));
+        assert!(source.contains("clamp(delta, -plan.max_candidate_gain, plan.max_candidate_gain)"));
+        assert!(source.contains("clamp(cognitive_delta, -0.5, 0.5)"));
+        assert!(
+            source.contains("!finite_memory_value(with_memory) || !finite_memory_value(composed)")
+        );
+        assert!(source.contains("store_state_f32(logit_index, bitcast<f32>(0x7fc00000u));"));
+        let module = naga::front::wgsl::parse_str(CLOSED_LOOP_MEMORY_CONTEXT_WGSL)
+            .expect("memory context shader parses");
+        naga::valid::Validator::new(
+            naga::valid::ValidationFlags::all(),
+            naga::valid::Capabilities::all(),
+        )
+        .validate(&module)
+        .expect("memory context shader validates");
+    }
+}

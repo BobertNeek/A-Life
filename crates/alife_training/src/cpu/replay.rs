@@ -15,6 +15,22 @@ pub(super) fn route_fires(raw: u8, step: usize) -> bool {
         _ => false,
     }
 }
+fn cognitive_bound(p: &BrainPhenotype, legacy_memory_bound: f32) -> f32 {
+    cognitive_bound_for_plan(
+        p.candidate_decoder()
+            .memory_channel()
+            .map(|plan| plan.schema_version()),
+        legacy_memory_bound,
+    )
+}
+fn cognitive_bound_for_plan(version: Option<u16>, legacy_memory_bound: f32) -> f32 {
+    if version == Some(2) {
+        0.5
+    } else {
+        legacy_memory_bound
+    }
+}
+
 fn activate(x: f32, kind: ActivationFunction) -> f32 {
     match kind.raw() {
         0 => x,
@@ -90,6 +106,11 @@ impl SparseGraph {
         weights: &[f32],
         q: &TrainingSequence,
     ) -> Result<Tape, TrainingError> {
+        let split_bounds = p
+            .candidate_decoder()
+            .memory_channel()
+            .is_some_and(|plan| plan.schema_version() == 2);
+        let cognitive_limit = cognitive_bound(p, q.memory_candidate_gain);
         let n = p.neuron_count() as usize;
         let steps = p.microstep_count() as usize;
         let mut a = vec![q.initial.activations.clone()];
@@ -212,8 +233,22 @@ impl SparseGraph {
                 if let Some(binding) = &c.memory_readout {
                     memory += binding.contribution();
                 }
-                logit += memory.clamp(-q.memory_candidate_gain, q.memory_candidate_gain)
-                    + cognitive.clamp(-q.memory_candidate_gain, q.memory_candidate_gain);
+                if split_bounds && (!memory.is_finite() || !cognitive.is_finite()) {
+                    return Err(invalid());
+                }
+                let memory_term = memory.clamp(-q.memory_candidate_gain, q.memory_candidate_gain);
+                let cognitive_term = cognitive.clamp(-cognitive_limit, cognitive_limit);
+                if split_bounds {
+                    // Plan2 uses the runtime's left-associated order, rejecting
+                    // invalid intermediate sums rather than masking overflow.
+                    logit += memory_term;
+                    if !logit.is_finite() {
+                        return Err(invalid());
+                    }
+                    logit += cognitive_term;
+                } else {
+                    logit += memory_term + cognitive_term;
+                }
                 logits.push(logit);
                 mem.push(memory);
                 cog.push(cognitive);
@@ -298,7 +333,12 @@ impl SparseGraph {
                             } else {
                                 tape.cognitive[t][c]
                             };
-                            if raw > -q.memory_candidate_gain && raw < q.memory_candidate_gain {
+                            let bound = if coord.head() == DecoderHeadKind::MemoryContext {
+                                q.memory_candidate_gain
+                            } else {
+                                cognitive_bound(p, q.memory_candidate_gain)
+                            };
+                            if raw > -bound && raw < bound {
                                 gradients[id] += g * input;
                             }
                         }
@@ -479,5 +519,18 @@ impl SparseGraph {
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod memory_bound_compatibility_tests {
+    use super::*;
+    #[test]
+    fn old_absent_plan_stays_disabled_but_v2_zero_does_not_disable_cognition() {
+        assert_eq!(cognitive_bound_for_plan(None, 0.0), 0.0);
+        assert_eq!(cognitive_bound_for_plan(Some(1), 0.5), 0.5);
+        for memory_bound in [0.0, 0.5, 1.0, 4.0] {
+            assert_eq!(cognitive_bound_for_plan(Some(2), memory_bound), 0.5);
+        }
     }
 }

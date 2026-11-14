@@ -225,7 +225,16 @@ fn n2048_exact_graph_adamw_step_changes_only_the_masked_weight_and_exports() {
         }
     }
     let limit = replay.memory_candidate_gain;
-    expected += memory.clamp(-limit, limit) + cognitive.clamp(-limit, limit);
+    let cognitive_limit = if phenotype
+        .candidate_decoder()
+        .memory_channel()
+        .is_some_and(|p| p.schema_version() == 2)
+    {
+        0.5
+    } else {
+        limit
+    };
+    expected += memory.clamp(-limit, limit) + cognitive.clamp(-cognitive_limit, cognitive_limit);
     assert!((logits[0] - expected).abs() < 1.0e-5);
     assert_eq!(
         logits[0].to_bits(),
@@ -1390,4 +1399,15 @@ fn ppo_contract_read(
     drop(mapped);
     buffer.unmap();
     result
+}
+
+#[test]
+fn memory_gain_training_source_separates_cognitive_forward_and_adjoint() {
+    let source = include_str!("../shaders/foundation_train.wgsl");
+    assert!(source.contains(
+        "clamp(memory, -limit, limit) + clamp(cognitive, -cognitive_limit(), cognitive_limit())"
+    ));
+    assert!(source.contains("select(bitcast<f32>(h(56u)), cognitive_limit(), head == 4u)"));
+    assert!(source.contains("raw > -limit && raw < limit"));
+    assert!(source.contains("select(bitcast<f32>(h(56u)), 0.5, h(0u) == 2u)"));
 }

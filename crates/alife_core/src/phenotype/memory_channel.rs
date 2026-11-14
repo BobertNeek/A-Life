@@ -46,6 +46,15 @@ impl MemoryChannelPlan {
         Ok(value)
     }
 
+    pub(super) fn try_new_v2(count: u32, bound: f32) -> Result<Self, ScaffoldContractError> {
+        let mut value = Self::try_new_v1(count)?;
+        value.schema_version = 2;
+        value.max_candidate_gain = bound;
+        value.validate_shape()?;
+        value.canonical_digest = value.recompute_digest()?;
+        Ok(value)
+    }
+
     pub const fn schema_version(&self) -> u16 {
         self.schema_version
     }
@@ -81,12 +90,14 @@ impl MemoryChannelPlan {
 
     fn validate_shape(&self) -> Result<(), ScaffoldContractError> {
         let lane_width = Self::TARGET_LATENT_WIDTH + Self::FAMILY_VALUE_WIDTH;
-        if self.schema_version != MEMORY_CHANNEL_SCHEMA_VERSION
+        if !matches!(self.schema_version, 1 | 2)
             || self.target_latent_lane_start != CANDIDATE_FEATURE_COUNT as u32
             || self.family_value_lane_start
                 != self.target_latent_lane_start + Self::TARGET_LATENT_WIDTH
             || self.decoder_input_stride != self.target_latent_lane_start + lane_width
-            || self.max_candidate_gain.to_bits() != 0.5_f32.to_bits()
+            || !self.max_candidate_gain.is_finite()
+            || self.max_candidate_gain < 0.0
+            || (self.schema_version == 1 && self.max_candidate_gain.to_bits() != 0.5_f32.to_bits())
             || self.memory_decoder_synapse_count < Self::MINIMUM_SYNAPSE_COUNT
             || !self
                 .memory_decoder_synapse_count
@@ -127,8 +138,12 @@ impl<'de> Deserialize<'de> for MemoryChannelPlan {
         }
 
         let wire = Wire::deserialize(deserializer)?;
-        let expected =
-            Self::try_new_v1(wire.memory_decoder_synapse_count).map_err(D::Error::custom)?;
+        let expected = match wire.schema_version {
+            1 => Self::try_new_v1(wire.memory_decoder_synapse_count),
+            2 => Self::try_new_v2(wire.memory_decoder_synapse_count, wire.max_candidate_gain),
+            _ => return Err(D::Error::custom("unsupported memory-channel plan version")),
+        }
+        .map_err(D::Error::custom)?;
         if wire.schema_version != expected.schema_version
             || wire.target_latent_lane_start != expected.target_latent_lane_start
             || wire.family_value_lane_start != expected.family_value_lane_start
@@ -136,7 +151,9 @@ impl<'de> Deserialize<'de> for MemoryChannelPlan {
             || wire.max_candidate_gain.to_bits() != expected.max_candidate_gain.to_bits()
             || wire.canonical_digest != expected.canonical_digest
         {
-            return Err(D::Error::custom("memory-channel ABI does not match v1"));
+            return Err(D::Error::custom(
+                "memory-channel ABI does not match its declared version",
+            ));
         }
         Ok(expected)
     }
