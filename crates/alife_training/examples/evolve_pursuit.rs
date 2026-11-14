@@ -50,6 +50,7 @@ struct Variation {
     angle: f32,
     speed: f32,
     appearance: u8,
+    distance_scale: f32,
 }
 impl Default for Variation {
     fn default() -> Self {
@@ -57,6 +58,7 @@ impl Default for Variation {
             angle: 0.,
             speed: 1.,
             appearance: 0,
+            distance_scale: 1.,
         }
     }
 }
@@ -384,12 +386,19 @@ fn trial(
         .clone();
     let own = old.organism_id();
     let mirror = if seed.is_multiple_of(2) { 1. } else { -1. };
-    let initial_local = match scene {
+    let mut initial_local = match scene {
         "contact" | "toy" | "hazard" => Vec3f::new(0.25, 0., 0.),
         "toy-then-food" | "wait-then-food" => Vec3f::new(100., 0., 0.),
         "crossing" | "frozen-crossing" => Vec3f::new(2.5, 0., -mirror),
         _ => Vec3f::new(2.5, 0., 0.),
     };
+    if !matches!(
+        scene,
+        "contact" | "toy" | "hazard" | "toy-then-food" | "wait-then-food"
+    ) {
+        initial_local.x *= variation.distance_scale;
+        initial_local.z *= variation.distance_scale;
+    }
     let initial = variation.rotate(initial_local);
     let mut world = HeadlessScenarioBuilder::new(seed)
         .agent("hunter", own, Vec3f::ZERO)
@@ -470,10 +479,10 @@ fn trial(
             kind: WorldObjectKind::Obstacle,
             organism_id: None,
             position: variation.rotate(Vec3f::new(
-                1.25,
+                1.25 * variation.distance_scale,
                 0.,
                 if scene == "partial-obstacle" {
-                    0.45 * mirror
+                    0.45 * mirror * variation.distance_scale
                 } else {
                     0.
                 },
@@ -567,7 +576,7 @@ fn trial(
                     mirror * 0.4 * (t * 0.08).sin(),
                 )),
                 "orbiting" => variation.rotate(Vec3f::new(
-                    1.8 + 0.7 * (t * 0.028).cos(),
+                    initial_local.x - 0.7 + 0.7 * (t * 0.028).cos(),
                     0.,
                     mirror * 0.7 * (t * 0.028).sin(),
                 )),
@@ -626,6 +635,7 @@ fn trial(
                     "reward":row.biological_reward,"outcome":row.patch.outcome(),
                     "logits":replay.candidate_logits[0],"decoder_candidates":row.replay_tick.candidates,
                     "motor_activations": ([1760,1775,1776,1791,1824,1839].map(|i| row.final_features[i])),
+                    "hold_motor_activation":row.final_features[1823],
                     "position":host.world().entity(hunter).unwrap().position,
                     "steering":host.world().entity(hunter).unwrap().local_steering,
                     "body_yaw":host.world().entity(hunter).unwrap().body_yaw,
@@ -679,6 +689,8 @@ fn trial(
 fn run(base: &FoundationWeightAsset, p: &BrainPhenotype, r: Request) -> Result<serde_json::Value> {
     if !r.variation.angle.is_finite()
         || !r.variation.speed.is_finite()
+        || !r.variation.distance_scale.is_finite()
+        || !(0.5..=2.0).contains(&r.variation.distance_scale)
         || !(0.0..=4.0).contains(&r.variation.speed)
         || r.variation.appearance > 3
         || r.seeds == 0
@@ -760,7 +772,7 @@ fn run(base: &FoundationWeightAsset, p: &BrainPhenotype, r: Request) -> Result<s
     }
     Ok(
         json!({"backend":"native-cpu", "memory_cap":trainer.phenotype().candidate_decoder().memory_channel().map(|m|m.max_candidate_gain()), "base_digest":base.digest(),"candidate_digest":asset.digest(),
-        "assay_version":6,"hold_readout":r.hold_readout,"motor_heads":r.motor_heads,"variation":r.variation,"readout_scale":r.readout_scale,"bearing_gain":r.bearing_gain,"params":r.params,"memory_aversion":r.memory_aversion,"ticks":r.ticks,"seconds":start.elapsed().as_secs_f64(),"trials":trials}),
+        "assay_version":7,"hold_readout":r.hold_readout,"motor_heads":r.motor_heads,"variation":r.variation,"readout_scale":r.readout_scale,"bearing_gain":r.bearing_gain,"params":r.params,"memory_aversion":r.memory_aversion,"ticks":r.ticks,"seconds":start.elapsed().as_secs_f64(),"trials":trials}),
     )
 }
 
@@ -956,23 +968,31 @@ mod tests {
             &base,
         )
         .unwrap();
-        let result = trial(
-            &template,
-            &trainer,
-            2026111300,
-            "receding",
-            3,
-            true,
-            Variation {
-                angle: std::f32::consts::FRAC_PI_2,
-                speed: 0.,
-                appearance: 1,
-            },
-        )
-        .unwrap();
-        assert_eq!(result.target_motion.len(), 3);
-        assert!(result.target_motion.iter().all(|r| r["translated"] == 0.0));
-        assert!((result.target_motion[0]["current"]["z"].as_f64().unwrap() - 2.5).abs() < 1e-6);
+        for distance_scale in [1., 1.4] {
+            let result = trial(
+                &template,
+                &trainer,
+                2026111300,
+                "receding",
+                3,
+                true,
+                Variation {
+                    angle: std::f32::consts::FRAC_PI_2,
+                    speed: 0.,
+                    appearance: 1,
+                    distance_scale,
+                },
+            )
+            .unwrap();
+            assert_eq!(result.target_motion.len(), 3);
+            assert!(result.target_motion.iter().all(|r| r["translated"] == 0.0));
+            assert!(
+                (result.target_motion[0]["current"]["z"].as_f64().unwrap()
+                    - f64::from(2.5 * distance_scale))
+                .abs()
+                    < 1e-6
+            );
+        }
     }
 
     #[test]
