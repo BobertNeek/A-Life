@@ -595,3 +595,43 @@ this assay. On combined source `586ec40c`, 17 native example tests and eight
 Python auditor regressions passed, as did strict Clippy, release builds and
 formatting. That main update changed no runtime, World, biology or existing
 pursuit source; frozen physical trials retain their original executed pins.
+
+## Stationary-fixture correction (assay v16)
+
+`editor_move_object` records placement displacement as velocity. The old assay
+parked a secondary hazard at x=100 and then moved it beside the creature without
+clearing that velocity. Warm preparation similarly parked and restored secondary
+toys and obstacles. Their unchanged positions did not make the sensed motion
+zero. Assay v16 uses a placement-only helper to reset velocity at those explicit
+boundaries. It leaves physical target trajectories, ordinary carried-object
+motion and the World editor API unchanged. New native regressions cover the
+secondary hazard, warm hazard/toy/obstacle restoration, and retained editor motion.
+The result includes `fixture_placement: stationary-teleport-v1`.
+
+The bounded prospective comparison used all three previously reported long mixed
+cases (2026115410–5412), all three original founders, and both binaries: 18 lives.
+No weight, body, seed, difficulty or selection target changed. Every prospective
+old-fixture trial summary exactly reproduced its historical receipt. The
+baseline binary's pursuit, World, runtime and biology source matches pre-fix
+#357; the intervening #356 change only adds the separate MemoryContext example.
+
+| Mixed-food result | Original fixture | Corrected fixture |
+|---|---:|---:|
+| Contact20 meals | 3/3 | 3/3 |
+| Motion-child meals | 0/3 | 0/3 |
+| Paired-pain-child meals | 0/3 | 0/3 |
+
+Only Contact20 seed 2026115411 changed trial aggregates: its first meal moved
+from tick 91 to 69, with injury increasing from 0.4755995 to 0.4835354. The other
+eight paired trial summaries match. The fixture defect therefore has observable
+consequences, but it does not explain away the mixed-food tradeoff in these
+cases. This limited correction check does not requalify every historical food,
+obstacle or warm-preparation ranking. These original assays stop at first meal,
+death or the time limit, so eating does not demonstrate survival after eating.
+
+`fixture-correction-study.json` and `fixture-correction-results.jsonl.gz` retain
+the frozen plan, exact source/binary identities, requests, aggregates and paired
+comparisons. Original archives, genetic assets and source pins are unchanged.
+Source `86003cc4` passed 13 pursuit tests plus six MemoryContext-example tests,
+strict release Clippy, release builds and formatting. All results are native CPU;
+no hosted-CI, GPU, living-prey or common-parent promotion is claimed.
