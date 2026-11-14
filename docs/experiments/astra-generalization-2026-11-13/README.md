@@ -171,6 +171,74 @@ refer to a different target than the representative query. That concern was sent
 to the channel-observation owner rather than tuning a supposedly authenticated
 target memory or duplicating its fix.
 
+## Pain-responsive inspection and its limits
+
+Two further **comparison candidates**, both direct children of Contact20, address
+repeated harmful inspection. Contact20 remains the common parent; neither is a
+production default or a claim of learned hazard recognition.
+
+`pursuit-twohead-contact20-pain-inspect32` changes three weights: pain relay
+897→Inspect motor1761 gets +64 (index9552), negative reference910→1761 gets +23
+(10419), and that motor's input23 readout gets −32 (25713). The existing pain
+path is homeostasis257→reserve1953→core897. Native observations showed a weak
+new relay saturated; balancing it against the negative reference separated
+steady harmless activation around0.70 from painful activation around0.95–0.985.
+PyTorch calculated the direct genetic readout changes on those frozen states;
+physical behavior was then measured independently, rather than inferred from logits.
+
+`pursuit-twohead-contact20-inspect24` is the simpler comparator: one weight,
+Inspect motor1775/input23, changes0→−24 (25727), without a new pain relay.
+All other weights, all32768 synapse coordinates, and every construction-genome
+field except the embedded candidate are unchanged. Both exports include their
+full inherited two-head genomes and reload to identical14-scene outcomes.
+
+Nine three-case pilot variants used378 fresh lives. The frozen candidates then
+faced ten new seeds2026114000–4009,14 scenes each, with varied headings,
+appearances, speeds and starting distances, at256 world intervals.
+
+| Fresh comparison | Contact20 | Pain circuit | One-weight suppression |
+|---|---:|---:|---:|
+| Ordinary food consumed |97/110|97/110|97/110|
+| Deaths in20 hazard lives |9|0|0|
+| Hazard→food meals |1/10|3/10|4/10|
+| Sum of final hazard injury |16.260|12.115|11.559|
+| Toy Ingest selections |915|802|802|
+| Failed Ingest bundles, all140 lives |3540|3230|3156|
+| Same97 meals, summed intervals |5824|5803|5981|
+
+The same97 individual ordinary-food cases succeed; there are no hidden exchanged
+wins/losses. The pain circuit preserves meal speed; the simpler edit takes2.7%
+longer. These are matched native CPU results, not a general intelligence score.
+
+**Longer exposure remains unsolved.** At a1024-interval budget on three additional
+seeds, all three lone-hazard lives die under every policy. Baseline neural decision
+counts before death are406/174/185, versus604/615/663 for the pain circuit and
+635/652/657 for the simpler edit. Decision counts are not elapsed world time.
+Mixed hazard→food successes are1/3,2/3 and1/3 respectively; the pain circuit loses
+the baseline's successful case and wins two different cases. Thus the short-run
+survival benefit postpones some deaths; it does not establish sustained avoidance.
+
+**The feature dependency is real.** Both readouts use object input23, terrain[1],
+which is0.5 in the original fixtures. New matched controls at0/0.25/1 confirm that
+the survival benefit disappears at zero. The static candidate matches all eight
+zero-feature trials exactly. The pain candidate matches seven exactly; one mixed
+life changes a single Inspect/Contact selection and small distance/energy/drive
+values, while survival, consumption and final injury still match. At terrain1,
+the pain candidate also loses one mixed food outcome relative to its control.
+Useful investigation, longer care loops, GPU operation and live prey remain outside
+this qualification. Lowering an overly strong inspection prior is promising;
+these results do not establish target-specific avoidance memory.
+
+`pain-inspection-study.json` contains the pilots, held-out pairs, negative controls,
+exact binary/source hashes, genetic differences and export identities. The archive
+now contains615 requests and6680 trials. Reproduce `pain14-heldout-balanced-g32-r0-0`
+against Contact20, or `pain14-reload-balanced-g32-r0` against the exported pain
+candidate. Assayv9 adds sparse genetic edits and relay observations. V10 adds
+matched object-property variation, complete action-motor observations and explicit
+world-step counts; all previous fields match v9 on14 scenes. Nine native tests,
+strict Clippy and release build pass on source40257068, including the merged
+tick64 trace-removal regression from #350. Raw neural traces remain local.
+
 ## Earlier verified improvement
 
 Ten fresh paired cases (sampling seeds 2026112500–2509), four appearances, five
