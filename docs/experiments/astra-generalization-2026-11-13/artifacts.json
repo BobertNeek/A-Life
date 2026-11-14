@@ -45,6 +45,22 @@
     "pursuit-twohead-contact20-inspect24.alife-foundation.genome.json": {
       "sha256": "2db3323128adc84230f77ed08e1c8decb98125977c583e3648a8f586b480bdea",
       "bytes": 205947
+    },
+    "pursuit-twohead-contact20-momentum128-paired16-withdraw1024.alife-foundation": {
+      "sha256": "e732d29e6d3111307690b8dab08e189de4736678432f6c36f7d77ad62edf7b94",
+      "bytes": 131581
+    },
+    "pursuit-twohead-contact20-momentum128-paired16-withdraw1024.alife-foundation.genome.json": {
+      "sha256": "b20b4b2539f21f8b0c24491ff768a3f38acda7709aecb31be7a627ad73c9c9d2",
+      "bytes": 206022
+    },
+    "pursuit-twohead-contact20-momentum128-withdraw1024-relief50.alife-foundation": {
+      "sha256": "73eaf36c3eb66d3ab3abd9bf3d0d68943a36f575eac7986842e6c62c1c113900",
+      "bytes": 131581
+    },
+    "pursuit-twohead-contact20-momentum128-withdraw1024-relief50.alife-foundation.genome.json": {
+      "sha256": "25d28849ae83db8fc40acc484aa19765338eb1257e6a3fdb9c7c8c8e26833b60",
+      "bytes": 206020
     }
   },
   "working_best": {
@@ -235,6 +251,25 @@
         "foundation_sha256": "f9bd6da726f11a259936ee8564916aad7d22322543fd819731eb425cb05e21ae",
         "genome_sha256": "3fa5498e5d209f8ec6a88f18599762beb5175e49bce00e1611cd3fc6f8528055",
         "status": "stronger research descendant; common-parent adoption pending; mixed hazard/food feeding remains weak"
+      }
+    ]
+  },
+  "withdrawal_research": {
+    "study": "withdrawal-study.json",
+    "archive": "withdrawal-results.jsonl.gz",
+    "shared_parent_unchanged": "Contact20",
+    "candidates": [
+      {
+        "asset": "pursuit-twohead-contact20-momentum128-paired16-withdraw1024.alife-foundation",
+        "foundation_sha256": "e732d29e6d3111307690b8dab08e189de4736678432f6c36f7d77ad62edf7b94",
+        "genome_sha256": "b20b4b2539f21f8b0c24491ff768a3f38acda7709aecb31be7a627ad73c9c9d2",
+        "status": "evaluated cumulative research descendant; shared-parent adoption pending"
+      },
+      {
+        "asset": "pursuit-twohead-contact20-momentum128-withdraw1024-relief50.alife-foundation",
+        "foundation_sha256": "73eaf36c3eb66d3ab3abd9bf3d0d68943a36f575eac7986842e6c62c1c113900",
+        "genome_sha256": "25d28849ae83db8fc40acc484aa19765338eb1257e6a3fdb9c7c8c8e26833b60",
+        "status": "evaluated cumulative research descendant; shared-parent adoption pending"
       }
     ]
   }

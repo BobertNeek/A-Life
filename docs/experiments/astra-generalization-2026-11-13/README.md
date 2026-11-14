@@ -585,3 +585,87 @@ this assay. On combined source `586ec40c`, 17 native example tests and eight
 Python auditor regressions passed, as did strict Clippy, release builds and
 formatting. That main update changed no runtime, World, biology or existing
 pursuit source; frozen physical trials retain their original executed pins.
+
+## Withdrawal and sustained care
+
+`withdrawal-study.json` and `withdrawal-results.jsonl.gz` preserve this next
+cumulative step. Contact20 remains the coordinated common parent. The two new
+research foundations both include complete construction genomes; their
+MemoryContext coefficients, body genes and synapse coordinates are unchanged.
+
+Starting from the paired-pain motion child, `withdraw1024` adds four weights:
+core 898 feeds Avoid motor 1794, and matched reference 911 feeds motor 1792.
+Their difference contributes `1024 * (m1794 - m1792) * observed_contact`.
+This uses sensed contact and the existing internal pain circuit, with no hidden
+hazard label. The next child, `relief50`, literally reloads that exported parent
+and halves only the six paired Contact release/restraint decoder weights.
+
+The initial frozen comparison covered ten varied cases and fourteen scenes,
+including five low-energy biology-prepared and five higher-energy lives after
+600 actual empty-host decisions. The lighter release child was then checked on
+these same preserved cases as exposed transfer controls, after separate fresh
+follow-ups; it is not called an unopened heldout comparison.
+
+| Ten-case comparison | Paired-pain parent | Withdraw1024 | Relief50 |
+|---|---:|---:|---:|
+| Ordinary food goals | 109/110 | 109/110 | 109/110 |
+| Mixed hazard/food meals | 0/10 | 3/10 | 5/10 |
+| Lone-hazard survivors | 10/10 | 10/10 | 10/10 |
+| Mean final lone-hazard injury | 0.4622 | 0.4637 | 0.4661 |
+
+All three fail the same moving-obstacle case. Withdraw1024 retains all 109
+parent meals but takes 4,615 versus 4,604 intervals for them. Relief50 exchanges
+two previously successful mixed cases for four new successes; it is not a
+pointwise improvement. In a separate fresh four-case follow-up, mixed meals were
+0/4, 2/4 and 3/4 respectively; all retained 16/16 ordinary meals and eight
+immediate/delayed hazard survivals. Three further fresh full-scene cases gave
+Withdraw1024 and Relief50 32/33 ordinary meals and 1/3 mixed meals each, again
+exchanging which mixed case worked. Their lone-hazard injury sums were 1.3592
+and 1.4426. These costs and failures remain part of the comparison.
+
+An exposed trace showed Withdraw1024 getting beyond 0.8 m from the hazard at
+interval 19 and eating at interval 108; its parent never ate by 256. It also
+selected Avoid on food fourteen times. This is a useful pain/contact response,
+not learned identification of which object caused pain. Independent PyTorch
+replay matched native activation values within 2.98e-8. Each exported child
+reloads to identical fourteen-scene physical and neural-admission results.
+
+### Continuing after the meal
+
+Assay v15 adds opt-in `variation.continue_after_consumption`. It records the
+first meal once, then continues ordinary World and brain execution to the time
+limit or actual death, without adding food or altering physiology. Default-off
+retains the original first-meal endpoint. A native test verifies that the first
+meal's entire trace is an exact prefix of the continued life, that the first
+meal time is retained, and that the consumed object remains consumed.
+
+Three fresh cases compared all four founders for 1,024 intervals. Each included
+stationary food, a lone hazard, and mixed hazard/food, across low-energy,
+higher-energy, and higher-energy host-experienced preparation:
+
+| Sustained-care outcome | Contact20 | Paired-pain parent | Withdraw1024 | Relief50 |
+|---|---:|---:|---:|---:|
+| Stationary food eaten and alive at 1,024 | 3/3 | 3/3 | 3/3 | 3/3 |
+| Lone-hazard survivors | 0/3 | 3/3 | 3/3 | 3/3 |
+| Mixed-case meals | 2/3 | 0/3 | 1/3 | 0/3 |
+| Mixed-case survivors | 0/3 | 3/3 | 3/3 | 3/3 |
+| Mixed cases with both a meal and survival | 0/3 | 0/3 | 1/3 | 0/3 |
+
+Contact20's two mixed meals occurred at intervals 31 and 34, followed by deaths
+at 240 and 242. The survival improvement is substantial in these fixtures, but
+sustained feeding while hurt remains unsolved. Relief50 improves the broader
+first-meal comparison; Withdraw1024 is the stronger mixed-care control in this
+small postmeal cohort. Neither is described as a universal champion.
+
+A separate untuned boundary probe retained waiting/food-arrival behavior and
+showed both motion descendants completing the higher-energy centered-obstacle
+case that Contact20 failed. All three failed the faster crossing target in the
+low-energy condition and passed in the higher-energy condition. This is not a
+maze-solving or interception proof, nor a live-prey hunting result.
+
+Twelve native assay tests, strict release Clippy, a release build and formatting
+pass on source `3827d874`. Earlier v14 physical results keep their original
+source/binary pins. The archive contains aggregate outcomes and requests,
+including diagnostic repetitions, not independent populations or a claim of
+statistical significance. Raw neural traces and historical checkpoints remain
+local; no acquired neural or optimizer arrays are published.

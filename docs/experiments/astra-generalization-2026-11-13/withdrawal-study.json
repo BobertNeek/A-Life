@@ -1,0 +1,1582 @@
+{
+  "method": "Direct cumulative genetic weight edits, native CPU experiments and independent PyTorch replay; feedback-informed hill climbing, not a one-shot replication of the MIT protocol.",
+  "paper": "https://rikiyat.github.io/blog/weight-space-programming/",
+  "common_parent_unchanged": "Contact20",
+  "plans": {
+    "pilot-plan": {
+      "parent_sha256": "f9bd6da726f11a259936ee8564916aad7d22322543fd819731eb425cb05e21ae",
+      "binary_sha256": "c6cb087c8478a874214cdd24e102992c7c1076c33263aea558b9186058abc9f8",
+      "source": "dc2733dc200c3b294d78921e796c752f98de6bfa",
+      "variants": [
+        [
+          "contact64",
+          [
+            [
+              9632,
+              2.0
+            ],
+            [
+              10482,
+              2.0
+            ],
+            [
+              26402,
+              64.0
+            ],
+            [
+              26400,
+              -64.0
+            ]
+          ]
+        ],
+        [
+          "contact256",
+          [
+            [
+              9632,
+              2.0
+            ],
+            [
+              10482,
+              2.0
+            ],
+            [
+              26402,
+              256.0
+            ],
+            [
+              26400,
+              -256.0
+            ]
+          ]
+        ],
+        [
+          "contact1024",
+          [
+            [
+              9632,
+              2.0
+            ],
+            [
+              10482,
+              2.0
+            ],
+            [
+              26402,
+              1024.0
+            ],
+            [
+              26400,
+              -1024.0
+            ]
+          ]
+        ]
+      ],
+      "conditions": [
+        "hungry-cold",
+        "energetic-cold",
+        "energetic-warm"
+      ],
+      "seed": 2026115301,
+      "ticks": 512,
+      "mechanism": "Existing phase-balanced pain signal also feeds paired Avoid motors. New score is gain*(motor1794-motor1792)*observed_contact. It targets physically contacted objects, with no hazard label or hidden World query. Goal is prompt withdrawal before injury disables movement, leaving time to reach food. Baseline release alone can restrain handling but remain trapped near the hazard.",
+      "controls": "Reuse completed paired16 condition results from pursuit15; full genotype and exact coordinate preservation verified. Source and recipient dynamics match; observed_contact includes body contact and carrying, which is an explicit limitation.",
+      "selection": "Retain stationary meals and lone-hazard survival in all three conditions, then maximize mixed meals and reduce injury. This is an exposed-case pilot, not a promotion.",
+      "next_fresh_seeds": [
+        2026115500,
+        2026115501,
+        2026115502,
+        2026115503,
+        2026115504,
+        2026115505,
+        2026115506,
+        2026115507,
+        2026115508,
+        2026115509
+      ]
+    },
+    "fresh-plan": {
+      "parent_sha256": "f9bd6da726f11a259936ee8564916aad7d22322543fd819731eb425cb05e21ae",
+      "binary_sha256": "e5d94d069e79ff98527ff018a964b4562e6744319aabce6ebf50c27e9f03da4f",
+      "source": "dab9fa14a3cba07349b400664df334d84b6fc25f",
+      "variants": [
+        [
+          "parent",
+          []
+        ],
+        [
+          "contact256",
+          [
+            [
+              9632,
+              2.0
+            ],
+            [
+              10482,
+              2.0
+            ],
+            [
+              26402,
+              256.0
+            ],
+            [
+              26400,
+              -256.0
+            ]
+          ]
+        ],
+        [
+          "contact1024",
+          [
+            [
+              9632,
+              2.0
+            ],
+            [
+              10482,
+              2.0
+            ],
+            [
+              26402,
+              1024.0
+            ],
+            [
+              26400,
+              -1024.0
+            ]
+          ]
+        ]
+      ],
+      "seeds": [
+        2026115500,
+        2026115501,
+        2026115502,
+        2026115503,
+        2026115504,
+        2026115505,
+        2026115506,
+        2026115507,
+        2026115508,
+        2026115509
+      ],
+      "selection": "Frozen comparison of both pilot variants with one mixed-food success. Preserve ordinary food success and survival; compare mixed meals and paired injury at matched durations. No variant chosen using these cases yet.",
+      "conditions": "First 5 cases low-energy biology preparation; last 5 high-energy actual600-host preparation. Rotation, appearance, speed and terrain varied. All 14 scenes;512 decisions. Moving Food remains surrogate.",
+      "frozen": true
+    },
+    "relief-plan": {
+      "parent_sha256": "f9bd6da726f11a259936ee8564916aad7d22322543fd819731eb425cb05e21ae",
+      "binary_sha256": "e5d94d069e79ff98527ff018a964b4562e6744319aabce6ebf50c27e9f03da4f",
+      "source": "dab9fa14a3cba07349b400664df334d84b6fc25f",
+      "variants": [
+        [
+          "relief25",
+          [
+            [
+              9632,
+              2.0
+            ],
+            [
+              10482,
+              2.0
+            ],
+            [
+              26402,
+              1024.0
+            ],
+            [
+              26400,
+              -1024.0
+            ],
+            [
+              26529,
+              -576.0
+            ],
+            [
+              26530,
+              576.0
+            ],
+            [
+              26785,
+              72.0
+            ],
+            [
+              26786,
+              -72.0
+            ],
+            [
+              26865,
+              18.0
+            ],
+            [
+              26866,
+              -18.0
+            ]
+          ]
+        ],
+        [
+          "relief50",
+          [
+            [
+              9632,
+              2.0
+            ],
+            [
+              10482,
+              2.0
+            ],
+            [
+              26402,
+              1024.0
+            ],
+            [
+              26400,
+              -1024.0
+            ],
+            [
+              26529,
+              -384.0
+            ],
+            [
+              26530,
+              384.0
+            ],
+            [
+              26785,
+              48.0
+            ],
+            [
+              26786,
+              -48.0
+            ],
+            [
+              26865,
+              12.0
+            ],
+            [
+              26866,
+              -12.0
+            ]
+          ]
+        ],
+        [
+          "relief75",
+          [
+            [
+              9632,
+              2.0
+            ],
+            [
+              10482,
+              2.0
+            ],
+            [
+              26402,
+              1024.0
+            ],
+            [
+              26400,
+              -1024.0
+            ],
+            [
+              26529,
+              -192.0
+            ],
+            [
+              26530,
+              192.0
+            ],
+            [
+              26785,
+              24.0
+            ],
+            [
+              26786,
+              -24.0
+            ],
+            [
+              26865,
+              6.0
+            ],
+            [
+              26866,
+              -6.0
+            ]
+          ]
+        ]
+      ],
+      "seed": 2026115301,
+      "conditions": [
+        "hungry-cold",
+        "energetic-cold",
+        "energetic-warm"
+      ],
+      "ticks": 512,
+      "reason": "Provisional additive descendants of contact1024, not an accepted common-parent change. Reduce only six paired Contact release/restraint decoder weights while retaining the new Avoid circuit. Hypothesis: withdrawal protects from repeated damage, allowing less prolonged manipulation restraint and earlier food consumption. Exposed pilot seed; frozen fresh comparison is unaffected.",
+      "selection": "Require all stationary meals and lone-hazard survival, then mixed meals and injury. A candidate is not promoted from this pilot."
+    },
+    "followup-plan": {
+      "parent_sha256": "f9bd6da726f11a259936ee8564916aad7d22322543fd819731eb425cb05e21ae",
+      "binary_sha256": "e5d94d069e79ff98527ff018a964b4562e6744319aabce6ebf50c27e9f03da4f",
+      "source": "dab9fa14a3cba07349b400664df334d84b6fc25f",
+      "variants": [
+        [
+          "parent",
+          []
+        ],
+        [
+          "contact1024",
+          [
+            [
+              9632,
+              2.0
+            ],
+            [
+              10482,
+              2.0
+            ],
+            [
+              26402,
+              1024.0
+            ],
+            [
+              26400,
+              -1024.0
+            ]
+          ]
+        ],
+        [
+          "relief50",
+          [
+            [
+              9632,
+              2.0
+            ],
+            [
+              10482,
+              2.0
+            ],
+            [
+              26402,
+              1024.0
+            ],
+            [
+              26400,
+              -1024.0
+            ],
+            [
+              26529,
+              -384.0
+            ],
+            [
+              26530,
+              384.0
+            ],
+            [
+              26785,
+              48.0
+            ],
+            [
+              26786,
+              -48.0
+            ],
+            [
+              26865,
+              12.0
+            ],
+            [
+              26866,
+              -12.0
+            ]
+          ]
+        ]
+      ],
+      "seeds": [
+        2026115700,
+        2026115701,
+        2026115702,
+        2026115703
+      ],
+      "scenes": [
+        "contact",
+        "stationary",
+        "moving-obstacle",
+        "toy",
+        "toy-then-food",
+        "hazard",
+        "hazard-choice",
+        "delayed-hazard"
+      ],
+      "ticks": 512,
+      "selection": "Exposed5301 relief25 and relief50 both2/3mixed meals; relief50 chosen for lower summed lone-hazard injury1.394 versus1.512. Relief75 and unchangedcontact1024 had1/3. All variants keptstationary3/3andlonehazards3/3. This new comparison freezes the selectedrelief50 against both its immediate and paired16 parents.",
+      "conditions": "Two low-energy biology-prepared cases and two high-energy actual600-host-prepared cases, varied appearance/rotation/terrain/speed. Focused transfer including delayed pain; not a replacement for every gameplay/self-care skill.",
+      "frozen": true
+    },
+    "relief-validation-plan": {
+      "source": "dab9fa14a3cba07349b400664df334d84b6fc25f",
+      "binary_sha256": "e5d94d069e79ff98527ff018a964b4562e6744319aabce6ebf50c27e9f03da4f",
+      "parent_sha256": "e732d29e6d3111307690b8dab08e189de4736678432f6c36f7d77ad62edf7b94",
+      "parent_genome_sha256": "b20b4b2539f21f8b0c24491ff768a3f38acda7709aecb31be7a627ad73c9c9d2",
+      "variants": [
+        [
+          "withdraw1024",
+          []
+        ],
+        [
+          "relief50",
+          [
+            [
+              26529,
+              -384.0
+            ],
+            [
+              26530,
+              384.0
+            ],
+            [
+              26785,
+              48.0
+            ],
+            [
+              26786,
+              -48.0
+            ],
+            [
+              26865,
+              12.0
+            ],
+            [
+              26866,
+              -12.0
+            ]
+          ]
+        ]
+      ],
+      "seeds": [
+        2026115900,
+        2026115901,
+        2026115902
+      ],
+      "ticks": 512,
+      "selection": "Cumulative child now literally loads the exported withdraw1024 parent and edits onlysix Contact decoder weights. Frozen generalization check after relief50 achieved3/4mixed meals versus2/4in prior fresh followup, retaining16/16ordinaryfood and all immediate/delayedhazard survivals. Retain no new ordinary-food or survival loss; assess mixed gains across both frozen comparisons, with exact losses reported.",
+      "conditions": "Two low-energy biology600 and one high-energy realhost600 case. Fourteen original scenes, varied rotation, appearance, target speed and terrain. Diagnostic export is not common-parent promotion.",
+      "frozen": true
+    },
+    "relief-broad-plan": {
+      "source": "dab9fa14a3cba07349b400664df334d84b6fc25f",
+      "binary_sha256": "e5d94d069e79ff98527ff018a964b4562e6744319aabce6ebf50c27e9f03da4f",
+      "foundation_sha256": "73eaf36c3eb66d3ab3abd9bf3d0d68943a36f575eac7986842e6c62c1c113900",
+      "genome_sha256": "25d28849ae83db8fc40acc484aa19765338eb1257e6a3fdb9c7c8c8e26833b60",
+      "cases": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "seeds": [
+        2026115500,
+        2026115501,
+        2026115502,
+        2026115503,
+        2026115504,
+        2026115505,
+        2026115506,
+        2026115507,
+        2026115508,
+        2026115509
+      ],
+      "controls": "Reuse the completed native fresh-parent/contact1024 results on these exact cases; no control rerun or historical recovery claim. These cases are now exposed transfer controls, not unopened heldouts.",
+      "reason": "Relief50 kept32/33ordinaryfood and allsurvival on3fresh full-scene cases, tied1/3mixed meals but exchangedone gain/loss. Across prior4-casefollowup plus3newcases it has4/7mixed versus3/7forwithdraw1024. Check all ten earlier full-scene controls before selecting it as next research parent.",
+      "frozen": true
+    },
+    "boundary-plan": {
+      "source": "dab9fa14a3cba07349b400664df334d84b6fc25f",
+      "binary_sha256": "e5d94d069e79ff98527ff018a964b4562e6744319aabce6ebf50c27e9f03da4f",
+      "variants": [
+        [
+          "contact20",
+          "d83a995e802e41b8e17799b0871f75d9ede35f95850049777323112e636654d1"
+        ],
+        [
+          "paired16",
+          "f9bd6da726f11a259936ee8564916aad7d22322543fd819731eb425cb05e21ae"
+        ],
+        [
+          "withdraw1024",
+          "e732d29e6d3111307690b8dab08e189de4736678432f6c36f7d77ad62edf7b94"
+        ]
+      ],
+      "seeds": [
+        2026115800,
+        2026115801
+      ],
+      "scenes": [
+        "obstacle",
+        "wait-then-food",
+        "frozen-crossing",
+        "crossing"
+      ],
+      "speed": 2.5,
+      "ticks": 512,
+      "purpose": "Untuned boundary probe: fully centered obstacle, empty wait then food arrival, frozen versus faster crossing target. Compare actual exported founders; no new edits, fitness screen or promotion. Two conditions are deliberately different; compare each genotype within condition, not causally across histories.",
+      "conditions": [
+        "low-energy biology600",
+        "high-energy actualhost600"
+      ]
+    },
+    "postmeal-plan": {
+      "source": "3827d874d105debe0dee0a15644f7eab5c432148",
+      "binary_sha256": "85f0b69af8a573f695e9edaf3d4a82dc4d2094477a5589489317104b10c7c55e",
+      "variants": [
+        [
+          "contact20",
+          "d83a995e802e41b8e17799b0871f75d9ede35f95850049777323112e636654d1",
+          "557da394c045d0b4353009c842825677aa7505f636d6252b20f67bfe0c3a5189"
+        ],
+        [
+          "paired16",
+          "f9bd6da726f11a259936ee8564916aad7d22322543fd819731eb425cb05e21ae",
+          "3fa5498e5d209f8ec6a88f18599762beb5175e49bce00e1611cd3fc6f8528055"
+        ],
+        [
+          "withdraw1024",
+          "e732d29e6d3111307690b8dab08e189de4736678432f6c36f7d77ad62edf7b94",
+          "b20b4b2539f21f8b0c24491ff768a3f38acda7709aecb31be7a627ad73c9c9d2"
+        ],
+        [
+          "relief50",
+          "73eaf36c3eb66d3ab3abd9bf3d0d68943a36f575eac7986842e6c62c1c113900",
+          "25d28849ae83db8fc40acc484aa19765338eb1257e6a3fdb9c7c8c8e26833b60"
+        ]
+      ],
+      "seeds": [
+        2026116200,
+        2026116201,
+        2026116202
+      ],
+      "scenes": [
+        "stationary",
+        "hazard",
+        "hazard-choice"
+      ],
+      "ticks": 1024,
+      "conditions": [
+        "low-energy biology600",
+        "high-energy biology600",
+        "high-energy actualhost600"
+      ],
+      "purpose": "Continue after first meal without respawning food or changing World. Score eating AND remaining alive at1024, retaining first-meal time and actual deaths. Existing first-meal tests can stop before the consequences of ongoing hazard contact. This tests the complete body trajectory, not just the meal trigger. Four fixed exported genotypes; no mutation, reward shaping or new learning head.",
+      "frozen": true
+    }
+  },
+  "broad_comparison": {
+    "paired16": {
+      "ordinary_meals": 109,
+      "ordinary_trials": 110,
+      "ordinary_ate_and_alive": 109,
+      "mixed_meals": 0,
+      "mixed_ate_and_alive": 0,
+      "mixed_survivors": 10,
+      "mixed_trials": 10,
+      "hazard_survivors": 10,
+      "hazard_trials": 10,
+      "mean_hazard_injury": 0.46222318708896637,
+      "food_failures": [
+        [
+          2026115504,
+          "moving-obstacle"
+        ]
+      ],
+      "mixed_results": [
+        {
+          "seed": 2026115500,
+          "ate": false,
+          "alive": true,
+          "intervals": 512,
+          "meal_tick": null,
+          "injury": 0.45313334465026855
+        },
+        {
+          "seed": 2026115501,
+          "ate": false,
+          "alive": true,
+          "intervals": 512,
+          "meal_tick": null,
+          "injury": 0.46386194229125977
+        },
+        {
+          "seed": 2026115502,
+          "ate": false,
+          "alive": true,
+          "intervals": 512,
+          "meal_tick": null,
+          "injury": 0.4631175100803375
+        },
+        {
+          "seed": 2026115503,
+          "ate": false,
+          "alive": true,
+          "intervals": 512,
+          "meal_tick": null,
+          "injury": 0.46356645226478577
+        },
+        {
+          "seed": 2026115504,
+          "ate": false,
+          "alive": true,
+          "intervals": 512,
+          "meal_tick": null,
+          "injury": 0.46463075280189514
+        },
+        {
+          "seed": 2026115505,
+          "ate": false,
+          "alive": true,
+          "intervals": 512,
+          "meal_tick": null,
+          "injury": 0.46282222867012024
+        },
+        {
+          "seed": 2026115506,
+          "ate": false,
+          "alive": true,
+          "intervals": 512,
+          "meal_tick": null,
+          "injury": 0.4637320935726166
+        },
+        {
+          "seed": 2026115507,
+          "ate": false,
+          "alive": true,
+          "intervals": 512,
+          "meal_tick": null,
+          "injury": 0.4633966386318207
+        },
+        {
+          "seed": 2026115508,
+          "ate": false,
+          "alive": true,
+          "intervals": 512,
+          "meal_tick": null,
+          "injury": 0.4627474248409271
+        },
+        {
+          "seed": 2026115509,
+          "ate": false,
+          "alive": true,
+          "intervals": 512,
+          "meal_tick": null,
+          "injury": 0.46266770362854004
+        }
+      ]
+    },
+    "withdraw1024": {
+      "ordinary_meals": 109,
+      "ordinary_trials": 110,
+      "ordinary_ate_and_alive": 109,
+      "mixed_meals": 3,
+      "mixed_ate_and_alive": 3,
+      "mixed_survivors": 10,
+      "mixed_trials": 10,
+      "hazard_survivors": 10,
+      "hazard_trials": 10,
+      "mean_hazard_injury": 0.4636985152959824,
+      "food_failures": [
+        [
+          2026115504,
+          "moving-obstacle"
+        ]
+      ],
+      "mixed_results": [
+        {
+          "seed": 2026115500,
+          "ate": true,
+          "alive": true,
+          "intervals": 110,
+          "meal_tick": 109,
+          "injury": 0.14740920066833496
+        },
+        {
+          "seed": 2026115501,
+          "ate": false,
+          "alive": true,
+          "intervals": 512,
+          "meal_tick": null,
+          "injury": 0.45319077372550964
+        },
+        {
+          "seed": 2026115502,
+          "ate": false,
+          "alive": true,
+          "intervals": 512,
+          "meal_tick": null,
+          "injury": 0.45318078994750977
+        },
+        {
+          "seed": 2026115503,
+          "ate": true,
+          "alive": true,
+          "intervals": 278,
+          "meal_tick": 277,
+          "injury": 0.4428546130657196
+        },
+        {
+          "seed": 2026115504,
+          "ate": false,
+          "alive": true,
+          "intervals": 512,
+          "meal_tick": null,
+          "injury": 0.4676790237426758
+        },
+        {
+          "seed": 2026115505,
+          "ate": false,
+          "alive": true,
+          "intervals": 512,
+          "meal_tick": null,
+          "injury": 0.43955740332603455
+        },
+        {
+          "seed": 2026115506,
+          "ate": false,
+          "alive": true,
+          "intervals": 512,
+          "meal_tick": null,
+          "injury": 0.46363916993141174
+        },
+        {
+          "seed": 2026115507,
+          "ate": false,
+          "alive": true,
+          "intervals": 512,
+          "meal_tick": null,
+          "injury": 0.46390989422798157
+        },
+        {
+          "seed": 2026115508,
+          "ate": true,
+          "alive": true,
+          "intervals": 95,
+          "meal_tick": 94,
+          "injury": 0.09351828694343567
+        },
+        {
+          "seed": 2026115509,
+          "ate": false,
+          "alive": true,
+          "intervals": 512,
+          "meal_tick": null,
+          "injury": 0.4628218114376068
+        }
+      ]
+    },
+    "relief50": {
+      "ordinary_meals": 109,
+      "ordinary_trials": 110,
+      "ordinary_ate_and_alive": 109,
+      "mixed_meals": 5,
+      "mixed_ate_and_alive": 5,
+      "mixed_survivors": 10,
+      "mixed_trials": 10,
+      "hazard_survivors": 10,
+      "hazard_trials": 10,
+      "mean_hazard_injury": 0.4661373019218445,
+      "food_failures": [
+        [
+          2026115504,
+          "moving-obstacle"
+        ]
+      ],
+      "mixed_results": [
+        {
+          "seed": 2026115500,
+          "ate": true,
+          "alive": true,
+          "intervals": 127,
+          "meal_tick": 126,
+          "injury": 0.1472049504518509
+        },
+        {
+          "seed": 2026115501,
+          "ate": true,
+          "alive": true,
+          "intervals": 68,
+          "meal_tick": 67,
+          "injury": 0.05327514186501503
+        },
+        {
+          "seed": 2026115502,
+          "ate": true,
+          "alive": true,
+          "intervals": 225,
+          "meal_tick": 224,
+          "injury": 0.4164886176586151
+        },
+        {
+          "seed": 2026115503,
+          "ate": false,
+          "alive": true,
+          "intervals": 512,
+          "meal_tick": null,
+          "injury": 0.46449148654937744
+        },
+        {
+          "seed": 2026115504,
+          "ate": true,
+          "alive": true,
+          "intervals": 98,
+          "meal_tick": 97,
+          "injury": 0.09346986562013626
+        },
+        {
+          "seed": 2026115505,
+          "ate": false,
+          "alive": true,
+          "intervals": 512,
+          "meal_tick": null,
+          "injury": 0.4533185064792633
+        },
+        {
+          "seed": 2026115506,
+          "ate": false,
+          "alive": true,
+          "intervals": 512,
+          "meal_tick": null,
+          "injury": 0.4530400335788727
+        },
+        {
+          "seed": 2026115507,
+          "ate": true,
+          "alive": true,
+          "intervals": 91,
+          "meal_tick": 90,
+          "injury": 0.12060031294822693
+        },
+        {
+          "seed": 2026115508,
+          "ate": false,
+          "alive": true,
+          "intervals": 512,
+          "meal_tick": null,
+          "injury": 0.4628535509109497
+        },
+        {
+          "seed": 2026115509,
+          "ate": false,
+          "alive": true,
+          "intervals": 512,
+          "meal_tick": null,
+          "injury": 0.4628218114376068
+        }
+      ]
+    }
+  },
+  "first_frozen_comparison": {
+    "parent": {
+      "all": {
+        "ordinary_food": 109,
+        "ordinary_food_trials": 110,
+        "mixed_food": 0,
+        "mixed_trials": 10,
+        "lone_hazard_survivors": 10,
+        "deaths": 0,
+        "failed_ingest_bundles": 2140,
+        "toy_ingest_selections": 1427,
+        "lone_hazard_injury_sum": 4.622231870889664,
+        "admitted_microsteps": {
+          "2": 11067,
+          "3": 9409
+        },
+        "food_failures": [
+          [
+            2026115504,
+            "moving-obstacle"
+          ]
+        ]
+      },
+      "low": {
+        "ordinary_food": 54,
+        "ordinary_food_trials": 55,
+        "mixed_food": 0,
+        "mixed_trials": 5,
+        "lone_hazard_survivors": 5,
+        "deaths": 0,
+        "failed_ingest_bundles": 1551,
+        "toy_ingest_selections": 973,
+        "lone_hazard_injury_sum": 2.3344040513038635,
+        "admitted_microsteps": {
+          "2": 11067
+        },
+        "food_failures": [
+          [
+            2026115504,
+            "moving-obstacle"
+          ]
+        ]
+      },
+      "high_host600": {
+        "ordinary_food": 55,
+        "ordinary_food_trials": 55,
+        "mixed_food": 0,
+        "mixed_trials": 5,
+        "lone_hazard_survivors": 5,
+        "deaths": 0,
+        "failed_ingest_bundles": 589,
+        "toy_ingest_selections": 454,
+        "lone_hazard_injury_sum": 2.2878278195858,
+        "admitted_microsteps": {
+          "3": 9409
+        },
+        "food_failures": []
+      }
+    },
+    "contact256": {
+      "all": {
+        "ordinary_food": 109,
+        "ordinary_food_trials": 110,
+        "mixed_food": 0,
+        "mixed_trials": 10,
+        "lone_hazard_survivors": 10,
+        "deaths": 0,
+        "failed_ingest_bundles": 2109,
+        "toy_ingest_selections": 1423,
+        "lone_hazard_injury_sum": 4.607109427452087,
+        "admitted_microsteps": {
+          "2": 11063,
+          "3": 9424
+        },
+        "food_failures": [
+          [
+            2026115504,
+            "moving-obstacle"
+          ]
+        ]
+      },
+      "low": {
+        "ordinary_food": 54,
+        "ordinary_food_trials": 55,
+        "mixed_food": 0,
+        "mixed_trials": 5,
+        "lone_hazard_survivors": 5,
+        "deaths": 0,
+        "failed_ingest_bundles": 1547,
+        "toy_ingest_selections": 979,
+        "lone_hazard_injury_sum": 2.299166977405548,
+        "admitted_microsteps": {
+          "2": 11063
+        },
+        "food_failures": [
+          [
+            2026115504,
+            "moving-obstacle"
+          ]
+        ]
+      },
+      "high_host600": {
+        "ordinary_food": 55,
+        "ordinary_food_trials": 55,
+        "mixed_food": 0,
+        "mixed_trials": 5,
+        "lone_hazard_survivors": 5,
+        "deaths": 0,
+        "failed_ingest_bundles": 562,
+        "toy_ingest_selections": 444,
+        "lone_hazard_injury_sum": 2.3079424500465393,
+        "admitted_microsteps": {
+          "3": 9424
+        },
+        "food_failures": []
+      },
+      "matched_parent": {
+        "food_losses": [],
+        "food_gains": [],
+        "shared_meals": 109,
+        "parent_shared_intervals": 4604,
+        "child_shared_intervals": 4615,
+        "mixed_gains": [],
+        "mixed_losses": []
+      }
+    },
+    "contact1024": {
+      "all": {
+        "ordinary_food": 109,
+        "ordinary_food_trials": 110,
+        "mixed_food": 3,
+        "mixed_trials": 10,
+        "lone_hazard_survivors": 10,
+        "deaths": 0,
+        "failed_ingest_bundles": 2114,
+        "toy_ingest_selections": 1424,
+        "lone_hazard_injury_sum": 4.636985152959824,
+        "admitted_microsteps": {
+          "2": 10427,
+          "3": 9007
+        },
+        "food_failures": [
+          [
+            2026115504,
+            "moving-obstacle"
+          ]
+        ]
+      },
+      "low": {
+        "ordinary_food": 54,
+        "ordinary_food_trials": 55,
+        "mixed_food": 2,
+        "mixed_trials": 5,
+        "lone_hazard_survivors": 5,
+        "deaths": 0,
+        "failed_ingest_bundles": 1551,
+        "toy_ingest_selections": 980,
+        "lone_hazard_injury_sum": 2.314384937286377,
+        "admitted_microsteps": {
+          "2": 10427
+        },
+        "food_failures": [
+          [
+            2026115504,
+            "moving-obstacle"
+          ]
+        ]
+      },
+      "high_host600": {
+        "ordinary_food": 55,
+        "ordinary_food_trials": 55,
+        "mixed_food": 1,
+        "mixed_trials": 5,
+        "lone_hazard_survivors": 5,
+        "deaths": 0,
+        "failed_ingest_bundles": 563,
+        "toy_ingest_selections": 444,
+        "lone_hazard_injury_sum": 2.3226002156734467,
+        "admitted_microsteps": {
+          "3": 9007
+        },
+        "food_failures": []
+      },
+      "matched_parent": {
+        "food_losses": [],
+        "food_gains": [],
+        "shared_meals": 109,
+        "parent_shared_intervals": 4604,
+        "child_shared_intervals": 4615,
+        "mixed_gains": [
+          [
+            2026115500,
+            "hazard-choice"
+          ],
+          [
+            2026115503,
+            "hazard-choice"
+          ],
+          [
+            2026115508,
+            "hazard-choice"
+          ]
+        ],
+        "mixed_losses": []
+      }
+    }
+  },
+  "followups": {
+    "followup": {
+      "parent": {
+        "ordinary_meals": 16,
+        "ordinary_trials": 16,
+        "mixed_meals": 0,
+        "mixed_trials": 4,
+        "hazard_survivors": 8,
+        "hazard_trials": 8,
+        "hazard_injury_sum": 3.675735265016556,
+        "mixed_results": [
+          [
+            2026115700,
+            false,
+            512,
+            0.453182190656662
+          ],
+          [
+            2026115701,
+            false,
+            512,
+            0.4532332420349121
+          ],
+          [
+            2026115702,
+            false,
+            512,
+            0.4683375358581543
+          ],
+          [
+            2026115703,
+            false,
+            512,
+            0.4686475694179535
+          ]
+        ]
+      },
+      "contact1024": {
+        "ordinary_meals": 16,
+        "ordinary_trials": 16,
+        "mixed_meals": 2,
+        "mixed_trials": 4,
+        "hazard_survivors": 8,
+        "hazard_trials": 8,
+        "hazard_injury_sum": 3.6722517609596252,
+        "mixed_results": [
+          [
+            2026115700,
+            false,
+            512,
+            0.46468326449394226
+          ],
+          [
+            2026115701,
+            true,
+            95,
+            0.07999661564826965
+          ],
+          [
+            2026115702,
+            true,
+            70,
+            0.06677798181772232
+          ],
+          [
+            2026115703,
+            false,
+            512,
+            0.46845921874046326
+          ]
+        ]
+      },
+      "relief50": {
+        "ordinary_meals": 16,
+        "ordinary_trials": 16,
+        "mixed_meals": 3,
+        "mixed_trials": 4,
+        "hazard_survivors": 8,
+        "hazard_trials": 8,
+        "hazard_injury_sum": 3.6801110208034515,
+        "mixed_results": [
+          [
+            2026115700,
+            false,
+            512,
+            0.46681150794029236
+          ],
+          [
+            2026115701,
+            true,
+            71,
+            0.08029010146856308
+          ],
+          [
+            2026115702,
+            true,
+            59,
+            0.06691590696573257
+          ],
+          [
+            2026115703,
+            true,
+            241,
+            0.21342682838439941
+          ]
+        ]
+      }
+    },
+    "validate": {
+      "withdraw1024": {
+        "ordinary_meals": 32,
+        "ordinary_trials": 33,
+        "mixed_meals": 1,
+        "mixed_trials": 3,
+        "hazard_survivors": 3,
+        "hazard_trials": 3,
+        "hazard_injury_sum": 1.3592490553855896,
+        "mixed_results": [
+          [
+            2026115900,
+            false,
+            512,
+            0.4531722962856293
+          ],
+          [
+            2026115901,
+            true,
+            128,
+            0.10663137584924698
+          ],
+          [
+            2026115902,
+            false,
+            512,
+            0.46342989802360535
+          ]
+        ]
+      },
+      "relief50": {
+        "ordinary_meals": 32,
+        "ordinary_trials": 33,
+        "mixed_meals": 1,
+        "mixed_trials": 3,
+        "hazard_survivors": 3,
+        "hazard_trials": 3,
+        "hazard_injury_sum": 1.4426094591617584,
+        "mixed_results": [
+          [
+            2026115900,
+            false,
+            512,
+            0.46720683574676514
+          ],
+          [
+            2026115901,
+            false,
+            512,
+            0.46451398730278015
+          ],
+          [
+            2026115902,
+            true,
+            54,
+            0.039919644594192505
+          ]
+        ]
+      }
+    }
+  },
+  "postmeal_comparison": {
+    "contact20": {
+      "ordinary_meals": 3,
+      "ordinary_trials": 3,
+      "ordinary_ate_and_alive": 3,
+      "mixed_meals": 2,
+      "mixed_ate_and_alive": 0,
+      "mixed_survivors": 0,
+      "mixed_trials": 3,
+      "hazard_survivors": 0,
+      "hazard_trials": 3,
+      "mean_hazard_injury": 1.0,
+      "food_failures": [],
+      "mixed_results": [
+        {
+          "seed": 2026116200,
+          "ate": false,
+          "alive": false,
+          "intervals": 712,
+          "meal_tick": null,
+          "injury": 1.0
+        },
+        {
+          "seed": 2026116201,
+          "ate": true,
+          "alive": false,
+          "intervals": 240,
+          "meal_tick": 31,
+          "injury": 1.0
+        },
+        {
+          "seed": 2026116202,
+          "ate": true,
+          "alive": false,
+          "intervals": 242,
+          "meal_tick": 34,
+          "injury": 1.0
+        }
+      ]
+    },
+    "paired16": {
+      "ordinary_meals": 3,
+      "ordinary_trials": 3,
+      "ordinary_ate_and_alive": 3,
+      "mixed_meals": 0,
+      "mixed_ate_and_alive": 0,
+      "mixed_survivors": 3,
+      "mixed_trials": 3,
+      "hazard_survivors": 3,
+      "hazard_trials": 3,
+      "mean_hazard_injury": 0.45002328356107074,
+      "food_failures": [],
+      "mixed_results": [
+        {
+          "seed": 2026116200,
+          "ate": false,
+          "alive": true,
+          "intervals": 1024,
+          "meal_tick": null,
+          "injury": 0.4643460512161255
+        },
+        {
+          "seed": 2026116201,
+          "ate": false,
+          "alive": true,
+          "intervals": 1024,
+          "meal_tick": null,
+          "injury": 0.4461386203765869
+        },
+        {
+          "seed": 2026116202,
+          "ate": false,
+          "alive": true,
+          "intervals": 1024,
+          "meal_tick": null,
+          "injury": 0.43279823660850525
+        }
+      ]
+    },
+    "withdraw1024": {
+      "ordinary_meals": 3,
+      "ordinary_trials": 3,
+      "ordinary_ate_and_alive": 3,
+      "mixed_meals": 1,
+      "mixed_ate_and_alive": 1,
+      "mixed_survivors": 3,
+      "mixed_trials": 3,
+      "hazard_survivors": 3,
+      "hazard_trials": 3,
+      "mean_hazard_injury": 0.4508403142293294,
+      "food_failures": [],
+      "mixed_results": [
+        {
+          "seed": 2026116200,
+          "ate": true,
+          "alive": true,
+          "intervals": 1024,
+          "meal_tick": 114,
+          "injury": 0.463268518447876
+        },
+        {
+          "seed": 2026116201,
+          "ate": false,
+          "alive": true,
+          "intervals": 1024,
+          "meal_tick": null,
+          "injury": 0.4558887481689453
+        },
+        {
+          "seed": 2026116202,
+          "ate": false,
+          "alive": true,
+          "intervals": 1024,
+          "meal_tick": null,
+          "injury": 0.46361446380615234
+        }
+      ]
+    },
+    "relief50": {
+      "ordinary_meals": 3,
+      "ordinary_trials": 3,
+      "ordinary_ate_and_alive": 3,
+      "mixed_meals": 0,
+      "mixed_ate_and_alive": 0,
+      "mixed_survivors": 3,
+      "mixed_trials": 3,
+      "hazard_survivors": 3,
+      "hazard_trials": 3,
+      "mean_hazard_injury": 0.46124990781148273,
+      "food_failures": [],
+      "mixed_results": [
+        {
+          "seed": 2026116200,
+          "ate": false,
+          "alive": true,
+          "intervals": 1024,
+          "meal_tick": null,
+          "injury": 0.46779727935791016
+        },
+        {
+          "seed": 2026116201,
+          "ate": false,
+          "alive": true,
+          "intervals": 1024,
+          "meal_tick": null,
+          "injury": 0.4658217132091522
+        },
+        {
+          "seed": 2026116202,
+          "ate": false,
+          "alive": true,
+          "intervals": 1024,
+          "meal_tick": null,
+          "injury": 0.4589691162109375
+        }
+      ]
+    }
+  },
+  "exports": {
+    "export-validation.json": {
+      "trials": 14,
+      "candidate_digest_exact": true,
+      "physical_and_admission_metrics_exact": true,
+      "synapse_coordinates_exact": true,
+      "changed_weights": [
+        [
+          9632,
+          0.0,
+          2.0
+        ],
+        [
+          10482,
+          0.0,
+          2.0
+        ],
+        [
+          26400,
+          0.0,
+          -1024.0
+        ],
+        [
+          26402,
+          0.0,
+          1024.0
+        ]
+      ],
+      "changed_genome_fields": [
+        "n2048_foundation_candidate"
+      ],
+      "foundation_sha256": "e732d29e6d3111307690b8dab08e189de4736678432f6c36f7d77ad62edf7b94",
+      "genome_sha256": "b20b4b2539f21f8b0c24491ff768a3f38acda7709aecb31be7a627ad73c9c9d2",
+      "source": "dab9fa14a3cba07349b400664df334d84b6fc25f",
+      "note": "New explicit diagnostic repetitions of completed frozen case5500; earlier lives were not overwritten or claimed recovered."
+    },
+    "relief-export-validation.json": {
+      "physical_and_admission_metrics_exact": true,
+      "trials": 14,
+      "synapse_coordinates_exact": true,
+      "changed_weights": [
+        [
+          26529,
+          768.0,
+          384.0
+        ],
+        [
+          26530,
+          -768.0,
+          -384.0
+        ],
+        [
+          26785,
+          -96.0,
+          -48.0
+        ],
+        [
+          26786,
+          96.0,
+          48.0
+        ],
+        [
+          26865,
+          -24.0,
+          -12.0
+        ],
+        [
+          26866,
+          24.0,
+          12.0
+        ]
+      ],
+      "changed_genome_fields": [
+        "n2048_foundation_candidate"
+      ],
+      "foundation_sha256": "73eaf36c3eb66d3ab3abd9bf3d0d68943a36f575eac7986842e6c62c1c113900",
+      "genome_sha256": "25d28849ae83db8fc40acc484aa19765338eb1257e6a3fdb9c7c8c8e26833b60",
+      "parent_sha256": "e732d29e6d3111307690b8dab08e189de4736678432f6c36f7d77ad62edf7b94"
+    }
+  },
+  "torch_audit": {
+    "torch": "2.15.0+cpu",
+    "results": [
+      {
+        "scene": "hazard-choice",
+        "tick": 32,
+        "max_activation_error": 2.9802322387695312e-08,
+        "expected_retained_max_error": 0.0
+      }
+    ]
+  },
+  "exposed_trace_diagnostic": {
+    "parent": {
+      "consumed": false,
+      "world_steps": 256,
+      "injury": 0.44312211871147156,
+      "first": {},
+      "counts": {
+        "('Approach', 2)": 177,
+        "('Ingest', 3)": 8,
+        "('Contact', None)": 220,
+        "('Contact', 3)": 20,
+        "('Other', 3)": 3,
+        "('Approach', 3)": 67,
+        "('Idle', None)": 1,
+        "('Avoid', 3)": 5,
+        "('Contact', 2)": 3,
+        "('Avoid', 2)": 2,
+        "('Approach', None)": 5,
+        "('Other', None)": 3,
+        "('Inspect', 3)": 1,
+        "('Ingest', 2)": 1,
+        "('Other', 2)": 1
+      },
+      "carried": {
+        "3": 10,
+        "2": 2
+      }
+    },
+    "contact1024": {
+      "consumed": true,
+      "world_steps": 108,
+      "injury": 0.10686448961496353,
+      "first": {
+        "outside_08": 19
+      },
+      "counts": {
+        "('Approach', 2)": 64,
+        "('Ingest', 3)": 2,
+        "('Contact', None)": 80,
+        "('Contact', 3)": 2,
+        "('Avoid', 3)": 1,
+        "('Other', 3)": 6,
+        "('Ingest', 2)": 6,
+        "('Avoid', 2)": 14,
+        "('Contact', 2)": 8,
+        "('Approach', 3)": 29,
+        "('Other', 2)": 4
+      },
+      "carried": {
+        "3": 1,
+        "2": 14
+      }
+    }
+  },
+  "limits": [
+    "Moving Food is a pursuit surrogate, not living-prey predation.",
+    "Pain/contact response is not learned target-specific danger recognition; the exposed trace also selected Avoid on food.",
+    "First-meal trials stop at consumption; only opt-in assay15 postmeal trials measure survival after meals.",
+    "The broad relief50 replay reuses exposed fixture identities with preserved parent controls; it is not an unopened heldout set.",
+    "Cases are one genotype under varied conditions, not independent trained populations or a significance claim.",
+    "Uniform high-energy reserves0.8 differ from the feedback study exact inherited biology.",
+    "Common-parent and production defaults are unchanged. No acquired neural/optimizer state is published."
+  ],
+  "source_qualification": {
+    "source": "3827d874d105debe0dee0a15644f7eab5c432148",
+    "native_example_tests": 12,
+    "strict_clippy": true,
+    "release_build": true,
+    "format_check": true,
+    "postmeal_prefix_test": "First-meal trace is bit-exact prefix of continued native life, original first-meal tick retained, consumed object stays consumed."
+  },
+  "archive": {
+    "file": "withdrawal-results.jsonl.gz",
+    "sha256": "55da933330e44e41b9cb1a1264b63d893453de7d0fa0286045ce3c94aa665e51",
+    "native_requests": 99,
+    "trial_records": 898,
+    "includes_diagnostic_repetitions": true
+  }
+}
