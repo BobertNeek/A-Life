@@ -61,3 +61,7 @@ required-features = ["cpu-backend"]
 [[example]]
 name = "terminal_context2135"
 required-features = ["cpu-backend"]
+
+[[example]]
+name = "feedback_retention"
+required-features = ["cpu-backend"]
