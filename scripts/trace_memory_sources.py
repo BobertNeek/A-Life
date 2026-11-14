@@ -81,6 +81,13 @@ def reconstruct(features, records, query_id, evidence):
     return candidates,top
 
 
+def verify_result(hunger, top, context):
+    if abs(hunger-context['target_latent'][0])>=2e-8:
+        raise ValueError(f"hunger mismatch: {hunger} != {context['target_latent'][0]}")
+    if top[0]['memory_id']!=context['best_target_source']:
+        raise ValueError('best source does not match native receipt')
+
+
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('run',type=Path)
@@ -102,8 +109,7 @@ def main():
     for r in top:total=f32(total+r['similarity'])
     hunger=0.
     for r in top:hunger=f32(hunger+f32(r['hunger_delta']*f32(r['similarity']/total)))
-    assert abs(hunger-context['target_latent'][0])<2e-8,(hunger,context['target_latent'][0])
-    assert top[0]['memory_id']==context['best_target_source']
+    verify_result(hunger,top,context)
     result={'passed':True,'decision_tick':query['tick'],'selected_family':query['action_family'],
       'candidate_index':index,'new_identity_without_exact_prior':True,
       'native_target_eligible':evidence['target_eligible'],'native_target_matches':evidence['target_matches'],
