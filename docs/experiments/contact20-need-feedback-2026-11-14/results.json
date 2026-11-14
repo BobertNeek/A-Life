@@ -1,0 +1,2126 @@
+{
+  "schema": 1,
+  "backend": "native-cpu",
+  "parent": "exact Contact20 full count2 genome",
+  "terminal_context": "Off",
+  "biology_variant": "none; default unmodified inherited body/chemistry; passive constructor equality checked by native single-pulse harness",
+  "intervention": "actual arm offset minus alpha*(actual PRE fast - matched None PRE fast); all other replay fields including lifetime fixed",
+  "interpretation": "retained feedback-history weight contribution; not pure direct pulse effect, A-specific credit, semantic understanding, or useful behavioral improvement",
+  "single_pulse": {
+    "seed": 2026112000,
+    "A_tick": 600,
+    "A_family": "Approach",
+    "A_need": {
+      "energy": 0.7033990025520325,
+      "health": 1.0,
+      "injury": 0.0,
+      "hunger": 0.46965160965919495,
+      "loneliness": 0.14999982714653015,
+      "pain": 0.0,
+      "fear": 0.09999991208314896,
+      "fatigue": 0.0005599650903604925,
+      "brain_atp": 0.6035653352737427,
+      "dopamine": 0.4999997615814209,
+      "oxytocin": 0.4999997615814209,
+      "cortisol": 0.1999998837709427,
+      "learning_modulator": 0.5543557405471802
+    },
+    "fixed_leadin": {
+      "host_steps": 600,
+      "decisions": 600,
+      "start": {
+        "energy": 0.7925000190734863,
+        "health": 1.0,
+        "injury": 0.0,
+        "hunger": 0.0,
+        "loneliness": 0.0,
+        "pain": 0.0,
+        "fear": 0.0,
+        "fatigue": 0.0,
+        "brain_atp": 0.75,
+        "dopamine": 0.0,
+        "oxytocin": 0.0,
+        "cortisol": 0.0,
+        "learning_modulator": 0.0
+      },
+      "end": {
+        "energy": 0.7033990025520325,
+        "health": 1.0,
+        "injury": 0.0,
+        "hunger": 0.46965160965919495,
+        "loneliness": 0.14999982714653015,
+        "pain": 0.0,
+        "fear": 0.09999991208314896,
+        "fatigue": 0.0005599650903604925,
+        "brain_atp": 0.6035653352737427,
+        "dopamine": 0.4999997615814209,
+        "oxytocin": 0.4999997615814209,
+        "cortisol": 0.1999998837709427,
+        "learning_modulator": 0.5543557405471802
+      },
+      "maturation": 0.32894736528396606,
+      "biochemical_expression": 1.0,
+      "total_movement": 0.0,
+      "sleeping_steps": 0,
+      "consolidations": 0,
+      "loneliness_qualified": true,
+      "declared_loneliness_threshold": 0.0001,
+      "family_counts": {
+        "Approach": 103,
+        "Contact": 103,
+        "Idle": 98,
+        "Other": 193,
+        "Rest": 103
+      },
+      "observer_full_checkpoint_equal_every_60_steps": true,
+      "checkpoint_600_sha256": "7dbdc0abee87291d840bb463bbc9bd5b664ec092b87ff2c6035f82bdeff486f2",
+      "representative_outcome_success_false_count": 101,
+      "neural_work": {
+        "microsteps": 1800,
+        "neuron_updates": 3686400,
+        "tile_visits": 187800,
+        "synapse_ops": 30720000,
+        "decoder_candidate_ops": 3600,
+        "memory_context_ops": 3600
+      },
+      "reward_sum": -0.51495487970711
+    },
+    "provenance": {
+      "asset_sha256": "d83a995e802e41b8e17799b0871f75d9ede35f95850049777323112e636654d1",
+      "backend": "native-cpu",
+      "binary_sha256": "dcf8e5954c50f445e09c4ff93c90f82cd4a7fcad24a4a5a827a12ec10161e942",
+      "genome_sha256": "557da394c045d0b4353009c842825677aa7505f636d6252b20f67bfe0c3a5189",
+      "raw_evidence_local_only": true,
+      "seed": 2026112000,
+      "source_commit": "3b6ed8f1978f4d003b91a1598efba7ca8fb615c3",
+      "source_sha256": "af9c7752368592d72d3856ea289121e0f55f95843790d793eaceeb86b62522a1",
+      "ticks": 16
+    },
+    "terminal_context": "Off",
+    "arms": [
+      {
+        "arm": "None",
+        "queue_tick": 601,
+        "cue_delivery_biology_tick": null,
+        "B_decision_tick": 601,
+        "B_outcome_tick": 602,
+        "B_reward": -0.004888422321528196,
+        "B_before": {
+          "energy": 0.7032255530357361,
+          "health": 1.0,
+          "injury": 0.0,
+          "hunger": 0.46976444125175476,
+          "loneliness": 0.14999982714653015,
+          "pain": 0.0,
+          "fear": 0.09999991208314896,
+          "fatigue": 0.0006399396224878728,
+          "brain_atp": 0.6034901738166809,
+          "dopamine": 0.4999997615814209,
+          "oxytocin": 0.4999997615814209,
+          "cortisol": 0.1999998837709427,
+          "learning_modulator": 0.5519424080848694
+        },
+        "B_after": {
+          "energy": 0.7030520439147949,
+          "health": 1.0,
+          "injury": 0.0,
+          "hunger": 0.4698779582977295,
+          "loneliness": 0.14999982714653015,
+          "pain": 0.0,
+          "fear": 0.09999991208314896,
+          "fatigue": 0.0007199141546152532,
+          "brain_atp": 0.6034144759178162,
+          "dopamine": 0.4999997615814209,
+          "oxytocin": 0.4999997615814209,
+          "cortisol": 0.1999998837709427,
+          "learning_modulator": 0.5964179039001465
+        },
+        "B_staged_and_updated_eligibility_l2": 157.78056969162031,
+        "B_fast_l2": 0.1655733476364743,
+        "selected_indices_different_from_None": 0,
+        "food_consumed": true,
+        "positive_energy_ticks": [
+          616
+        ],
+        "decision_count": 16,
+        "sleeping_steps": 0,
+        "consolidations": 0,
+        "microsteps_each_decision": null,
+        "final": {
+          "energy": 0.829188883304596,
+          "health": 1.0,
+          "injury": 0.0,
+          "hunger": 0.2912769913673401,
+          "loneliness": 0.14999982714653015,
+          "pain": 0.0,
+          "fear": 0.09999991208314896,
+          "fatigue": 0.0019190701423212886,
+          "brain_atp": 0.8976818919181824,
+          "dopamine": 0.5676798224449158,
+          "oxytocin": 0.4999997615814209,
+          "cortisol": 0.1999998837709427,
+          "learning_modulator": 1.0
+        },
+        "reward_sum": -0.03438607603311539,
+        "max_post_delivery_logit_effect": 0.0,
+        "last_diagnostic": {
+          "ablated_resampled_joint_log_probability": -1.8153271675109863,
+          "activation_max_abs": 0.0,
+          "arm_last_decision_tick": 615,
+          "arm_sleep_phase": "Awake",
+          "fast_component_l2": 0.0,
+          "fast_component_nonzero": 0,
+          "frame_digest": [
+            8528383856565400272,
+            10792311068222743131,
+            10350439569131509458,
+            3534510217894837875
+          ],
+          "interval": 15,
+          "logit_max_abs": 0.0,
+          "microsteps": 4,
+          "native_joint_log_probability": -1.8153271675109863,
+          "none_last_decision_tick": 615,
+          "none_sleep_phase": "Awake",
+          "resampled_action_changed": false,
+          "same_state_intervention_only": true,
+          "sampling_counter": 616,
+          "sequence_id": 617,
+          "world_tick": 616
+        },
+        "diagnostic_choice_changes": 0,
+        "neural_work": {
+          "decoder_candidate_ops": 186,
+          "memory_context_ops": 186,
+          "microsteps": 49,
+          "neuron_updates": 100352,
+          "synapse_ops": 827392,
+          "tile_visits": 5071
+        },
+        "representative_outcome_success_false_count": 13,
+        "cold_exact": true,
+        "observer_full_checkpoint_equal": true,
+        "last_pre_checkpoint_sha256": "2b9c5647495e4f688239089c650dfffa7086a99e557c2df9cb56a759cdef8d67"
+      },
+      {
+        "arm": "Praise",
+        "queue_tick": 601,
+        "cue_delivery_biology_tick": 602,
+        "B_decision_tick": 601,
+        "B_outcome_tick": 602,
+        "B_reward": 0.05591917783021927,
+        "B_before": {
+          "energy": 0.7032255530357361,
+          "health": 1.0,
+          "injury": 0.0,
+          "hunger": 0.46976444125175476,
+          "loneliness": 0.14999982714653015,
+          "pain": 0.0,
+          "fear": 0.09999991208314896,
+          "fatigue": 0.0006399396224878728,
+          "brain_atp": 0.6034901738166809,
+          "dopamine": 0.4999997615814209,
+          "oxytocin": 0.4999997615814209,
+          "cortisol": 0.1999998837709427,
+          "learning_modulator": 0.5519424080848694
+        },
+        "B_after": {
+          "energy": 0.7030520439147949,
+          "health": 1.0,
+          "injury": 0.0,
+          "hunger": 0.4698779582977295,
+          "loneliness": 0.14999982714653015,
+          "pain": 0.0,
+          "fear": 0.09999991208314896,
+          "fatigue": 0.0007199141546152532,
+          "brain_atp": 0.6034144759178162,
+          "dopamine": 0.6799997687339783,
+          "oxytocin": 0.4999997615814209,
+          "cortisol": 0.1999998837709427,
+          "learning_modulator": 0.5964179039001465
+        },
+        "B_staged_and_updated_eligibility_l2": 157.75611210348544,
+        "B_fast_l2": 0.17010240166431362,
+        "selected_indices_different_from_None": 0,
+        "food_consumed": true,
+        "positive_energy_ticks": [
+          616
+        ],
+        "decision_count": 16,
+        "sleeping_steps": 0,
+        "consolidations": 0,
+        "microsteps_each_decision": null,
+        "final": {
+          "energy": 0.8291888236999512,
+          "health": 1.0,
+          "injury": 0.0,
+          "hunger": 0.2912769913673401,
+          "loneliness": 0.14999982714653015,
+          "pain": 0.0,
+          "fear": 0.09999991208314896,
+          "fatigue": 0.0019190701423212886,
+          "brain_atp": 0.8976818919181824,
+          "dopamine": 0.6388323903083801,
+          "oxytocin": 0.4999997615814209,
+          "cortisol": 0.1999998837709427,
+          "learning_modulator": 1.0
+        },
+        "reward_sum": 0.027355022728443146,
+        "max_post_delivery_logit_effect": 0.04110431671142578,
+        "last_diagnostic": {
+          "ablated_resampled_joint_log_probability": -1.8153076171875,
+          "activation_max_abs": 0.0001493692398071289,
+          "arm_last_decision_tick": 615,
+          "arm_sleep_phase": "Awake",
+          "fast_component_l2": 0.008138923393059909,
+          "fast_component_nonzero": 26704,
+          "frame_digest": [
+            13667349427830080345,
+            7498507251131864023,
+            3137840546097433707,
+            5004385585864476482
+          ],
+          "interval": 15,
+          "logit_max_abs": 0.018610253930091858,
+          "microsteps": 4,
+          "native_joint_log_probability": -1.8111560344696045,
+          "none_last_decision_tick": 615,
+          "none_sleep_phase": "Awake",
+          "resampled_action_changed": false,
+          "same_state_intervention_only": true,
+          "sampling_counter": 616,
+          "sequence_id": 617,
+          "world_tick": 616
+        },
+        "diagnostic_choice_changes": 0,
+        "neural_work": {
+          "decoder_candidate_ops": 186,
+          "memory_context_ops": 186,
+          "microsteps": 49,
+          "neuron_updates": 100352,
+          "synapse_ops": 827392,
+          "tile_visits": 5071
+        },
+        "representative_outcome_success_false_count": 13,
+        "cold_exact": true,
+        "observer_full_checkpoint_equal": true,
+        "last_pre_checkpoint_sha256": "27634537ceffb62e7098fc4cce4260ef1839a14aa3bba224d10344bb68596679"
+      },
+      {
+        "arm": "Scold",
+        "queue_tick": 601,
+        "cue_delivery_biology_tick": 602,
+        "B_decision_tick": 601,
+        "B_outcome_tick": 602,
+        "B_reward": -0.009984947741031647,
+        "B_before": {
+          "energy": 0.7032255530357361,
+          "health": 1.0,
+          "injury": 0.0,
+          "hunger": 0.46976444125175476,
+          "loneliness": 0.14999982714653015,
+          "pain": 0.0,
+          "fear": 0.09999991208314896,
+          "fatigue": 0.0006399396224878728,
+          "brain_atp": 0.6034901738166809,
+          "dopamine": 0.4999997615814209,
+          "oxytocin": 0.4999997615814209,
+          "cortisol": 0.1999998837709427,
+          "learning_modulator": 0.5519424080848694
+        },
+        "B_after": {
+          "energy": 0.7030520439147949,
+          "health": 1.0,
+          "injury": 0.0,
+          "hunger": 0.4698779582977295,
+          "loneliness": 0.14999982714653015,
+          "pain": 0.0,
+          "fear": 0.21999990940093994,
+          "fatigue": 0.0007199141546152532,
+          "brain_atp": 0.6034144759178162,
+          "dopamine": 0.4999997615814209,
+          "oxytocin": 0.4999997615814209,
+          "cortisol": 0.34999990463256836,
+          "learning_modulator": 0.5964179039001465
+        },
+        "B_staged_and_updated_eligibility_l2": 157.75620897914143,
+        "B_fast_l2": 0.16527435548167532,
+        "selected_indices_different_from_None": 0,
+        "food_consumed": true,
+        "positive_energy_ticks": [
+          616
+        ],
+        "decision_count": 16,
+        "sleeping_steps": 0,
+        "consolidations": 0,
+        "microsteps_each_decision": null,
+        "final": {
+          "energy": 0.8291888236999512,
+          "health": 1.0,
+          "injury": 0.0,
+          "hunger": 0.2912769913673401,
+          "loneliness": 0.14999982714653015,
+          "pain": 0.0,
+          "fear": 0.16505028307437897,
+          "fatigue": 0.0019190701423212886,
+          "brain_atp": 0.8976818919181824,
+          "dopamine": 0.5676798224449158,
+          "oxytocin": 0.4999997615814209,
+          "cortisol": 0.25929367542266846,
+          "learning_modulator": 1.0
+        },
+        "reward_sum": -0.04218076169490814,
+        "max_post_delivery_logit_effect": 0.006041526794433594,
+        "last_diagnostic": {
+          "ablated_resampled_joint_log_probability": -1.8153157234191895,
+          "activation_max_abs": 6.407499313354492e-06,
+          "arm_last_decision_tick": 615,
+          "arm_sleep_phase": "Awake",
+          "fast_component_l2": 0.001129895157053003,
+          "fast_component_nonzero": 26800,
+          "frame_digest": [
+            11957388436903002341,
+            5624038109020212277,
+            18178763182455996398,
+            7271726344889901302
+          ],
+          "interval": 15,
+          "logit_max_abs": 0.002192765474319458,
+          "microsteps": 4,
+          "native_joint_log_probability": -1.8158223628997803,
+          "none_last_decision_tick": 615,
+          "none_sleep_phase": "Awake",
+          "resampled_action_changed": false,
+          "same_state_intervention_only": true,
+          "sampling_counter": 616,
+          "sequence_id": 617,
+          "world_tick": 616
+        },
+        "diagnostic_choice_changes": 0,
+        "neural_work": {
+          "decoder_candidate_ops": 186,
+          "memory_context_ops": 186,
+          "microsteps": 49,
+          "neuron_updates": 100352,
+          "synapse_ops": 827392,
+          "tile_visits": 5071
+        },
+        "representative_outcome_success_false_count": 13,
+        "cold_exact": true,
+        "observer_full_checkpoint_equal": true,
+        "last_pre_checkpoint_sha256": "0de68c0403d85ba488258fad87dbe49679f436c3fad05e6e9c74c5ffc1b70ca4"
+      },
+      {
+        "arm": "Pet",
+        "queue_tick": 601,
+        "cue_delivery_biology_tick": 602,
+        "B_decision_tick": 601,
+        "B_outcome_tick": 602,
+        "B_reward": 0.0023477382492274046,
+        "B_before": {
+          "energy": 0.7032255530357361,
+          "health": 1.0,
+          "injury": 0.0,
+          "hunger": 0.46976444125175476,
+          "loneliness": 0.14999982714653015,
+          "pain": 0.0,
+          "fear": 0.09999991208314896,
+          "fatigue": 0.0006399396224878728,
+          "brain_atp": 0.6034901738166809,
+          "dopamine": 0.4999997615814209,
+          "oxytocin": 0.4999997615814209,
+          "cortisol": 0.1999998837709427,
+          "learning_modulator": 0.5519424080848694
+        },
+        "B_after": {
+          "energy": 0.7030520439147949,
+          "health": 1.0,
+          "injury": 0.0,
+          "hunger": 0.4698779582977295,
+          "loneliness": 0.0,
+          "pain": 0.0,
+          "fear": 0.09999991208314896,
+          "fatigue": 0.0007199141546152532,
+          "brain_atp": 0.6034144759178162,
+          "dopamine": 0.4999997615814209,
+          "oxytocin": 0.6124997735023499,
+          "cortisol": 0.1999998837709427,
+          "learning_modulator": 0.5964179039001465
+        },
+        "B_staged_and_updated_eligibility_l2": 157.77920086580127,
+        "B_fast_l2": 0.1660655793733638,
+        "selected_indices_different_from_None": 0,
+        "food_consumed": true,
+        "positive_energy_ticks": [
+          616
+        ],
+        "decision_count": 16,
+        "sleeping_steps": 0,
+        "consolidations": 0,
+        "microsteps_each_decision": null,
+        "final": {
+          "energy": 0.829188883304596,
+          "health": 1.0,
+          "injury": 0.0,
+          "hunger": 0.2912769913673401,
+          "loneliness": 0.0686870589852333,
+          "pain": 0.0,
+          "fear": 0.09999991208314896,
+          "fatigue": 0.0019190701423212886,
+          "brain_atp": 0.8976818919181824,
+          "dopamine": 0.5676798224449158,
+          "oxytocin": 0.5444702506065369,
+          "cortisol": 0.1999998837709427,
+          "learning_modulator": 1.0
+        },
+        "reward_sum": -0.030111905187368393,
+        "max_post_delivery_logit_effect": 0.0028524398803710938,
+        "last_diagnostic": {
+          "ablated_resampled_joint_log_probability": -1.8153175115585327,
+          "activation_max_abs": 1.2516975402832031e-06,
+          "arm_last_decision_tick": 615,
+          "arm_sleep_phase": "Awake",
+          "fast_component_l2": 0.0006026098782941567,
+          "fast_component_nonzero": 26704,
+          "frame_digest": [
+            4120488347726160925,
+            3868032649876990255,
+            18197289976105508535,
+            5933188822945777744
+          ],
+          "interval": 15,
+          "logit_max_abs": 0.0015665888786315918,
+          "microsteps": 4,
+          "native_joint_log_probability": -1.814953327178955,
+          "none_last_decision_tick": 615,
+          "none_sleep_phase": "Awake",
+          "resampled_action_changed": false,
+          "same_state_intervention_only": true,
+          "sampling_counter": 616,
+          "sequence_id": 617,
+          "world_tick": 616
+        },
+        "diagnostic_choice_changes": 0,
+        "neural_work": {
+          "decoder_candidate_ops": 186,
+          "memory_context_ops": 186,
+          "microsteps": 49,
+          "neuron_updates": 100352,
+          "synapse_ops": 827392,
+          "tile_visits": 5071
+        },
+        "representative_outcome_success_false_count": 13,
+        "cold_exact": true,
+        "observer_full_checkpoint_equal": true,
+        "last_pre_checkpoint_sha256": "a9f7dd5b9ae440dbff7eb6a5b31286941968d344022489df1df11c89150c301f"
+      },
+      {
+        "arm": "Slap",
+        "queue_tick": 601,
+        "cue_delivery_biology_tick": 602,
+        "B_decision_tick": 601,
+        "B_outcome_tick": 602,
+        "B_reward": -0.009942908771336079,
+        "B_before": {
+          "energy": 0.7032255530357361,
+          "health": 1.0,
+          "injury": 0.0,
+          "hunger": 0.46976444125175476,
+          "loneliness": 0.14999982714653015,
+          "pain": 0.0,
+          "fear": 0.09999991208314896,
+          "fatigue": 0.0006399396224878728,
+          "brain_atp": 0.6034901738166809,
+          "dopamine": 0.4999997615814209,
+          "oxytocin": 0.4999997615814209,
+          "cortisol": 0.1999998837709427,
+          "learning_modulator": 0.5519424080848694
+        },
+        "B_after": {
+          "energy": 0.7030423283576965,
+          "health": 0.9945964217185974,
+          "injury": 0.005403650458902121,
+          "hunger": 0.469878226518631,
+          "loneliness": 0.14999982714653015,
+          "pain": 0.01600000075995922,
+          "fear": 0.10699991136789322,
+          "fatigue": 0.0007199141546152532,
+          "brain_atp": 0.6034142971038818,
+          "dopamine": 0.4999997615814209,
+          "oxytocin": 0.4999997615814209,
+          "cortisol": 0.2129998803138733,
+          "learning_modulator": 0.5964179039001465
+        },
+        "B_staged_and_updated_eligibility_l2": 157.78056079109757,
+        "B_fast_l2": 0.16523398342702117,
+        "selected_indices_different_from_None": 0,
+        "food_consumed": true,
+        "positive_energy_ticks": [
+          616
+        ],
+        "decision_count": 16,
+        "sleeping_steps": 0,
+        "consolidations": 0,
+        "microsteps_each_decision": null,
+        "final": {
+          "energy": 0.8290078043937683,
+          "health": 0.9947728514671326,
+          "injury": 0.005227224435657263,
+          "hunger": 0.2913157045841217,
+          "loneliness": 0.14999982714653015,
+          "pain": 0.008673380129039288,
+          "fear": 0.10379455238580704,
+          "fatigue": 0.0019190701423212886,
+          "brain_atp": 0.8976559638977051,
+          "dopamine": 0.5676798224449158,
+          "oxytocin": 0.4999997615814209,
+          "cortisol": 0.20513874292373657,
+          "learning_modulator": 1.0
+        },
+        "reward_sum": -0.03944544866681099,
+        "max_post_delivery_logit_effect": 0.0036563873291015625,
+        "last_diagnostic": {
+          "ablated_resampled_joint_log_probability": -1.81532621383667,
+          "activation_max_abs": 1.0132789611816406e-05,
+          "arm_last_decision_tick": 615,
+          "arm_sleep_phase": "Awake",
+          "fast_component_l2": 0.0006814846673262569,
+          "fast_component_nonzero": 26896,
+          "frame_digest": [
+            8847515562627446152,
+            12746928193578679440,
+            1110163950793616260,
+            11829489531162447020
+          ],
+          "interval": 15,
+          "logit_max_abs": 0.001530870795249939,
+          "microsteps": 4,
+          "native_joint_log_probability": -1.8156765699386597,
+          "none_last_decision_tick": 615,
+          "none_sleep_phase": "Awake",
+          "resampled_action_changed": false,
+          "same_state_intervention_only": true,
+          "sampling_counter": 616,
+          "sequence_id": 617,
+          "world_tick": 616
+        },
+        "diagnostic_choice_changes": 0,
+        "neural_work": {
+          "decoder_candidate_ops": 186,
+          "memory_context_ops": 186,
+          "microsteps": 49,
+          "neuron_updates": 100352,
+          "synapse_ops": 827392,
+          "tile_visits": 5071
+        },
+        "representative_outcome_success_false_count": 13,
+        "cold_exact": true,
+        "observer_full_checkpoint_equal": true,
+        "last_pre_checkpoint_sha256": "fa743cee02822e885c923a977a3a66501b71aba270f525c90c2dd2ee3d054a47"
+      }
+    ],
+    "torch": {
+      "torch_version": "2.15.0+cpu",
+      "threads": 1,
+      "dtype": "float32",
+      "tolerance": 2e-05,
+      "rows": [
+        {
+          "arm": "None",
+          "interval": 1,
+          "torch_max_abs_errors": {
+            "native_logits": 0.0,
+            "native_final": 2.9802322387695312e-08,
+            "ablated_logits": 0.0,
+            "ablated_final": 2.9802322387695312e-08
+          },
+          "native_fixed_action_logp_f64": -2.4762934138964597e-05,
+          "ablated_fixed_action_logp_f64": -2.4762934138964597e-05,
+          "fixed_action_logp_delta_f64": 0.0,
+          "only_fast_component_reconstructed_exactly": true,
+          "torch_logit_effect_max_abs": 0.0,
+          "torch_activity_effect_max_abs": 0.0
+        },
+        {
+          "arm": "None",
+          "interval": 7,
+          "torch_max_abs_errors": {
+            "native_logits": 0.0,
+            "native_final": 2.9802322387695312e-08,
+            "ablated_logits": 0.0,
+            "ablated_final": 2.9802322387695312e-08
+          },
+          "native_fixed_action_logp_f64": -2.209226348117519e-05,
+          "ablated_fixed_action_logp_f64": -2.209226348117519e-05,
+          "fixed_action_logp_delta_f64": 0.0,
+          "only_fast_component_reconstructed_exactly": true,
+          "torch_logit_effect_max_abs": 0.0,
+          "torch_activity_effect_max_abs": 0.0
+        },
+        {
+          "arm": "None",
+          "interval": 15,
+          "torch_max_abs_errors": {
+            "native_logits": 0.0,
+            "native_final": 5.960464477539063e-08,
+            "ablated_logits": 0.0,
+            "ablated_final": 5.960464477539063e-08
+          },
+          "native_fixed_action_logp_f64": -1.8153270822613836,
+          "ablated_fixed_action_logp_f64": -1.8153270822613836,
+          "fixed_action_logp_delta_f64": 0.0,
+          "only_fast_component_reconstructed_exactly": true,
+          "torch_logit_effect_max_abs": 0.0,
+          "torch_activity_effect_max_abs": 0.0
+        },
+        {
+          "arm": "Praise",
+          "interval": 1,
+          "torch_max_abs_errors": {
+            "native_logits": 0.0,
+            "native_final": 0.0,
+            "ablated_logits": 0.0,
+            "ablated_final": 2.9802322387695312e-08
+          },
+          "native_fixed_action_logp_f64": -2.4268118459735296e-05,
+          "ablated_fixed_action_logp_f64": -2.476356934046953e-05,
+          "fixed_action_logp_delta_f64": 4.954508807342356e-07,
+          "only_fast_component_reconstructed_exactly": true,
+          "torch_logit_effect_max_abs": 0.021883010864257812,
+          "torch_activity_effect_max_abs": 0.00013756752014160156
+        },
+        {
+          "arm": "Praise",
+          "interval": 7,
+          "torch_max_abs_errors": {
+            "native_logits": 0.0,
+            "native_final": 5.960464477539063e-08,
+            "ablated_logits": 0.0,
+            "ablated_final": 5.960464477539063e-08
+          },
+          "native_fixed_action_logp_f64": -2.1893138669137894e-05,
+          "ablated_fixed_action_logp_f64": -2.208682547908898e-05,
+          "fixed_action_logp_delta_f64": 1.9368680995108443e-07,
+          "only_fast_component_reconstructed_exactly": true,
+          "torch_logit_effect_max_abs": 0.022768020629882812,
+          "torch_activity_effect_max_abs": 0.0001373887062072754
+        },
+        {
+          "arm": "Praise",
+          "interval": 15,
+          "torch_max_abs_errors": {
+            "native_logits": 0.0,
+            "native_final": 5.960464477539063e-08,
+            "ablated_logits": 0.0,
+            "ablated_final": 2.9802322387695312e-08
+          },
+          "native_fixed_action_logp_f64": -1.8111561553639621,
+          "ablated_fixed_action_logp_f64": -1.8153076918739348,
+          "fixed_action_logp_delta_f64": 0.004151536509972686,
+          "only_fast_component_reconstructed_exactly": true,
+          "torch_logit_effect_max_abs": 0.018610253930091858,
+          "torch_activity_effect_max_abs": 0.0001493692398071289
+        },
+        {
+          "arm": "Scold",
+          "interval": 1,
+          "torch_max_abs_errors": {
+            "native_logits": 0.0,
+            "native_final": 0.0,
+            "ablated_logits": 0.0,
+            "ablated_final": 2.9802322387695312e-08
+          },
+          "native_fixed_action_logp_f64": -2.4804423978471565e-05,
+          "ablated_fixed_action_logp_f64": -2.4763858651683735e-05,
+          "fixed_action_logp_delta_f64": -4.0565326787830305e-08,
+          "only_fast_component_reconstructed_exactly": true,
+          "torch_logit_effect_max_abs": 0.0017910003662109375,
+          "torch_activity_effect_max_abs": 1.043081283569336e-05
+        },
+        {
+          "arm": "Scold",
+          "interval": 7,
+          "torch_max_abs_errors": {
+            "native_logits": 0.0,
+            "native_final": 2.9802322387695312e-08,
+            "ablated_logits": 0.0,
+            "ablated_final": 2.9802322387695312e-08
+          },
+          "native_fixed_action_logp_f64": -2.2115121055939193e-05,
+          "ablated_fixed_action_logp_f64": -2.2087649639741816e-05,
+          "fixed_action_logp_delta_f64": -2.747141619737712e-08,
+          "only_fast_component_reconstructed_exactly": true,
+          "torch_logit_effect_max_abs": 0.00311279296875,
+          "torch_activity_effect_max_abs": 9.059906005859375e-06
+        },
+        {
+          "arm": "Scold",
+          "interval": 15,
+          "torch_max_abs_errors": {
+            "native_logits": 0.0,
+            "native_final": 5.960464477539063e-08,
+            "ablated_logits": 0.0,
+            "ablated_final": 2.9802322387695312e-08
+          },
+          "native_fixed_action_logp_f64": -1.815822371686067,
+          "ablated_fixed_action_logp_f64": -1.8153156941154422,
+          "fixed_action_logp_delta_f64": -0.0005066775706248361,
+          "only_fast_component_reconstructed_exactly": true,
+          "torch_logit_effect_max_abs": 0.002192765474319458,
+          "torch_activity_effect_max_abs": 6.407499313354492e-06
+        },
+        {
+          "arm": "Pet",
+          "interval": 1,
+          "torch_max_abs_errors": {
+            "native_logits": 0.0,
+            "native_final": 2.9802322387695312e-08,
+            "ablated_logits": 0.0,
+            "ablated_final": 2.9802322387695312e-08
+          },
+          "native_fixed_action_logp_f64": -2.487669452486863e-05,
+          "ablated_fixed_action_logp_f64": -2.4940694503495632e-05,
+          "fixed_action_logp_delta_f64": 6.399997862700202e-08,
+          "only_fast_component_reconstructed_exactly": true,
+          "torch_logit_effect_max_abs": 0.002819061279296875,
+          "torch_activity_effect_max_abs": 1.609325408935547e-05
+        },
+        {
+          "arm": "Pet",
+          "interval": 7,
+          "torch_max_abs_errors": {
+            "native_logits": 0.0,
+            "native_final": 1.4901161193847656e-08,
+            "ablated_logits": 0.0,
+            "ablated_final": 2.9802322387695312e-08
+          },
+          "native_fixed_action_logp_f64": -2.1957526037075614e-05,
+          "ablated_fixed_action_logp_f64": -2.1975758905243798e-05,
+          "fixed_action_logp_delta_f64": 1.8232868168184638e-08,
+          "only_fast_component_reconstructed_exactly": true,
+          "torch_logit_effect_max_abs": 0.002086639404296875,
+          "torch_activity_effect_max_abs": 9.953975677490234e-06
+        },
+        {
+          "arm": "Pet",
+          "interval": 15,
+          "torch_max_abs_errors": {
+            "native_logits": 0.0,
+            "native_final": 1.4901161193847656e-08,
+            "ablated_logits": 0.0,
+            "ablated_final": 2.9802322387695312e-08
+          },
+          "native_fixed_action_logp_f64": -1.8149533108535758,
+          "ablated_fixed_action_logp_f64": -1.8153176464575003,
+          "fixed_action_logp_delta_f64": 0.0003643356039244594,
+          "only_fast_component_reconstructed_exactly": true,
+          "torch_logit_effect_max_abs": 0.0015665888786315918,
+          "torch_activity_effect_max_abs": 1.2516975402832031e-06
+        },
+        {
+          "arm": "Slap",
+          "interval": 1,
+          "torch_max_abs_errors": {
+            "native_logits": 0.0,
+            "native_final": 2.9802322387695312e-08,
+            "ablated_logits": 0.0,
+            "ablated_final": 2.9802322387695312e-08
+          },
+          "native_fixed_action_logp_f64": -2.5339326961986236e-05,
+          "ablated_fixed_action_logp_f64": -2.5293798353353563e-05,
+          "fixed_action_logp_delta_f64": -4.552860863267288e-08,
+          "only_fast_component_reconstructed_exactly": true,
+          "torch_logit_effect_max_abs": 0.0019512176513671875,
+          "torch_activity_effect_max_abs": 1.1295080184936523e-05
+        },
+        {
+          "arm": "Slap",
+          "interval": 7,
+          "torch_max_abs_errors": {
+            "native_logits": 0.0,
+            "native_final": 2.9802322387695312e-08,
+            "ablated_logits": 0.0,
+            "ablated_final": 0.0
+          },
+          "native_fixed_action_logp_f64": -2.1685201630824043e-05,
+          "ablated_fixed_action_logp_f64": -2.1665922673877247e-05,
+          "fixed_action_logp_delta_f64": -1.9278956946796775e-08,
+          "only_fast_component_reconstructed_exactly": true,
+          "torch_logit_effect_max_abs": 0.00215911865234375,
+          "torch_activity_effect_max_abs": 1.0371208190917969e-05
+        },
+        {
+          "arm": "Slap",
+          "interval": 15,
+          "torch_max_abs_errors": {
+            "native_logits": 0.0,
+            "native_final": 2.9802322387695312e-08,
+            "ablated_logits": 0.0,
+            "ablated_final": 2.9802322387695312e-08
+          },
+          "native_fixed_action_logp_f64": -1.815676508255388,
+          "ablated_fixed_action_logp_f64": -1.8153261646162175,
+          "fixed_action_logp_delta_f64": -0.000350343639170525,
+          "only_fast_component_reconstructed_exactly": true,
+          "torch_logit_effect_max_abs": 0.001530870795249939,
+          "torch_activity_effect_max_abs": 1.0132789611816406e-05
+        }
+      ],
+      "passed": true,
+      "training_calls": 0
+    }
+  },
+  "repeated_consequence": {
+    "seed": 2026112000,
+    "independence": "three experimental branches of the same actual need-bearing tick-600 state; not another fresh cohort",
+    "source_boundary_sha256": "7dbdc0abee87291d840bb463bbc9bd5b664ec092b87ff2c6035f82bdeff486f2",
+    "provenance": {
+      "asset_sha256": "d83a995e802e41b8e17799b0871f75d9ede35f95850049777323112e636654d1",
+      "backend": "native-cpu",
+      "binary_sha256": "4dd7c4f0694383d1643397dd2b7fd2db44848ec0f3f70476cf8de1edce99caf7",
+      "genome_sha256": "557da394c045d0b4353009c842825677aa7505f636d6252b20f67bfe0c3a5189",
+      "seed": 2026112000,
+      "source_adam_sha256": "ac58c2defaaa98ef0e0b386881a45ab1d6bc2cc0fa0c6632bb48b5c3d710f264",
+      "source_boundary_sha256": "7dbdc0abee87291d840bb463bbc9bd5b664ec092b87ff2c6035f82bdeff486f2",
+      "source_commit": "3b6ed8f1978f4d003b91a1598efba7ca8fb615c3",
+      "source_life": "actual fixed-600 boundary before any target or player cue",
+      "source_sha256": "f644b2ebfa6bb2fbfc6379530b2e8b53c5cd690c42d8b217fec90c4b5f5633ef",
+      "terminal_context": "Off"
+    },
+    "presentations": 3,
+    "presentation_offsets": [
+      0,
+      24,
+      48
+    ],
+    "exposure_steps": 90,
+    "quiet_steps": 24,
+    "probe_steps": 24,
+    "yoked_delay_ticks": 6,
+    "signal": "Pet only; other signals separately measured in single-pulse run",
+    "arms": [
+      {
+        "arm": "None",
+        "queue_ticks": [],
+        "pulses": [],
+        "deliveries": [],
+        "meal_events": [
+          {
+            "in_presentation_window": true,
+            "outcome_tick": 605,
+            "target_ordinal": 0
+          },
+          {
+            "in_presentation_window": true,
+            "outcome_tick": 629,
+            "target_ordinal": 1
+          },
+          {
+            "in_presentation_window": true,
+            "outcome_tick": 653,
+            "target_ordinal": 2
+          }
+        ],
+        "exposure_targets_consumed": 3,
+        "probe_target_consumed": true,
+        "sleeping_steps": 0,
+        "consolidations": 0,
+        "final": {
+          "energy": 0.9268391728401184,
+          "health": 1.0,
+          "injury": 0.0,
+          "hunger": 0.1899924874305725,
+          "loneliness": 0.14999982714653015,
+          "pain": 0.0,
+          "fear": 0.09999991208314896,
+          "fatigue": 0.0,
+          "brain_atp": 0.9341657161712646,
+          "dopamine": 0.5417338609695435,
+          "oxytocin": 0.4999997615814209,
+          "cortisol": 0.1999998837709427,
+          "learning_modulator": 0.906472384929657,
+          "maturation": 0.3947368562221527,
+          "age_ticks": 738,
+          "biochemical_expression": 1.0
+        },
+        "movement_total": 2.9151119973436304,
+        "phases": {
+          "exposure": {
+            "start_tick": 600,
+            "end_tick": 690,
+            "before": {
+              "energy": 0.7033990025520325,
+              "health": 1.0,
+              "injury": 0.0,
+              "hunger": 0.46965160965919495,
+              "loneliness": 0.14999982714653015,
+              "pain": 0.0,
+              "fear": 0.09999991208314896,
+              "fatigue": 0.0005599650903604925,
+              "brain_atp": 0.6035653352737427,
+              "dopamine": 0.4999997615814209,
+              "oxytocin": 0.4999997615814209,
+              "cortisol": 0.1999998837709427,
+              "learning_modulator": 0.5543557405471802,
+              "maturation": 0.32894736528396606,
+              "age_ticks": 600,
+              "biochemical_expression": 1.0
+            },
+            "after": {
+              "energy": 0.8950176239013672,
+              "health": 1.0,
+              "injury": 0.0,
+              "hunger": 0.2764369547367096,
+              "loneliness": 0.14999982714653015,
+              "pain": 0.0,
+              "fear": 0.09999991208314896,
+              "fatigue": 0.00039998622378334403,
+              "brain_atp": 0.7753470540046692,
+              "dopamine": 0.509322464466095,
+              "oxytocin": 0.4999997615814209,
+              "cortisol": 0.1999998837709427,
+              "learning_modulator": 0.6923523545265198,
+              "maturation": 0.3618420958518982,
+              "age_ticks": 690,
+              "biochemical_expression": 1.0
+            },
+            "decisions": 90,
+            "selected_indices_different_from_None": 0,
+            "positive_energy_ticks": [
+              605,
+              629,
+              653
+            ],
+            "representative_outcome_success_false_count": 19,
+            "neural_work": {
+              "decoder_candidate_ops": 630,
+              "memory_context_ops": 630,
+              "microsteps": 355,
+              "neuron_updates": 727040,
+              "synapse_ops": 5304320,
+              "tile_visits": 33525
+            },
+            "physical_receipt_energy_cost_sum": 1.8299999758601189,
+            "reward_sum": -0.06036875006975606,
+            "movement": 1.4160719617384423
+          },
+          "quiet": {
+            "start_tick": 690,
+            "end_tick": 714,
+            "before": {
+              "energy": 0.8950176239013672,
+              "health": 1.0,
+              "injury": 0.0,
+              "hunger": 0.2764369547367096,
+              "loneliness": 0.14999982714653015,
+              "pain": 0.0,
+              "fear": 0.09999991208314896,
+              "fatigue": 0.00039998622378334403,
+              "brain_atp": 0.7753470540046692,
+              "dopamine": 0.509322464466095,
+              "oxytocin": 0.4999997615814209,
+              "cortisol": 0.1999998837709427,
+              "learning_modulator": 0.6923523545265198,
+              "maturation": 0.3618420958518982,
+              "age_ticks": 690,
+              "biochemical_expression": 1.0
+            },
+            "after": {
+              "energy": 0.8911563754081726,
+              "health": 1.0,
+              "injury": 0.0,
+              "hunger": 0.3101489245891571,
+              "loneliness": 0.14999982714653015,
+              "pain": 0.0,
+              "fear": 0.09999991208314896,
+              "fatigue": 7.999868103070185e-05,
+              "brain_atp": 0.7260329127311707,
+              "dopamine": 0.502111554145813,
+              "oxytocin": 0.4999997615814209,
+              "cortisol": 0.1999998837709427,
+              "learning_modulator": 0.6281465291976929,
+              "maturation": 0.3618420958518982,
+              "age_ticks": 714,
+              "biochemical_expression": 1.0
+            },
+            "decisions": 24,
+            "selected_indices_different_from_None": 0,
+            "positive_energy_ticks": [],
+            "representative_outcome_success_false_count": 8,
+            "neural_work": {
+              "decoder_candidate_ops": 144,
+              "memory_context_ops": 144,
+              "microsteps": 82,
+              "neuron_updates": 167936,
+              "synapse_ops": 1310720,
+              "tile_visits": 8142
+            },
+            "physical_receipt_energy_cost_sum": 0.0,
+            "reward_sum": -0.04269541401299648,
+            "movement": 0.0
+          },
+          "fresh_no_feedback_probe": {
+            "start_tick": 714,
+            "end_tick": 738,
+            "before": {
+              "energy": 0.8911563754081726,
+              "health": 1.0,
+              "injury": 0.0,
+              "hunger": 0.3101489245891571,
+              "loneliness": 0.14999982714653015,
+              "pain": 0.0,
+              "fear": 0.09999991208314896,
+              "fatigue": 7.999868103070185e-05,
+              "brain_atp": 0.7260329127311707,
+              "dopamine": 0.502111554145813,
+              "oxytocin": 0.4999997615814209,
+              "cortisol": 0.1999998837709427,
+              "learning_modulator": 0.6281465291976929,
+              "maturation": 0.3618420958518982,
+              "age_ticks": 714,
+              "biochemical_expression": 1.0
+            },
+            "after": {
+              "energy": 0.9268391728401184,
+              "health": 1.0,
+              "injury": 0.0,
+              "hunger": 0.1899924874305725,
+              "loneliness": 0.14999982714653015,
+              "pain": 0.0,
+              "fear": 0.09999991208314896,
+              "fatigue": 0.0,
+              "brain_atp": 0.9341657161712646,
+              "dopamine": 0.5417338609695435,
+              "oxytocin": 0.4999997615814209,
+              "cortisol": 0.1999998837709427,
+              "learning_modulator": 0.906472384929657,
+              "maturation": 0.3947368562221527,
+              "age_ticks": 738,
+              "biochemical_expression": 1.0
+            },
+            "decisions": 24,
+            "selected_indices_different_from_None": 0,
+            "positive_energy_ticks": [
+              729
+            ],
+            "representative_outcome_success_false_count": 15,
+            "neural_work": {
+              "decoder_candidate_ops": 234,
+              "memory_context_ops": 234,
+              "microsteps": 81,
+              "neuron_updates": 165888,
+              "synapse_ops": 1302528,
+              "tile_visits": 8079
+            },
+            "physical_receipt_energy_cost_sum": 1.8099999651312828,
+            "reward_sum": -0.05463585801771842,
+            "movement": 1.499040035605188
+          }
+        },
+        "probe_diagnostic_count": 24,
+        "probe_diagnostic_choice_changes": 0,
+        "max_probe_logit_effect": 0.0,
+        "last_probe_diagnostic": {
+          "activation_max_abs": 0.0,
+          "arm_last_decision_tick": 736,
+          "arm_sleep_phase": "Awake",
+          "fast_component_l2": 0.0,
+          "interval": 137,
+          "logit_max_abs": 0.0,
+          "microsteps": 4,
+          "none_last_decision_tick": 736,
+          "none_sleep_phase": "Awake",
+          "resampled_action_changed": false,
+          "same_state_only": true,
+          "sampling_counter": 737,
+          "world_tick": 737
+        },
+        "observer_full_checkpoint_equal": true,
+        "cold_exact": true,
+        "last_pre_checkpoint_sha256": "193efd53445f2f7e6c2ab71f42811ac61315da9901e8281374a0af79ef8b2483"
+      },
+      {
+        "arm": "PetContingent",
+        "queue_ticks": [
+          605,
+          629,
+          653
+        ],
+        "pulses": [
+          {
+            "leaves_A_unattributed": true,
+            "observed_consumption_outcome_tick": 605,
+            "queue_tick": 605,
+            "source": "ordinary external Pet after actual target consumption",
+            "target_ordinal": 0
+          },
+          {
+            "leaves_A_unattributed": true,
+            "observed_consumption_outcome_tick": 629,
+            "queue_tick": 629,
+            "source": "ordinary external Pet after actual target consumption",
+            "target_ordinal": 1
+          },
+          {
+            "leaves_A_unattributed": true,
+            "observed_consumption_outcome_tick": 653,
+            "queue_tick": 653,
+            "source": "ordinary external Pet after actual target consumption",
+            "target_ordinal": 2
+          }
+        ],
+        "deliveries": [
+          {
+            "delivery_tick": 606,
+            "before": {
+              "energy": 0.8309829235076904,
+              "health": 1.0,
+              "injury": 0.0,
+              "hunger": 0.2863689064979553,
+              "loneliness": 0.14999982714653015,
+              "pain": 0.0,
+              "fear": 0.09999991208314896,
+              "fatigue": 0.0009598228498362005,
+              "brain_atp": 0.8457539081573486,
+              "dopamine": 0.5719997882843018,
+              "oxytocin": 0.4999997615814209,
+              "cortisol": 0.1999998837709427,
+              "learning_modulator": 0.7184779644012451,
+              "maturation": 0.32894736528396606,
+              "age_ticks": 605,
+              "biochemical_expression": 1.0
+            },
+            "after": {
+              "energy": 0.8308045864105225,
+              "health": 1.0,
+              "injury": 0.0,
+              "hunger": 0.28998488187789917,
+              "loneliness": 0.0,
+              "pain": 0.0,
+              "fear": 0.09999991208314896,
+              "fatigue": 0.001039782422594726,
+              "brain_atp": 0.8985432982444763,
+              "dopamine": 0.5676798224449158,
+              "oxytocin": 0.6124997735023499,
+              "cortisol": 0.1999998837709427,
+              "learning_modulator": 0.7551243305206299,
+              "maturation": 0.32894736528396606,
+              "age_ticks": 606,
+              "biochemical_expression": 1.0
+            },
+            "row_rewards": [
+              0.009871064685285091
+            ]
+          },
+          {
+            "delivery_tick": 630,
+            "before": {
+              "energy": 0.868994414806366,
+              "health": 1.0,
+              "injury": 0.0,
+              "hunger": 0.16266721487045288,
+              "loneliness": 0.09134171158075333,
+              "pain": 0.0,
+              "fear": 0.09999991208314896,
+              "fatigue": 0.0006399396224878728,
+              "brain_atp": 1.0,
+              "dopamine": 0.5883079767227173,
+              "oxytocin": 0.5271077752113342,
+              "cortisol": 0.1999998837709427,
+              "learning_modulator": 0.8454770445823669,
+              "maturation": 0.32894736528396606,
+              "age_ticks": 629,
+              "biochemical_expression": 1.0
+            },
+            "after": {
+              "energy": 0.8688202500343323,
+              "health": 1.0,
+              "injury": 0.0,
+              "hunger": 0.17009077966213226,
+              "loneliness": 0.0,
+              "pain": 0.0,
+              "fear": 0.09999991208314896,
+              "fatigue": 0.0,
+              "brain_atp": 1.0,
+              "dopamine": 0.5830094814300537,
+              "oxytocin": 0.6379812955856323,
+              "cortisol": 0.1999998837709427,
+              "learning_modulator": 0.8752344250679016,
+              "maturation": 0.32894736528396606,
+              "age_ticks": 630,
+              "biochemical_expression": 1.0
+            },
+            "row_rewards": [
+              0.00421644002199173
+            ]
+          },
+          {
+            "delivery_tick": 654,
+            "before": {
+              "energy": 0.9014820456504822,
+              "health": 1.0,
+              "injury": 0.0,
+              "hunger": 0.09859660267829895,
+              "loneliness": 0.09134171158075333,
+              "pain": 0.0,
+              "fear": 0.09999991208314896,
+              "fatigue": 0.000879863218870014,
+              "brain_atp": 1.0,
+              "dopamine": 0.5920016765594482,
+              "oxytocin": 0.5332476496696472,
+              "cortisol": 0.1999998837709427,
+              "learning_modulator": 0.8929328322410583,
+              "maturation": 0.32894736528396606,
+              "age_ticks": 653,
+              "biochemical_expression": 1.0
+            },
+            "after": {
+              "energy": 0.9013078808784485,
+              "health": 1.0,
+              "injury": 0.0,
+              "hunger": 0.1076083779335022,
+              "loneliness": 0.0,
+              "pain": 0.0,
+              "fear": 0.09999991208314896,
+              "fatigue": 0.0009598228498362005,
+              "brain_atp": 1.0,
+              "dopamine": 0.5864815711975098,
+              "oxytocin": 0.6437528133392334,
+              "cortisol": 0.1999998837709427,
+              "learning_modulator": 0.9202114939689636,
+              "maturation": 0.32894736528396606,
+              "age_ticks": 654,
+              "biochemical_expression": 1.0
+            },
+            "row_rewards": [
+              0.004101357888430357
+            ]
+          }
+        ],
+        "meal_events": [
+          {
+            "in_presentation_window": true,
+            "outcome_tick": 605,
+            "target_ordinal": 0
+          },
+          {
+            "in_presentation_window": true,
+            "outcome_tick": 629,
+            "target_ordinal": 1
+          },
+          {
+            "in_presentation_window": true,
+            "outcome_tick": 653,
+            "target_ordinal": 2
+          }
+        ],
+        "exposure_targets_consumed": 3,
+        "probe_target_consumed": true,
+        "sleeping_steps": 0,
+        "consolidations": 0,
+        "final": {
+          "energy": 0.9268391728401184,
+          "health": 1.0,
+          "injury": 0.0,
+          "hunger": 0.1899924874305725,
+          "loneliness": 0.14513735473155975,
+          "pain": 0.0,
+          "fear": 0.09999991208314896,
+          "fatigue": 0.0,
+          "brain_atp": 0.9341657161712646,
+          "dopamine": 0.5417338609695435,
+          "oxytocin": 0.5007950067520142,
+          "cortisol": 0.1999998837709427,
+          "learning_modulator": 0.9084162712097168,
+          "maturation": 0.3947368562221527,
+          "age_ticks": 738,
+          "biochemical_expression": 1.0
+        },
+        "movement_total": 2.9151119973436304,
+        "phases": {
+          "exposure": {
+            "start_tick": 600,
+            "end_tick": 690,
+            "before": {
+              "energy": 0.7033990025520325,
+              "health": 1.0,
+              "injury": 0.0,
+              "hunger": 0.46965160965919495,
+              "loneliness": 0.14999982714653015,
+              "pain": 0.0,
+              "fear": 0.09999991208314896,
+              "fatigue": 0.0005599650903604925,
+              "brain_atp": 0.6035653352737427,
+              "dopamine": 0.4999997615814209,
+              "oxytocin": 0.4999997615814209,
+              "cortisol": 0.1999998837709427,
+              "learning_modulator": 0.5543557405471802,
+              "maturation": 0.32894736528396606,
+              "age_ticks": 600,
+              "biochemical_expression": 1.0
+            },
+            "after": {
+              "energy": 0.8950176239013672,
+              "health": 1.0,
+              "injury": 0.0,
+              "hunger": 0.2764369547367096,
+              "loneliness": 0.11549711972475052,
+              "pain": 0.0,
+              "fear": 0.09999991208314896,
+              "fatigue": 0.00039998622378334403,
+              "brain_atp": 0.7753470540046692,
+              "dopamine": 0.509322464466095,
+              "oxytocin": 0.515496015548706,
+              "cortisol": 0.1999998837709427,
+              "learning_modulator": 0.6970592737197876,
+              "maturation": 0.3618420958518982,
+              "age_ticks": 690,
+              "biochemical_expression": 1.0
+            },
+            "decisions": 90,
+            "selected_indices_different_from_None": 0,
+            "positive_energy_ticks": [
+              605,
+              629,
+              653
+            ],
+            "representative_outcome_success_false_count": 19,
+            "neural_work": {
+              "decoder_candidate_ops": 630,
+              "memory_context_ops": 630,
+              "microsteps": 355,
+              "neuron_updates": 727040,
+              "synapse_ops": 5304320,
+              "tile_visits": 33525
+            },
+            "physical_receipt_energy_cost_sum": 1.8299999758601189,
+            "reward_sum": -0.05661647314991569,
+            "movement": 1.4160719617384423
+          },
+          "quiet": {
+            "start_tick": 690,
+            "end_tick": 714,
+            "before": {
+              "energy": 0.8950176239013672,
+              "health": 1.0,
+              "injury": 0.0,
+              "hunger": 0.2764369547367096,
+              "loneliness": 0.11549711972475052,
+              "pain": 0.0,
+              "fear": 0.09999991208314896,
+              "fatigue": 0.00039998622378334403,
+              "brain_atp": 0.7753470540046692,
+              "dopamine": 0.509322464466095,
+              "oxytocin": 0.515496015548706,
+              "cortisol": 0.1999998837709427,
+              "learning_modulator": 0.6970592737197876,
+              "maturation": 0.3618420958518982,
+              "age_ticks": 690,
+              "biochemical_expression": 1.0
+            },
+            "after": {
+              "energy": 0.8911561965942383,
+              "health": 1.0,
+              "injury": 0.0,
+              "hunger": 0.3101489245891571,
+              "loneliness": 0.1370471864938736,
+              "pain": 0.0,
+              "fear": 0.09999991208314896,
+              "fatigue": 7.999868103070185e-05,
+              "brain_atp": 0.7260328531265259,
+              "dopamine": 0.502111554145813,
+              "oxytocin": 0.5035098195075989,
+              "cortisol": 0.1999998837709427,
+              "learning_modulator": 0.6314781308174133,
+              "maturation": 0.3618420958518982,
+              "age_ticks": 714,
+              "biochemical_expression": 1.0
+            },
+            "decisions": 24,
+            "selected_indices_different_from_None": 0,
+            "positive_energy_ticks": [],
+            "representative_outcome_success_false_count": 8,
+            "neural_work": {
+              "decoder_candidate_ops": 144,
+              "memory_context_ops": 144,
+              "microsteps": 82,
+              "neuron_updates": 167936,
+              "synapse_ops": 1310720,
+              "tile_visits": 8142
+            },
+            "physical_receipt_energy_cost_sum": 0.0,
+            "reward_sum": -0.04361067646095762,
+            "movement": 0.0
+          },
+          "fresh_no_feedback_probe": {
+            "start_tick": 714,
+            "end_tick": 738,
+            "before": {
+              "energy": 0.8911561965942383,
+              "health": 1.0,
+              "injury": 0.0,
+              "hunger": 0.3101489245891571,
+              "loneliness": 0.1370471864938736,
+              "pain": 0.0,
+              "fear": 0.09999991208314896,
+              "fatigue": 7.999868103070185e-05,
+              "brain_atp": 0.7260328531265259,
+              "dopamine": 0.502111554145813,
+              "oxytocin": 0.5035098195075989,
+              "cortisol": 0.1999998837709427,
+              "learning_modulator": 0.6314781308174133,
+              "maturation": 0.3618420958518982,
+              "age_ticks": 714,
+              "biochemical_expression": 1.0
+            },
+            "after": {
+              "energy": 0.9268391728401184,
+              "health": 1.0,
+              "injury": 0.0,
+              "hunger": 0.1899924874305725,
+              "loneliness": 0.14513735473155975,
+              "pain": 0.0,
+              "fear": 0.09999991208314896,
+              "fatigue": 0.0,
+              "brain_atp": 0.9341657161712646,
+              "dopamine": 0.5417338609695435,
+              "oxytocin": 0.5007950067520142,
+              "cortisol": 0.1999998837709427,
+              "learning_modulator": 0.9084162712097168,
+              "maturation": 0.3947368562221527,
+              "age_ticks": 738,
+              "biochemical_expression": 1.0
+            },
+            "decisions": 24,
+            "selected_indices_different_from_None": 0,
+            "positive_energy_ticks": [
+              729
+            ],
+            "representative_outcome_success_false_count": 15,
+            "neural_work": {
+              "decoder_candidate_ops": 234,
+              "memory_context_ops": 234,
+              "microsteps": 81,
+              "neuron_updates": 165888,
+              "synapse_ops": 1302528,
+              "tile_visits": 8079
+            },
+            "physical_receipt_energy_cost_sum": 1.8099999651312828,
+            "reward_sum": -0.054983167654427234,
+            "movement": 1.499040035605188
+          }
+        },
+        "probe_diagnostic_count": 24,
+        "probe_diagnostic_choice_changes": 0,
+        "max_probe_logit_effect": 0.005921363830566406,
+        "last_probe_diagnostic": {
+          "activation_max_abs": 5.14984130859375e-05,
+          "arm_last_decision_tick": 736,
+          "arm_sleep_phase": "Awake",
+          "fast_component_l2": 0.0011461428972895493,
+          "interval": 137,
+          "logit_max_abs": 0.0009111016988754272,
+          "microsteps": 4,
+          "none_last_decision_tick": 736,
+          "none_sleep_phase": "Awake",
+          "resampled_action_changed": false,
+          "same_state_only": true,
+          "sampling_counter": 737,
+          "world_tick": 737
+        },
+        "observer_full_checkpoint_equal": true,
+        "cold_exact": true,
+        "last_pre_checkpoint_sha256": "44cd5575f89e422c15173d5eef364e9f84251b6b99854963acdfbd78ad741b7c"
+      },
+      {
+        "arm": "PetDelayedYoked",
+        "queue_ticks": [
+          611,
+          635,
+          659
+        ],
+        "pulses": [
+          {
+            "leaves_A_unattributed": true,
+            "queue_tick": 611,
+            "source": "six ticks after matched contingent schedule; actual external Pet"
+          },
+          {
+            "leaves_A_unattributed": true,
+            "queue_tick": 635,
+            "source": "six ticks after matched contingent schedule; actual external Pet"
+          },
+          {
+            "leaves_A_unattributed": true,
+            "queue_tick": 659,
+            "source": "six ticks after matched contingent schedule; actual external Pet"
+          }
+        ],
+        "deliveries": [
+          {
+            "delivery_tick": 612,
+            "before": {
+              "energy": 0.8299292922019958,
+              "health": 1.0,
+              "injury": 0.0,
+              "hunger": 0.30608242750167847,
+              "loneliness": 0.14999982714653015,
+              "pain": 0.0,
+              "fear": 0.09999991208314896,
+              "fatigue": 0.0014395209727808833,
+              "brain_atp": 0.8726704716682434,
+              "dopamine": 0.5496704578399658,
+              "oxytocin": 0.4999997615814209,
+              "cortisol": 0.1999998837709427,
+              "learning_modulator": 0.7387496829032898,
+              "maturation": 0.32894736528396606,
+              "age_ticks": 611,
+              "biochemical_expression": 1.0
+            },
+            "after": {
+              "energy": 0.8297548890113831,
+              "health": 1.0,
+              "injury": 0.0,
+              "hunger": 0.3089413344860077,
+              "loneliness": 0.0,
+              "pain": 0.0,
+              "fear": 0.09999991208314896,
+              "fatigue": 0.0015194508014246821,
+              "brain_atp": 0.8643768429756165,
+              "dopamine": 0.5466902256011963,
+              "oxytocin": 0.6124997735023499,
+              "cortisol": 0.1999998837709427,
+              "learning_modulator": 0.737992525100708,
+              "maturation": 0.32894736528396606,
+              "age_ticks": 612,
+              "biochemical_expression": 1.0
+            },
+            "row_rewards": [
+              0.006816231645643711
+            ]
+          },
+          {
+            "delivery_tick": 636,
+            "before": {
+              "energy": 0.8679352402687073,
+              "health": 1.0,
+              "injury": 0.0,
+              "hunger": 0.20306052267551422,
+              "loneliness": 0.09134171158075333,
+              "pain": 0.0,
+              "fear": 0.09999991208314896,
+              "fatigue": 0.00039998622378334403,
+              "brain_atp": 0.9650178551673889,
+              "dopamine": 0.5609210133552551,
+              "oxytocin": 0.5271077752113342,
+              "cortisol": 0.1999998837709427,
+              "learning_modulator": 0.8472909331321716,
+              "maturation": 0.32894736528396606,
+              "age_ticks": 635,
+              "biochemical_expression": 1.0
+            },
+            "after": {
+              "energy": 0.8677559494972229,
+              "health": 1.0,
+              "injury": 0.0,
+              "hunger": 0.20890028774738312,
+              "loneliness": 0.0,
+              "pain": 0.0,
+              "fear": 0.09999991208314896,
+              "fatigue": 0.00047997565707191825,
+              "brain_atp": 0.9538170099258423,
+              "dopamine": 0.5572657585144043,
+              "oxytocin": 0.6379812955856323,
+              "cortisol": 0.1999998837709427,
+              "learning_modulator": 0.8413928151130676,
+              "maturation": 0.32894736528396606,
+              "age_ticks": 636,
+              "biochemical_expression": 1.0
+            },
+            "row_rewards": [
+              0.0036549889482557774
+            ]
+          },
+          {
+            "delivery_tick": 660,
+            "before": {
+              "energy": 0.9004423022270203,
+              "health": 1.0,
+              "injury": 0.0,
+              "hunger": 0.14761410653591156,
+              "loneliness": 0.09134171158075333,
+              "pain": 0.0,
+              "fear": 0.09999991208314896,
+              "fatigue": 0.0,
+              "brain_atp": 0.9704931378364563,
+              "dopamine": 0.5634691715240479,
+              "oxytocin": 0.5332476496696472,
+              "cortisol": 0.1999998837709427,
+              "learning_modulator": 0.8862884044647217,
+              "maturation": 0.32894736528396606,
+              "age_ticks": 659,
+              "biochemical_expression": 1.0
+            },
+            "after": {
+              "energy": 0.9002707600593567,
+              "health": 1.0,
+              "injury": 0.0,
+              "hunger": 0.1546962857246399,
+              "loneliness": 0.0,
+              "pain": 0.0,
+              "fear": 0.09999991208314896,
+              "fatigue": 0.0,
+              "brain_atp": 0.9597464203834534,
+              "dopamine": 0.5596610307693481,
+              "oxytocin": 0.6437528133392334,
+              "cortisol": 0.1999998837709427,
+              "learning_modulator": 0.8781954050064087,
+              "maturation": 0.3618420958518982,
+              "age_ticks": 660,
+              "biochemical_expression": 1.0
+            },
+            "row_rewards": [
+              0.0036295000463724136
+            ]
+          }
+        ],
+        "meal_events": [
+          {
+            "in_presentation_window": true,
+            "outcome_tick": 605,
+            "target_ordinal": 0
+          },
+          {
+            "in_presentation_window": true,
+            "outcome_tick": 629,
+            "target_ordinal": 1
+          },
+          {
+            "in_presentation_window": true,
+            "outcome_tick": 653,
+            "target_ordinal": 2
+          }
+        ],
+        "exposure_targets_consumed": 3,
+        "probe_target_consumed": true,
+        "sleeping_steps": 0,
+        "consolidations": 0,
+        "final": {
+          "energy": 0.9268391728401184,
+          "health": 1.0,
+          "injury": 0.0,
+          "hunger": 0.1899924874305725,
+          "loneliness": 0.14378778636455536,
+          "pain": 0.0,
+          "fear": 0.09999991208314896,
+          "fatigue": 0.0,
+          "brain_atp": 0.9341657161712646,
+          "dopamine": 0.5417338609695435,
+          "oxytocin": 0.5011523365974426,
+          "cortisol": 0.1999998837709427,
+          "learning_modulator": 0.9083591103553772,
+          "maturation": 0.3947368562221527,
+          "age_ticks": 738,
+          "biochemical_expression": 1.0
+        },
+        "movement_total": 2.9151119973436304,
+        "phases": {
+          "exposure": {
+            "start_tick": 600,
+            "end_tick": 690,
+            "before": {
+              "energy": 0.7033990025520325,
+              "health": 1.0,
+              "injury": 0.0,
+              "hunger": 0.46965160965919495,
+              "loneliness": 0.14999982714653015,
+              "pain": 0.0,
+              "fear": 0.09999991208314896,
+              "fatigue": 0.0005599650903604925,
+              "brain_atp": 0.6035653352737427,
+              "dopamine": 0.4999997615814209,
+              "oxytocin": 0.4999997615814209,
+              "cortisol": 0.1999998837709427,
+              "learning_modulator": 0.5543557405471802,
+              "maturation": 0.32894736528396606,
+              "age_ticks": 600,
+              "biochemical_expression": 1.0
+            },
+            "after": {
+              "energy": 0.8950176239013672,
+              "health": 1.0,
+              "injury": 0.0,
+              "hunger": 0.2764369547367096,
+              "loneliness": 0.10592137277126312,
+              "pain": 0.0,
+              "fear": 0.09999991208314896,
+              "fatigue": 0.00039998622378334403,
+              "brain_atp": 0.7753470540046692,
+              "dopamine": 0.509322464466095,
+              "oxytocin": 0.5224622488021851,
+              "cortisol": 0.1999998837709427,
+              "learning_modulator": 0.6992241144180298,
+              "maturation": 0.3618420958518982,
+              "age_ticks": 690,
+              "biochemical_expression": 1.0
+            },
+            "decisions": 90,
+            "selected_indices_different_from_None": 0,
+            "positive_energy_ticks": [
+              605,
+              629,
+              653
+            ],
+            "representative_outcome_success_false_count": 19,
+            "neural_work": {
+              "decoder_candidate_ops": 630,
+              "memory_context_ops": 630,
+              "microsteps": 355,
+              "neuron_updates": 727040,
+              "synapse_ops": 5304320,
+              "tile_visits": 33525
+            },
+            "physical_receipt_energy_cost_sum": 1.8299999758601189,
+            "reward_sum": -0.05657065552077256,
+            "movement": 1.4160719617384423
+          },
+          "quiet": {
+            "start_tick": 690,
+            "end_tick": 714,
+            "before": {
+              "energy": 0.8950176239013672,
+              "health": 1.0,
+              "injury": 0.0,
+              "hunger": 0.2764369547367096,
+              "loneliness": 0.10592137277126312,
+              "pain": 0.0,
+              "fear": 0.09999991208314896,
+              "fatigue": 0.00039998622378334403,
+              "brain_atp": 0.7753470540046692,
+              "dopamine": 0.509322464466095,
+              "oxytocin": 0.5224622488021851,
+              "cortisol": 0.1999998837709427,
+              "learning_modulator": 0.6992241144180298,
+              "maturation": 0.3618420958518982,
+              "age_ticks": 690,
+              "biochemical_expression": 1.0
+            },
+            "after": {
+              "energy": 0.8911562561988831,
+              "health": 1.0,
+              "injury": 0.0,
+              "hunger": 0.3101489245891571,
+              "loneliness": 0.13345232605934143,
+              "pain": 0.0,
+              "fear": 0.09999991208314896,
+              "fatigue": 7.999868103070185e-05,
+              "brain_atp": 0.7260329127311707,
+              "dopamine": 0.502111554145813,
+              "oxytocin": 0.505087673664093,
+              "cortisol": 0.1999998837709427,
+              "learning_modulator": 0.6310217976570129,
+              "maturation": 0.3618420958518982,
+              "age_ticks": 714,
+              "biochemical_expression": 1.0
+            },
+            "decisions": 24,
+            "selected_indices_different_from_None": 0,
+            "positive_energy_ticks": [],
+            "representative_outcome_success_false_count": 8,
+            "neural_work": {
+              "decoder_candidate_ops": 144,
+              "memory_context_ops": 144,
+              "microsteps": 82,
+              "neuron_updates": 167936,
+              "synapse_ops": 1310720,
+              "tile_visits": 8142
+            },
+            "physical_receipt_energy_cost_sum": 0.0,
+            "reward_sum": -0.04386468783923192,
+            "movement": 0.0
+          },
+          "fresh_no_feedback_probe": {
+            "start_tick": 714,
+            "end_tick": 738,
+            "before": {
+              "energy": 0.8911562561988831,
+              "health": 1.0,
+              "injury": 0.0,
+              "hunger": 0.3101489245891571,
+              "loneliness": 0.13345232605934143,
+              "pain": 0.0,
+              "fear": 0.09999991208314896,
+              "fatigue": 7.999868103070185e-05,
+              "brain_atp": 0.7260329127311707,
+              "dopamine": 0.502111554145813,
+              "oxytocin": 0.505087673664093,
+              "cortisol": 0.1999998837709427,
+              "learning_modulator": 0.6310217976570129,
+              "maturation": 0.3618420958518982,
+              "age_ticks": 714,
+              "biochemical_expression": 1.0
+            },
+            "after": {
+              "energy": 0.9268391728401184,
+              "health": 1.0,
+              "injury": 0.0,
+              "hunger": 0.1899924874305725,
+              "loneliness": 0.14378778636455536,
+              "pain": 0.0,
+              "fear": 0.09999991208314896,
+              "fatigue": 0.0,
+              "brain_atp": 0.9341657161712646,
+              "dopamine": 0.5417338609695435,
+              "oxytocin": 0.5011523365974426,
+              "cortisol": 0.1999998837709427,
+              "learning_modulator": 0.9083591103553772,
+              "maturation": 0.3947368562221527,
+              "age_ticks": 738,
+              "biochemical_expression": 1.0
+            },
+            "decisions": 24,
+            "selected_indices_different_from_None": 0,
+            "positive_energy_ticks": [
+              729
+            ],
+            "representative_outcome_success_false_count": 15,
+            "neural_work": {
+              "decoder_candidate_ops": 234,
+              "memory_context_ops": 234,
+              "microsteps": 81,
+              "neuron_updates": 165888,
+              "synapse_ops": 1302528,
+              "tile_visits": 8079
+            },
+            "physical_receipt_energy_cost_sum": 1.8099999651312828,
+            "reward_sum": -0.05507956459769048,
+            "movement": 1.499040035605188
+          }
+        },
+        "probe_diagnostic_count": 24,
+        "probe_diagnostic_choice_changes": 0,
+        "max_probe_logit_effect": 0.0034961700439453125,
+        "last_probe_diagnostic": {
+          "activation_max_abs": 4.565715789794922e-05,
+          "arm_last_decision_tick": 736,
+          "arm_sleep_phase": "Awake",
+          "fast_component_l2": 0.0007095970744238281,
+          "interval": 137,
+          "logit_max_abs": 0.000990837812423706,
+          "microsteps": 4,
+          "none_last_decision_tick": 736,
+          "none_sleep_phase": "Awake",
+          "resampled_action_changed": false,
+          "same_state_only": true,
+          "sampling_counter": 737,
+          "world_tick": 737
+        },
+        "observer_full_checkpoint_equal": true,
+        "cold_exact": true,
+        "last_pre_checkpoint_sha256": "7878dfb5df4300cadf55cff4821fd328ae453683f641035a2b554ab554aa4ae1"
+      }
+    ],
+    "torch": {
+      "torch_version": "2.15.0+cpu",
+      "threads": 1,
+      "dtype": "float32",
+      "tolerance": 2e-05,
+      "rows": [
+        {
+          "arm": "None",
+          "interval": 114,
+          "torch_max_abs_errors": {
+            "native_logits": 0.0,
+            "native_final": 5.960464477539063e-08,
+            "ablated_logits": 0.0,
+            "ablated_final": 5.960464477539063e-08
+          },
+          "native_fixed_action_logp_f64": -5.067354966273959e-05,
+          "ablated_fixed_action_logp_f64": -5.067354966273959e-05,
+          "fixed_action_logp_delta_f64": 0.0,
+          "only_fast_component_reconstructed_exactly": true,
+          "torch_logit_effect_max_abs": 0.0,
+          "torch_activity_effect_max_abs": 0.0
+        },
+        {
+          "arm": "None",
+          "interval": 121,
+          "torch_max_abs_errors": {
+            "native_logits": 0.0,
+            "native_final": 0.0,
+            "ablated_logits": 0.0,
+            "ablated_final": 0.0
+          },
+          "native_fixed_action_logp_f64": -2.3664990712040677e-05,
+          "ablated_fixed_action_logp_f64": -2.3664990712040677e-05,
+          "fixed_action_logp_delta_f64": 0.0,
+          "only_fast_component_reconstructed_exactly": true,
+          "torch_logit_effect_max_abs": 0.0,
+          "torch_activity_effect_max_abs": 0.0
+        },
+        {
+          "arm": "None",
+          "interval": 129,
+          "torch_max_abs_errors": {
+            "native_logits": 0.0,
+            "native_final": 5.960464477539063e-08,
+            "ablated_logits": 0.0,
+            "ablated_final": 5.960464477539063e-08
+          },
+          "native_fixed_action_logp_f64": -1.7660530889207697,
+          "ablated_fixed_action_logp_f64": -1.7660530889207697,
+          "fixed_action_logp_delta_f64": 0.0,
+          "only_fast_component_reconstructed_exactly": true,
+          "torch_logit_effect_max_abs": 0.0,
+          "torch_activity_effect_max_abs": 0.0
+        },
+        {
+          "arm": "None",
+          "interval": 137,
+          "torch_max_abs_errors": {
+            "native_logits": 0.0,
+            "native_final": 5.960464477539063e-08,
+            "ablated_logits": 0.0,
+            "ablated_final": 5.960464477539063e-08
+          },
+          "native_fixed_action_logp_f64": -1.7818227256575951,
+          "ablated_fixed_action_logp_f64": -1.7818227256575951,
+          "fixed_action_logp_delta_f64": 0.0,
+          "only_fast_component_reconstructed_exactly": true,
+          "torch_logit_effect_max_abs": 0.0,
+          "torch_activity_effect_max_abs": 0.0
+        },
+        {
+          "arm": "PetContingent",
+          "interval": 114,
+          "torch_max_abs_errors": {
+            "native_logits": 0.0,
+            "native_final": 2.9802322387695312e-08,
+            "ablated_logits": 0.0,
+            "ablated_final": 5.960464477539063e-08
+          },
+          "native_fixed_action_logp_f64": -5.066955013867636e-05,
+          "ablated_fixed_action_logp_f64": -5.067442360394033e-05,
+          "fixed_action_logp_delta_f64": 4.8734652639730925e-09,
+          "only_fast_component_reconstructed_exactly": true,
+          "torch_logit_effect_max_abs": 0.000990152359008789,
+          "torch_activity_effect_max_abs": 4.634261131286621e-05
+        },
+        {
+          "arm": "PetContingent",
+          "interval": 121,
+          "torch_max_abs_errors": {
+            "native_logits": 0.0,
+            "native_final": 2.9802322387695312e-08,
+            "ablated_logits": 0.0,
+            "ablated_final": 5.960464477539063e-08
+          },
+          "native_fixed_action_logp_f64": -2.359902093582417e-05,
+          "ablated_fixed_action_logp_f64": -2.366423706731157e-05,
+          "fixed_action_logp_delta_f64": 6.521613148740223e-08,
+          "only_fast_component_reconstructed_exactly": true,
+          "torch_logit_effect_max_abs": 0.004817962646484375,
+          "torch_activity_effect_max_abs": 4.64022159576416e-05
+        },
+        {
+          "arm": "PetContingent",
+          "interval": 129,
+          "torch_max_abs_errors": {
+            "native_logits": 2.3283064365386963e-10,
+            "native_final": 5.960464477539063e-08,
+            "ablated_logits": 0.0,
+            "ablated_final": 0.0
+          },
+          "native_fixed_action_logp_f64": -1.7663158321379397,
+          "ablated_fixed_action_logp_f64": -1.7660506099067184,
+          "fixed_action_logp_delta_f64": -0.0002652222312213848,
+          "only_fast_component_reconstructed_exactly": true,
+          "torch_logit_effect_max_abs": 0.0009347200393676758,
+          "torch_activity_effect_max_abs": 5.02467155456543e-05
+        },
+        {
+          "arm": "PetContingent",
+          "interval": 137,
+          "torch_max_abs_errors": {
+            "native_logits": 0.0,
+            "native_final": 5.960464477539063e-08,
+            "ablated_logits": 0.0,
+            "ablated_final": 2.9802322387695312e-08
+          },
+          "native_fixed_action_logp_f64": -1.7820917351307148,
+          "ablated_fixed_action_logp_f64": -1.7818167573856285,
+          "fixed_action_logp_delta_f64": -0.00027497774508633555,
+          "only_fast_component_reconstructed_exactly": true,
+          "torch_logit_effect_max_abs": 0.0009111016988754272,
+          "torch_activity_effect_max_abs": 5.14984130859375e-05
+        },
+        {
+          "arm": "PetDelayedYoked",
+          "interval": 114,
+          "torch_max_abs_errors": {
+            "native_logits": 0.0,
+            "native_final": 0.0,
+            "ablated_logits": 0.0,
+            "ablated_final": 2.9802322387695312e-08
+          },
+          "native_fixed_action_logp_f64": -5.068839365663764e-05,
+          "ablated_fixed_action_logp_f64": -5.06923804928818e-05,
+          "fixed_action_logp_delta_f64": 3.9868362441568056e-09,
+          "only_fast_component_reconstructed_exactly": true,
+          "torch_logit_effect_max_abs": 0.0010328739881515503,
+          "torch_activity_effect_max_abs": 4.124641418457031e-05
+        },
+        {
+          "arm": "PetDelayedYoked",
+          "interval": 121,
+          "torch_max_abs_errors": {
+            "native_logits": 0.0,
+            "native_final": 5.960464477539063e-08,
+            "ablated_logits": 0.0,
+            "ablated_final": 2.9802322387695312e-08
+          },
+          "native_fixed_action_logp_f64": -2.362906796157234e-05,
+          "ablated_fixed_action_logp_f64": -2.3664306639077966e-05,
+          "fixed_action_logp_delta_f64": 3.5238677505625e-08,
+          "only_fast_component_reconstructed_exactly": true,
+          "torch_logit_effect_max_abs": 0.0026655197143554688,
+          "torch_activity_effect_max_abs": 4.1157007217407227e-05
+        },
+        {
+          "arm": "PetDelayedYoked",
+          "interval": 129,
+          "torch_max_abs_errors": {
+            "native_logits": 0.0,
+            "native_final": 0.0,
+            "ablated_logits": 0.0,
+            "ablated_final": 5.960464477539063e-08
+          },
+          "native_fixed_action_logp_f64": -1.7668365906018806,
+          "ablated_fixed_action_logp_f64": -1.7660507910241396,
+          "fixed_action_logp_delta_f64": -0.0007857995777409421,
+          "only_fast_component_reconstructed_exactly": true,
+          "torch_logit_effect_max_abs": 0.000993102788925171,
+          "torch_activity_effect_max_abs": 4.44948673248291e-05
+        },
+        {
+          "arm": "PetDelayedYoked",
+          "interval": 137,
+          "torch_max_abs_errors": {
+            "native_logits": 0.0,
+            "native_final": 5.960464477539063e-08,
+            "ablated_logits": 0.0,
+            "ablated_final": 5.960464477539063e-08
+          },
+          "native_fixed_action_logp_f64": -1.7826188504418998,
+          "ablated_fixed_action_logp_f64": -1.7818171797065252,
+          "fixed_action_logp_delta_f64": -0.0008016707353746266,
+          "only_fast_component_reconstructed_exactly": true,
+          "torch_logit_effect_max_abs": 0.000990837812423706,
+          "torch_activity_effect_max_abs": 4.565715789794922e-05
+        }
+      ],
+      "passed": true,
+      "training_calls": 0
+    }
+  }
+}
