@@ -139,6 +139,21 @@ pub struct CpuCanonicalHost {
 }
 #[derive(Clone, serde::Deserialize)]
 pub struct CpuCollectedDecision {
+    // Test-only capture from the exact call which charges this real native step.
+    // Not persisted, imported, reported as component-specific physiology, or
+    // included in diagnostic serialization.
+    #[cfg(test)]
+    #[serde(skip)]
+    pub(super) cognitive_cost_capture: Option<(CognitiveWorkCostPolicy, f32, f32, f32)>,
+    /// Explicitly requested cognitive action-phase/input facts, candidate aligned.
+    /// Ordinary preparation does not request these for reporting. Offboard viewers
+    /// use MemorySidecarState::inspect_execution_evidence instead. These are not
+    /// isolated physiological effects or a policy override.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub executed_action_recall: Option<Vec<Option<alife_core::ExecutedActionRecallV1>>>,
+    /// Already included once in patch cognitive memory_ops, not an extra debit.
+    #[serde(default, skip_serializing_if = "execution_work_is_zero")]
+    pub executed_action_recall_work: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub memory_readout_research: Option<CpuMemoryReadoutReceiptV1>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -156,6 +171,10 @@ pub struct CpuCollectedDecision {
     pub biological_reward: f32,
     pub patch: ExperiencePatch,
 }
+fn execution_work_is_zero(work: &u64) -> bool {
+    *work == 0
+}
+
 #[path = "terminal_row_wire.rs"]
 mod terminal_row_wire;
 
@@ -165,6 +184,10 @@ impl serde::Serialize for CpuCollectedDecision {
         // resident-derived arrays. Enabled rows are diagnostic-only envelopes.
         #[derive(serde::Serialize)]
         struct Flat<'a> {
+            #[serde(skip_serializing_if = "Option::is_none")]
+            executed_action_recall: &'a Option<Vec<Option<alife_core::ExecutedActionRecallV1>>>,
+            #[serde(skip_serializing_if = "execution_work_is_zero")]
+            executed_action_recall_work: u64,
             #[serde(skip_serializing_if = "Option::is_none")]
             memory_readout_research: &'a Option<CpuMemoryReadoutReceiptV1>,
             #[serde(skip_serializing_if = "Option::is_none")]
@@ -181,6 +204,8 @@ impl serde::Serialize for CpuCollectedDecision {
             patch: &'a ExperiencePatch,
         }
         let flat = Flat {
+            executed_action_recall: &self.executed_action_recall,
+            executed_action_recall_work: self.executed_action_recall_work,
             memory_readout_research: &self.memory_readout_research,
             terminal_context2135: &self.terminal_context2135,
             organism_id: &self.organism_id,
@@ -1415,6 +1440,7 @@ impl CpuCanonicalHost {
                 u64::from(memory.exact_bucket_reads)
                     + u64::from(memory.neighbor_bucket_reads)
                     + u64::from(memory.similarity_evaluations)
+                    + memory.execution_evidence_work
                     + terminal_context2135
                         .as_ref()
                         .map_or(0, |r| r.reserved_work_units)
@@ -1434,7 +1460,17 @@ impl CpuCanonicalHost {
                 .get(id)
                 .cloned()
                 .ok_or(CpuHostError::State("missing post-action organism"))?;
-            after.account_cognitive_work(work, CognitiveWorkCostPolicy::enabled(1.0e-6)?)?;
+            let cost_policy = CognitiveWorkCostPolicy::enabled(1.0e-6)?;
+            #[cfg(test)]
+            let energy_before_cost = after.biochemistry().body.energy;
+            let _applied_cognitive_debit = after.account_cognitive_work(work, cost_policy)?;
+            #[cfg(test)]
+            let cognitive_cost_capture = Some((
+                cost_policy,
+                _applied_cognitive_debit,
+                energy_before_cost,
+                after.biochemistry().body.energy,
+            ));
             after.stage_prediction_residual_pulse(
                 sequence,
                 output.dispatch_generation,
@@ -1565,6 +1601,14 @@ impl CpuCanonicalHost {
                         additional_work_ops: readout_work,
                     });
             decisions.push(CpuCollectedDecision {
+                #[cfg(test)]
+                cognitive_cost_capture,
+                executed_action_recall_work: memory.execution_evidence_work,
+                executed_action_recall: recall
+                    .executed_actions()
+                    .iter()
+                    .any(Option::is_some)
+                    .then(|| recall.executed_actions().to_vec()),
                 memory_readout_research,
                 terminal_context2135,
                 organism_id: id,

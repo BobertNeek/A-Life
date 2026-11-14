@@ -26,6 +26,11 @@ pub const MEMORY_MERGE_SIMILARITY: f32 = 0.98;
 
 const CANDIDATE_MEMORY_BANK_DOMAIN: &[u8] = b"ALIFE-CANDIDATE-MEMORY-BANK-V2";
 
+mod executed_action;
+pub use executed_action::{
+    ExecutedActionMemoryV1, ExecutedActionRecallV1, ExecutionEvidenceInspectionV1,
+};
+
 mod family_provenance;
 pub use family_provenance::{MemoryFamilySourceV1, MemoryFamilySourcesV1};
 
@@ -108,8 +113,16 @@ pub struct MemoryRecallReceipt {
     pub exact_bucket_reads: u32,
     pub neighbor_bucket_reads: u32,
     pub similarity_evaluations: u32,
+    /// Explicit cognitive factual lookup/decode/projection work; not scalar similarity.
+    /// Zero on ordinary recall. Offboard diagnostic work is never charged here.
+    #[serde(default, skip_serializing_if = "execution_work_is_zero")]
+    pub execution_evidence_work: u64,
     pub candidates: Vec<CandidateMemoryRecallReceipt>,
     pub degradations: Vec<MemoryRecallDegradation>,
+}
+
+fn execution_work_is_zero(work: &u64) -> bool {
+    *work == 0
 }
 
 impl MemoryRecallReceipt {
@@ -152,6 +165,7 @@ impl MemoryRecallReceipt {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct PreparedMemoryRecall {
+    executed_actions: Vec<Option<ExecutedActionRecallV1>>,
     family_sources: Option<Vec<MemoryFamilySourcesV1>>,
     context: EpisodicRetrievalContextV1,
     // The episodic rows are private and immutable after either constructor.
@@ -166,6 +180,11 @@ pub struct PreparedMemoryRecall {
 }
 
 impl PreparedMemoryRecall {
+    /// Measured per-channel facts from an explicitly requested cognitive lookup.
+    /// Ordinary scalar recall returns aligned None entries without factual work.
+    pub fn executed_actions(&self) -> &[Option<ExecutedActionRecallV1>] {
+        &self.executed_actions
+    }
     /// Derive predecision attention evidence from this exact validated draft.
     /// The routed neural frame must still be finalized before GPU dispatch.
     pub fn attention_evidence_for_draft(
@@ -201,6 +220,7 @@ impl PreparedMemoryRecall {
             .map(|query| EpisodicDecisionKeyV2::try_new(query, context_digest, final_frame_digest))
             .collect::<Result<Vec<_>, _>>()?;
         let finalized = FinalizedMemoryRecall {
+            executed_actions: self.executed_actions,
             family_sources: self.family_sources,
             context: self.context,
             base_frame_digest: self.base_frame_digest,
@@ -222,6 +242,10 @@ impl PreparedMemoryRecall {
         &self,
         draft: &PerceptionFrameDraft,
     ) -> Result<(), ScaffoldContractError> {
+        executed_action::validate_projection(
+            &self.executed_actions,
+            &self.candidate_queries.iter().collect::<Vec<_>>(),
+        )?;
         if self.receipt.runtime_approximate {
             return self.validate_runtime_binding(draft);
         }
@@ -344,6 +368,7 @@ impl PreparedMemoryRecall {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct FinalizedMemoryRecall {
+    executed_actions: Vec<Option<ExecutedActionRecallV1>>,
     family_sources: Option<Vec<MemoryFamilySourcesV1>>,
     context: EpisodicRetrievalContextV1,
     base_frame_digest: PerceptionBaseDigest,
@@ -356,6 +381,11 @@ pub struct FinalizedMemoryRecall {
 }
 
 impl FinalizedMemoryRecall {
+    /// Measured per-channel facts from an explicitly requested cognitive lookup.
+    /// Ordinary scalar recall returns aligned None entries without factual work.
+    pub fn executed_actions(&self) -> &[Option<ExecutedActionRecallV1>] {
+        &self.executed_actions
+    }
     /// Present only when explicitly requested during existing audited recall.
     /// Age is already reflected by native retention in family_confidence.
     pub fn family_sources(&self) -> Option<&[MemoryFamilySourcesV1]> {
@@ -384,6 +414,14 @@ impl FinalizedMemoryRecall {
     }
 
     pub fn validate_for_frame(&self, frame: &PerceptionFrame) -> Result<(), ScaffoldContractError> {
+        executed_action::validate_projection(
+            &self.executed_actions,
+            &self
+                .candidate_keys
+                .iter()
+                .map(|k| k.query())
+                .collect::<Vec<_>>(),
+        )?;
         if self.receipt.runtime_approximate {
             if self.receipt.organism_id_raw != frame.organism_id().raw()
                 || self.context.tick != frame.tick()
@@ -989,6 +1027,68 @@ impl MemoryBank {
         self.recall_frame_impl(draft, false)
     }
 
+    /// Explicit cognitive consumer request. Unlike ordinary scalar recall, this
+    /// bounded factual lookup is charged once in the returned work receipt.
+    pub fn recall_frame_with_execution_evidence(
+        &self,
+        draft: &PerceptionFrameDraft,
+    ) -> Result<PreparedMemoryRecall, ScaffoldContractError> {
+        let mut prepared = self.recall_frame(draft)?;
+        self.populate_execution_evidence(&mut prepared)?;
+        Ok(prepared)
+    }
+
+    fn populate_execution_evidence(
+        &self,
+        prepared: &mut PreparedMemoryRecall,
+    ) -> Result<(), ScaffoldContractError> {
+        let (rows, work) =
+            executed_action::recall(&self.candidate_store, &prepared.candidate_queries)?;
+        executed_action::validate_projection(
+            &rows,
+            &prepared.candidate_queries.iter().collect::<Vec<_>>(),
+        )?;
+        prepared.executed_actions = rows;
+        prepared.receipt.execution_evidence_work = work;
+        Ok(())
+    }
+
+    /// Offboard inspection only. Does not change a bank, recall receipt, neural
+    /// state or biology. diagnostic_work_units is NOT a cognitive work debit.
+    /// Looks up the current bank using the supplied historical query, not the
+    /// original decision's bank snapshot. Later admissions may change results.
+    pub fn inspect_execution_evidence(
+        &self,
+        recall: &FinalizedMemoryRecall,
+    ) -> Result<ExecutionEvidenceInspectionV1, ScaffoldContractError> {
+        let mut queries = Vec::with_capacity(recall.candidate_keys.len());
+        for (index, key) in recall.candidate_keys.iter().enumerate() {
+            key.validate_contract()?;
+            let query = key.query();
+            if query.organism_id().raw() != recall.receipt.organism_id_raw
+                || query.profile() != recall.context.profile
+                || query.tick() != recall.context.tick
+                || usize::from(query.candidate_index()) != index
+                || key.final_frame_digest() != recall.final_frame_digest
+                || key.retrieval_context_digest() != recall.context_digest
+                || query.base_frame_digest() != recall.base_frame_digest
+            {
+                return Err(ScaffoldContractError::InvalidMemoryQuery);
+            }
+            queries.push(query.clone());
+        }
+        if queries.len() != usize::from(recall.receipt.candidate_count) || queries.is_empty() {
+            return Err(ScaffoldContractError::InvalidMemoryQuery);
+        }
+        let (rows, diagnostic_work_units) =
+            executed_action::recall(&self.candidate_store, &queries)?;
+        executed_action::validate_projection(&rows, &queries.iter().collect::<Vec<_>>())?;
+        Ok(ExecutionEvidenceInspectionV1 {
+            rows,
+            diagnostic_work_units,
+        })
+    }
+
     /// Capture source identity/phase while the same selected records are already
     /// read for ordinary family aggregation. Rankings and encoded lanes agree.
     pub fn recall_frame_with_family_sources(
@@ -1159,6 +1259,8 @@ impl MemoryBank {
         let context = EpisodicRetrievalContextV1::new(draft.tick(), profile, candidate_contexts)?;
         let encoded_context = context.to_perception_context_block()?;
         let context_digest = encoded_context.canonical_digest();
+        let executed_actions = vec![None; candidate_queries.len()];
+        let execution_evidence_work = 0;
         let receipt = MemoryRecallReceipt {
             runtime_approximate: false,
             schema_version: MEMORY_RECALL_SCHEMA_VERSION,
@@ -1172,11 +1274,13 @@ impl MemoryBank {
             exact_bucket_reads,
             neighbor_bucket_reads,
             similarity_evaluations,
+            execution_evidence_work,
             candidates: candidate_receipts,
             degradations,
         };
         receipt.validate_contract()?;
         let prepared = PreparedMemoryRecall {
+            executed_actions,
             family_sources,
             context,
             encoded_context,

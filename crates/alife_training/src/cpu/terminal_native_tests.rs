@@ -161,6 +161,48 @@ fn real_nonrepresentative_consumption_is_recorded_once_and_survives_cold_continu
                     .iter()
                     .any(|r| r.sealed_sequence_id_raw == recorded.sequence_id
                         && r.family_raw == u16::from(CandidateActionFamily::Ingest.raw())));
+                // The new independently typed record recovers the actual secondary
+                // Ingest phase without relabeling the representative's bundle value.
+                let bank = resident.memory.export_active_bank().unwrap();
+                let facts = bank
+                    .records
+                    .iter()
+                    .filter_map(|record| record.executed_actions_json.as_ref())
+                    .flat_map(|bytes| {
+                        serde_json::from_slice::<Vec<alife_core::ExecutedActionMemoryV1>>(bytes)
+                            .unwrap()
+                    })
+                    .collect::<Vec<_>>();
+                let fact = facts
+                    .iter()
+                    .find(|fact| {
+                        fact.source_sequence_id.raw() == recorded.sequence_id
+                            && fact.receipt.channel == MotorChannel::Manipulation
+                    })
+                    .unwrap();
+                assert_eq!(fact.query.action_family(), CandidateActionFamily::Ingest);
+                assert_eq!(fact.receipt.physical.contact, PhysicalContactKind::Consumed);
+                let input = fact.receipt.execution_evidence.unwrap();
+                assert_eq!(
+                    input.command_target,
+                    observation
+                        .key()
+                        .query()
+                        .tracked_object_id()
+                        .and_then(|_| fact.receipt.physical.target_entity)
+                );
+                assert!(input.body_inputs.nutrition > 0.);
+                assert_eq!(input.body_inputs.player_reward, 0.);
+                assert_eq!(input.body_inputs.social_disapproval_v1, 0.);
+                assert_eq!(
+                    fact.bundle_digest,
+                    patch.selected_bundle().unwrap().canonical_digest().unwrap()
+                );
+                assert_eq!(fact.event_tick, patch.outcome().outcome_tick);
+                assert_ne!(
+                    fact.query.action_family(),
+                    patch.decision().neural_evidence().unwrap().action_family
+                );
                 let key = observation.key();
                 assert!(ChannelTerminalObservationV1::try_from_sealed_patch(
                     patch,
@@ -201,6 +243,86 @@ fn real_nonrepresentative_consumption_is_recorded_once_and_survives_cold_continu
                     config.mask_new_context = mask;
                     let mut branch = CpuCanonicalHost::from_checkpoint(cp, &trainer).unwrap();
                     let row = branch.step(&trainer, 1.0).unwrap().decisions.remove(0);
+                    // Ordinary cognition has no factual consumer: an external
+                    // viewer must not silently cause charged brain lookup work.
+                    assert_eq!(row.executed_action_recall_work, 0);
+                    assert!(row.executed_action_recall.is_none());
+                    let (step_recall, _) = branch.residents[&row.organism_id.raw()]
+                        .last_terminal_capture
+                        .as_ref()
+                        .unwrap();
+                    let recalled = step_recall.receipt();
+                    assert!(step_recall.executed_actions().iter().all(Option::is_none));
+                    let bank_before = serde_json::to_vec(
+                        &branch.residents[&row.organism_id.raw()]
+                            .memory
+                            .export_active_bank()
+                            .unwrap(),
+                    )
+                    .unwrap();
+                    let inspection = branch.residents[&row.organism_id.raw()]
+                        .memory
+                        .inspect_execution_evidence(step_recall)
+                        .unwrap();
+                    assert!(inspection.diagnostic_work_units > 0);
+                    assert_eq!(inspection.rows.len(), step_recall.candidate_keys().len());
+                    assert_eq!(
+                        serde_json::to_vec(
+                            &branch.residents[&row.organism_id.raw()]
+                                .memory
+                                .export_active_bank()
+                                .unwrap()
+                        )
+                        .unwrap(),
+                        bank_before
+                    );
+                    assert_eq!(recalled.execution_evidence_work, 0);
+                    let base_memory_ops = u64::from(recalled.exact_bucket_reads)
+                        + u64::from(recalled.neighbor_bucket_reads)
+                        + u64::from(recalled.similarity_evaluations)
+                        + row
+                            .terminal_context2135
+                            .as_ref()
+                            .map_or(0, |r| r.reserved_work_units)
+                        + row
+                            .memory_readout_research
+                            .as_ref()
+                            .map_or(0, |r| r.additional_work_ops);
+                    assert_eq!(
+                        row.executed_action_recall_work,
+                        recalled.execution_evidence_work
+                    );
+                    let charged = row.patch.cognitive_work().unwrap();
+                    assert_eq!(
+                        charged.memory_ops,
+                        base_memory_ops + row.executed_action_recall_work
+                    );
+                    let record = branch
+                        .world
+                        .organism_registry()
+                        .get(row.organism_id)
+                        .unwrap();
+                    assert_eq!(record.cognitive_work(), charged);
+                    let (actual_policy, actual_debit, before_energy, after_energy) =
+                        row.cognitive_cost_capture.unwrap();
+                    let phenotype = record.phenotype();
+                    let requested = actual_policy.energy_debit(charged).unwrap()
+                        * phenotype.body.metabolic_turnover
+                        * (alife_core::ContinuousLocus::midpoint_value(0.52, 0.60)
+                            - phenotype.chemistry.brain_atp_efficiency)
+                            .exp2();
+                    assert_eq!(actual_debit, requested.min(before_energy));
+                    assert_eq!(record.cognitive_energy_debit(), actual_debit);
+                    assert!((before_energy - after_energy - actual_debit).abs() < 2.0e-6);
+                    let mut component = alife_core::cognitive_work::CognitiveWorkCounters::zero();
+                    component.memory_ops = row.executed_action_recall_work;
+                    let tariff_component = actual_policy
+                        .energy_debit(&component.into_receipt().unwrap())
+                        .unwrap();
+                    eprintln!("OFFBOARD_FACT_INSPECTION diagnostic_work_units={} charged_extra_memory_ops=0", inspection.diagnostic_work_units);
+                    eprintln!("EXECUTION_FACT_ACCOUNTING base_memory_ops={base_memory_ops} extra_memory_ops={} total_memory_ops={} actual_tariff={} component_tariff_calculation={tariff_component} actual_total_applied_debit={actual_debit} measured_total_energy_difference={}",
+                        row.executed_action_recall_work, charged.memory_ops, actual_policy.energy_per_work_unit,
+                        before_energy - after_energy);
                     let mut value =
                         serde_json::to_value(row.terminal_context2135.unwrap()).unwrap();
                     value.as_object_mut().unwrap().remove("config");

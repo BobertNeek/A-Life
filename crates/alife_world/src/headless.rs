@@ -5532,7 +5532,16 @@ impl HeadlessWorld {
             if let Some(observation) = observation {
                 channel_observations.push(observation);
             }
-            channel_outcomes.push(ChannelPhysicalOutcome::new(channel.channel, physical)?);
+            channel_outcomes.push(
+                ChannelPhysicalOutcome::new(channel.channel, physical)?.with_execution_evidence(
+                    alife_core::ExecutedChannelEvidenceV1::new(
+                        channel.primitive,
+                        channel.target.and_then(|target| target.entity),
+                        result.execution.succeeded,
+                        result.body_event,
+                    )?,
+                )?,
+            );
             channel_receipts.push(HeadlessMotorChannelReceipt {
                 command: channel.clone(),
                 phase: result.phase,
@@ -12979,6 +12988,10 @@ mod task_6_factorized_motor_tests {
             .unwrap();
         assert_eq!(locomotion.physical.contact, PhysicalContactKind::Blocked);
         assert_eq!(locomotion.physical.target_entity, Some(blocker));
+        let blocked_evidence = locomotion.execution_evidence.unwrap();
+        assert!(!blocked_evidence.succeeded);
+        assert_eq!(blocked_evidence.command_target, None);
+        assert_eq!(blocked_evidence.body_inputs.nutrition, 0.);
         let manipulation = receipt
             .joint
             .channel_outcomes
@@ -12994,6 +13007,115 @@ mod task_6_factorized_motor_tests {
         )
         .unwrap();
         assert_eq!(roundtrip, receipt.joint);
+    }
+
+    #[test]
+    fn executed_channel_evidence_preserves_mixed_target_inputs_not_joint_physiology() {
+        for cue in [
+            None,
+            Some(crate::PlayerInteractionV1::Praise),
+            Some(crate::PlayerInteractionV1::Scold),
+            Some(crate::PlayerInteractionV1::Pet),
+            Some(crate::PlayerInteractionV1::Slap),
+        ] {
+            let (mut world, agent, food, mut bundle) = prepared_world();
+            hold_food_for_meal(&mut world, food);
+            let hazard = world
+                .editor_spawn_object(WorldEditorSpawnSpec {
+                    label: "nearby-contact".into(),
+                    kind: WorldObjectKind::Hazard,
+                    organism_id: None,
+                    position: Vec3f::new(0.25, 0., 0.),
+                    nutrition: 0.,
+                    hazard_pain: 0.2,
+                    radius: 0.3,
+                    token_id: None,
+                })
+                .unwrap();
+            let locomotion = bundle
+                .channels
+                .iter_mut()
+                .find(|c| c.channel == MotorChannel::Locomotion)
+                .unwrap();
+            locomotion.target = Some(alife_core::ActionTarget::new(Some(hazard), None));
+            if let Some(cue) = cue {
+                world
+                    .queue_player_interaction_v1(ORGANISM_ID, Vec3f::ZERO, cue)
+                    .unwrap();
+            }
+            let queued = world
+                .pending_player_care
+                .get(&ORGANISM_ID.raw())
+                .copied()
+                .unwrap_or_else(BodyEventDelta::zero);
+            let before = world.organism_registry().get(ORGANISM_ID).unwrap().clone();
+            let receipt = world.apply_registered_motor_bundle(&bundle, agent).unwrap();
+            let movement = receipt
+                .joint
+                .channel_outcomes
+                .iter()
+                .find(|c| c.channel == MotorChannel::Locomotion)
+                .unwrap();
+            let meal = receipt
+                .joint
+                .channel_outcomes
+                .iter()
+                .find(|c| c.channel == MotorChannel::Manipulation)
+                .unwrap();
+            let move_evidence = movement.execution_evidence.unwrap();
+            let meal_evidence = meal.execution_evidence.unwrap();
+            assert_eq!(move_evidence.command_target, Some(hazard));
+            assert_eq!(move_evidence.primitive, HeadlessActionIds::APPROACH);
+            assert_eq!(move_evidence.body_inputs.nutrition, 0.);
+            assert_eq!(meal_evidence.command_target, Some(food));
+            assert_eq!(meal_evidence.primitive, HeadlessActionIds::EAT);
+            assert!(meal_evidence.succeeded);
+            assert_eq!(meal.physical.contact, PhysicalContactKind::Consumed);
+            assert_eq!(meal_evidence.body_inputs.nutrition, 0.6);
+            assert_eq!(meal_evidence.body_inputs.damage, 0.);
+            assert!(receipt.body_event.damage > 0.);
+            // External cues remain shared biological inputs, never claimed by Ingest.
+            for channel in &receipt.joint.channel_outcomes {
+                let inputs = channel.execution_evidence.unwrap().body_inputs;
+                assert_eq!(inputs.player_reward, 0.);
+                assert_eq!(inputs.social_disapproval_v1, 0.);
+                assert_eq!(inputs.social_contact, 0.);
+            }
+            assert_eq!(receipt.body_event.player_reward, queued.player_reward);
+            assert_eq!(
+                receipt.body_event.social_disapproval_v1,
+                queued.social_disapproval_v1
+            );
+            assert_eq!(receipt.body_event.social_contact, queued.social_contact);
+            assert!(receipt.body_event.damage >= queued.damage);
+            assert!(world.pending_player_care.get(&ORGANISM_ID.raw()).is_none());
+            // Shared biological advance and full harm remain once and unchanged.
+            let expected = before
+                .biochemistry()
+                .advance(receipt.outcome_tick, receipt.body_event, before.phenotype())
+                .unwrap();
+            assert_eq!(receipt.biology_after, expected);
+            let mut altered = *meal;
+            altered.execution_evidence.as_mut().unwrap().command_target = Some(hazard);
+            assert!(altered.validate_contract().is_err());
+            altered = *meal;
+            altered.execution_evidence.as_mut().unwrap().succeeded = false;
+            assert!(altered.validate_contract().is_err());
+            let mut legacy = serde_json::to_value(&receipt.joint).unwrap();
+            for channel in legacy["channel_outcomes"].as_array_mut().unwrap() {
+                channel
+                    .as_object_mut()
+                    .unwrap()
+                    .remove("execution_evidence");
+            }
+            let decoded: JointPhysicalOutcome = serde_json::from_value(legacy.clone()).unwrap();
+            decoded.validate_contract().unwrap();
+            assert!(decoded
+                .channel_outcomes
+                .iter()
+                .all(|c| c.execution_evidence.is_none()));
+            assert_eq!(serde_json::to_value(decoded).unwrap(), legacy);
+        }
     }
 
     #[test]

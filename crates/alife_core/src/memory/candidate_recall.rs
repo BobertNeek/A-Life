@@ -75,6 +75,7 @@ pub(super) fn candidate_record_from_patch_runtime(
         salience_q16: (salience.clamp(0.0, 1.0) * f32::from(u16::MAX)).round() as u16,
         observation_count: 1,
         outcome_contact: representative_outcome_contact(patch),
+        executed_actions_json: executed_action::from_patch(patch)?,
     };
     record.validate_contract()?;
     Ok(record)
@@ -173,6 +174,21 @@ pub(super) fn merge_candidate_records(
     );
     merged.first_tick = Tick::new(retained.first_tick.raw().min(observation.first_tick.raw()));
     merged.last_tick = Tick::new(retained.last_tick.raw().max(observation.last_tick.raw()));
+    // Typed facts retain their actual event sequence; never upgrade old unknown
+    // observations or average a measured consummatory event with preparation.
+    let retained_event = executed_action::cached(&retained.executed_actions_json)
+        .iter()
+        .map(|fact| fact.source_sequence_id.raw())
+        .max()
+        .unwrap_or(0);
+    let observation_event = executed_action::cached(&observation.executed_actions_json)
+        .iter()
+        .map(|fact| fact.source_sequence_id.raw())
+        .max()
+        .unwrap_or(0);
+    if observation_event > retained_event {
+        merged.executed_actions_json = observation.executed_actions_json.clone();
+    }
     merged.observation_count = new_count;
     merged.validate_contract()?;
     Ok(merged)

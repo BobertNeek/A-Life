@@ -173,12 +173,12 @@ pub use evolutionary_genetics::{
     MAX_MUTATION_RECORDS,
 };
 pub use experience::{
-    ConceptHint, DecisionEvidence, DecisionSnapshot, EvidenceKind, ExperiencePatch,
-    ExperiencePatchBuilder, ExperiencePatchHeader, ExperiencePatchPhase, HeuristicDecisionEvidence,
-    HeuristicPreActionEvidence, JointPhysicalOutcome, MeasuredPhysiologyTransition,
-    MemoryExpectancySnapshot, MemoryHint, NeuralDecisionEvidence, PhysicalActionOutcome,
-    PhysicalContactKind, PostActionOutcome, PreActionBrainEvidence, PreActionSnapshot,
-    TeacherFeedbackObservation, V11_EXPERIENCE_ABI_VERSION,
+    ConceptHint, DecisionEvidence, DecisionSnapshot, EvidenceKind, ExecutedChannelEvidenceV1,
+    ExperiencePatch, ExperiencePatchBuilder, ExperiencePatchHeader, ExperiencePatchPhase,
+    HeuristicDecisionEvidence, HeuristicPreActionEvidence, JointPhysicalOutcome,
+    MeasuredPhysiologyTransition, MemoryExpectancySnapshot, MemoryHint, NeuralDecisionEvidence,
+    PhysicalActionOutcome, PhysicalContactKind, PostActionOutcome, PreActionBrainEvidence,
+    PreActionSnapshot, TeacherFeedbackObservation, V11_EXPERIENCE_ABI_VERSION,
 };
 pub use foundation::{
     FoundationAbiBinding, FoundationCompatibilityFamilyId, FoundationId, FoundationLayoutId,
@@ -384,3 +384,7 @@ pub use validation::{ensure_current_version, Validate};
 pub use version::{
     require_current_version, require_version, ContractVersion, SchemaKind, SchemaVersions,
 };
+
+pub use memory::{ExecutedActionMemoryV1, ExecutedActionRecallV1};
+
+pub use memory::ExecutionEvidenceInspectionV1;

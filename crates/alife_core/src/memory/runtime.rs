@@ -153,6 +153,21 @@ impl MemoryBank {
         ]
     }
 
+    /// Explicit factual cognitive lookup, including on a scalar-cache hit.
+    /// The bounded factual work is performed and charged exactly once.
+    pub fn recall_frame_runtime_with_execution_evidence(
+        &self,
+        draft: &PerceptionFrameDraft,
+        cache: &RuntimeMemoryRecallCache,
+        refresh: bool,
+    ) -> Result<(PreparedMemoryRecall, Option<RuntimeMemoryRecallCache>), ScaffoldContractError>
+    {
+        draft.validate_contract()?;
+        let (mut prepared, next) = self.recall_frame_runtime(draft, cache, refresh)?;
+        self.populate_execution_evidence(&mut prepared)?;
+        Ok((prepared, next))
+    }
+
     /// Fresh keys for current perception/action credit, with bounded cached
     /// recall values. New target/action identities always cause a real search.
     pub fn recall_frame_runtime(
@@ -256,6 +271,8 @@ impl MemoryBank {
         let context = EpisodicRetrievalContextV1::new(draft.tick(), profile, contexts)?;
         let encoded_context = context.to_perception_context_block()?;
         let context_digest = encoded_context.canonical_digest();
+        let executed_actions = vec![None; queries.len()];
+        let execution_evidence_work = 0;
         let receipt = MemoryRecallReceipt {
             runtime_approximate: true,
             schema_version: MEMORY_RECALL_SCHEMA_VERSION,
@@ -275,11 +292,13 @@ impl MemoryBank {
             exact_bucket_reads: 0,
             neighbor_bucket_reads: 0,
             similarity_evaluations: evaluations,
+            execution_evidence_work,
             candidates: Vec::new(),
             degradations: Vec::new(),
         };
         Ok((
             PreparedMemoryRecall {
+                executed_actions,
                 family_sources: None,
                 context,
                 encoded_context,

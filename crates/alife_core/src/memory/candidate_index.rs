@@ -66,6 +66,8 @@ pub(super) struct CandidateMemoryRecordV2 {
     /// target. Absence is legacy/unknown, never inferred from consequence floats.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(super) outcome_contact: Option<PhysicalContactKind>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) executed_actions_json: Option<executed_action::CheckedExecutionFacts>,
 }
 
 impl CandidateMemoryRecordV2 {
@@ -130,6 +132,19 @@ impl CandidateMemoryRecordV2 {
                     || self.family_raw != u16::from(CandidateActionFamily::Ingest.raw())))
         {
             return Err(ScaffoldContractError::InvalidMemoryQuery);
+        }
+        for fact in executed_action::cached(&self.executed_actions_json) {
+            if fact.query.version().raw() != self.query_version_raw
+                || fact.query.organism_id().raw() != self.organism_id_raw
+                || fact.source_sequence_id.raw() > self.source_sequence_id.raw()
+                || fact.query.tick().raw() < self.first_tick.raw()
+                || fact.query.tick().raw() > self.last_tick.raw()
+                || fact.query.profile().profile_id.raw() != self.profile_id_raw
+                || fact.query.profile().profile_schema_version != self.profile_schema_version
+                || fact.query.profile().sensory_abi_version != self.sensory_abi_version_raw
+            {
+                return Err(ScaffoldContractError::InvalidMemoryQuery);
+            }
         }
         self.memory_id.validate()?;
         self.source_sequence_id.validate()?;
@@ -199,6 +214,8 @@ pub(super) struct CandidateMemoryStoreV2 {
     pub(super) merge_count: u64,
     pub(super) eviction_count: u64,
     pub(super) records: BTreeMap<u64, CandidateMemoryRecordV2>,
+    #[serde(skip, default)]
+    pub(super) execution_index: BTreeMap<executed_action::ExecutionKey, Vec<(u64, MemoryId)>>,
     pub(super) last_sequence_by_organism: BTreeMap<u64, u64>,
     #[serde(skip, default)]
     pub(super) family_index: BTreeMap<(MemoryBucketKey, u8), Vec<MemoryId>>,
@@ -225,6 +242,7 @@ impl Default for CandidateMemoryStoreV2 {
             eviction_count: 0,
             records: BTreeMap::new(),
             last_sequence_by_organism: BTreeMap::new(),
+            execution_index: BTreeMap::new(),
             family_index: BTreeMap::new(),
             target_index: BTreeMap::new(),
             family_namespace_index: BTreeMap::new(),
@@ -286,6 +304,7 @@ impl<'de> Deserialize<'de> for CandidateMemoryStoreV2 {
             eviction_count: wire.eviction_count,
             records: wire.records,
             last_sequence_by_organism: wire.last_sequence_by_organism,
+            execution_index: BTreeMap::new(),
             family_index: BTreeMap::new(),
             target_index: BTreeMap::new(),
             family_namespace_index: BTreeMap::new(),
@@ -378,6 +397,7 @@ impl CandidateMemoryStoreV2 {
             digest.write_u16(record.salience_q16);
             digest.write_u32(record.observation_count);
             write_outcome_provenance(&mut digest, record.outcome_contact);
+            executed_action::write_cached_digest(&mut digest, &record.executed_actions_json);
         }
         digest.write_sequence_len(self.last_sequence_by_organism.len());
         for (organism, sequence) in &self.last_sequence_by_organism {
@@ -392,6 +412,7 @@ impl CandidateMemoryStoreV2 {
             .records
             .get(&memory_id.raw())
             .expect("validated candidate memory record exists");
+        executed_action::index_insert(&mut self.execution_index, record);
         let family_key = record.family_key();
         let target_key = record.target_key();
         let category_features = record.query_features.clone();
@@ -509,6 +530,7 @@ impl CandidateMemoryStoreV2 {
     }
 
     pub(super) fn remove_record_from_indices(&mut self, record: &CandidateMemoryRecordV2) {
+        executed_action::index_remove(&mut self.execution_index, record);
         let family_key = record.family_key();
         let category = family_key.category_key(&record.query_features);
         if let Some(ids) = self.family_category_index.get_mut(&category) {
@@ -555,6 +577,7 @@ impl CandidateMemoryStoreV2 {
     }
 
     pub(super) fn rebuild_indices(&mut self) {
+        self.execution_index.clear();
         self.family_index.clear();
         self.target_index.clear();
         self.family_namespace_index.clear();
