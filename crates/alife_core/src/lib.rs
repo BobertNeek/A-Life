@@ -233,8 +233,8 @@ pub use lobe::{
 };
 pub use math::{validate_finite, validate_finite_slice, Aabb, Pose, Quatf, Vec2f, Vec3f, Velocity};
 pub use memory::{
-    CandidateMemoryRecallReceipt, FinalizedMemoryRecall, MemoryBank, MemoryBankConfig,
-    MemoryBucketReceiptKey, MemoryCompactionCheckpoint, MemoryCompactionIdentity,
+    CandidateMemoryRecallReceipt, ChannelTerminalObservationV1, FinalizedMemoryRecall, MemoryBank,
+    MemoryBankConfig, MemoryBucketReceiptKey, MemoryCompactionCheckpoint, MemoryCompactionIdentity,
     MemoryCompactionPhase, MemoryCompactionReceipt, MemoryConsolidationBatch, MemoryConsolidator,
     MemoryExpectancy, MemoryMatch, MemoryOutcomeSummary, MemoryQuery, MemoryRecallChannel,
     MemoryRecallDegradation, MemoryRecallReceipt, MemoryRecord, MemorySidecarState,
