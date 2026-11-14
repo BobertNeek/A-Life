@@ -108,6 +108,7 @@ fn replay(phenotype: &BrainPhenotype, ticks: usize, burn_in: usize) -> TrainingS
                 candidates: [CandidateActionFamily::Approach, CandidateActionFamily::Rest]
                     .into_iter()
                     .map(|family| TrainingReplayCandidate {
+                        memory_readout: None,
                         family,
                         decoder_inputs: std::array::from_fn(|lane| (lane % 7) as f32 / 16.0),
                         innate_bias: -0.125,

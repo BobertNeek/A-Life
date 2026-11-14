@@ -230,19 +230,18 @@ pub struct TrainingInitialState {
 
 /// One production decoder candidate, including confidence-weighted memory
 /// lanes (24..36) and cognitive projection lanes (36..54).
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TrainingReplayCandidate {
+    pub memory_readout: Option<Box<crate::FrozenMemoryReadoutTermV1>>,
     pub family: CandidateActionFamily,
-    #[serde(with = "decoder_input_array")]
     pub decoder_inputs: [f32; 54],
     /// Fixed gene-compiled salience already present in production selection.
     // Positional compact replay codecs require this field even when zero.
     // The default retains backward reading of older JSON replay fixtures.
-    #[serde(default)]
     pub innate_bias: f32,
 }
 
-mod decoder_input_array {
+pub(crate) mod decoder_input_array {
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
     pub fn serialize<S: Serializer>(values: &[f32; 54], serializer: S) -> Result<S::Ok, S::Error> {
@@ -345,6 +344,11 @@ impl TrainingSequence {
             .dendrites
             .validate_for_neuron_count(phenotype.neuron_count())?;
         for tick in &self.ticks {
+            for (index, candidate) in tick.candidates.iter().enumerate() {
+                if let Some(binding) = &candidate.memory_readout {
+                    binding.validate(index, &tick.candidates)?;
+                }
+            }
             if tick.encoded_inputs.len() != n
                 || !finite(&tick.encoded_inputs)
                 || !tick.projection_gain.is_finite()

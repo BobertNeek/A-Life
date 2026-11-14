@@ -414,6 +414,7 @@ pub(super) fn evaluate_window_scaled(
     version: u64,
     auxiliary_scale: f32,
 ) -> Result<WindowEvaluation, TrainingError> {
+    super::cohort::validate_ordinary_training_sequence(&window.sequence)?;
     window.batch.validate_policy_version(version)?;
     window.sequence.validate_for(trainer.phenotype())?;
     if window.sequence.ticks.len() - window.sequence.burn_in_ticks != window.batch.len()

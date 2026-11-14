@@ -115,6 +115,7 @@ fn windows(
                                 let mut decoder_inputs = [0.0; 54];
                                 decoder_inputs[lane] = scale;
                                 TrainingReplayCandidate {
+                                    memory_readout: None,
                                     family,
                                     decoder_inputs,
                                     innate_bias: 0.0,

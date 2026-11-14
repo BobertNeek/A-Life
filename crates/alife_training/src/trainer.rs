@@ -388,6 +388,14 @@ impl FoundationTrainer {
     /// Replaces only replay scratch storage; genetic weights and both AdamW
     /// moments remain on GPU. Existing objective bindings must be recreated.
     pub fn prepare_replay(&mut self, sequence: &TrainingSequence) -> Result<(), TrainingError> {
+        if sequence
+            .ticks
+            .iter()
+            .flat_map(|t| &t.candidates)
+            .any(|c| c.memory_readout.is_some())
+        {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
+        }
         sequence.validate_for(&self.phenotype)?;
         self.replay_speech_active = false;
         let shape = (sequence.ticks.len(), sequence.initial.dendrites.clone());
@@ -2956,6 +2964,7 @@ mod tests {
             effective_weight_offsets: vec![0.0; phenotype.synapses().len()],
             structural_synapses: Vec::new(),
             candidates: vec![TrainingReplayCandidate {
+                memory_readout: None,
                 family: alife_core::CandidateActionFamily::Approach,
                 decoder_inputs: [0.0; 54],
                 innate_bias: 0.0,

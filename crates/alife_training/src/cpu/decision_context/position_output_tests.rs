@@ -325,6 +325,7 @@ fn typed_frame_preserves_features_and_rejects_zero_effect_kind_relabel() {
         effective_weight_offsets: vec![],
         structural_synapses: vec![],
         candidates: vec![crate::TrainingReplayCandidate {
+            memory_readout: None,
             family: CandidateActionFamily::Inspect,
             decoder_inputs: d,
             innate_bias: 0.,

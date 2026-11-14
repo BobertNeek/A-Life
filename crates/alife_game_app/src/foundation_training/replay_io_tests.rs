@@ -171,6 +171,7 @@ fn sequence() -> TrainingSequence {
             effective_weight_offsets: offsets,
             structural_synapses: Vec::new(),
             candidates: vec![alife_training::TrainingReplayCandidate {
+                memory_readout: None,
                 family: alife_core::CandidateActionFamily::Idle,
                 decoder_inputs: [-0.0; 54],
                 innate_bias: -0.0,
@@ -356,6 +357,7 @@ pub(super) fn record_fixture_at(tick: u64) -> (FoundationReplayRecord, alife_cor
             let mut decoder_inputs = [0.0; 54];
             decoder_inputs[..24].copy_from_slice(&candidate.features.0);
             TrainingReplayCandidate {
+                memory_readout: None,
                 family: candidate.family,
                 decoder_inputs,
                 innate_bias: 0.0,

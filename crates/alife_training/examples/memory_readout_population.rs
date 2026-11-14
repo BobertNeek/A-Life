@@ -25,6 +25,8 @@ struct Request {
     id: String,
     seed: u64,
     gain: f32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    prepared_readout_coefficient: Option<f32>,
     swap_nutrition: bool,
     reverse_exposure: bool,
     reverse_creation: bool,
@@ -335,10 +337,31 @@ fn run(
     if !POPULATION.contains(&q.gain) || q.distance <= 0. || q.distance > 4. || q.appearance > 1 {
         return Err("outside frozen bounded population/fixture".into());
     }
+    if q.prepared_readout_coefficient
+        .is_some_and(|w| ![-4., 0., 4.].contains(&w) || q.gain != 0.)
+    {
+        return Err(
+            "prepared readout requires unchanged parent and declared signed weights".into(),
+        );
+    }
     if q.verify_cues {
         let mut evidence = Vec::new();
         for nutrition in [0.0_f32, 0.6_f32] {
-            let (mut diagnostic, founder, own, _, _) = setup(base, genome, q)?;
+            let (mut diagnostic, founder, own, _, diagnostic_genome) = setup(base, genome, q)?;
+            if let Some(coefficient) = q.prepared_readout_coefficient {
+                diagnostic.enable_frozen_memory_readout(
+                    FrozenMemoryReadoutConstructionV1 {
+                        schema_version: 1,
+                        readout_abi_version: 1,
+                        work_policy_version: 1,
+                        parent_genome: diagnostic_genome,
+                        source_family: CandidateActionFamily::Ingest,
+                        destination_family: CandidateActionFamily::Approach,
+                        coefficient,
+                    },
+                    &founder,
+                )?;
+            }
             let target = spawn(
                 &mut diagnostic,
                 own,
@@ -350,7 +373,21 @@ fn run(
                 q.angle,
                 q.appearance,
             )?;
+            e.save(
+                &format!("NUTRITION-CUE-{nutrition}-BIRTH.cp.json"),
+                &bytes(&diagnostic.checkpoint(&founder)?)?,
+            )?;
+            e.save(
+                &format!("NUTRITION-CUE-{nutrition}-ADAM.json"),
+                &bytes(&founder.checkpoint())?,
+            )?;
             let step = diagnostic.step(&founder, 1.0)?;
+            let diagnostic_post = bytes(&diagnostic.checkpoint(&founder)?)?;
+            e.save(
+                &format!("NUTRITION-CUE-{nutrition}-POST.cp.json"),
+                &diagnostic_post,
+            )?;
+            e.remember_valid(diagnostic_post);
             assert!(!diagnostic.world().entity(target).unwrap().consumed);
             assert_eq!(step.decisions.len(), 1);
             e.save(
@@ -368,6 +405,19 @@ fn run(
             "no_object_consumed":true,"not_population_outcomes":true}))?)?;
     }
     let (mut h, t, id, asset, child) = setup(base, genome, q)?;
+    if let Some(coefficient) = q.prepared_readout_coefficient {
+        let construction = FrozenMemoryReadoutConstructionV1 {
+            schema_version: 1,
+            readout_abi_version: 1,
+            work_policy_version: 1,
+            parent_genome: child.clone(),
+            source_family: CandidateActionFamily::Ingest,
+            destination_family: CandidateActionFamily::Approach,
+            coefficient,
+        };
+        e.save("READOUT-CONSTRUCTION.json", &bytes(&construction)?)?;
+        h.enable_frozen_memory_readout(construction, &t)?;
+    }
     e.save("REQUEST.json", &bytes(q)?)?;
     e.save("CANDIDATE.alife-foundation", &asset.encode_canonical()?)?;
     e.save("GENOME.json", &bytes(&child)?)?;
@@ -379,8 +429,8 @@ fn run(
     let p = t.phenotype();
     let ids = basis(p);
     e.save("PROVENANCE.json",&bytes(&json!({"source_commit":option_env!("ALIFE_ASSAY_GIT_COMMIT"),"source_sha256":hash(include_bytes!("memory_readout_population.rs")),
-  "binary_sha256":hash(&std::fs::read(std::env::current_exe()?)?),"asset_sha256":hash(&asset.encode_canonical()?),"genome_sha256":hash(&bytes(&child)?),"gain":q.gain,"population":POPULATION,
-  "basis":"Ingest MemoryContext family_value_lane_start + 3; positive uniform L1-normalized coefficient","indices":ids,"cap":p.candidate_decoder().memory_channel().unwrap().max_candidate_gain(),"terminal":"Off","backend":"native-cpu"}))?)?;
+  "binary_sha256":hash(&std::fs::read(std::env::current_exe()?)?),"asset_sha256":hash(&asset.encode_canonical()?),"genome_sha256":hash(&bytes(&child)?),"gain":q.gain,"population":POPULATION,"prepared_readout_coefficient":q.prepared_readout_coefficient,
+  "basis":if q.prepared_readout_coefficient.is_some(){"CPU research prepared Ingest energy to Approach; separate frozen config; no legacy coefficient edits"}else{"Ingest MemoryContext family_value_lane_start + 3; positive uniform L1-normalized coefficient"},"indices":if q.prepared_readout_coefficient.is_some(){Vec::<usize>::new()}else{ids.clone()},"cap":p.candidate_decoder().memory_channel().unwrap().max_candidate_gain(),"terminal":"Off","backend":"native-cpu"}))?)?;
     let graph = p
         .synapses()
         .iter()
@@ -503,15 +553,21 @@ fn run(
             .chain(&probe)
             .map(|(a, _, _)| h.world().entity(*a).unwrap().consumed)
             .collect::<Vec<_>>();
-        if j % 24 == 0 || j == 102 || j == 149 {
+        if q.prepared_readout_coefficient.is_some() || j % 24 == 0 || j == 102 || j == 149 {
             let b = bytes(&pre)?;
             e.save(&format!("STEP-{j:03}-PRE.cp.json"), &b)?;
             e.remember_valid(b);
         }
         let step = h.step(&t, 1.)?;
+        e.save(&format!("STEP-{j:03}.rows.json"), &bytes(&step.decisions)?)?;
+        let post = h.checkpoint(&t)?;
+        if q.prepared_readout_coefficient.is_some() {
+            let b = bytes(&post)?;
+            e.save(&format!("STEP-{j:03}-POST.cp.json"), &b)?;
+            e.remember_valid(b);
+        }
         twin.step(&t, 1.)?;
         sleeping += step.sleeping_organisms;
-        e.save(&format!("STEP-{j:03}.rows.json"), &bytes(&step.decisions)?)?;
         for (k, (a, app, nutrition)) in targets.iter().chain(&probe).enumerate() {
             if !was[k] && h.world().entity(*a).unwrap().consumed {
                 let event = json!({"tick":step.tick_after,"target":a,"appearance":app,"nutrition":nutrition,"probe":k>=targets.len()});
@@ -555,7 +611,9 @@ fn run(
                             _ => None,
                         })
                         .sum::<f32>();
-                    candidates.push(json!({"index":i,"family":c.family,"target":native_candidate.target,"hunger_delta":m.target_latent[0],"confidence":m.target_confidence.raw(),"weighted_hunger":c.decoder_inputs[24],"source_count":m.target_source_count,"best_source":m.best_target_source,"family_source_count":m.family_source_count,"best_family_source":m.best_family_source,"family_value":m.family_value,"family_confidence":m.family_confidence.raw(),"memory_raw":memory,"memory_capped":memory.clamp(-0.5,0.5)}));
+                    let binding = c.memory_readout.as_ref().map_or(0., |b| b.contribution());
+                    let total_memory = memory + binding;
+                    candidates.push(json!({"ordinary_memory_raw":memory,"prepared_binding_contribution":binding,"prepared_memory_total":total_memory,"prepared_memory_capped":total_memory.clamp(-0.5,0.5),"index":i,"family":c.family,"target":native_candidate.target,"hunger_delta":m.target_latent[0],"confidence":m.target_confidence.raw(),"weighted_hunger":c.decoder_inputs[24],"source_count":m.target_source_count,"best_source":m.best_target_source,"family_source_count":m.family_source_count,"best_family_source":m.best_family_source,"family_value":m.family_value,"family_confidence":m.family_confidence.raw(),"memory_raw":memory,"memory_capped":memory.clamp(-0.5,0.5)}));
                 }
                 let seq = TrainingSequence {
                     phenotype_hash: p.phenotype_hash(),
@@ -577,7 +635,25 @@ fn run(
                     )?,
                     row.action
                 );
-                if [102, 108, 110].contains(&j) {
+                if [102, 108, 110].contains(&j) && q.prepared_readout_coefficient.is_some() {
+                    let mut zeroed = seq.clone();
+                    for candidate in &mut zeroed.ticks[0].candidates {
+                        if let Some(term) = &mut candidate.memory_readout {
+                            term.coefficient = 0.;
+                        }
+                    }
+                    let ablated = t.evaluate_replay(&zeroed)?;
+                    let selected = sample_cpu_joint_action(
+                        p,
+                        row.patch.pre_action().perception(),
+                        &ablated.candidate_logits[0],
+                        q.seed as u32,
+                        row.sampling_counter.unwrap(),
+                        1.,
+                    )?;
+                    e.save(&format!("STEP-{j:03}-{row_idx}-PREPARED-READOUT-COPY.json"),&bytes(&json!({"native":seq,"zeroed_frozen_coefficient":zeroed,"native_logits":native.candidate_logits[0],"zeroed_logits":ablated.candidate_logits[0],"zeroed_action":selected,"trajectory_intervention":false}))?)?;
+                }
+                if [102, 108, 110].contains(&j) && q.prepared_readout_coefficient.is_none() {
                     let mut trials = Vec::new();
                     for gain in POPULATION {
                         let mut changed = seq.clone();
@@ -610,8 +686,8 @@ fn run(
                 sources.push(json!({"interval":j,"tick":step.tick_before,"candidates":candidates}));
             }
         }
-        let post = h.checkpoint(&t)?;
-        if j % 24 == 0
+        if q.prepared_readout_coefficient.is_some()
+            || j % 24 == 0
             || j == 102
             || j == 149
             || was
@@ -621,8 +697,10 @@ fn run(
         {
             let b = bytes(&post)?;
             assert_eq!(b, bytes(&twin.checkpoint(&t)?)?);
-            e.save(&format!("STEP-{j:03}-POST.cp.json"), &b)?;
-            e.remember_valid(b);
+            if q.prepared_readout_coefficient.is_none() {
+                e.save(&format!("STEP-{j:03}-POST.cp.json"), &b)?;
+                e.remember_valid(b);
+            }
         }
         trace.push(json!({"interval":j,"tick":step.tick_before,"before":before,"after":physiology(&h,id),"actions":step.decisions.iter().map(|r|&r.action).collect::<Vec<_>>(),"rewards":step.decisions.iter().map(|r|r.biological_reward).collect::<Vec<_>>() }));
     }
@@ -763,6 +841,7 @@ mod tests {
                     effective_weight_offsets: vec![0.; t.weights().len()],
                     structural_synapses: vec![],
                     candidates: vec![alife_training::TrainingReplayCandidate {
+                        memory_readout: None,
                         family: CandidateActionFamily::Ingest,
                         decoder_inputs: [0.; 54],
                         innate_bias: 0.,

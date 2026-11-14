@@ -125,6 +125,7 @@ pub fn encode_cpu_frame(
                 .find(|f| f.family() == c.family)
                 .ok_or_else(invalid)?;
             Ok(TrainingReplayCandidate {
+                memory_readout: None,
                 family: c.family,
                 decoder_inputs: inputs,
                 innate_bias: family.innate_contribution(homeostasis.drives, c.features),

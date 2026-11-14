@@ -35,6 +35,8 @@ pub enum CpuHostError {
 }
 #[derive(Clone)]
 struct Resident {
+    memory_readout: Option<FrozenMemoryReadoutConstructionV1>,
+    memory_readout_digest: Option<[u64; 4]>,
     #[cfg(test)]
     last_terminal_capture: Option<(FinalizedMemoryRecall, ExperiencePatch)>,
     terminal_channel2135: Option<TerminalChannelState2135>,
@@ -89,6 +91,8 @@ struct CpuReplayEvent {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CpuResidentCheckpoint {
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub memory_readout: Option<FrozenMemoryReadoutConstructionV1>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub terminal_channel2135: Option<TerminalChannelState2135>,
     pub neural: CpuOrganismCheckpoint,
     pub activity: CpuActivityState,
@@ -136,6 +140,8 @@ pub struct CpuCanonicalHost {
 #[derive(Clone, serde::Deserialize)]
 pub struct CpuCollectedDecision {
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub memory_readout_research: Option<CpuMemoryReadoutReceiptV1>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub terminal_context2135: Option<TerminalContextReceipt2135>,
     pub organism_id: OrganismId,
     /// Exact native sampling counter. Older diagnostic rows lack this evidence;
@@ -160,6 +166,8 @@ impl serde::Serialize for CpuCollectedDecision {
         #[derive(serde::Serialize)]
         struct Flat<'a> {
             #[serde(skip_serializing_if = "Option::is_none")]
+            memory_readout_research: &'a Option<CpuMemoryReadoutReceiptV1>,
+            #[serde(skip_serializing_if = "Option::is_none")]
             terminal_context2135: &'a Option<TerminalContextReceipt2135>,
             organism_id: &'a OrganismId,
             #[serde(skip_serializing_if = "Option::is_none")]
@@ -173,6 +181,7 @@ impl serde::Serialize for CpuCollectedDecision {
             patch: &'a ExperiencePatch,
         }
         let flat = Flat {
+            memory_readout_research: &self.memory_readout_research,
             terminal_context2135: &self.terminal_context2135,
             organism_id: &self.organism_id,
             sampling_counter: &self.sampling_counter,
@@ -184,7 +193,11 @@ impl serde::Serialize for CpuCollectedDecision {
             biological_reward: &self.biological_reward,
             patch: &self.patch,
         };
-        terminal_row_wire::serialize(&flat, self.terminal_context2135.is_some(), serializer)
+        if self.memory_readout_research.is_some() {
+            super::memory_binding::serialize_research_row(&flat, serializer)
+        } else {
+            terminal_row_wire::serialize(&flat, self.terminal_context2135.is_some(), serializer)
+        }
     }
 }
 
@@ -259,6 +272,8 @@ impl CpuCanonicalHost {
             residents.insert(
                 id.raw(),
                 Resident {
+                    memory_readout: None,
+                    memory_readout_digest: None,
                     #[cfg(test)]
                     last_terminal_capture: None,
                     terminal_channel2135: None,
@@ -411,6 +426,41 @@ impl CpuCanonicalHost {
         *self = snapshot;
         Ok(())
     }
+    /// Fresh construction extension, separately versioned and frozen. It cannot
+    /// be attached to an acquired life or silently exported as a legacy genome.
+    pub fn enable_frozen_memory_readout(
+        &mut self,
+        config: FrozenMemoryReadoutConstructionV1,
+        founder: &CpuFoundationTrainer,
+    ) -> Result<(), CpuHostError> {
+        if self.sampling_counter != 0
+            || self.terminal_context2135.is_some()
+            || self.residents.values().any(|r| {
+                r.memory_readout.is_some()
+                    || r.neural
+                        .checkpoint()
+                        .is_ok_and(|c| c.last_decision_tick.is_some())
+            })
+        {
+            return Err(CpuHostError::State(
+                "memory readout requires a fresh exclusive construction",
+            ));
+        }
+        config.validate()?;
+        config.validate_parent(founder)?;
+        for record in self.world.organism_registry().iter() {
+            if record.genome() != &config.parent_genome {
+                return Err(CpuHostError::State("memory readout full parent mismatch"));
+            }
+        }
+        let digest = config.digest()?;
+        for resident in self.residents.values_mut() {
+            resident.memory_readout = Some(config.clone());
+            resident.memory_readout_digest = Some(digest);
+        }
+        self.seal_all_residents()?;
+        Ok(())
+    }
     /// Opt-in only before the first decision. The complete candidate is the
     /// exact parent foundation plus this separately persisted research recipe.
     pub fn enable_terminal_context2135(
@@ -418,7 +468,10 @@ impl CpuCanonicalHost {
         config: TerminalContextConfig2135,
         founder: &CpuFoundationTrainer,
     ) -> Result<(), CpuHostError> {
-        if self.sampling_counter != 0 || self.terminal_context2135.is_some() {
+        if self.sampling_counter != 0
+            || self.terminal_context2135.is_some()
+            || self.residents.values().any(|r| r.memory_readout.is_some())
+        {
             return Err(CpuHostError::State(
                 "terminal recipe can only be set before first decision",
             ));
@@ -445,6 +498,11 @@ impl CpuCanonicalHost {
         Ok(())
     }
     fn validate_founder(&self, founder: &CpuFoundationTrainer) -> Result<(), CpuHostError> {
+        for resident in self.residents.values() {
+            if let Some(config) = &resident.memory_readout {
+                config.validate_parent(founder)?;
+            }
+        }
         if let Some(config) = &self.terminal_context2135 {
             config.validate().map_err(CpuHostError::Preparation)?;
             config
@@ -522,6 +580,7 @@ impl CpuCanonicalHost {
             .values()
             .map(|r| {
                 Ok(CpuResidentCheckpoint {
+                    memory_readout: r.memory_readout.clone(),
                     terminal_channel2135: r.terminal_channel2135.clone(),
                     neural: r.neural.checkpoint()?,
                     activity: r.activity.clone(),
@@ -541,9 +600,11 @@ impl CpuCanonicalHost {
             .collect::<Result<_, CpuHostError>>()?;
         Ok(CpuCanonicalCheckpoint {
             terminal_context2135: self.terminal_context2135.clone(),
-            schema_version: terminal_host_checkpoint_schema2135(
-                self.terminal_context2135.is_some(),
-            ),
+            schema_version: if self.residents.values().any(|r| r.memory_readout.is_some()) {
+                5
+            } else {
+                terminal_host_checkpoint_schema2135(self.terminal_context2135.is_some())
+            },
             phenotype_hash: self.phenotype_hash,
             founder_weight_digest: self.founder_weight_digest,
             sampling_seed: self.sampling_seed,
@@ -566,11 +627,23 @@ impl CpuCanonicalHost {
                 "version1 CPU checkpoint lacks tracked-object identity; exact private-life restore requires version2",
             ));
         }
-        validate_terminal_host_checkpoint_schema2135(
-            checkpoint.schema_version,
-            checkpoint.terminal_context2135.is_some(),
-        )
-        .map_err(CpuHostError::State)?;
+        let has_readout = checkpoint
+            .residents
+            .iter()
+            .any(|r| r.memory_readout.is_some());
+        if has_readout {
+            if checkpoint.schema_version != 5 || checkpoint.terminal_context2135.is_some() {
+                return Err(CpuHostError::State(
+                    "unsupported combined/legacy memory readout checkpoint",
+                ));
+            }
+        } else {
+            validate_terminal_host_checkpoint_schema2135(
+                checkpoint.schema_version,
+                checkpoint.terminal_context2135.is_some(),
+            )
+            .map_err(CpuHostError::State)?;
+        }
         let channel_policy = checkpoint
             .terminal_context2135
             .as_ref()
@@ -682,7 +755,16 @@ impl CpuCanonicalHost {
                     ));
                 }
             }
+            if let Some(config) = &r.memory_readout {
+                config.validate()?;
+                config.validate_parent(founder)?;
+                if &config.parent_genome != record.genome() {
+                    return Err(CpuHostError::State("memory readout parent genome differs"));
+                }
+            }
             let mut resident = Resident {
+                memory_readout_digest: r.memory_readout.as_ref().map(|c| c.digest()).transpose()?,
+                memory_readout: r.memory_readout,
                 #[cfg(test)]
                 last_terminal_capture: None,
                 terminal_channel2135: r.terminal_channel2135,
@@ -1005,7 +1087,12 @@ impl CpuCanonicalHost {
                     "semantic preparation changed ordinary perception",
                 ));
             }
-            let preparation = prepare_canonical_frame(
+            let prepare_frame = if r.memory_readout.is_some() {
+                prepare_canonical_frame_with_family_sources
+            } else {
+                prepare_canonical_frame
+            };
+            let preparation = prepare_frame(
                 &CanonicalPreparationInput {
                     draft,
                     candidate_binding,
@@ -1027,7 +1114,7 @@ impl CpuCanonicalHost {
             }
             let frame = prepared.frame;
             let recall = prepared.memory_recall;
-            let activity = cpu_activity_budget(
+            let mut activity = cpu_activity_budget(
                 p,
                 CpuActivityAnchor {
                     frame_digest: frame.frame_digest().0,
@@ -1094,6 +1181,18 @@ impl CpuCanonicalHost {
                     .collect(),
             )?;
             context.microstep_count = u32::from(activity.microsteps);
+            let readout_work = if let Some(config) = &r.memory_readout {
+                let work = super::memory_binding::bind_prepared_memory_readout(
+                    config,
+                    &frame,
+                    &recall,
+                    &mut context,
+                )?;
+                super::memory_binding::charge_memory_readout_work(&mut activity, work)?;
+                work.total_ops
+            } else {
+                0
+            };
             let mut output = r.neural.advance(founder, context, &effects)?;
             if let Some(receipt) = &terminal_context2135 {
                 apply_terminal2135(receipt, &mut output.candidate_logits)
@@ -1318,7 +1417,8 @@ impl CpuCanonicalHost {
                     + u64::from(memory.similarity_evaluations)
                     + terminal_context2135
                         .as_ref()
-                        .map_or(0, |r| r.reserved_work_units),
+                        .map_or(0, |r| r.reserved_work_units)
+                    + readout_work,
                 cognitive.concept.active_concepts.len() as u64,
                 cognitive.gap.active_gaps.len() as u64,
                 prediction.error.len() as u64,
@@ -1449,7 +1549,23 @@ impl CpuCanonicalHost {
                 .next_sequence
                 .checked_add(1)
                 .ok_or(CpuHostError::State("sequence overflow"))?;
+            let memory_readout_research =
+                r.memory_readout
+                    .as_ref()
+                    .map(|config| CpuMemoryReadoutReceiptV1 {
+                        schema_version: 1,
+                        readout_abi_version: config.readout_abi_version,
+                        work_policy_version: config.work_policy_version,
+                        construction_digest: r
+                            .memory_readout_digest
+                            .expect("configured readout was sealed"),
+                        source_family: config.source_family,
+                        destination_family: config.destination_family,
+                        coefficient: config.coefficient,
+                        additional_work_ops: readout_work,
+                    });
             decisions.push(CpuCollectedDecision {
+                memory_readout_research,
                 terminal_context2135,
                 organism_id: id,
                 sampling_counter: Some(sampling_counter),
@@ -1609,6 +1725,13 @@ fn resident_digest(
             sampling_counter,
         ),
     )?;
+    let ordinary = match r.memory_readout_digest {
+        None => ordinary,
+        Some(digest) => json_digest(
+            b"ALIFE-CPU-FROZEN-MEMORY-READOUT-PRIVATE-V1",
+            &(ordinary, digest),
+        )?,
+    };
     match &r.terminal_channel2135 {
         None => Ok(ordinary),
         Some(channels) => json_digest(

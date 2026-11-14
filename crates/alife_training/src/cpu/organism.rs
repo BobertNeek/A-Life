@@ -610,11 +610,13 @@ mod tests {
             structural_synapses: vec![],
             candidates: vec![
                 crate::TrainingReplayCandidate {
+                    memory_readout: None,
                     family: CandidateActionFamily::Inspect,
                     decoder_inputs: [0.2; 54],
                     innate_bias: 0.,
                 },
                 crate::TrainingReplayCandidate {
+                    memory_readout: None,
                     family: CandidateActionFamily::Other,
                     decoder_inputs: [0.3; 54],
                     innate_bias: 0.,

@@ -193,6 +193,7 @@ pub(super) struct TargetRecallResult {
 
 #[derive(Clone)]
 pub(super) struct FamilyRecallResult {
+    pub(super) provenance: Option<Box<MemoryFamilySourcesV1>>,
     pub(super) values: [f32; MEMORY_VALUE_V1_COUNT],
     pub(super) confidence: Confidence,
     pub(super) source_count: u16,
@@ -341,6 +342,16 @@ pub(super) fn recall_family_channel_with_budget(
     exact_key: &MemoryBucketKey,
     search_cap: usize,
 ) -> Result<FamilyRecallResult, ScaffoldContractError> {
+    recall_family_channel_with_provenance(store, query, exact_key, search_cap, false)
+}
+
+pub(super) fn recall_family_channel_with_provenance(
+    store: &CandidateMemoryStoreV2,
+    query: &CandidateMemoryQueryV2,
+    exact_key: &MemoryBucketKey,
+    search_cap: usize,
+    collect_provenance: bool,
+) -> Result<FamilyRecallResult, ScaffoldContractError> {
     let ids = collect_shortlist(
         &neighbor_family_keys(exact_key),
         |key| {
@@ -408,10 +419,19 @@ pub(super) fn recall_family_channel_with_budget(
         }
     }
     sort_and_truncate_matches(&mut matches);
-    let (values, confidence, source_count, best_source) =
-        aggregate_family_matches(store, &matches, query.tick())?;
+    let (values, confidence, source_count, best_source, mut provenance) =
+        aggregate_family_matches_with_provenance(
+            store,
+            &matches,
+            query.tick(),
+            collect_provenance,
+        )?;
+    if let Some(provenance) = &mut provenance {
+        provenance.category_generalized = generalized;
+    }
     let confidence = Confidence::new(confidence.raw() * if generalized { 0.75 } else { 1.0 })?;
     Ok(FamilyRecallResult {
+        provenance,
         values,
         confidence,
         source_count,
@@ -625,15 +645,59 @@ fn aggregate_family_matches(
     ),
     ScaffoldContractError,
 > {
+    let (values, confidence, count, best, _) =
+        aggregate_family_matches_with_provenance(store, matches, tick, false)?;
+    Ok((values, confidence, count, best))
+}
+
+#[allow(clippy::type_complexity)]
+fn aggregate_family_matches_with_provenance(
+    store: &CandidateMemoryStoreV2,
+    matches: &[(MemoryId, f32)],
+    tick: Tick,
+    collect_provenance: bool,
+) -> Result<
+    (
+        [f32; MEMORY_VALUE_V1_COUNT],
+        Confidence,
+        u16,
+        Option<MemoryId>,
+        Option<Box<MemoryFamilySourcesV1>>,
+    ),
+    ScaffoldContractError,
+> {
+    let mut provenance = collect_provenance.then(|| Box::new(MemoryFamilySourcesV1::empty()));
     let mut output = [0.0; MEMORY_VALUE_V1_COUNT];
     let total = matches.iter().map(|(_, score)| *score).sum::<f32>();
     if total <= 0.0 {
-        return Ok((output, Confidence::new(0.0)?, 0, None));
+        return Ok((output, Confidence::new(0.0)?, 0, None, provenance));
     }
     let mut weighted_confidence = 0.0;
-    for (memory_id, score) in matches {
+    for (index, (memory_id, score)) in matches.iter().enumerate() {
         let record = &store.records[&memory_id.raw()];
         let weight = *score / total;
+        if let Some(provenance) = &mut provenance {
+            provenance.sources[index] = Some(MemoryFamilySourceV1 {
+                memory_id: *memory_id,
+                organism_id: OrganismId(record.organism_id_raw),
+                profile: crate::SensorProfileIdentity {
+                    profile_id: crate::SensorProfileId(record.profile_id_raw),
+                    profile_schema_version: record.profile_schema_version,
+                    sensory_abi_version: record.sensory_abi_version_raw,
+                },
+                family: CandidateActionFamily::try_from_raw(record.family_raw as u8)?,
+                prior_tracked_target: (record.tracked_object_id_raw != 0)
+                    .then_some(crate::TrackedObjectId(record.tracked_object_id_raw)),
+                sequence_id: record.source_sequence_id,
+                first_tick: record.first_tick,
+                last_tick: record.last_tick,
+                observation_count: record.observation_count,
+                episode_confidence: record.confidence,
+                similarity: *score,
+                aggregate_weight: weight,
+                outcome_contact: record.outcome_contact,
+            });
+        }
         for (value, source) in output.iter_mut().zip(record.family_value) {
             *value += source * weight;
         }
@@ -645,6 +709,7 @@ fn aggregate_family_matches(
         Confidence::new((weighted_confidence * average_similarity).clamp(0.0, 1.0))?,
         u16::try_from(matches.len()).map_err(|_| ScaffoldContractError::InvalidMemoryQuery)?,
         matches.first().map(|(id, _)| *id),
+        provenance,
     ))
 }
 

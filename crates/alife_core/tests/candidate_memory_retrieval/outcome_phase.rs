@@ -634,3 +634,66 @@ fn legacy_meal_reversal_keeps_the_existing_nearby_context_similarity_rule() {
         );
     }
 }
+
+#[test]
+fn opt_in_family_sources_preserve_native_values_bytes_ranking_and_phase() {
+    for contact in [PhysicalContactKind::Consumed, PhysicalContactKind::Touch] {
+        let mut bank = empty_bank();
+        let event = meal_event(&bank, 1, contact, 0.1, 0.);
+        bank.observe_sealed_patch(&event).unwrap();
+        let before = serde_json::to_vec(&bank).unwrap();
+        let draft = probe_for_object(3, slot(0, 71, 0.4, [0., 0.8, 0.9]));
+        let legacy = bank.recall_frame(&draft).unwrap();
+        let annotated = bank.recall_frame_with_family_sources(&draft).unwrap();
+        assert_eq!(legacy.context(), annotated.context());
+        assert_eq!(legacy.receipt(), annotated.receipt());
+        let (old_frame, old) = legacy.finalize(draft.clone()).unwrap();
+        let (new_frame, new) = annotated.finalize(draft).unwrap();
+        assert_eq!(old_frame, new_frame);
+        assert_eq!(old.candidate_keys(), new.candidate_keys());
+        assert!(old.family_sources().is_none());
+        let provenance = &new.family_sources().unwrap()[0];
+        assert!(!provenance.category_generalized);
+        let sources = provenance.sources.iter().flatten().collect::<Vec<_>>();
+        assert_eq!(sources.len(), 1);
+        assert_eq!(
+            Some(sources[0].memory_id),
+            new.context().candidates[0].best_family_source
+        );
+        assert_eq!(sources[0].family, CandidateActionFamily::Ingest);
+        assert_eq!(sources[0].prior_tracked_target, Some(TrackedObjectId(71)));
+        assert_eq!(sources[0].outcome_contact, Some(contact));
+        assert_eq!(sources[0].last_tick, Tick::new(1));
+        assert_eq!(sources[0].aggregate_weight, 1.);
+        assert_eq!(sources[0].profile, new.context().profile);
+        assert_eq!(serde_json::to_vec(&bank).unwrap(), before);
+    }
+}
+
+#[test]
+fn opt_in_family_sources_preserve_empty_and_unknown_evidence() {
+    let mut bank = empty_bank();
+    let draft = probe_for_object(3, slot(0, 71, 0.4, [0., 0.8, 0.9]));
+    let (_, empty) = bank
+        .recall_frame_with_family_sources(&draft)
+        .unwrap()
+        .finalize(draft.clone())
+        .unwrap();
+    assert!(empty.family_sources().unwrap()[0]
+        .sources
+        .iter()
+        .all(Option::is_none));
+    assert_eq!(empty.context().candidates[0].family_confidence.raw(), 0.);
+    bank.observe_sealed_patch(&sequenced_patch(1, 1, 71, 0.4, 0.1, 0.))
+        .unwrap();
+    let (_, unknown) = bank
+        .recall_frame_with_family_sources(&draft)
+        .unwrap()
+        .finalize(draft)
+        .unwrap();
+    assert!(unknown.family_sources().unwrap()[0]
+        .sources
+        .iter()
+        .flatten()
+        .all(|s| s.outcome_contact.is_none()));
+}

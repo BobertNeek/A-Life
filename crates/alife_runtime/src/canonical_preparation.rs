@@ -695,6 +695,29 @@ pub fn prepare_canonical_frame(
     predictor: &GroundedSuccessorPredictor,
     measure: bool,
 ) -> CanonicalPreparationOutcome {
+    prepare_canonical_frame_impl(input, memory, topology, predictor, measure, false)
+}
+
+/// Research annotation of the existing routed recall, without another query or
+/// a bank export. This does not enable a GPU readout or change encoded lanes.
+pub fn prepare_canonical_frame_with_family_sources(
+    input: &CanonicalPreparationInput,
+    memory: &MemorySidecarState,
+    topology: &TopologySidecar,
+    predictor: &GroundedSuccessorPredictor,
+    measure: bool,
+) -> CanonicalPreparationOutcome {
+    prepare_canonical_frame_impl(input, memory, topology, predictor, measure, true)
+}
+
+fn prepare_canonical_frame_impl(
+    input: &CanonicalPreparationInput,
+    memory: &MemorySidecarState,
+    topology: &TopologySidecar,
+    predictor: &GroundedSuccessorPredictor,
+    measure: bool,
+    family_sources: bool,
+) -> CanonicalPreparationOutcome {
     let draft = &input.draft;
     let receptor_effects = input.receptor_effects;
     let tick_before = draft.tick();
@@ -789,7 +812,11 @@ pub fn prepare_canonical_frame(
         let topology_concept_started = measure.then(std::time::Instant::now);
         preparation_stage = "routed recall";
         let leaf_started = measure.then(std::time::Instant::now);
-        let routed_recall = memory.recall_frame(&routed_draft)?;
+        let routed_recall = if family_sources {
+            memory.recall_frame_with_family_sources(&routed_draft)?
+        } else {
+            memory.recall_frame(&routed_draft)?
+        };
         let routed_recall_ns = leaf_started.map_or(0, elapsed_ns);
         let leaf_started = measure.then(std::time::Instant::now);
         let mut cognitive_context = cognitive_memory_context_for_recall(

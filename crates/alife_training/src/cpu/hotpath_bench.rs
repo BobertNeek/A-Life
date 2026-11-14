@@ -66,6 +66,7 @@ fn sequence(p: &BrainPhenotype, ticks: usize, burn_in: usize) -> TrainingSequenc
     ]
     .into_iter()
     .map(|family| TrainingReplayCandidate {
+        memory_readout: None,
         family,
         decoder_inputs: inputs,
         innate_bias: 0.04,

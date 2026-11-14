@@ -59,6 +59,7 @@ fn sequence(phenotype: &BrainPhenotype, ticks: usize, burn: usize) -> TrainingSe
                 structural_synapses: Vec::new(),
                 candidates: (0..25)
                     .map(|i| TrainingReplayCandidate {
+                        memory_readout: None,
                         family: [
                             alife_core::CandidateActionFamily::Approach,
                             alife_core::CandidateActionFamily::Ingest,

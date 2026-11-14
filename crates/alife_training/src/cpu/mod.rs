@@ -14,6 +14,8 @@ mod cooperative_round;
 mod cooperative_source;
 mod fresh_founder;
 mod host;
+mod memory_binding;
+pub use memory_binding::{CpuMemoryReadoutReceiptV1, FrozenMemoryReadoutConstructionV1};
 mod input;
 mod objective;
 mod organism;

@@ -38,7 +38,11 @@ pub fn cpu_training_windows(
         }
     }
     let terminal = terminal_record.map(|r| *r.biochemistry());
-    if decisions.iter().any(|d| d.terminal_context2135.is_some()) {
+    if decisions.iter().any(|d| {
+        d.terminal_context2135.is_some()
+            || d.memory_readout_research.is_some()
+            || has_research_memory_readout(&d.replay_tick)
+    }) {
         return Err(super::invalid());
     }
     if decisions.is_empty()
@@ -201,6 +205,22 @@ pub fn cpu_training_windows(
         });
     }
     Ok(windows)
+}
+
+fn has_research_memory_readout(tick: &crate::TrainingReplayTick) -> bool {
+    tick.candidates.iter().any(|c| c.memory_readout.is_some())
+}
+
+/// Both ordinary CPU cohort trainers preflight every window before mutation and
+/// repeat this check on reloaded windows. Research replay remains available via
+/// evaluate_replay/probe_replay_gradients, outside ordinary optimizer admission.
+pub(super) fn validate_ordinary_training_sequence(
+    sequence: &TrainingSequence,
+) -> Result<(), TrainingError> {
+    if sequence.ticks.iter().any(has_research_memory_readout) {
+        return Err(super::invalid());
+    }
+    Ok(())
 }
 /// One actor update and one full residual critic Adam update per effective batch.
 /// Every window's frozen probabilities and actual features are checked before
