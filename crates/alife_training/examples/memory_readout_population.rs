@@ -416,7 +416,7 @@ fn run(
     let ids = basis(p);
     e.save("PROVENANCE.json",&bytes(&json!({"source_commit":option_env!("ALIFE_ASSAY_GIT_COMMIT"),"source_sha256":hash(include_bytes!("memory_readout_population.rs")),
   "binary_sha256":hash(&std::fs::read(std::env::current_exe()?)?),"asset_sha256":hash(&asset.encode_canonical()?),"genome_sha256":hash(&bytes(&child)?),"gain":q.gain,"population":POPULATION,"prepared_readout_coefficient":q.prepared_readout_coefficient,
-  "basis":"Ingest MemoryContext family_value_lane_start + 3; positive uniform L1-normalized coefficient","indices":ids,"cap":p.candidate_decoder().memory_channel().unwrap().max_candidate_gain(),"terminal":"Off","backend":"native-cpu"}))?)?;
+  "basis":if q.prepared_readout_coefficient.is_some(){"CPU research prepared Ingest energy to Approach; separate frozen config; no legacy coefficient edits"}else{"Ingest MemoryContext family_value_lane_start + 3; positive uniform L1-normalized coefficient"},"indices":if q.prepared_readout_coefficient.is_some(){Vec::<usize>::new()}else{ids.clone()},"cap":p.candidate_decoder().memory_channel().unwrap().max_candidate_gain(),"terminal":"Off","backend":"native-cpu"}))?)?;
     let graph = p
         .synapses()
         .iter()
