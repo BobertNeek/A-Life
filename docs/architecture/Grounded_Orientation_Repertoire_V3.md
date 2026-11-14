@@ -13,3 +13,7 @@ The frozen foundation limit remains 32 candidates. V3 reserves space for seven p
 ## State and evidence boundaries
 
 Genetic opt-in changes phenotype identity. It is not a migration of an acquired individual, and existing checkpoints must not be patched to claim the new phenotype. Native tests exercise sampled actions through normal World execution; deterministic candidate-construction tests establish bounds/identity, not learned gaze skill. CPU qualification is not GPU execution or FPS evidence. No memory-cap, reward-credit, learner, or neural-reset change is included.
+
+## Sensor-model scope
+
+GroundedObjectSlotsV1 remains the legacy range-limited, omnidirectional model with identity observer rotation and world-axis relative bearings. V3 physical head motion does not make a behind cue disappear or newly appear in that profile. It does not introduce directional sight or occlusion. Meaningful visual-search tests require an explicit directional-vision profile transfer with its own input, visibility, calibration and cost controls; do not silently reinterpret V1.
