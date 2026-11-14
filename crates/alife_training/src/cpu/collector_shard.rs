@@ -366,6 +366,11 @@ fn validate_decision(
     assignment: &CpuCollectorAssignmentV1,
     config: PpoConfig,
 ) -> Result<(), TrainingError> {
+    // The optional research head is not part of the legacy PPO replay ABI.
+    // Never admit such a row as if its ordinary replay logits selected the action.
+    if decision.terminal_context2135.is_some() {
+        return Err(invalid());
+    }
     let sequence = TrainingSequence {
         phenotype_hash: trainer.phenotype().phenotype_hash(),
         initial: decision.initial.clone(),

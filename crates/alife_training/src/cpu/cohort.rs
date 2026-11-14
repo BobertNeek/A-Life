@@ -38,6 +38,9 @@ pub fn cpu_training_windows(
         }
     }
     let terminal = terminal_record.map(|r| *r.biochemistry());
+    if decisions.iter().any(|d| d.terminal_context2135.is_some()) {
+        return Err(super::invalid());
+    }
     if decisions.is_empty()
         || (terminal.is_none() && decisions.len() < 2)
         || window_ticks == 0

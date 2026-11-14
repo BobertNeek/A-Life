@@ -1,0 +1,4 @@
+{"seed": 2026111800, "ticks": 256, "leadin": 600, "arm": "off", "gain": 16, "reverse_appearance": false, "alias": false, "evidence_id": "seed-2026111800-off-appearance-a-twohead-v4", "parent": "pursuit-twohead-bearing4"}
+{"seed": 2026111800, "ticks": 256, "leadin": 600, "arm": "zero", "gain": 16, "reverse_appearance": false, "alias": false, "evidence_id": "seed-2026111800-zero-appearance-a-twohead-v4", "parent": "pursuit-twohead-bearing4"}
+{"seed": 2026111800, "ticks": 256, "leadin": 600, "arm": "active", "gain": 16, "reverse_appearance": false, "alias": false, "evidence_id": "seed-2026111800-active-appearance-a-twohead-v4", "parent": "pursuit-twohead-bearing4"}
+{"seed": 2026111800, "ticks": 256, "leadin": 600, "arm": "mask", "gain": 16, "reverse_appearance": false, "alias": false, "evidence_id": "seed-2026111800-mask-appearance-a-twohead-v4", "parent": "pursuit-twohead-bearing4"}
