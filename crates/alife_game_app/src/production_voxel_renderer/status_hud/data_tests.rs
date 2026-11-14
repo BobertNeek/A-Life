@@ -42,7 +42,7 @@ pub(super) fn row() -> WorldOrganismPresentationRow {
         .remove(0)
 }
 #[test]
-fn six_quantities_are_independent_actual_physiology_not_generic_wellbeing() {
+fn seven_quantities_are_independent_actual_physiology_not_generic_wellbeing() {
     let mut row = row();
     let h = &mut row.biochemistry.homeostasis;
     h.drives.hunger = 0.11;
@@ -54,6 +54,19 @@ fn six_quantities_are_independent_actual_physiology_not_generic_wellbeing() {
     h.hormones.dopamine = 0.88;
     h.hormones.oxytocin = 0.77;
     row.biochemistry.body.energy = 0.22;
+    // Familiarity is history, not physiology: the row carries no record
+    // until the creature has been cared for, so it reads unknown — and a
+    // record maps [-1, 1] to [0, 1] on the meter (0.5 reads 0.75).
+    assert_eq!(row.familiarity, PresentationEvidence::Unknown);
+    let mut with_history = row.clone();
+    with_history.familiarity = PresentationEvidence::Observed {
+        value: PlayerFamiliarity {
+            value: 0.5,
+            last_interaction_tick: Tick::new(3),
+            interactions: 2,
+        },
+        tick: Tick::new(3),
+    };
     let readout = Readout::from_row(row.world_entity_id, row.organism_id, Some(&row), []);
     assert_eq!(
         readout.values,
@@ -63,9 +76,17 @@ fn six_quantities_are_independent_actual_physiology_not_generic_wellbeing() {
             Some(0.33),
             Some(1.0 - 0.44),
             Some(0.55),
-            Some(0.66)
+            Some(0.66),
+            None,
         ]
     );
+    let readout = Readout::from_row(
+        with_history.world_entity_id,
+        with_history.organism_id,
+        Some(&with_history),
+        [],
+    );
+    assert_eq!(readout.values[6], Some(0.75));
     for quantity in [Quantity::Hunger, Quantity::Fatigue, Quantity::SleepPressure] {
         assert!(!quantity.warning(0.1));
         assert!(quantity.warning(0.9));
@@ -76,6 +97,8 @@ fn six_quantities_are_independent_actual_physiology_not_generic_wellbeing() {
     }
     assert!(!Quantity::PraiseSignal.warning(0.0));
     assert!(!Quantity::PraiseSignal.warning(1.0));
+    assert!(!Quantity::Familiarity.warning(0.0));
+    assert!(!Quantity::Familiarity.warning(1.0));
 }
 fn set_raw(row: &mut WorldOrganismPresentationRow, quantity: Quantity, value: f32) {
     let h = &mut row.biochemistry.homeostasis;
@@ -86,23 +109,48 @@ fn set_raw(row: &mut WorldOrganismPresentationRow, quantity: Quantity, value: f3
         Quantity::Calm => h.drives.fear = value,
         Quantity::SleepPressure => h.hormones.sleep_pressure = value,
         Quantity::PraiseSignal => h.hormones.extension[0] = value,
+        Quantity::Familiarity => {
+            row.familiarity = PresentationEvidence::Observed {
+                value: PlayerFamiliarity {
+                    value,
+                    last_interaction_tick: Tick::new(0),
+                    interactions: 0,
+                },
+                tick: Tick::new(0),
+            }
+        }
     }
 }
 #[test]
 fn invalid_raw_values_are_unknown_in_each_lane_and_zero_is_known() {
     for quantity in QUANTITIES {
-        for invalid in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY, -0.01, 1.01] {
+        // Familiarity is signed history, not a 0..=1 physiology lane:
+        // its raw domain is [-1, 1] and its meter maps that to [0, 1].
+        let (invalids, valids): (&[f32], &[f32]) = if quantity == Quantity::Familiarity {
+            (
+                &[f32::NAN, f32::INFINITY, f32::NEG_INFINITY, -1.01, 1.01],
+                &[-1.0, 0.0, 1.0],
+            )
+        } else {
+            (
+                &[f32::NAN, f32::INFINITY, f32::NEG_INFINITY, -0.01, 1.01],
+                &[0.0, 0.5, 1.0],
+            )
+        };
+        for invalid in invalids {
             let mut row = row();
-            set_raw(&mut row, quantity, invalid);
+            set_raw(&mut row, quantity, *invalid);
             assert_eq!(quantity.value(&row), None, "{quantity:?}: {invalid}");
         }
-        for valid in [0.0, 0.5, 1.0] {
+        for valid in valids {
             let mut row = row();
-            set_raw(&mut row, quantity, valid);
+            set_raw(&mut row, quantity, *valid);
             assert_eq!(
                 quantity.value(&row),
                 Some(if quantity == Quantity::Calm {
                     1.0 - valid
+                } else if quantity == Quantity::Familiarity {
+                    (valid + 1.0) / 2.0
                 } else {
                     valid
                 })
@@ -117,7 +165,7 @@ fn unknown_row_and_every_identity_lifecycle_mismatch_fail_closed() {
     let organism = row.organism_id;
     assert_eq!(
         Readout::from_row(stable, organism, None, []).values,
-        [None; 6]
+        [None; 7]
     );
     assert_eq!(
         Readout::from_row(stable, organism, Some(&row), []).name,
@@ -159,7 +207,7 @@ fn unknown_row_and_every_identity_lifecycle_mismatch_fail_closed() {
     assert!(Readout::from_row(stable, organism, Some(&row), [&food]).holding_food);
     for changed in mutations {
         let readout = Readout::from_row(stable, organism, Some(&changed), [&food]);
-        assert_eq!(readout.values, [None; 6]);
+        assert_eq!(readout.values, [None; 7]);
         assert_eq!(readout.name, None);
         assert!(
             !readout.holding_food,
@@ -206,16 +254,17 @@ fn selected_readout_does_not_depend_on_spawn_metadata_and_rebinds_on_frame_remov
     let stable = row.world_entity_id;
     let mut world = World::new();
     world.init_resource::<BevyEntityMap>();
-    assert_eq!(selected_readout(&world, stable).values, [None; 6]);
+    assert_eq!(selected_readout(&world, stable).values, [None; 7]);
     let entity = bind_creature(&mut world, &row);
-    assert_eq!(selected_readout(&world, stable).values, [None; 6]);
+    assert_eq!(selected_readout(&world, stable).values, [None; 7]);
     world.insert_resource(
         LiveBrainPresentationFrameResource::from_authoritative_world(&organism_world).unwrap(),
     );
-    assert!(selected_readout(&world, stable)
-        .values
-        .iter()
-        .all(Option::is_some));
+    // The six physiology lanes read; familiarity has no history in this
+    // world, so it stays unknown rather than reading as a midpoint.
+    let first = selected_readout(&world, stable);
+    assert!(first.values[..6].iter().all(Option::is_some));
+    assert_eq!(first.values[6], None);
     let measured = selected_readout(&world, stable);
     assert_eq!(
         selected_readout(&world, stable),
@@ -226,14 +275,14 @@ fn selected_readout_does_not_depend_on_spawn_metadata_and_rebinds_on_frame_remov
         .get_mut::<ProductionCreatureAssemblyRoot>(entity)
         .unwrap()
         .organism_id = OrganismId(2);
-    assert_eq!(selected_readout(&world, stable).values, [None; 6]);
+    assert_eq!(selected_readout(&world, stable).values, [None; 7]);
     world
         .get_mut::<ProductionCreatureAssemblyRoot>(entity)
         .unwrap()
         .organism_id = row.organism_id;
     assert_eq!(selected_readout(&world, stable), measured);
     world.remove_resource::<LiveBrainPresentationFrameResource>();
-    assert_eq!(selected_readout(&world, stable).values, [None; 6]);
+    assert_eq!(selected_readout(&world, stable).values, [None; 7]);
     world.insert_resource(
         LiveBrainPresentationFrameResource::from_authoritative_world(&organism_world).unwrap(),
     );
@@ -261,7 +310,7 @@ fn selected_readout_does_not_depend_on_spawn_metadata_and_rebinds_on_frame_remov
     world
         .entity_mut(entity)
         .remove::<Fvr04ProductionCreatureVisualMarker>();
-    assert_eq!(selected_readout(&world, stable).values, [None; 6]);
+    assert_eq!(selected_readout(&world, stable).values, [None; 7]);
 }
 #[test]
 fn canonical_name_changes_while_frame_is_paused_and_invalid_targets_never_use_stale_names() {
@@ -392,8 +441,12 @@ fn food_badge_rebinds_on_selection_frame_identity_and_load_changes() {
     );
     let other_readout = selected_readout(&world, other.world_entity_id);
     assert!(
-        other_readout.values.iter().all(Option::is_some),
+        other_readout.values[..6].iter().all(Option::is_some),
         "second selection is a valid live creature"
+    );
+    assert_eq!(
+        other_readout.values[6], None,
+        "a second creature with no history is unknown, not a stranger"
     );
     assert!(
         !other_readout.holding_food,
@@ -497,5 +550,37 @@ fn debug_care_line_reports_the_last_observed_response_and_marks_unknown_as_unkno
     assert_eq!(
         debug_care_line(&observed(pet_and_scold)),
         "Petted and scolded, felt at tick 7, praise 0.10 to 0.42, loneliness 0.61 to 0.55"
+    );
+}
+
+#[test]
+fn debug_familiarity_line_reports_the_band_and_marks_unknown_as_unknown() {
+    // No record is unknown, never a definite absence: an old save with no
+    // recorded familiarity reads exactly like a creature never yet cared for.
+    assert_eq!(
+        debug_familiarity_line(&PresentationEvidence::Unknown),
+        "familiarity: unknown (no interaction history)"
+    );
+    let observed = |value: f32, interactions: u32| PresentationEvidence::Observed {
+        value: PlayerFamiliarity {
+            value,
+            last_interaction_tick: Tick::new(7),
+            interactions,
+        },
+        tick: Tick::new(7),
+    };
+    // The band is vocabulary, not a measurement: the line carries the
+    // exact value alongside it.
+    assert_eq!(
+        debug_familiarity_line(&observed(0.6, 12)),
+        "familiarity: trusting (0.60, 12 interactions, last at tick 7)"
+    );
+    assert_eq!(
+        debug_familiarity_line(&observed(0.0, 4)),
+        "familiarity: stranger (0.00, 4 interactions, last at tick 7)"
+    );
+    assert_eq!(
+        debug_familiarity_line(&observed(-0.8, 3)),
+        "familiarity: wary (-0.80, 3 interactions, last at tick 7)"
     );
 }

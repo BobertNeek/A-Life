@@ -130,7 +130,7 @@ fn image_name(world: &World, entity: Entity) -> Option<&'static str> {
 }
 
 fn assert_readout_components(world: &mut World, readout: Option<&Readout>) {
-    let values = readout.map_or([None; 6], |readout| readout.values);
+    let values = readout.map_or([None; 7], |readout| readout.values);
     let badge = world
         .query_filtered::<&Visibility, With<HeldFood>>()
         .single(world)
@@ -144,10 +144,10 @@ fn assert_readout_components(world: &mut World, readout: Option<&Readout>) {
         }
     );
     let value = |quantity| values[QUANTITIES.iter().position(|q| *q == quantity).unwrap()];
-    assert_eq!(world.query::<&MeterFill>().iter(world).count(), 6);
-    assert_eq!(world.query::<&MeterTrack>().iter(world).count(), 6);
-    assert_eq!(world.query::<&Unknown>().iter(world).count(), 6);
-    assert_eq!(world.query::<&Warning>().iter(world).count(), 6);
+    assert_eq!(world.query::<&MeterFill>().iter(world).count(), 7);
+    assert_eq!(world.query::<&MeterTrack>().iter(world).count(), 7);
+    assert_eq!(world.query::<&Unknown>().iter(world).count(), 7);
+    assert_eq!(world.query::<&Warning>().iter(world).count(), 7);
     for (fill, node, color) in world
         .query::<(&MeterFill, &Node, &BackgroundColor)>()
         .iter(world)
@@ -520,6 +520,7 @@ fn cpu_layout_fits_supported_viewports_and_exports_source_derived_fixtures() {
         Some(0.78),
         Some(0.30),
         Some(0.12),
+        Some(0.65),
     ];
     let cases = [
         (
@@ -545,6 +546,7 @@ fn cpu_layout_fits_supported_viewports_and_exports_source_derived_fixtures() {
                     Some(0.12),
                     Some(0.90),
                     Some(0.05),
+                    Some(0.10),
                 ],
             }),
             false,
@@ -555,7 +557,7 @@ fn cpu_layout_fits_supported_viewports_and_exports_source_derived_fixtures() {
                 name: None,
                 holding_food: false,
                 stable_id: 42,
-                values: [None; 6],
+                values: [None; 7],
             }),
             false,
         ),
@@ -565,7 +567,7 @@ fn cpu_layout_fits_supported_viewports_and_exports_source_derived_fixtures() {
                 name: None,
                 holding_food: false,
                 stable_id: 42,
-                values: [Some(0.0); 6],
+                values: [Some(0.0); 7],
             }),
             false,
         ),
@@ -582,6 +584,7 @@ fn cpu_layout_fits_supported_viewports_and_exports_source_derived_fixtures() {
                     Some(0.60),
                     Some(1.0),
                     Some(1.0),
+                    Some(1.0),
                 ],
             }),
             false,
@@ -592,7 +595,7 @@ fn cpu_layout_fits_supported_viewports_and_exports_source_derived_fixtures() {
                 name: None,
                 holding_food: false,
                 stable_id: 42,
-                values: [Some(0.25), Some(0.82), None, Some(0.78), None, Some(0.12)],
+                values: [Some(0.25), Some(0.82), None, Some(0.78), None, Some(0.12), None],
             }),
             false,
         ),
@@ -696,7 +699,7 @@ fn cpu_layout_fits_supported_viewports_and_exports_source_derived_fixtures() {
 fn unknown_is_not_valid_zero_and_clear_or_debug_hides_selection() {
     let mut world = World::new();
     spawn(&mut world);
-    for values in [[None; 6], [Some(0.0); 6], [Some(1.0); 6], [None; 6]] {
+    for values in [[None; 7], [Some(0.0); 7], [Some(1.0); 7], [None; 7]] {
         let readout = Readout {
             name: None,
             holding_food: false,
@@ -710,7 +713,7 @@ fn unknown_is_not_valid_zero_and_clear_or_debug_hides_selection() {
         name: None,
         holding_food: false,
         stable_id: u64::MAX,
-        values: [Some(0.5); 6],
+        values: [Some(0.5); 7],
     };
     for (selected, debug, shown) in [
         (true, true, false),
@@ -797,7 +800,7 @@ fn real_dock_retains_priority_and_status_restores_when_it_fits() {
         name: None,
         holding_food: false,
         stable_id: 42,
-        values: [Some(0.5); 6],
+        values: [Some(0.5); 7],
     };
     let panel = world
         .query_filtered::<Entity, With<HudRoot>>()
@@ -839,7 +842,7 @@ fn explicit_help_uses_space_above_dock_and_temporarily_hides_selected_status() {
         name: None,
         holding_food: false,
         stable_id: 42,
-        values: [Some(0.5); 6],
+        values: [Some(0.5); 7],
     };
     set_readout(&mut world, Some(&readout), false);
     adapt_bottom_controls_visibility(&mut world, Vec2::new(320.0, 240.0), true);
@@ -863,7 +866,7 @@ fn food_badge_clears_and_restores_without_resizing_the_header_or_intercepting_in
     let readout = Readout {
         name: None,
         stable_id: u64::MAX,
-        values: [Some(0.5); 6],
+        values: [Some(0.5); 7],
         holding_food: true,
     };
     let mut original_box = None;
@@ -1000,3 +1003,4 @@ fn naming_button_is_the_only_input_target_and_fails_closed_without_a_living_iden
         }
     }
 }
+
