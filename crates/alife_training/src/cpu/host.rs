@@ -432,10 +432,14 @@ impl CpuCanonicalHost {
                 .validate_genome(record.genome())
                 .map_err(CpuHostError::Preparation)?;
         }
-        let channel_policy = config.schema_version == 3;
+        let channel_policy = config.schema_version >= 3;
         if channel_policy {
             for (&id, resident) in &mut self.residents {
-                resident.terminal_channel2135 = Some(TerminalChannelState2135::new(OrganismId(id)));
+                resident.terminal_channel2135 = Some(if config.schema_version == 4 {
+                    TerminalChannelState2135::new_batched(OrganismId(id))
+                } else {
+                    TerminalChannelState2135::new(OrganismId(id))
+                });
             }
         }
         self.terminal_context2135 = Some(config);
@@ -574,7 +578,7 @@ impl CpuCanonicalHost {
         let channel_policy = checkpoint
             .terminal_context2135
             .as_ref()
-            .is_some_and(|c| c.schema_version == 3);
+            .is_some_and(|c| c.schema_version >= 3);
         if checkpoint.world.config.brain_policy.policy != PolicyBackend::NeuralClosedLoopCpu {
             return Err(CpuHostError::State(
                 "not a versioned offline CPU checkpoint",
@@ -668,6 +672,20 @@ impl CpuCanonicalHost {
                 ));
             }
             if let Some(channels) = &r.terminal_channel2135 {
+                let expected = if checkpoint
+                    .terminal_context2135
+                    .as_ref()
+                    .is_some_and(|c| c.schema_version == 4)
+                {
+                    2
+                } else {
+                    1
+                };
+                if channels.schema_version != expected {
+                    return Err(CpuHostError::State(
+                        "terminal reader recipe/authority version mismatch",
+                    ));
+                }
                 channels
                     .validate(r.next_sequence)
                     .map_err(CpuHostError::Preparation)?;

@@ -47,3 +47,14 @@ fn legacy_recipe_continuation_probe() {
         assert_eq!(serde_json::to_vec(&trainer.checkpoint()).unwrap(), founder);
     }
 }
+
+#[test]
+fn existing_lives_cannot_switch_to_batched_reader_by_editing_only_config() {
+    let (mut host, trainer) = parent::fixture(None);
+    host.enable_terminal_context2135(TerminalContextConfig2135::new(16.0).unwrap(), &trainer)
+        .unwrap();
+    host.step(&trainer, 1.0).unwrap();
+    let mut cp = host.checkpoint(&trainer).unwrap();
+    cp.terminal_context2135.as_mut().unwrap().schema_version = 4;
+    assert!(CpuCanonicalHost::from_checkpoint(cp, &trainer).is_err());
+}

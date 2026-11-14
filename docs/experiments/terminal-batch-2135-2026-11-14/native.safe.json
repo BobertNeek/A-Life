@@ -1,0 +1,69 @@
+{
+  "schema": "terminal_batch_native_safe_v1",
+  "main_base": "d6758f84",
+  "parent": "Contact20 exact pair in PLAN.md",
+  "qualification": {
+    "training_library": {
+      "passed": 157,
+      "ignored": 7,
+      "seconds": 120.01
+    },
+    "native_integration_tests": 7,
+    "strict_clippy": "passed: lib, tests, terminal_context2135 example",
+    "format": "passed",
+    "external_v6_recipe2_checkpoint": "exact bytes and next-step continuation passed",
+    "retained_real_capacity_probe": {
+      "ordinary_records": 66,
+      "channel_sources": 1,
+      "old_recipe3": "BankCapacityExceeded",
+      "new_recipe4": "Admitted",
+      "reserved_work_units": 332160,
+      "reserved_atp_q16": 21769,
+      "approach_queries": 3,
+      "scope": "pure read diagnostic with constructed full ATP budget; old life remained recipe3"
+    },
+    "recipe4_native": "actual consumption, earlier/current prepared-query output equality, shared stage counts, cold/next-step equality, founder parity, authority tamper rejection, constructed low ATP continuation passed"
+  },
+  "reference": {
+    "commit": "d7772193239ac86949b04c919ba3c16d3208a6c0",
+    "binary_sha256": "defa8569b366a8e3cc7e9a82395ec50f553479cee28de580a1de33eabb8a0c09",
+    "test": "legacy_recipe_continuation_probe",
+    "result": "passed",
+    "recipes": [
+      2,
+      3
+    ],
+    "checkpoint_and_row_files": 12
+  },
+  "legacy_recipe2_3_exact": {
+    "files": 12,
+    "total_bytes": 10194240,
+    "ordered_content_sha256": "47d8a1ea32de740c5cf4107966a1f862024ce993c000d8269e473aa902862eda",
+    "recipes": [
+      2,
+      3
+    ]
+  },
+  "default_off_original_exact": {
+    "files": 16,
+    "total_bytes": 13719215,
+    "ordered_content_sha256": "998d55f14544137685e4d1c491dc4ffa2400bd498ac369d3e21f85cdd987e4ab",
+    "old_executable_commit": "2d196898bc65c822f19a311bfeb0bc252d5816e9"
+  },
+  "commands": [
+    "cargo test -p alife_training --features cpu-backend --lib",
+    "cargo test -p alife_training --features cpu-backend --test cpu_terminal_context2135",
+    "cargo test -p alife_training --features cpu-backend --test cpu_terminal_batch2135",
+    "cargo test -p alife_training --features cpu-backend --test cpu_terminal_compat2135 original_host_full_parent_compatibility_probe -- --exact --nocapture",
+    "cargo clippy -p alife_training --features cpu-backend --lib --tests --example terminal_context2135 -- -D warnings",
+    "cargo fmt --all -- --check",
+    "ALIFE_TERMINAL_REAL_INPUT=LOCAL_FINAL_CP cargo test -p alife_training --features cpu-backend --lib retained_real_bank_above64 -- --ignored --nocapture",
+    "ALIFE_NATIVE_LEGACY_CP=LOCAL_V6_CP cargo test -p alife_training --features cpu-backend --lib external_recipe2_checkpoint_keeps_exact_bytes_and_continuation -- --ignored"
+  ],
+  "limitations": [
+    "CPU native qualification only; no hosted CI or GPU pass claimed",
+    "Logical tariffs are not measured hardware FLOPs",
+    "Paid-life comparison not yet launched at source qualification",
+    "No parent promotion; acquired state remains LOCAL"
+  ]
+}

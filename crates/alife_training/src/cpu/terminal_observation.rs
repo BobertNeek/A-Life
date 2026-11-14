@@ -20,8 +20,15 @@ impl TerminalChannelState2135 {
             observations: Vec::new(),
         }
     }
+    pub fn new_batched(organism_id: OrganismId) -> Self {
+        let mut state = Self::new(organism_id);
+        // Distinct authority input: an old life cannot change read policies by
+        // changing only its unsealed top-level config version.
+        state.schema_version = 2;
+        state
+    }
     pub fn validate(&self, next_sequence: u64) -> Result<(), String> {
-        if self.schema_version != 1
+        if !matches!(self.schema_version, 1 | 2)
             || self.organism_id.raw() == 0
             || self.observations.len() > TERMINAL_CHANNEL_CAPACITY2135
             || self.last_processed_sequence.checked_add(1) != Some(next_sequence)

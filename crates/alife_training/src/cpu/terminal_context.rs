@@ -1,5 +1,7 @@
 //! Explicit experimental CPU terminal-memory context, separate from the 36-lane ABI.
 //! Fixed-in-life head weights; existing waking biological learner remains unchanged.
+#[path = "terminal_batch_host.rs"]
+mod batch_host;
 #[path = "terminal_head.rs"]
 pub mod head;
 #[path = "native_terminal.rs"]
@@ -99,6 +101,19 @@ impl TerminalContextConfig2135 {
         config.validate_genome(genome)?;
         Ok(config)
     }
+    /// Fresh recipe4 life: immutable per-decision bank/proof/index batch.
+    /// This never migrates an existing recipe2/3 individual.
+    pub fn for_parent_batched(
+        asset: &FoundationWeightAsset,
+        genome: &CreatureGenome,
+        phenotype: &BrainPhenotype,
+        gain: f32,
+    ) -> Result<Self, String> {
+        let mut config = Self::for_parent(asset, genome, phenotype, gain)?;
+        config.schema_version = 4;
+        config.validate()?;
+        Ok(config)
+    }
     /// Exact continuation policy of pre-channel-observation research lives.
     pub fn legacy_v2(gain: f32) -> Result<Self, String> {
         let h = head::Head::new(true, gain).map_err(|_| "invalid terminal gain")?;
@@ -124,10 +139,10 @@ impl TerminalContextConfig2135 {
                 && s.bytes()
                     .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
         };
-        if !matches!(self.schema_version, 2 | 3)
+        if !matches!(self.schema_version, 2..=4)
             || (self.schema_version == 2
                 && (!legacy_identity || self.parent_native_digest.is_some()))
-            || (self.schema_version == 3 && self.parent_native_digest.is_none())
+            || (self.schema_version >= 3 && self.parent_native_digest.is_none())
             || !digest_text(&self.parent_sha256)
             || !digest_text(&self.construction_genome_sha256)
             || self.motor_head_count != 2
@@ -246,6 +261,8 @@ pub struct TerminalAdmissionPlan2135 {
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TerminalContextReceipt2135 {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub batch_work: Option<reader::batch::BatchWork>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub observation: Option<TerminalObservationReceipt2135>,
     pub schema_version: u16,
@@ -397,6 +414,9 @@ fn prepare_terminal_inner2135(
     available_atp_q16: u32,
 ) -> Result<TerminalContextReceipt2135, String> {
     config.validate()?;
+    if config.schema_version == 4 {
+        return batch_host::prepare(config, memory, channels, recall, available_atp_q16);
+    }
     if (config.schema_version == 3) != channels.is_some() {
         return Err("terminal observation policy/state mismatch".into());
     }
@@ -425,6 +445,7 @@ fn prepare_terminal_inner2135(
         available_atp_q16 - observation_debit,
     )?;
     let mut result = TerminalContextReceipt2135 {
+        batch_work: None,
         observation,
         schema_version: config.schema_version,
         config: config.clone(),

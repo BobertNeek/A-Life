@@ -1,5 +1,7 @@
 //! Opt-in terminal reader for legacy native-bank and recipe3 channel sources.
 //! Core validates source/query codecs; charged host admission owns dispatch.
+#[path = "terminal_batch.rs"]
+pub mod batch;
 #[path = "terminal_kernel.rs"]
 mod terminal_kernel;
 use alife_core::{

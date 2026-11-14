@@ -34,6 +34,8 @@ struct Request {
     food_nutrition: Option<f32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     decision_target: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    recipe_version: Option<u16>,
 }
 fn config(asset: &FoundationWeightAsset) -> Result<CanonicalNewGameConfig> {
     let mut c = CanonicalNewGameConfig::phase3(2026111701, 1)?;
@@ -152,6 +154,9 @@ fn run(
         || !(1..=512).contains(&request.ticks)
         || request.leadin > 2400
         || request
+            .recipe_version
+            .is_some_and(|version| !matches!(version, 3 | 4))
+        || request
             .decision_target
             .is_some_and(|n| n == 0 || n > request.ticks)
         || request
@@ -167,7 +172,7 @@ fn run(
     let founder_bytes = serde_json::to_vec(&trainer.checkpoint())?;
     evidence.save("FOUNDER-OPTIMIZER-BIRTH.json", &founder_bytes)?;
     evidence.save("PROVENANCE.json",&serde_json::to_vec_pretty(&json!({
-        "schema":2135,"revision":"v6-local-physical-trace","parent_sha256":format!("{:x}",Sha256::digest(asset.encode_canonical()?)),
+        "schema":2135,"revision":"versioned-local-physical-trace","parent_sha256":format!("{:x}",Sha256::digest(asset.encode_canonical()?)),
         "parent_native_digest":asset.digest(),"parent_manifest":asset.manifest(),
         "construction_genome_sha256":format!("{:x}",Sha256::digest(serde_json::to_vec(genome)?)),
         "motor_head_count":trainer.phenotype().cognitive_architecture().motor_head_count(),
@@ -180,7 +185,9 @@ fn run(
             "head":format!("{:x}",Sha256::digest(include_bytes!("../src/cpu/terminal_head.rs"))),
             "channel_state":format!("{:x}",Sha256::digest(include_bytes!("../src/cpu/terminal_observation.rs"))),
             "channel_proof":format!("{:x}",Sha256::digest(include_bytes!("../../alife_core/src/memory/channel_terminal.rs"))),
-            "trace":format!("{:x}",Sha256::digest(include_bytes!("support/terminal_trace2135.rs")))},
+            "trace":format!("{:x}",Sha256::digest(include_bytes!("support/terminal_trace2135.rs"))),
+            "batch":format!("{:x}",Sha256::digest(include_bytes!("../src/cpu/terminal_batch.rs"))),
+            "batch_dispatch":format!("{:x}",Sha256::digest(include_bytes!("../src/cpu/terminal_batch_host.rs")))},
         "local_only":true,"automatic_retry":false,"compile_commit":option_env!("ALIFE_ASSAY_GIT_COMMIT")
     }))?)?;
     evidence.save(
@@ -226,16 +233,16 @@ fn run(
             Ok::<_, ScaffoldContractError>(())
         })?;
     if request.arm != "off" {
-        let mut c = TerminalContextConfig2135::for_parent(
-            asset,
-            genome,
-            trainer.phenotype(),
-            if request.arm == "zero" {
-                0.
-            } else {
-                request.gain
-            },
-        )?;
+        let gain = if request.arm == "zero" {
+            0.0
+        } else {
+            request.gain
+        };
+        let mut c = if request.recipe_version == Some(4) {
+            TerminalContextConfig2135::for_parent_batched(asset, genome, trainer.phenotype(), gain)
+        } else {
+            TerminalContextConfig2135::for_parent(asset, genome, trainer.phenotype(), gain)
+        }?;
         c.mask_new_context = request.arm == "mask";
         host.enable_terminal_context2135(c, &trainer)?;
     }
