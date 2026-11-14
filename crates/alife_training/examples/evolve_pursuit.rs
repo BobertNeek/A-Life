@@ -54,6 +54,7 @@ struct Variation {
     appearance: u8,
     distance_scale: f32,
     initial_energy: f32,
+    terrain: [f32; 2],
 }
 impl Default for Variation {
     fn default() -> Self {
@@ -63,6 +64,7 @@ impl Default for Variation {
             appearance: 0,
             distance_scale: 1.,
             initial_energy: 0.25,
+            terrain: [0.5, 0.5],
         }
     }
 }
@@ -95,6 +97,7 @@ struct Trial {
     initial_drives: DriveSnapshot,
     final_drives: DriveSnapshot,
     sleeping_steps: usize,
+    world_steps: usize,
     injury: f32,
     alive: bool,
     decisions: usize,
@@ -465,7 +468,7 @@ fn trial(
             shape,
             chemical: [0., 0., 0.],
             surface_temperature: 0.,
-            terrain: [0.5, 0.5],
+            terrain: variation.terrain,
         },
     )?;
     let mut distraction_id = None;
@@ -498,7 +501,7 @@ fn trial(
                 shape,
                 chemical: [0.; 3],
                 surface_temperature: 0.,
-                terrain: [0.5, 0.5],
+                terrain: variation.terrain,
             },
         )?;
     }
@@ -578,6 +581,7 @@ fn trial(
         initial_drives,
         final_drives: initial_drives,
         sleeping_steps: 0,
+        world_steps: 0,
         injury: 0.,
         alive: true,
         decisions: 0,
@@ -657,6 +661,7 @@ fn trial(
                 .pain
         });
         let step = host.step(trainer, 1.)?;
+        result.world_steps = tick + 1;
         result.sleeping_steps += step.sleeping_organisms;
         for row in step.decisions {
             result.decisions += 1;
@@ -692,6 +697,7 @@ fn trial(
                     "motor_activations": ([1760,1775,1776,1791,1824,1839].map(|i| row.final_features[i])),
                     "hold_motor_activation":row.final_features[1823],
                     "inspect_motor_activations":&row.final_features[1760..1776],
+                    "action_motor_activations":&row.final_features[1728..1856],
                     "need_relay_activations":&row.final_features[896..912],
                     "objects_before":objects_before,
                     "objects_after":([Some(target),distraction_id].into_iter().flatten().map(|id| {
@@ -765,6 +771,10 @@ fn run(base: &FoundationWeightAsset, p: &BrainPhenotype, r: Request) -> Result<s
         || !(0.5..=2.0).contains(&r.variation.distance_scale)
         || !r.variation.initial_energy.is_finite()
         || !(0.0..=1.0).contains(&r.variation.initial_energy)
+        || r.variation
+            .terrain
+            .iter()
+            .any(|v| !v.is_finite() || !(0.0..=1.0).contains(v))
         || !(0.0..=4.0).contains(&r.variation.speed)
         || r.variation.appearance > 3
         || r.seeds == 0
@@ -847,7 +857,7 @@ fn run(base: &FoundationWeightAsset, p: &BrainPhenotype, r: Request) -> Result<s
     }
     Ok(
         json!({"backend":"native-cpu", "memory_cap":trainer.phenotype().candidate_decoder().memory_channel().map(|m|m.max_candidate_gain()), "base_digest":base.digest(),"candidate_digest":asset.digest(),
-        "assay_version":9,"weight_edits":r.weight_edits,"hold_readout":r.hold_readout,"motor_heads":r.motor_heads,"variation":r.variation,"readout_scale":r.readout_scale,"bearing_gain":r.bearing_gain,"params":r.params,"memory_aversion":r.memory_aversion,"ticks":r.ticks,"seconds":start.elapsed().as_secs_f64(),"trials":trials}),
+        "assay_version":10,"weight_edits":r.weight_edits,"hold_readout":r.hold_readout,"motor_heads":r.motor_heads,"variation":r.variation,"readout_scale":r.readout_scale,"bearing_gain":r.bearing_gain,"params":r.params,"memory_aversion":r.memory_aversion,"ticks":r.ticks,"seconds":start.elapsed().as_secs_f64(),"trials":trials}),
     )
 }
 
@@ -1132,6 +1142,7 @@ mod tests {
                     appearance: 1,
                     distance_scale,
                     initial_energy: 0.25,
+                    terrain: [0.5, 0.5],
                 },
             )
             .unwrap();
@@ -1158,30 +1169,23 @@ mod tests {
             &base,
         )
         .unwrap();
-        let food = trial(
-            &template,
-            &trainer,
-            2026111300,
-            "contact",
-            1,
-            true,
-            Variation::default(),
-        )
-        .unwrap();
-        let toy = trial(
-            &template,
-            &trainer,
-            2026111300,
-            "toy",
-            1,
-            true,
-            Variation::default(),
-        )
-        .unwrap();
-        assert_eq!(food.trace[0]["candidates"], toy.trace[0]["candidates"]);
-        for c in food.trace[0]["candidates"].as_array().unwrap() {
-            if !c["target"]["entity"].is_null() {
-                assert_eq!(c["features"][15], 0.0);
+        for terrain in [[0.5, 0.5], [0.25, 0.0], [0.0, 1.0]] {
+            let variation = Variation {
+                terrain,
+                ..Variation::default()
+            };
+            let food = trial(
+                &template, &trainer, 2026111300, "contact", 1, true, variation,
+            )
+            .unwrap();
+            let toy = trial(&template, &trainer, 2026111300, "toy", 1, true, variation).unwrap();
+            assert_eq!(food.trace[0]["candidates"], toy.trace[0]["candidates"]);
+            for c in food.trace[0]["candidates"].as_array().unwrap() {
+                if !c["target"]["entity"].is_null() {
+                    assert_eq!(c["features"][15], 0.0);
+                    assert_eq!(c["features"][22], terrain[0]);
+                    assert_eq!(c["features"][23], terrain[1]);
+                }
             }
         }
     }
