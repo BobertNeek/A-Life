@@ -621,9 +621,10 @@ baseline binary's pursuit, World, runtime and biology source matches pre-fix
 | Motion-child meals | 0/3 | 0/3 |
 | Paired-pain-child meals | 0/3 | 0/3 |
 
-Only Contact20 seed 2026115411 changed trial aggregates: its first meal moved
-from tick 91 to 69, with injury increasing from 0.4755995 to 0.4835354. The other
-eight paired trial summaries match. The fixture defect therefore has observable
+Contact20 seed 2026115411 changed meal timing: its first meal moved from tick 91
+to 69, with injury increasing from 0.4755995 to 0.4835354. Seed 2026115412 changed
+one Ingest selection to Contact, with the same meal time and physical outcome
+aggregates. The other seven paired trial summaries match. The fixture defect has observable
 consequences, but it does not explain away the mixed-food tradeoff in these
 cases. This limited correction check does not requalify every historical food,
 obstacle or warm-preparation ranking. These original assays stop at first meal,
