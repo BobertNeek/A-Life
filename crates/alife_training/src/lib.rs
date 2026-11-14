@@ -1,5 +1,7 @@
 //! Offline foundation training on the compiled neural graph, using WGSL or CPU.
 #![recursion_limit = "256"]
+#[cfg(test)]
+extern crate self as alife_training;
 
 mod backend_handoff;
 #[cfg(feature = "receipt-lineage")]

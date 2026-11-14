@@ -1,0 +1,273 @@
+{
+  "source": "v8 research assay; fresh replay of seed2026112800 on exact Contact20. Original aggregate metrics reproduced.",
+  "receipt_limit": "CpuCanonicalStep does not expose GripTransferKind::Released. These are measured ownership transitions under a selected Grab, not a captured Released event.",
+  "trials": [
+    {
+      "scene": "hazard",
+      "decisions": 104,
+      "sleeping_steps": 24,
+      "initial_drives": {
+        "brain_atp": 0.3747084438800812,
+        "curiosity": 0.4499996304512024,
+        "extension": [
+          0.12000088393688202,
+          0.0
+        ],
+        "fatigue": 0.03705247491598129,
+        "fear": 0.09999991208314896,
+        "hunger": 0.8129372596740723,
+        "loneliness": 0.14999982714653015,
+        "pain": 0.0,
+        "reproductive_drive": 0.09999991208314896,
+        "temperature_stress": 0.0
+      },
+      "final_drives": {
+        "brain_atp": 0.36781540513038635,
+        "curiosity": 0.4409257769584656,
+        "extension": [
+          0.14120124280452728,
+          0.0
+        ],
+        "fatigue": 0.0,
+        "fear": 0.44601184129714966,
+        "hunger": 0.8232768774032593,
+        "loneliness": 0.14999982714653015,
+        "pain": 0.039963625371456146,
+        "reproductive_drive": 0.09999991208314896,
+        "temperature_stress": 0.0
+      },
+      "injury": 0.7996360659599304,
+      "consumed": false,
+      "held_rows": 67,
+      "held_grab_present": 67,
+      "held_grab_in_manipulation_mask": 67,
+      "held_grab_selected": 11,
+      "acquisition_ticks": [
+        4,
+        8,
+        14,
+        30,
+        50,
+        59,
+        69,
+        72,
+        80,
+        87,
+        105,
+        112
+      ],
+      "release_transitions": [
+        {
+          "tick": 6,
+          "selected_held_grab": true,
+          "pain_before": 0.50396329164505,
+          "pain_after": 0.523804783821106,
+          "distance_after": 0.499999988824131,
+          "next_reacquisition": 8,
+          "next_observed_no_contact": 7,
+          "next_distance_over_reach075": null
+        },
+        {
+          "tick": 10,
+          "selected_held_grab": true,
+          "pain_before": 0.5802929401397705,
+          "pain_after": 0.5970812439918518,
+          "distance_after": 0.500000003725296,
+          "next_reacquisition": 14,
+          "next_observed_no_contact": 11,
+          "next_distance_over_reach075": null
+        },
+        {
+          "tick": 27,
+          "selected_held_grab": true,
+          "pain_before": 1.0,
+          "pain_after": 1.0,
+          "distance_after": 0.49999999161810255,
+          "next_reacquisition": 30,
+          "next_observed_no_contact": 28,
+          "next_distance_over_reach075": null
+        },
+        {
+          "tick": 48,
+          "selected_held_grab": true,
+          "pain_before": 0.10625509917736053,
+          "pain_after": 0.15616914629936218,
+          "distance_after": 0.5000000046566185,
+          "next_reacquisition": 50,
+          "next_observed_no_contact": 49,
+          "next_distance_over_reach075": null
+        },
+        {
+          "tick": 57,
+          "selected_held_grab": true,
+          "pain_before": 0.6459311842918396,
+          "pain_after": 0.679277777671814,
+          "distance_after": 0.5000000046566185,
+          "next_reacquisition": 59,
+          "next_observed_no_contact": 58,
+          "next_distance_over_reach075": null
+        },
+        {
+          "tick": 65,
+          "selected_held_grab": true,
+          "pain_before": 0.9641679525375366,
+          "pain_after": 0.9886400699615479,
+          "distance_after": 0.5000000046566185,
+          "next_reacquisition": 69,
+          "next_observed_no_contact": 66,
+          "next_distance_over_reach075": null
+        },
+        {
+          "tick": 71,
+          "selected_held_grab": true,
+          "pain_before": 1.0,
+          "pain_after": 0.9857358336448669,
+          "distance_after": 0.5000000055879411,
+          "next_reacquisition": 72,
+          "next_observed_no_contact": 72,
+          "next_distance_over_reach075": null
+        },
+        {
+          "tick": 78,
+          "selected_held_grab": true,
+          "pain_before": 1.0,
+          "pain_after": 1.0,
+          "distance_after": 0.49999999534339284,
+          "next_reacquisition": 80,
+          "next_observed_no_contact": 79,
+          "next_distance_over_reach075": null
+        },
+        {
+          "tick": 86,
+          "selected_held_grab": true,
+          "pain_before": 1.0,
+          "pain_after": 1.0,
+          "distance_after": 0.5000000093132314,
+          "next_reacquisition": 87,
+          "next_observed_no_contact": 87,
+          "next_distance_over_reach075": null
+        },
+        {
+          "tick": 96,
+          "selected_held_grab": true,
+          "pain_before": 1.0,
+          "pain_after": 1.0,
+          "distance_after": 0.5000000046566185,
+          "next_reacquisition": 105,
+          "next_observed_no_contact": 97,
+          "next_distance_over_reach075": null
+        },
+        {
+          "tick": 110,
+          "selected_held_grab": true,
+          "pain_before": 1.0,
+          "pain_after": 1.0,
+          "distance_after": 0.49999998044223165,
+          "next_reacquisition": 112,
+          "next_observed_no_contact": 111,
+          "next_distance_over_reach075": null
+        }
+      ]
+    },
+    {
+      "scene": "hazard-choice",
+      "decisions": 73,
+      "sleeping_steps": 0,
+      "initial_drives": {
+        "brain_atp": 0.3747084438800812,
+        "curiosity": 0.4499996304512024,
+        "extension": [
+          0.12000088393688202,
+          0.0
+        ],
+        "fatigue": 0.03705247491598129,
+        "fear": 0.09999991208314896,
+        "hunger": 0.8129372596740723,
+        "loneliness": 0.14999982714653015,
+        "pain": 0.0,
+        "reproductive_drive": 0.09999991208314896,
+        "temperature_stress": 0.0
+      },
+      "final_drives": {
+        "brain_atp": 0.6145448684692383,
+        "curiosity": 0.7904701828956604,
+        "extension": [
+          0.13460113108158112,
+          0.0
+        ],
+        "fatigue": 0.04274693876504898,
+        "fear": 0.2435772866010666,
+        "hunger": 0.6331828236579895,
+        "loneliness": 0.14999982714653015,
+        "pain": 0.32817670702934265,
+        "reproductive_drive": 0.09999991208314896,
+        "temperature_stress": 0.0
+      },
+      "injury": 0.32372644543647766,
+      "consumed": true,
+      "held_rows": 43,
+      "held_grab_present": 43,
+      "held_grab_in_manipulation_mask": 43,
+      "held_grab_selected": 4,
+      "acquisition_ticks": [
+        3,
+        13,
+        27,
+        32,
+        67
+      ],
+      "release_transitions": [
+        {
+          "tick": 4,
+          "selected_held_grab": true,
+          "pain_before": 0.1860428899526596,
+          "pain_after": 0.17860117554664612,
+          "distance_after": 0.5,
+          "next_reacquisition": 13,
+          "next_observed_no_contact": 5,
+          "next_distance_over_reach075": null
+        },
+        {
+          "tick": 20,
+          "selected_held_grab": true,
+          "pain_before": 0.21197186410427094,
+          "pain_after": 0.20349298417568207,
+          "distance_after": 0.4999999403953552,
+          "next_reacquisition": 27,
+          "next_observed_no_contact": 21,
+          "next_distance_over_reach075": null
+        },
+        {
+          "tick": 28,
+          "selected_held_grab": true,
+          "pain_before": 0.15291425585746765,
+          "pain_after": 0.14679768681526184,
+          "distance_after": 0.4999999403953552,
+          "next_reacquisition": 32,
+          "next_observed_no_contact": 29,
+          "next_distance_over_reach075": null
+        },
+        {
+          "tick": 65,
+          "selected_held_grab": true,
+          "pain_before": 0.3462439179420471,
+          "pain_after": 0.33239415287971497,
+          "distance_after": 0.5,
+          "next_reacquisition": 67,
+          "next_observed_no_contact": 66,
+          "next_distance_over_reach075": null
+        },
+        {
+          "tick": 68,
+          "selected_held_grab": false,
+          "pain_before": 0.3063344359397888,
+          "pain_after": 0.29408106207847595,
+          "distance_after": 0.5500000715255737,
+          "next_reacquisition": null,
+          "next_observed_no_contact": 69,
+          "next_distance_over_reach075": null
+        }
+      ]
+    }
+  ]
+}

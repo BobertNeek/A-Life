@@ -26,6 +26,9 @@ pub const MEMORY_MERGE_SIMILARITY: f32 = 0.98;
 
 const CANDIDATE_MEMORY_BANK_DOMAIN: &[u8] = b"ALIFE-CANDIDATE-MEMORY-BANK-V2";
 
+mod channel_terminal;
+pub use channel_terminal::ChannelTerminalObservationV1;
+
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MemoryRecallChannel {
