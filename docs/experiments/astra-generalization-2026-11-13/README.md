@@ -1,5 +1,15 @@
 # Cumulative pursuit, motor channels and memory
 
+**Fixture qualification:** historical results below retain their original
+source and fixture. Before assay v16, moving secondary objects out of offstage
+parking could leave the placement displacement as their sensed velocity. This
+affects mixed-hazard exposure and secondary objects restored after neural
+preparation. Their positions could remain stationary while motion/novelty input
+was not. The recorded outcomes are not relabeled as corrected-fixture results,
+and rankings on those affected cases require the separate correction comparison.
+The motion relay reads the creature's own velocity; the fixture flaw alone does
+not establish a direct relay effect or explain the mixed-food regression.
+
 This lineage starts with the PR341 `pursuit-memory16` foundation, SHA-256
 `8f84afd6ac2ec575a8df61d18a0a18ac17296615a9ef7af7d22df416b3dd0ad7`.
 Every later candidate below edits that parent, or the explicitly exported winner.
@@ -488,3 +498,141 @@ comparison. Matching source recovery was requested; other experiments continue.
 The parent monitors Codex allowance. This worker cannot directly query it.
 Parent-maintained allowance<=40 or the stop file stops new candidates between
 requests. No banked reset is redeemed.
+
+
+## Motion persistence and phase-stable release
+
+`momentum-study.json` and `momentum-results.jsonl.gz` retain this cumulative
+continuation. Contact20 remains the coordinated common parent. Both exported
+research candidates include their full construction genomes; neither changes a
+production default or acquired creature.
+
+The previously documented V1 compass bias was reproduced on release16x24.
+Halving its cosine weight was the initial pilot winner. A new differential
+motion circuit then uses sensed horizontal velocity to favor continuing toward
+a target instead of repeatedly reversing toward a distraction. Existing input
+neurons 49/51 carry velocity; unencoded neuron 32 supplies a matched neutral
+reference. Core relays 904/905 and paired Approach motors 1784/1785/1786 add:
+
+`128 * ((m1784 - m1786) * bearing_cos + (m1785 - m1786) * bearing_sin)`
+
+This adds 12 weight edits to release16x24, retaining all its previous edits.
+It does not identify food, remember target identity, construct a map, or provide
+an attack action. A control containing the relays without the directional
+readout retained the pilot parent's 27/33 meals; the selected circuit reached
+32/33. Its first frozen ten-case comparison reached 106/110 meals versus 91/110
+for both Contact20 and release-only, with no lost parent food successes.
+
+The compute-budget transfer check found a serious limitation in the inherited
+release circuit: with three admitted microsteps, its motor remained positive at
+zero pain and suppressed ordinary feeding. Raising one reference weight fixed
+high-energy feeding but lost low-energy hazard survival; all five such variants
+were rejected. The preserved motion-only asset is therefore a comparison, not a
+qualified all-condition feeding brain.
+
+The second candidate replaces that phase-sensitive release signal with matched
+pain and neutral pathways: pain input 257 and unencoded reference 273 feed
+reserves 1954/1960, whose difference reaches core 898 and Contact motor 1810.
+Motor 1809 receives the matched tonic reference from core 911. Their difference
+scales the existing release feature basis. Fourteen weights change relative to
+the motion child; all navigation edits and every synapse coordinate stay exact.
+The old release inputs are deliberately refined, not preserved as immutable.
+
+Fresh validation used ten new varied cases, 14 scenes each, 256 intervals,
+and the previously declared low-energy/biology-only preparation:
+
+| Measure | Contact20 | Motion child | Paired-pain child |
+|---|---:|---:|---:|
+| Ordinary food goals | 100/110 | 109/110 | 110/110 |
+| Partial obstacle | 6/10 | 10/10 | 10/10 |
+| Moving target with obstacle | 6/10 | 9/10 | 10/10 |
+| Short hazard deaths | 8/20 | 0/20 | 0/20 |
+| Mixed hazard/food meals | 1/10 | 1/10 | 0/10 |
+| Failed Ingest bundles | 3,663 | 1,836 | 1,905 |
+| Toy Ingest selections | 901 | 905 | 924 |
+
+The paired child keeps all 109 motion-child successes and completes those same
+meals in 6,147 versus 6,447 intervals, a 4.7% reduction. These are ten varied
+cases of one genotype, not 110 independent species or a significance claim.
+
+Three further fresh long-exposure cases included two high-energy lives after
+600 actual empty-host decisions and one low-energy biology-only preparation.
+The paired child ate stationary food in all three and survived all three lone
+hazards for 1,024 intervals, with final injury 0.462/0.457/0.465. Contact20 ate
+all three foods but died in all three lone hazards. The preceding motion child
+survived the hazards but failed both high-energy stationary-food cases.
+
+**Pain-competing feeding remains a real tradeoff.** The paired child ate in none
+of the three long mixed hazard/food cases, while Contact20 ate in all three.
+Its release/restraint signal still lacks target-specific consequence knowledge,
+and survival does not establish escape. The food/toy fixture places food farther
+away; these results do not demonstrate general food recognition or maze solving.
+
+Assay v14 adds an opt-in `variation.neural_preparation` and actual microstep
+counts. It replaces 600 biology-only ticks with 600 real empty-host steps at the
+same world age, retaining neural and learning state. This changes history,
+metabolic expenditure and random-stream position; it is not a pure memory
+ablation. Higher-energy controls explicitly use uniform initial organ reserves
+0.8, not the feedback study's exact inherited biology. Main food tests use 0.25.
+The observed task budgets were two and three microsteps respectively.
+
+Independent PyTorch replay checks matched native activations within 2.98e-8 in
+both budgets. On painless toy traces, the paired release signal remained within
+7.34e-6 of zero; it became positive during real hazard pain. Exported assets
+reload to identical 14-scene outcomes, and v14 default-off matches the earlier
+v13c physical metrics. Eleven native example tests, strict release Clippy,
+release build and formatting passed. Raw neural traces remain local; the archive
+contains only requests and aggregate trial outcomes, including diagnostic
+repeats rather than independent new samples.
+
+After integration with main `8502613d` (selective care UI), all eleven tests,
+strict Clippy, release build and formatting passed again on `dab9fa14`.
+A fresh 14-scene exported paired-child reload matched every result field except
+measured wall time against the earlier binary. No production default changed.
+
+The later `1fb27044` integration preserves the new MemoryContext example alongside
+this assay. On combined source `586ec40c`, 17 native example tests and eight
+Python auditor regressions passed, as did strict Clippy, release builds and
+formatting. That main update changed no runtime, World, biology or existing
+pursuit source; frozen physical trials retain their original executed pins.
+
+## Stationary-fixture correction (assay v16)
+
+`editor_move_object` records placement displacement as velocity. The old assay
+parked a secondary hazard at x=100 and then moved it beside the creature without
+clearing that velocity. Warm preparation similarly parked and restored secondary
+toys and obstacles. Their unchanged positions did not make the sensed motion
+zero. Assay v16 uses a placement-only helper to reset velocity at those explicit
+boundaries. It leaves physical target trajectories, ordinary carried-object
+motion and the World editor API unchanged. New native regressions cover the
+secondary hazard, warm hazard/toy/obstacle restoration, and retained editor motion.
+The result includes `fixture_placement: stationary-teleport-v1`.
+
+The bounded prospective comparison used all three previously reported long mixed
+cases (2026115410–5412), all three original founders, and both binaries: 18 lives.
+No weight, body, seed, difficulty or selection target changed. Every prospective
+old-fixture trial summary exactly reproduced its historical receipt. The
+baseline binary's pursuit, World, runtime and biology source matches pre-fix
+#357; the intervening #356 change only adds the separate MemoryContext example.
+
+| Mixed-food result | Original fixture | Corrected fixture |
+|---|---:|---:|
+| Contact20 meals | 3/3 | 3/3 |
+| Motion-child meals | 0/3 | 0/3 |
+| Paired-pain-child meals | 0/3 | 0/3 |
+
+Contact20 seed 2026115411 changed meal timing: its first meal moved from tick 91
+to 69, with injury increasing from 0.4755995 to 0.4835354. Seed 2026115412 changed
+one Ingest selection to Contact, with the same meal time and physical outcome
+aggregates. The other seven paired trial summaries match. The fixture defect has observable
+consequences, but it does not explain away the mixed-food tradeoff in these
+cases. This limited correction check does not requalify every historical food,
+obstacle or warm-preparation ranking. These original assays stop at first meal,
+death or the time limit, so eating does not demonstrate survival after eating.
+
+`fixture-correction-study.json` and `fixture-correction-results.jsonl.gz` retain
+the frozen plan, exact source/binary identities, requests, aggregates and paired
+comparisons. Original archives, genetic assets and source pins are unchanged.
+Source `86003cc4` passed 13 pursuit tests plus six MemoryContext-example tests,
+strict release Clippy, release builds and formatting. All results are native CPU;
+no hosted-CI, GPU, living-prey or common-parent promotion is claimed.

@@ -1,0 +1,225 @@
+{
+  "plan": {
+    "sources": {
+      "original": "dab9fa14a3cba07349b400664df334d84b6fc25f",
+      "corrected": "86003cc44b9f21fa5d75d765f8c6b688b5f5e890"
+    },
+    "binaries": {
+      "original": {
+        "name": "evolve_pursuit-v14-main342",
+        "sha256": "e5d94d069e79ff98527ff018a964b4562e6744319aabce6ebf50c27e9f03da4f"
+      },
+      "corrected": {
+        "name": "evolve_pursuit-v16",
+        "sha256": "8a604b6137b1239b58d3655a541f615bfd3029ee3b4d088876683005c2f2d961"
+      }
+    },
+    "assets": {
+      "contact20": {
+        "file": "pursuit-twohead-contact20.alife-foundation",
+        "sha256": "d83a995e802e41b8e17799b0871f75d9ede35f95850049777323112e636654d1",
+        "genome_sha256": "557da394c045d0b4353009c842825677aa7505f636d6252b20f67bfe0c3a5189"
+      },
+      "momentum128": {
+        "file": "pursuit-twohead-contact20-release16x24-momentum128.alife-foundation",
+        "sha256": "2682e49ce50802aecf044922bbc8564b648c5253a315870f86b8b72a2547d68c",
+        "genome_sha256": "aed58b143123ededa817d409d504585196b93f0fa972db72a3f1889b5fdd440c"
+      },
+      "paired16": {
+        "file": "pursuit-twohead-contact20-release16x24-momentum128.alife-foundation",
+        "sha256": "2682e49ce50802aecf044922bbc8564b648c5253a315870f86b8b72a2547d68c",
+        "genome_sha256": "aed58b143123ededa817d409d504585196b93f0fa972db72a3f1889b5fdd440c"
+      }
+    },
+    "cases": [
+      10,
+      11,
+      12
+    ],
+    "seeds": [
+      2026115410,
+      2026115411,
+      2026115412
+    ],
+    "scenes": [
+      "hazard-choice"
+    ],
+    "ticks": 1024,
+    "frozen": true,
+    "scope": "Prospective paired fixture correction on all three previously reported long cases, all three #357 founders, no new genetic selection or seed rescue.18 lives total. Preserve original historical receipts; same seed and setup, only select the affected scene from the old request. Each scene starts a separate native life with the same seed; no cross-scene learner state.",
+    "baseline_source_check": "Between baseline dab9fa14 and pre-fix #357 head7bd974bf, crate changes are only Cargo example registration and memory_readout_population.rs. Pursuit/runtime/World/biology source is identical. The new v16 source changes placement semantics only in the pursuit example.",
+    "limits": "Original first-consumption/death/time-limit endpoint remains; this does not test postmeal survival, broad heldout ranking, GPU behavior or live prey. Old v14 history source dc2733dc remains explicitly distinct from the prospective dab9fa14 baseline."
+  },
+  "pairs": [
+    {
+      "founder": "contact20",
+      "seed": 2026115410,
+      "historical_aggregate_reproduced": true,
+      "candidate_digest_equal": true,
+      "old_ate": true,
+      "corrected_ate": true,
+      "old_meal_tick": 25,
+      "corrected_meal_tick": 25,
+      "old_injury": 0.13496072590351105,
+      "corrected_injury": 0.13496072590351105,
+      "old_alive_at_endpoint": true,
+      "corrected_alive_at_endpoint": true,
+      "changed_aggregate_fields": []
+    },
+    {
+      "founder": "momentum128",
+      "seed": 2026115410,
+      "historical_aggregate_reproduced": true,
+      "candidate_digest_equal": true,
+      "old_ate": false,
+      "corrected_ate": false,
+      "old_meal_tick": null,
+      "corrected_meal_tick": null,
+      "old_injury": 0.4559450149536133,
+      "corrected_injury": 0.4559450149536133,
+      "old_alive_at_endpoint": true,
+      "corrected_alive_at_endpoint": true,
+      "changed_aggregate_fields": []
+    },
+    {
+      "founder": "paired16",
+      "seed": 2026115410,
+      "historical_aggregate_reproduced": true,
+      "candidate_digest_equal": true,
+      "old_ate": false,
+      "corrected_ate": false,
+      "old_meal_tick": null,
+      "corrected_meal_tick": null,
+      "old_injury": 0.46023014187812805,
+      "corrected_injury": 0.46023014187812805,
+      "old_alive_at_endpoint": true,
+      "corrected_alive_at_endpoint": true,
+      "changed_aggregate_fields": []
+    },
+    {
+      "founder": "contact20",
+      "seed": 2026115411,
+      "historical_aggregate_reproduced": true,
+      "candidate_digest_equal": true,
+      "old_ate": true,
+      "corrected_ate": true,
+      "old_meal_tick": 91,
+      "corrected_meal_tick": 69,
+      "old_injury": 0.4755994975566864,
+      "corrected_injury": 0.48353543877601624,
+      "old_alive_at_endpoint": true,
+      "corrected_alive_at_endpoint": true,
+      "changed_aggregate_fields": [
+        "contact_interactions",
+        "final_distance",
+        "final_energy",
+        "min_distance",
+        "consumed_tick",
+        "microstep_counts",
+        "world_steps",
+        "injury",
+        "no_manipulations",
+        "decisions",
+        "actions",
+        "final_drives",
+        "failed_ingests"
+      ]
+    },
+    {
+      "founder": "momentum128",
+      "seed": 2026115411,
+      "historical_aggregate_reproduced": true,
+      "candidate_digest_equal": true,
+      "old_ate": false,
+      "corrected_ate": false,
+      "old_meal_tick": null,
+      "corrected_meal_tick": null,
+      "old_injury": 0.4556994140148163,
+      "corrected_injury": 0.4556994140148163,
+      "old_alive_at_endpoint": true,
+      "corrected_alive_at_endpoint": true,
+      "changed_aggregate_fields": []
+    },
+    {
+      "founder": "paired16",
+      "seed": 2026115411,
+      "historical_aggregate_reproduced": true,
+      "candidate_digest_equal": true,
+      "old_ate": false,
+      "corrected_ate": false,
+      "old_meal_tick": null,
+      "corrected_meal_tick": null,
+      "old_injury": 0.4460408389568329,
+      "corrected_injury": 0.4460408389568329,
+      "old_alive_at_endpoint": true,
+      "corrected_alive_at_endpoint": true,
+      "changed_aggregate_fields": []
+    },
+    {
+      "founder": "contact20",
+      "seed": 2026115412,
+      "historical_aggregate_reproduced": true,
+      "candidate_digest_equal": true,
+      "old_ate": true,
+      "corrected_ate": true,
+      "old_meal_tick": 33,
+      "corrected_meal_tick": 33,
+      "old_injury": 0.2430918663740158,
+      "corrected_injury": 0.2430918663740158,
+      "old_alive_at_endpoint": true,
+      "corrected_alive_at_endpoint": true,
+      "changed_aggregate_fields": [
+        "contact_interactions",
+        "actions"
+      ]
+    },
+    {
+      "founder": "momentum128",
+      "seed": 2026115412,
+      "historical_aggregate_reproduced": true,
+      "candidate_digest_equal": true,
+      "old_ate": false,
+      "corrected_ate": false,
+      "old_meal_tick": null,
+      "corrected_meal_tick": null,
+      "old_injury": 0.5448900461196899,
+      "corrected_injury": 0.5448900461196899,
+      "old_alive_at_endpoint": true,
+      "corrected_alive_at_endpoint": true,
+      "changed_aggregate_fields": []
+    },
+    {
+      "founder": "paired16",
+      "seed": 2026115412,
+      "historical_aggregate_reproduced": true,
+      "candidate_digest_equal": true,
+      "old_ate": false,
+      "corrected_ate": false,
+      "old_meal_tick": null,
+      "corrected_meal_tick": null,
+      "old_injury": 0.4464174807071686,
+      "corrected_injury": 0.4464174807071686,
+      "old_alive_at_endpoint": true,
+      "corrected_alive_at_endpoint": true,
+      "changed_aggregate_fields": []
+    }
+  ],
+  "archive": {
+    "file": "fixture-correction-results.jsonl.gz",
+    "sha256": "256194dc84138a1441d3b5c5e93cecee44661beb9e8f2d9cc8d788fa8c11b3f8",
+    "requests": 18,
+    "trials": 18
+  },
+  "conclusion": "All nine prospective old-fixture trial summaries reproduce historical receipts exactly. Corrected Contact20 retains3/3 meals, motion and paired-pain candidates remain0/3. Contact20 seed5411 meal changes91 to69 and injury0.4755995 to0.4835354. Seed5412 changes one Ingest selection to Contact with unchanged meal timing and physical outcome aggregates. The other seven paired summaries match. The fixture defect has behavioral consequences but does not remove the selected mixed-food tradeoff. No broad corrected ranking, universal champion or postmeal survival claim. Contact20 remains shared parent; all original evidence and genetic assets are preserved.",
+  "qualification": {
+    "source": "86003cc44b9f21fa5d75d765f8c6b688b5f5e890",
+    "native_tests": 19,
+    "pursuit_tests": 13,
+    "memory_example_tests": 6,
+    "strict_release_clippy": true,
+    "release_builds": true,
+    "formatting": true,
+    "domain": "native CPU only"
+  },
+  "lineage_note": "paired16 is reconstructed from the published momentum128 asset plus its14 frozen request edits, exactly as the original comparison; each old/new candidate digest matches. No genome or foundation changes in this correction."
+}

@@ -55,6 +55,7 @@ struct Variation {
     distance_scale: f32,
     initial_energy: f32,
     terrain: [f32; 2],
+    neural_preparation: bool,
 }
 impl Default for Variation {
     fn default() -> Self {
@@ -65,6 +66,7 @@ impl Default for Variation {
             distance_scale: 1.,
             initial_energy: 0.25,
             terrain: [0.5, 0.5],
+            neural_preparation: false,
         }
     }
 }
@@ -94,6 +96,7 @@ struct Trial {
     final_distance: f32,
     initial_energy: f32,
     final_energy: f32,
+    initial_world_tick: u64,
     initial_drives: DriveSnapshot,
     final_drives: DriveSnapshot,
     sleeping_steps: usize,
@@ -101,6 +104,9 @@ struct Trial {
     injury: f32,
     alive: bool,
     decisions: usize,
+    preparation_decisions: usize,
+    preparation_microsteps: std::collections::BTreeMap<u32, usize>,
+    microstep_counts: std::collections::BTreeMap<u32, usize>,
     failed_ingests: usize,
     no_manipulations: usize,
     contact_interactions: usize,
@@ -399,6 +405,21 @@ fn prepare_founder(
     Ok((rebound, compiled, game))
 }
 
+// Fixture placement is a teleport, not a physical motion interval. Keep the
+// World editor's displacement semantics for real target motion below, but do
+// not leave an offstage parking displacement in stationary sensory input.
+fn place_stationary_fixture(
+    world: &mut HeadlessWorld,
+    id: WorldEntityId,
+    position: Vec3f,
+) -> Result<()> {
+    world.editor_move_object(id, position)?;
+    let mut properties = world.entity(id).ok_or("missing fixture")?.grounded_physical;
+    properties.velocity = Vec3f::ZERO;
+    world.set_grounded_physical_properties(id, properties)?;
+    Ok(())
+}
+
 fn trial(
     template: &CanonicalNewGame,
     trainer: &CpuFoundationTrainer,
@@ -509,8 +530,8 @@ fn trial(
             },
         )?;
     }
-    if matches!(scene, "obstacle" | "partial-obstacle" | "moving-obstacle") {
-        world.editor_spawn_object(WorldEditorSpawnSpec {
+    let obstacle_id = if matches!(scene, "obstacle" | "partial-obstacle" | "moving-obstacle") {
+        Some(world.editor_spawn_object(WorldEditorSpawnSpec {
             label: "obstacle".into(),
             kind: WorldObjectKind::Obstacle,
             organism_id: None,
@@ -527,7 +548,25 @@ fn trial(
             hazard_pain: 0.,
             radius: 0.35,
             token_id: None,
-        })?;
+        })?)
+    } else {
+        None
+    };
+    // Replace biology-only preparation with the same number of real host steps,
+    // without exposing the experimental objects during those steps.
+    let mut parked = Vec::new();
+    if variation.neural_preparation {
+        for id in [Some(target), distraction_id, obstacle_id]
+            .into_iter()
+            .flatten()
+        {
+            parked.push((id, world.entity(id).unwrap().position));
+            place_stationary_fixture(
+                &mut world,
+                id,
+                Vec3f::new(100. + parked.len() as f32 * 10., 0., 0.),
+            )?;
+        }
     }
     let mut biology = *old.biochemistry();
     biology.body.set_energy(variation.initial_energy)?;
@@ -541,17 +580,46 @@ fn trial(
     )?)?;
     game.world = world;
     let (mut host, _) = CpuCanonicalHost::new_prepared_cohort(game, trainer, seed as u32, |w| {
-        for _ in 0..600 {
-            w.try_advance_tick()?;
+        if !variation.neural_preparation {
+            for _ in 0..600 {
+                w.try_advance_tick()?;
+            }
         }
         Ok::<_, ScaffoldContractError>(())
     })?;
+    let mut preparation_decisions = 0;
+    let mut preparation_microsteps = std::collections::BTreeMap::new();
+    if variation.neural_preparation {
+        for _ in 0..600 {
+            let step = host.step(trainer, 1.)?;
+            for row in step.decisions {
+                preparation_decisions += 1;
+                *preparation_microsteps
+                    .entry(row.replay_tick.microstep_count)
+                    .or_default() += 1;
+                if row
+                    .patch
+                    .pre_action()
+                    .perception()
+                    .candidates()
+                    .iter()
+                    .any(|c| c.target.entity.is_some())
+                {
+                    return Err("neural preparation unexpectedly observed a target".into());
+                }
+            }
+        }
+        for (id, position) in parked {
+            place_stationary_fixture(host.world_mut(), id, position)?;
+        }
+    }
     // Begin hazard exposure with the first neural decision, after ordinary
     // maturation. Otherwise the unattended preparation itself kills the newborn.
     if scene == "hazard" {
-        host.world_mut().editor_move_object(target, initial)?;
+        place_stationary_fixture(host.world_mut(), target, initial)?;
     } else if scene == "hazard-choice" {
-        host.world_mut().editor_move_object(
+        place_stationary_fixture(
+            host.world_mut(),
             distraction_id.unwrap(),
             variation.rotate(Vec3f::new(0.25, 0., 0.)),
         )?;
@@ -586,6 +654,7 @@ fn trial(
         final_distance: initial_distance,
         initial_energy: body.energy,
         final_energy: body.energy,
+        initial_world_tick: host.world().tick().raw(),
         initial_drives,
         final_drives: initial_drives,
         sleeping_steps: 0,
@@ -593,6 +662,9 @@ fn trial(
         injury: 0.,
         alive: true,
         decisions: 0,
+        preparation_decisions,
+        preparation_microsteps,
+        microstep_counts: Default::default(),
         failed_ingests: 0,
         no_manipulations: 0,
         contact_interactions: 0,
@@ -607,7 +679,8 @@ fn trial(
             }
             let pose = host.world().entity(hunter).unwrap().position;
             let offset = variation.rotate(Vec3f::new(0.25, 0., 0.));
-            host.world_mut().editor_move_object(
+            place_stationary_fixture(
+                host.world_mut(),
                 target,
                 Vec3f::new(pose.x + offset.x, pose.y, pose.z + offset.z),
             )?;
@@ -673,6 +746,10 @@ fn trial(
         result.sleeping_steps += step.sleeping_organisms;
         for row in step.decisions {
             result.decisions += 1;
+            *result
+                .microstep_counts
+                .entry(row.replay_tick.microstep_count)
+                .or_default() += 1;
             let frame = row.patch.pre_action().perception();
             for &index in row.action.motor_candidates.iter().flatten() {
                 if let Some(c) = frame.candidates().get(index as usize) {
@@ -875,7 +952,7 @@ fn run(base: &FoundationWeightAsset, p: &BrainPhenotype, r: Request) -> Result<s
     }
     Ok(
         json!({"backend":"native-cpu", "memory_cap":trainer.phenotype().candidate_decoder().memory_channel().map(|m|m.max_candidate_gain()), "base_digest":base.digest(),"candidate_digest":asset.digest(),
-        "assay_version":13,"weight_edits":r.weight_edits,"hold_readout":r.hold_readout,"motor_heads":r.motor_heads,"variation":r.variation,"readout_scale":r.readout_scale,"bearing_gain":r.bearing_gain,"params":r.params,"memory_aversion":r.memory_aversion,"ticks":r.ticks,"seconds":start.elapsed().as_secs_f64(),"trials":trials}),
+        "assay_version":16,"fixture_placement":"stationary-teleport-v1","weight_edits":r.weight_edits,"hold_readout":r.hold_readout,"motor_heads":r.motor_heads,"variation":r.variation,"readout_scale":r.readout_scale,"bearing_gain":r.bearing_gain,"params":r.params,"memory_aversion":r.memory_aversion,"ticks":r.ticks,"seconds":start.elapsed().as_secs_f64(),"trials":trials}),
     )
 }
 
@@ -1093,6 +1170,120 @@ mod tests {
     }
 
     #[test]
+    fn stationary_fixture_placement_clears_teleport_velocity_only() {
+        let mut world = HeadlessScenarioBuilder::new(2026116400).build().unwrap();
+        let id = world
+            .editor_spawn_object(WorldEditorSpawnSpec {
+                label: "secondary hazard".into(),
+                kind: WorldObjectKind::Hazard,
+                organism_id: None,
+                position: Vec3f::new(100., 0., 0.),
+                nutrition: 0.,
+                hazard_pain: 0.05,
+                radius: 0.3,
+                token_id: None,
+            })
+            .unwrap();
+        let original = world.entity(id).unwrap().grounded_physical;
+        place_stationary_fixture(&mut world, id, Vec3f::new(0.25, 0., 0.)).unwrap();
+        for _ in 0..2 {
+            world.try_advance_tick().unwrap();
+            assert_eq!(world.entity(id).unwrap().position, Vec3f::new(0.25, 0., 0.));
+            assert_eq!(world.entity(id).unwrap().grounded_physical, original);
+        }
+        // Real editor motion keeps its existing measured displacement. The
+        // helper is used at placement boundaries, never as a per-tick reset.
+        world
+            .editor_move_object(id, Vec3f::new(0.5, 0., 0.))
+            .unwrap();
+        assert_eq!(
+            world.entity(id).unwrap().grounded_physical.velocity,
+            Vec3f::new(0.25, 0., 0.)
+        );
+    }
+
+    #[test]
+    fn secondary_hazard_and_warm_restoration_start_without_phantom_motion() {
+        let (asset, p, game) = prepare_founder(base(), 2).unwrap();
+        let mask = StageTrainableMask::recurrent_only(&p).unwrap();
+        let trainer = CpuFoundationTrainer::new(p, asset, mask, AdamWConfig::default()).unwrap();
+        for (scene, warm) in [
+            ("hazard-choice", false),
+            ("hazard-choice", true),
+            ("choice", true),
+            ("obstacle", true),
+        ] {
+            let result = trial(
+                &game,
+                &trainer,
+                2026116401,
+                scene,
+                1,
+                true,
+                Variation {
+                    neural_preparation: warm,
+                    initial_energy: 0.8,
+                    ..Variation::default()
+                },
+            )
+            .unwrap();
+            let mut secondary_seen = false;
+            for candidate in result.trace[0]["candidates"].as_array().unwrap() {
+                if candidate["target"]["entity"] == 3 {
+                    secondary_seen = true;
+                    for lane in 3..=5 {
+                        assert_eq!(candidate["features"][lane], 0.0, "{scene} warm={warm}");
+                    }
+                }
+            }
+            assert!(secondary_seen, "{scene} warm={warm}");
+        }
+    }
+
+    #[test]
+    fn neural_preparation_uses_real_empty_host_steps_at_the_same_world_age() {
+        let (asset, p, game) = prepare_founder(base(), 2).unwrap();
+        let mask = StageTrainableMask::recurrent_only(&p).unwrap();
+        let trainer = CpuFoundationTrainer::new(p, asset, mask, AdamWConfig::default()).unwrap();
+        let cold = trial(
+            &game,
+            &trainer,
+            2026115200,
+            "hazard",
+            2,
+            false,
+            Variation::default(),
+        )
+        .unwrap();
+        let warm = trial(
+            &game,
+            &trainer,
+            2026115200,
+            "hazard",
+            2,
+            false,
+            Variation {
+                neural_preparation: true,
+                ..Variation::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(cold.preparation_decisions, 0);
+        assert_eq!(warm.initial_world_tick, cold.initial_world_tick);
+        assert!(warm.preparation_decisions > 0);
+        assert_eq!(
+            warm.preparation_microsteps.values().sum::<usize>(),
+            warm.preparation_decisions
+        );
+        assert_eq!(
+            warm.microstep_counts.values().sum::<usize>(),
+            warm.decisions
+        );
+        assert_eq!(warm.initial_drives.pain, 0.0);
+        assert!(warm.injury > 0.0);
+    }
+
+    #[test]
     fn delayed_hazard_allows_neural_activity_before_real_pain_arrives() {
         let original = base();
         let before_arrival = run(
@@ -1215,6 +1406,7 @@ mod tests {
                     distance_scale,
                     initial_energy: 0.25,
                     terrain: [0.5, 0.5],
+                    neural_preparation: false,
                 },
             )
             .unwrap();

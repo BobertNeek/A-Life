@@ -218,5 +218,24 @@
       ],
       "exact_reload_trials": 14
     }
-  ]
+  ],
+  "motion_persistence_research": {
+    "study": "momentum-study.json",
+    "archive": "momentum-results.jsonl.gz",
+    "shared_parent_unchanged": "Contact20",
+    "candidates": [
+      {
+        "asset": "pursuit-twohead-contact20-release16x24-momentum128.alife-foundation",
+        "foundation_sha256": "2682e49ce50802aecf044922bbc8564b648c5253a315870f86b8b72a2547d68c",
+        "genome_sha256": "aed58b143123ededa817d409d504585196b93f0fa972db72a3f1889b5fdd440c",
+        "status": "comparison only: phase-sensitive release prevents eating in measured high-energy three-microstep cases"
+      },
+      {
+        "asset": "pursuit-twohead-contact20-momentum128-paired16.alife-foundation",
+        "foundation_sha256": "f9bd6da726f11a259936ee8564916aad7d22322543fd819731eb425cb05e21ae",
+        "genome_sha256": "3fa5498e5d209f8ec6a88f18599762beb5175e49bce00e1611cd3fc6f8528055",
+        "status": "stronger research descendant; common-parent adoption pending; mixed hazard/food feeding remains weak"
+      }
+    ]
+  }
 }
