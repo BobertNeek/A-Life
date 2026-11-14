@@ -350,6 +350,13 @@ impl PerceptionContextKind {
     }
 }
 
+/// World-authenticated self-capability, not a sensor profile or a scored action.
+/// The World binds the constructor's architecture to the organism's genome.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum OrientationRepertoireProvenance {
+    GroundedOrientationV3,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct PerceptionFrameDraft {
     schema_version: u16,
@@ -362,6 +369,8 @@ pub struct PerceptionFrameDraft {
     candidates: Vec<ActionCandidate>,
     profile_provenance: SensorProfileProvenance,
     grounded_object_slots: Vec<GroundedObjectSlotV1>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    orientation_repertoire: Option<OrientationRepertoireProvenance>,
     base_digest: PerceptionBaseDigest,
 }
 
@@ -393,6 +402,64 @@ impl PerceptionFrameDraft {
         profile_provenance: SensorProfileProvenance,
         grounded_object_slots: Vec<GroundedObjectSlotV1>,
     ) -> Result<Self, ScaffoldContractError> {
+        Self::new_with_orientation_repertoire(
+            organism_id,
+            tick,
+            sensor_profile,
+            sensory,
+            body,
+            homeostasis,
+            candidates,
+            profile_provenance,
+            grounded_object_slots,
+            None,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_with_grounded_orientation_v3(
+        organism_id: OrganismId,
+        tick: Tick,
+        sensor_profile: SensorProfile,
+        sensory: SensorySnapshot,
+        body: BodySnapshot,
+        homeostasis: HomeostaticSnapshot,
+        candidates: Vec<ActionCandidate>,
+        profile_provenance: SensorProfileProvenance,
+        grounded_object_slots: Vec<GroundedObjectSlotV1>,
+        architecture: &crate::genome::CognitiveArchitectureGenomeParameters,
+    ) -> Result<Self, ScaffoldContractError> {
+        architecture.validate_contract()?;
+        if !architecture.grounded_orientation_repertoire() {
+            return Err(ScaffoldContractError::InvalidPerceptionFrame);
+        }
+        Self::new_with_orientation_repertoire(
+            organism_id,
+            tick,
+            sensor_profile,
+            sensory,
+            body,
+            homeostasis,
+            candidates,
+            profile_provenance,
+            grounded_object_slots,
+            Some(OrientationRepertoireProvenance::GroundedOrientationV3),
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn new_with_orientation_repertoire(
+        organism_id: OrganismId,
+        tick: Tick,
+        sensor_profile: SensorProfile,
+        sensory: SensorySnapshot,
+        body: BodySnapshot,
+        homeostasis: HomeostaticSnapshot,
+        candidates: Vec<ActionCandidate>,
+        profile_provenance: SensorProfileProvenance,
+        grounded_object_slots: Vec<GroundedObjectSlotV1>,
+        orientation_repertoire: Option<OrientationRepertoireProvenance>,
+    ) -> Result<Self, ScaffoldContractError> {
         let schema_version = SchemaVersions::CURRENT.perception.raw();
         validate_frame_base(
             schema_version,
@@ -405,6 +472,7 @@ impl PerceptionFrameDraft {
             &candidates,
             profile_provenance,
             &grounded_object_slots,
+            orientation_repertoire,
         )?;
         let base_digest = compute_base_digest(
             schema_version,
@@ -417,6 +485,7 @@ impl PerceptionFrameDraft {
             &candidates,
             profile_provenance,
             &grounded_object_slots,
+            orientation_repertoire,
         );
         Ok(Self {
             schema_version,
@@ -429,12 +498,17 @@ impl PerceptionFrameDraft {
             candidates,
             profile_provenance,
             grounded_object_slots,
+            orientation_repertoire,
             base_digest,
         })
     }
 
     pub const fn schema_version(&self) -> u16 {
         self.schema_version
+    }
+
+    pub const fn grounded_orientation_repertoire(&self) -> bool {
+        self.orientation_repertoire.is_some()
     }
 
     pub const fn organism_id(&self) -> OrganismId {
@@ -493,6 +567,25 @@ impl PerceptionFrameDraft {
         })
     }
 
+    /// Rebind candidates without dropping the authenticated self-capability.
+    pub fn with_candidates(
+        self,
+        candidates: Vec<ActionCandidate>,
+    ) -> Result<Self, ScaffoldContractError> {
+        Self::new_with_orientation_repertoire(
+            self.organism_id,
+            self.tick,
+            self.sensor_profile,
+            self.sensory,
+            self.body,
+            self.homeostasis,
+            candidates,
+            self.profile_provenance,
+            self.grounded_object_slots,
+            self.orientation_repertoire,
+        )
+    }
+
     /// Attach private, bounded semantic input before recall/finalization. Ordinary
     /// sight, hearing, candidates and world object slots remain unchanged.
     pub fn with_semantic_context(
@@ -500,7 +593,7 @@ impl PerceptionFrameDraft {
         context: Option<crate::SemanticContextRef>,
     ) -> Result<Self, ScaffoldContractError> {
         self.sensory.semantic_context = context;
-        Self::new(
+        Self::new_with_orientation_repertoire(
             self.organism_id,
             self.tick,
             self.sensor_profile,
@@ -510,12 +603,13 @@ impl PerceptionFrameDraft {
             self.candidates,
             self.profile_provenance,
             self.grounded_object_slots,
+            self.orientation_repertoire,
         )
     }
 
     pub fn with_remembered_novelty(mut self, novelty: f32) -> Result<Self, ScaffoldContractError> {
         self.sensory.channels.novelty_signal = crate::NormalizedScalar::new(novelty)?;
-        Self::new(
+        Self::new_with_orientation_repertoire(
             self.organism_id,
             self.tick,
             self.sensor_profile,
@@ -525,6 +619,7 @@ impl PerceptionFrameDraft {
             self.candidates,
             self.profile_provenance,
             self.grounded_object_slots,
+            self.orientation_repertoire,
         )
     }
 }
@@ -542,6 +637,7 @@ impl Validate for PerceptionFrameDraft {
             &self.candidates,
             self.profile_provenance,
             &self.grounded_object_slots,
+            self.orientation_repertoire,
         )?;
         let expected = compute_base_digest(
             self.schema_version,
@@ -554,6 +650,7 @@ impl Validate for PerceptionFrameDraft {
             &self.candidates,
             self.profile_provenance,
             &self.grounded_object_slots,
+            self.orientation_repertoire,
         );
         if expected == self.base_digest {
             Ok(())
@@ -580,6 +677,8 @@ impl<'de> Deserialize<'de> for PerceptionFrameDraft {
             candidates: Vec<ActionCandidate>,
             profile_provenance: SensorProfileProvenance,
             grounded_object_slots: Vec<GroundedObjectSlotV1>,
+            #[serde(default)]
+            orientation_repertoire: Option<OrientationRepertoireProvenance>,
             base_digest: PerceptionBaseDigest,
         }
 
@@ -595,6 +694,7 @@ impl<'de> Deserialize<'de> for PerceptionFrameDraft {
             &wire.candidates,
             wire.profile_provenance,
             &wire.grounded_object_slots,
+            wire.orientation_repertoire,
         )
         .map_err(D::Error::custom)?;
         let expected = compute_base_digest(
@@ -608,6 +708,7 @@ impl<'de> Deserialize<'de> for PerceptionFrameDraft {
             &wire.candidates,
             wire.profile_provenance,
             &wire.grounded_object_slots,
+            wire.orientation_repertoire,
         );
         if expected != wire.base_digest {
             return Err(D::Error::custom("perception base digest mismatch"));
@@ -623,6 +724,7 @@ impl<'de> Deserialize<'de> for PerceptionFrameDraft {
             candidates: wire.candidates,
             profile_provenance: wire.profile_provenance,
             grounded_object_slots: wire.grounded_object_slots,
+            orientation_repertoire: wire.orientation_repertoire,
             base_digest: wire.base_digest,
         })
     }
@@ -741,6 +843,10 @@ impl PerceptionFrame {
             grounded_object_slots,
         )?
         .finalize(PerceptionContextBlock::empty())
+    }
+
+    pub const fn grounded_orientation_repertoire(&self) -> bool {
+        self.base.grounded_orientation_repertoire()
     }
 
     pub const fn organism_id(&self) -> OrganismId {
@@ -865,7 +971,13 @@ fn validate_frame_base(
     candidates: &[ActionCandidate],
     profile_provenance: SensorProfileProvenance,
     grounded_object_slots: &[GroundedObjectSlotV1],
+    orientation_repertoire: Option<OrientationRepertoireProvenance>,
 ) -> Result<(), ScaffoldContractError> {
+    if orientation_repertoire == Some(OrientationRepertoireProvenance::GroundedOrientationV3)
+        && sensor_profile != SensorProfile::GroundedObjectSlotsV1
+    {
+        return Err(ScaffoldContractError::InvalidPerceptionFrame);
+    }
     ensure_current_version(SchemaKind::Perception, schema_version)
         .map_err(|_| ScaffoldContractError::InvalidPerceptionFrame)?;
     organism_id
@@ -963,7 +1075,11 @@ fn validate_frame_base(
                             && candidate.target == ActionTarget::NONE
                             && intrinsic_grounding == CandidateFeatureVector::zero() => {}
                     (CandidateActionFamily::Approach, CandidateObservationRef::None)
-                        if sensor_profile.has_terrain_vision()
+                        if (sensor_profile.has_terrain_vision()
+                            || orientation_repertoire
+                                == Some(
+                                    OrientationRepertoireProvenance::GroundedOrientationV3,
+                                ))
                             && candidate.kind == ActionKind::Move
                             && candidate.target == ActionTarget::NONE
                             && intrinsic_grounding.0[0] == 0.0
@@ -980,7 +1096,11 @@ fn validate_frame_base(
                             && candidate.target == ActionTarget::NONE
                             && intrinsic_grounding == CandidateFeatureVector::zero() => {}
                     (CandidateActionFamily::Inspect, CandidateObservationRef::None)
-                        if sensor_profile.has_terrain_vision()
+                        if (sensor_profile.has_terrain_vision()
+                            || orientation_repertoire
+                                == Some(
+                                    OrientationRepertoireProvenance::GroundedOrientationV3,
+                                ))
                             && candidate.kind == ActionKind::Look
                             && candidate.target == ActionTarget::NONE
                             && intrinsic_grounding.0[18] == 1.0
@@ -995,7 +1115,11 @@ fn validate_frame_base(
                                 (1.0, 0.0) | (-1.0, 0.0) | (0.0, 1.0) | (0.0, 0.0)
                             ) => {}
                     (CandidateActionFamily::Inspect, CandidateObservationRef::None)
-                        if sensor_profile.has_terrain_vision()
+                        if (sensor_profile.has_terrain_vision()
+                            || orientation_repertoire
+                                == Some(
+                                    OrientationRepertoireProvenance::GroundedOrientationV3,
+                                ))
                             && candidate.kind == ActionKind::Look
                             && candidate.target == ActionTarget::NONE
                             && intrinsic_grounding.0[2..19]
@@ -1075,6 +1199,7 @@ fn compute_base_digest(
     candidates: &[ActionCandidate],
     profile_provenance: SensorProfileProvenance,
     grounded_object_slots: &[GroundedObjectSlotV1],
+    orientation_repertoire: Option<OrientationRepertoireProvenance>,
 ) -> PerceptionBaseDigest {
     let mut builder = CanonicalDigestBuilder::new(PERCEPTION_BASE_DOMAIN);
     builder.write_u16(schema_version);
@@ -1097,6 +1222,10 @@ fn compute_base_digest(
     for slot in grounded_object_slots {
         encode_grounded_object_slot(&mut builder, slot)
             .expect("validated grounded object slots have canonical finite fields");
+    }
+    if orientation_repertoire == Some(OrientationRepertoireProvenance::GroundedOrientationV3) {
+        builder.write_u64(0x6d6f746f725f7633);
+        builder.write_u16(3);
     }
     PerceptionBaseDigest(builder.finish256())
 }

@@ -186,17 +186,7 @@ pub fn route_observed_focal_candidates(
         return route_focal_candidates(draft, attention);
     };
     let candidates = binding.candidates_for_focus(draft, Some(*focal_object))?;
-    let observed = PerceptionFrameDraft::new(
-        draft.organism_id(),
-        draft.tick(),
-        draft.sensor_profile(),
-        draft.sensory().clone(),
-        draft.body(),
-        *draft.homeostasis(),
-        candidates,
-        draft.profile_provenance(),
-        draft.grounded_object_slots().to_vec(),
-    )?;
+    let observed = draft.clone().with_candidates(candidates)?;
     route_focal_candidates(&observed, attention)
 }
 
@@ -234,17 +224,7 @@ pub fn route_focal_candidates(
             u16::try_from(index).map_err(|_| ScaffoldContractError::InvalidActionCandidate)?;
     }
 
-    PerceptionFrameDraft::new(
-        draft.organism_id(),
-        draft.tick(),
-        draft.sensor_profile(),
-        draft.sensory().clone(),
-        draft.body(),
-        *draft.homeostasis(),
-        candidates,
-        draft.profile_provenance(),
-        draft.grounded_object_slots().to_vec(),
-    )
+    draft.clone().with_candidates(candidates)
 }
 
 pub fn cognitive_context_with_attention(

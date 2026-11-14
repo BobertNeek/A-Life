@@ -67,6 +67,11 @@ impl GpuClosedLoopBackend {
             {
                 return Err(ScaffoldContractError::BrainOwnershipMismatch);
             }
+            if frame.grounded_orientation_repertoire()
+                != resident.brain_slot.grounded_orientation_repertoire()
+            {
+                return Err(ScaffoldContractError::InvalidPerceptionFrame);
+            }
             if resident.ownership.sensor_profile != frame.sensor_profile() {
                 return Err(ScaffoldContractError::SensorProfileMismatch);
             }

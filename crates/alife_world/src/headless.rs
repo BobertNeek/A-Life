@@ -41,8 +41,8 @@ use alife_core::{
 };
 
 use crate::candidate_enumerator::{
-    enumerate_grounded_candidates, enumerate_privileged_candidates, GroundedCandidateBinding,
-    HEADLESS_VISION_RADIUS,
+    enumerate_grounded_candidates, enumerate_grounded_candidates_with_orientation_v3,
+    enumerate_privileged_candidates, GroundedCandidateBinding, HEADLESS_VISION_RADIUS,
 };
 use crate::ecology::{
     deterministic_zone_position, EcologyConfig, EcologyMetrics, EcologySensorySummary,
@@ -454,6 +454,110 @@ mod carry_pose_tests {
         )
         .unwrap();
         assert_eq!(defaults, without_evidence);
+    }
+
+    #[test]
+    fn grounded_orientation_v3_keeps_contact_and_focus_with_three_object_budget() {
+        let (mut world, _, held) = held_world();
+        for index in 0..8 {
+            let label = format!("v3-clutter-{index}");
+            world
+                .spawn_toy(
+                    &label,
+                    Vec3f::new(0.1 + index as f32 * 0.03, 0.0, 0.0),
+                    true,
+                )
+                .unwrap();
+            let id = world.entity_id(&label).unwrap();
+            world.editor_set_optical_opacity(id, 0.0).unwrap();
+        }
+        let snapshot = world
+            .physical_observation_snapshot(ORGANISM, Tick::ZERO)
+            .unwrap();
+        let grounded =
+            GroundedSensorExtractor::extract(&snapshot, &mut world.tracked_objects).unwrap();
+        let founder = alife_core::CreatureGenome::early_mammal_founder(
+            2176,
+            alife_core::FoundationGeneticIdentity::new(
+                10,
+                1,
+                7,
+                alife_core::BrainCapacityClass::N2048_ID,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        let legacy = *founder
+            .express()
+            .unwrap()
+            .brain_genome
+            .cognitive_architecture();
+        let genes = legacy.with_grounded_orientation_v3(3).unwrap();
+        let profile = SensorProfile::GroundedObjectSlotsV1;
+        let old = enumerate_grounded_candidates(&grounded, profile, Some(held)).unwrap();
+        let (focal_slot, focal_transport) = grounded
+            .slots()
+            .iter()
+            .zip(grounded.transports())
+            .rev()
+            .find(|(_, transport)| transport.transport_entity != held)
+            .unwrap();
+        let focus = focal_slot.tracked_object_id;
+        let focused_entity = focal_transport.transport_entity;
+        assert_ne!(focused_entity, held);
+        let new = enumerate_grounded_candidates_with_orientation_v3(
+            &grounded,
+            profile,
+            Some(held),
+            Some(focus),
+            &genes,
+        )
+        .unwrap();
+        assert_eq!(
+            old.iter()
+                .filter(|c| c.action_id == HeadlessActionIds::EAT)
+                .count(),
+            4
+        );
+        assert_eq!(
+            new.iter()
+                .filter(|c| c.action_id == HeadlessActionIds::EAT)
+                .count(),
+            3
+        );
+        assert!(new.len() <= alife_core::MAX_ACTION_CANDIDATES);
+        assert!(new.iter().any(|c| c.target.entity == Some(held)));
+        assert!(new.iter().any(|c| c.target.entity == Some(focused_entity)));
+        assert_eq!(
+            new.iter()
+                .filter(|c| c.action_id == HeadlessActionIds::LOOK_LEFT)
+                .count(),
+            1
+        );
+        assert!(!old
+            .iter()
+            .any(|c| c.action_id == HeadlessActionIds::LOOK_LEFT));
+        assert_eq!(
+            old,
+            enumerate_grounded_candidates(&grounded, profile, Some(held)).unwrap()
+        );
+        assert!(enumerate_grounded_candidates_with_orientation_v3(
+            &grounded, profile, None, None, &legacy
+        )
+        .is_err());
+        let v2 = legacy.with_independent_orientation_v2(3).unwrap();
+        assert!(enumerate_grounded_candidates_with_orientation_v3(
+            &grounded, profile, None, None, &v2
+        )
+        .is_err());
+        let terrain_before =
+            enumerate_grounded_candidates(&grounded, SensorProfile::GroundedTerrainVisionV1, None)
+                .unwrap();
+        assert_eq!(
+            terrain_before,
+            enumerate_grounded_candidates(&grounded, SensorProfile::GroundedTerrainVisionV1, None)
+                .unwrap()
+        );
     }
 
     #[test]
@@ -4385,9 +4489,33 @@ impl HeadlessWorld {
                             .find(|(slot, _)| slot.contact > 0.0)
                             .map(|(_, transport)| transport.transport_entity)
                     });
-                let candidates = enumerate_grounded_candidates(&grounded, profile, active_contact)?;
-                let binding =
-                    GroundedCandidateBinding::new(grounded.clone(), profile, active_contact);
+                // Private registry genotype/expression is authoritative. No fixture,
+                // hidden object class, or current food state selects this repertoire.
+                let architecture = self
+                    .organism_registry
+                    .get(organism_id)
+                    .map(|record| *record.phenotype().brain_genome.cognitive_architecture());
+                let orientation_architecture = architecture.filter(|a| {
+                    profile == SensorProfile::GroundedObjectSlotsV1
+                        && a.grounded_orientation_repertoire()
+                });
+                let candidates = if let Some(a) = &orientation_architecture {
+                    enumerate_grounded_candidates_with_orientation_v3(
+                        &grounded,
+                        profile,
+                        active_contact,
+                        None,
+                        a,
+                    )?
+                } else {
+                    enumerate_grounded_candidates(&grounded, profile, active_contact)?
+                };
+                let binding = GroundedCandidateBinding::new(
+                    grounded.clone(),
+                    profile,
+                    active_contact,
+                    orientation_architecture.is_some(),
+                );
                 let (mut sensory, body, slots, transports) = grounded.into_parts();
                 // Bind only already observed bodies to personal recognition.
                 // Physical identity is not a friendly label or learned affinity.
@@ -4515,18 +4643,33 @@ impl HeadlessWorld {
                 }
                 sensory.language_context = language_context;
                 sensory.validate_contract()?;
-                PerceptionFrameDraft::new(
-                    organism_id,
-                    tick,
-                    profile,
-                    sensory,
-                    body,
-                    homeostasis,
-                    candidates,
-                    provenance,
-                    slots,
-                )
-                .map(|draft| (draft, Some(binding)))
+                let draft = if let Some(a) = &orientation_architecture {
+                    PerceptionFrameDraft::new_with_grounded_orientation_v3(
+                        organism_id,
+                        tick,
+                        profile,
+                        sensory,
+                        body,
+                        homeostasis,
+                        candidates,
+                        provenance,
+                        slots,
+                        a,
+                    )
+                } else {
+                    PerceptionFrameDraft::new(
+                        organism_id,
+                        tick,
+                        profile,
+                        sensory,
+                        body,
+                        homeostasis,
+                        candidates,
+                        provenance,
+                        slots,
+                    )
+                };
+                draft.map(|draft| (draft, Some(binding)))
             }
         }
     }

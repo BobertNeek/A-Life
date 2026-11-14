@@ -45,7 +45,9 @@ impl GpuPerceptionUpload {
         frame
             .validate()
             .map_err(|_| GpuClosedLoopError::MalformedUpload)?;
-        if u32::from(frame.sensor_profile().raw()) != slot.sensor_profile_raw() {
+        if u32::from(frame.sensor_profile().raw()) != slot.sensor_profile_raw()
+            || frame.grounded_orientation_repertoire() != slot.grounded_orientation_repertoire()
+        {
             return Err(GpuClosedLoopError::MalformedUpload);
         }
         let record = slot.record();

@@ -756,3 +756,135 @@ fn joint_membership_observes_real_secondary_meal_without_rewriting_world_or_cred
     }
     panic!("fixture did not consume");
 }
+
+#[test]
+fn grounded_orientation_v3_is_sampled_and_executed_without_forced_choices() {
+    let (mut host, trainer) = parent::grounded_orientation_fixture();
+    let owner = host
+        .world
+        .organism_registry()
+        .iter()
+        .next()
+        .unwrap()
+        .organism_id();
+    // Public encoder admission must bind repertoire to the actual phenotype,
+    // not merely accept any same-profile frame carrying a valid V3 marker.
+    let record = host.world.organism_registry().get(owner).unwrap().clone();
+    let tick = record.biochemistry().homeostasis.tick;
+    let (draft, candidate_binding) = host
+        .world
+        .perception_frame_draft_with_bindings(
+            owner,
+            tick,
+            trainer.phenotype().sensor_profile(),
+            record.biochemistry().homeostasis,
+        )
+        .unwrap();
+    let receptors = record
+        .biochemistry()
+        .neural_receptor_frame(record.phenotype())
+        .unwrap();
+    let effects = NeuralReceptorEffects::from_frame(
+        &receptors,
+        &NeuralReceptorPhenotype::compile(trainer.phenotype()).unwrap(),
+    )
+    .unwrap();
+    let resident = &host.residents[&owner.raw()];
+    let prepared = prepare_canonical_frame(
+        &CanonicalPreparationInput {
+            draft,
+            candidate_binding,
+            sequence_id: ExperienceSequenceId(resident.next_sequence),
+            homeostasis: record.biochemistry().homeostasis,
+            hysteresis: resident.hysteresis,
+            policy: attention_selection_policy_for(trainer.phenotype()),
+            neural_receptors: receptors,
+            receptor_effects: effects,
+        },
+        &resident.memory,
+        &resident.topology,
+        &resident.predictor,
+        false,
+    )
+    .result
+    .unwrap();
+    let frame = prepared.frame;
+    let recall = prepared.memory_recall;
+    assert!(encode_cpu_frame(
+        trainer.phenotype(),
+        &frame,
+        &recall,
+        &effects,
+        vec![true; trainer.phenotype().projections().len()],
+        vec![]
+    )
+    .is_ok());
+    let (_, legacy_trainer) = parent::contact20_fixture(None);
+    assert!(encode_cpu_frame(
+        legacy_trainer.phenotype(),
+        &frame,
+        &recall,
+        &effects,
+        vec![true; legacy_trainer.phenotype().projections().len()],
+        vec![]
+    )
+    .is_err());
+    let mut actual_orientation = 0;
+    let mut changed_pose = false;
+    for _ in 0..32 {
+        let id = host
+            .world
+            .organism_registry()
+            .get(owner)
+            .unwrap()
+            .world_entity_id();
+        let before = host.world.entity(id).unwrap().clone();
+        let step = host.step(&trainer, 1.0).unwrap();
+        let after = host.world.entity(id).unwrap();
+        changed_pose |= before.body_yaw != after.body_yaw || before.head_yaw != after.head_yaw;
+        for row in &step.decisions {
+            assert_ne!(row.action.motor_masks[1], 0);
+            assert!(row.action.motor_candidates[1].is_some());
+            let frame = row.patch.pre_action().perception();
+            assert!(frame.grounded_orientation_repertoire());
+            assert!(frame.candidates().len() <= MAX_ACTION_CANDIDATES);
+            for action in [
+                HeadlessActionIds::TURN_LEFT,
+                HeadlessActionIds::TURN_RIGHT,
+                HeadlessActionIds::LOOK_LEFT,
+                HeadlessActionIds::LOOK_RIGHT,
+                HeadlessActionIds::LOOK_CENTER,
+                HeadlessActionIds::HOLD_GAZE,
+            ] {
+                assert_eq!(
+                    frame
+                        .candidates()
+                        .iter()
+                        .filter(|c| c.action_id == action)
+                        .count(),
+                    1
+                );
+            }
+            for receipt in &row.patch.outcome().joint.as_ref().unwrap().channel_outcomes {
+                if receipt.channel == MotorChannel::Orientation {
+                    assert!(receipt.execution_evidence.as_ref().unwrap().succeeded);
+                    actual_orientation += 1;
+                }
+            }
+        }
+    }
+    assert!(actual_orientation > 0);
+    assert!(changed_pose);
+    eprintln!(
+        "V3 normal native orientation receipts={actual_orientation}; actual body/head pose changed"
+    );
+    let checkpoint = host.checkpoint(&trainer).unwrap();
+    let bytes = serde_json::to_vec(&checkpoint).unwrap();
+    let restored =
+        CpuCanonicalHost::from_checkpoint(serde_json::from_slice(&bytes).unwrap(), &trainer)
+            .unwrap();
+    assert_eq!(
+        serde_json::to_vec(&restored.checkpoint(&trainer).unwrap()).unwrap(),
+        bytes
+    );
+}
