@@ -4337,5 +4337,16 @@
     "source": "dab9fa14a3cba07349b400664df334d84b6fc25f",
     "binary_sha256": "e5d94d069e79ff98527ff018a964b4562e6744319aabce6ebf50c27e9f03da4f",
     "note": "Initial whole-JSON assertion caught expected measured wall-clock difference; every other field exact. No repeated life."
+  },
+  "main356_qualification": {
+    "source": "586ec40c32445d3b9ba56fc7fe811517065a4b9f",
+    "main": "1fb2704438213db6392ec63893bd93a62c14d733",
+    "native_example_tests": 17,
+    "python_auditor_tests": 8,
+    "strict_clippy": true,
+    "release_builds": true,
+    "format_check": true,
+    "physical_reruns": false,
+    "unchanged_existing_pursuit_and_simulation_source": true
   }
 }

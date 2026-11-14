@@ -579,3 +579,9 @@ After integration with main `8502613d` (selective care UI), all eleven tests,
 strict Clippy, release build and formatting passed again on `dab9fa14`.
 A fresh 14-scene exported paired-child reload matched every result field except
 measured wall time against the earlier binary. No production default changed.
+
+The later `1fb27044` integration preserves the new MemoryContext example alongside
+this assay. On combined source `586ec40c`, 17 native example tests and eight
+Python auditor regressions passed, as did strict Clippy, release builds and
+formatting. That main update changed no runtime, World, biology or existing
+pursuit source; frozen physical trials retain their original executed pins.
