@@ -36,9 +36,13 @@ beside unattended newborns during preparation killed them before any neural
 trial, so that invalid setup was corrected before reporting behavior. All three
 brains survived the short revised controls but accumulated substantial injury.
 The contact edit improved hazard→food outcome in one of four cases and reduced
-injury in those mixed cases. A carried painful object remains a weakness:
-Inspect/Approach/Flee/Eat/Grab/Play provide no explicit voluntary Drop action.
-No world behavior or reflex was modified here. This finding was relayed to Bob.
+injury in those mixed cases. A carried painful object remains a weakness, but
+the lack of a separate Drop label does not mean release is impossible: selecting
+Grab on the object already held releases it. The released object stays at the
+0.5m grip position, so contact and pain can persist until the creature moves away.
+The original hazard runs saved aggregates, not traces; they do not establish
+whether a held-target Grab was offered or selected, or whether release preceded
+escape. No world behavior or reflex was modified here.
 
 Assay v5 records survival and stops at death. Seven focused native tests and
 strict Clippy pass, including actual hazard exposure after preparation. The older six-test statements

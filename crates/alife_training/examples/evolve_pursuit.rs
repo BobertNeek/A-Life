@@ -51,6 +51,7 @@ struct Variation {
     speed: f32,
     appearance: u8,
     distance_scale: f32,
+    initial_energy: f32,
 }
 impl Default for Variation {
     fn default() -> Self {
@@ -59,6 +60,7 @@ impl Default for Variation {
             speed: 1.,
             appearance: 0,
             distance_scale: 1.,
+            initial_energy: 0.25,
         }
     }
 }
@@ -88,6 +90,9 @@ struct Trial {
     final_distance: f32,
     initial_energy: f32,
     final_energy: f32,
+    initial_drives: DriveSnapshot,
+    final_drives: DriveSnapshot,
+    sleeping_steps: usize,
     injury: f32,
     alive: bool,
     decisions: usize,
@@ -494,7 +499,7 @@ fn trial(
         })?;
     }
     let mut biology = *old.biochemistry();
-    biology.body.set_energy(0.25)?;
+    biology.body.set_energy(variation.initial_energy)?;
     world.register_organism_record(WorldOrganismRecord::new(
         own,
         world.entity_id("hunter").unwrap(),
@@ -528,6 +533,14 @@ fn trial(
         .unwrap()
         .biochemistry()
         .body;
+    let initial_drives = host
+        .world()
+        .organism_registry()
+        .get(own)
+        .unwrap()
+        .biochemistry()
+        .homeostasis
+        .drives;
     let mut result = Trial {
         seed,
         scene: scene.into(),
@@ -538,6 +551,9 @@ fn trial(
         final_distance: distance(Vec3f::ZERO, initial),
         initial_energy: body.energy,
         final_energy: body.energy,
+        initial_drives,
+        final_drives: initial_drives,
+        sleeping_steps: 0,
         injury: 0.,
         alive: true,
         decisions: 0,
@@ -602,7 +618,22 @@ fn trial(
                     "previous":previous,"current":actual,"translated":distance(previous,actual)}));
             }
         }
+        let objects_before = trace.then(|| [Some(target), distraction_id].into_iter().flatten().map(|id| {
+            let o = host.world().entity(id).unwrap();
+            json!({"id":id,"position":o.position,"carried_by":o.carried_by,"activity_hold":o.activity_hold,"consumed":o.consumed})
+        }).collect::<Vec<_>>());
+        let pain_before = trace.then(|| {
+            host.world()
+                .organism_registry()
+                .get(own)
+                .unwrap()
+                .biochemistry()
+                .homeostasis
+                .drives
+                .pain
+        });
         let step = host.step(trainer, 1.)?;
+        result.sleeping_steps += step.sleeping_organisms;
         for row in step.decisions {
             result.decisions += 1;
             let frame = row.patch.pre_action().perception();
@@ -636,6 +667,13 @@ fn trial(
                     "logits":replay.candidate_logits[0],"decoder_candidates":row.replay_tick.candidates,
                     "motor_activations": ([1760,1775,1776,1791,1824,1839].map(|i| row.final_features[i])),
                     "hold_motor_activation":row.final_features[1823],
+                    "objects_before":objects_before,
+                    "objects_after":([Some(target),distraction_id].into_iter().flatten().map(|id| {
+                        let o=host.world().entity(id).unwrap();
+                        json!({"id":id,"position":o.position,"carried_by":o.carried_by,"activity_hold":o.activity_hold,"consumed":o.consumed})
+                    }).collect::<Vec<_>>()),
+                    "pain_before":pain_before,
+                    "pain_after":host.world().organism_registry().get(own).unwrap().biochemistry().homeostasis.drives.pain,
                     "position":host.world().entity(hunter).unwrap().position,
                     "steering":host.world().entity(hunter).unwrap().local_steering,
                     "body_yaw":host.world().entity(hunter).unwrap().body_yaw,
@@ -682,6 +720,14 @@ fn trial(
         .biochemistry()
         .body;
     result.final_energy = body.energy;
+    result.final_drives = host
+        .world()
+        .organism_registry()
+        .get(own)
+        .unwrap()
+        .biochemistry()
+        .homeostasis
+        .drives;
     result.injury = body.injury;
     Ok(result)
 }
@@ -691,6 +737,8 @@ fn run(base: &FoundationWeightAsset, p: &BrainPhenotype, r: Request) -> Result<s
         || !r.variation.speed.is_finite()
         || !r.variation.distance_scale.is_finite()
         || !(0.5..=2.0).contains(&r.variation.distance_scale)
+        || !r.variation.initial_energy.is_finite()
+        || !(0.0..=1.0).contains(&r.variation.initial_energy)
         || !(0.0..=4.0).contains(&r.variation.speed)
         || r.variation.appearance > 3
         || r.seeds == 0
@@ -772,7 +820,7 @@ fn run(base: &FoundationWeightAsset, p: &BrainPhenotype, r: Request) -> Result<s
     }
     Ok(
         json!({"backend":"native-cpu", "memory_cap":trainer.phenotype().candidate_decoder().memory_channel().map(|m|m.max_candidate_gain()), "base_digest":base.digest(),"candidate_digest":asset.digest(),
-        "assay_version":7,"hold_readout":r.hold_readout,"motor_heads":r.motor_heads,"variation":r.variation,"readout_scale":r.readout_scale,"bearing_gain":r.bearing_gain,"params":r.params,"memory_aversion":r.memory_aversion,"ticks":r.ticks,"seconds":start.elapsed().as_secs_f64(),"trials":trials}),
+        "assay_version":8,"hold_readout":r.hold_readout,"motor_heads":r.motor_heads,"variation":r.variation,"readout_scale":r.readout_scale,"bearing_gain":r.bearing_gain,"params":r.params,"memory_aversion":r.memory_aversion,"ticks":r.ticks,"seconds":start.elapsed().as_secs_f64(),"trials":trials}),
     )
 }
 
@@ -981,6 +1029,7 @@ mod tests {
                     speed: 0.,
                     appearance: 1,
                     distance_scale,
+                    initial_energy: 0.25,
                 },
             )
             .unwrap();
