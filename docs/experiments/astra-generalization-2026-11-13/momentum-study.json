@@ -1,0 +1,4334 @@
+{
+  "schema": 1,
+  "backend": "native-cpu",
+  "source": "dc2733dc200c3b294d78921e796c752f98de6bfa",
+  "shared_parent": "Contact20 unchanged; release and momentum are explicitly identified research descendants",
+  "mechanism": "Sensed horizontal velocity, relayed through paired existing neurons, adds a motion-aligned Approach score. It is short motion persistence, not a map, authenticated target memory, or prey attack.",
+  "formula": "128*((motor1784-motor1786)*bearing_cos + (motor1785-motor1786)*bearing_sin)",
+  "biology_scope": "Main selection and held-out use the prior0.25 uniform initial organ-energy and600 biology-only ticks. Separate transfer tests explicitly vary600 host activity and0.8 initial organ-energy.",
+  "parent_sha256": "40f844bc55b578965e629a629c620a170a09f39b0f33fb05b1f7b1db0feabfa0",
+  "genetic_diff": {
+    "changed_indices": [
+      456,
+      457,
+      693,
+      721,
+      10047,
+      10117,
+      10187,
+      25737,
+      25738,
+      25752,
+      25754,
+      25759
+    ],
+    "changed_genome_fields": [
+      "n2048_foundation_candidate"
+    ],
+    "all_other_parent_weights_and_coordinates_exact": true,
+    "previous_20_release_edits_preserved": true,
+    "foundation_sha256": "2682e49ce50802aecf044922bbc8564b648c5253a315870f86b8b72a2547d68c",
+    "genome_sha256": "aed58b143123ededa817d409d504585196b93f0fa972db72a3f1889b5fdd440c"
+  },
+  "pilot_plan": {
+    "parent_sha256": "40f844bc55b578965e629a629c620a170a09f39b0f33fb05b1f7b1db0feabfa0",
+    "binary_sha256": "251878b3d28a13a4ff2b6a0e67d9d4fae6ba50e0af3b067bf237550195f639bb",
+    "variants": [
+      [
+        "cos0",
+        [
+          [
+            25759,
+            -4.0
+          ]
+        ]
+      ],
+      [
+        "cos2",
+        [
+          [
+            25759,
+            -2.0
+          ]
+        ]
+      ],
+      [
+        "cos8",
+        [
+          [
+            25759,
+            4.0
+          ]
+        ]
+      ],
+      [
+        "cos0-distance34",
+        [
+          [
+            25759,
+            -4.0
+          ],
+          [
+            25760,
+            -12.0
+          ]
+        ]
+      ],
+      [
+        "cos0-distance58",
+        [
+          [
+            25759,
+            -4.0
+          ],
+          [
+            25760,
+            12.0
+          ]
+        ]
+      ],
+      [
+        "distance34",
+        [
+          [
+            25760,
+            -12.0
+          ]
+        ]
+      ],
+      [
+        "distance58",
+        [
+          [
+            25760,
+            12.0
+          ]
+        ]
+      ]
+    ],
+    "cases": [
+      0,
+      2,
+      4
+    ],
+    "selection": "Exposed cases, 14 scenes. Keep all baseline ordinary success cases and hazard survival first; maximize ordinary meals then hazard-choice meals then common-meal latency. No published phenotype promotion on pilots.",
+    "source": "af6ffe7d54a07b95d35c892c8f3b007f623023a0",
+    "mechanism": "Target switching in observed failure traces, with strong fixed-frame bearing coefficient. Direct signed ActionCandidate changes only; no object-class/color cue and no MemoryContext edits.",
+    "prior_controls": "Reuse exact completed release16x24 results from crisis14-final-main-release-{case}.json; diagnostics confirmed exported-parent parity on case2 failures."
+  },
+  "pilot": [
+    {
+      "label": "base",
+      "lives": 42,
+      "food": 26,
+      "lost": [],
+      "gain": [],
+      "deaths": 0,
+      "mixed": 0,
+      "toy_ingest": 230,
+      "meal_intervals": 1506
+    },
+    {
+      "label": "cos0",
+      "lives": 42,
+      "food": 29,
+      "lost": [
+        "(0, 'partial-obstacle')"
+      ],
+      "gain": [
+        "(0, 'moving-obstacle')",
+        "(2, 'partial-obstacle')",
+        "(2, 'choice')",
+        "(4, 'choice')"
+      ],
+      "deaths": 0,
+      "mixed": 0,
+      "toy_ingest": 278,
+      "meal_intervals": 1854
+    },
+    {
+      "label": "cos2",
+      "lives": 42,
+      "food": 27,
+      "lost": [],
+      "gain": [
+        "(0, 'moving-obstacle')"
+      ],
+      "deaths": 0,
+      "mixed": 1,
+      "toy_ingest": 258,
+      "meal_intervals": 1622
+    },
+    {
+      "label": "cos8",
+      "lives": 42,
+      "food": 21,
+      "lost": [
+        "(2, 'crossing')",
+        "(4, 'stationary')",
+        "(4, 'receding')",
+        "(4, 'zigzag')",
+        "(4, 'fleeing')"
+      ],
+      "gain": [],
+      "deaths": 0,
+      "mixed": 0,
+      "toy_ingest": 151,
+      "meal_intervals": 1353
+    },
+    {
+      "label": "cos0-distance34",
+      "lives": 42,
+      "food": 31,
+      "lost": [
+        "(0, 'partial-obstacle')"
+      ],
+      "gain": [
+        "(0, 'moving-obstacle')",
+        "(2, 'partial-obstacle')",
+        "(2, 'choice')",
+        "(4, 'partial-obstacle')",
+        "(4, 'moving-obstacle')",
+        "(4, 'choice')"
+      ],
+      "deaths": 0,
+      "mixed": 0,
+      "toy_ingest": 277,
+      "meal_intervals": 2009
+    },
+    {
+      "label": "cos0-distance58",
+      "lives": 42,
+      "food": 29,
+      "lost": [
+        "(0, 'partial-obstacle')"
+      ],
+      "gain": [
+        "(0, 'moving-obstacle')",
+        "(2, 'partial-obstacle')",
+        "(2, 'choice')",
+        "(4, 'choice')"
+      ],
+      "deaths": 0,
+      "mixed": 1,
+      "toy_ingest": 277,
+      "meal_intervals": 1790
+    },
+    {
+      "label": "distance34",
+      "lives": 42,
+      "food": 25,
+      "lost": [
+        "(2, 'crossing')"
+      ],
+      "gain": [],
+      "deaths": 0,
+      "mixed": 0,
+      "toy_ingest": 184,
+      "meal_intervals": 1524
+    },
+    {
+      "label": "distance58",
+      "lives": 42,
+      "food": 26,
+      "lost": [],
+      "gain": [],
+      "deaths": 0,
+      "mixed": 0,
+      "toy_ingest": 234,
+      "meal_intervals": 1475
+    }
+  ],
+  "momentum_plan": {
+    "base": "release16x24 plus pilot-winning cosine delta -2; all prior 20 release edits inherited",
+    "variants": [
+      [
+        "wire-only",
+        [
+          [
+            25759,
+            -2.0
+          ],
+          [
+            693,
+            4.0
+          ],
+          [
+            706,
+            -4.0
+          ],
+          [
+            721,
+            4.0
+          ],
+          [
+            707,
+            -4.0
+          ],
+          [
+            10047,
+            2.0
+          ],
+          [
+            10117,
+            2.0
+          ],
+          [
+            10187,
+            2.0
+          ]
+        ]
+      ],
+      [
+        "momentum16",
+        [
+          [
+            25759,
+            -2.0
+          ],
+          [
+            693,
+            4.0
+          ],
+          [
+            706,
+            -4.0
+          ],
+          [
+            721,
+            4.0
+          ],
+          [
+            707,
+            -4.0
+          ],
+          [
+            10047,
+            2.0
+          ],
+          [
+            10117,
+            2.0
+          ],
+          [
+            10187,
+            2.0
+          ],
+          [
+            25752,
+            16.0
+          ],
+          [
+            25754,
+            -16.0
+          ],
+          [
+            25737,
+            16.0
+          ],
+          [
+            25738,
+            -16.0
+          ]
+        ]
+      ],
+      [
+        "momentum32",
+        [
+          [
+            25759,
+            -2.0
+          ],
+          [
+            693,
+            4.0
+          ],
+          [
+            706,
+            -4.0
+          ],
+          [
+            721,
+            4.0
+          ],
+          [
+            707,
+            -4.0
+          ],
+          [
+            10047,
+            2.0
+          ],
+          [
+            10117,
+            2.0
+          ],
+          [
+            10187,
+            2.0
+          ],
+          [
+            25752,
+            32.0
+          ],
+          [
+            25754,
+            -32.0
+          ],
+          [
+            25737,
+            32.0
+          ],
+          [
+            25738,
+            -32.0
+          ]
+        ]
+      ],
+      [
+        "momentum64",
+        [
+          [
+            25759,
+            -2.0
+          ],
+          [
+            693,
+            4.0
+          ],
+          [
+            706,
+            -4.0
+          ],
+          [
+            721,
+            4.0
+          ],
+          [
+            707,
+            -4.0
+          ],
+          [
+            10047,
+            2.0
+          ],
+          [
+            10117,
+            2.0
+          ],
+          [
+            10187,
+            2.0
+          ],
+          [
+            25752,
+            64.0
+          ],
+          [
+            25754,
+            -64.0
+          ],
+          [
+            25737,
+            64.0
+          ],
+          [
+            25738,
+            -64.0
+          ]
+        ]
+      ],
+      [
+        "momentum128",
+        [
+          [
+            25759,
+            -2.0
+          ],
+          [
+            693,
+            4.0
+          ],
+          [
+            706,
+            -4.0
+          ],
+          [
+            721,
+            4.0
+          ],
+          [
+            707,
+            -4.0
+          ],
+          [
+            10047,
+            2.0
+          ],
+          [
+            10117,
+            2.0
+          ],
+          [
+            10187,
+            2.0
+          ],
+          [
+            25752,
+            128.0
+          ],
+          [
+            25754,
+            -128.0
+          ],
+          [
+            25737,
+            128.0
+          ],
+          [
+            25738,
+            -128.0
+          ]
+        ]
+      ],
+      [
+        "momentum256",
+        [
+          [
+            25759,
+            -2.0
+          ],
+          [
+            693,
+            4.0
+          ],
+          [
+            706,
+            -4.0
+          ],
+          [
+            721,
+            4.0
+          ],
+          [
+            707,
+            -4.0
+          ],
+          [
+            10047,
+            2.0
+          ],
+          [
+            10117,
+            2.0
+          ],
+          [
+            10187,
+            2.0
+          ],
+          [
+            25752,
+            256.0
+          ],
+          [
+            25754,
+            -256.0
+          ],
+          [
+            25737,
+            256.0
+          ],
+          [
+            25738,
+            -256.0
+          ]
+        ]
+      ]
+    ],
+    "cases": [
+      0,
+      2,
+      4
+    ],
+    "mechanism": "A differential vx/vz relay adds a motion-aligned candidate bearing score, aiming to reduce rapid reversals. Vertical velocity is a matched neutral reference in these planar fixtures; this is NOT qualified for sloping/vertical motion. No object identity, hidden target, MemoryContext, or world changes.",
+    "controls": "wire-only measures collateral relay effects without its new directional readout; cos2 completed pilot supplies parent outcomes.",
+    "selection": "Preserve cos2 ordinary successes and hazard survival, then maximize meals; holdout unexamined.",
+    "parent_sha256": "40f844bc55b578965e629a629c620a170a09f39b0f33fb05b1f7b1db0feabfa0",
+    "binary_sha256": "251878b3d28a13a4ff2b6a0e67d9d4fae6ba50e0af3b067bf237550195f639bb"
+  },
+  "momentum_pilot": [
+    {
+      "label": "cos2",
+      "lives": 42,
+      "food": 27,
+      "lost": [],
+      "gain": [],
+      "deaths": 0,
+      "mixed": 1,
+      "toy_ingest": 258,
+      "meal_intervals": 1622
+    },
+    {
+      "label": "wire-only",
+      "lives": 42,
+      "food": 27,
+      "lost": [],
+      "gain": [],
+      "deaths": 0,
+      "mixed": 1,
+      "toy_ingest": 258,
+      "meal_intervals": 1622
+    },
+    {
+      "label": "momentum16",
+      "lives": 42,
+      "food": 28,
+      "lost": [],
+      "gain": [
+        "(2, 'partial-obstacle')"
+      ],
+      "deaths": 0,
+      "mixed": 1,
+      "toy_ingest": 261,
+      "meal_intervals": 1691
+    },
+    {
+      "label": "momentum32",
+      "lives": 42,
+      "food": 29,
+      "lost": [],
+      "gain": [
+        "(2, 'partial-obstacle')",
+        "(4, 'choice')"
+      ],
+      "deaths": 0,
+      "mixed": 1,
+      "toy_ingest": 251,
+      "meal_intervals": 1756
+    },
+    {
+      "label": "momentum64",
+      "lives": 42,
+      "food": 31,
+      "lost": [],
+      "gain": [
+        "(2, 'partial-obstacle')",
+        "(2, 'moving-obstacle')",
+        "(2, 'choice')",
+        "(4, 'choice')"
+      ],
+      "deaths": 0,
+      "mixed": 1,
+      "toy_ingest": 246,
+      "meal_intervals": 1844
+    },
+    {
+      "label": "momentum128",
+      "lives": 42,
+      "food": 32,
+      "lost": [],
+      "gain": [
+        "(2, 'partial-obstacle')",
+        "(2, 'moving-obstacle')",
+        "(2, 'choice')",
+        "(4, 'partial-obstacle')",
+        "(4, 'choice')"
+      ],
+      "deaths": 0,
+      "mixed": 2,
+      "toy_ingest": 253,
+      "meal_intervals": 1873
+    },
+    {
+      "label": "momentum256",
+      "lives": 42,
+      "food": 32,
+      "lost": [],
+      "gain": [
+        "(2, 'partial-obstacle')",
+        "(2, 'moving-obstacle')",
+        "(2, 'choice')",
+        "(4, 'partial-obstacle')",
+        "(4, 'choice')"
+      ],
+      "deaths": 0,
+      "mixed": 1,
+      "toy_ingest": 223,
+      "meal_intervals": 1869
+    }
+  ],
+  "frozen": {
+    "chosen": "momentum128",
+    "selection": "32/33 ordinary meals without losses, 2/3 mixed meals versus momentum256 1/3; retain all 20 release edits and the cos2 winner.",
+    "edits": [
+      [
+        25759,
+        -2.0
+      ],
+      [
+        693,
+        4.0
+      ],
+      [
+        456,
+        -4.0
+      ],
+      [
+        721,
+        4.0
+      ],
+      [
+        457,
+        -4.0
+      ],
+      [
+        10047,
+        2.0
+      ],
+      [
+        10117,
+        2.0
+      ],
+      [
+        10187,
+        2.0
+      ],
+      [
+        25752,
+        128.0
+      ],
+      [
+        25754,
+        -128.0
+      ],
+      [
+        25737,
+        128.0
+      ],
+      [
+        25738,
+        -128.0
+      ]
+    ],
+    "reference": "Unused input neuron32 replaces vertical-velocity neuron50. No encoder assignment, identical input-neuron dynamics, zero incoming recurrent weights; ordinary zero-vy fixture outcomes must match.",
+    "heldout": [
+      2026115100,
+      2026115101,
+      2026115102,
+      2026115103,
+      2026115104,
+      2026115105,
+      2026115106,
+      2026115107,
+      2026115108,
+      2026115109
+    ],
+    "frozen": true
+  },
+  "heldout_plan": {
+    "variants": [
+      {
+        "name": "contact20",
+        "parent_sha256": "d83a995e802e41b8e17799b0871f75d9ede35f95850049777323112e636654d1",
+        "edits": []
+      },
+      {
+        "name": "release",
+        "parent_sha256": "40f844bc55b578965e629a629c620a170a09f39b0f33fb05b1f7b1db0feabfa0",
+        "edits": []
+      },
+      {
+        "name": "cos2",
+        "parent_sha256": "40f844bc55b578965e629a629c620a170a09f39b0f33fb05b1f7b1db0feabfa0",
+        "edits": [
+          [
+            25759,
+            -2.0
+          ]
+        ]
+      },
+      {
+        "name": "momentum128",
+        "parent_sha256": "40f844bc55b578965e629a629c620a170a09f39b0f33fb05b1f7b1db0feabfa0",
+        "edits": [
+          [
+            25759,
+            -2.0
+          ],
+          [
+            693,
+            4.0
+          ],
+          [
+            456,
+            -4.0
+          ],
+          [
+            721,
+            4.0
+          ],
+          [
+            457,
+            -4.0
+          ],
+          [
+            10047,
+            2.0
+          ],
+          [
+            10117,
+            2.0
+          ],
+          [
+            10187,
+            2.0
+          ],
+          [
+            25752,
+            128.0
+          ],
+          [
+            25754,
+            -128.0
+          ],
+          [
+            25737,
+            128.0
+          ],
+          [
+            25738,
+            -128.0
+          ]
+        ]
+      }
+    ],
+    "seeds": [
+      2026115100,
+      2026115101,
+      2026115102,
+      2026115103,
+      2026115104,
+      2026115105,
+      2026115106,
+      2026115107,
+      2026115108,
+      2026115109
+    ],
+    "ticks": 256,
+    "source": "078f8a98a309111761da7ab21eef98a9bbef7182",
+    "binary_sha256": "251878b3d28a13a4ff2b6a0e67d9d4fae6ba50e0af3b067bf237550195f639bb",
+    "scope": "Frozen fresh comparison. Eleven food scenes, toy and two hazards. This is feeding/pursuit/short-hazard coverage, not a full self-care or general-intelligence battery. No further tuning on these seeds.",
+    "terrain": [
+      [
+        0.0,
+        1.0
+      ],
+      [
+        1.0,
+        0.0
+      ],
+      [
+        0.25,
+        0.75
+      ],
+      [
+        0.5,
+        0.5
+      ]
+    ]
+  },
+  "heldout": [
+    {
+      "name": "contact20",
+      "lives": 140,
+      "food": 91,
+      "food_trials": 110,
+      "per_scene": {
+        "contact": 10,
+        "stationary": 10,
+        "receding": 10,
+        "crossing": 8,
+        "zigzag": 10,
+        "orbiting": 10,
+        "fleeing": 10,
+        "partial-obstacle": 4,
+        "moving-obstacle": 3,
+        "choice": 6,
+        "toy-then-food": 10
+      },
+      "deaths": 7,
+      "mixed_meals": 3,
+      "hazard_injury": 15.247349873185158,
+      "toy_ingest": 864,
+      "failed_ingest_bundles": 3621,
+      "comparisons": {
+        "contact20": {
+          "lost": [],
+          "gained": [],
+          "common": 91,
+          "parent_common_intervals": 5115,
+          "child_common_intervals": 5115
+        },
+        "release": {
+          "lost": [],
+          "gained": [],
+          "common": 91,
+          "parent_common_intervals": 5609,
+          "child_common_intervals": 5115
+        },
+        "cos2": {
+          "lost": [
+            [
+              7,
+              "partial-obstacle"
+            ]
+          ],
+          "gained": [],
+          "common": 91,
+          "parent_common_intervals": 5587,
+          "child_common_intervals": 5115
+        }
+      }
+    },
+    {
+      "name": "release",
+      "lives": 140,
+      "food": 91,
+      "food_trials": 110,
+      "per_scene": {
+        "contact": 10,
+        "stationary": 10,
+        "receding": 10,
+        "crossing": 8,
+        "zigzag": 10,
+        "orbiting": 10,
+        "fleeing": 10,
+        "partial-obstacle": 4,
+        "moving-obstacle": 3,
+        "choice": 6,
+        "toy-then-food": 10
+      },
+      "deaths": 0,
+      "mixed_meals": 1,
+      "hazard_injury": 9.65544405579567,
+      "toy_ingest": 792,
+      "failed_ingest_bundles": 2300,
+      "comparisons": {
+        "contact20": {
+          "lost": [],
+          "gained": [],
+          "common": 91,
+          "parent_common_intervals": 5115,
+          "child_common_intervals": 5609
+        },
+        "release": {
+          "lost": [],
+          "gained": [],
+          "common": 91,
+          "parent_common_intervals": 5609,
+          "child_common_intervals": 5609
+        },
+        "cos2": {
+          "lost": [
+            [
+              7,
+              "partial-obstacle"
+            ]
+          ],
+          "gained": [],
+          "common": 91,
+          "parent_common_intervals": 5587,
+          "child_common_intervals": 5609
+        }
+      }
+    },
+    {
+      "name": "cos2",
+      "lives": 140,
+      "food": 92,
+      "food_trials": 110,
+      "per_scene": {
+        "contact": 10,
+        "stationary": 10,
+        "receding": 10,
+        "crossing": 8,
+        "zigzag": 10,
+        "orbiting": 10,
+        "fleeing": 10,
+        "partial-obstacle": 5,
+        "moving-obstacle": 3,
+        "choice": 6,
+        "toy-then-food": 10
+      },
+      "deaths": 0,
+      "mixed_meals": 2,
+      "hazard_injury": 9.756484627723694,
+      "toy_ingest": 882,
+      "failed_ingest_bundles": 2292,
+      "comparisons": {
+        "contact20": {
+          "lost": [],
+          "gained": [
+            [
+              7,
+              "partial-obstacle"
+            ]
+          ],
+          "common": 91,
+          "parent_common_intervals": 5115,
+          "child_common_intervals": 5587
+        },
+        "release": {
+          "lost": [],
+          "gained": [
+            [
+              7,
+              "partial-obstacle"
+            ]
+          ],
+          "common": 91,
+          "parent_common_intervals": 5609,
+          "child_common_intervals": 5587
+        },
+        "cos2": {
+          "lost": [],
+          "gained": [],
+          "common": 92,
+          "parent_common_intervals": 5712,
+          "child_common_intervals": 5712
+        }
+      }
+    },
+    {
+      "name": "momentum128",
+      "lives": 140,
+      "food": 106,
+      "food_trials": 110,
+      "per_scene": {
+        "contact": 10,
+        "stationary": 10,
+        "receding": 10,
+        "crossing": 8,
+        "zigzag": 10,
+        "orbiting": 10,
+        "fleeing": 10,
+        "partial-obstacle": 10,
+        "moving-obstacle": 8,
+        "choice": 10,
+        "toy-then-food": 10
+      },
+      "deaths": 0,
+      "mixed_meals": 1,
+      "hazard_injury": 9.614672154188156,
+      "toy_ingest": 878,
+      "failed_ingest_bundles": 1856,
+      "comparisons": {
+        "contact20": {
+          "lost": [],
+          "gained": [
+            [
+              2,
+              "moving-obstacle"
+            ],
+            [
+              3,
+              "partial-obstacle"
+            ],
+            [
+              3,
+              "choice"
+            ],
+            [
+              4,
+              "partial-obstacle"
+            ],
+            [
+              4,
+              "moving-obstacle"
+            ],
+            [
+              5,
+              "partial-obstacle"
+            ],
+            [
+              5,
+              "moving-obstacle"
+            ],
+            [
+              5,
+              "choice"
+            ],
+            [
+              6,
+              "partial-obstacle"
+            ],
+            [
+              6,
+              "moving-obstacle"
+            ],
+            [
+              6,
+              "choice"
+            ],
+            [
+              7,
+              "partial-obstacle"
+            ],
+            [
+              7,
+              "choice"
+            ],
+            [
+              8,
+              "partial-obstacle"
+            ],
+            [
+              9,
+              "moving-obstacle"
+            ]
+          ],
+          "common": 91,
+          "parent_common_intervals": 5115,
+          "child_common_intervals": 5527
+        },
+        "release": {
+          "lost": [],
+          "gained": [
+            [
+              2,
+              "moving-obstacle"
+            ],
+            [
+              3,
+              "partial-obstacle"
+            ],
+            [
+              3,
+              "choice"
+            ],
+            [
+              4,
+              "partial-obstacle"
+            ],
+            [
+              4,
+              "moving-obstacle"
+            ],
+            [
+              5,
+              "partial-obstacle"
+            ],
+            [
+              5,
+              "moving-obstacle"
+            ],
+            [
+              5,
+              "choice"
+            ],
+            [
+              6,
+              "partial-obstacle"
+            ],
+            [
+              6,
+              "moving-obstacle"
+            ],
+            [
+              6,
+              "choice"
+            ],
+            [
+              7,
+              "partial-obstacle"
+            ],
+            [
+              7,
+              "choice"
+            ],
+            [
+              8,
+              "partial-obstacle"
+            ],
+            [
+              9,
+              "moving-obstacle"
+            ]
+          ],
+          "common": 91,
+          "parent_common_intervals": 5609,
+          "child_common_intervals": 5527
+        },
+        "cos2": {
+          "lost": [],
+          "gained": [
+            [
+              2,
+              "moving-obstacle"
+            ],
+            [
+              3,
+              "partial-obstacle"
+            ],
+            [
+              3,
+              "choice"
+            ],
+            [
+              4,
+              "partial-obstacle"
+            ],
+            [
+              4,
+              "moving-obstacle"
+            ],
+            [
+              5,
+              "partial-obstacle"
+            ],
+            [
+              5,
+              "moving-obstacle"
+            ],
+            [
+              5,
+              "choice"
+            ],
+            [
+              6,
+              "partial-obstacle"
+            ],
+            [
+              6,
+              "moving-obstacle"
+            ],
+            [
+              6,
+              "choice"
+            ],
+            [
+              7,
+              "choice"
+            ],
+            [
+              8,
+              "partial-obstacle"
+            ],
+            [
+              9,
+              "moving-obstacle"
+            ]
+          ],
+          "common": 92,
+          "parent_common_intervals": 5712,
+          "child_common_intervals": 5614
+        }
+      }
+    }
+  ],
+  "diagnostic": [
+    {
+      "scene": "partial-obstacle",
+      "switches": 105,
+      "target2": 138,
+      "target3": 118,
+      "frames": 256,
+      "consumed": false,
+      "min_distance": 0.9464799165725708,
+      "final_distance": 1.0560576915740967
+    },
+    {
+      "scene": "moving-obstacle",
+      "switches": 92,
+      "target2": 177,
+      "target3": 79,
+      "frames": 256,
+      "consumed": false,
+      "min_distance": 1.6875578165054321,
+      "final_distance": 4.0740227699279785
+    },
+    {
+      "scene": "choice",
+      "switches": 119,
+      "target2": 144,
+      "target3": 112,
+      "frames": 256,
+      "consumed": false,
+      "min_distance": 1.719486951828003,
+      "final_distance": 2.0159199237823486
+    }
+  ],
+  "momentum_diagnostic": [
+    {
+      "scene": "partial-obstacle",
+      "parent": {
+        "decisions": 256,
+        "switches": 105,
+        "consumed": false,
+        "meal": null
+      },
+      "child": {
+        "decisions": 76,
+        "switches": 3,
+        "consumed": true,
+        "meal": 75
+      },
+      "motor_differences": {
+        "x": -0.032769620418548584,
+        "z": 0.023777544498443604
+      },
+      "sensed_neuron_differences": {
+        "x": -0.043340325355529785,
+        "z": 0.05136704444885254
+      }
+    },
+    {
+      "scene": "moving-obstacle",
+      "parent": {
+        "decisions": 256,
+        "switches": 92,
+        "consumed": false,
+        "meal": null
+      },
+      "child": {
+        "decisions": 256,
+        "switches": 84,
+        "consumed": false,
+        "meal": null
+      },
+      "motor_differences": {
+        "x": -0.038934171199798584,
+        "z": 0.020928680896759033
+      },
+      "sensed_neuron_differences": {
+        "x": -0.05541181564331055,
+        "z": 0.04078039526939392
+      }
+    },
+    {
+      "scene": "choice",
+      "parent": {
+        "decisions": 256,
+        "switches": 119,
+        "consumed": false,
+        "meal": null
+      },
+      "child": {
+        "decisions": 256,
+        "switches": 111,
+        "consumed": false,
+        "meal": null
+      },
+      "motor_differences": {
+        "x": -0.03276294469833374,
+        "z": 0.0237734317779541
+      },
+      "sensed_neuron_differences": {
+        "x": -0.04332393407821655,
+        "z": 0.051348209381103516
+      }
+    }
+  ],
+  "torch_replay": {
+    "torch": "2.15.0+cpu",
+    "results": [
+      {
+        "scene": "partial-obstacle",
+        "tick": 32,
+        "max_activation_error": 0.0,
+        "expected_retained_max_error": 0.0
+      },
+      {
+        "scene": "moving-obstacle",
+        "tick": 32,
+        "max_activation_error": 2.9802322387695312e-08,
+        "expected_retained_max_error": 0.0
+      },
+      {
+        "scene": "choice",
+        "tick": 32,
+        "max_activation_error": 2.9802322387695312e-08,
+        "expected_retained_max_error": 0.0
+      }
+    ]
+  },
+  "torch_momentum": {
+    "torch": "2.15.0+cpu",
+    "results": [
+      {
+        "scene": "partial-obstacle",
+        "tick": 32,
+        "max_activation_error": 0.0,
+        "expected_retained_max_error": 0.0
+      },
+      {
+        "scene": "moving-obstacle",
+        "tick": 32,
+        "max_activation_error": 2.9802322387695312e-08,
+        "expected_retained_max_error": 0.0
+      },
+      {
+        "scene": "choice",
+        "tick": 32,
+        "max_activation_error": 2.9802322387695312e-08,
+        "expected_retained_max_error": 0.0
+      }
+    ]
+  },
+  "torch_sensitivity": {
+    "torch": "2.15.0+cpu",
+    "scope": "Frozen native rows only, with other logits held fixed. Does not simulate subsequent learning or body trajectories.",
+    "results": [
+      {
+        "scene": "partial-obstacle",
+        "mean_frozen_food_approach_probability": {
+          "base": 0.4995782621554099,
+          "cos0": 0.8862590126227587,
+          "cos2": 0.7271564749535173,
+          "cos8": 0.26266855197172845
+        },
+        "max_analytic_gradient_error": 0.0
+      },
+      {
+        "scene": "moving-obstacle",
+        "mean_frozen_food_approach_probability": {
+          "base": 0.6362605237518437,
+          "cos0": 0.9982280312106013,
+          "cos2": 0.970424781087786,
+          "cos8": 0.15770948274416696
+        },
+        "max_analytic_gradient_error": 0.0
+      },
+      {
+        "scene": "choice",
+        "mean_frozen_food_approach_probability": {
+          "base": 0.5104932137182914,
+          "cos0": 0.9866698863916099,
+          "cos2": 0.8899463128764182,
+          "cos8": 0.09580217410893965
+        },
+        "max_analytic_gradient_error": 0.0
+      }
+    ]
+  },
+  "reload": {
+    "matched_trials": 14,
+    "candidate_digest_exact": true,
+    "all_prior_physical_metrics_exact": true,
+    "scope": "Export reload plus default-off v14 parity against v13c; only four new diagnostic fields excluded."
+  },
+  "preflight": {
+    "failure": "Coordinate lookup for 904->1777 failed before any native process or life. Corrected to existing sparse routes 904->1784, 905->1785, 906->1786. No wiring was invented."
+  },
+  "records": 171,
+  "trials": 1776,
+  "limits": [
+    "Not a full self-care or general-intelligence battery.",
+    "Main held-out has one fixed genotype and ten varied cases, not independent species.",
+    "Moving Food is a pursuit surrogate; no living-prey injury, consumption or World changes.",
+    "No MemoryContext changes.",
+    "Failed Ingest bundles are representative-success diagnostics, not target-specific credit.",
+    "Toy ingestion attempts increase relative to release-only; unchanged manipulation/memory limitations remain.",
+    "Final hazard injury at a food endpoint is not equal-duration cumulative harm.",
+    "Historical Contact20 compass-bias experiments already documented the V1 issue; this is cumulative testing with release circuitry, followed by a new velocity circuit."
+  ],
+  "transfer": {
+    "plan": {
+      "seeds": [
+        2026115201,
+        2026115202
+      ],
+      "scenes": [
+        "stationary",
+        "moving-obstacle",
+        "hazard",
+        "hazard-choice"
+      ],
+      "ticks": 512,
+      "modes": [
+        "biology600",
+        "host600"
+      ],
+      "binary_sha256": "c6cb087c8478a874214cdd24e102992c7c1076c33263aea558b9186058abc9f8",
+      "source": "dc2733dc200c3b294d78921e796c752f98de6bfa",
+      "scope": "Transfer qualification only, frozen brains. Same600 World ticks: cold biology only, warm actual600 empty-host steps with learned state continuing. All objects parked outside perception then restored; no artificial ATP or neural-state priming. Actual microsteps and initial biological drives reported.",
+      "parents": {
+        "contact20": "d83a995e802e41b8e17799b0871f75d9ede35f95850049777323112e636654d1",
+        "release": "40f844bc55b578965e629a629c620a170a09f39b0f33fb05b1f7b1db0feabfa0",
+        "momentum128": "2682e49ce50802aecf044922bbc8564b648c5253a315870f86b8b72a2547d68c"
+      }
+    },
+    "completed_requests": 12,
+    "results": [
+      {
+        "name": "transfer-contact20-0-0",
+        "trials": [
+          {
+            "scene": "stationary",
+            "consumed": true,
+            "alive": true,
+            "injury": 0.0,
+            "consumed_tick": 42,
+            "initial_world_tick": 600,
+            "preparation_decisions": 0,
+            "preparation_microsteps": {},
+            "microstep_counts": {
+              "2": 43
+            }
+          },
+          {
+            "scene": "moving-obstacle",
+            "consumed": true,
+            "alive": true,
+            "injury": 0.0,
+            "consumed_tick": 65,
+            "initial_world_tick": 600,
+            "preparation_decisions": 0,
+            "preparation_microsteps": {},
+            "microstep_counts": {
+              "2": 66
+            }
+          },
+          {
+            "scene": "hazard",
+            "consumed": false,
+            "alive": false,
+            "injury": 1.0,
+            "consumed_tick": null,
+            "initial_world_tick": 600,
+            "preparation_decisions": 0,
+            "preparation_microsteps": {},
+            "microstep_counts": {
+              "2": 158
+            }
+          },
+          {
+            "scene": "hazard-choice",
+            "consumed": false,
+            "alive": false,
+            "injury": 1.0,
+            "consumed_tick": null,
+            "initial_world_tick": 600,
+            "preparation_decisions": 0,
+            "preparation_microsteps": {},
+            "microstep_counts": {
+              "2": 372
+            }
+          }
+        ]
+      },
+      {
+        "name": "transfer-contact20-0-1",
+        "trials": [
+          {
+            "scene": "stationary",
+            "consumed": true,
+            "alive": true,
+            "injury": 0.0,
+            "consumed_tick": 54,
+            "initial_world_tick": 600,
+            "preparation_decisions": 600,
+            "preparation_microsteps": {
+              "2": 414,
+              "3": 186
+            },
+            "microstep_counts": {
+              "2": 55
+            }
+          },
+          {
+            "scene": "moving-obstacle",
+            "consumed": false,
+            "alive": true,
+            "injury": 0.0,
+            "consumed_tick": null,
+            "initial_world_tick": 600,
+            "preparation_decisions": 600,
+            "preparation_microsteps": {
+              "2": 414,
+              "3": 186
+            },
+            "microstep_counts": {
+              "2": 512
+            }
+          },
+          {
+            "scene": "hazard",
+            "consumed": false,
+            "alive": false,
+            "injury": 1.0,
+            "consumed_tick": null,
+            "initial_world_tick": 600,
+            "preparation_decisions": 600,
+            "preparation_microsteps": {
+              "2": 414,
+              "3": 186
+            },
+            "microstep_counts": {
+              "2": 165
+            }
+          },
+          {
+            "scene": "hazard-choice",
+            "consumed": false,
+            "alive": false,
+            "injury": 1.0,
+            "consumed_tick": null,
+            "initial_world_tick": 600,
+            "preparation_decisions": 600,
+            "preparation_microsteps": {
+              "2": 414,
+              "3": 186
+            },
+            "microstep_counts": {
+              "2": 512
+            }
+          }
+        ]
+      },
+      {
+        "name": "transfer-contact20-1-0",
+        "trials": [
+          {
+            "scene": "stationary",
+            "consumed": true,
+            "alive": true,
+            "injury": 0.0,
+            "consumed_tick": 71,
+            "initial_world_tick": 600,
+            "preparation_decisions": 0,
+            "preparation_microsteps": {},
+            "microstep_counts": {
+              "2": 72
+            }
+          },
+          {
+            "scene": "moving-obstacle",
+            "consumed": false,
+            "alive": true,
+            "injury": 0.0,
+            "consumed_tick": null,
+            "initial_world_tick": 600,
+            "preparation_decisions": 0,
+            "preparation_microsteps": {},
+            "microstep_counts": {
+              "2": 512
+            }
+          },
+          {
+            "scene": "hazard",
+            "consumed": false,
+            "alive": false,
+            "injury": 1.0,
+            "consumed_tick": null,
+            "initial_world_tick": 600,
+            "preparation_decisions": 0,
+            "preparation_microsteps": {},
+            "microstep_counts": {
+              "2": 442
+            }
+          },
+          {
+            "scene": "hazard-choice",
+            "consumed": false,
+            "alive": true,
+            "injury": 0.8551551699638367,
+            "consumed_tick": null,
+            "initial_world_tick": 600,
+            "preparation_decisions": 0,
+            "preparation_microsteps": {},
+            "microstep_counts": {
+              "2": 512
+            }
+          }
+        ]
+      },
+      {
+        "name": "transfer-contact20-1-1",
+        "trials": [
+          {
+            "scene": "stationary",
+            "consumed": true,
+            "alive": true,
+            "injury": 0.0,
+            "consumed_tick": 86,
+            "initial_world_tick": 600,
+            "preparation_decisions": 600,
+            "preparation_microsteps": {
+              "2": 414,
+              "3": 186
+            },
+            "microstep_counts": {
+              "2": 87
+            }
+          },
+          {
+            "scene": "moving-obstacle",
+            "consumed": false,
+            "alive": true,
+            "injury": 0.0,
+            "consumed_tick": null,
+            "initial_world_tick": 600,
+            "preparation_decisions": 600,
+            "preparation_microsteps": {
+              "2": 414,
+              "3": 186
+            },
+            "microstep_counts": {
+              "2": 512
+            }
+          },
+          {
+            "scene": "hazard",
+            "consumed": false,
+            "alive": false,
+            "injury": 1.0,
+            "consumed_tick": null,
+            "initial_world_tick": 600,
+            "preparation_decisions": 600,
+            "preparation_microsteps": {
+              "2": 414,
+              "3": 186
+            },
+            "microstep_counts": {
+              "2": 427
+            }
+          },
+          {
+            "scene": "hazard-choice",
+            "consumed": false,
+            "alive": true,
+            "injury": 0.9313454031944275,
+            "consumed_tick": null,
+            "initial_world_tick": 600,
+            "preparation_decisions": 600,
+            "preparation_microsteps": {
+              "2": 414,
+              "3": 186
+            },
+            "microstep_counts": {
+              "2": 512
+            }
+          }
+        ]
+      },
+      {
+        "name": "transfer-momentum128-0-0",
+        "trials": [
+          {
+            "scene": "stationary",
+            "consumed": true,
+            "alive": true,
+            "injury": 0.0,
+            "consumed_tick": 46,
+            "initial_world_tick": 600,
+            "preparation_decisions": 0,
+            "preparation_microsteps": {},
+            "microstep_counts": {
+              "2": 47
+            }
+          },
+          {
+            "scene": "moving-obstacle",
+            "consumed": true,
+            "alive": true,
+            "injury": 0.0,
+            "consumed_tick": 65,
+            "initial_world_tick": 600,
+            "preparation_decisions": 0,
+            "preparation_microsteps": {},
+            "microstep_counts": {
+              "2": 66
+            }
+          },
+          {
+            "scene": "hazard",
+            "consumed": false,
+            "alive": true,
+            "injury": 0.529636025428772,
+            "consumed_tick": null,
+            "initial_world_tick": 600,
+            "preparation_decisions": 0,
+            "preparation_microsteps": {},
+            "microstep_counts": {
+              "2": 512
+            }
+          },
+          {
+            "scene": "hazard-choice",
+            "consumed": false,
+            "alive": true,
+            "injury": 0.5183528065681458,
+            "consumed_tick": null,
+            "initial_world_tick": 600,
+            "preparation_decisions": 0,
+            "preparation_microsteps": {},
+            "microstep_counts": {
+              "2": 512
+            }
+          }
+        ]
+      },
+      {
+        "name": "transfer-momentum128-0-1",
+        "trials": [
+          {
+            "scene": "stationary",
+            "consumed": true,
+            "alive": true,
+            "injury": 0.0,
+            "consumed_tick": 59,
+            "initial_world_tick": 600,
+            "preparation_decisions": 600,
+            "preparation_microsteps": {
+              "2": 414,
+              "3": 186
+            },
+            "microstep_counts": {
+              "2": 60
+            }
+          },
+          {
+            "scene": "moving-obstacle",
+            "consumed": false,
+            "alive": true,
+            "injury": 0.0,
+            "consumed_tick": null,
+            "initial_world_tick": 600,
+            "preparation_decisions": 600,
+            "preparation_microsteps": {
+              "2": 414,
+              "3": 186
+            },
+            "microstep_counts": {
+              "2": 512
+            }
+          },
+          {
+            "scene": "hazard",
+            "consumed": false,
+            "alive": true,
+            "injury": 0.526210367679596,
+            "consumed_tick": null,
+            "initial_world_tick": 600,
+            "preparation_decisions": 600,
+            "preparation_microsteps": {
+              "2": 414,
+              "3": 186
+            },
+            "microstep_counts": {
+              "2": 512
+            }
+          },
+          {
+            "scene": "hazard-choice",
+            "consumed": false,
+            "alive": true,
+            "injury": 0.5533192157745361,
+            "consumed_tick": null,
+            "initial_world_tick": 600,
+            "preparation_decisions": 600,
+            "preparation_microsteps": {
+              "2": 414,
+              "3": 186
+            },
+            "microstep_counts": {
+              "2": 512
+            }
+          }
+        ]
+      },
+      {
+        "name": "transfer-momentum128-1-0",
+        "trials": [
+          {
+            "scene": "stationary",
+            "consumed": true,
+            "alive": true,
+            "injury": 0.0,
+            "consumed_tick": 71,
+            "initial_world_tick": 600,
+            "preparation_decisions": 0,
+            "preparation_microsteps": {},
+            "microstep_counts": {
+              "2": 72
+            }
+          },
+          {
+            "scene": "moving-obstacle",
+            "consumed": false,
+            "alive": true,
+            "injury": 0.0,
+            "consumed_tick": null,
+            "initial_world_tick": 600,
+            "preparation_decisions": 0,
+            "preparation_microsteps": {},
+            "microstep_counts": {
+              "2": 512
+            }
+          },
+          {
+            "scene": "hazard",
+            "consumed": false,
+            "alive": true,
+            "injury": 0.5107061862945557,
+            "consumed_tick": null,
+            "initial_world_tick": 600,
+            "preparation_decisions": 0,
+            "preparation_microsteps": {},
+            "microstep_counts": {
+              "2": 512
+            }
+          },
+          {
+            "scene": "hazard-choice",
+            "consumed": false,
+            "alive": true,
+            "injury": 0.5031833052635193,
+            "consumed_tick": null,
+            "initial_world_tick": 600,
+            "preparation_decisions": 0,
+            "preparation_microsteps": {},
+            "microstep_counts": {
+              "2": 512
+            }
+          }
+        ]
+      },
+      {
+        "name": "transfer-momentum128-1-1",
+        "trials": [
+          {
+            "scene": "stationary",
+            "consumed": true,
+            "alive": true,
+            "injury": 0.0,
+            "consumed_tick": 86,
+            "initial_world_tick": 600,
+            "preparation_decisions": 600,
+            "preparation_microsteps": {
+              "2": 414,
+              "3": 186
+            },
+            "microstep_counts": {
+              "2": 87
+            }
+          },
+          {
+            "scene": "moving-obstacle",
+            "consumed": false,
+            "alive": true,
+            "injury": 0.0,
+            "consumed_tick": null,
+            "initial_world_tick": 600,
+            "preparation_decisions": 600,
+            "preparation_microsteps": {
+              "2": 414,
+              "3": 186
+            },
+            "microstep_counts": {
+              "2": 512
+            }
+          },
+          {
+            "scene": "hazard",
+            "consumed": false,
+            "alive": true,
+            "injury": 0.5456658005714417,
+            "consumed_tick": null,
+            "initial_world_tick": 600,
+            "preparation_decisions": 600,
+            "preparation_microsteps": {
+              "2": 414,
+              "3": 186
+            },
+            "microstep_counts": {
+              "2": 512
+            }
+          },
+          {
+            "scene": "hazard-choice",
+            "consumed": false,
+            "alive": true,
+            "injury": 0.5146315693855286,
+            "consumed_tick": null,
+            "initial_world_tick": 600,
+            "preparation_decisions": 600,
+            "preparation_microsteps": {
+              "2": 414,
+              "3": 186
+            },
+            "microstep_counts": {
+              "2": 512
+            }
+          }
+        ]
+      },
+      {
+        "name": "transfer-release-0-0",
+        "trials": [
+          {
+            "scene": "stationary",
+            "consumed": true,
+            "alive": true,
+            "injury": 0.0,
+            "consumed_tick": 46,
+            "initial_world_tick": 600,
+            "preparation_decisions": 0,
+            "preparation_microsteps": {},
+            "microstep_counts": {
+              "2": 47
+            }
+          },
+          {
+            "scene": "moving-obstacle",
+            "consumed": true,
+            "alive": true,
+            "injury": 0.0,
+            "consumed_tick": 66,
+            "initial_world_tick": 600,
+            "preparation_decisions": 0,
+            "preparation_microsteps": {},
+            "microstep_counts": {
+              "2": 67
+            }
+          },
+          {
+            "scene": "hazard",
+            "consumed": false,
+            "alive": true,
+            "injury": 0.5296210646629333,
+            "consumed_tick": null,
+            "initial_world_tick": 600,
+            "preparation_decisions": 0,
+            "preparation_microsteps": {},
+            "microstep_counts": {
+              "2": 512
+            }
+          },
+          {
+            "scene": "hazard-choice",
+            "consumed": true,
+            "alive": true,
+            "injury": 0.3364444673061371,
+            "consumed_tick": 132,
+            "initial_world_tick": 600,
+            "preparation_decisions": 0,
+            "preparation_microsteps": {},
+            "microstep_counts": {
+              "2": 133
+            }
+          }
+        ]
+      },
+      {
+        "name": "transfer-release-0-1",
+        "trials": [
+          {
+            "scene": "stationary",
+            "consumed": true,
+            "alive": true,
+            "injury": 0.0,
+            "consumed_tick": 59,
+            "initial_world_tick": 600,
+            "preparation_decisions": 600,
+            "preparation_microsteps": {
+              "2": 414,
+              "3": 186
+            },
+            "microstep_counts": {
+              "2": 60
+            }
+          },
+          {
+            "scene": "moving-obstacle",
+            "consumed": false,
+            "alive": true,
+            "injury": 0.0,
+            "consumed_tick": null,
+            "initial_world_tick": 600,
+            "preparation_decisions": 600,
+            "preparation_microsteps": {
+              "2": 414,
+              "3": 186
+            },
+            "microstep_counts": {
+              "2": 512
+            }
+          },
+          {
+            "scene": "hazard",
+            "consumed": false,
+            "alive": true,
+            "injury": 0.5416666865348816,
+            "consumed_tick": null,
+            "initial_world_tick": 600,
+            "preparation_decisions": 600,
+            "preparation_microsteps": {
+              "2": 414,
+              "3": 186
+            },
+            "microstep_counts": {
+              "2": 512
+            }
+          },
+          {
+            "scene": "hazard-choice",
+            "consumed": false,
+            "alive": true,
+            "injury": 0.5262537002563477,
+            "consumed_tick": null,
+            "initial_world_tick": 600,
+            "preparation_decisions": 600,
+            "preparation_microsteps": {
+              "2": 414,
+              "3": 186
+            },
+            "microstep_counts": {
+              "2": 512
+            }
+          }
+        ]
+      },
+      {
+        "name": "transfer-release-1-0",
+        "trials": [
+          {
+            "scene": "stationary",
+            "consumed": true,
+            "alive": true,
+            "injury": 0.0,
+            "consumed_tick": 71,
+            "initial_world_tick": 600,
+            "preparation_decisions": 0,
+            "preparation_microsteps": {},
+            "microstep_counts": {
+              "2": 72
+            }
+          },
+          {
+            "scene": "moving-obstacle",
+            "consumed": false,
+            "alive": true,
+            "injury": 0.0,
+            "consumed_tick": null,
+            "initial_world_tick": 600,
+            "preparation_decisions": 0,
+            "preparation_microsteps": {},
+            "microstep_counts": {
+              "2": 512
+            }
+          },
+          {
+            "scene": "hazard",
+            "consumed": false,
+            "alive": true,
+            "injury": 0.591990053653717,
+            "consumed_tick": null,
+            "initial_world_tick": 600,
+            "preparation_decisions": 0,
+            "preparation_microsteps": {},
+            "microstep_counts": {
+              "2": 512
+            }
+          },
+          {
+            "scene": "hazard-choice",
+            "consumed": false,
+            "alive": true,
+            "injury": 0.5070909857749939,
+            "consumed_tick": null,
+            "initial_world_tick": 600,
+            "preparation_decisions": 0,
+            "preparation_microsteps": {},
+            "microstep_counts": {
+              "2": 512
+            }
+          }
+        ]
+      },
+      {
+        "name": "transfer-release-1-1",
+        "trials": [
+          {
+            "scene": "stationary",
+            "consumed": true,
+            "alive": true,
+            "injury": 0.0,
+            "consumed_tick": 86,
+            "initial_world_tick": 600,
+            "preparation_decisions": 600,
+            "preparation_microsteps": {
+              "2": 414,
+              "3": 186
+            },
+            "microstep_counts": {
+              "2": 87
+            }
+          },
+          {
+            "scene": "moving-obstacle",
+            "consumed": false,
+            "alive": true,
+            "injury": 0.0,
+            "consumed_tick": null,
+            "initial_world_tick": 600,
+            "preparation_decisions": 600,
+            "preparation_microsteps": {
+              "2": 414,
+              "3": 186
+            },
+            "microstep_counts": {
+              "2": 512
+            }
+          },
+          {
+            "scene": "hazard",
+            "consumed": false,
+            "alive": true,
+            "injury": 0.5030832886695862,
+            "consumed_tick": null,
+            "initial_world_tick": 600,
+            "preparation_decisions": 600,
+            "preparation_microsteps": {
+              "2": 414,
+              "3": 186
+            },
+            "microstep_counts": {
+              "2": 512
+            }
+          },
+          {
+            "scene": "hazard-choice",
+            "consumed": false,
+            "alive": true,
+            "injury": 0.5108440518379211,
+            "consumed_tick": null,
+            "initial_world_tick": 600,
+            "preparation_decisions": 600,
+            "preparation_microsteps": {
+              "2": 414,
+              "3": 186
+            },
+            "microstep_counts": {
+              "2": 512
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "high-energy": {
+    "plan": {
+      "seeds": [
+        2026115301
+      ],
+      "scenes": [
+        "stationary",
+        "hazard",
+        "hazard-choice"
+      ],
+      "ticks": 512,
+      "modes": [
+        "biology600",
+        "host600"
+      ],
+      "binary_sha256": "c6cb087c8478a874214cdd24e102992c7c1076c33263aea558b9186058abc9f8",
+      "source": "dc2733dc200c3b294d78921e796c752f98de6bfa",
+      "scope": "Explicit uniform initial organ-energy0.8 variant, NOT exact inherited-body reproduction of #354. Transfer qualification only, frozen brains. Same600 World ticks: cold biology only, warm actual600 empty-host steps with learned state continuing. All objects parked outside perception then restored; no artificial ATP or neural-state priming. Actual microsteps and initial biological drives reported.",
+      "parents": {
+        "contact20": "d83a995e802e41b8e17799b0871f75d9ede35f95850049777323112e636654d1",
+        "release": "40f844bc55b578965e629a629c620a170a09f39b0f33fb05b1f7b1db0feabfa0",
+        "momentum128": "2682e49ce50802aecf044922bbc8564b648c5253a315870f86b8b72a2547d68c"
+      }
+    },
+    "completed_requests": 6,
+    "results": [
+      {
+        "name": "high-energy-contact20-0-0",
+        "trials": [
+          {
+            "scene": "stationary",
+            "consumed": true,
+            "alive": true,
+            "injury": 0.0,
+            "consumed_tick": 14,
+            "initial_world_tick": 600,
+            "preparation_decisions": 0,
+            "preparation_microsteps": {},
+            "microstep_counts": {
+              "3": 15
+            }
+          },
+          {
+            "scene": "hazard",
+            "consumed": false,
+            "alive": false,
+            "injury": 1.0,
+            "consumed_tick": null,
+            "initial_world_tick": 600,
+            "preparation_decisions": 0,
+            "preparation_microsteps": {},
+            "microstep_counts": {
+              "3": 180
+            }
+          },
+          {
+            "scene": "hazard-choice",
+            "consumed": true,
+            "alive": true,
+            "injury": 0.5144643187522888,
+            "consumed_tick": 60,
+            "initial_world_tick": 600,
+            "preparation_decisions": 0,
+            "preparation_microsteps": {},
+            "microstep_counts": {
+              "3": 61
+            }
+          }
+        ]
+      },
+      {
+        "name": "high-energy-contact20-0-1",
+        "trials": [
+          {
+            "scene": "stationary",
+            "consumed": true,
+            "alive": true,
+            "injury": 0.0,
+            "consumed_tick": 16,
+            "initial_world_tick": 600,
+            "preparation_decisions": 600,
+            "preparation_microsteps": {
+              "3": 600
+            },
+            "microstep_counts": {
+              "3": 17
+            }
+          },
+          {
+            "scene": "hazard",
+            "consumed": false,
+            "alive": false,
+            "injury": 1.0,
+            "consumed_tick": null,
+            "initial_world_tick": 600,
+            "preparation_decisions": 600,
+            "preparation_microsteps": {
+              "3": 600
+            },
+            "microstep_counts": {
+              "3": 163
+            }
+          },
+          {
+            "scene": "hazard-choice",
+            "consumed": true,
+            "alive": true,
+            "injury": 0.2972460687160492,
+            "consumed_tick": 30,
+            "initial_world_tick": 600,
+            "preparation_decisions": 600,
+            "preparation_microsteps": {
+              "3": 600
+            },
+            "microstep_counts": {
+              "3": 31
+            }
+          }
+        ]
+      },
+      {
+        "name": "high-energy-momentum128-0-0",
+        "trials": [
+          {
+            "scene": "stationary",
+            "consumed": false,
+            "alive": true,
+            "injury": 0.0,
+            "consumed_tick": null,
+            "initial_world_tick": 600,
+            "preparation_decisions": 0,
+            "preparation_microsteps": {},
+            "microstep_counts": {
+              "3": 512
+            }
+          },
+          {
+            "scene": "hazard",
+            "consumed": false,
+            "alive": true,
+            "injury": 0.4635674059391022,
+            "consumed_tick": null,
+            "initial_world_tick": 600,
+            "preparation_decisions": 0,
+            "preparation_microsteps": {},
+            "microstep_counts": {
+              "3": 512
+            }
+          },
+          {
+            "scene": "hazard-choice",
+            "consumed": false,
+            "alive": true,
+            "injury": 0.4681216776371002,
+            "consumed_tick": null,
+            "initial_world_tick": 600,
+            "preparation_decisions": 0,
+            "preparation_microsteps": {},
+            "microstep_counts": {
+              "3": 512
+            }
+          }
+        ]
+      },
+      {
+        "name": "high-energy-momentum128-0-1",
+        "trials": [
+          {
+            "scene": "stationary",
+            "consumed": false,
+            "alive": true,
+            "injury": 0.0,
+            "consumed_tick": null,
+            "initial_world_tick": 600,
+            "preparation_decisions": 600,
+            "preparation_microsteps": {
+              "3": 600
+            },
+            "microstep_counts": {
+              "3": 512
+            }
+          },
+          {
+            "scene": "hazard",
+            "consumed": false,
+            "alive": true,
+            "injury": 0.4648278057575226,
+            "consumed_tick": null,
+            "initial_world_tick": 600,
+            "preparation_decisions": 600,
+            "preparation_microsteps": {
+              "3": 600
+            },
+            "microstep_counts": {
+              "3": 512
+            }
+          },
+          {
+            "scene": "hazard-choice",
+            "consumed": false,
+            "alive": true,
+            "injury": 0.4630793333053589,
+            "consumed_tick": null,
+            "initial_world_tick": 600,
+            "preparation_decisions": 600,
+            "preparation_microsteps": {
+              "3": 600
+            },
+            "microstep_counts": {
+              "3": 512
+            }
+          }
+        ]
+      },
+      {
+        "name": "high-energy-release-0-0",
+        "trials": [
+          {
+            "scene": "stationary",
+            "consumed": false,
+            "alive": true,
+            "injury": 0.0,
+            "consumed_tick": null,
+            "initial_world_tick": 600,
+            "preparation_decisions": 0,
+            "preparation_microsteps": {},
+            "microstep_counts": {
+              "3": 512
+            }
+          },
+          {
+            "scene": "hazard",
+            "consumed": false,
+            "alive": true,
+            "injury": 0.46375414729118347,
+            "consumed_tick": null,
+            "initial_world_tick": 600,
+            "preparation_decisions": 0,
+            "preparation_microsteps": {},
+            "microstep_counts": {
+              "3": 512
+            }
+          },
+          {
+            "scene": "hazard-choice",
+            "consumed": false,
+            "alive": true,
+            "injury": 0.2371949404478073,
+            "consumed_tick": null,
+            "initial_world_tick": 600,
+            "preparation_decisions": 0,
+            "preparation_microsteps": {},
+            "microstep_counts": {
+              "3": 512
+            }
+          }
+        ]
+      },
+      {
+        "name": "high-energy-release-0-1",
+        "trials": [
+          {
+            "scene": "stationary",
+            "consumed": false,
+            "alive": true,
+            "injury": 0.0,
+            "consumed_tick": null,
+            "initial_world_tick": 600,
+            "preparation_decisions": 600,
+            "preparation_microsteps": {
+              "3": 600
+            },
+            "microstep_counts": {
+              "3": 512
+            }
+          },
+          {
+            "scene": "hazard",
+            "consumed": false,
+            "alive": true,
+            "injury": 0.4639216363430023,
+            "consumed_tick": null,
+            "initial_world_tick": 600,
+            "preparation_decisions": 600,
+            "preparation_microsteps": {
+              "3": 600
+            },
+            "microstep_counts": {
+              "3": 512
+            }
+          },
+          {
+            "scene": "hazard-choice",
+            "consumed": false,
+            "alive": true,
+            "injury": 0.46482232213020325,
+            "consumed_tick": null,
+            "initial_world_tick": 600,
+            "preparation_decisions": 600,
+            "preparation_microsteps": {
+              "3": 600
+            },
+            "microstep_counts": {
+              "3": 512
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "phase_reference_plan": {
+    "parent_sha256": "2682e49ce50802aecf044922bbc8564b648c5253a315870f86b8b72a2547d68c",
+    "binary_sha256": "c6cb087c8478a874214cdd24e102992c7c1076c33263aea558b9186058abc9f8",
+    "variants": [
+      [
+        "reference-base",
+        []
+      ],
+      [
+        "reference9.0",
+        [
+          [
+            10431,
+            3.801316261291504
+          ]
+        ]
+      ],
+      [
+        "reference10.0",
+        [
+          [
+            10431,
+            4.801316261291504
+          ]
+        ]
+      ],
+      [
+        "reference11.0",
+        [
+          [
+            10431,
+            5.801316261291504
+          ]
+        ]
+      ],
+      [
+        "reference12.0",
+        [
+          [
+            10431,
+            6.801316261291504
+          ]
+        ]
+      ],
+      [
+        "reference14.0",
+        [
+          [
+            10431,
+            8.801316261291504
+          ]
+        ]
+      ]
+    ],
+    "conditions": [
+      [
+        "hungry-cold",
+        0.25,
+        false
+      ],
+      [
+        "energetic-cold",
+        0.8,
+        false
+      ],
+      [
+        "energetic-warm",
+        0.8,
+        true
+      ]
+    ],
+    "reused_controls": {
+      "reference-base/energetic-cold": "high-energy-momentum128-0-0",
+      "reference-base/energetic-warm": "high-energy-momentum128-0-1"
+    },
+    "seed": 2026115301,
+    "scenes": [
+      "stationary",
+      "hazard",
+      "hazard-choice"
+    ],
+    "ticks": 512,
+    "hypothesis": "Three-microstep native painless Contact1809 activation is positive and saturates manipulation despite pain=0. Vary only its existing negative-tonic reference weight; all32 previous edits retained. Reject gains that prevent ordinary food or lose hazard survival in either compute/history condition.",
+    "selection": "Must eat stationary food and survive lone hazard in all3 conditions; then prioritize mixed meals, lower final lone-hazard injury and common meal latency. Frozen wider nav result is not rerun/reinterpreted."
+  },
+  "phase_reference_results": [
+    {
+      "name": "phase-reference-base-hungry-cold",
+      "results": [
+        {
+          "scene": "stationary",
+          "consumed": true,
+          "alive": true,
+          "injury": 0.0,
+          "consumed_tick": 43,
+          "microstep_counts": {
+            "2": 44
+          }
+        },
+        {
+          "scene": "hazard",
+          "consumed": false,
+          "alive": true,
+          "injury": 0.5296003222465515,
+          "consumed_tick": null,
+          "microstep_counts": {
+            "2": 512
+          }
+        },
+        {
+          "scene": "hazard-choice",
+          "consumed": false,
+          "alive": true,
+          "injury": 0.5181854367256165,
+          "consumed_tick": null,
+          "microstep_counts": {
+            "2": 512
+          }
+        }
+      ]
+    },
+    {
+      "name": "phase-reference10.0-energetic-cold",
+      "results": [
+        {
+          "scene": "stationary",
+          "consumed": true,
+          "alive": true,
+          "injury": 0.0,
+          "consumed_tick": 14,
+          "microstep_counts": {
+            "3": 15
+          }
+        },
+        {
+          "scene": "hazard",
+          "consumed": false,
+          "alive": true,
+          "injury": 0.6601796746253967,
+          "consumed_tick": null,
+          "microstep_counts": {
+            "3": 512
+          }
+        },
+        {
+          "scene": "hazard-choice",
+          "consumed": false,
+          "alive": true,
+          "injury": 0.14254619181156158,
+          "consumed_tick": null,
+          "microstep_counts": {
+            "3": 512
+          }
+        }
+      ]
+    },
+    {
+      "name": "phase-reference10.0-energetic-warm",
+      "results": [
+        {
+          "scene": "stationary",
+          "consumed": true,
+          "alive": true,
+          "injury": 0.0,
+          "consumed_tick": 16,
+          "microstep_counts": {
+            "3": 17
+          }
+        },
+        {
+          "scene": "hazard",
+          "consumed": false,
+          "alive": true,
+          "injury": 0.6653980016708374,
+          "consumed_tick": null,
+          "microstep_counts": {
+            "3": 512
+          }
+        },
+        {
+          "scene": "hazard-choice",
+          "consumed": false,
+          "alive": true,
+          "injury": 0.18310903012752533,
+          "consumed_tick": null,
+          "microstep_counts": {
+            "3": 512
+          }
+        }
+      ]
+    },
+    {
+      "name": "phase-reference10.0-hungry-cold",
+      "results": [
+        {
+          "scene": "stationary",
+          "consumed": true,
+          "alive": true,
+          "injury": 0.0,
+          "consumed_tick": 42,
+          "microstep_counts": {
+            "2": 43
+          }
+        },
+        {
+          "scene": "hazard",
+          "consumed": false,
+          "alive": false,
+          "injury": 1.0,
+          "consumed_tick": null,
+          "microstep_counts": {
+            "2": 297
+          }
+        },
+        {
+          "scene": "hazard-choice",
+          "consumed": false,
+          "alive": false,
+          "injury": 1.0,
+          "consumed_tick": null,
+          "microstep_counts": {
+            "2": 231
+          }
+        }
+      ]
+    },
+    {
+      "name": "phase-reference11.0-energetic-cold",
+      "results": [
+        {
+          "scene": "stationary",
+          "consumed": true,
+          "alive": true,
+          "injury": 0.0,
+          "consumed_tick": 14,
+          "microstep_counts": {
+            "3": 15
+          }
+        },
+        {
+          "scene": "hazard",
+          "consumed": false,
+          "alive": true,
+          "injury": 0.7652437090873718,
+          "consumed_tick": null,
+          "microstep_counts": {
+            "3": 512
+          }
+        },
+        {
+          "scene": "hazard-choice",
+          "consumed": false,
+          "alive": true,
+          "injury": 0.0884610116481781,
+          "consumed_tick": null,
+          "microstep_counts": {
+            "3": 512
+          }
+        }
+      ]
+    },
+    {
+      "name": "phase-reference11.0-energetic-warm",
+      "results": [
+        {
+          "scene": "stationary",
+          "consumed": true,
+          "alive": true,
+          "injury": 0.0,
+          "consumed_tick": 16,
+          "microstep_counts": {
+            "3": 17
+          }
+        },
+        {
+          "scene": "hazard",
+          "consumed": false,
+          "alive": true,
+          "injury": 0.7107681632041931,
+          "consumed_tick": null,
+          "microstep_counts": {
+            "3": 512
+          }
+        },
+        {
+          "scene": "hazard-choice",
+          "consumed": false,
+          "alive": true,
+          "injury": 0.0884610116481781,
+          "consumed_tick": null,
+          "microstep_counts": {
+            "3": 512
+          }
+        }
+      ]
+    },
+    {
+      "name": "phase-reference11.0-hungry-cold",
+      "results": [
+        {
+          "scene": "stationary",
+          "consumed": true,
+          "alive": true,
+          "injury": 0.0,
+          "consumed_tick": 42,
+          "microstep_counts": {
+            "2": 43
+          }
+        },
+        {
+          "scene": "hazard",
+          "consumed": false,
+          "alive": false,
+          "injury": 1.0,
+          "consumed_tick": null,
+          "microstep_counts": {
+            "2": 297
+          }
+        },
+        {
+          "scene": "hazard-choice",
+          "consumed": false,
+          "alive": false,
+          "injury": 1.0,
+          "consumed_tick": null,
+          "microstep_counts": {
+            "2": 231
+          }
+        }
+      ]
+    },
+    {
+      "name": "phase-reference12.0-energetic-cold",
+      "results": [
+        {
+          "scene": "stationary",
+          "consumed": true,
+          "alive": true,
+          "injury": 0.0,
+          "consumed_tick": 14,
+          "microstep_counts": {
+            "3": 15
+          }
+        },
+        {
+          "scene": "hazard",
+          "consumed": false,
+          "alive": true,
+          "injury": 0.8442554473876953,
+          "consumed_tick": null,
+          "microstep_counts": {
+            "3": 512
+          }
+        },
+        {
+          "scene": "hazard-choice",
+          "consumed": false,
+          "alive": true,
+          "injury": 0.0884610116481781,
+          "consumed_tick": null,
+          "microstep_counts": {
+            "3": 512
+          }
+        }
+      ]
+    },
+    {
+      "name": "phase-reference12.0-energetic-warm",
+      "results": [
+        {
+          "scene": "stationary",
+          "consumed": true,
+          "alive": true,
+          "injury": 0.0,
+          "consumed_tick": 16,
+          "microstep_counts": {
+            "3": 17
+          }
+        },
+        {
+          "scene": "hazard",
+          "consumed": false,
+          "alive": true,
+          "injury": 0.885719358921051,
+          "consumed_tick": null,
+          "microstep_counts": {
+            "3": 512
+          }
+        },
+        {
+          "scene": "hazard-choice",
+          "consumed": false,
+          "alive": true,
+          "injury": 0.0884610116481781,
+          "consumed_tick": null,
+          "microstep_counts": {
+            "3": 512
+          }
+        }
+      ]
+    },
+    {
+      "name": "phase-reference12.0-hungry-cold",
+      "results": [
+        {
+          "scene": "stationary",
+          "consumed": true,
+          "alive": true,
+          "injury": 0.0,
+          "consumed_tick": 42,
+          "microstep_counts": {
+            "2": 43
+          }
+        },
+        {
+          "scene": "hazard",
+          "consumed": false,
+          "alive": false,
+          "injury": 1.0,
+          "consumed_tick": null,
+          "microstep_counts": {
+            "2": 297
+          }
+        },
+        {
+          "scene": "hazard-choice",
+          "consumed": false,
+          "alive": false,
+          "injury": 1.0,
+          "consumed_tick": null,
+          "microstep_counts": {
+            "2": 231
+          }
+        }
+      ]
+    },
+    {
+      "name": "phase-reference14.0-energetic-cold",
+      "results": [
+        {
+          "scene": "stationary",
+          "consumed": true,
+          "alive": true,
+          "injury": 0.0,
+          "consumed_tick": 14,
+          "microstep_counts": {
+            "3": 15
+          }
+        },
+        {
+          "scene": "hazard",
+          "consumed": false,
+          "alive": false,
+          "injury": 1.0,
+          "consumed_tick": null,
+          "microstep_counts": {
+            "3": 386
+          }
+        },
+        {
+          "scene": "hazard-choice",
+          "consumed": false,
+          "alive": true,
+          "injury": 0.0884610116481781,
+          "consumed_tick": null,
+          "microstep_counts": {
+            "3": 512
+          }
+        }
+      ]
+    },
+    {
+      "name": "phase-reference14.0-energetic-warm",
+      "results": [
+        {
+          "scene": "stationary",
+          "consumed": true,
+          "alive": true,
+          "injury": 0.0,
+          "consumed_tick": 16,
+          "microstep_counts": {
+            "3": 17
+          }
+        },
+        {
+          "scene": "hazard",
+          "consumed": false,
+          "alive": false,
+          "injury": 1.0,
+          "consumed_tick": null,
+          "microstep_counts": {
+            "3": 419
+          }
+        },
+        {
+          "scene": "hazard-choice",
+          "consumed": false,
+          "alive": true,
+          "injury": 0.0884610116481781,
+          "consumed_tick": null,
+          "microstep_counts": {
+            "3": 512
+          }
+        }
+      ]
+    },
+    {
+      "name": "phase-reference14.0-hungry-cold",
+      "results": [
+        {
+          "scene": "stationary",
+          "consumed": true,
+          "alive": true,
+          "injury": 0.0,
+          "consumed_tick": 42,
+          "microstep_counts": {
+            "2": 43
+          }
+        },
+        {
+          "scene": "hazard",
+          "consumed": false,
+          "alive": false,
+          "injury": 1.0,
+          "consumed_tick": null,
+          "microstep_counts": {
+            "2": 297
+          }
+        },
+        {
+          "scene": "hazard-choice",
+          "consumed": false,
+          "alive": false,
+          "injury": 1.0,
+          "consumed_tick": null,
+          "microstep_counts": {
+            "2": 231
+          }
+        }
+      ]
+    },
+    {
+      "name": "phase-reference9.0-energetic-cold",
+      "results": [
+        {
+          "scene": "stationary",
+          "consumed": true,
+          "alive": true,
+          "injury": 0.0,
+          "consumed_tick": 21,
+          "microstep_counts": {
+            "3": 22
+          }
+        },
+        {
+          "scene": "hazard",
+          "consumed": false,
+          "alive": true,
+          "injury": 0.5757868885993958,
+          "consumed_tick": null,
+          "microstep_counts": {
+            "3": 512
+          }
+        },
+        {
+          "scene": "hazard-choice",
+          "consumed": false,
+          "alive": true,
+          "injury": 0.5571708679199219,
+          "consumed_tick": null,
+          "microstep_counts": {
+            "3": 512
+          }
+        }
+      ]
+    },
+    {
+      "name": "phase-reference9.0-energetic-warm",
+      "results": [
+        {
+          "scene": "stationary",
+          "consumed": true,
+          "alive": true,
+          "injury": 0.0,
+          "consumed_tick": 16,
+          "microstep_counts": {
+            "3": 17
+          }
+        },
+        {
+          "scene": "hazard",
+          "consumed": false,
+          "alive": true,
+          "injury": 0.5531297922134399,
+          "consumed_tick": null,
+          "microstep_counts": {
+            "3": 512
+          }
+        },
+        {
+          "scene": "hazard-choice",
+          "consumed": true,
+          "alive": true,
+          "injury": 0.5013951063156128,
+          "consumed_tick": 258,
+          "microstep_counts": {
+            "3": 259
+          }
+        }
+      ]
+    },
+    {
+      "name": "phase-reference9.0-hungry-cold",
+      "results": [
+        {
+          "scene": "stationary",
+          "consumed": true,
+          "alive": true,
+          "injury": 0.0,
+          "consumed_tick": 42,
+          "microstep_counts": {
+            "2": 43
+          }
+        },
+        {
+          "scene": "hazard",
+          "consumed": false,
+          "alive": false,
+          "injury": 1.0,
+          "consumed_tick": null,
+          "microstep_counts": {
+            "2": 300
+          }
+        },
+        {
+          "scene": "hazard-choice",
+          "consumed": false,
+          "alive": true,
+          "injury": 0.6715527176856995,
+          "consumed_tick": null,
+          "microstep_counts": {
+            "2": 512
+          }
+        }
+      ]
+    }
+  ],
+  "phase3_torch": {
+    "torch": "2.15.0+cpu",
+    "results": [
+      {
+        "scene": "stationary",
+        "tick": 32,
+        "max_activation_error": 2.9802322387695312e-08,
+        "expected_retained_max_error": 0.0
+      },
+      {
+        "scene": "hazard",
+        "tick": 32,
+        "max_activation_error": 2.9802322387695312e-08,
+        "expected_retained_max_error": 0.0
+      }
+    ]
+  },
+  "paired_plan": {
+    "parent_sha256": "2682e49ce50802aecf044922bbc8564b648c5253a315870f86b8b72a2547d68c",
+    "variants": [
+      [
+        "paired4",
+        [
+          [
+            6665,
+            2.0
+          ],
+          [
+            6799,
+            2.0
+          ],
+          [
+            7702,
+            4.0
+          ],
+          [
+            7770,
+            -4.0
+          ],
+          [
+            9567,
+            -16.0
+          ],
+          [
+            10431,
+            -5.198683738708496
+          ],
+          [
+            10487,
+            2.0
+          ],
+          [
+            9637,
+            2.0
+          ],
+          [
+            26529,
+            1536.0
+          ],
+          [
+            26530,
+            -768.0
+          ],
+          [
+            26785,
+            -192.0
+          ],
+          [
+            26786,
+            96.0
+          ],
+          [
+            26865,
+            -48.0
+          ],
+          [
+            26866,
+            24.0
+          ]
+        ]
+      ],
+      [
+        "paired8",
+        [
+          [
+            6665,
+            2.0
+          ],
+          [
+            6799,
+            2.0
+          ],
+          [
+            7702,
+            8.0
+          ],
+          [
+            7770,
+            -8.0
+          ],
+          [
+            9567,
+            -16.0
+          ],
+          [
+            10431,
+            -5.198683738708496
+          ],
+          [
+            10487,
+            2.0
+          ],
+          [
+            9637,
+            2.0
+          ],
+          [
+            26529,
+            1536.0
+          ],
+          [
+            26530,
+            -768.0
+          ],
+          [
+            26785,
+            -192.0
+          ],
+          [
+            26786,
+            96.0
+          ],
+          [
+            26865,
+            -48.0
+          ],
+          [
+            26866,
+            24.0
+          ]
+        ]
+      ],
+      [
+        "paired16",
+        [
+          [
+            6665,
+            2.0
+          ],
+          [
+            6799,
+            2.0
+          ],
+          [
+            7702,
+            16.0
+          ],
+          [
+            7770,
+            -16.0
+          ],
+          [
+            9567,
+            -16.0
+          ],
+          [
+            10431,
+            -5.198683738708496
+          ],
+          [
+            10487,
+            2.0
+          ],
+          [
+            9637,
+            2.0
+          ],
+          [
+            26529,
+            1536.0
+          ],
+          [
+            26530,
+            -768.0
+          ],
+          [
+            26785,
+            -192.0
+          ],
+          [
+            26786,
+            96.0
+          ],
+          [
+            26865,
+            -48.0
+          ],
+          [
+            26866,
+            24.0
+          ]
+        ]
+      ]
+    ],
+    "conditions": [
+      [
+        "hungry-cold",
+        0.25,
+        false
+      ],
+      [
+        "energetic-cold",
+        0.8,
+        false
+      ],
+      [
+        "energetic-warm",
+        0.8,
+        true
+      ]
+    ],
+    "seed": 2026115301,
+    "ticks": 512,
+    "mechanism": "Matched pain257 and unencoded neutral273 feed unused reserves1954/1960 with equal gain2. Their difference enters core898, relayed to motor1810 and compared against matched motor1809 driven by tonic core911. Contact readout becomes (motor1810-motor1809) times the prior release basis. Old phase-sensitive core897/reference910 inputs to1809 are disabled. All navigation edits remain exact; existing release circuit is refined rather than treated as immutable.",
+    "limits": "Core relay has weak pre-existing connections to other regions; native controls measure collateral consequences. No changes to projection cadence, chemistry, MemoryContext readouts, or world.",
+    "selection": "Require stationary food and lone-hazard survival across all three modes; maximize mixed meals, then minimize lone-hazard injury."
+  },
+  "paired_pilot": [
+    {
+      "name": "paired4",
+      "stationary_meals": 3,
+      "lone_hazard_survivors": 3,
+      "mixed_meals": 0,
+      "lone_hazard_injury_sum": 1.537903606891632
+    },
+    {
+      "name": "paired8",
+      "stationary_meals": 3,
+      "lone_hazard_survivors": 3,
+      "mixed_meals": 0,
+      "lone_hazard_injury_sum": 1.424015998840332
+    },
+    {
+      "name": "paired16",
+      "stationary_meals": 3,
+      "lone_hazard_survivors": 3,
+      "mixed_meals": 0,
+      "lone_hazard_injury_sum": 1.3703101575374603
+    }
+  ],
+  "paired_signal": [
+    {
+      "mode": "low",
+      "scene": "toy",
+      "microsteps": {
+        "2": 128
+      },
+      "pain_min": 0.0,
+      "pain_max": 0.0,
+      "signal_min": 1.3709068298339844e-06,
+      "signal_max": 7.331371307373047e-06,
+      "signal_mean": 4.561617970466614e-06
+    },
+    {
+      "mode": "low",
+      "scene": "hazard",
+      "microsteps": {
+        "2": 128
+      },
+      "pain_min": 0.062259361147880554,
+      "pain_max": 0.22124047577381134,
+      "signal_min": 0.3061596751213074,
+      "signal_max": 0.7399887293577194,
+      "signal_mean": 0.5749866861539582
+    },
+    {
+      "mode": "high",
+      "scene": "toy",
+      "microsteps": {
+        "3": 128
+      },
+      "pain_min": 0.0,
+      "pain_max": 0.0,
+      "signal_min": -4.0531158447265625e-06,
+      "signal_max": 1.8477439880371094e-06,
+      "signal_mean": -4.830459753672282e-07
+    },
+    {
+      "mode": "high",
+      "scene": "hazard",
+      "microsteps": {
+        "3": 128
+      },
+      "pain_min": 0.012905190698802471,
+      "pain_max": 0.14363984763622284,
+      "signal_min": 0.03546816110610962,
+      "signal_max": 0.5671124458312988,
+      "signal_mean": 0.2531092648083965
+    }
+  ],
+  "paired_torch_low": {
+    "torch": "2.15.0+cpu",
+    "results": [
+      {
+        "scene": "toy",
+        "tick": 32,
+        "max_activation_error": 2.9802322387695312e-08,
+        "expected_retained_max_error": 0.0
+      },
+      {
+        "scene": "hazard",
+        "tick": 32,
+        "max_activation_error": 2.9802322387695312e-08,
+        "expected_retained_max_error": 0.0
+      }
+    ]
+  },
+  "paired_torch_high": {
+    "torch": "2.15.0+cpu",
+    "results": [
+      {
+        "scene": "toy",
+        "tick": 32,
+        "max_activation_error": 1.1920928955078125e-07,
+        "expected_retained_max_error": 0.0
+      },
+      {
+        "scene": "hazard",
+        "tick": 32,
+        "max_activation_error": 0.0,
+        "expected_retained_max_error": 0.0
+      }
+    ]
+  },
+  "paired_genetic_diff": {
+    "changed_indices": [
+      6665,
+      6799,
+      7702,
+      7770,
+      9567,
+      9637,
+      10431,
+      10487,
+      26529,
+      26530,
+      26785,
+      26786,
+      26865,
+      26866
+    ],
+    "all_navigation_edits_preserved": true,
+    "all_other_parent_weights_and_coordinates_exact": true,
+    "changed_genome_fields": [
+      "n2048_foundation_candidate"
+    ],
+    "foundation_sha256": "f9bd6da726f11a259936ee8564916aad7d22322543fd819731eb425cb05e21ae",
+    "genome_sha256": "3fa5498e5d209f8ec6a88f18599762beb5175e49bce00e1611cd3fc6f8528055"
+  },
+  "paired_reload": {
+    "matched_trials": 14,
+    "candidate_digest_exact": true,
+    "all_physical_and_admission_metrics_exact": true
+  },
+  "final_plan": {
+    "variants": [
+      {
+        "name": "contact20",
+        "parent_sha256": "d83a995e802e41b8e17799b0871f75d9ede35f95850049777323112e636654d1",
+        "edits": []
+      },
+      {
+        "name": "momentum128",
+        "parent_sha256": "2682e49ce50802aecf044922bbc8564b648c5253a315870f86b8b72a2547d68c",
+        "edits": []
+      },
+      {
+        "name": "paired16",
+        "parent_sha256": "2682e49ce50802aecf044922bbc8564b648c5253a315870f86b8b72a2547d68c",
+        "edits": [
+          [
+            6665,
+            2.0
+          ],
+          [
+            6799,
+            2.0
+          ],
+          [
+            7702,
+            16.0
+          ],
+          [
+            7770,
+            -16.0
+          ],
+          [
+            9567,
+            -16.0
+          ],
+          [
+            10431,
+            -5.198683738708496
+          ],
+          [
+            10487,
+            2.0
+          ],
+          [
+            9637,
+            2.0
+          ],
+          [
+            26529,
+            1536.0
+          ],
+          [
+            26530,
+            -768.0
+          ],
+          [
+            26785,
+            -192.0
+          ],
+          [
+            26786,
+            96.0
+          ],
+          [
+            26865,
+            -48.0
+          ],
+          [
+            26866,
+            24.0
+          ]
+        ]
+      }
+    ],
+    "navigation_seeds": [
+      2026115110,
+      2026115111,
+      2026115112,
+      2026115113,
+      2026115114,
+      2026115115,
+      2026115116,
+      2026115117,
+      2026115118,
+      2026115119
+    ],
+    "high_energy_host_long_seeds": [
+      2026115410,
+      2026115411
+    ],
+    "low_energy_long_seed": 2026115412,
+    "source": "dc2733dc200c3b294d78921e796c752f98de6bfa",
+    "binary_sha256": "c6cb087c8478a874214cdd24e102992c7c1076c33263aea558b9186058abc9f8",
+    "frozen": true,
+    "selection": "paired16 passed stationary eating and lone-hazard survival in all3 exposed conditions, tied mixed meals, and minimized summed lone-hazard injury. No tuning on these fresh controls.",
+    "limits": "Higher-energy arms use uniform initial organ reserves0.8, not exact inherited biology. Host600 versus biology600 changes neural/learning history, metabolic expenditure and random-stream position; not a pure memory ablation. Long trials stop on first consumption or death.",
+    "terrain": [
+      [
+        0.75,
+        0.25
+      ],
+      [
+        0.25,
+        1.0
+      ],
+      [
+        1.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.5
+      ]
+    ]
+  },
+  "final_navigation": [
+    {
+      "name": "contact20",
+      "lives": 140,
+      "food": 100,
+      "food_trials": 110,
+      "per_scene": {
+        "contact": 10,
+        "stationary": 10,
+        "receding": 10,
+        "crossing": 10,
+        "zigzag": 10,
+        "orbiting": 10,
+        "fleeing": 10,
+        "partial-obstacle": 6,
+        "moving-obstacle": 6,
+        "choice": 8,
+        "toy-then-food": 10
+      },
+      "deaths": 8,
+      "mixed_meals": 1,
+      "hazard_injury": 16.32221721112728,
+      "toy_ingest": 901,
+      "failed_ingest_bundles": 3663,
+      "comparisons": {
+        "contact20": {
+          "lost": [],
+          "gained": [],
+          "common": 100,
+          "parent_common_intervals": 5447,
+          "child_common_intervals": 5447
+        },
+        "momentum128": {
+          "lost": [
+            [
+              2,
+              "moving-obstacle"
+            ],
+            [
+              3,
+              "partial-obstacle"
+            ],
+            [
+              4,
+              "partial-obstacle"
+            ],
+            [
+              4,
+              "moving-obstacle"
+            ],
+            [
+              4,
+              "choice"
+            ],
+            [
+              5,
+              "partial-obstacle"
+            ],
+            [
+              5,
+              "moving-obstacle"
+            ],
+            [
+              5,
+              "choice"
+            ],
+            [
+              6,
+              "partial-obstacle"
+            ]
+          ],
+          "gained": [],
+          "common": 100,
+          "parent_common_intervals": 5756,
+          "child_common_intervals": 5447
+        }
+      }
+    },
+    {
+      "name": "momentum128",
+      "lives": 140,
+      "food": 109,
+      "food_trials": 110,
+      "per_scene": {
+        "contact": 10,
+        "stationary": 10,
+        "receding": 10,
+        "crossing": 10,
+        "zigzag": 10,
+        "orbiting": 10,
+        "fleeing": 10,
+        "partial-obstacle": 10,
+        "moving-obstacle": 9,
+        "choice": 10,
+        "toy-then-food": 10
+      },
+      "deaths": 0,
+      "mixed_meals": 1,
+      "hazard_injury": 9.63723835349083,
+      "toy_ingest": 905,
+      "failed_ingest_bundles": 1836,
+      "comparisons": {
+        "contact20": {
+          "lost": [],
+          "gained": [
+            [
+              2,
+              "moving-obstacle"
+            ],
+            [
+              3,
+              "partial-obstacle"
+            ],
+            [
+              4,
+              "partial-obstacle"
+            ],
+            [
+              4,
+              "moving-obstacle"
+            ],
+            [
+              4,
+              "choice"
+            ],
+            [
+              5,
+              "partial-obstacle"
+            ],
+            [
+              5,
+              "moving-obstacle"
+            ],
+            [
+              5,
+              "choice"
+            ],
+            [
+              6,
+              "partial-obstacle"
+            ]
+          ],
+          "common": 100,
+          "parent_common_intervals": 5447,
+          "child_common_intervals": 5756
+        },
+        "momentum128": {
+          "lost": [],
+          "gained": [],
+          "common": 109,
+          "parent_common_intervals": 6447,
+          "child_common_intervals": 6447
+        }
+      }
+    },
+    {
+      "name": "paired16",
+      "lives": 140,
+      "food": 110,
+      "food_trials": 110,
+      "per_scene": {
+        "contact": 10,
+        "stationary": 10,
+        "receding": 10,
+        "crossing": 10,
+        "zigzag": 10,
+        "orbiting": 10,
+        "fleeing": 10,
+        "partial-obstacle": 10,
+        "moving-obstacle": 10,
+        "choice": 10,
+        "toy-then-food": 10
+      },
+      "deaths": 0,
+      "mixed_meals": 0,
+      "hazard_injury": 8.345610469579697,
+      "toy_ingest": 924,
+      "failed_ingest_bundles": 1905,
+      "comparisons": {
+        "contact20": {
+          "lost": [],
+          "gained": [
+            [
+              2,
+              "moving-obstacle"
+            ],
+            [
+              3,
+              "partial-obstacle"
+            ],
+            [
+              4,
+              "partial-obstacle"
+            ],
+            [
+              4,
+              "moving-obstacle"
+            ],
+            [
+              4,
+              "choice"
+            ],
+            [
+              5,
+              "partial-obstacle"
+            ],
+            [
+              5,
+              "moving-obstacle"
+            ],
+            [
+              5,
+              "choice"
+            ],
+            [
+              6,
+              "partial-obstacle"
+            ],
+            [
+              7,
+              "moving-obstacle"
+            ]
+          ],
+          "common": 100,
+          "parent_common_intervals": 5447,
+          "child_common_intervals": 5312
+        },
+        "momentum128": {
+          "lost": [],
+          "gained": [
+            [
+              7,
+              "moving-obstacle"
+            ]
+          ],
+          "common": 109,
+          "parent_common_intervals": 6447,
+          "child_common_intervals": 6147
+        }
+      }
+    }
+  ],
+  "final_long_transfer": [
+    {
+      "name": "final-contact20-10",
+      "trials": [
+        {
+          "scene": "stationary",
+          "consumed": true,
+          "alive": true,
+          "injury": 0.0,
+          "consumed_tick": 25,
+          "initial_world_tick": 600,
+          "preparation_decisions": 600,
+          "preparation_microsteps": {
+            "3": 600
+          },
+          "microstep_counts": {
+            "3": 26
+          }
+        },
+        {
+          "scene": "hazard",
+          "consumed": false,
+          "alive": false,
+          "injury": 1.0,
+          "consumed_tick": null,
+          "initial_world_tick": 600,
+          "preparation_decisions": 600,
+          "preparation_microsteps": {
+            "3": 600
+          },
+          "microstep_counts": {
+            "3": 189
+          }
+        },
+        {
+          "scene": "hazard-choice",
+          "consumed": true,
+          "alive": true,
+          "injury": 0.13496072590351105,
+          "consumed_tick": 25,
+          "initial_world_tick": 600,
+          "preparation_decisions": 600,
+          "preparation_microsteps": {
+            "3": 600
+          },
+          "microstep_counts": {
+            "3": 26
+          }
+        }
+      ]
+    },
+    {
+      "name": "final-contact20-11",
+      "trials": [
+        {
+          "scene": "stationary",
+          "consumed": true,
+          "alive": true,
+          "injury": 0.0,
+          "consumed_tick": 58,
+          "initial_world_tick": 600,
+          "preparation_decisions": 600,
+          "preparation_microsteps": {
+            "3": 600
+          },
+          "microstep_counts": {
+            "3": 59
+          }
+        },
+        {
+          "scene": "hazard",
+          "consumed": false,
+          "alive": false,
+          "injury": 1.0,
+          "consumed_tick": null,
+          "initial_world_tick": 600,
+          "preparation_decisions": 600,
+          "preparation_microsteps": {
+            "3": 600
+          },
+          "microstep_counts": {
+            "3": 456
+          }
+        },
+        {
+          "scene": "hazard-choice",
+          "consumed": true,
+          "alive": true,
+          "injury": 0.4755994975566864,
+          "consumed_tick": 91,
+          "initial_world_tick": 600,
+          "preparation_decisions": 600,
+          "preparation_microsteps": {
+            "3": 600
+          },
+          "microstep_counts": {
+            "3": 92
+          }
+        }
+      ]
+    },
+    {
+      "name": "final-contact20-12",
+      "trials": [
+        {
+          "scene": "stationary",
+          "consumed": true,
+          "alive": true,
+          "injury": 0.0,
+          "consumed_tick": 33,
+          "initial_world_tick": 600,
+          "preparation_decisions": 0,
+          "preparation_microsteps": {},
+          "microstep_counts": {
+            "2": 34
+          }
+        },
+        {
+          "scene": "hazard",
+          "consumed": false,
+          "alive": false,
+          "injury": 1.0,
+          "consumed_tick": null,
+          "initial_world_tick": 600,
+          "preparation_decisions": 0,
+          "preparation_microsteps": {},
+          "microstep_counts": {
+            "2": 167
+          }
+        },
+        {
+          "scene": "hazard-choice",
+          "consumed": true,
+          "alive": true,
+          "injury": 0.2430918663740158,
+          "consumed_tick": 33,
+          "initial_world_tick": 600,
+          "preparation_decisions": 0,
+          "preparation_microsteps": {},
+          "microstep_counts": {
+            "2": 34
+          }
+        }
+      ]
+    },
+    {
+      "name": "final-momentum128-10",
+      "trials": [
+        {
+          "scene": "stationary",
+          "consumed": false,
+          "alive": true,
+          "injury": 0.0,
+          "consumed_tick": null,
+          "initial_world_tick": 600,
+          "preparation_decisions": 600,
+          "preparation_microsteps": {
+            "3": 600
+          },
+          "microstep_counts": {
+            "3": 1024
+          }
+        },
+        {
+          "scene": "hazard",
+          "consumed": false,
+          "alive": true,
+          "injury": 0.4065800905227661,
+          "consumed_tick": null,
+          "initial_world_tick": 600,
+          "preparation_decisions": 600,
+          "preparation_microsteps": {
+            "3": 600
+          },
+          "microstep_counts": {
+            "3": 1024
+          }
+        },
+        {
+          "scene": "hazard-choice",
+          "consumed": false,
+          "alive": true,
+          "injury": 0.4559450149536133,
+          "consumed_tick": null,
+          "initial_world_tick": 600,
+          "preparation_decisions": 600,
+          "preparation_microsteps": {
+            "3": 600
+          },
+          "microstep_counts": {
+            "3": 1024
+          }
+        }
+      ]
+    },
+    {
+      "name": "final-momentum128-11",
+      "trials": [
+        {
+          "scene": "stationary",
+          "consumed": false,
+          "alive": true,
+          "injury": 0.0,
+          "consumed_tick": null,
+          "initial_world_tick": 600,
+          "preparation_decisions": 600,
+          "preparation_microsteps": {
+            "3": 600
+          },
+          "microstep_counts": {
+            "3": 1024
+          }
+        },
+        {
+          "scene": "hazard",
+          "consumed": false,
+          "alive": true,
+          "injury": 0.45803388953208923,
+          "consumed_tick": null,
+          "initial_world_tick": 600,
+          "preparation_decisions": 600,
+          "preparation_microsteps": {
+            "3": 600
+          },
+          "microstep_counts": {
+            "3": 1024
+          }
+        },
+        {
+          "scene": "hazard-choice",
+          "consumed": false,
+          "alive": true,
+          "injury": 0.4556994140148163,
+          "consumed_tick": null,
+          "initial_world_tick": 600,
+          "preparation_decisions": 600,
+          "preparation_microsteps": {
+            "3": 600
+          },
+          "microstep_counts": {
+            "3": 1024
+          }
+        }
+      ]
+    },
+    {
+      "name": "final-momentum128-12",
+      "trials": [
+        {
+          "scene": "stationary",
+          "consumed": true,
+          "alive": true,
+          "injury": 0.0,
+          "consumed_tick": 41,
+          "initial_world_tick": 600,
+          "preparation_decisions": 0,
+          "preparation_microsteps": {},
+          "microstep_counts": {
+            "2": 42
+          }
+        },
+        {
+          "scene": "hazard",
+          "consumed": false,
+          "alive": true,
+          "injury": 0.564471423625946,
+          "consumed_tick": null,
+          "initial_world_tick": 600,
+          "preparation_decisions": 0,
+          "preparation_microsteps": {},
+          "microstep_counts": {
+            "2": 1024
+          }
+        },
+        {
+          "scene": "hazard-choice",
+          "consumed": false,
+          "alive": true,
+          "injury": 0.5448900461196899,
+          "consumed_tick": null,
+          "initial_world_tick": 600,
+          "preparation_decisions": 0,
+          "preparation_microsteps": {},
+          "microstep_counts": {
+            "2": 1024
+          }
+        }
+      ]
+    },
+    {
+      "name": "final-paired16-10",
+      "trials": [
+        {
+          "scene": "stationary",
+          "consumed": true,
+          "alive": true,
+          "injury": 0.0,
+          "consumed_tick": 18,
+          "initial_world_tick": 600,
+          "preparation_decisions": 600,
+          "preparation_microsteps": {
+            "3": 600
+          },
+          "microstep_counts": {
+            "3": 19
+          }
+        },
+        {
+          "scene": "hazard",
+          "consumed": false,
+          "alive": true,
+          "injury": 0.4622396230697632,
+          "consumed_tick": null,
+          "initial_world_tick": 600,
+          "preparation_decisions": 600,
+          "preparation_microsteps": {
+            "3": 600
+          },
+          "microstep_counts": {
+            "3": 1024
+          }
+        },
+        {
+          "scene": "hazard-choice",
+          "consumed": false,
+          "alive": true,
+          "injury": 0.46023014187812805,
+          "consumed_tick": null,
+          "initial_world_tick": 600,
+          "preparation_decisions": 600,
+          "preparation_microsteps": {
+            "3": 600
+          },
+          "microstep_counts": {
+            "3": 1024
+          }
+        }
+      ]
+    },
+    {
+      "name": "final-paired16-11",
+      "trials": [
+        {
+          "scene": "stationary",
+          "consumed": true,
+          "alive": true,
+          "injury": 0.0,
+          "consumed_tick": 39,
+          "initial_world_tick": 600,
+          "preparation_decisions": 600,
+          "preparation_microsteps": {
+            "3": 600
+          },
+          "microstep_counts": {
+            "3": 40
+          }
+        },
+        {
+          "scene": "hazard",
+          "consumed": false,
+          "alive": true,
+          "injury": 0.45745405554771423,
+          "consumed_tick": null,
+          "initial_world_tick": 600,
+          "preparation_decisions": 600,
+          "preparation_microsteps": {
+            "3": 600
+          },
+          "microstep_counts": {
+            "3": 1024
+          }
+        },
+        {
+          "scene": "hazard-choice",
+          "consumed": false,
+          "alive": true,
+          "injury": 0.4460408389568329,
+          "consumed_tick": null,
+          "initial_world_tick": 600,
+          "preparation_decisions": 600,
+          "preparation_microsteps": {
+            "3": 600
+          },
+          "microstep_counts": {
+            "3": 1024
+          }
+        }
+      ]
+    },
+    {
+      "name": "final-paired16-12",
+      "trials": [
+        {
+          "scene": "stationary",
+          "consumed": true,
+          "alive": true,
+          "injury": 0.0,
+          "consumed_tick": 37,
+          "initial_world_tick": 600,
+          "preparation_decisions": 0,
+          "preparation_microsteps": {},
+          "microstep_counts": {
+            "2": 38
+          }
+        },
+        {
+          "scene": "hazard",
+          "consumed": false,
+          "alive": true,
+          "injury": 0.4645524024963379,
+          "consumed_tick": null,
+          "initial_world_tick": 600,
+          "preparation_decisions": 0,
+          "preparation_microsteps": {},
+          "microstep_counts": {
+            "2": 1024
+          }
+        },
+        {
+          "scene": "hazard-choice",
+          "consumed": false,
+          "alive": true,
+          "injury": 0.4464174807071686,
+          "consumed_tick": null,
+          "initial_world_tick": 600,
+          "preparation_decisions": 0,
+          "preparation_microsteps": {},
+          "microstep_counts": {
+            "2": 1024
+          }
+        }
+      ]
+    }
+  ]
+}

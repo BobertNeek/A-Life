@@ -488,3 +488,89 @@ comparison. Matching source recovery was requested; other experiments continue.
 The parent monitors Codex allowance. This worker cannot directly query it.
 Parent-maintained allowance<=40 or the stop file stops new candidates between
 requests. No banked reset is redeemed.
+
+
+## Motion persistence and phase-stable release
+
+`momentum-study.json` and `momentum-results.jsonl.gz` retain this cumulative
+continuation. Contact20 remains the coordinated common parent. Both exported
+research candidates include their full construction genomes; neither changes a
+production default or acquired creature.
+
+The previously documented V1 compass bias was reproduced on release16x24.
+Halving its cosine weight was the initial pilot winner. A new differential
+motion circuit then uses sensed horizontal velocity to favor continuing toward
+a target instead of repeatedly reversing toward a distraction. Existing input
+neurons 49/51 carry velocity; unencoded neuron 32 supplies a matched neutral
+reference. Core relays 904/905 and paired Approach motors 1784/1785/1786 add:
+
+`128 * ((m1784 - m1786) * bearing_cos + (m1785 - m1786) * bearing_sin)`
+
+This adds 12 weight edits to release16x24, retaining all its previous edits.
+It does not identify food, remember target identity, construct a map, or provide
+an attack action. A control containing the relays without the directional
+readout retained the pilot parent's 27/33 meals; the selected circuit reached
+32/33. Its first frozen ten-case comparison reached 106/110 meals versus 91/110
+for both Contact20 and release-only, with no lost parent food successes.
+
+The compute-budget transfer check found a serious limitation in the inherited
+release circuit: with three admitted microsteps, its motor remained positive at
+zero pain and suppressed ordinary feeding. Raising one reference weight fixed
+high-energy feeding but lost low-energy hazard survival; all five such variants
+were rejected. The preserved motion-only asset is therefore a comparison, not a
+qualified all-condition feeding brain.
+
+The second candidate replaces that phase-sensitive release signal with matched
+pain and neutral pathways: pain input 257 and unencoded reference 273 feed
+reserves 1954/1960, whose difference reaches core 898 and Contact motor 1810.
+Motor 1809 receives the matched tonic reference from core 911. Their difference
+scales the existing release feature basis. Fourteen weights change relative to
+the motion child; all navigation edits and every synapse coordinate stay exact.
+The old release inputs are deliberately refined, not preserved as immutable.
+
+Fresh validation used ten new varied cases, 14 scenes each, 256 intervals,
+and the previously declared low-energy/biology-only preparation:
+
+| Measure | Contact20 | Motion child | Paired-pain child |
+|---|---:|---:|---:|
+| Ordinary food goals | 100/110 | 109/110 | 110/110 |
+| Partial obstacle | 6/10 | 10/10 | 10/10 |
+| Moving target with obstacle | 6/10 | 9/10 | 10/10 |
+| Short hazard deaths | 8/20 | 0/20 | 0/20 |
+| Mixed hazard/food meals | 1/10 | 1/10 | 0/10 |
+| Failed Ingest bundles | 3,663 | 1,836 | 1,905 |
+| Toy Ingest selections | 901 | 905 | 924 |
+
+The paired child keeps all 109 motion-child successes and completes those same
+meals in 6,147 versus 6,447 intervals, a 4.7% reduction. These are ten varied
+cases of one genotype, not 110 independent species or a significance claim.
+
+Three further fresh long-exposure cases included two high-energy lives after
+600 actual empty-host decisions and one low-energy biology-only preparation.
+The paired child ate stationary food in all three and survived all three lone
+hazards for 1,024 intervals, with final injury 0.462/0.457/0.465. Contact20 ate
+all three foods but died in all three lone hazards. The preceding motion child
+survived the hazards but failed both high-energy stationary-food cases.
+
+**Pain-competing feeding remains a real tradeoff.** The paired child ate in none
+of the three long mixed hazard/food cases, while Contact20 ate in all three.
+Its release/restraint signal still lacks target-specific consequence knowledge,
+and survival does not establish escape. The food/toy fixture places food farther
+away; these results do not demonstrate general food recognition or maze solving.
+
+Assay v14 adds an opt-in `variation.neural_preparation` and actual microstep
+counts. It replaces 600 biology-only ticks with 600 real empty-host steps at the
+same world age, retaining neural and learning state. This changes history,
+metabolic expenditure and random-stream position; it is not a pure memory
+ablation. Higher-energy controls explicitly use uniform initial organ reserves
+0.8, not the feedback study's exact inherited biology. Main food tests use 0.25.
+The observed task budgets were two and three microsteps respectively.
+
+Independent PyTorch replay checks matched native activations within 2.98e-8 in
+both budgets. On painless toy traces, the paired release signal remained within
+7.34e-6 of zero; it became positive during real hazard pain. Exported assets
+reload to identical 14-scene outcomes, and v14 default-off matches the earlier
+v13c physical metrics. Eleven native example tests, strict release Clippy,
+release build and formatting passed. Raw neural traces remain local; the archive
+contains only requests and aggregate trial outcomes, including diagnostic
+repeats rather than independent new samples.
