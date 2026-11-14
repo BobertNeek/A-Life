@@ -34,6 +34,8 @@ struct Request {
     motor_heads: u8,
     #[serde(default)]
     hold_readout: [f32; 2],
+    #[serde(default)]
+    weight_edits: Vec<(usize, f32)>,
 }
 
 fn one_head() -> u8 {
@@ -223,6 +225,28 @@ fn scale_readouts(
 
 fn distance(a: Vec3f, b: Vec3f) -> f32 {
     ((a.x - b.x).powi(2) + (a.z - b.z).powi(2)).sqrt()
+}
+
+fn edit_weights(
+    base: FoundationWeightAsset,
+    p: &BrainPhenotype,
+    edits: &[(usize, f32)],
+) -> Result<FoundationWeightAsset> {
+    if edits.is_empty() {
+        return Ok(base);
+    }
+    let mut weights = base.weights().to_vec();
+    for &(index, delta) in edits {
+        if !delta.is_finite() {
+            return Err("weight delta must be finite".into());
+        }
+        *weights.get_mut(index).ok_or("weight index out of range")? += delta;
+    }
+    Ok(FoundationWeightAsset::from_trained_weights(
+        p,
+        weights,
+        base.manifest().training_stage(),
+    )?)
 }
 
 // Existing NO_MANIPULATION uses Contact lane23=1, lane18=0. Object Contact
@@ -667,6 +691,8 @@ fn trial(
                     "logits":replay.candidate_logits[0],"decoder_candidates":row.replay_tick.candidates,
                     "motor_activations": ([1760,1775,1776,1791,1824,1839].map(|i| row.final_features[i])),
                     "hold_motor_activation":row.final_features[1823],
+                    "inspect_motor_activations":&row.final_features[1760..1776],
+                    "need_relay_activations":&row.final_features[896..912],
                     "objects_before":objects_before,
                     "objects_after":([Some(target),distraction_id].into_iter().flatten().map(|id| {
                         let o=host.world().entity(id).unwrap();
@@ -780,6 +806,7 @@ fn run(base: &FoundationWeightAsset, p: &BrainPhenotype, r: Request) -> Result<s
         r.bearing_gain,
     )?;
     let asset = hold_candidate(asset, p, r.hold_readout)?;
+    let asset = edit_weights(asset, p, &r.weight_edits)?;
     let (asset, compiled, template) = prepare_founder(asset, r.motor_heads)?;
     assert!(compiled
         .synapses()
@@ -820,7 +847,7 @@ fn run(base: &FoundationWeightAsset, p: &BrainPhenotype, r: Request) -> Result<s
     }
     Ok(
         json!({"backend":"native-cpu", "memory_cap":trainer.phenotype().candidate_decoder().memory_channel().map(|m|m.max_candidate_gain()), "base_digest":base.digest(),"candidate_digest":asset.digest(),
-        "assay_version":8,"hold_readout":r.hold_readout,"motor_heads":r.motor_heads,"variation":r.variation,"readout_scale":r.readout_scale,"bearing_gain":r.bearing_gain,"params":r.params,"memory_aversion":r.memory_aversion,"ticks":r.ticks,"seconds":start.elapsed().as_secs_f64(),"trials":trials}),
+        "assay_version":9,"weight_edits":r.weight_edits,"hold_readout":r.hold_readout,"motor_heads":r.motor_heads,"variation":r.variation,"readout_scale":r.readout_scale,"bearing_gain":r.bearing_gain,"params":r.params,"memory_aversion":r.memory_aversion,"ticks":r.ticks,"seconds":start.elapsed().as_secs_f64(),"trials":trials}),
     )
 }
 
@@ -839,7 +866,7 @@ fn main() -> Result<()> {
     if std::env::args().nth(2).as_deref() == Some("--inspect") {
         println!(
             "{}",
-            json!({"construction_context":construction_context(&base)?,"weights":base.weights(),"synapses":p.synapses().iter().map(|s|
+            json!({"construction_context":construction_context(&base)?,"lobe_layout":p.lobe_layout(),"sensor_encoder":p.sensor_encoder(),"neuron_dynamics":p.neuron_dynamics(),"weights":base.weights(),"synapses":p.synapses().iter().map(|s|
             json!({"source":s.source(),"target":s.target(),"kind":s.kind(),"route":s.route_index()})
         ).collect::<Vec<_>>()})
         );
@@ -867,6 +894,37 @@ mod tests {
             "../../../assets/foundations/experimental-anchored-v2-research.alife-foundation"
         ))
         .unwrap()
+    }
+
+    #[test]
+    fn sparse_weight_edits_roundtrip_without_changing_other_coordinates() {
+        let base = base();
+        let p = phenotype(&base).unwrap();
+        assert_eq!(
+            edit_weights(base.clone(), &p, &[])
+                .unwrap()
+                .encode_canonical()
+                .unwrap(),
+            base.encode_canonical().unwrap()
+        );
+        let edited = edit_weights(base.clone(), &p, &[(9552, 4.)]).unwrap();
+        let restored =
+            FoundationWeightAsset::decode_canonical(&edited.encode_canonical().unwrap()).unwrap();
+        for (i, (before, after)) in base.weights().iter().zip(restored.weights()).enumerate() {
+            assert_eq!(
+                after.to_bits(),
+                (if i == 9552 { before + 4. } else { *before }).to_bits()
+            );
+        }
+        let compiled = phenotype(&restored).unwrap();
+        assert!(compiled
+            .synapses()
+            .iter()
+            .zip(restored.weights())
+            .all(|(s, w)| s.genetic_weight().to_bits() == w.to_bits()));
+        assert!(edit_weights(base.clone(), &p, &[(usize::MAX, 1.)]).is_err());
+        assert!(edit_weights(base.clone(), &p, &[(9552, f32::NAN)]).is_err());
+        assert!(edit_weights(base, &p, &[(9552, f32::MAX), (9552, f32::MAX)]).is_err());
     }
 
     #[test]
