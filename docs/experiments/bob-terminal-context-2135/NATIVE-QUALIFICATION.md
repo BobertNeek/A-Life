@@ -6,6 +6,37 @@ Native tests were committed at `6f4c5a38`; integration commit
 `13f97750f3ea71c5797d4c69e674a75f83744422`. Results here are native CPU,
 Rust 2021, rustc/cargo 1.98.1. No hosted CI or GPU qualification is claimed.
 
+## Current-main integration
+
+Combined source commit `f62b9055cc515cd14f3b60979859f83c0f2570a5` merges
+main `fc12ee1658d9752decacef828c0f902a68cf0678` (#348) into observer fix
+`90ee82084bcaa1f3355894a4bc168f08adc354b3`. Main's nine-file delta changes
+only `evolve_pursuit.rs` and experiment documentation/assets/results. Core,
+host and library source remain the qualified observer revision. Hold4 assets
+are retained from main; Contact20 remains the accepted fixture and parent.
+Its two hashes below were independently rechecked unchanged.
+
+On that exact combined source commit these commands passed:
+
+```sh
+ALIFE_ASSAY_GIT_COMMIT=f62b9055cc515cd14f3b60979859f83c0f2570a5 cargo build -p alife_training --features cpu-backend --example terminal_context2135 --example evolve_pursuit
+cargo test -p alife_training --features cpu-backend --test cpu_terminal_context2135 --test cpu_terminal_compat2135 -- --nocapture
+cargo clippy -p alife_training --features cpu-backend --lib --tests --examples -- -D warnings
+cargo fmt --all --check
+git diff --check
+```
+
+Both examples built; all five native integration tests passed, with the same
+one explicitly external old-executable fixture ignored in the ordinary run.
+Strict checks passed. The unchanged 152 library cases were not repeated for
+this example/docs/assets integration. Earlier receipts remain intact.
+The subsequent qualification-note commit changes only this Markdown file.
+
+Combined terminal example SHA256:
+`5ca4279258ffb7b2a12ab0147db05bea8bbff3b22e88e322e3b0fc28e6301c10`.
+Combined pursuit example SHA256:
+`d852f6561be78085a95263bc93824b7d35bb33df2126d17332917fb9eb986e23`.
+
 ## Exact parents and retained baseline
 
 The legacy bearing4 fixture retains foundation SHA256
