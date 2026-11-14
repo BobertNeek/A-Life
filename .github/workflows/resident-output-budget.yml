@@ -11,6 +11,9 @@ on:
       - 'Cargo.*'
       - 'scripts/check_resident_recovery_native.py'
       - 'scripts/check_continuous_store_native.py'
+permissions:
+  contents: read
+
 jobs:
   quota-primitives:
     strategy:

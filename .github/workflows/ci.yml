@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: ["main"]
 
+permissions:
+  contents: read
+
 jobs:
   gpu-diagnostic-pipes:
     name: GPU diagnostic pipe contracts (${{ matrix.os }})
