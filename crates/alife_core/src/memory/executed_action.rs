@@ -125,7 +125,22 @@ pub(super) fn from_patch(
     let Some(joint) = patch.outcome().joint.as_ref() else {
         return Ok(None);
     };
-    let frame = patch.pre_action().perception();
+    from_execution(
+        patch.pre_action().perception(),
+        bundle,
+        joint,
+        patch.header().sequence_id,
+        patch.outcome().outcome_tick,
+    )
+}
+
+pub(super) fn from_execution(
+    frame: &PerceptionFrame,
+    bundle: &crate::MotorCommandBundle,
+    joint: &crate::JointPhysicalOutcome,
+    sequence: ExperienceSequenceId,
+    event_tick: Tick,
+) -> Result<Option<CheckedExecutionFacts>, ScaffoldContractError> {
     let mut facts = Vec::new();
     for receipt in &joint.channel_outcomes {
         let Some(evidence) = receipt.execution_evidence.as_ref() else {
@@ -161,8 +176,8 @@ pub(super) fn from_patch(
         let query = MemoryQueryEncoderV2::encode_from_frame(frame, candidate)?;
         facts.push(ExecutedActionMemoryV1 {
             query,
-            source_sequence_id: patch.header().sequence_id,
-            event_tick: patch.outcome().outcome_tick,
+            source_sequence_id: sequence,
+            event_tick,
             bundle_digest: bundle.canonical_digest()?,
             receipt: *receipt,
         });

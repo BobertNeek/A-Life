@@ -607,6 +607,7 @@ pub struct CanonicalPreparationInput {
 pub struct CanonicalPreparedFrame {
     pub frame: PerceptionFrame,
     pub memory_recall: FinalizedMemoryRecall,
+    pub joint_comparison_sources: Option<Vec<alife_core::memory::JointMembershipSourceV1>>,
 }
 pub struct CanonicalPreparationOutcome {
     pub result: Result<CanonicalPreparedFrame, ScaffoldContractError>,
@@ -675,7 +676,7 @@ pub fn prepare_canonical_frame(
     predictor: &GroundedSuccessorPredictor,
     measure: bool,
 ) -> CanonicalPreparationOutcome {
-    prepare_canonical_frame_impl(input, memory, topology, predictor, measure, false)
+    prepare_canonical_frame_impl(input, memory, topology, predictor, measure, false, 0)
 }
 
 /// Research annotation of the existing routed recall, without another query or
@@ -687,7 +688,42 @@ pub fn prepare_canonical_frame_with_family_sources(
     predictor: &GroundedSuccessorPredictor,
     measure: bool,
 ) -> CanonicalPreparationOutcome {
-    prepare_canonical_frame_impl(input, memory, topology, predictor, measure, true)
+    prepare_canonical_frame_impl(input, memory, topology, predictor, measure, true, 0)
+}
+
+/// Explicit CPU research preparation. First-pass attention remains ordinary;
+/// routed candidate family recall uses joint-observed membership, not isolated
+/// action effects. The caller must admit and charge the additional work.
+pub fn prepare_canonical_frame_with_joint_membership(
+    input: &CanonicalPreparationInput,
+    memory: &MemorySidecarState,
+    topology: &TopologySidecar,
+    predictor: &GroundedSuccessorPredictor,
+    measure: bool,
+) -> CanonicalPreparationOutcome {
+    prepare_canonical_frame_impl(input, memory, topology, predictor, measure, false, 1)
+}
+
+/// Equal-work CPU research comparison, applied family route.
+pub fn prepare_canonical_frame_joint_applied(
+    input: &CanonicalPreparationInput,
+    memory: &MemorySidecarState,
+    topology: &TopologySidecar,
+    predictor: &GroundedSuccessorPredictor,
+    measure: bool,
+) -> CanonicalPreparationOutcome {
+    prepare_canonical_frame_impl(input, memory, topology, predictor, measure, false, 2)
+}
+
+/// Equal-work CPU research comparison, withheld family route.
+pub fn prepare_canonical_frame_joint_withheld(
+    input: &CanonicalPreparationInput,
+    memory: &MemorySidecarState,
+    topology: &TopologySidecar,
+    predictor: &GroundedSuccessorPredictor,
+    measure: bool,
+) -> CanonicalPreparationOutcome {
+    prepare_canonical_frame_impl(input, memory, topology, predictor, measure, false, 3)
 }
 
 fn prepare_canonical_frame_impl(
@@ -697,6 +733,7 @@ fn prepare_canonical_frame_impl(
     predictor: &GroundedSuccessorPredictor,
     measure: bool,
     family_sources: bool,
+    joint_membership: u8,
 ) -> CanonicalPreparationOutcome {
     let draft = &input.draft;
     let receptor_effects = input.receptor_effects;
@@ -792,7 +829,15 @@ fn prepare_canonical_frame_impl(
         let topology_concept_started = measure.then(std::time::Instant::now);
         preparation_stage = "routed recall";
         let leaf_started = measure.then(std::time::Instant::now);
-        let routed_recall = if family_sources {
+        let mut joint_comparison_sources = None;
+        let routed_recall = if joint_membership >= 2 {
+            let (recall, sources) =
+                memory.recall_frame_joint_comparison(&routed_draft, joint_membership == 2)?;
+            joint_comparison_sources = Some(sources);
+            recall
+        } else if joint_membership == 1 {
+            memory.recall_frame_with_joint_membership(&routed_draft)?
+        } else if family_sources {
             memory.recall_frame_with_family_sources(&routed_draft)?
         } else {
             memory.recall_frame(&routed_draft)?
@@ -843,6 +888,7 @@ fn prepare_canonical_frame_impl(
         Ok(CanonicalPreparedFrame {
             frame,
             memory_recall,
+            joint_comparison_sources,
         })
     })();
     CanonicalPreparationOutcome {

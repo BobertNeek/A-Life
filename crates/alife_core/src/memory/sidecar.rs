@@ -522,6 +522,18 @@ impl MemorySidecarState {
         self.bank.recall_frame_runtime(draft, cache, refresh)
     }
 
+    pub fn reserve_joint_membership_admission_work(
+        &self,
+        frame: &PerceptionFrame,
+        bundle: &crate::MotorCommandBundle,
+        joint: &crate::JointPhysicalOutcome,
+        sequence: ExperienceSequenceId,
+        event_tick: Tick,
+    ) -> Result<(u64, u64), ScaffoldContractError> {
+        self.bank
+            .reserve_joint_membership_admission_work(frame, bundle, joint, sequence, event_tick)
+    }
+
     pub fn observe_sealed_patch_with_joint_membership(
         &mut self,
         patch: &ExperiencePatch,
@@ -538,6 +550,20 @@ impl MemorySidecarState {
             return Err(ScaffoldContractError::BrainOwnershipMismatch);
         }
         self.bank.recall_frame_with_joint_membership(draft)
+    }
+
+    /// Explicit equal-work applied/withheld membership comparison.
+    pub fn recall_frame_joint_comparison(
+        &self,
+        draft: &PerceptionFrameDraft,
+        apply: bool,
+    ) -> Result<(PreparedMemoryRecall, Vec<JointMembershipSourceV1>), ScaffoldContractError> {
+        if draft.organism_id() != self.organism_id
+            || draft.profile_provenance().identity() != self.profile
+        {
+            return Err(ScaffoldContractError::BrainOwnershipMismatch);
+        }
+        self.bank.recall_frame_joint_comparison(draft, apply)
     }
 
     pub fn observe_sealed_patch(
