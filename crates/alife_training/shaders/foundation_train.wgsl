@@ -156,10 +156,15 @@ fn candidate_adjoint(tick:u32, candidate:u32) -> f32 {
   let weight = bitcast<f32>(candidate_field(tick, candidate, 3u));
   return 2.0 * weight * (load_output_f32(h(28u) + tick * h(51u) + candidate) - expected) / loss_denominator();
 }
+// Header one preserves the legacy shared bound, including no-channel zero.
+// Header two is admitted only for an explicit memory-plan-v2 phenotype.
+fn cognitive_limit() -> f32 {
+  return select(bitcast<f32>(h(56u)), 0.5, h(0u) == 2u);
+}
 fn auxiliary_gate(tick:u32, candidate:u32, head:u32) -> f32 {
   let offset = select(h(58u), h(59u), head == 4u);
   let raw = load_output_f32(offset + tick * h(51u) + candidate);
-  let limit = bitcast<f32>(h(56u));
+  let limit = select(bitcast<f32>(h(56u)), cognitive_limit(), head == 4u);
   return select(0.0, 1.0, raw > -limit && raw < limit);
 }
 @compute @workgroup_size(64)
@@ -275,7 +280,18 @@ fn forward_candidate_logits(@builtin(global_invocation_id) gid:vec3<u32>) {
   let limit = bitcast<f32>(h(56u));
   store_output_f32(h(58u) + output_index, memory);
   store_output_f32(h(59u) + output_index, cognitive);
-  store_output_f32(h(28u) + output_index, logit + clamp(memory, -limit, limit) + clamp(cognitive, -limit, limit));
+  if (h(0u) == 2u) {
+    let with_memory = logit + clamp(memory, -limit, limit);
+    let composed = with_memory + clamp(cognitive, -cognitive_limit(), cognitive_limit());
+    if (!finite(logit) || !finite(memory) || !finite(cognitive) || !finite(with_memory) || !finite(composed)) {
+      // Sticky failure is visible to readback AND pre-write optimizer validation.
+      store_output_f32(h(28u) + output_index, bitcast<f32>(0x7fc00000u));
+      return;
+    }
+    store_output_f32(h(28u) + output_index, composed);
+  } else {
+    store_output_f32(h(28u) + output_index, logit + clamp(memory, -limit, limit) + clamp(cognitive, -cognitive_limit(), cognitive_limit()));
+  }
 }
 
 @compute @workgroup_size(1)
@@ -683,10 +699,25 @@ fn adam_proposal(synapse:u32) -> vec3<f32> {
   return vec3<f32>(next_weight, next_m, next_v);
 }
 
+// Each workgroup lane scans a disjoint subset of active candidate records.
+// Do not rely on finite gradients: saturation can hide an invalid raw sum.
+fn plan_two_forward_invalid(lane:u32) -> bool {
+  if (h(0u) != 2u) { return false; }
+  for (var index = lane; index < h(5u) * h(51u); index += 64u) {
+    let tick = index / h(51u);
+    let candidate = index % h(51u);
+    if (candidate_field(tick, candidate, 0u) == 0u) { continue; }
+    if (!finite(load_output_f32(h(28u) + index))
+        || !finite(load_output_f32(h(58u) + index))
+        || !finite(load_output_f32(h(59u) + index))) { return true; }
+  }
+  return false;
+}
+
 var<workgroup> adam_invalid:array<u32,64>;
 @compute @workgroup_size(64)
 fn validate_accumulation(@builtin(local_invocation_index) lane:u32) {
-  var invalid = 0u;
+  var invalid = select(0u, 1u, plan_two_forward_invalid(lane));
   if (!finite(load_output_f32(h(29u) + 2u))) { invalid = 1u; }
   for (var synapse = lane; synapse < h(2u); synapse += 64u) {
     if (trainable_mask[synapse] == 0u) { continue; }
@@ -713,7 +744,7 @@ fn accumulate_weight_gradients(@builtin(global_invocation_id) gid:vec3<u32>) {
 
 @compute @workgroup_size(64)
 fn validate_adamw(@builtin(local_invocation_index) lane:u32) {
-  var invalid = 0u;
+  var invalid = select(0u, 1u, plan_two_forward_invalid(lane));
   if (!finite(load_output_f32(h(29u) + 2u))) { invalid = 1u; }
   for (var synapse = lane; synapse < h(2u); synapse += 64u) {
     if (trainable_mask[synapse] == 0u) { continue; }

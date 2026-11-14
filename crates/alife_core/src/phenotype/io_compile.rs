@@ -392,7 +392,7 @@ pub(super) fn compile_decoders(
         return Err(compile_error());
     }
     let memory_channel =
-        super::MemoryChannelPlan::try_new_v1(super::MemoryChannelPlan::MINIMUM_SYNAPSE_COUNT)?;
+        memory_channel_for_genome(genome, super::MemoryChannelPlan::MINIMUM_SYNAPSE_COUNT)?;
     let decoder = CandidateDecoderPlan::try_new(
         motor.start,
         motor_width,
@@ -564,7 +564,8 @@ fn compile_n2048_decoders(
     if candidate_count != crate::N2048FoundationLayoutV1::CANDIDATE_DECODER_SYNAPSE_COUNT {
         return Err(compile_error());
     }
-    let memory_channel = super::MemoryChannelPlan::try_new_v1(
+    let memory_channel = memory_channel_for_genome(
+        genome,
         crate::N2048FoundationLayoutV1::MEMORY_DECODER_SYNAPSE_COUNT,
     )?;
     let candidate = CandidateDecoderPlan::try_new(
@@ -866,6 +867,18 @@ const fn gcd_u32(mut a: u32, mut b: u32) -> u32 {
 
 const fn compile_error() -> ScaffoldContractError {
     ScaffoldContractError::PhenotypeCompile
+}
+
+fn memory_channel_for_genome(
+    genome: &crate::BrainGenome,
+    count: u32,
+) -> Result<super::MemoryChannelPlan, ScaffoldContractError> {
+    let architecture = genome.cognitive_architecture();
+    if architecture.schema_version() == 4 {
+        super::MemoryChannelPlan::try_new_v2(count, architecture.memory_candidate_bound())
+    } else {
+        super::MemoryChannelPlan::try_new_v1(count)
+    }
 }
 
 #[cfg(test)]

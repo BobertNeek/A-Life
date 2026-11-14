@@ -44,7 +44,8 @@ fn add_candidate_memory_context(@builtin(global_invocation_id) gid:vec3<u32>) {
   let plan = load_memory_channel_plan(memory_plan_offset);
   let decoder = load_decoder_plan(brain.decoder_plan_offset);
   let input_stride = decoder.flattened_input_lane_count;
-  let valid_plan = plan.schema_version == MEMORY_SCHEMA_VERSION
+  let valid_plan = ((plan.schema_version == 1u && plan.max_candidate_gain == 0.5)
+      || plan.schema_version == 2u)
     && plan.target_latent_lane_start == 24u
     && plan.family_value_lane_start == 32u
     && plan.decoder_input_stride == 36u
@@ -172,8 +173,19 @@ fn add_candidate_memory_context(@builtin(global_invocation_id) gid:vec3<u32>) {
     atomicOr(&mutable_state_words[brain.diagnostic_offset + MEMORY_CONTEXT_DIAGNOSTIC_LANE], CONTRACT_INVALID_DIAGNOSTIC_BIT);
     return;
   }
-  store_state_f32(logit_index,
-    base_logit
-      + clamp(delta, -plan.max_candidate_gain, plan.max_candidate_gain)
-      + clamp(cognitive_delta, -plan.max_candidate_gain, plan.max_candidate_gain));
+  if (plan.schema_version == 2u) {
+    let with_memory = base_logit + clamp(delta, -plan.max_candidate_gain, plan.max_candidate_gain);
+    let composed = with_memory + clamp(cognitive_delta, -0.5, 0.5);
+    if (!finite_memory_value(base_logit) || !finite_memory_value(with_memory) || !finite_memory_value(composed)) {
+      atomicOr(&mutable_state_words[brain.diagnostic_offset + MEMORY_CONTEXT_DIAGNOSTIC_LANE], CONTRACT_INVALID_DIAGNOSTIC_BIT);
+      store_state_f32(logit_index, bitcast<f32>(0x7fc00000u));
+      return;
+    }
+    store_state_f32(logit_index, composed);
+  } else {
+    store_state_f32(logit_index,
+      base_logit
+        + clamp(delta, -plan.max_candidate_gain, plan.max_candidate_gain)
+        + clamp(cognitive_delta, -0.5, 0.5));
+  }
 }

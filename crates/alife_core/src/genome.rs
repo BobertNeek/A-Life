@@ -95,6 +95,10 @@ impl Validate for InnatePriorityGenes {
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 pub struct CognitiveArchitectureGenomeParameters {
     schema_version: u16,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    memory_candidate_bound: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    inherited_motor_layout: Option<u16>,
     attention_capacity: u8,
     active_concept_limit: u16,
     active_gap_limit: u8,
@@ -118,8 +122,43 @@ pub struct CognitiveArchitectureGenomeParameters {
 pub const COGNITIVE_ARCHITECTURE_SCHEMA_VERSION: u16 = 1;
 pub const COGNITIVE_ARCHITECTURE_ORIENTATION_SCHEMA_VERSION: u16 = 2;
 pub const COGNITIVE_ARCHITECTURE_GROUNDED_ORIENTATION_SCHEMA_VERSION: u16 = 3;
+/// Explicit inherited memory-bound extension. Old readers reject schema four.
+pub const COGNITIVE_ARCHITECTURE_MEMORY_BOUND_SCHEMA_VERSION: u16 = 4;
 
 impl CognitiveArchitectureGenomeParameters {
+    /// Fresh genetic construction only; changing this changes phenotype identity.
+    /// The cognitive-context bound remains 0.5. Existing motor layout is retained.
+    pub fn with_memory_candidate_bound_v4(
+        mut self,
+        bound: f32,
+    ) -> Result<Self, ScaffoldContractError> {
+        let layout = self.motor_layout_schema_version();
+        self.schema_version = COGNITIVE_ARCHITECTURE_MEMORY_BOUND_SCHEMA_VERSION;
+        self.memory_candidate_bound = Some(bound);
+        self.inherited_motor_layout = Some(layout);
+        self.validate_contract()?;
+        Ok(self)
+    }
+    pub const fn memory_candidate_bound(&self) -> f32 {
+        match self.memory_candidate_bound {
+            Some(bound) => bound,
+            None => 0.5,
+        }
+    }
+    pub const fn motor_layout_schema_version(&self) -> u16 {
+        match self.inherited_motor_layout {
+            Some(layout) => layout,
+            None => self.schema_version,
+        }
+    }
+    fn set_motor_layout(&mut self, layout: u16) {
+        if self.schema_version == COGNITIVE_ARCHITECTURE_MEMORY_BOUND_SCHEMA_VERSION {
+            self.inherited_motor_layout = Some(layout);
+        } else {
+            self.schema_version = layout;
+        }
+    }
+
     /// Opt in a fresh genome to independent orientation. This is not a save migration.
     /// V2 heads select the prefix Locomotion, Orientation, Manipulation, Vocal, Posture.
     /// Two heads enable gaze; one still enables only independent locomotion.
@@ -127,7 +166,7 @@ impl CognitiveArchitectureGenomeParameters {
         mut self,
         motor_head_count: u8,
     ) -> Result<Self, ScaffoldContractError> {
-        self.schema_version = COGNITIVE_ARCHITECTURE_ORIENTATION_SCHEMA_VERSION;
+        self.set_motor_layout(COGNITIVE_ARCHITECTURE_ORIENTATION_SCHEMA_VERSION);
         self.motor_head_count = motor_head_count;
         self.validate_contract()?;
         Ok(self)
@@ -139,19 +178,20 @@ impl CognitiveArchitectureGenomeParameters {
         mut self,
         motor_head_count: u8,
     ) -> Result<Self, ScaffoldContractError> {
-        self.schema_version = COGNITIVE_ARCHITECTURE_GROUNDED_ORIENTATION_SCHEMA_VERSION;
+        self.set_motor_layout(COGNITIVE_ARCHITECTURE_GROUNDED_ORIENTATION_SCHEMA_VERSION);
         self.motor_head_count = motor_head_count;
         self.validate_contract()?;
         Ok(self)
     }
 
     pub const fn grounded_orientation_repertoire(&self) -> bool {
-        self.schema_version == COGNITIVE_ARCHITECTURE_GROUNDED_ORIENTATION_SCHEMA_VERSION
+        self.motor_layout_schema_version()
+            == COGNITIVE_ARCHITECTURE_GROUNDED_ORIENTATION_SCHEMA_VERSION
     }
 
     fn motor_head_bound(&self) -> usize {
         if matches!(
-            self.schema_version,
+            self.motor_layout_schema_version(),
             COGNITIVE_ARCHITECTURE_ORIENTATION_SCHEMA_VERSION
                 | COGNITIVE_ARCHITECTURE_GROUNDED_ORIENTATION_SCHEMA_VERSION
         ) {
@@ -183,6 +223,8 @@ impl CognitiveArchitectureGenomeParameters {
     ) -> Result<Self, ScaffoldContractError> {
         let value = Self {
             schema_version: COGNITIVE_ARCHITECTURE_SCHEMA_VERSION,
+            memory_candidate_bound: None,
+            inherited_motor_layout: None,
             attention_capacity,
             active_concept_limit,
             active_gap_limit,
@@ -208,6 +250,8 @@ impl CognitiveArchitectureGenomeParameters {
     pub(crate) const fn canonical_default() -> Self {
         Self {
             schema_version: COGNITIVE_ARCHITECTURE_SCHEMA_VERSION,
+            memory_candidate_bound: None,
+            inherited_motor_layout: None,
             attention_capacity: 1,
             active_concept_limit: 16,
             active_gap_limit: 4,
@@ -362,6 +406,29 @@ impl CognitiveArchitectureGenomeParameters {
         rate!(concept_learning_rate);
         rate!(motor_learning_rate);
         rate!(structural_learning_rate);
+        if self.memory_candidate_bound.is_some() || other.memory_candidate_bound.is_some() {
+            // A legacy allele contributes the legacy .5 value. Either parent's
+            // explicit extension is inherited, without changing motor-layout
+            // inheritance or adding a mapping draw to two legacy parents.
+            let left = self.memory_candidate_bound();
+            let right = other.memory_candidate_bound();
+            let left_log = left.ln_1p();
+            let right_log = right.ln_1p();
+            let mapped = map(left_log, right_log, 0.0, f32::MAX.ln_1p())?;
+            if !mapped.is_finite() || mapped < 0.0 || mapped > f32::MAX.ln_1p() {
+                return Err(ScaffoldContractError::ScalarOutOfRange);
+            }
+            // Preserve exact alleles under identity/selection. In particular,
+            // ln1p(.5) -> expm1 in f32 otherwise rounds down by one ULP.
+            let bound = if mapped.to_bits() == left_log.to_bits() {
+                left
+            } else if mapped.to_bits() == right_log.to_bits() {
+                right
+            } else {
+                (f64::from(mapped).exp_m1()).min(f64::from(f32::MAX)) as f32
+            };
+            child = child.with_memory_candidate_bound_v4(bound)?;
+        }
         child.validate_for_brain_class(class)?;
         Ok(child)
     }
@@ -401,6 +468,10 @@ impl CognitiveArchitectureGenomeParameters {
             self.structural_learning_rate,
         ] {
             digest.write_f32(value)?;
+        }
+        if let Some(bound) = self.memory_candidate_bound {
+            digest.write_u16(self.motor_layout_schema_version());
+            digest.write_f32(bound)?;
         }
         Ok(())
     }
@@ -442,11 +513,24 @@ impl CognitiveArchitectureGenomeParameters {
     }
 
     fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        let extended = self.schema_version == COGNITIVE_ARCHITECTURE_MEMORY_BOUND_SCHEMA_VERSION;
+        if extended {
+            if !matches!(self.inherited_motor_layout, Some(1..=3))
+                || !self
+                    .memory_candidate_bound
+                    .is_some_and(|v| v.is_finite() && v >= 0.0)
+            {
+                return Err(ScaffoldContractError::ScalarOutOfRange);
+            }
+        } else if self.memory_candidate_bound.is_some() || self.inherited_motor_layout.is_some() {
+            return Err(ScaffoldContractError::ScalarOutOfRange);
+        }
         if !matches!(
             self.schema_version,
             COGNITIVE_ARCHITECTURE_SCHEMA_VERSION
                 | COGNITIVE_ARCHITECTURE_ORIENTATION_SCHEMA_VERSION
                 | COGNITIVE_ARCHITECTURE_GROUNDED_ORIENTATION_SCHEMA_VERSION
+                | COGNITIVE_ARCHITECTURE_MEMORY_BOUND_SCHEMA_VERSION
         ) || self.attention_capacity == 0
             || usize::from(self.attention_capacity) > crate::attention::MAX_FOCAL_TARGETS
             || self.active_concept_limit == 0
@@ -501,9 +585,70 @@ impl<'de> Deserialize<'de> for CognitiveArchitectureGenomeParameters {
     where
         D: Deserializer<'de>,
     {
+        // Positional codecs omit the optional extension entirely for legacy
+        // versions. Select its presence from the version before reading fields.
+        if !deserializer.is_human_readable() {
+            struct Positional;
+            impl<'de> serde::de::Visitor<'de> for Positional {
+                type Value = CognitiveArchitectureGenomeParameters;
+                fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                    formatter.write_str("versioned cognitive architecture parameters")
+                }
+                fn visit_seq<A: serde::de::SeqAccess<'de>>(
+                    self,
+                    mut seq: A,
+                ) -> Result<Self::Value, A::Error> {
+                    fn next<'de, T: Deserialize<'de>, A: serde::de::SeqAccess<'de>>(
+                        seq: &mut A,
+                    ) -> Result<T, A::Error> {
+                        seq.next_element()?.ok_or_else(|| {
+                            serde::de::Error::custom("missing cognitive architecture field")
+                        })
+                    }
+                    let schema_version: u16 = next(&mut seq)?;
+                    let (memory_candidate_bound, inherited_motor_layout) =
+                        if schema_version == COGNITIVE_ARCHITECTURE_MEMORY_BOUND_SCHEMA_VERSION {
+                            (next(&mut seq)?, next(&mut seq)?)
+                        } else {
+                            (None, None)
+                        };
+                    let value = CognitiveArchitectureGenomeParameters {
+                        schema_version,
+                        memory_candidate_bound,
+                        inherited_motor_layout,
+                        attention_capacity: next(&mut seq)?,
+                        active_concept_limit: next(&mut seq)?,
+                        active_gap_limit: next(&mut seq)?,
+                        predictor_capacity: next(&mut seq)?,
+                        predictor_learning_rate: next(&mut seq)?,
+                        motor_head_count: next(&mut seq)?,
+                        motor_head_width: next(&mut seq)?,
+                        dendritic_branch_capacity: next(&mut seq)?,
+                        structural_candidate_budget: next(&mut seq)?,
+                        structural_edit_budget: next(&mut seq)?,
+                        sleep_trigger_threshold: next(&mut seq)?,
+                        sleep_replay_rate: next(&mut seq)?,
+                        sleep_consolidation_rate: next(&mut seq)?,
+                        attention_learning_rate: next(&mut seq)?,
+                        concept_learning_rate: next(&mut seq)?,
+                        motor_learning_rate: next(&mut seq)?,
+                        structural_learning_rate: next(&mut seq)?,
+                    };
+                    value
+                        .validate_contract()
+                        .map_err(serde::de::Error::custom)?;
+                    Ok(value)
+                }
+            }
+            return deserializer.deserialize_tuple(20, Positional);
+        }
         #[derive(Deserialize)]
         struct Wire {
             schema_version: u16,
+            #[serde(default)]
+            memory_candidate_bound: Option<f32>,
+            #[serde(default)]
+            inherited_motor_layout: Option<u16>,
             attention_capacity: u8,
             active_concept_limit: u16,
             active_gap_limit: u8,
@@ -525,6 +670,8 @@ impl<'de> Deserialize<'de> for CognitiveArchitectureGenomeParameters {
         let wire = Wire::deserialize(deserializer)?;
         let value = Self {
             schema_version: wire.schema_version,
+            memory_candidate_bound: wire.memory_candidate_bound,
+            inherited_motor_layout: wire.inherited_motor_layout,
             attention_capacity: wire.attention_capacity,
             active_concept_limit: wire.active_concept_limit,
             active_gap_limit: wire.active_gap_limit,
@@ -2500,5 +2647,154 @@ mod orientation_layout_inheritance_tests {
             .unwrap();
         assert_eq!(child.schema_version(), 1);
         assert_eq!(bounds[4], (1., 6.));
+    }
+}
+
+#[cfg(test)]
+mod inherited_memory_bound_tests {
+    use super::*;
+    #[test]
+    fn opt_in_preserves_layout_and_legacy_wire() {
+        for layout in 1..=3 {
+            let base = match layout {
+                1 => CognitiveArchitectureGenomeParameters::canonical_default(),
+                2 => CognitiveArchitectureGenomeParameters::canonical_default()
+                    .with_independent_orientation_v2(2)
+                    .unwrap(),
+                _ => CognitiveArchitectureGenomeParameters::canonical_default()
+                    .with_grounded_orientation_v3(3)
+                    .unwrap(),
+            };
+            let old_binary =
+                bincode::serde::encode_to_vec(base, bincode::config::standard()).unwrap();
+            assert_eq!(
+                bincode::serde::decode_from_slice::<CognitiveArchitectureGenomeParameters, _>(
+                    &old_binary,
+                    bincode::config::standard()
+                )
+                .unwrap()
+                .0,
+                base
+            );
+            let old = serde_json::to_value(base).unwrap();
+            assert!(old.get("memory_candidate_bound").is_none());
+            let new = base.with_memory_candidate_bound_v4(1.0).unwrap();
+            let binary = bincode::serde::encode_to_vec(new, bincode::config::standard()).unwrap();
+            assert_eq!(
+                bincode::serde::decode_from_slice::<CognitiveArchitectureGenomeParameters, _>(
+                    &binary,
+                    bincode::config::standard()
+                )
+                .unwrap()
+                .0,
+                new
+            );
+            assert_eq!(new.motor_layout_schema_version(), layout);
+            assert_eq!(new.motor_head_count(), base.motor_head_count());
+            assert_eq!(
+                new.grounded_orientation_repertoire(),
+                base.grounded_orientation_repertoire()
+            );
+            assert_eq!(new.memory_candidate_bound(), 1.0);
+            assert_eq!(
+                serde_json::from_value::<CognitiveArchitectureGenomeParameters>(
+                    serde_json::to_value(new).unwrap()
+                )
+                .unwrap(),
+                new
+            );
+            assert_eq!(
+                serde_json::from_value::<CognitiveArchitectureGenomeParameters>(old.clone())
+                    .unwrap(),
+                base
+            );
+            // Stripping version while retaining the extension must fail.
+            let mut bad = serde_json::to_value(new).unwrap();
+            bad["schema_version"] = layout.into();
+            assert!(serde_json::from_value::<CognitiveArchitectureGenomeParameters>(bad).is_err());
+            let mut missing = old;
+            missing["schema_version"] = 4.into();
+            assert!(
+                serde_json::from_value::<CognitiveArchitectureGenomeParameters>(missing).is_err()
+            );
+        }
+    }
+    #[test]
+    fn memory_bound_and_motor_layout_builders_compose_both_orders() {
+        let base = CognitiveArchitectureGenomeParameters::canonical_default();
+        let first = base.with_memory_candidate_bound_v4(1.0).unwrap();
+        assert_eq!(
+            first.with_independent_orientation_v2(2).unwrap(),
+            base.with_independent_orientation_v2(2)
+                .unwrap()
+                .with_memory_candidate_bound_v4(1.0)
+                .unwrap()
+        );
+        assert_eq!(
+            first.with_grounded_orientation_v3(3).unwrap(),
+            base.with_grounded_orientation_v3(3)
+                .unwrap()
+                .with_memory_candidate_bound_v4(1.0)
+                .unwrap()
+        );
+        let changed = first
+            .with_grounded_orientation_v3(3)
+            .unwrap()
+            .with_memory_candidate_bound_v4(4.0)
+            .unwrap();
+        assert_eq!(changed.motor_layout_schema_version(), 3);
+        assert_eq!(changed.motor_head_count(), 3);
+        assert!(changed.grounded_orientation_repertoire());
+        assert_eq!(changed.memory_candidate_bound(), 4.0);
+    }
+    #[test]
+    fn reciprocal_extension_crosses_and_identity_are_preserved() {
+        let legacy = CognitiveArchitectureGenomeParameters::canonical_default();
+        let extended = legacy
+            .with_independent_orientation_v2(2)
+            .unwrap()
+            .with_memory_candidate_bound_v4(1.0)
+            .unwrap();
+        let mean = |a: f32, b: f32, _, _| Ok((a + b) * 0.5);
+        let maternal = extended
+            .map_inherited_parameters(&legacy, crate::BrainCapacityClass::N2048_ID, mean)
+            .unwrap();
+        let paternal = legacy
+            .map_inherited_parameters(&extended, crate::BrainCapacityClass::N2048_ID, mean)
+            .unwrap();
+        assert_eq!(maternal.schema_version(), 4);
+        assert_eq!(paternal.schema_version(), 4);
+        assert_eq!(
+            maternal.memory_candidate_bound().to_bits(),
+            paternal.memory_candidate_bound().to_bits()
+        );
+        assert!(maternal.memory_candidate_bound() > 0.5 && maternal.memory_candidate_bound() < 1.0);
+        assert_eq!(maternal.motor_layout_schema_version(), 2);
+        assert_eq!(paternal.motor_layout_schema_version(), 1);
+        for value in [0.0, 0.5, 1.0, 4.0, 1e-30, f32::MAX] {
+            let parent = legacy.with_memory_candidate_bound_v4(value).unwrap();
+            let child = parent
+                .map_inherited_parameters(&parent, crate::BrainCapacityClass::N2048_ID, mean)
+                .unwrap();
+            assert_eq!(child.memory_candidate_bound().to_bits(), value.to_bits());
+        }
+    }
+    #[test]
+    fn finite_nonnegative_bound_and_inheritance() {
+        let base = CognitiveArchitectureGenomeParameters::canonical_default();
+        for bound in [0., 0.5, 1., 4., f32::MAX] {
+            assert!(base.with_memory_candidate_bound_v4(bound).is_ok());
+        }
+        for bound in [-1., f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+            assert!(base.with_memory_candidate_bound_v4(bound).is_err());
+        }
+        let a = base.with_memory_candidate_bound_v4(1.).unwrap();
+        let b = base.with_memory_candidate_bound_v4(4.).unwrap();
+        let child = a
+            .map_inherited_parameters(&b, crate::BrainCapacityClass::N2048_ID, |x, _, _, _| Ok(x))
+            .unwrap();
+        assert_eq!(child.memory_candidate_bound(), 1.);
+        let changed = a.with_memory_candidate_bound_v4(2.).unwrap();
+        assert_eq!(changed.motor_layout_schema_version(), 1);
     }
 }

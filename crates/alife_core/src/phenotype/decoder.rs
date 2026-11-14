@@ -231,7 +231,7 @@ impl CandidateDecoderPlan {
         let architecture = phenotype.cognitive_architecture();
         let head_count = usize::from(architecture.motor_head_count());
         let width = architecture.motor_head_width();
-        let channels: &[MotorChannel] = match architecture.schema_version() {
+        let channels: &[MotorChannel] = match architecture.motor_layout_schema_version() {
             1 => &FACTORIZED_MOTOR_CHANNELS,
             2 | 3 => &ORIENTATION_MOTOR_CHANNELS_V2,
             _ => return Err(ScaffoldContractError::PhenotypeCompile),
@@ -275,6 +275,17 @@ impl CandidateDecoderPlan {
     ) -> Result<(), ScaffoldContractError> {
         self.validate_local()?;
         self.factorized_motor_channels(phenotype)?;
+        if let Some(plan) = self.memory_channel {
+            let architecture = phenotype.cognitive_architecture();
+            if plan.max_candidate_gain().to_bits()
+                != architecture.memory_candidate_bound().to_bits()
+                || (plan.schema_version() == 2) != (architecture.schema_version() == 4)
+            {
+                return Err(ScaffoldContractError::PhenotypeCompile);
+            }
+        } else if phenotype.cognitive_architecture().schema_version() == 4 {
+            return Err(ScaffoldContractError::PhenotypeCompile);
+        }
         let capacity = crate::BrainCapacityClass::supported_for_id(phenotype.brain_class_id())?;
         let execution = capacity.execution();
         let expected_stride = self
