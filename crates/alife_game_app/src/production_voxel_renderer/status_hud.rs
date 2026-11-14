@@ -1,8 +1,9 @@
 //! Wordless selected-creature identity, physiology, possession and playback readout.
-//! Icon meters show measured quantities, not six interchangeable needs or health scores.
+//! Icon meters show measured quantities, not seven interchangeable needs or health scores.
 use super::*;
 use alife_world::{
-    HeadlessWorld, PlayerCareKind, PlayerCareReceipt, PresentationEvidence, WorldObject,
+    HeadlessWorld, PlayerCareKind, PlayerCareReceipt, PlayerFamiliarity, PresentationEvidence,
+    WorldObject,
 };
 use bevy::a11y::AccessibilityNode;
 use bevy::image::{CompressedImageFormats, ImageSampler, ImageType};
@@ -17,14 +18,16 @@ enum Quantity {
     Calm,
     SleepPressure,
     PraiseSignal,
+    Familiarity,
 }
-const QUANTITIES: [Quantity; 6] = [
+const QUANTITIES: [Quantity; 7] = [
     Quantity::Hunger,
     Quantity::Energy,
     Quantity::Fatigue,
     Quantity::Calm,
     Quantity::SleepPressure,
     Quantity::PraiseSignal,
+    Quantity::Familiarity,
 ];
 impl Quantity {
     fn name(self) -> &'static str {
@@ -35,6 +38,7 @@ impl Quantity {
             Self::Calm => "calm",
             Self::SleepPressure => "sleep",
             Self::PraiseSignal => "praise",
+            Self::Familiarity => "familiarity",
         }
     }
     fn accessible_name(self) -> &'static str {
@@ -45,9 +49,23 @@ impl Quantity {
             Self::Calm => "Calm",
             Self::SleepPressure => "Sleep pressure",
             Self::PraiseSignal => "Praise signal",
+            Self::Familiarity => "Familiarity",
         }
     }
     fn value(self, row: &WorldOrganismPresentationRow) -> Option<f32> {
+        // Familiarity is history, not physiology: the row carries the
+        // decayed record, or nothing when the creature has no history.
+        // The meter maps [-1, 1] to [0, 1] (wary empty, stranger half,
+        // trusting full); unknown stays unknown, never a midpoint.
+        if self == Self::Familiarity {
+            return match &row.familiarity {
+                PresentationEvidence::Observed {
+                    value: familiarity,
+                    ..
+                } => normalized((familiarity.value + 1.0) / 2.0),
+                PresentationEvidence::Unknown => None,
+            };
+        }
         let h = &row.biochemistry.homeostasis;
         let raw = match self {
             Self::Hunger => h.drives.hunger,
@@ -70,7 +88,7 @@ impl Quantity {
         match self {
             Self::Hunger | Self::Fatigue | Self::SleepPressure => value >= 0.65,
             Self::Energy | Self::Calm => value <= 0.35,
-            Self::PraiseSignal => false,
+            Self::PraiseSignal | Self::Familiarity => false,
         }
     }
     fn meter_color(self, value: f32) -> Color {
@@ -91,7 +109,7 @@ fn normalized(value: f32) -> Option<f32> {
 struct Readout {
     stable_id: u64,
     name: Option<String>,
-    values: [Option<f32>; 6],
+    values: [Option<f32>; 7],
     holding_food: bool,
 }
 impl Readout {
@@ -170,6 +188,29 @@ fn debug_care_line(care: &PresentationEvidence<PlayerCareReceipt>) -> String {
         }
     }
 }
+/// DEBUG-ONLY inspector line for the selected creature's familiarity.
+/// Never wired into the user-facing HUD: the game shows the disposition
+/// (the creature's resting head and ears, and its meter), not the band
+/// and decimals. No record is UNKNOWN, never a definite absence — a save
+/// from before familiarity existed reads exactly the same way, so the
+/// line says "unknown" and never "stranger".
+#[allow(dead_code)]
+fn debug_familiarity_line(familiarity: &PresentationEvidence<PlayerFamiliarity>) -> String {
+    match familiarity {
+        PresentationEvidence::Unknown => {
+            "familiarity: unknown (no interaction history)".to_string()
+        }
+        PresentationEvidence::Observed { value, .. } => {
+            format!(
+                "familiarity: {} ({:.2}, {} interactions, last at tick {})",
+                value.band().label(),
+                value.value,
+                value.interactions,
+                value.last_interaction_tick.raw()
+            )
+        }
+    }
+}
 fn valid_row(
     stable_id: WorldEntityId,
     organism_id: OrganismId,
@@ -224,7 +265,12 @@ const PANEL: Color = Color::srgb(0.075, 0.115, 0.135);
 const CARD: Color = Color::srgb(0.050, 0.075, 0.090);
 const INK: Color = Color::srgb(0.98, 0.96, 0.84);
 const HEADER_HEIGHT: f32 = 36.0;
-const EMBEDDED: [(&str, &[u8]); 13] = [
+// The panel is exactly wide enough for seven meter cards in one row:
+// seven 52px cards plus six 8px gaps is 412px, plus 12px padding and
+// 6px border. Widening it (rather than wrapping to two rows) keeps the
+// selection panel fitting above the care dock at 640x360.
+const PANEL_WIDTH: f32 = 430.0;
+const EMBEDDED: [(&str, &[u8]); 14] = [
     (
         "holding_food",
         include_bytes!("../../../../assets/ui/status_hud/holding_food.png"),
@@ -252,6 +298,10 @@ const EMBEDDED: [(&str, &[u8]); 13] = [
     (
         "praise",
         include_bytes!("../../../../assets/ui/status_hud/praise.png"),
+    ),
+    (
+        "familiarity",
+        include_bytes!("../../../../assets/ui/status_hud/familiarity.png"),
     ),
     (
         "selection",
@@ -386,7 +436,7 @@ pub(super) fn spawn(world: &mut World) {
                 position_type: PositionType::Absolute,
                 left: Val::Px(16.0),
                 top: Val::Px(76.0),
-                width: Val::Px(370.0),
+                width: Val::Px(PANEL_WIDTH),
                 padding: UiRect::all(Val::Px(6.0)),
                 border: UiRect::all(Val::Px(3.0)),
                 border_radius: BorderRadius::all(Val::Px(18.0)),
@@ -729,7 +779,7 @@ fn set_readout(world: &mut World, readout: Option<&Readout>, debug: bool) {
             accessible.clear_description();
         }
     }
-    let values = readout.map_or([None; 6], |r| r.values);
+    let values = readout.map_or([None; 7], |r| r.values);
     for mut visibility in world
         .query_filtered::<&mut Visibility, With<HeldFood>>()
         .iter_mut(world)
@@ -804,7 +854,7 @@ fn set_readout(world: &mut World, readout: Option<&Readout>, debug: bool) {
     }
 }
 fn apply_layout(world: &mut World, size: Vec2) {
-    let width = (size.x - 32.0).clamp(0.0, 370.0);
+    let width = (size.x - 32.0).clamp(0.0, PANEL_WIDTH);
     for mut node in world
         .query_filtered::<&mut Node, With<HudRoot>>()
         .iter_mut(world)
@@ -848,7 +898,7 @@ fn selected_readout(world: &World, stable_id: WorldEntityId) -> Readout {
         Readout {
             stable_id: stable_id.raw(),
             name: None,
-            values: [None; 6],
+            values: [None; 7],
             holding_food: false,
         },
         |organism_id| {
@@ -935,7 +985,7 @@ fn set_status(world: &mut World, count: usize, paused: bool, fast: bool) {
     }
 }
 fn panel_bottom(size: Vec2) -> f32 {
-    let width = (size.x - 32.0).clamp(0.0, 370.0);
+    let width = (size.x - 32.0).clamp(0.0, PANEL_WIDTH);
     let columns = ((width - 18.0 + 8.0) / 60.0).floor().max(1.0) as usize;
     let rows = QUANTITIES.len().div_ceil(columns);
     76.0 + 18.0
