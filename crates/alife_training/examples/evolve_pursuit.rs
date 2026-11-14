@@ -56,6 +56,7 @@ struct Variation {
     initial_energy: f32,
     terrain: [f32; 2],
     neural_preparation: bool,
+    continue_after_consumption: bool,
 }
 impl Default for Variation {
     fn default() -> Self {
@@ -67,6 +68,7 @@ impl Default for Variation {
             initial_energy: 0.25,
             terrain: [0.5, 0.5],
             neural_preparation: false,
+            continue_after_consumption: false,
         }
     }
 }
@@ -796,8 +798,10 @@ fn trial(
         }
         if object.consumed {
             result.consumed = true;
-            result.consumed_tick = Some(tick);
-            break;
+            result.consumed_tick.get_or_insert(tick);
+            if !variation.continue_after_consumption {
+                break;
+            }
         }
         result.alive = host
             .world()
@@ -931,7 +935,7 @@ fn run(base: &FoundationWeightAsset, p: &BrainPhenotype, r: Request) -> Result<s
     }
     Ok(
         json!({"backend":"native-cpu", "memory_cap":trainer.phenotype().candidate_decoder().memory_channel().map(|m|m.max_candidate_gain()), "base_digest":base.digest(),"candidate_digest":asset.digest(),
-        "assay_version":14,"weight_edits":r.weight_edits,"hold_readout":r.hold_readout,"motor_heads":r.motor_heads,"variation":r.variation,"readout_scale":r.readout_scale,"bearing_gain":r.bearing_gain,"params":r.params,"memory_aversion":r.memory_aversion,"ticks":r.ticks,"seconds":start.elapsed().as_secs_f64(),"trials":trials}),
+        "assay_version":15,"weight_edits":r.weight_edits,"hold_readout":r.hold_readout,"motor_heads":r.motor_heads,"variation":r.variation,"readout_scale":r.readout_scale,"bearing_gain":r.bearing_gain,"params":r.params,"memory_aversion":r.memory_aversion,"ticks":r.ticks,"seconds":start.elapsed().as_secs_f64(),"trials":trials}),
     )
 }
 
@@ -1129,6 +1133,52 @@ mod tests {
     }
 
     #[test]
+    fn postmeal_continuation_keeps_the_first_meal_and_identical_prefix() {
+        let parent = FoundationWeightAsset::decode_canonical(include_bytes!(
+            "../../../docs/experiments/astra-generalization-2026-11-13/pursuit-twohead-contact20.alife-foundation"
+        ))
+        .unwrap();
+        let (asset, p, game) = prepare_founder(parent, 2).unwrap();
+        let mask = StageTrainableMask::recurrent_only(&p).unwrap();
+        let trainer = CpuFoundationTrainer::new(p, asset, mask, AdamWConfig::default()).unwrap();
+        let first_meal = trial(
+            &game,
+            &trainer,
+            2026116100,
+            "contact",
+            64,
+            true,
+            Variation::default(),
+        )
+        .unwrap();
+        assert!(first_meal.consumed && first_meal.world_steps < 64);
+        let continued = trial(
+            &game,
+            &trainer,
+            2026116100,
+            "contact",
+            64,
+            true,
+            Variation {
+                continue_after_consumption: true,
+                ..Variation::default()
+            },
+        )
+        .unwrap();
+        assert!(continued.consumed && continued.alive);
+        assert_eq!(continued.world_steps, 64);
+        assert_eq!(continued.consumed_tick, first_meal.consumed_tick);
+        assert_eq!(
+            &continued.trace[..first_meal.trace.len()],
+            first_meal.trace.as_slice()
+        );
+        assert!(continued.trace.len() > first_meal.trace.len());
+        assert!(continued.trace[first_meal.trace.len()..]
+            .iter()
+            .all(|row| row["objects_before"][0]["consumed"] == true));
+    }
+
+    #[test]
     fn hazard_exposure_begins_after_preparation_and_has_real_consequences() {
         let (asset, p, game) = prepare_founder(base(), 1).unwrap();
         let mask = StageTrainableMask::recurrent_only(&p).unwrap();
@@ -1315,6 +1365,7 @@ mod tests {
                     initial_energy: 0.25,
                     terrain: [0.5, 0.5],
                     neural_preparation: false,
+                    continue_after_consumption: false,
                 },
             )
             .unwrap();
