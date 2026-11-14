@@ -121,6 +121,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('local_run', type=Path)
     parser.add_argument('--intervals', default='5,7')
+    parser.add_argument('--arms', default='None,Praise,Scold,Pet,Slap')
     parser.add_argument('--output', default='TORCH-AGGREGATES.json')
     args = parser.parse_args()
     torch.set_num_threads(1)
@@ -128,7 +129,10 @@ def main():
         raise ValueError('simple create-only output filename required')
     graph = Graph(json.loads((args.local_run/'GRAPH-LOCAL.json').read_text()))
     results = []
-    for arm in ['None', 'Praise', 'Scold', 'Pet', 'Slap']:
+    arms = args.arms.split(',')
+    if any(not arm.isalnum() for arm in arms) or len(set(arms)) != len(arms):
+        raise ValueError('distinct alphanumeric arm names required')
+    for arm in arms:
         for interval in map(int,args.intervals.split(',')):
             stem = f'{arm}-{interval:03}'
             diagnostic = json.loads((args.local_run/f'{stem}-DIAGNOSTIC.json').read_text())
