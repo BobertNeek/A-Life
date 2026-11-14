@@ -37,6 +37,8 @@ pub struct PortableMemoryRecordV2 {
     pub outcome_contact: Option<PhysicalContactKind>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub executed_actions_json: Option<Vec<u8>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub joint_event_json: Option<Vec<u8>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -79,6 +81,9 @@ pub enum MemoryUpdateKind {
 pub struct MemoryUpdateReceipt {
     #[serde(default)]
     pub runtime_approximate: bool,
+    /// Extra opt-in event encoding/validation/index work, not yet a host biological debit.
+    #[serde(default, skip_serializing_if = "execution_work_is_zero")]
+    pub joint_membership_admission_work: u64,
     pub sealed_sequence_id: ExperienceSequenceId,
     pub organism_id_raw: u64,
     pub bucket: MemoryBucketReceiptKey,
@@ -375,6 +380,17 @@ impl MemorySidecarState {
         organism_id: OrganismId,
     ) -> Result<Self, ScaffoldContractError> {
         organism_id.validate()?;
+        // Event identity and tracked membership cannot be rebound truthfully by
+        // the legacy founder-clone operation. Preserve the original bank.
+        if self
+            .bank
+            .candidate_store
+            .records
+            .values()
+            .any(|record| record.joint_event.is_some())
+        {
+            return Err(ScaffoldContractError::InvalidMemoryQuery);
+        }
         let mut bank = self.bank.clone();
         let previous_sequence = bank
             .candidate_store
@@ -506,24 +522,43 @@ impl MemorySidecarState {
         self.bank.recall_frame_runtime(draft, cache, refresh)
     }
 
+    pub fn observe_sealed_patch_with_joint_membership(
+        &mut self,
+        patch: &ExperiencePatch,
+    ) -> Result<MemoryUpdateReceipt, ScaffoldContractError> {
+        self.observe_sealed_patch_impl(patch, false, true)
+    }
+    pub fn recall_frame_with_joint_membership(
+        &self,
+        draft: &PerceptionFrameDraft,
+    ) -> Result<PreparedMemoryRecall, ScaffoldContractError> {
+        if draft.organism_id() != self.organism_id
+            || draft.profile_provenance().identity() != self.profile
+        {
+            return Err(ScaffoldContractError::BrainOwnershipMismatch);
+        }
+        self.bank.recall_frame_with_joint_membership(draft)
+    }
+
     pub fn observe_sealed_patch(
         &mut self,
         patch: &ExperiencePatch,
     ) -> Result<MemoryUpdateReceipt, ScaffoldContractError> {
-        self.observe_sealed_patch_impl(patch, false)
+        self.observe_sealed_patch_impl(patch, false, false)
     }
 
     pub fn observe_sealed_patch_runtime(
         &mut self,
         patch: &ExperiencePatch,
     ) -> Result<MemoryUpdateReceipt, ScaffoldContractError> {
-        self.observe_sealed_patch_impl(patch, true)
+        self.observe_sealed_patch_impl(patch, true, false)
     }
 
     fn observe_sealed_patch_impl(
         &mut self,
         patch: &ExperiencePatch,
         runtime: bool,
+        joint_membership: bool,
     ) -> Result<MemoryUpdateReceipt, ScaffoldContractError> {
         if matches!(
             self.compaction.phase,
@@ -537,7 +572,10 @@ impl MemorySidecarState {
         if patch.header().sensor_profile.identity() != self.profile {
             return Err(ScaffoldContractError::SensorProfileMismatch);
         }
-        let receipt = if runtime {
+        let receipt = if joint_membership {
+            self.bank
+                .observe_sealed_patch_with_joint_membership(patch)?
+        } else if runtime {
             self.bank.observe_sealed_patch_runtime(patch)?
         } else {
             self.bank.observe_sealed_patch(patch)?
@@ -774,6 +812,30 @@ impl MemorySidecarState {
         active_asset: PortableMemoryBankAssetV2,
         staged_asset: Option<PortableMemoryBankAssetV2>,
     ) -> Result<Self, ScaffoldContractError> {
+        if active_asset.schema_version == 3
+            || staged_asset
+                .as_ref()
+                .is_some_and(|asset| asset.schema_version == 3)
+        {
+            return Err(ScaffoldContractError::InvalidMemoryQuery);
+        }
+        Self::restore_portable_with_joint_membership(
+            profile,
+            checkpoint,
+            active_asset,
+            staged_asset,
+        )
+    }
+
+    /// Explicit research admission of joint-observed membership memory.
+    /// Callers must account for reported membership admission and query work;
+    /// ordinary live-host restoration intentionally rejects enriched banks.
+    pub fn restore_portable_with_joint_membership(
+        profile: crate::SensorProfileIdentity,
+        checkpoint: MemoryCompactionCheckpoint,
+        active_asset: PortableMemoryBankAssetV2,
+        staged_asset: Option<PortableMemoryBankAssetV2>,
+    ) -> Result<Self, ScaffoldContractError> {
         profile
             .validate_contract()
             .map_err(|_| ScaffoldContractError::InvalidMemoryQuery)?;
@@ -929,7 +991,7 @@ impl MemorySidecarState {
 
 impl PortableMemoryRecordV2 {
     pub fn recompute_canonical_digest(&self) -> Result<[u64; 4], ScaffoldContractError> {
-        self.recompute_digest_with_checked_facts(None)
+        self.recompute_digest_with_checked_facts(None, None)
     }
 
     // Only internal immutable facts qualify as a proof, and their exact bytes
@@ -937,6 +999,7 @@ impl PortableMemoryRecordV2 {
     fn recompute_digest_with_checked_facts(
         &self,
         checked: Option<&Option<executed_action::CheckedExecutionFacts>>,
+        checked_event: Option<&Option<joint_membership::CheckedJointEvent>>,
     ) -> Result<[u64; 4], ScaffoldContractError> {
         let mut digest = CanonicalDigestBuilder::new(PORTABLE_MEMORY_RECORD_DOMAIN);
         digest.write_u16(self.schema_version);
@@ -972,6 +1035,19 @@ impl PortableMemoryRecordV2 {
         } else {
             executed_action::write_digest(&mut digest, &self.executed_actions_json)?;
         }
+        if let Some(checked_event) = checked_event {
+            if self.joint_event_json.as_deref() != checked_event.as_ref().map(|e| e.bytes()) {
+                return Err(ScaffoldContractError::InvalidMemoryQuery);
+            }
+            if let Some(event) = checked_event {
+                event.validate_portable(self)?;
+            }
+            joint_membership::digest(&mut digest, checked_event);
+        } else if let Some(bytes) = &self.joint_event_json {
+            let event = joint_membership::CheckedJointEvent::from_bytes(bytes.clone())?;
+            event.validate_portable(self)?;
+            joint_membership::digest(&mut digest, &Some(event));
+        }
         Ok(digest.finish256())
     }
 
@@ -980,7 +1056,7 @@ impl PortableMemoryRecordV2 {
         organism_id_raw: u64,
         profile: crate::SensorProfileIdentity,
     ) -> Result<(), ScaffoldContractError> {
-        self.validate_with_checked_facts(organism_id_raw, profile, None)
+        self.validate_with_checked_facts(organism_id_raw, profile, None, None)
     }
 
     fn validate_with_checked_facts(
@@ -988,6 +1064,7 @@ impl PortableMemoryRecordV2 {
         organism_id_raw: u64,
         profile: crate::SensorProfileIdentity,
         checked: Option<&Option<executed_action::CheckedExecutionFacts>>,
+        checked_event: Option<&Option<joint_membership::CheckedJointEvent>>,
     ) -> Result<(), ScaffoldContractError> {
         let record_profile = crate::SensorProfileIdentity {
             profile_id: crate::SensorProfileId(self.profile_id_raw),
@@ -1008,7 +1085,12 @@ impl PortableMemoryRecordV2 {
         let target_latent = portable_floats(&self.target_latent_bits)?;
         let family_value = portable_floats(&self.family_value_bits)?;
         let confidence = portable_float(self.confidence_bits)?;
-        if self.schema_version != PORTABLE_MEMORY_BANK_ASSET_SCHEMA_VERSION
+        if self.schema_version
+            != if self.joint_event_json.is_some() {
+                joint_membership::RECORD_SCHEMA
+            } else {
+                PORTABLE_MEMORY_BANK_ASSET_SCHEMA_VERSION
+            }
             || self.organism_id_raw != organism_id_raw
             || record_profile != profile
             || self.first_tick_raw > self.last_tick_raw
@@ -1021,7 +1103,8 @@ impl PortableMemoryRecordV2 {
             || (self.outcome_contact.is_some()
                 && (self.tracked_object_id_raw == 0 || family != CandidateActionFamily::Ingest))
             || !(0.0..=1.0).contains(&confidence)
-            || self.canonical_digest != self.recompute_digest_with_checked_facts(checked)?
+            || self.canonical_digest
+                != self.recompute_digest_with_checked_facts(checked, checked_event)?
         {
             return Err(ScaffoldContractError::InvalidMemoryQuery);
         }
@@ -1072,7 +1155,12 @@ impl PortableMemoryBankAssetV2 {
             .map_err(|_| ScaffoldContractError::InvalidMemoryQuery)?;
         OrganismId(self.organism_id_raw).validate()?;
         let config = portable_memory_config(self)?;
-        if self.schema_version != PORTABLE_MEMORY_BANK_ASSET_SCHEMA_VERSION
+        if self.schema_version
+            != if self.records.iter().any(|r| r.joint_event_json.is_some()) {
+                joint_membership::RECORD_SCHEMA
+            } else {
+                PORTABLE_MEMORY_BANK_ASSET_SCHEMA_VERSION
+            }
             || self.records.len() > config.capacity
             || self.next_memory_id_raw == 0
             || (!self.records.is_empty() && self.last_observed_sequence_id_raw == 0)
@@ -1080,7 +1168,23 @@ impl PortableMemoryBankAssetV2 {
             return Err(ScaffoldContractError::InvalidMemoryQuery);
         }
         let mut previous_id = 0;
+        let mut joint_events = std::collections::BTreeSet::new();
         for record in &self.records {
+            if let Some(bytes) = &record.joint_event_json {
+                let sequence = if let Some(store) = checked {
+                    store
+                        .records
+                        .get(&record.memory_id_raw)
+                        .and_then(|r| r.joint_event.as_ref())
+                        .ok_or(ScaffoldContractError::InvalidMemoryQuery)?
+                        .sequence()
+                } else {
+                    joint_membership::CheckedJointEvent::from_bytes(bytes.clone())?.sequence()
+                };
+                if !joint_events.insert((record.organism_id_raw, sequence)) {
+                    return Err(ScaffoldContractError::InvalidMemoryQuery);
+                }
+            }
             if let Some(store) = checked {
                 let original = store
                     .records
@@ -1090,6 +1194,7 @@ impl PortableMemoryBankAssetV2 {
                     self.organism_id_raw,
                     self.profile,
                     Some(&original.executed_actions_json),
+                    Some(&original.joint_event),
                 )?;
             } else {
                 record.validate_for(self.organism_id_raw, self.profile)?;
@@ -1125,7 +1230,7 @@ fn portable_bank_from_memory(
     let mut records = Vec::with_capacity(bank.candidate_store.records.len());
     for record in bank.candidate_store.records.values() {
         let mut portable = PortableMemoryRecordV2 {
-            schema_version: PORTABLE_MEMORY_BANK_ASSET_SCHEMA_VERSION,
+            schema_version: record.schema_version,
             memory_id_raw: record.memory_id.raw(),
             organism_id_raw: record.organism_id_raw,
             sealed_sequence_id_raw: record.source_sequence_id.raw(),
@@ -1160,17 +1265,21 @@ fn portable_bank_from_memory(
             observation_count: record.observation_count,
             canonical_digest: [0; 4],
             outcome_contact: record.outcome_contact,
+            joint_event_json: record.joint_event.as_ref().map(|e| e.bytes().to_vec()),
             executed_actions_json: record
                 .executed_actions_json
                 .as_ref()
                 .map(|facts| facts.bytes().to_vec()),
         };
-        portable.canonical_digest =
-            portable.recompute_digest_with_checked_facts(Some(&record.executed_actions_json))?;
+        portable.canonical_digest = portable.recompute_digest_with_checked_facts(
+            Some(&record.executed_actions_json),
+            Some(&record.joint_event),
+        )?;
         portable.validate_with_checked_facts(
             organism_id.raw(),
             profile,
             Some(&record.executed_actions_json),
+            Some(&record.joint_event),
         )?;
         records.push(portable);
     }
@@ -1186,7 +1295,11 @@ fn portable_bank_from_memory(
         return Err(ScaffoldContractError::InvalidMemoryQuery);
     }
     let mut asset = PortableMemoryBankAssetV2 {
-        schema_version: PORTABLE_MEMORY_BANK_ASSET_SCHEMA_VERSION,
+        schema_version: if records.iter().any(|r| r.joint_event_json.is_some()) {
+            joint_membership::RECORD_SCHEMA
+        } else {
+            PORTABLE_MEMORY_BANK_ASSET_SCHEMA_VERSION
+        },
         organism_id_raw: organism_id.raw(),
         profile,
         capacity: u32::try_from(bank.config.capacity)
@@ -1230,7 +1343,7 @@ fn memory_bank_from_portable(
                 .try_into()
                 .map_err(|_| ScaffoldContractError::InvalidMemoryQuery)?;
         let record = CandidateMemoryRecordV2 {
-            schema_version: MEMORY_RECALL_SCHEMA_VERSION,
+            schema_version: portable.schema_version,
             memory_id: MemoryId(portable.memory_id_raw),
             organism_id_raw: portable.organism_id_raw,
             source_sequence_id: ExperienceSequenceId(portable.sealed_sequence_id_raw),
@@ -1251,6 +1364,11 @@ fn memory_bank_from_portable(
             salience_q16: portable.salience_q16,
             observation_count: portable.observation_count,
             outcome_contact: portable.outcome_contact,
+            joint_event: portable
+                .joint_event_json
+                .clone()
+                .map(joint_membership::CheckedJointEvent::from_bytes)
+                .transpose()?,
             executed_actions_json: portable
                 .executed_actions_json
                 .clone()
@@ -1272,6 +1390,7 @@ fn memory_bank_from_portable(
         eviction_count: asset.eviction_count,
         records,
         last_sequence_by_organism,
+        joint_membership_index: std::collections::BTreeMap::new(),
         execution_index: std::collections::BTreeMap::new(),
         family_index: std::collections::BTreeMap::new(),
         target_index: std::collections::BTreeMap::new(),

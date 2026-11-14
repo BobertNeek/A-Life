@@ -26,6 +26,8 @@ pub const MEMORY_MERGE_SIMILARITY: f32 = 0.98;
 
 const CANDIDATE_MEMORY_BANK_DOMAIN: &[u8] = b"ALIFE-CANDIDATE-MEMORY-BANK-V2";
 
+mod joint_membership;
+pub use joint_membership::JointMembershipSourceV1;
 mod executed_action;
 pub use executed_action::{
     ExecutedActionMemoryV1, ExecutedActionRecallV1, ExecutionEvidenceInspectionV1,
@@ -117,6 +119,9 @@ pub struct MemoryRecallReceipt {
     /// Zero on ordinary recall. Offboard diagnostic work is never charged here.
     #[serde(default, skip_serializing_if = "execution_work_is_zero")]
     pub execution_evidence_work: u64,
+    /// Explicit V3 alternative joint-observed family sources; scalar counters describe baseline retrieval.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub joint_membership_sources: Vec<JointMembershipSourceV1>,
     pub candidates: Vec<CandidateMemoryRecallReceipt>,
     pub degradations: Vec<MemoryRecallDegradation>,
 }
@@ -127,6 +132,28 @@ fn execution_work_is_zero(work: &u64) -> bool {
 
 impl MemoryRecallReceipt {
     fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        if !matches!(
+            self.schema_version,
+            MEMORY_RECALL_SCHEMA_VERSION | joint_membership::RECORD_SCHEMA
+        ) || (self.schema_version == MEMORY_RECALL_SCHEMA_VERSION
+            && !self.joint_membership_sources.is_empty())
+            || (self.schema_version == joint_membership::RECORD_SCHEMA && self.runtime_approximate)
+            || self.joint_membership_sources.len()
+                > usize::from(self.candidate_count) * MEMORY_RECALL_TOP_K
+        {
+            return Err(ScaffoldContractError::InvalidMemoryQuery);
+        }
+        let mut seen = std::collections::BTreeSet::new();
+        for source in &self.joint_membership_sources {
+            source.memory_id.validate()?;
+            source.source_sequence_id.validate()?;
+            if source.candidate_index >= self.candidate_count
+                || source.bundle_digest == [0; 4]
+                || !seen.insert((source.candidate_index, source.source_sequence_id.raw()))
+            {
+                return Err(ScaffoldContractError::InvalidMemoryQuery);
+            }
+        }
         if self.runtime_approximate {
             return if self.organism_id_raw != 0
                 && usize::from(self.candidate_count) <= MAX_ACTION_CANDIDATES
@@ -137,7 +164,11 @@ impl MemoryRecallReceipt {
                 Err(ScaffoldContractError::InvalidMemoryQuery)
             };
         }
-        if self.schema_version != MEMORY_RECALL_SCHEMA_VERSION
+        if !matches!(
+            self.schema_version,
+            MEMORY_RECALL_SCHEMA_VERSION | joint_membership::RECORD_SCHEMA
+        ) || (self.schema_version == MEMORY_RECALL_SCHEMA_VERSION
+            && !self.joint_membership_sources.is_empty())
             || self.organism_id_raw == 0
             || usize::from(self.candidate_count) != self.candidates.len()
             || self.candidates.is_empty()
@@ -1275,6 +1306,7 @@ impl MemoryBank {
             neighbor_bucket_reads,
             similarity_evaluations,
             execution_evidence_work,
+            joint_membership_sources: Vec::new(),
             candidates: candidate_receipts,
             degradations,
         };
@@ -1301,20 +1333,21 @@ impl MemoryBank {
         &mut self,
         patch: &ExperiencePatch,
     ) -> Result<MemoryUpdateReceipt, ScaffoldContractError> {
-        self.observe_sealed_patch_impl(patch, false)
+        self.observe_sealed_patch_impl(patch, false, false)
     }
 
     pub fn observe_sealed_patch_runtime(
         &mut self,
         patch: &ExperiencePatch,
     ) -> Result<MemoryUpdateReceipt, ScaffoldContractError> {
-        self.observe_sealed_patch_impl(patch, true)
+        self.observe_sealed_patch_impl(patch, true, false)
     }
 
     fn observe_sealed_patch_impl(
         &mut self,
         patch: &ExperiencePatch,
         runtime: bool,
+        joint_membership: bool,
     ) -> Result<MemoryUpdateReceipt, ScaffoldContractError> {
         if !runtime {
             patch.validate_contract()?;
@@ -1357,11 +1390,24 @@ impl MemoryBank {
             .map_err(|_| ScaffoldContractError::ScalarOutOfRange)?;
         let candidate_memory_id = MemoryId(self.candidate_store.next_memory_id);
         candidate_memory_id.validate()?;
-        let candidate_record = if runtime {
+        let mut candidate_record = if runtime {
             candidate_recall::candidate_record_from_patch_runtime(candidate_memory_id, patch)?
         } else {
             candidate_record_from_patch(candidate_memory_id, patch)?
         };
+        if joint_membership {
+            candidate_record.joint_event =
+                joint_membership::CheckedJointEvent::capture(&candidate_record, patch)?;
+            if candidate_record.joint_event.is_some() {
+                candidate_record.schema_version = joint_membership::RECORD_SCHEMA;
+            }
+            candidate_record.validate_contract()?;
+        }
+        let mut joint_membership_admission_work = candidate_record
+            .joint_event
+            .as_ref()
+            .filter(|_| joint_membership)
+            .map_or(0, |e| e.admission_work());
         let (target_key, family_key) = keys_for_query(query);
 
         let mut merge_id: Option<MemoryId> = None;
@@ -1567,11 +1613,13 @@ impl MemoryBank {
                 merged,
                 merge_count,
             } => {
-                self.candidate_store.remove_record_from_indices(old);
+                joint_membership_admission_work +=
+                    self.candidate_store.remove_record_from_indices(old);
                 self.candidate_store
                     .records
                     .insert(memory_id.raw(), merged.clone());
-                self.candidate_store.insert_record_into_indices(*memory_id);
+                joint_membership_admission_work +=
+                    self.candidate_store.insert_record_into_indices(*memory_id);
                 self.candidate_store.merge_count = *merge_count;
             }
             MutationPlan::Insert {
@@ -1581,7 +1629,8 @@ impl MemoryBank {
                 self.candidate_store
                     .records
                     .insert(record.memory_id.raw(), record.clone());
-                self.candidate_store
+                joint_membership_admission_work += self
+                    .candidate_store
                     .insert_record_into_indices(record.memory_id);
                 self.candidate_store.next_memory_id = *next_memory_id;
             }
@@ -1594,11 +1643,13 @@ impl MemoryBank {
                 self.candidate_store
                     .records
                     .remove(&removed.memory_id.raw());
-                self.candidate_store.remove_record_from_indices(removed);
+                joint_membership_admission_work +=
+                    self.candidate_store.remove_record_from_indices(removed);
                 self.candidate_store
                     .records
                     .insert(record.memory_id.raw(), record.clone());
-                self.candidate_store
+                joint_membership_admission_work += self
+                    .candidate_store
                     .insert_record_into_indices(record.memory_id);
                 self.candidate_store.next_memory_id = *next_memory_id;
                 self.candidate_store.eviction_count = *eviction_count;
@@ -1659,6 +1710,7 @@ impl MemoryBank {
 
         Ok(MemoryUpdateReceipt {
             runtime_approximate: runtime,
+            joint_membership_admission_work,
             sealed_sequence_id: patch.header().sequence_id,
             organism_id_raw,
             bucket: family_key.receipt(),

@@ -10692,6 +10692,7 @@ mod tests {
             neighbor_bucket_reads: 5,
             similarity_evaluations: 7,
             execution_evidence_work: 0,
+            joint_membership_sources: Vec::new(),
             candidates: Vec::new(),
             degradations: Vec::new(),
         };
@@ -13649,6 +13650,7 @@ mod tests {
             neighbor_bucket_reads: 0,
             similarity_evaluations: 0,
             execution_evidence_work: 0,
+            joint_membership_sources: Vec::new(),
             candidates: Vec::new(),
             degradations: Vec::new(),
         };

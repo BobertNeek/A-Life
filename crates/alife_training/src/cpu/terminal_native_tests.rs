@@ -582,3 +582,177 @@ fn recipe2_keeps_legacy_nonrepresentative_consumption_semantics() {
     }
     panic!("legacy native fixture did not reproduce independent consumption");
 }
+
+#[test]
+fn joint_membership_observes_real_secondary_meal_without_rewriting_world_or_credit() {
+    let (mut host, trainer) = food_fixture(false, true);
+    let owner = host
+        .world
+        .organism_registry()
+        .iter()
+        .next()
+        .unwrap()
+        .organism_id();
+    let resident = &host.residents[&owner.raw()];
+    let mut observed = resident.memory.clone();
+    let mut legacy = resident.memory.clone();
+    let founder = serde_json::to_vec(&trainer.checkpoint()).unwrap();
+    let mut actual_prior_queries = 0;
+    for _ in 0..64 {
+        let step = host.step(&trainer, 1.0).unwrap();
+        let host_bytes = serde_json::to_vec(&host.checkpoint(&trainer).unwrap()).unwrap();
+        for row in &step.decisions {
+            let frame = row.patch.pre_action().perception();
+            let draft = PerceptionFrameDraft::new(
+                frame.organism_id(),
+                frame.tick(),
+                frame.sensor_profile(),
+                frame.sensory().clone(),
+                frame.body(),
+                *frame.homeostasis(),
+                frame.candidates().to_vec(),
+                frame.profile_provenance(),
+                frame.grounded_object_slots().to_vec(),
+            )
+            .unwrap();
+            let plain = observed.recall_frame(&draft).unwrap();
+            let member = observed.recall_frame_with_joint_membership(&draft).unwrap();
+            assert!(plain.receipt().joint_membership_sources.is_empty());
+            for (a, b) in plain
+                .context()
+                .candidates
+                .iter()
+                .zip(&member.context().candidates)
+            {
+                assert_eq!(a.target_latent, b.target_latent);
+                assert_eq!(a.target_confidence, b.target_confidence);
+            }
+            actual_prior_queries +=
+                usize::from(!member.receipt().joint_membership_sources.is_empty());
+            member.finalize(draft).unwrap();
+            let admission = observed
+                .observe_sealed_patch_with_joint_membership(&row.patch)
+                .unwrap();
+            assert!(admission.joint_membership_admission_work > 0);
+            let ordinary_admission = legacy.observe_sealed_patch(&row.patch).unwrap();
+            assert_eq!(ordinary_admission.joint_membership_admission_work, 0);
+            let is_meal = row.patch.outcome().joint.as_ref().is_some_and(|j| {
+                j.channel_outcomes.iter().any(|r| {
+                    r.channel == MotorChannel::Manipulation
+                        && r.physical.contact == PhysicalContactKind::Consumed
+                })
+            });
+            if is_meal {
+                assert_ne!(
+                    row.patch
+                        .decision()
+                        .neural_evidence()
+                        .unwrap()
+                        .action_family,
+                    CandidateActionFamily::Ingest
+                );
+                let exported = observed.export_active_bank().unwrap();
+                assert_eq!(exported.schema_version, 3);
+                assert!(!exported
+                    .records
+                    .iter()
+                    .any(|r| r.family_raw == u16::from(CandidateActionFamily::Ingest.raw())));
+                assert!(exported
+                    .records
+                    .iter()
+                    .any(|r| r.joint_event_json.is_some()));
+                let restored = MemorySidecarState::restore_portable_with_joint_membership(
+                    observed.profile(),
+                    *observed.compaction_checkpoint(),
+                    exported.clone(),
+                    None,
+                )
+                .unwrap();
+                assert_eq!(restored.export_active_bank().unwrap(), exported);
+                assert!(observed
+                    .observe_sealed_patch_with_joint_membership(&row.patch)
+                    .is_err());
+                // Explicit saved-context probe, NOT a claim that consumed food is
+                // still visible. Advance only the diagnostic query's clock.
+                let tick = row.patch.outcome().outcome_tick;
+                let mut sensory = frame.sensory().clone();
+                sensory.tick = tick;
+                let mut home = *frame.homeostasis();
+                home.tick = tick;
+                let provenance = SensorProfileProvenance::new(
+                    frame.sensor_profile(),
+                    SensoryAbiVersion::CURRENT,
+                    tick,
+                )
+                .unwrap();
+                let probe = PerceptionFrameDraft::new(
+                    frame.organism_id(),
+                    tick,
+                    frame.sensor_profile(),
+                    sensory,
+                    frame.body(),
+                    home,
+                    frame.candidates().to_vec(),
+                    provenance,
+                    frame.grounded_object_slots().to_vec(),
+                )
+                .unwrap();
+                let ordinary = observed.recall_frame(&probe).unwrap();
+                let learned = restored.recall_frame_with_joint_membership(&probe).unwrap();
+                let ingest = frame
+                    .candidates()
+                    .iter()
+                    .find(|c| {
+                        c.family == CandidateActionFamily::Ingest
+                            && row
+                                .patch
+                                .outcome()
+                                .joint
+                                .as_ref()
+                                .unwrap()
+                                .channel_outcomes
+                                .iter()
+                                .any(|r| {
+                                    r.channel == MotorChannel::Manipulation
+                                        && r.execution_evidence.as_ref().is_some_and(|e| {
+                                            e.primitive == c.action_id
+                                                && e.command_target == c.target.entity
+                                        })
+                                })
+                    })
+                    .unwrap();
+                let index = ingest.candidate_index as usize;
+                assert_eq!(ordinary.context().candidates[index].family_source_count, 0);
+                assert!(learned.context().candidates[index].family_source_count > 0);
+                assert!(learned
+                    .receipt()
+                    .joint_membership_sources
+                    .iter()
+                    .any(|s| s.candidate_index == ingest.candidate_index
+                        && s.source_sequence_id == row.patch.header().sequence_id));
+                assert_eq!(
+                    learned.context().candidates[index].family_value[1],
+                    if row.patch.outcome().success {
+                        1.0
+                    } else {
+                        0.0
+                    }
+                );
+                assert!(learned.receipt().execution_evidence_work > 0);
+                learned.finalize(probe).unwrap();
+                assert_eq!(
+                    host_bytes,
+                    serde_json::to_vec(&host.checkpoint(&trainer).unwrap()).unwrap()
+                );
+                assert_eq!(founder, serde_json::to_vec(&trainer.checkpoint()).unwrap());
+                eprintln!("JOINT_MEMBERSHIP real secondary meal admitted; actual prior query frames={actual_prior_queries}; saved-context probe restores exact event; world/neural/credit/Adam unchanged");
+                return;
+            }
+        }
+        assert_eq!(
+            host_bytes,
+            serde_json::to_vec(&host.checkpoint(&trainer).unwrap()).unwrap()
+        );
+    }
+    panic!("fixture did not consume");
+}

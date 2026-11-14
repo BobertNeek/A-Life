@@ -293,6 +293,7 @@ impl MemoryBank {
             neighbor_bucket_reads: 0,
             similarity_evaluations: evaluations,
             execution_evidence_work,
+            joint_membership_sources: Vec::new(),
             candidates: Vec::new(),
             degradations: Vec::new(),
         };
