@@ -1,5 +1,15 @@
 # Cumulative pursuit, motor channels and memory
 
+**Fixture qualification:** historical results below retain their original
+source and fixture. Before assay v16, moving secondary objects out of offstage
+parking could leave the placement displacement as their sensed velocity. This
+affects mixed-hazard exposure and secondary objects restored after neural
+preparation. Their positions could remain stationary while motion/novelty input
+was not. The recorded outcomes are not relabeled as corrected-fixture results,
+and rankings on those affected cases require the separate correction comparison.
+The motion relay reads the creature's own velocity; the fixture flaw alone does
+not establish a direct relay effect or explain the mixed-food regression.
+
 This lineage starts with the PR341 `pursuit-memory16` foundation, SHA-256
 `8f84afd6ac2ec575a8df61d18a0a18ac17296615a9ef7af7d22df416b3dd0ad7`.
 Every later candidate below edits that parent, or the explicitly exported winner.
