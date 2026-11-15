@@ -331,6 +331,9 @@ pub struct JointMembershipLiveReceipt2177 {
 #[serde(deny_unknown_fields)]
 pub struct JointMembershipComparison2182 {
     pub apply: bool,
+    /// Absent on historical all-family comparison rows.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub applied_family2266: Option<CandidateActionFamily>,
     pub queried_sources: Vec<alife_core::memory::JointMembershipSourceV1>,
 }
 
@@ -718,6 +721,24 @@ impl CpuCanonicalHost {
         Ok(())
     }
 
+    /// Fresh-only Contact route candidate. Modes 4/5 are sealed into resident
+    /// authority and schema 9; existing acquired checkpoints are never migrated.
+    pub fn enable_joint_membership_contact_comparison2266(
+        &mut self,
+        founder: &CpuFoundationTrainer,
+        apply: bool,
+    ) -> Result<(), CpuHostError> {
+        let mut next = self.clone();
+        next.validate_joint_membership_enable(founder)?;
+        next.joint_membership2177 = Some(if apply { 4 } else { 5 });
+        for resident in next.residents.values_mut() {
+            resident.joint_comparison_mode = next.joint_membership2177;
+        }
+        next.seal_all_residents()?;
+        *self = next;
+        Ok(())
+    }
+
     pub fn world(&self) -> &HeadlessWorld {
         &self.world
     }
@@ -915,10 +936,10 @@ impl CpuCanonicalHost {
             joint_membership2177: self.joint_membership2177,
             terminal_context2135: self.terminal_context2135.clone(),
             schema_version: if self.joint_membership2177.is_some() {
-                if self.joint_membership2177 == Some(1) {
-                    8
-                } else {
-                    7
+                match self.joint_membership2177 {
+                    Some(1) => 8,
+                    Some(4 | 5) => 9,
+                    _ => 7,
                 }
             } else if self.residents.values().any(|r| r.memory_readout.is_some()) {
                 5
@@ -952,8 +973,13 @@ impl CpuCanonicalHost {
             .iter()
             .any(|r| r.memory_readout.is_some());
         if let Some(version) = checkpoint.joint_membership2177 {
-            if !matches!(version, 1..=3)
-                || checkpoint.schema_version != if version == 1 { 8 } else { 7 }
+            if !matches!(version, 1..=5)
+                || checkpoint.schema_version
+                    != match version {
+                        1 => 8,
+                        4 | 5 => 9,
+                        _ => 7,
+                    }
                 || has_readout
                 || checkpoint.terminal_context2135.is_some()
             {
@@ -1420,7 +1446,11 @@ impl CpuCanonicalHost {
                     "semantic preparation changed ordinary perception",
                 ));
             }
-            let prepare_frame = if self.joint_membership2177 == Some(2) {
+            let prepare_frame = if self.joint_membership2177 == Some(4) {
+                prepare_canonical_frame_joint_contact_applied2266
+            } else if self.joint_membership2177 == Some(5) {
+                prepare_canonical_frame_joint_contact_withheld2266
+            } else if self.joint_membership2177 == Some(2) {
                 prepare_canonical_frame_joint_applied
             } else if self.joint_membership2177 == Some(3) {
                 prepare_canonical_frame_joint_withheld
@@ -1471,15 +1501,20 @@ impl CpuCanonicalHost {
             let mut joint_membership2177 =
                 self.joint_membership2177
                     .map(|_| JointMembershipLiveReceipt2177 {
-                        schema_version: if self.joint_membership2177 == Some(1) {
-                            1
-                        } else {
-                            2
+                        schema_version: match self.joint_membership2177 {
+                            Some(1) => 1,
+                            Some(4 | 5) => 3,
+                            _ => 2,
                         },
                         sources: recall.receipt().joint_membership_sources.clone(),
                         comparison: prepared.joint_comparison_sources.map(|queried_sources| {
                             JointMembershipComparison2182 {
-                                apply: self.joint_membership2177 == Some(2),
+                                apply: matches!(self.joint_membership2177, Some(2 | 4)),
+                                applied_family2266: matches!(
+                                    self.joint_membership2177,
+                                    Some(4 | 5)
+                                )
+                                .then_some(CandidateActionFamily::Contact),
                                 queried_sources,
                             }
                         }),

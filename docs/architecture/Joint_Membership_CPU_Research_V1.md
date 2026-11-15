@@ -30,3 +30,30 @@ remain unsupported and reject enabled rows. These are research-only CPU paths,
 not a qualified GPU/game behavior change or a claim of improved learning.
 
 Both fresh enable methods stage and seal a cloned host before committing it. A failed seal leaves the original world, resident state, mode and sampling state unchanged. Ordinary checkpoints and modes 2/3 retain their existing schemas and private-seal calculation.
+
+## Fresh Contact-only candidate (2266)
+
+`enable_joint_membership_contact_comparison2266(founder, apply)` opts a fresh
+CPU host into mode 4 (Contact applied) or mode 5 (all replacement withheld).
+These modes use checkpoint schema 9 and bind the exact mode in the existing
+resident private-authority seal. They cannot be added to an acquired host,
+substituted for another saved mode, or silently downgraded to older readers.
+Modes 0/1/2/3 retain their previous checkpoint schemas and seal calculation.
+
+Both new modes perform the same one ordinary recall, all-family membership
+search, declared comparison tariff, shared-outcome capture and admission work
+as modes 2/3. Mode 4 retains joint estimates only for candidates whose declared
+action family is Contact. Every other candidate retains the complete ordinary
+family value, confidence, source count and best source. Target recall, first
+attention pass, existing memory bound, neural learning and biology are unchanged.
+No object-kind or chemistry gate is introduced. Applied source receipts contain
+only Contact sources; queried-but-withheld sources remain separately visible.
+The new live receipt has schema 3 and its comparison names Contact explicitly.
+
+Existing plan-2 collected-row envelopes remain matching-reader roundtrippable;
+ordinary PPO/cooperative collector admission still rejects these research rows.
+Logical work equality does not imply equal machine instructions or wall time.
+Exact untouched-family recall does not imply identical downstream cognitive
+projection or neural choices, since Contact input changes can affect the shared
+network. This is a source/runtime candidate, not a demonstrated behavioral repair,
+a new reward/learner, a checkpoint migration, or a production/GPU selection.

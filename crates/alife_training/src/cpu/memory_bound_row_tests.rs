@@ -9,7 +9,7 @@ fn fixture(plan2: bool) -> (CpuCanonicalHost, CpuFoundationTrainer) {
     from_pair_with_repertoire(
         include_bytes!("../../../../docs/experiments/astra-generalization-2026-11-13/pursuit-twohead-contact20.alife-foundation"),
         include_bytes!("../../../../docs/experiments/astra-generalization-2026-11-13/pursuit-twohead-contact20.alife-foundation.genome.json"),
-        plan2)
+        plan2, 0.5)
 }
 fn collect(
     plan2: bool,
@@ -235,10 +235,18 @@ fn legacy_rows_keep_original_flat_bytes() {
     }
 }
 
+pub(super) fn fixture_bound2266(bound: f32) -> (CpuCanonicalHost, CpuFoundationTrainer) {
+    from_pair_with_repertoire(
+        include_bytes!("../../../../docs/experiments/astra-generalization-2026-11-13/pursuit-twohead-contact20.alife-foundation"),
+        include_bytes!("../../../../docs/experiments/astra-generalization-2026-11-13/pursuit-twohead-contact20.alife-foundation.genome.json"),
+        true, bound)
+}
+
 fn from_pair_with_repertoire(
     asset_bytes: &[u8],
     genome_bytes: &[u8],
     plan2: bool,
+    bound: f32,
 ) -> (CpuCanonicalHost, CpuFoundationTrainer) {
     let mut asset = FoundationWeightAsset::decode_canonical(asset_bytes).unwrap();
     let mut genome: CreatureGenome = serde_json::from_slice(genome_bytes).unwrap();
@@ -247,7 +255,7 @@ fn from_pair_with_repertoire(
             &mut genome.brain.construction.maternal_architecture,
             &mut genome.brain.construction.paternal_architecture,
         ] {
-            *architecture = architecture.with_memory_candidate_bound_v4(0.5).unwrap();
+            *architecture = architecture.with_memory_candidate_bound_v4(bound).unwrap();
         }
     }
     assert!(
@@ -340,7 +348,7 @@ fn from_pair_with_repertoire(
             .memory_channel()
             .unwrap()
             .max_candidate_gain(),
-        0.5
+        if plan2 { bound } else { 0.5 }
     );
     let chemistry = *old.biochemistry();
     game.world
