@@ -4428,6 +4428,7 @@ fn cognitive_work_receipt(
     neural_work: &BrainWorkCounters,
     v11_work: &GpuV11WorkReceipt,
     prediction_ops: u64,
+    grip_sensing_work: u64,
 ) -> Result<CognitiveWorkReceipt, ScaffoldContractError> {
     let memory_ops = u64::from(memory.exact_bucket_reads)
         .saturating_add(u64::from(memory.neighbor_bucket_reads))
@@ -4436,7 +4437,12 @@ fn cognitive_work_receipt(
     cognitive_work_receipt_from_subsystems(
         neural_work,
         v11_work,
-        context.attention.budget_receipt.work_units,
+        context
+            .attention
+            .budget_receipt
+            .work_units
+            .checked_add(grip_sensing_work)
+            .ok_or(ScaffoldContractError::ScalarOutOfRange)?,
         memory_ops,
         context.concept.active_concepts.len() as u64,
         context.gap.active_gaps.len() as u64,
@@ -4678,6 +4684,7 @@ fn seal_prepared_selection_core(
         &work.counters,
         &v11_work,
         prediction_update.error.len() as u64,
+        frame.grip_proprioception().map_or(0, |r| r.work_units()),
     )?;
     resident.last_cognitive_context = Some(cognitive_context.clone());
     resident.last_selected_motor_bundle = Some(motor_bundle.clone());
@@ -10698,18 +10705,27 @@ mod tests {
         };
         let neural = BrainWorkCounters::default();
         let v11 = GpuV11WorkReceipt::default();
-        let legacy = cognitive_work_receipt(&context, &memory, &neural, &v11, 0).unwrap();
+        let legacy = cognitive_work_receipt(&context, &memory, &neural, &v11, 0, 0).unwrap();
         assert_eq!(legacy.memory_ops, 3 + 5 + 7);
         memory.execution_evidence_work = 11;
         for runtime_approximate in [false, true] {
             memory.runtime_approximate = runtime_approximate;
-            let charged = cognitive_work_receipt(&context, &memory, &neural, &v11, 0).unwrap();
+            let charged = cognitive_work_receipt(&context, &memory, &neural, &v11, 0, 0).unwrap();
             assert_eq!(charged.memory_ops, legacy.memory_ops + 11);
             assert_eq!(charged.weighted_total, legacy.weighted_total + 11);
         }
+        let without_grip = cognitive_work_receipt(&context, &memory, &neural, &v11, 0, 0).unwrap();
+        let with_grip = cognitive_work_receipt(&context, &memory, &neural, &v11, 0, 13).unwrap();
+        assert_eq!(
+            with_grip.focal_target_ops,
+            without_grip.focal_target_ops + 13
+        );
+        assert_eq!(with_grip.memory_ops, without_grip.memory_ops);
+        assert_eq!(with_grip.weighted_total, without_grip.weighted_total + 13);
+        assert!(cognitive_work_receipt(&context, &memory, &neural, &v11, 0, u64::MAX).is_err());
         // Saturation must not wrap factual work into an artificially cheap receipt.
         memory.execution_evidence_work = u64::MAX;
-        assert!(cognitive_work_receipt(&context, &memory, &neural, &v11, 0).is_err());
+        assert!(cognitive_work_receipt(&context, &memory, &neural, &v11, 0, 0).is_err());
     }
 
     #[test]

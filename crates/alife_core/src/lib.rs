@@ -390,4 +390,4 @@ pub use memory::{ExecutedActionMemoryV1, ExecutedActionRecallV1};
 
 pub use memory::ExecutionEvidenceInspectionV1;
 
-pub use perception::OrientationRepertoireProvenance;
+pub use perception::{GripProprioceptionV1, OrientationRepertoireProvenance};

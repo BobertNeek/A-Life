@@ -874,7 +874,7 @@ fn memory_channel_for_genome(
     count: u32,
 ) -> Result<super::MemoryChannelPlan, ScaffoldContractError> {
     let architecture = genome.cognitive_architecture();
-    if architecture.schema_version() == 4 {
+    if matches!(architecture.schema_version(), 4 | 5) {
         super::MemoryChannelPlan::try_new_v2(count, architecture.memory_candidate_bound())
     } else {
         super::MemoryChannelPlan::try_new_v1(count)
