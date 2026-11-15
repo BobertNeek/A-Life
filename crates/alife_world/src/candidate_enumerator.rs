@@ -118,6 +118,7 @@ pub struct GroundedCandidateBinding {
     grounded_orientation_v3: bool,
     coverage_plan: Option<CandidateOpportunityCoveragePlan>,
     active_approach: Option<Option<TrackedObjectId>>,
+    maze_heading2346: bool,
 }
 
 impl GroundedCandidateBinding {
@@ -134,9 +135,11 @@ impl GroundedCandidateBinding {
             grounded_orientation_v3,
             coverage_plan: None,
             active_approach: None,
+            maze_heading2346: false,
         }
     }
 
+    pub(crate) fn with_maze_heading2346(mut self)->Self{self.grounded_orientation_v3=true;self.maze_heading2346=true;self}
     pub fn with_coverage(mut self, plan: CandidateOpportunityCoveragePlan) -> Self {
         let capacity = if self.profile.has_terrain_vision() || self.grounded_orientation_v3 {
             3
@@ -262,12 +265,13 @@ impl GroundedCandidateBinding {
             || draft.tick() != self.grounded.sensory().tick
             || draft.sensor_profile() != self.profile
             || draft.grounded_orientation_repertoire() != self.grounded_orientation_v3
+            || draft.maze_heading2346() != self.maze_heading2346
             || draft.body() != self.grounded.body()
             || draft.grounded_object_slots() != self.grounded.slots()
         {
             return Err(ScaffoldContractError::InvalidPerceptionFrame);
         }
-        let (initial, initial_receipt) = enumerate_grounded_candidates_with_coverage(
+        let (initial, initial_receipt) = enumerate_grounded_candidates_with_coverage_impl(
             &self.grounded,
             self.profile,
             self.active_contact,
@@ -275,6 +279,7 @@ impl GroundedCandidateBinding {
             self.grounded_orientation_v3,
             plan,
             0,
+            self.maze_heading2346,
         )?;
         if draft.candidate_opportunity_coverage() != initial_receipt.as_ref()
             || already_charged_work != initial_receipt.as_ref().map_or(0, |r| r.work_units())
@@ -287,7 +292,7 @@ impl GroundedCandidateBinding {
         let carried = already_charged_work
             .checked_add(validation_work)
             .ok_or(ScaffoldContractError::InvalidPerceptionFrame)?;
-        enumerate_grounded_candidates_with_coverage(
+        enumerate_grounded_candidates_with_coverage_impl(
             &self.grounded,
             self.profile,
             self.active_contact,
@@ -295,6 +300,7 @@ impl GroundedCandidateBinding {
             self.grounded_orientation_v3,
             plan,
             carried,
+            self.maze_heading2346,
         )
     }
 
@@ -312,25 +318,28 @@ impl GroundedCandidateBinding {
             || draft.tick() != self.grounded.sensory().tick
             || draft.sensor_profile() != self.profile
             || draft.grounded_orientation_repertoire() != self.grounded_orientation_v3
+            || draft.maze_heading2346() != self.maze_heading2346
             || draft.body() != self.grounded.body()
             || draft.grounded_object_slots() != self.grounded.slots()
             || draft.candidates()
-                != enumerate_grounded_candidates_impl(
+                != enumerate_grounded_candidates_impl_heading(
                     &self.grounded,
                     self.profile,
                     self.active_contact,
                     None,
                     self.grounded_orientation_v3,
+                    self.maze_heading2346,
                 )?
         {
             return Err(ScaffoldContractError::InvalidPerceptionFrame);
         }
-        enumerate_grounded_candidates_impl(
+        enumerate_grounded_candidates_impl_heading(
             &self.grounded,
             self.profile,
             self.active_contact,
             focal_object,
             self.grounded_orientation_v3,
+            self.maze_heading2346,
         )
     }
 }
@@ -437,6 +446,22 @@ pub fn enumerate_grounded_candidates_with_coverage(
     plan: CandidateOpportunityCoveragePlan,
     already_charged_work: u64,
 ) -> Result<(Vec<ActionCandidate>, Option<CandidateOpportunityCoverageV1>), ScaffoldContractError> {
+    enumerate_grounded_candidates_with_coverage_impl(grounded,profile,active_contact,focal_object,grounded_orientation_v3,plan,already_charged_work,false)
+}
+pub fn enumerate_maze_heading2346(grounded:&GroundedSensingFrame,profile:SensorProfile,active_contact:Option<WorldEntityId>,focal_object:Option<TrackedObjectId>,plan:CandidateOpportunityCoveragePlan,already_charged_work:u64)->Result<(Vec<ActionCandidate>,Option<CandidateOpportunityCoverageV1>),ScaffoldContractError>{
+    enumerate_grounded_candidates_with_coverage_impl(grounded,profile,active_contact,focal_object,true,plan,already_charged_work,true)
+}
+#[allow(clippy::too_many_arguments)]
+fn enumerate_grounded_candidates_with_coverage_impl(
+    grounded: &GroundedSensingFrame,
+    profile: SensorProfile,
+    active_contact: Option<WorldEntityId>,
+    focal_object: Option<TrackedObjectId>,
+    grounded_orientation_v3: bool,
+    plan: CandidateOpportunityCoveragePlan,
+    already_charged_work: u64,
+    heading_only: bool,
+) -> Result<(Vec<ActionCandidate>, Option<CandidateOpportunityCoverageV1>), ScaffoldContractError> {
     let capacity = if profile.has_terrain_vision() || grounded_orientation_v3 {
         3
     } else {
@@ -447,12 +472,13 @@ pub fn enumerate_grounded_candidates_with_coverage(
             return Err(ScaffoldContractError::InvalidPerceptionFrame);
         }
         return Ok((
-            enumerate_grounded_candidates_impl(
+            enumerate_grounded_candidates_impl_heading(
                 grounded,
                 profile,
                 active_contact,
                 focal_object,
                 grounded_orientation_v3,
+                heading_only,
             )?,
             None,
         ));
@@ -488,6 +514,7 @@ pub fn enumerate_grounded_candidates_with_coverage(
         focal_object,
         grounded_orientation_v3,
         Some(selected),
+        heading_only,
     )?;
     Ok((candidates, Some(receipt)))
 }
@@ -681,6 +708,16 @@ fn enumerate_grounded_candidates_impl(
     focal_object: Option<TrackedObjectId>,
     grounded_orientation_v3: bool,
 ) -> Result<Vec<ActionCandidate>, ScaffoldContractError> {
+    enumerate_grounded_candidates_impl_heading(grounded,profile,active_contact,focal_object,grounded_orientation_v3,false)
+}
+fn enumerate_grounded_candidates_impl_heading(
+    grounded: &GroundedSensingFrame,
+    profile: SensorProfile,
+    active_contact: Option<WorldEntityId>,
+    focal_object: Option<TrackedObjectId>,
+    grounded_orientation_v3: bool,
+    heading_only: bool,
+) -> Result<Vec<ActionCandidate>, ScaffoldContractError> {
     enumerate_grounded_candidates_selected(
         grounded,
         profile,
@@ -688,6 +725,7 @@ fn enumerate_grounded_candidates_impl(
         focal_object,
         grounded_orientation_v3,
         None,
+        heading_only,
     )
 }
 
@@ -698,6 +736,7 @@ fn enumerate_grounded_candidates_selected(
     focal_object: Option<TrackedObjectId>,
     grounded_orientation_v3: bool,
     selected_override: Option<Vec<usize>>,
+    heading_only: bool,
 ) -> Result<Vec<ActionCandidate>, ScaffoldContractError> {
     if !matches!(
         profile,
@@ -756,7 +795,8 @@ fn enumerate_grounded_candidates_selected(
             let mut features = [0.0; CANDIDATE_FEATURE_COUNT];
             features[CANDIDATE_FEATURE_BEARING_SIN_LANE] = bearing_sin;
             features[CANDIDATE_FEATURE_BEARING_COS_LANE] = bearing_cos;
-            // Distinguish body primitives from head gaze and object descriptors.
+            // Existing intrinsic body-primitive basis. Not an exclusive kind bit:
+            // observed object lanes 19/23 can also be nonzero.
             features[CANDIDATE_FEATURE_RESERVED_START_LANE + 1] = 1.0;
             candidates.push(ActionCandidate::new(
                 u16::try_from(candidates.len())
@@ -773,7 +813,7 @@ fn enumerate_grounded_candidates_selected(
                 DurationTicks::new(1),
             )?);
         }
-        for (action_id, bearing_sin, bearing_cos) in [
+        if !heading_only { for (action_id, bearing_sin, bearing_cos) in [
             (HeadlessActionIds::LOOK_LEFT, 1.0, 0.0),
             (HeadlessActionIds::LOOK_RIGHT, -1.0, 0.0),
             (HeadlessActionIds::LOOK_CENTER, 0.0, 1.0),
@@ -802,6 +842,7 @@ fn enumerate_grounded_candidates_selected(
         }
     }
 
+    }
     let selected = if let Some(selected) = selected_override {
         selected
     } else {
@@ -1178,6 +1219,28 @@ mod opportunity_coverage_tests {
             .iter()
             .map(|&i| g.slots()[i as usize].tracked_object_id.raw())
             .collect()
+    }
+    #[test]
+    fn maze_heading_has_only_three_exact_native_primitives_and_capacity_three() {
+        let g=fixture(8,false);
+        let contact=Some(g.transports()[7].transport_entity);
+        let focal=Some(g.slots()[6].tracked_object_id);
+        for phase in 0..6 {
+            let (c,r)=enumerate_maze_heading2346(&g,SensorProfile::GroundedObjectSlotsV1,contact,focal,CandidateOpportunityCoveragePlan::new(phase),0).unwrap();
+            let (_,old)=enumerate_grounded_candidates_with_coverage(&g,SensorProfile::GroundedObjectSlotsV1,contact,focal,true,CandidateOpportunityCoveragePlan::new(phase),0).unwrap();
+            assert_eq!(r,old); // same contact/focus/rotating set and selector work
+            assert_eq!(r.as_ref().unwrap().capacity(),3);
+            assert!(c.len()<=32);
+            for (id,sin,cos) in [(105,0.0,1.0),(604,1.0,0.0),(605,-1.0,0.0)] {
+                let matches=c.iter().filter(|c|c.action_id.raw()==id).collect::<Vec<_>>();
+                assert_eq!(matches.len(),1);let a=matches[0];
+                assert_eq!(a.observation,CandidateObservationRef::None);assert_eq!(a.target,ActionTarget::NONE);
+                let mut expected=[0.0;CANDIDATE_FEATURE_COUNT];expected[0]=sin;expected[1]=cos;expected[19]=1.0;
+                let expected=CandidateFeatureVector(expected).with_intrinsic_action_basis(a.kind);
+                assert_eq!(a.features.0.map(f32::to_bits),expected.0.map(f32::to_bits));
+            }
+            assert!(!c.iter().any(|a|matches!(a.action_id.raw(),601|602|603|606)));
+        }
     }
     #[test]
     fn crowded_stable_roster_covers_every_object_without_overwriting_protection() {

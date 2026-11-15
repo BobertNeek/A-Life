@@ -35,6 +35,7 @@ pub enum CpuHostError {
 }
 #[derive(Clone)]
 struct Resident {
+    maze_blocked2346: Option<MazeBlockedHistory2346>,
     active_approach_intent2327: Option<ActiveApproachIntent2327>,
     joint_comparison_mode: Option<u16>,
     memory_readout: Option<FrozenMemoryReadoutConstructionV1>,
@@ -93,6 +94,8 @@ struct CpuReplayEvent {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CpuResidentCheckpoint {
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub maze_blocked2346: Option<MazeBlockedHistory2346>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub active_approach_intent2327: Option<ActiveApproachIntent2327>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub memory_readout: Option<FrozenMemoryReadoutConstructionV1>,
@@ -115,6 +118,8 @@ pub struct CpuResidentCheckpoint {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CpuCanonicalCheckpoint {
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub maze_program2346: Option<u16>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub candidate_opportunity_coverage2313: Option<u16>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub joint_membership2177: Option<u16>,
@@ -136,6 +141,7 @@ pub struct CpuCanonicalCheckpoint {
 /// chemistry, memories, predictor, neural traces, sleep, sequence and RNG counter.
 #[derive(Clone)]
 pub struct CpuCanonicalHost {
+    maze_program2346: Option<u16>,
     candidate_opportunity_coverage2313: Option<u16>,
     #[cfg(test)]
     fail_joint_membership_after_admission: bool,
@@ -890,6 +896,7 @@ impl CpuCanonicalHost {
             residents.insert(
                 id.raw(),
                 Resident {
+                    maze_blocked2346: None,
                     active_approach_intent2327: None,
                     joint_comparison_mode: None,
                     memory_readout: None,
@@ -934,6 +941,7 @@ impl CpuCanonicalHost {
             fail_joint_membership_after_admission: false,
             #[cfg(test)]
             fail_ingest_outcome_binding2286: false,
+            maze_program2346: None,
             candidate_opportunity_coverage2313: None,
             joint_membership2177: None,
             terminal_context2135: None,
@@ -1191,6 +1199,15 @@ impl CpuCanonicalHost {
         Ok(())
     }
 
+    /// Explicit research sensing/repertoire capability, never a genome migration.
+    pub fn fork_with_maze_program_for_research2346(&self,founder:&CpuFoundationTrainer)->Result<Self,CpuHostError>{
+        self.validate_founder(founder)?;let before=self.checkpoint(founder)?;
+        if before.schema_version!=18||self.maze_program2346.is_some()||self.candidate_opportunity_coverage2313!=Some(3)||self.residents.values().any(|r|r.maze_blocked2346.is_some()){return Err(CpuHostError::State("maze program requires original CP18 cap3"));}
+        let mut next=self.clone();next.maze_program2346=Some(1);let after=next.checkpoint(founder)?;let mut norm=after.clone();norm.schema_version=before.schema_version;norm.maze_program2346=None;
+        if serde_json::to_vec(&norm)?!=serde_json::to_vec(&before)?{return Err(CpuHostError::State("maze attachment changed retained state"));}
+        let cold=Self::from_checkpoint(after.clone(),founder)?;if serde_json::to_vec(&after)?!=serde_json::to_vec(&cold.checkpoint(founder)?)?{return Err(CpuHostError::State("maze cold attachment mismatch"));}Ok(next)
+    }
+
     /// Explicit additive active-opportunity continuity, initially without intent.
     pub fn fork_with_active_approach_opportunity_for_research(&self, founder: &CpuFoundationTrainer) -> Result<Self,CpuHostError> {
         self.validate_founder(founder)?;
@@ -1275,6 +1292,13 @@ impl CpuCanonicalHost {
         previous: &CpuFoundationTrainer,
         next: &CpuFoundationTrainer,
     ) -> Result<(), CpuHostError> {
+        self.rebase_policy_checked2346(previous,next,false)
+    }
+    pub fn rebase_maze_program_policy2346(&mut self,previous:&CpuFoundationTrainer,next:&CpuFoundationTrainer)->Result<(),CpuHostError>{
+        if self.maze_program2346!=Some(1){return Err(CpuHostError::State("maze rebase requires explicit CP19"));}
+        self.rebase_policy_checked2346(previous,next,true)
+    }
+    fn rebase_policy_checked2346(&mut self,previous:&CpuFoundationTrainer,next:&CpuFoundationTrainer,maze:bool)->Result<(),CpuHostError>{
         self.validate_founder(previous)?;
         if serde_json::to_vec(previous.phenotype())? != serde_json::to_vec(next.phenotype())?
             || previous.source_foundation.encode_canonical()?
@@ -1296,7 +1320,7 @@ impl CpuCanonicalHost {
         for (index, (a, b)) in old.weights.iter().zip(&normalized.weights).enumerate() {
             if a.to_bits() != b.to_bits() {
                 if !b.is_finite()
-                    || !super::readout_calibration_coordinate(previous.phenotype(), index)
+                    || !(if maze {super::maze_program::program_coordinate(previous.phenotype(),index)&&b.abs()<=16.}else{super::readout_calibration_coordinate(previous.phenotype(), index)})
                 {
                     return Err(CpuHostError::State(
                         "readout calibration changed forbidden coordinate",
@@ -1480,6 +1504,7 @@ impl CpuCanonicalHost {
         Ok(())
     }
     fn validate_founder(&self, founder: &CpuFoundationTrainer) -> Result<(), CpuHostError> {
+        if self.maze_program2346!=Some(1) && founder.weights().iter().zip(founder.phenotype().synapses()).enumerate().any(|(i,(w,s))|super::maze_program::recurrent_coordinate(founder.phenotype(),i)&&w.to_bits()!=s.genetic_weight().to_bits()){return Err(CpuHostError::State("recurrent maze policy requires CP19"));}
         for resident in self.residents.values() {
             if let Some(config) = &resident.memory_readout {
                 config.validate_parent(founder)?;
@@ -1562,6 +1587,7 @@ impl CpuCanonicalHost {
             .values()
             .map(|r| {
                 Ok(CpuResidentCheckpoint {
+                    maze_blocked2346: r.maze_blocked2346.clone(),
                     active_approach_intent2327: r.active_approach_intent2327.clone(),
                     memory_readout: r.memory_readout.clone(),
                     terminal_channel2135: r.terminal_channel2135.clone(),
@@ -1582,10 +1608,11 @@ impl CpuCanonicalHost {
             })
             .collect::<Result<_, CpuHostError>>()?;
         Ok(CpuCanonicalCheckpoint {
+            maze_program2346: self.maze_program2346,
             candidate_opportunity_coverage2313: self.candidate_opportunity_coverage2313,
             joint_membership2177: self.joint_membership2177,
             terminal_context2135: self.terminal_context2135.clone(),
-            schema_version: if self.candidate_opportunity_coverage2313 == Some(3) {
+            schema_version: if self.maze_program2346==Some(1) {19} else if self.candidate_opportunity_coverage2313 == Some(3) {
                 18
             } else if self.candidate_opportunity_coverage2313 == Some(2) {
                 17
@@ -1631,7 +1658,7 @@ impl CpuCanonicalHost {
         }
         if let Some(version) = checkpoint.candidate_opportunity_coverage2313 {
             if !matches!(version, 1..=3)
-                || checkpoint.schema_version != match version {3=>18,2=>17,_=>16}
+                || checkpoint.schema_version != if checkpoint.maze_program2346==Some(1){19}else{match version {3=>18,2=>17,_=>16}}
                 || !matches!(checkpoint.joint_membership2177, Some(14 | 15))
                 || founder.phenotype().sensor_profile() != SensorProfile::GroundedObjectSlotsV1
             {
@@ -1644,7 +1671,10 @@ impl CpuCanonicalHost {
                 "CP16 requires explicit candidate opportunity adapter",
             ));
         }
+        if checkpoint.maze_program2346.is_some() && (checkpoint.maze_program2346!=Some(1)||checkpoint.schema_version!=19||checkpoint.candidate_opportunity_coverage2313!=Some(3)) {return Err(CpuHostError::State("invalid maze program identity"));}
+        if checkpoint.schema_version==19&&checkpoint.maze_program2346!=Some(1){return Err(CpuHostError::State("CP19 requires maze program"));}
         for resident in &checkpoint.residents {
+            if let Some(h)=&resident.maze_blocked2346 {h.validate()?;if checkpoint.maze_program2346!=Some(1)||h.source_sequence.raw()>=resident.next_sequence {return Err(CpuHostError::State("invalid blocked history identity"));}}
             if let Some(intent) = &resident.active_approach_intent2327 {
                 if checkpoint.candidate_opportunity_coverage2313 != Some(3) {return Err(CpuHostError::State("active intent requires CP18 coverage3"));}
                 intent.validate()?;
@@ -1665,7 +1695,7 @@ impl CpuCanonicalHost {
                         10 | 11 => 13,
                         12 | 13 => 14,
                         14 | 15 => {
-                            if checkpoint.candidate_opportunity_coverage2313 == Some(3) {
+                            if checkpoint.maze_program2346==Some(1) {19} else if checkpoint.candidate_opportunity_coverage2313 == Some(3) {
                                 18
                             } else if checkpoint.candidate_opportunity_coverage2313 == Some(2) {
                                 17
@@ -1756,6 +1786,7 @@ impl CpuCanonicalHost {
             {
                 return Err(CpuHostError::State("checkpoint causal boundary mismatch"));
             }
+            if let Some(h)=&r.maze_blocked2346 {h.validate()?;if h.organism_id!=id||h.source_tick>=world.tick(){return Err(CpuHostError::State("blocked history causal boundary mismatch"));}}
             if let Some(intent)=&r.active_approach_intent2327 {
                 if intent.organism_id!=id || intent.source_tick>=world.tick() {return Err(CpuHostError::State("active intent causal boundary mismatch"));}
             }
@@ -1819,6 +1850,7 @@ impl CpuCanonicalHost {
                 }
             }
             let mut resident = Resident {
+                maze_blocked2346: r.maze_blocked2346,
                 active_approach_intent2327: r.active_approach_intent2327,
                 joint_comparison_mode: checkpoint.joint_membership2177,
                 memory_readout_digest: r.memory_readout.as_ref().map(|c| c.digest()).transpose()?,
@@ -1867,6 +1899,7 @@ impl CpuCanonicalHost {
             fail_joint_membership_after_admission: false,
             #[cfg(test)]
             fail_ingest_outcome_binding2286: false,
+            maze_program2346: checkpoint.maze_program2346,
             candidate_opportunity_coverage2313: checkpoint.candidate_opportunity_coverage2313,
             joint_membership2177: checkpoint.joint_membership2177,
             terminal_context2135: checkpoint.terminal_context2135.clone(),
@@ -2136,7 +2169,9 @@ impl CpuCanonicalHost {
                 &receptors,
                 &NeuralReceptorPhenotype::compile(p)?,
             )?;
-            let (draft, candidate_binding) = if self.candidate_opportunity_coverage2313.is_some() {
+            let (draft, candidate_binding) = if self.maze_program2346==Some(1) {
+                perception_world.perception_frame_draft_with_maze_heading2346(id,tick,p.sensor_profile(),record.biochemistry().homeostasis,sequence.raw())?
+            } else if self.candidate_opportunity_coverage2313.is_some() {
                 perception_world.perception_frame_draft_with_candidate_coverage2313(
                     id,
                     tick,
@@ -2152,6 +2187,17 @@ impl CpuCanonicalHost {
                     record.biochemistry().homeostasis,
                 )?
             };
+            let mut maze_sense_work2346=0u64;
+            let draft=if self.maze_program2346==Some(1) {
+                maze_sense_work2346=1; // pending option read, once at this awake frame
+                if let Some(history)=r.maze_blocked2346.take(){
+                    history.validate()?;
+                    if history.organism_id!=id||history.source_tick.raw()>=tick.raw(){return Err(CpuHostError::State("blocked history source mismatch"));}
+                    maze_sense_work2346+=8; // seven source fields read, pending slot clear
+                    let sense=alife_core::perception::MazeBlockedSense2346::new(id,history.source_tick,history.source_sequence,history.source_frame,history.primitive,history.blocked,record.embodiment().sensor_gain(SensorCapability::Touch))?;
+                    draft.with_maze_blocked_sense2346(sense)?
+                }else{draft}
+            }else{draft};
             let mut active_intent_read_work2327=0;
             let candidate_binding=if self.candidate_opportunity_coverage2313==Some(3) {
                 active_intent_read_work2327=1+r.active_approach_intent2327.as_ref().map_or(0, |_|1);
@@ -2627,11 +2673,18 @@ impl CpuCanonicalHost {
                 r.active_approach_intent2327=after.clone();
                 Some(ActiveApproachOpportunityRow2327 {frame_digest:frame.frame_digest(),before,after,selection:active_selection2327.ok_or(CpuHostError::State("active mode lacks selector proof"))?,intent_work_units})
             }else{None};
+            let maze_outcome_work2346=if self.maze_program2346==Some(1){
+                let (history,work)=MazeBlockedHistory2346::from_outcome(&frame,sequence,&receipt.joint)?;
+                r.maze_blocked2346=history;work+1 // pending state assignment
+            }else{0};
             let work = CognitiveWorkCounters::new(
                 work_neurons,
                 work_synapses,
                 dendritic_work,
                 cognitive.attention.budget_receipt.work_units
+                    + maze_sense_work2346 + maze_outcome_work2346
+                    + frame.maze_heading_work_units()
+                    + frame.maze_blocked_sense2346().map_or(0, |s|s.work_units())
                     + active_approach_opportunity2327.as_ref().map_or(0,|r|r.intent_work_units+r.selection.work_units)
                     + approach_attention_feedback2325.as_ref().map_or(0, |r| r.work_units)
                     + frame.grip_proprioception().map_or(0, |r| r.work_units())
@@ -3011,6 +3064,7 @@ fn resident_digest(
             sampling_counter,
         ),
     )?;
+    let ordinary=match &r.maze_blocked2346 {Some(history)=>json_digest(b"ALIFE-CPU-MAZE-BLOCKED-V1",&(ordinary,history))?,None=>ordinary};
     let ordinary=match &r.active_approach_intent2327 {Some(intent)=>json_digest(b"ALIFE-CPU-ACTIVE-APPROACH-INTENT-V1",&(ordinary,intent))?,None=>ordinary};
     let ordinary = match r.joint_comparison_mode {
         None => ordinary,

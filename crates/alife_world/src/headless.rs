@@ -4425,6 +4425,30 @@ impl HeadlessWorld {
             None,
             None,
             Some(crate::CandidateOpportunityCoveragePlan::new(phase)),
+            false,
+        )
+    }
+    pub fn perception_frame_draft_with_maze_heading2346(
+        &mut self,
+        organism_id: OrganismId,
+        tick: Tick,
+        profile: SensorProfile,
+        homeostasis: HomeostaticSnapshot,
+        phase: u64,
+    ) -> Result<(PerceptionFrameDraft, Option<GroundedCandidateBinding>), ScaffoldContractError>
+    {
+        if profile != SensorProfile::GroundedObjectSlotsV1 {
+            return Err(ScaffoldContractError::SensorProfileMismatch);
+        }
+        self.perception_frame_draft_with_availability_and_coverage(
+            organism_id,
+            tick,
+            profile,
+            homeostasis,
+            None,
+            None,
+            Some(crate::CandidateOpportunityCoveragePlan::new(phase)),
+            true,
         )
     }
     #[allow(clippy::too_many_arguments)]
@@ -4446,6 +4470,7 @@ impl HeadlessWorld {
             index,
             availability,
             None,
+            false,
         )
     }
 
@@ -4459,6 +4484,7 @@ impl HeadlessWorld {
         index: Option<&HeadlessPerceptionBatchIndex>,
         availability: Option<&mut Vec<GroundedSourceAvailabilityV1>>,
         coverage: Option<crate::CandidateOpportunityCoveragePlan>,
+        maze_heading2346: bool,
     ) -> Result<(PerceptionFrameDraft, Option<GroundedCandidateBinding>), ScaffoldContractError>
     {
         homeostasis
@@ -4568,7 +4594,9 @@ impl HeadlessWorld {
                     profile == SensorProfile::GroundedObjectSlotsV1
                         && a.grounded_orientation_repertoire()
                 });
-                let (candidates, opportunity_receipt) = if let Some(plan) = coverage {
+                let (candidates, opportunity_receipt) = if maze_heading2346 {
+                    crate::enumerate_maze_heading2346(&grounded,profile,active_contact,None,coverage.ok_or(ScaffoldContractError::InvalidPerceptionFrame)?,0)?
+                } else if let Some(plan) = coverage {
                     crate::enumerate_grounded_candidates_with_coverage(
                         &grounded,
                         profile,
@@ -4600,6 +4628,7 @@ impl HeadlessWorld {
                     active_contact,
                     orientation_architecture.is_some(),
                 );
+                let binding=if maze_heading2346 {binding.with_maze_heading2346()}else{binding};
                 let binding = match coverage {
                     Some(plan) => binding.with_coverage(plan),
                     None => binding,
@@ -4753,7 +4782,9 @@ impl HeadlessWorld {
                 }
                 sensory.language_context = language_context;
                 sensory.validate_contract()?;
-                let draft = if let Some(a) = &orientation_architecture {
+                let draft = if maze_heading2346 {
+                    PerceptionFrameDraft::new_with_maze_heading2346(organism_id,tick,profile,sensory,body,homeostasis,candidates,provenance,slots)
+                } else if let Some(a) = &orientation_architecture {
                     PerceptionFrameDraft::new_with_grounded_orientation_v3(
                         organism_id,
                         tick,
