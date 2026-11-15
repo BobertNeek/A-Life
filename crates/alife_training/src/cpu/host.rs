@@ -150,6 +150,7 @@ pub struct CpuCanonicalHost {
 }
 #[derive(Clone)]
 pub struct CpuCollectedDecision {
+    pub approach_attention_feedback2325: Option<ApproachAttentionFeedback2325>,
     /// Present only for the versioned plan-2 JSON wire; not an auxiliary reward.
     pub memory_plan2242: Option<MemoryPlanRow2242>,
     pub joint_membership2177: Option<JointMembershipLiveReceipt2177>,
@@ -158,6 +159,8 @@ pub struct CpuCollectedDecision {
     // included in diagnostic serialization.
     #[cfg(test)]
     pub(super) cognitive_cost_capture: Option<(CognitiveWorkCostPolicy, f32, f32, f32)>,
+    #[cfg(test)]
+    pub(super) cognitive_body_cost_capture: Option<(BodyState, BodyState)>,
     /// Explicitly requested cognitive action-phase/input facts, candidate aligned.
     /// Ordinary preparation does not request these for reporting. Offboard viewers
     /// use MemorySidecarState::inspect_execution_evidence instead. These are not
@@ -180,6 +183,85 @@ pub struct CpuCollectedDecision {
     pub patch: ExperiencePatch,
 }
 
+/// Native post-execution attention feedback, never a forced action or reward.
+/// Work is a logical operation tariff: twelve fixed receipt field copies, plus
+/// each actual option/index lookup, predicate, visited channel/slot and state write.
+/// It is included once in focal-target work, not an additional energy debit.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ApproachAttentionFeedback2325 {
+    pub schema_version: u16,
+    pub frame_digest: PerceptionFrameDigest,
+    pub organism_id: OrganismId,
+    pub source_tick: Tick,
+    pub selected_candidate: Option<u16>,
+    pub executed: Option<ExecutedChannelEvidenceV1>,
+    pub tracked_object_id: Option<TrackedObjectId>,
+    pub target_entity: Option<WorldEntityId>,
+    pub before: HysteresisState,
+    pub after: HysteresisState,
+    pub nominated: bool,
+    pub work_units: u64,
+}
+fn approach_attention_feedback(
+    frame: &PerceptionFrame,
+    action: &crate::PpoJointAction,
+    joint: &JointPhysicalOutcome,
+    world: &HeadlessWorld,
+    before: HysteresisState,
+) -> Result<ApproachAttentionFeedback2325, CpuHostError> {
+    let mut r = ApproachAttentionFeedback2325 {
+        schema_version: 1, frame_digest: frame.frame_digest(), organism_id: frame.organism_id(),
+        source_tick: frame.tick(), selected_candidate: None, executed: None,
+        tracked_object_id: None, target_entity: None, before, after: before,
+        nominated: false, work_units: 12,
+    };
+    r.work_units += 1; // selected locomotion option
+    let Some(index) = action.motor_candidates[0] else { return Ok(r); };
+    r.selected_candidate = Some(index); r.work_units += 2; // receipt write and candidate lookup
+    let candidate = frame.candidates().get(index as usize).ok_or(CpuHostError::State("feedback candidate missing"))?;
+    r.work_units += 1;
+    if candidate.family != CandidateActionFamily::Approach { return Ok(r); }
+    r.work_units += 1;
+    if candidate.action_id.raw() != 101 { return Ok(r); }
+    for channel in &joint.channel_outcomes {
+        r.work_units += 2; // channel visit and identity comparison
+        if channel.channel != MotorChannel::Locomotion { continue; }
+        r.work_units += 1;
+        let Some(executed) = channel.execution_evidence else { return Ok(r); };
+        r.executed = Some(executed); r.work_units += 2; // receipt copy and success test
+        if !executed.succeeded { return Ok(r); }
+        r.work_units += 1;
+        if executed.primitive != candidate.action_id { return Err(CpuHostError::State("feedback executed primitive mismatch")); }
+        r.work_units += 1;
+        let Some(target) = candidate.target.entity else { return Ok(r); };
+        r.target_entity = Some(target); r.work_units += 2; // receipt write and identity check
+        if executed.command_target != Some(target) { return Err(CpuHostError::State("feedback executed target mismatch")); }
+        r.work_units += 1;
+        let CandidateObservationRef::ObjectSlot(slot_index) = candidate.observation else { return Ok(r); };
+        for slot in frame.grounded_object_slots() {
+            r.work_units += 2;
+            if slot.slot_index != slot_index { continue; }
+            r.work_units += 1;
+            let Some(object) = world.entity(target) else { return Ok(r); };
+            r.work_units += 1;
+            if object.consumed { return Ok(r); }
+            r.tracked_object_id = Some(slot.tracked_object_id); r.work_units += 2; // receipt write and incumbent compare
+            let identity = Some(StableFocusIdentity::TrackedObject(slot.tracked_object_id));
+            if r.after.previous_identity != identity {
+                r.after.previous_identity = identity;
+                r.after.retained_ticks = 1;
+                r.work_units += 2;
+            }
+            r.nominated = true;
+            r.work_units += 2; // nominated receipt and resident-state assignment
+            return Ok(r);
+        }
+        return Ok(r);
+    }
+    Ok(r)
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct MemoryPlanRow2242 {
@@ -188,6 +270,8 @@ pub struct MemoryPlanRow2242 {
 }
 #[derive(Clone, serde::Deserialize)]
 struct CollectedDecisionFlat2242 {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    approach_attention_feedback2325: Option<ApproachAttentionFeedback2325>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub joint_membership2177: Option<JointMembershipLiveReceipt2177>,
     // Test-only capture from the exact call which charges this real native step.
@@ -226,9 +310,12 @@ impl From<CollectedDecisionFlat2242> for CpuCollectedDecision {
     fn from(flat: CollectedDecisionFlat2242) -> Self {
         Self {
             memory_plan2242: None,
+            approach_attention_feedback2325: flat.approach_attention_feedback2325,
             joint_membership2177: flat.joint_membership2177,
             #[cfg(test)]
             cognitive_cost_capture: flat.cognitive_cost_capture,
+            #[cfg(test)]
+            cognitive_body_cost_capture: None,
             executed_action_recall: flat.executed_action_recall,
             executed_action_recall_work: flat.executed_action_recall_work,
             memory_readout_research: flat.memory_readout_research,
@@ -602,6 +689,8 @@ impl serde::Serialize for CpuCollectedDecision {
         #[derive(serde::Serialize)]
         struct Flat<'a> {
             #[serde(skip_serializing_if = "Option::is_none")]
+            approach_attention_feedback2325: &'a Option<ApproachAttentionFeedback2325>,
+            #[serde(skip_serializing_if = "Option::is_none")]
             joint_membership2177: &'a Option<JointMembershipLiveReceipt2177>,
             #[serde(skip_serializing_if = "Option::is_none")]
             executed_action_recall: &'a Option<Vec<Option<alife_core::ExecutedActionRecallV1>>>,
@@ -623,6 +712,7 @@ impl serde::Serialize for CpuCollectedDecision {
             patch: &'a ExperiencePatch,
         }
         let flat = Flat {
+            approach_attention_feedback2325: &self.approach_attention_feedback2325,
             joint_membership2177: &self.joint_membership2177,
             executed_action_recall: &self.executed_action_recall,
             executed_action_recall_work: self.executed_action_recall_work,
@@ -1059,6 +1149,34 @@ impl CpuCanonicalHost {
         Ok(())
     }
 
+    /// Explicit experimental action-to-attention feedback on an immutable copy.
+    /// No intent is seeded at attachment; only the existing adapter identity changes.
+    pub fn fork_with_approach_attention_feedback_for_research(
+        &self, founder: &CpuFoundationTrainer,
+    ) -> Result<Self, CpuHostError> {
+        self.validate_founder(founder)?;
+        if self.candidate_opportunity_coverage2313 != Some(1)
+            || !matches!(self.joint_membership2177, Some(14 | 15))
+            || founder.phenotype().sensor_profile() != SensorProfile::GroundedObjectSlotsV1 {
+            return Err(CpuHostError::State("Approach feedback requires CP16 coverage1 mode14/15 Slots"));
+        }
+        let before = self.checkpoint(founder)?;
+        let mut next = self.clone();
+        next.candidate_opportunity_coverage2313 = Some(2);
+        let after = next.checkpoint(founder)?;
+        let mut normalized = after.clone();
+        normalized.schema_version = before.schema_version;
+        normalized.candidate_opportunity_coverage2313 = before.candidate_opportunity_coverage2313;
+        if serde_json::to_vec(&normalized)? != serde_json::to_vec(&before)? {
+            return Err(CpuHostError::State("Approach feedback fork changed acquired state"));
+        }
+        let cold = Self::from_checkpoint(after.clone(), founder)?;
+        if serde_json::to_vec(&cold.checkpoint(founder)?)? != serde_json::to_vec(&after)? {
+            return Err(CpuHostError::State("Approach feedback fork cold validation changed state"));
+        }
+        Ok(next)
+    }
+
     /// Explicit retained-life experimental opportunity adapter. No genotype,
     /// phenotype, neural, memory, world, sampling or founder mutation occurs.
     /// Saved identity becomes CP16; disabling or hand-editing is not a migration.
@@ -1415,7 +1533,9 @@ impl CpuCanonicalHost {
             candidate_opportunity_coverage2313: self.candidate_opportunity_coverage2313,
             joint_membership2177: self.joint_membership2177,
             terminal_context2135: self.terminal_context2135.clone(),
-            schema_version: if self.candidate_opportunity_coverage2313.is_some() {
+            schema_version: if self.candidate_opportunity_coverage2313 == Some(2) {
+                17
+            } else if self.candidate_opportunity_coverage2313.is_some() {
                 16
             } else if self.joint_membership2177.is_some() {
                 match self.joint_membership2177 {
@@ -1456,8 +1576,8 @@ impl CpuCanonicalHost {
             ));
         }
         if let Some(version) = checkpoint.candidate_opportunity_coverage2313 {
-            if version != 1
-                || checkpoint.schema_version != 16
+            if !matches!(version, 1 | 2)
+                || checkpoint.schema_version != if version == 2 { 17 } else { 16 }
                 || !matches!(checkpoint.joint_membership2177, Some(14 | 15))
                 || founder.phenotype().sensor_profile() != SensorProfile::GroundedObjectSlotsV1
             {
@@ -1465,7 +1585,7 @@ impl CpuCanonicalHost {
                     "invalid candidate opportunity adapter identity",
                 ));
             }
-        } else if checkpoint.schema_version == 16 {
+        } else if matches!(checkpoint.schema_version, 16 | 17) {
             return Err(CpuHostError::State(
                 "CP16 requires explicit candidate opportunity adapter",
             ));
@@ -1485,7 +1605,9 @@ impl CpuCanonicalHost {
                         10 | 11 => 13,
                         12 | 13 => 14,
                         14 | 15 => {
-                            if checkpoint.candidate_opportunity_coverage2313.is_some() {
+                            if checkpoint.candidate_opportunity_coverage2313 == Some(2) {
+                                17
+                            } else if checkpoint.candidate_opportunity_coverage2313.is_some() {
                                 16
                             } else {
                                 15
@@ -2412,11 +2534,17 @@ impl CpuCanonicalHost {
                         .count() as u64
                 })
                 .sum::<u64>();
+            let approach_attention_feedback2325 = if self.candidate_opportunity_coverage2313 == Some(2) {
+                let feedback = approach_attention_feedback(&frame, &action, &receipt.joint, &self.world, r.hysteresis)?;
+                if feedback.nominated { r.hysteresis = feedback.after; }
+                Some(feedback)
+            } else { None };
             let work = CognitiveWorkCounters::new(
                 work_neurons,
                 work_synapses,
                 dendritic_work,
                 cognitive.attention.budget_receipt.work_units
+                    + approach_attention_feedback2325.as_ref().map_or(0, |r| r.work_units)
                     + frame.grip_proprioception().map_or(0, |r| r.work_units())
                     + frame
                         .candidate_opportunity_coverage()
@@ -2452,7 +2580,11 @@ impl CpuCanonicalHost {
             let cost_policy = CognitiveWorkCostPolicy::enabled(1.0e-6)?;
             #[cfg(test)]
             let energy_before_cost = after.biochemistry().body.energy;
+            #[cfg(test)]
+            let body_before_cost = after.biochemistry().body;
             let _applied_cognitive_debit = after.account_cognitive_work(work, cost_policy)?;
+            #[cfg(test)]
+            let after_body_cost = after.biochemistry().body;
             #[cfg(test)]
             let cognitive_cost_capture = Some((
                 cost_policy,
@@ -2608,6 +2740,7 @@ impl CpuCanonicalHost {
                         additional_work_ops: readout_work,
                     });
             decisions.push(CpuCollectedDecision {
+                approach_attention_feedback2325,
                 memory_plan2242: founder
                     .phenotype()
                     .candidate_decoder()
@@ -2620,6 +2753,8 @@ impl CpuCanonicalHost {
                 joint_membership2177,
                 #[cfg(test)]
                 cognitive_cost_capture,
+                #[cfg(test)]
+                cognitive_body_cost_capture: Some((body_before_cost, after_body_cost)),
                 executed_action_recall_work: memory.execution_evidence_work,
                 executed_action_recall: recall
                     .executed_actions()
@@ -2938,3 +3073,7 @@ mod joint_membership_native_tests;
 #[cfg(test)]
 #[path = "grip_proprioception_tests.rs"]
 mod grip_proprioception_tests;
+
+#[cfg(test)]
+#[path = "approach_attention_feedback_tests.rs"]
+mod approach_attention_feedback_tests;
