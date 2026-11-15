@@ -56,14 +56,16 @@ impl NavigationState2349{
    // edge. Own-pose differences from passive movement/transport remain odometry.
    if let Some(old)=&self.previous_pose{let net=[pose.position[0]-old.position[0],pose.position[1]-old.position[1]];motion.executed_traversal=net.map(f32::to_bits)==pending.displacement_world.map(f32::to_bits);}
    work+=14;}
+  // V1 uses world-XZ bearings; map yaw is relative to attachment body yaw.
+  work+=1;let slot_offset=if self.map.frame_version2367()==3{work+=2;if frame.sensor_profile()!=SensorProfile::GroundedObjectSlotsV1{return Err(err("corrected map frame requires GroundedObjectSlotsV1"))}-pose.body_yaw}else{pose.head_yaw};
   let mut optimized_route=None;
   let(map,map_work)=if self.version==3 {
-   let(validated,map_work)=self.map.observe_validated(sequence,frame.grounded_object_slots(),alife_world::GROUNDED_VISION_RADIUS,pose.head_yaw,motion,None).map_err(err)?;
-   optimized_route=Some(route_policy2349::preference_validated(&validated,frame.grounded_object_slots(),pose.head_yaw,frame.candidates()).map_err(err)?);
+   let(validated,map_work)=self.map.observe_validated(sequence,frame.grounded_object_slots(),alife_world::GROUNDED_VISION_RADIUS,slot_offset,motion,None).map_err(err)?;
+   optimized_route=Some(route_policy2349::preference_validated(&validated,frame.grounded_object_slots(),slot_offset,frame.candidates()).map_err(err)?);
    (validated.into_inner(),map_work)
-  }else{self.map.observe(sequence,frame.grounded_object_slots(),alife_world::GROUNDED_VISION_RADIUS,pose.head_yaw,motion,None).map_err(err)?};self.map=map;if self.map.goal().is_none()&&self.goal_source.take().is_some(){work+=1;}self.previous_pose=Some(pose.clone());work+=map_work.units()+2;
-  let goal_route=if self.version==2{Some(super::goal_route2349::preference(&self.map,frame.grounded_object_slots(),pose.head_yaw,frame.candidates()).map_err(err)?)}else{None};
-  let route=if let Some(g)=&goal_route{work+=g.work_units+g.candidate_bias.len()as u64+12;g.projection()}else{let r=if let Some(r)=optimized_route{r}else{route_policy2349::preference(&self.map,frame.grounded_object_slots(),pose.head_yaw,frame.candidates()).map_err(err)?};work+=r.work.units();r};
+  }else{self.map.observe(sequence,frame.grounded_object_slots(),alife_world::GROUNDED_VISION_RADIUS,slot_offset,motion,None).map_err(err)?};self.map=map;if self.map.goal().is_none()&&self.goal_source.take().is_some(){work+=1;}self.previous_pose=Some(pose.clone());work+=map_work.units()+2;
+  let goal_route=if self.version==2{Some(super::goal_route2349::preference(&self.map,frame.grounded_object_slots(),slot_offset,frame.candidates()).map_err(err)?)}else{None};
+  let route=if let Some(g)=&goal_route{work+=g.work_units+g.candidate_bias.len()as u64+12;g.projection()}else{let r=if let Some(r)=optimized_route{r}else{route_policy2349::preference(&self.map,frame.grounded_object_slots(),slot_offset,frame.candidates()).map_err(err)?};work+=r.work.units();r};
   if context.candidates.len()!=frame.candidates().len(){return Err(err("graph candidate alignment"))}
   let(mut bases,mut outputs)=(Vec::new(),Vec::new());
   for((dst,c),bias)in context.candidates.iter_mut().zip(frame.candidates()).zip(&route.candidate_bias){

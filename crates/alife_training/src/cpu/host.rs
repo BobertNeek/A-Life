@@ -1237,6 +1237,23 @@ impl CpuCanonicalHost {
         let cold=Self::from_checkpoint(after.clone(),founder)?;if serde_json::to_vec(&after)?!=serde_json::to_vec(&cold.checkpoint(founder)?)?{return Err(CpuHostError::State("navigation cold mismatch"));}Ok(next)
     }
     /// Preserve an acquired map and every historical receipt; change only its future controller.
+    /// Explicit retained legacy-frame migration. Never rotate or reconstruct old landmarks:
+    /// they remain UNKNOWN until genuine native reobservation. Visited topology is unchanged.
+    pub fn fork_acquired_graph_with_world_slot_frame_for_research2367(&self,founder:&CpuFoundationTrainer)->Result<Self,CpuHostError>{
+        let before=self.checkpoint(founder)?;
+        if founder.phenotype().sensor_profile()!=SensorProfile::GroundedObjectSlotsV1||before.schema_version!=20||self.maze_program2346!=Some(1)||!matches!(self.experienced_navigation2349,Some(1|2|3))||self.residents.is_empty()||self.world.organism_registry().iter().any(|r|!r.lifecycle().is_alive()){return Err(CpuHostError::State("slot frame upgrade requires living CP20 acquired map"));}
+        let mut next=self.clone();
+        for r in next.residents.values_mut(){let navigation=r.navigation2349.as_mut().ok_or(CpuHostError::State("missing acquired map"))?;navigation.map=navigation.map.with_world_slot_frame2367().map_err(CpuHostError::Preparation)?;r.sealed_authority=None;}
+        next.seal_all_residents()?;let after=next.checkpoint(founder)?;let mut norm=after.clone();
+        for r in &mut norm.residents {r.navigation2349.as_mut().ok_or(CpuHostError::State("missing upgraded map"))?.map.restore_frame_identity_for_check2367();}
+        // Verify each world record differs ONLY by the correctly derived new brain seal.
+        let old=before.world.world.organism_records.as_ref().ok_or(CpuHostError::State("missing original records"))?;
+        let new=norm.world.world.organism_records.as_mut().ok_or(CpuHostError::State("missing new records"))?;
+        if old.len()!=new.len(){return Err(CpuHostError::State("navigation changed record population"));}
+        for (a,b) in old.iter().zip(new.iter_mut()) {let mut expected=a.clone();expected.seal_cognitive_subsystems(a.biochemistry().tick,b.state_graph().brain.content_digest,a.state_graph().memory.content_digest)?;if serde_json::to_vec(&expected)?!=serde_json::to_vec(b)?{return Err(CpuHostError::State("navigation changed old private record"));}*b=a.clone();}
+        if serde_json::to_vec(&norm)?!=serde_json::to_vec(&before)?{return Err(CpuHostError::State("navigation altered retained state outside identity"));}
+        let cold=Self::from_checkpoint(after.clone(),founder)?;if serde_json::to_vec(&after)?!=serde_json::to_vec(&cold.checkpoint(founder)?)?{return Err(CpuHostError::State("navigation cold mismatch"));}Ok(next)
+    }
     pub fn fork_acquired_graph_with_goal_route_for_research2353(&self,founder:&CpuFoundationTrainer)->Result<Self,CpuHostError>{
         let before=self.checkpoint(founder)?;
         if before.schema_version!=20||self.maze_program2346!=Some(1)||self.experienced_navigation2349!=Some(1)||self.residents.is_empty()||self.world.organism_registry().iter().any(|r|!r.lifecycle().is_alive()){return Err(CpuHostError::State("goal route upgrade requires living CP20 mode1 retained source"));}

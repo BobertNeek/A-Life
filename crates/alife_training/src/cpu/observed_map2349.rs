@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 pub const NODE_CAP: usize = 32;
 pub const EDGE_CAP: usize = 64;
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Landmark { pub id: TrackedObjectId, pub position: [f32;2], pub confidence:f32, pub last_seen:u64, pub visits:u64 }
+pub struct Landmark { #[serde(default,skip_serializing_if="Option::is_none")] pub world_frame_verified2367:Option<bool>, pub id: TrackedObjectId, pub position: [f32;2], pub confidence:f32, pub last_seen:u64, pub visits:u64 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Traversal { pub from:u64, pub to:u64, pub displacement:[f32;2], pub successes:u64, pub blocked:u64, pub last_sequence:u64 }
 impl Traversal { pub fn confidence(&self)->f32 {self.successes as f32/(self.successes.saturating_add(self.blocked).saturating_add(1)) as f32} }
@@ -29,7 +29,7 @@ pub struct MeasuredMotion { pub displacement:[f32;2], pub yaw_delta:f32, pub blo
 fn rotate(p:[f32;2],yaw:f32)->[f32;2] {let(s,c)=yaw.sin_cos();[c*p[0]-s*p[1],s*p[0]+c*p[1]]}
 pub fn heading_bin(yaw:f32)->usize {((yaw.rem_euclid(std::f32::consts::TAU)/std::f32::consts::TAU*8.0).floor() as usize).min(7)}
 fn finite(p:[f32;2])->bool {p.iter().all(|x|x.is_finite())}
-impl Default for ObservedMap {fn default()->Self{Self{version:2,sequence:0,position:[0.;2],yaw:0.,nodes:vec![],edges:vec![],visit_nodes:vec![],last_visit:None,next_visit:1,contact_origin:[0.;2],goal:None,goal_set_at:0}}}
+impl Default for ObservedMap {fn default()->Self{Self{version:3,sequence:0,position:[0.;2],yaw:0.,nodes:vec![],edges:vec![],visit_nodes:vec![],last_visit:None,next_visit:1,contact_origin:[0.;2],goal:None,goal_set_at:0}}}
 /// Unforgeable in sibling modules; never serialized and no mutable accessor.
 /// Issued only by an observation that has already validated its result.
 pub(super) struct ValidatedObservedMap(ObservedMap);
@@ -38,6 +38,12 @@ impl ValidatedObservedMap {
  pub(super) fn into_inner(self)->ObservedMap { self.0 }
 }
 impl ObservedMap {
+ /// Map v3 consumes actual V1 world-frame bearings through an explicit body offset.
+ pub fn frame_version2367(&self)->u8{self.version}
+ pub(super) fn with_world_slot_frame2367(&self)->Result<Self,String>{self.validate()?;if self.version!=2{return Err("frame upgrade requires legacy map2".into())}let mut next=self.clone();next.version=3;next.validate()?;Ok(next)}
+ pub(super) fn restore_frame_identity_for_check2367(&mut self){self.version=2;}
+ pub fn landmark_position_verified2367(&self,n:&Landmark)->bool{self.version==2||n.world_frame_verified2367==Some(true)}
+
  pub(super) fn observe_validated(&self,sequence:ExperienceSequenceId,slots:&[GroundedObjectSlotV1],range_scale:f32,gaze_yaw:f32,motion:MeasuredMotion,selected_approach:Option<TrackedObjectId>)->Result<(ValidatedObservedMap,MapWork),String>{
   let (map,mut work)=self.observe(sequence,slots,range_scale,gaze_yaw,motion,selected_approach)?;
   // One bounded wrapper creation/move, no second map copy or validation.
@@ -73,8 +79,8 @@ impl ObservedMap {
  pub fn validate(&self)->Result<(),String>{self.validate_counted().map(|_|())}
  pub fn validate_counted(&self)->Result<u64,String>{
  let mut checks=1;
- if self.goal_set_at>self.sequence||self.version!=2||self.next_visit==0||self.nodes.len()>NODE_CAP||self.edges.len()>EDGE_CAP||self.visit_nodes.len()>NODE_CAP||!finite(self.position)||!finite(self.contact_origin)||!self.yaw.is_finite(){return Err("invalid graph header".into())}
- for(i,n)in self.nodes.iter().enumerate(){checks+=1;if n.id.raw()==0||!finite(n.position)||!n.confidence.is_finite()||!(0.0..=1.0).contains(&n.confidence)||n.last_seen>self.sequence{return Err("invalid node".into())}for x in &self.nodes[..i]{checks+=1;if x.id==n.id{return Err("duplicate node".into())}}}
+ if self.goal_set_at>self.sequence||!matches!(self.version,2|3)||self.next_visit==0||self.nodes.len()>NODE_CAP||self.edges.len()>EDGE_CAP||self.visit_nodes.len()>NODE_CAP||!finite(self.position)||!finite(self.contact_origin)||!self.yaw.is_finite(){return Err("invalid graph header".into())}
+ for(i,n)in self.nodes.iter().enumerate(){checks+=1;if self.version==3{checks+=2;if n.world_frame_verified2367==Some(false){return Err("invalid frame verification".into())}}else if n.world_frame_verified2367.is_some(){return Err("legacy map has new frame evidence".into())}checks+=1;if n.id.raw()==0||!finite(n.position)||!n.confidence.is_finite()||!(0.0..=1.0).contains(&n.confidence)||n.last_seen>self.sequence{return Err("invalid node".into())}for x in &self.nodes[..i]{checks+=1;if x.id==n.id{return Err("duplicate node".into())}}}
  for(i,e)in self.edges.iter().enumerate(){checks+=1;if e.from==e.to||!finite(e.displacement)||e.last_sequence>self.sequence{return Err("invalid edge".into())}
   let(mut from,mut to)=(false,false);for n in &self.visit_nodes{checks+=2;from|=n.id==e.from;to|=n.id==e.to;}if !from||!to{return Err("dangling edge".into())}
   for x in &self.edges[..i]{checks+=1;if x.from==e.from&&x.to==e.to{return Err("duplicate edge".into())}}
@@ -132,9 +138,9 @@ impl ObservedMap {
      let id={work.record_copies+=(next.nodes.len()-victim-1)as u64;next.nodes.remove(victim).id};work.field_updates+=1;
      if next.goal==Some(id){next.goal=None;work.field_updates+=1}
     }
-    next.nodes.push(Landmark{id:s.tracked_object_id,position,confidence:s.confidence.raw(),last_seen:sequence.raw(),visits:0});work.field_updates+=5;next.nodes.len()-1
+    next.nodes.push(Landmark{world_frame_verified2367:None,id:s.tracked_object_id,position,confidence:s.confidence.raw(),last_seen:sequence.raw(),visits:0});work.field_updates+=5;next.nodes.len()-1
    };
-   let n=&mut next.nodes[i];n.position=position;n.confidence=s.confidence.raw();n.last_seen=sequence.raw();work.field_updates+=3;
+   let n=&mut next.nodes[i];work.comparisons+=1;if next.version==3{n.world_frame_verified2367=Some(true);work.field_updates+=1;}n.position=position;n.confidence=s.confidence.raw();n.last_seen=sequence.raw();work.field_updates+=3;
   }
   if let Some(id)=selected_approach{if next.nodes.iter().any(|n|{work.node_visits+=1;work.comparisons+=1;n.id==id}){next.goal=Some(id);next.goal_set_at=sequence.raw();work.field_updates+=2;}}
   work.record_copies+=slots.len()as u64;let mut signature:Vec<_>=slots.iter().map(|s|s.tracked_object_id).collect();signature.sort_by(|a,b|{work.comparisons+=1;a.cmp(b)});
@@ -195,4 +201,18 @@ fn cold(m:&ObservedMap)->ObservedMap{let bytes=m.encode().unwrap();let n=Observe
 fn visible()->GroundedObjectSlotV1{GroundedObjectSlotV1{slot_index:0,tracked_object_id:TrackedObjectId(1),bearing:[0.,1.],distance:0.5,relative_velocity:[0.;3],color:[0.;3],material:[0.;3],shape:[0.;3],chemical:[0.;3],contact:0.,proprioception:[0.;2],temperature:0.,terrain:[0.;2],confidence:Confidence::new(1.).unwrap()}}
 #[test]fn shared_landmark_cannot_loop_match_passive_near_anchor(){let slots=[visible()];let(a,_)=ObservedMap::default().observe(ExperienceSequenceId(1),&slots,8.,0.,motion([0.;2],false),None).unwrap();let(b,_)=a.observe(ExperienceSequenceId(2),&slots,8.,0.,motion([0.01,0.],false),None).unwrap();assert_ne!(a.current_visit(),b.current_visit());assert_eq!(b.visited_nodes().len(),2);assert!(b.edges().is_empty());let c=b.observe(ExperienceSequenceId(3),&slots,8.,0.,motion([0.5,0.],true),None).unwrap().0;assert_eq!(c.edges()[0].from,b.current_visit().unwrap());}
 
+}
+
+#[cfg(test)]
+mod world_frame_regressions2367 {
+ use super::*;use alife_core::Confidence;
+ fn slot()->GroundedObjectSlotV1{GroundedObjectSlotV1{slot_index:0,tracked_object_id:TrackedObjectId(99),bearing:[0.,1.],distance:0.5,relative_velocity:[0.;3],color:[0.;3],material:[0.;3],shape:[0.;3],chemical:[0.;3],contact:0.,proprioception:[0.;2],temperature:0.,terrain:[0.;2],confidence:Confidence::new(1.).unwrap()}}
+ fn zero()->MeasuredMotion{MeasuredMotion{displacement:[0.;2],yaw_delta:0.,blocked:false,zero_step_blocked:false,executed_traversal:false}}
+ fn fresh()->ObservedMap{ObservedMap::default().observe(ExperienceSequenceId(1),&[slot()],8.,0.,zero(),Some(TrackedObjectId(99))).unwrap().0}
+ // Synthetic old-wire fixture only. No retained organism or acquired state is edited.
+ fn legacy()->ObservedMap{let mut v:serde_json::Value=serde_json::from_slice(&fresh().encode().unwrap()).unwrap();v["version"]=serde_json::json!(2);for n in v["nodes"].as_array_mut().unwrap(){n.as_object_mut().unwrap().remove("world_frame_verified2367");}ObservedMap::decode(&serde_json::to_vec(&v).unwrap()).unwrap()}
+ #[test]fn old_coordinates_migrate_unknown_without_reconstruction(){let old=legacy();let n=old.with_world_slot_frame2367().unwrap();assert_eq!(n.nodes(),old.nodes());assert_eq!(n.edges(),old.edges());assert_eq!(n.visited_nodes(),old.visited_nodes());assert_eq!(n.goal(),old.goal());assert!(!n.landmark_position_verified2367(&n.nodes()[0]));assert!(n.with_world_slot_frame2367().is_err());assert_eq!(super::super::goal_route2349::preference(&n,&[],0.,&[]).unwrap().mode,"ExploreBacktrackFallback");let cold=ObservedMap::decode(&n.encode().unwrap()).unwrap();assert_eq!(n.encode().unwrap(),cold.encode().unwrap());}
+ #[test]fn rotation_reobservation_absence_and_revisit_keep_world_position(){let old=legacy();let upgraded=old.with_world_slot_frame2367().unwrap();let mut motion=zero();motion.yaw_delta=1.;let (map,work)=upgraded.observe(ExperienceSequenceId(2),&[slot()],8.,-1.,motion,None).unwrap();assert_eq!(map.nodes()[0].position,old.nodes()[0].position);assert!(map.landmark_position_verified2367(&map.nodes()[0]));assert!(work.field_updates>0);let absent=map.observe(ExperienceSequenceId(3),&[],8.,-1.,zero(),None).unwrap().0;assert_eq!(absent.nodes()[0].position,map.nodes()[0].position);assert!(absent.landmark_position_verified2367(&absent.nodes()[0]));assert!(absent.nodes()[0].confidence<map.nodes()[0].confidence);let back=absent.observe(ExperienceSequenceId(4),&[slot()],8.,-1.,zero(),None).unwrap().0;assert_eq!(back.nodes()[0].position,map.nodes()[0].position);assert_eq!(back.nodes()[0].confidence,1.);let r=super::super::route_policy2349::preference(&map,&[slot()],-1.,&[]).unwrap();assert!((r.target_heading_body.unwrap()+1.).abs()<1e-6);}
+ #[test]fn corrected_world_bearing_scene_rotations_match(){let original=fresh();for phi in[-0.8_f32,0.7,2.1]{let mut s=slot();s.bearing=[phi.sin(),phi.cos()];let m=ObservedMap::default().observe(ExperienceSequenceId(1),&[s],8.,-phi,zero(),None).unwrap().0;let a=m.nodes()[0].position;let b=original.nodes()[0].position;assert!((a[0]-b[0]).abs()<2e-6&&(a[1]-b[1]).abs()<2e-6);}}
+ #[test]fn invalid_frame_evidence_and_legacy_relabel_rejected(){let f=fresh();assert_eq!(f.frame_version2367(),3);let mut v:serde_json::Value=serde_json::from_slice(&f.encode().unwrap()).unwrap();v["version"]=serde_json::json!(2);assert!(ObservedMap::decode(&serde_json::to_vec(&v).unwrap()).is_err());v["version"]=serde_json::json!(3);v["nodes"][0]["world_frame_verified2367"]=serde_json::json!(false);assert!(ObservedMap::decode(&serde_json::to_vec(&v).unwrap()).is_err());}
 }
