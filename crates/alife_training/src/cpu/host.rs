@@ -1173,6 +1173,51 @@ impl CpuCanonicalHost {
         Ok(())
     }
 
+    /// Alive-only age-policy counterfactual copy, not learning or resurrection.
+    /// Authentication and cold validation preserve the exact acquired branch;
+    /// only the pre-existing persisted world age-death flag may differ.
+    pub fn fork_without_age_death_for_research(
+        &self,
+        founder: &CpuFoundationTrainer,
+    ) -> Result<Self, CpuHostError> {
+        self.validate_founder(founder)?;
+        if self.residents.is_empty() {
+            return Err(CpuHostError::State(
+                "age-policy fork requires living residents",
+            ));
+        }
+        for raw in self.residents.keys() {
+            let record = self
+                .world
+                .organism_registry()
+                .get(OrganismId(*raw))
+                .ok_or(CpuHostError::State("age-policy fork resident missing"))?;
+            if !record.lifecycle().is_alive() {
+                return Err(CpuHostError::State(
+                    "age-policy fork cannot revive dead residents",
+                ));
+            }
+        }
+        let before = self.checkpoint(founder)?;
+        let mut fork = self.clone();
+        fork.world = self.world.fork_without_age_death_for_research()?;
+        let after = fork.checkpoint(founder)?;
+        let mut normalized = after.clone();
+        normalized.world.world.disable_age_death = before.world.world.disable_age_death;
+        if serde_json::to_vec(&before)? != serde_json::to_vec(&normalized)? {
+            return Err(CpuHostError::State(
+                "age-policy fork changed retained state beyond flag",
+            ));
+        }
+        let cold = Self::from_checkpoint(after.clone(), founder)?;
+        if serde_json::to_vec(&after)? != serde_json::to_vec(&cold.checkpoint(founder)?)? {
+            return Err(CpuHostError::State(
+                "age-policy fork cold restore changed state",
+            ));
+        }
+        Ok(fork)
+    }
+
     pub fn world(&self) -> &HeadlessWorld {
         &self.world
     }
