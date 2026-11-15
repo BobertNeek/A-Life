@@ -4,9 +4,10 @@ use std::collections::BTreeSet;
 
 use alife_core::{
     ActionCandidate, ActionId, ActionKind, ActionTarget, AffordanceBits, CandidateActionFamily,
-    CandidateFeatureVector, CandidateObservationRef, Confidence, DurationTicks, NormalizedScalar,
-    PerceptionFrameDraft, ScaffoldContractError, SensorProfile, TrackedObjectId, Validate, Vec3f,
-    WorldEntityId, CANDIDATE_FEATURE_COUNT, MAX_ACTION_CANDIDATES,
+    CandidateFeatureVector, CandidateObservationRef, CandidateOpportunityCoverageV1, Confidence,
+    DurationTicks, NormalizedScalar, PerceptionFrameDraft, ScaffoldContractError, SensorProfile,
+    TrackedObjectId, Validate, Vec3f, WorldEntityId, CANDIDATE_FEATURE_COUNT,
+    MAX_ACTION_CANDIDATES,
 };
 
 use crate::{
@@ -70,6 +71,21 @@ const OBJECT_ACTIONS: [(ActionId, ActionKind, CandidateActionFamily, f32); 6] = 
 const MAX_CANDIDATE_OBJECTS: usize = (MAX_ACTION_CANDIDATES - INTRINSIC_CANDIDATE_COUNT) / 6;
 const KNOWN_AFFORDANCE_MASK: u32 = (1 << CANDIDATE_FEATURE_AFFORDANCE_COUNT) - 1;
 
+/// Explicit transient selection phase supplied from the persisted experience sequence.
+/// This plan never owns a mutable counter and never consumes the sampling RNG.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CandidateOpportunityCoveragePlan {
+    phase: u64,
+}
+impl CandidateOpportunityCoveragePlan {
+    pub const fn new(phase: u64) -> Self {
+        Self { phase }
+    }
+    pub const fn phase(&self) -> u64 {
+        self.phase
+    }
+}
+
 /// Transient world-owned target transport from the exact observed snapshot.
 /// Kept outside the sensory/checkpoint ABI and never resolved through tracking
 /// history or a later world lookup during cognition preparation.
@@ -79,6 +95,7 @@ pub struct GroundedCandidateBinding {
     profile: SensorProfile,
     active_contact: Option<WorldEntityId>,
     grounded_orientation_v3: bool,
+    coverage_plan: Option<CandidateOpportunityCoveragePlan>,
 }
 
 impl GroundedCandidateBinding {
@@ -93,7 +110,74 @@ impl GroundedCandidateBinding {
             profile,
             active_contact,
             grounded_orientation_v3,
+            coverage_plan: None,
         }
+    }
+
+    pub fn with_coverage(mut self, plan: CandidateOpportunityCoveragePlan) -> Self {
+        let capacity = if self.profile.has_terrain_vision() || self.grounded_orientation_v3 {
+            3
+        } else {
+            MAX_CANDIDATE_OBJECTS
+        };
+        self.coverage_plan = (self.grounded.slots().len() > capacity).then_some(plan);
+        self
+    }
+    pub const fn coverage_plan(&self) -> Option<CandidateOpportunityCoveragePlan> {
+        self.coverage_plan
+    }
+
+    /// Recompute using the current FIRST focal object, even if it was initially admitted.
+    /// Validate against the exact initial coverage selection, not the legacy nearest set.
+    pub fn candidates_for_focus_with_coverage(
+        &self,
+        draft: &PerceptionFrameDraft,
+        focal_object: Option<TrackedObjectId>,
+        already_charged_work: u64,
+    ) -> Result<(Vec<ActionCandidate>, Option<CandidateOpportunityCoverageV1>), ScaffoldContractError>
+    {
+        let plan = self
+            .coverage_plan
+            .ok_or(ScaffoldContractError::InvalidPerceptionFrame)?;
+        draft.validate()?;
+        if draft.organism_id() != self.grounded.sensory().organism_id
+            || draft.tick() != self.grounded.sensory().tick
+            || draft.sensor_profile() != self.profile
+            || draft.grounded_orientation_repertoire() != self.grounded_orientation_v3
+            || draft.body() != self.grounded.body()
+            || draft.grounded_object_slots() != self.grounded.slots()
+        {
+            return Err(ScaffoldContractError::InvalidPerceptionFrame);
+        }
+        let (initial, initial_receipt) = enumerate_grounded_candidates_with_coverage(
+            &self.grounded,
+            self.profile,
+            self.active_contact,
+            None,
+            self.grounded_orientation_v3,
+            plan,
+            0,
+        )?;
+        if draft.candidate_opportunity_coverage() != initial_receipt.as_ref()
+            || already_charged_work != initial_receipt.as_ref().map_or(0, |r| r.work_units())
+            || draft.candidates() != initial
+        {
+            return Err(ScaffoldContractError::InvalidPerceptionFrame);
+        }
+        // The validation selector really ran, so its work is additional, not free.
+        let validation_work = initial_receipt.as_ref().map_or(0, |r| r.work_units());
+        let carried = already_charged_work
+            .checked_add(validation_work)
+            .ok_or(ScaffoldContractError::InvalidPerceptionFrame)?;
+        enumerate_grounded_candidates_with_coverage(
+            &self.grounded,
+            self.profile,
+            self.active_contact,
+            focal_object,
+            self.grounded_orientation_v3,
+            plan,
+            carried,
+        )
     }
 
     pub fn candidates_for_focus(
@@ -101,6 +185,9 @@ impl GroundedCandidateBinding {
         draft: &PerceptionFrameDraft,
         focal_object: Option<TrackedObjectId>,
     ) -> Result<Vec<ActionCandidate>, ScaffoldContractError> {
+        if self.coverage_plan.is_some() {
+            return Err(ScaffoldContractError::InvalidPerceptionFrame);
+        }
         // Semantic context/remembered novelty may be attached after capture;
         // observed bodies, slots and original opportunities must still match.
         if draft.organism_id() != self.grounded.sensory().organism_id
@@ -218,12 +305,230 @@ pub fn enumerate_grounded_candidates_with_orientation_v3(
     enumerate_grounded_candidates_impl(grounded, profile, active_contact, focal_object, true)
 }
 
+/// Under crowding, preserve observed contact and first focus, then grant one
+/// rotating residual opportunity. Remaining capacity uses distance/identity order.
+/// Work tariff counts loop visits, scalar key comparisons, index writes, membership
+/// comparisons, and the one modulo. It is logical work, not elapsed runtime.
+#[allow(clippy::too_many_arguments)]
+pub fn enumerate_grounded_candidates_with_coverage(
+    grounded: &GroundedSensingFrame,
+    profile: SensorProfile,
+    active_contact: Option<WorldEntityId>,
+    focal_object: Option<TrackedObjectId>,
+    grounded_orientation_v3: bool,
+    plan: CandidateOpportunityCoveragePlan,
+    already_charged_work: u64,
+) -> Result<(Vec<ActionCandidate>, Option<CandidateOpportunityCoverageV1>), ScaffoldContractError> {
+    let capacity = if profile.has_terrain_vision() || grounded_orientation_v3 {
+        3
+    } else {
+        MAX_CANDIDATE_OBJECTS
+    };
+    if grounded.slots().len() <= capacity {
+        if already_charged_work != 0 {
+            return Err(ScaffoldContractError::InvalidPerceptionFrame);
+        }
+        return Ok((
+            enumerate_grounded_candidates_impl(
+                grounded,
+                profile,
+                active_contact,
+                focal_object,
+                grounded_orientation_v3,
+            )?,
+            None,
+        ));
+    }
+    if grounded.slots().len() != grounded.transports().len()
+        || grounded.slots().len() > alife_core::MAX_GROUNDED_OBJECT_SLOTS
+    {
+        return Err(ScaffoldContractError::InvalidPerceptionFrame);
+    }
+    let (selected, contact, focal, work) = coverage_selection(
+        grounded,
+        active_contact,
+        focal_object,
+        capacity,
+        plan.phase(),
+    )?;
+    let work = already_charged_work
+        .checked_add(work)
+        .ok_or(ScaffoldContractError::InvalidPerceptionFrame)?;
+    let receipt = CandidateOpportunityCoverageV1::new(
+        grounded.slots().len() as u16,
+        capacity as u8,
+        contact.map(|i| i as u16),
+        focal.map(|i| i as u16),
+        plan.phase(),
+        selected.iter().map(|&i| i as u16).collect(),
+        work,
+    )?;
+    let candidates = enumerate_grounded_candidates_selected(
+        grounded,
+        profile,
+        active_contact,
+        focal_object,
+        grounded_orientation_v3,
+        Some(selected),
+    )?;
+    Ok((candidates, Some(receipt)))
+}
+
+#[allow(clippy::type_complexity)]
+fn coverage_selection(
+    grounded: &GroundedSensingFrame,
+    active_contact: Option<WorldEntityId>,
+    focal_object: Option<TrackedObjectId>,
+    capacity: usize,
+    phase: u64,
+) -> Result<(Vec<usize>, Option<usize>, Option<usize>, u64), ScaffoldContractError> {
+    let n = grounded.slots().len();
+    let mut work = 0_u64;
+    let mut contact = None;
+    let mut focal = None;
+    let mut roster = Vec::with_capacity(n);
+    for (i, (slot, transport)) in grounded
+        .slots()
+        .iter()
+        .zip(grounded.transports())
+        .enumerate()
+    {
+        work += 4; // visit, slot/transport agreement, contact identity, focal identity
+        if slot.slot_index as usize != i || transport.slot_index != slot.slot_index {
+            return Err(ScaffoldContractError::InvalidPerceptionFrame);
+        }
+        if Some(transport.transport_entity) == active_contact {
+            work += 1;
+            if slot.contact > 0.0 {
+                contact = Some(i);
+                work += 1;
+            }
+        }
+        if Some(slot.tracked_object_id) == focal_object {
+            focal = Some(i);
+            work += 1;
+        }
+        roster.push(i);
+        work += 1;
+    }
+    // Deterministic insertion sort: count every actual comparison and move.
+    for i in 1..roster.len() {
+        let mut j = i;
+        while j > 0 {
+            work += 2; // duplicate equality and ordering comparison
+            let a = grounded.slots()[roster[j - 1]].tracked_object_id.raw();
+            let b = grounded.slots()[roster[j]].tracked_object_id.raw();
+            if a == b {
+                return Err(ScaffoldContractError::InvalidPerceptionFrame);
+            }
+            if a < b {
+                break;
+            }
+            roster.swap(j - 1, j);
+            work += 2;
+            j -= 1;
+        }
+    }
+    let mut selected = Vec::with_capacity(capacity);
+    if let Some(i) = contact {
+        selected.push(i);
+        work += 1;
+    }
+    if let Some(i) = focal {
+        work += 1;
+        if Some(i) != contact {
+            selected.push(i);
+            work += 1;
+        }
+    }
+    let mut residual = Vec::new();
+    for i in roster {
+        work += 3; // visit and two reservation comparisons
+        // Evaluate both billed identity comparisons, even for the contact slot.
+        let is_contact = Some(i) == contact;
+        let is_focal = Some(i) == focal;
+        if !is_contact && !is_focal {
+            residual.push(i);
+            work += 1;
+        }
+    }
+    // No reservation is sacrificed to make room. At least one residual opportunity
+    // is mandatory whenever any unreserved observed object remains.
+    if selected.len() > capacity || (!residual.is_empty() && selected.len() == capacity) {
+        return Err(ScaffoldContractError::InvalidPerceptionFrame);
+    }
+    if !residual.is_empty() {
+        let index = (phase % residual.len() as u64) as usize;
+        work += 1;
+        selected.push(residual[index]);
+        work += 1;
+    }
+    let mut nearest = (0..n).collect::<Vec<_>>();
+    work += n as u64;
+    for i in 1..nearest.len() {
+        let mut j = i;
+        while j > 0 {
+            let a = &grounded.slots()[nearest[j - 1]];
+            let b = &grounded.slots()[nearest[j]];
+            work += 1;
+            let mut ordering = a.distance.total_cmp(&b.distance);
+            if ordering.is_eq() {
+                work += 1;
+                ordering = a.tracked_object_id.raw().cmp(&b.tracked_object_id.raw());
+            }
+            if !ordering.is_gt() {
+                break;
+            }
+            nearest.swap(j - 1, j);
+            work += 2;
+            j -= 1;
+        }
+    }
+    for i in nearest {
+        work += 1;
+        if selected.len() == capacity {
+            break;
+        }
+        let mut found = false;
+        for &s in &selected {
+            work += 1;
+            if i == s {
+                found = true;
+                break;
+            }
+        }
+        if !found {
+            selected.push(i);
+            work += 1;
+        }
+    }
+    Ok((selected, contact, focal, work))
+}
+
 fn enumerate_grounded_candidates_impl(
     grounded: &GroundedSensingFrame,
     profile: SensorProfile,
     active_contact: Option<WorldEntityId>,
     focal_object: Option<TrackedObjectId>,
     grounded_orientation_v3: bool,
+) -> Result<Vec<ActionCandidate>, ScaffoldContractError> {
+    enumerate_grounded_candidates_selected(
+        grounded,
+        profile,
+        active_contact,
+        focal_object,
+        grounded_orientation_v3,
+        None,
+    )
+}
+
+fn enumerate_grounded_candidates_selected(
+    grounded: &GroundedSensingFrame,
+    profile: SensorProfile,
+    active_contact: Option<WorldEntityId>,
+    focal_object: Option<TrackedObjectId>,
+    grounded_orientation_v3: bool,
+    selected_override: Option<Vec<usize>>,
 ) -> Result<Vec<ActionCandidate>, ScaffoldContractError> {
     if !matches!(
         profile,
@@ -328,35 +633,40 @@ fn enumerate_grounded_candidates_impl(
         }
     }
 
-    let mut selected = (0..grounded.slots().len().min(object_limit)).collect::<Vec<_>>();
-    let contact_index = grounded
-        .transports()
-        .iter()
-        .position(|transport| Some(transport.transport_entity) == active_contact)
-        .filter(|index| grounded.slots()[*index].contact > 0.0);
-    if let Some(index) = contact_index {
-        if !selected.contains(&index) {
-            if let Some(last) = selected.last_mut() {
-                *last = index;
+    let selected = if let Some(selected) = selected_override {
+        selected
+    } else {
+        let mut selected = (0..grounded.slots().len().min(object_limit)).collect::<Vec<_>>();
+        let contact_index = grounded
+            .transports()
+            .iter()
+            .position(|transport| Some(transport.transport_entity) == active_contact)
+            .filter(|index| grounded.slots()[*index].contact > 0.0);
+        if let Some(index) = contact_index {
+            if !selected.contains(&index) {
+                if let Some(last) = selected.last_mut() {
+                    *last = index;
+                }
             }
         }
-    }
-    if let Some(index) = grounded
-        .slots()
-        .iter()
-        .position(|slot| Some(slot.tracked_object_id) == focal_object)
-    {
-        if !selected.contains(&index) {
-            // Contact retains its reservation when focus competes for capacity.
-            if let Some(replaced) = selected
-                .iter_mut()
-                .rev()
-                .find(|i| Some(**i) != contact_index)
-            {
-                *replaced = index;
+        if let Some(index) = grounded
+            .slots()
+            .iter()
+            .position(|slot| Some(slot.tracked_object_id) == focal_object)
+        {
+            if !selected.contains(&index) {
+                // Contact retains its reservation when focus competes for capacity.
+                if let Some(replaced) = selected
+                    .iter_mut()
+                    .rev()
+                    .find(|i| Some(**i) != contact_index)
+                {
+                    *replaced = index;
+                }
             }
         }
-    }
+        selected
+    };
     for index in selected {
         let slot = &grounded.slots()[index];
         let transport = &grounded.transports()[index];
@@ -654,5 +964,253 @@ mod founder_basis_tests {
             Err(ScaffoldContractError::InvalidPerceptionFrame),
             "the action descriptor cannot fabricate a different opportunity",
         );
+    }
+}
+
+#[cfg(test)]
+mod opportunity_coverage_tests {
+    use super::*;
+    use crate::{GroundedSensorExtractor, HeadlessScenarioBuilder, TrackedObjectRegistry};
+    use alife_core::{OrganismId, Tick};
+    fn fixture(count: usize, reverse: bool) -> GroundedSensingFrame {
+        fixture_shape(count, reverse, false)
+    }
+    fn fixture_shape(count: usize, reverse: bool, ties: bool) -> GroundedSensingFrame {
+        let mut builder =
+            HeadlessScenarioBuilder::new(2313).agent("owner", OrganismId(1), Vec3f::ZERO);
+        for i in 0..count {
+            builder = builder.toy(
+                &format!("o{i}"),
+                Vec3f::new(0.5 + i as f32 * 0.4, 0.0, 0.0),
+                true,
+            );
+        }
+        let world = builder.build().unwrap();
+        let mut snapshot = world
+            .physical_observation_snapshot(OrganismId(1), Tick::ZERO)
+            .unwrap();
+        snapshot.visible.last_mut().unwrap().contact = true;
+        if ties {
+            for o in &mut snapshot.visible {
+                o.position = Vec3f::new(1.0, 0.0, 0.0);
+            }
+        }
+        if reverse {
+            snapshot.visible.reverse();
+        }
+        GroundedSensorExtractor::extract(
+            &snapshot,
+            &mut TrackedObjectRegistry::new(2313, 16).unwrap(),
+        )
+        .unwrap()
+    }
+    fn targets(g: &GroundedSensingFrame, slots: &[u16]) -> Vec<u64> {
+        slots
+            .iter()
+            .map(|&i| g.slots()[i as usize].tracked_object_id.raw())
+            .collect()
+    }
+    #[test]
+    fn crowded_stable_roster_covers_every_object_without_overwriting_protection() {
+        let g = fixture(8, false);
+        let contact = Some(g.transports()[7].transport_entity);
+        let focal = Some(g.slots()[6].tracked_object_id);
+        for orientation in [false, true] {
+            let cap = if orientation { 3 } else { 4 };
+            let mut covered = BTreeSet::new();
+            for phase in 0..6 {
+                let (c, r) = enumerate_grounded_candidates_with_coverage(
+                    &g,
+                    SensorProfile::GroundedObjectSlotsV1,
+                    contact,
+                    focal,
+                    orientation,
+                    CandidateOpportunityCoveragePlan::new(phase),
+                    0,
+                )
+                .unwrap();
+                let r = r.unwrap();
+                assert_eq!(r.capacity() as usize, cap);
+                assert!(r.selected_slots().contains(&7));
+                assert!(r.selected_slots().contains(&6));
+                assert_eq!(r.selected_slots().len(), cap);
+                assert_eq!(
+                    r.selected_slots().iter().collect::<BTreeSet<_>>().len(),
+                    cap
+                );
+                covered.extend(r.selected_slots().iter().copied());
+                assert!(c.len() <= 32);
+                for &slot in r.selected_slots() {
+                    assert_eq!(
+                        c.iter()
+                            .filter(|x| x.observation == CandidateObservationRef::ObjectSlot(slot))
+                            .count(),
+                        6
+                    );
+                }
+            }
+            assert_eq!(covered, (0u16..8).collect());
+        }
+    }
+    #[test]
+    fn reorder_ties_and_disappearance_depend_only_on_current_observed_roster() {
+        let g = fixture(8, false);
+        let reversed = fixture(8, true);
+        assert_eq!(g.slots(), reversed.slots());
+        for phase in [0, 1, 7, u64::MAX] {
+            let a = enumerate_grounded_candidates_with_coverage(
+                &g,
+                SensorProfile::GroundedObjectSlotsV1,
+                None,
+                None,
+                false,
+                CandidateOpportunityCoveragePlan::new(phase),
+                0,
+            )
+            .unwrap();
+            let b = enumerate_grounded_candidates_with_coverage(
+                &reversed,
+                SensorProfile::GroundedObjectSlotsV1,
+                None,
+                None,
+                false,
+                CandidateOpportunityCoveragePlan::new(phase),
+                0,
+            )
+            .unwrap();
+            assert_eq!(a, b);
+            let smaller = fixture(5, false);
+            let (_, r) = enumerate_grounded_candidates_with_coverage(
+                &smaller,
+                SensorProfile::GroundedObjectSlotsV1,
+                Some(WorldEntityId(999)),
+                Some(TrackedObjectId(999)),
+                false,
+                CandidateOpportunityCoveragePlan::new(phase),
+                0,
+            )
+            .unwrap();
+            let r = r.unwrap();
+            assert_eq!(r.contact_slot(), None);
+            assert_eq!(r.focal_slot(), None);
+            assert!(r.selected_slots().iter().all(|&i| i < 5));
+        }
+        assert_eq!(targets(&g, &[0, 1, 2]).len(), 3);
+    }
+    #[test]
+    fn uncrowded_is_legacy_exact_and_capacity_cannot_sacrifice_reservations() {
+        let g = fixture(3, false);
+        for phase in [0, u64::MAX] {
+            let (c, r) = enumerate_grounded_candidates_with_coverage(
+                &g,
+                SensorProfile::GroundedObjectSlotsV1,
+                None,
+                None,
+                false,
+                CandidateOpportunityCoveragePlan::new(phase),
+                0,
+            )
+            .unwrap();
+            assert!(r.is_none());
+            assert_eq!(
+                c,
+                enumerate_grounded_candidates(&g, SensorProfile::GroundedObjectSlotsV1, None)
+                    .unwrap()
+            );
+        }
+        let g = fixture(8, false);
+        let contact = Some(g.transports()[7].transport_entity);
+        let focal = Some(g.slots()[6].tracked_object_id);
+        assert!(coverage_selection(&g, contact, focal, 0, 0).is_err());
+        assert!(coverage_selection(&g, contact, focal, 1, 0).is_err());
+        assert!(coverage_selection(&g, contact, focal, 2, 0).is_err());
+        assert!(coverage_selection(&g, contact, focal, 3, 0).is_ok());
+    }
+    #[test]
+    fn physical_distance_ties_are_stable_and_binding_authenticates_initial_phase() {
+        let a = fixture_shape(8, false, true);
+        let b = fixture_shape(8, true, true);
+        for phase in 0..8 {
+            let select = |g: &GroundedSensingFrame| {
+                enumerate_grounded_candidates_with_coverage(
+                    g,
+                    SensorProfile::GroundedObjectSlotsV1,
+                    None,
+                    None,
+                    false,
+                    CandidateOpportunityCoveragePlan::new(phase),
+                    0,
+                )
+                .unwrap()
+            };
+            assert_eq!(select(&a), select(&b));
+        }
+        let g = fixture(8, false);
+        let plan = CandidateOpportunityCoveragePlan::new(3);
+        let (c, r) = enumerate_grounded_candidates_with_coverage(
+            &g,
+            SensorProfile::GroundedObjectSlotsV1,
+            None,
+            None,
+            false,
+            plan,
+            0,
+        )
+        .unwrap();
+        let r = r.unwrap();
+        let (sensory, body, slots, _) = g.clone().into_parts();
+        let d = PerceptionFrameDraft::new(
+            OrganismId(1),
+            Tick::ZERO,
+            SensorProfile::GroundedObjectSlotsV1,
+            sensory,
+            body,
+            alife_core::HomeostaticSnapshot::baseline(Tick::ZERO),
+            c,
+            alife_core::SensorProfileProvenance::new(
+                SensorProfile::GroundedObjectSlotsV1,
+                alife_core::SensoryAbiVersion::CURRENT,
+                Tick::ZERO,
+            )
+            .unwrap(),
+            slots,
+        )
+        .unwrap()
+        .with_opportunity_coverage(r.clone())
+        .unwrap();
+        let binding = GroundedCandidateBinding::new(
+            g.clone(),
+            SensorProfile::GroundedObjectSlotsV1,
+            None,
+            false,
+        )
+        .with_coverage(plan);
+        let focus = Some(g.slots()[7].tracked_object_id);
+        let (_, new) = binding
+            .candidates_for_focus_with_coverage(&d, focus, r.work_units())
+            .unwrap();
+        let new = new.unwrap();
+        assert_eq!(new.focal_slot(), Some(7));
+        assert!(new.selected_slots().contains(&7));
+        assert!(new.work_units() > r.work_units() * 2);
+        assert!(binding.candidates_for_focus(&d, focus).is_err());
+        assert!(binding
+            .candidates_for_focus_with_coverage(&d, focus, 0)
+            .is_err());
+        let wrong =
+            GroundedCandidateBinding::new(g, SensorProfile::GroundedObjectSlotsV1, None, false)
+                .with_coverage(CandidateOpportunityCoveragePlan::new(4));
+        assert!(wrong
+            .candidates_for_focus_with_coverage(&d, focus, r.work_units())
+            .is_err());
+        assert!(GroundedCandidateBinding::new(
+            fixture(3, false),
+            SensorProfile::GroundedObjectSlotsV1,
+            None,
+            false
+        )
+        .with_coverage(plan)
+        .coverage_plan()
+        .is_none());
     }
 }

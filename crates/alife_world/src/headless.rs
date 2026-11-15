@@ -4381,6 +4381,18 @@ impl HeadlessWorld {
         )
     }
 
+    pub fn perception_frame_draft_with_candidate_coverage2313(
+        &mut self, organism_id: OrganismId, tick: Tick, profile: SensorProfile,
+        homeostasis: HomeostaticSnapshot, phase: u64,
+    ) -> Result<(PerceptionFrameDraft, Option<GroundedCandidateBinding>), ScaffoldContractError> {
+        if profile != SensorProfile::GroundedObjectSlotsV1 {
+            return Err(ScaffoldContractError::SensorProfileMismatch);
+        }
+        self.perception_frame_draft_with_availability_and_coverage(
+            organism_id, tick, profile, homeostasis, None, None,
+            Some(crate::CandidateOpportunityCoveragePlan::new(phase)),
+        )
+    }
     #[allow(clippy::too_many_arguments)]
     fn perception_frame_draft_with_availability_sink(
         &mut self,
@@ -4390,6 +4402,23 @@ impl HeadlessWorld {
         homeostasis: HomeostaticSnapshot,
         index: Option<&HeadlessPerceptionBatchIndex>,
         availability: Option<&mut Vec<GroundedSourceAvailabilityV1>>,
+    ) -> Result<(PerceptionFrameDraft, Option<GroundedCandidateBinding>), ScaffoldContractError>
+    {
+        self.perception_frame_draft_with_availability_and_coverage(
+            organism_id, tick, profile, homeostasis, index, availability, None,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn perception_frame_draft_with_availability_and_coverage(
+        &mut self,
+        organism_id: OrganismId,
+        tick: Tick,
+        profile: SensorProfile,
+        homeostasis: HomeostaticSnapshot,
+        index: Option<&HeadlessPerceptionBatchIndex>,
+        availability: Option<&mut Vec<GroundedSourceAvailabilityV1>>,
+        coverage: Option<crate::CandidateOpportunityCoveragePlan>,
     ) -> Result<(PerceptionFrameDraft, Option<GroundedCandidateBinding>), ScaffoldContractError>
     {
         homeostasis
@@ -4499,7 +4528,12 @@ impl HeadlessWorld {
                     profile == SensorProfile::GroundedObjectSlotsV1
                         && a.grounded_orientation_repertoire()
                 });
-                let candidates = if let Some(a) = &orientation_architecture {
+                let (candidates, opportunity_receipt) = if let Some(plan) = coverage {
+                    crate::enumerate_grounded_candidates_with_coverage(
+                        &grounded, profile, active_contact, None,
+                        orientation_architecture.is_some(), plan, 0,
+                    )?
+                } else { (if let Some(a) = &orientation_architecture {
                     enumerate_grounded_candidates_with_orientation_v3(
                         &grounded,
                         profile,
@@ -4509,13 +4543,14 @@ impl HeadlessWorld {
                     )?
                 } else {
                     enumerate_grounded_candidates(&grounded, profile, active_contact)?
-                };
+                }, None) };
                 let binding = GroundedCandidateBinding::new(
                     grounded.clone(),
                     profile,
                     active_contact,
                     orientation_architecture.is_some(),
                 );
+                let binding = match coverage { Some(plan) => binding.with_coverage(plan), None => binding };
                 let (mut sensory, body, slots, transports) = grounded.into_parts();
                 // Bind only already observed bodies to personal recognition.
                 // Physical identity is not a friendly label or learned affinity.
@@ -4694,6 +4729,10 @@ impl HeadlessWorld {
                 let draft = draft?;
                 let draft = match grip_proprioception {
                     Some(receipt) => draft.with_grip_proprioception(receipt)?,
+                    None => draft,
+                };
+                let draft = match opportunity_receipt {
+                    Some(receipt) => draft.with_opportunity_coverage(receipt)?,
                     None => draft,
                 };
                 Ok((draft, Some(binding)))

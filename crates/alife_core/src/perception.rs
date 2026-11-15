@@ -23,6 +23,155 @@ const PERCEPTION_CONTEXT_DOMAIN: &[u8] = b"alife.perception.context.v1";
 const PERCEPTION_FRAME_DOMAIN: &[u8] = b"alife.perception.frame.v1";
 const CANDIDATE_FEATURE_DOMAIN: &[u8] = b"alife.candidate.features.v1";
 
+/// Evidence of a bounded, score-free candidate opportunity selection.
+/// This receipt authenticates measured work and observed slots, never action scores.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct CandidateOpportunityCoverageV1 {
+    observed_slots: u16,
+    capacity: u8,
+    contact_slot: Option<u16>,
+    focal_slot: Option<u16>,
+    phase: u64,
+    selected_slots: Vec<u16>,
+    work_units: u64,
+}
+impl CandidateOpportunityCoverageV1 {
+    pub fn new(
+        observed_slots: u16,
+        capacity: u8,
+        contact_slot: Option<u16>,
+        focal_slot: Option<u16>,
+        phase: u64,
+        selected_slots: Vec<u16>,
+        work_units: u64,
+    ) -> Result<Self, ScaffoldContractError> {
+        let value = Self {
+            observed_slots,
+            capacity,
+            contact_slot,
+            focal_slot,
+            phase,
+            selected_slots,
+            work_units,
+        };
+        value.validate_contract()?;
+        Ok(value)
+    }
+    pub const fn observed_slots(&self) -> u16 {
+        self.observed_slots
+    }
+    pub const fn capacity(&self) -> u8 {
+        self.capacity
+    }
+    pub const fn contact_slot(&self) -> Option<u16> {
+        self.contact_slot
+    }
+    pub const fn focal_slot(&self) -> Option<u16> {
+        self.focal_slot
+    }
+    pub const fn phase(&self) -> u64 {
+        self.phase
+    }
+    pub fn selected_slots(&self) -> &[u16] {
+        &self.selected_slots
+    }
+    pub const fn work_units(&self) -> u64 {
+        self.work_units
+    }
+    fn validate_candidates(
+        &self,
+        slots: &[GroundedObjectSlotV1],
+        candidates: &[ActionCandidate],
+    ) -> Result<(), ScaffoldContractError> {
+        self.validate_contract()?;
+        if usize::from(self.observed_slots) != slots.len() {
+            return Err(ScaffoldContractError::InvalidPerceptionFrame);
+        }
+        let mut masks = [0u8; 16];
+        for c in candidates {
+            if let CandidateObservationRef::ObjectSlot(slot) = c.observation {
+                if !self.selected_slots.contains(&slot) {
+                    return Err(ScaffoldContractError::InvalidPerceptionFrame);
+                }
+                let bit = match c.family {
+                    CandidateActionFamily::Inspect => 1,
+                    CandidateActionFamily::Approach => 2,
+                    CandidateActionFamily::Avoid => 4,
+                    CandidateActionFamily::Ingest => 8,
+                    CandidateActionFamily::Contact => 16,
+                    CandidateActionFamily::Other => 32,
+                    _ => return Err(ScaffoldContractError::InvalidPerceptionFrame),
+                };
+                let mask = &mut masks[usize::from(slot)];
+                if *mask & bit != 0 {
+                    return Err(ScaffoldContractError::InvalidPerceptionFrame);
+                }
+                *mask |= bit;
+            }
+        }
+        if self
+            .selected_slots
+            .iter()
+            .any(|&slot| masks[usize::from(slot)] != 63)
+        {
+            return Err(ScaffoldContractError::InvalidPerceptionFrame);
+        }
+        Ok(())
+    }
+}
+impl Validate for CandidateOpportunityCoverageV1 {
+    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        let mut seen = [false; 16];
+        if self.observed_slots > 16
+            || self.capacity > 16
+            || self.selected_slots.len() > usize::from(self.capacity)
+            || self.work_units > crate::cognitive_work::MAX_COGNITIVE_WORK_COUNTER
+        {
+            return Err(ScaffoldContractError::InvalidPerceptionFrame);
+        }
+        for &slot in &self.selected_slots {
+            if slot >= self.observed_slots || seen[usize::from(slot)] {
+                return Err(ScaffoldContractError::InvalidPerceptionFrame);
+            }
+            seen[usize::from(slot)] = true;
+        }
+        if [self.contact_slot, self.focal_slot]
+            .into_iter()
+            .flatten()
+            .any(|slot| !self.selected_slots.contains(&slot))
+        {
+            return Err(ScaffoldContractError::InvalidPerceptionFrame);
+        }
+        Ok(())
+    }
+}
+impl<'de> Deserialize<'de> for CandidateOpportunityCoverageV1 {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Wire {
+            observed_slots: u16,
+            capacity: u8,
+            contact_slot: Option<u16>,
+            focal_slot: Option<u16>,
+            phase: u64,
+            selected_slots: Vec<u16>,
+            work_units: u64,
+        }
+        let w = Wire::deserialize(deserializer)?;
+        Self::new(
+            w.observed_slots,
+            w.capacity,
+            w.contact_slot,
+            w.focal_slot,
+            w.phase,
+            w.selected_slots,
+            w.work_units,
+        )
+        .map_err(D::Error::custom)
+    }
+}
+
 /// World-measured global own-grip observation. This is not target ownership or a policy.
 /// Logical tariff: one occupancy check per visited object, one output/reduction,
 /// and two calibration operations (multiply and clamp). No runtime-speed claim.
@@ -438,6 +587,8 @@ pub struct PerceptionFrameDraft {
     orientation_repertoire: Option<OrientationRepertoireProvenance>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     grip_proprioception: Option<GripProprioceptionV1>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    candidate_opportunity_coverage: Option<CandidateOpportunityCoverageV1>,
     base_digest: PerceptionBaseDigest,
 }
 
@@ -481,6 +632,7 @@ impl PerceptionFrameDraft {
             grounded_object_slots,
             None,
             None,
+            None,
         )
     }
 
@@ -513,6 +665,7 @@ impl PerceptionFrameDraft {
             grounded_object_slots,
             Some(OrientationRepertoireProvenance::GroundedOrientationV3),
             None,
+            None,
         )
     }
 
@@ -529,6 +682,7 @@ impl PerceptionFrameDraft {
         grounded_object_slots: Vec<GroundedObjectSlotV1>,
         orientation_repertoire: Option<OrientationRepertoireProvenance>,
         grip_proprioception: Option<GripProprioceptionV1>,
+        candidate_opportunity_coverage: Option<CandidateOpportunityCoverageV1>,
     ) -> Result<Self, ScaffoldContractError> {
         let schema_version = SchemaVersions::CURRENT.perception.raw();
         validate_frame_base(
@@ -544,6 +698,7 @@ impl PerceptionFrameDraft {
             &grounded_object_slots,
             orientation_repertoire,
             grip_proprioception,
+            candidate_opportunity_coverage.as_ref(),
         )?;
         let base_digest = compute_base_digest(
             schema_version,
@@ -558,6 +713,7 @@ impl PerceptionFrameDraft {
             &grounded_object_slots,
             orientation_repertoire,
             grip_proprioception,
+            candidate_opportunity_coverage.as_ref(),
         );
         Ok(Self {
             schema_version,
@@ -572,8 +728,33 @@ impl PerceptionFrameDraft {
             grounded_object_slots,
             orientation_repertoire,
             grip_proprioception,
+            candidate_opportunity_coverage,
             base_digest,
         })
+    }
+
+    pub fn candidate_opportunity_coverage(&self) -> Option<&CandidateOpportunityCoverageV1> {
+        self.candidate_opportunity_coverage.as_ref()
+    }
+    pub fn with_opportunity_coverage(
+        mut self,
+        receipt: CandidateOpportunityCoverageV1,
+    ) -> Result<Self, ScaffoldContractError> {
+        if self.candidate_opportunity_coverage.is_some() {
+            return Err(ScaffoldContractError::InvalidPerceptionFrame);
+        }
+        self.candidate_opportunity_coverage = Some(receipt);
+        let candidates = std::mem::take(&mut self.candidates);
+        self.with_candidates(candidates)
+    }
+    /// Replace the opportunity set and its measured receipt as one validated value.
+    pub fn with_candidates_and_opportunity_coverage(
+        mut self,
+        candidates: Vec<ActionCandidate>,
+        receipt: CandidateOpportunityCoverageV1,
+    ) -> Result<Self, ScaffoldContractError> {
+        self.candidate_opportunity_coverage = Some(receipt);
+        self.with_candidates(candidates)
     }
 
     /// Bind a measured observation without altering any input or candidate.
@@ -594,6 +775,7 @@ impl PerceptionFrameDraft {
             self.grounded_object_slots,
             self.orientation_repertoire,
             self.grip_proprioception,
+            self.candidate_opportunity_coverage,
         )
     }
     pub const fn grip_proprioception(&self) -> Option<GripProprioceptionV1> {
@@ -681,6 +863,7 @@ impl PerceptionFrameDraft {
             self.grounded_object_slots,
             self.orientation_repertoire,
             self.grip_proprioception,
+            self.candidate_opportunity_coverage,
         )
     }
 
@@ -703,6 +886,7 @@ impl PerceptionFrameDraft {
             self.grounded_object_slots,
             self.orientation_repertoire,
             self.grip_proprioception,
+            self.candidate_opportunity_coverage,
         )
     }
 
@@ -720,6 +904,7 @@ impl PerceptionFrameDraft {
             self.grounded_object_slots,
             self.orientation_repertoire,
             self.grip_proprioception,
+            self.candidate_opportunity_coverage,
         )
     }
 }
@@ -739,6 +924,7 @@ impl Validate for PerceptionFrameDraft {
             &self.grounded_object_slots,
             self.orientation_repertoire,
             self.grip_proprioception,
+            self.candidate_opportunity_coverage.as_ref(),
         )?;
         let expected = compute_base_digest(
             self.schema_version,
@@ -753,6 +939,7 @@ impl Validate for PerceptionFrameDraft {
             &self.grounded_object_slots,
             self.orientation_repertoire,
             self.grip_proprioception,
+            self.candidate_opportunity_coverage.as_ref(),
         );
         if expected == self.base_digest {
             Ok(())
@@ -783,6 +970,8 @@ impl<'de> Deserialize<'de> for PerceptionFrameDraft {
             orientation_repertoire: Option<OrientationRepertoireProvenance>,
             #[serde(default)]
             grip_proprioception: Option<GripProprioceptionV1>,
+            #[serde(default)]
+            candidate_opportunity_coverage: Option<CandidateOpportunityCoverageV1>,
             base_digest: PerceptionBaseDigest,
         }
 
@@ -800,6 +989,7 @@ impl<'de> Deserialize<'de> for PerceptionFrameDraft {
             &wire.grounded_object_slots,
             wire.orientation_repertoire,
             wire.grip_proprioception,
+            wire.candidate_opportunity_coverage.as_ref(),
         )
         .map_err(D::Error::custom)?;
         let expected = compute_base_digest(
@@ -815,6 +1005,7 @@ impl<'de> Deserialize<'de> for PerceptionFrameDraft {
             &wire.grounded_object_slots,
             wire.orientation_repertoire,
             wire.grip_proprioception,
+            wire.candidate_opportunity_coverage.as_ref(),
         );
         if expected != wire.base_digest {
             return Err(D::Error::custom("perception base digest mismatch"));
@@ -832,6 +1023,7 @@ impl<'de> Deserialize<'de> for PerceptionFrameDraft {
             grounded_object_slots: wire.grounded_object_slots,
             orientation_repertoire: wire.orientation_repertoire,
             grip_proprioception: wire.grip_proprioception,
+            candidate_opportunity_coverage: wire.candidate_opportunity_coverage,
             base_digest: wire.base_digest,
         })
     }
@@ -926,6 +1118,9 @@ impl<'de> Deserialize<'de> for PerceptionContextBlock {
 }
 
 impl PerceptionFrame {
+    pub fn candidate_opportunity_coverage(&self) -> Option<&CandidateOpportunityCoverageV1> {
+        self.base.candidate_opportunity_coverage()
+    }
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         organism_id: OrganismId,
@@ -1084,7 +1279,11 @@ fn validate_frame_base(
     grounded_object_slots: &[GroundedObjectSlotV1],
     orientation_repertoire: Option<OrientationRepertoireProvenance>,
     grip_proprioception: Option<GripProprioceptionV1>,
+    candidate_opportunity_coverage: Option<&CandidateOpportunityCoverageV1>,
 ) -> Result<(), ScaffoldContractError> {
+    if let Some(receipt) = candidate_opportunity_coverage {
+        receipt.validate_candidates(grounded_object_slots, candidates)?;
+    }
     if let Some(receipt) = grip_proprioception {
         receipt.validate()?;
         if sensor_profile != SensorProfile::GroundedObjectSlotsV1
@@ -1322,6 +1521,7 @@ fn compute_base_digest(
     grounded_object_slots: &[GroundedObjectSlotV1],
     orientation_repertoire: Option<OrientationRepertoireProvenance>,
     grip_proprioception: Option<GripProprioceptionV1>,
+    candidate_opportunity_coverage: Option<&CandidateOpportunityCoverageV1>,
 ) -> PerceptionBaseDigest {
     let mut builder = CanonicalDigestBuilder::new(PERCEPTION_BASE_DOMAIN);
     builder.write_u16(schema_version);
@@ -1357,6 +1557,23 @@ fn compute_base_digest(
         builder
             .write_f32(receipt.touch_gain)
             .expect("validated grip calibration");
+    }
+    if let Some(receipt) = candidate_opportunity_coverage {
+        builder.write_u64(0x6f7070636f763031);
+        builder.write_u16(receipt.observed_slots);
+        builder.write_u8(receipt.capacity);
+        for slot in [receipt.contact_slot, receipt.focal_slot] {
+            builder.write_bool(slot.is_some());
+            if let Some(slot) = slot {
+                builder.write_u16(slot);
+            }
+        }
+        builder.write_u64(receipt.phase);
+        builder.write_sequence_len(receipt.selected_slots.len());
+        for &slot in &receipt.selected_slots {
+            builder.write_u16(slot);
+        }
+        builder.write_u64(receipt.work_units);
     }
     PerceptionBaseDigest(builder.finish256())
 }
@@ -1988,6 +2205,245 @@ mod grip_proprioception_tests {
         assert_eq!(
             serde_json::from_value::<PerceptionFrameDraft>(v).unwrap(),
             d
+        );
+    }
+}
+
+#[cfg(test)]
+mod candidate_opportunity_coverage_tests {
+    use super::*;
+    fn fixture() -> PerceptionFrameDraft {
+        let owner = OrganismId(2313);
+        let tick = Tick::new(1);
+        let profile = SensorProfile::GroundedObjectSlotsV1;
+        let slots = (0..2)
+            .map(|i| GroundedObjectSlotV1 {
+                slot_index: i,
+                tracked_object_id: crate::TrackedObjectId(u64::from(i) + 1),
+                bearing: [0.0, 1.0],
+                distance: 0.2,
+                relative_velocity: [0.; 3],
+                color: [0.1; 3],
+                material: [0.; 3],
+                shape: [0.2; 3],
+                chemical: [0.; 3],
+                contact: 0.0,
+                proprioception: [0.; 2],
+                temperature: 0.0,
+                terrain: [0.; 2],
+                confidence: Confidence::new(1.0).unwrap(),
+            })
+            .collect::<Vec<_>>();
+        let mut candidates = Vec::new();
+        for slot in &slots {
+            for (kind, family) in [
+                (ActionKind::Inspect, CandidateActionFamily::Inspect),
+                (ActionKind::Move, CandidateActionFamily::Approach),
+                (ActionKind::Move, CandidateActionFamily::Avoid),
+                (ActionKind::Interact, CandidateActionFamily::Ingest),
+                (ActionKind::Interact, CandidateActionFamily::Contact),
+                (ActionKind::Interact, CandidateActionFamily::Other),
+            ] {
+                candidates.push(
+                    ActionCandidate::new(
+                        candidates.len() as u16,
+                        ActionId(100 + candidates.len() as u32),
+                        kind,
+                        family,
+                        CandidateObservationRef::ObjectSlot(slot.slot_index),
+                        ActionTarget::NONE,
+                        slot.candidate_features().unwrap(),
+                        Confidence::new(1.).unwrap(),
+                        NormalizedScalar::new(0.).unwrap(),
+                        DurationTicks::new(1),
+                        DurationTicks::new(1),
+                    )
+                    .unwrap(),
+                );
+            }
+        }
+        let channels = SensoryChannels::ZERO;
+        PerceptionFrameDraft::new(
+            owner,
+            tick,
+            profile,
+            SensorySnapshot::new(owner, tick, Vec3f::ZERO, channels, Default::default()).unwrap(),
+            BodySnapshot {
+                pose: Pose::IDENTITY,
+                velocity: Velocity::ZERO,
+            },
+            HomeostaticSnapshot::baseline(tick),
+            candidates,
+            SensorProfileProvenance::new(profile, crate::SensoryAbiVersion::CURRENT, tick).unwrap(),
+            slots,
+        )
+        .unwrap()
+        .with_grip_proprioception(GripProprioceptionV1::new(3, false, 1.).unwrap())
+        .unwrap()
+    }
+    fn receipt() -> CandidateOpportunityCoverageV1 {
+        CandidateOpportunityCoverageV1::new(2, 2, Some(0), Some(1), 7, vec![0, 1], 11).unwrap()
+    }
+    fn reindex(candidates: &mut [ActionCandidate]) {
+        for (i, c) in candidates.iter_mut().enumerate() {
+            c.candidate_index = i as u16;
+        }
+    }
+    #[test]
+    fn coverage_validates_bounds_duplicates_protected_slots_and_work() {
+        for (n, cap, contact, focal, selected, work) in [
+            (17, 2, None, None, vec![0], 0),
+            (2, 17, None, None, vec![0], 0),
+            (2, 1, None, None, vec![0, 1], 0),
+            (2, 2, None, None, vec![0, 0], 0),
+            (2, 2, None, None, vec![2], 0),
+            (2, 2, Some(1), None, vec![0], 0),
+            (2, 2, None, Some(1), vec![0], 0),
+            (2, 2, None, None, vec![0], 1_000_000_001),
+        ] {
+            assert!(
+                CandidateOpportunityCoverageV1::new(n, cap, contact, focal, 0, selected, work)
+                    .is_err()
+            );
+        }
+        assert!(CandidateOpportunityCoverageV1::new(0, 0, None, None, 0, vec![], 0).is_ok());
+        let mut v = serde_json::to_value(receipt()).unwrap();
+        v["selected_slots"] = serde_json::json!([0, 0]);
+        assert!(serde_json::from_value::<CandidateOpportunityCoverageV1>(v).is_err());
+    }
+    #[test]
+    fn coverage_retained_through_reorder_semantics_grip_and_finalization() {
+        let d = fixture().with_opportunity_coverage(receipt()).unwrap();
+        let mut candidates = d.candidates().to_vec();
+        candidates.reverse();
+        reindex(&mut candidates);
+        let reordered = d.clone().with_candidates(candidates).unwrap();
+        for rebuilt in [
+            reordered,
+            d.clone().with_semantic_context(None).unwrap(),
+            d.clone().with_remembered_novelty(0.2).unwrap(),
+            d.clone()
+                .with_grip_proprioception(d.grip_proprioception().unwrap())
+                .unwrap(),
+        ] {
+            assert_eq!(rebuilt.candidate_opportunity_coverage(), Some(&receipt()));
+            assert_eq!(rebuilt.grip_proprioception(), d.grip_proprioception());
+            rebuilt.validate_contract().unwrap();
+            let frame = rebuilt.finalize(PerceptionContextBlock::empty()).unwrap();
+            assert_eq!(frame.candidate_opportunity_coverage(), Some(&receipt()));
+            let bytes = serde_json::to_vec(&frame).unwrap();
+            assert_eq!(
+                serde_json::from_slice::<PerceptionFrame>(&bytes).unwrap(),
+                frame
+            );
+        }
+    }
+    #[test]
+    fn coverage_requires_exact_six_family_set_and_atomic_replacement() {
+        let base = fixture();
+        let d = base.clone().with_opportunity_coverage(receipt()).unwrap();
+        let mut missing = d.candidates().to_vec();
+        missing.remove(0);
+        reindex(&mut missing);
+        assert!(d.clone().with_candidates(missing).is_err());
+        let mut duplicate = d.candidates().to_vec();
+        duplicate[1] = duplicate[0];
+        reindex(&mut duplicate);
+        assert!(d.clone().with_candidates(duplicate).is_err());
+        let mut one = d
+            .candidates()
+            .iter()
+            .filter(|c| c.observation == CandidateObservationRef::ObjectSlot(0))
+            .copied()
+            .collect::<Vec<_>>();
+        reindex(&mut one);
+        assert!(d.clone().with_candidates(one.clone()).is_err());
+        let new = CandidateOpportunityCoverageV1::new(2, 2, Some(0), None, 8, vec![0], 9).unwrap();
+        let changed = d
+            .with_candidates_and_opportunity_coverage(one, new.clone())
+            .unwrap();
+        assert_eq!(changed.candidate_opportunity_coverage(), Some(&new));
+        assert_eq!(changed.grip_proprioception(), base.grip_proprioception());
+        assert!(base
+            .with_opportunity_coverage(
+                CandidateOpportunityCoverageV1::new(1, 1, None, None, 0, vec![0], 0).unwrap()
+            )
+            .is_err());
+    }
+    #[test]
+    fn coverage_digest_and_wire_reject_tampering_or_stripping() {
+        let d = fixture().with_opportunity_coverage(receipt()).unwrap();
+        for field in ["phase", "work_units", "capacity"] {
+            let mut v = serde_json::to_value(&d).unwrap();
+            v["candidate_opportunity_coverage"][field] = 13.into();
+            assert!(serde_json::from_value::<PerceptionFrameDraft>(v).is_err());
+        }
+        let mut v = serde_json::to_value(&d).unwrap();
+        v.as_object_mut()
+            .unwrap()
+            .remove("candidate_opportunity_coverage");
+        assert!(serde_json::from_value::<PerceptionFrameDraft>(v).is_err());
+        let mut v = serde_json::to_value(&d).unwrap();
+        v["candidate_opportunity_coverage"]["selected_slots"] = serde_json::json!([1, 0]);
+        assert!(serde_json::from_value::<PerceptionFrameDraft>(v).is_err());
+        assert_ne!(d.base_digest(), fixture().base_digest());
+    }
+    #[test]
+    fn coverage_absence_preserves_legacy_serialized_fields_and_digest() {
+        let d = fixture();
+        let bytes = serde_json::to_vec(&d).unwrap();
+        assert!(!std::str::from_utf8(&bytes)
+            .unwrap()
+            .contains("candidate_opportunity_coverage"));
+        let mut v = serde_json::to_value(&d).unwrap();
+        v["candidate_opportunity_coverage"] = serde_json::Value::Null;
+        let decoded = serde_json::from_value::<PerceptionFrameDraft>(v).unwrap();
+        assert_eq!(decoded, d);
+        assert_eq!(serde_json::to_vec(&decoded).unwrap(), bytes);
+        assert_eq!(
+            d.clone()
+                .with_candidates(d.candidates().to_vec())
+                .unwrap()
+                .base_digest(),
+            d.base_digest()
+        );
+        #[derive(Serialize)]
+        struct Legacy<'a> {
+            schema_version: u16,
+            organism_id: OrganismId,
+            tick: Tick,
+            sensor_profile: SensorProfile,
+            sensory: &'a SensorySnapshot,
+            body: BodySnapshot,
+            homeostasis: &'a HomeostaticSnapshot,
+            candidates: &'a [ActionCandidate],
+            profile_provenance: SensorProfileProvenance,
+            grounded_object_slots: &'a [GroundedObjectSlotV1],
+            #[serde(skip_serializing_if = "Option::is_none")]
+            orientation_repertoire: Option<OrientationRepertoireProvenance>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            grip_proprioception: Option<GripProprioceptionV1>,
+            base_digest: PerceptionBaseDigest,
+        }
+        let old = Legacy {
+            schema_version: d.schema_version,
+            organism_id: d.organism_id,
+            tick: d.tick,
+            sensor_profile: d.sensor_profile,
+            sensory: &d.sensory,
+            body: d.body,
+            homeostasis: &d.homeostasis,
+            candidates: &d.candidates,
+            profile_provenance: d.profile_provenance,
+            grounded_object_slots: &d.grounded_object_slots,
+            orientation_repertoire: d.orientation_repertoire,
+            grip_proprioception: d.grip_proprioception,
+            base_digest: d.base_digest,
+        };
+        assert_eq!(serde_json::to_vec(&old).unwrap(), bytes);
+        assert_eq!(
+            bincode::serde::encode_to_vec(&old, bincode::config::standard()).unwrap(),
+            bincode::serde::encode_to_vec(&d, bincode::config::standard()).unwrap()
         );
     }
 }
