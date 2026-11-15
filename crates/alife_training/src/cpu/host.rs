@@ -2219,7 +2219,8 @@ impl CpuCanonicalHost {
                 work_neurons,
                 work_synapses,
                 dendritic_work,
-                cognitive.attention.budget_receipt.work_units,
+                cognitive.attention.budget_receipt.work_units
+                    + frame.grip_proprioception().map_or(0, |r| r.work_units()),
                 u64::from(memory.exact_bucket_reads)
                     + u64::from(memory.neighbor_bucket_reads)
                     + u64::from(memory.similarity_evaluations)
@@ -2733,3 +2734,7 @@ fn structural_sleep_evidence(
 #[cfg(test)]
 #[path = "joint_membership_native_tests.rs"]
 mod joint_membership_native_tests;
+
+#[cfg(test)]
+#[path = "grip_proprioception_tests.rs"]
+mod grip_proprioception_tests;

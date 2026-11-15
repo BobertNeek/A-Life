@@ -23,6 +23,71 @@ const PERCEPTION_CONTEXT_DOMAIN: &[u8] = b"alife.perception.context.v1";
 const PERCEPTION_FRAME_DOMAIN: &[u8] = b"alife.perception.frame.v1";
 const CANDIDATE_FEATURE_DOMAIN: &[u8] = b"alife.candidate.features.v1";
 
+/// World-measured global own-grip observation. This is not target ownership or a policy.
+/// Logical tariff: one occupancy check per visited object, one output/reduction,
+/// and two calibration operations (multiply and clamp). No runtime-speed claim.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+pub struct GripProprioceptionV1 {
+    inspected_objects: u64,
+    held: bool,
+    touch_gain: f32,
+}
+
+impl GripProprioceptionV1 {
+    pub fn new(
+        inspected_objects: u64,
+        held: bool,
+        touch_gain: f32,
+    ) -> Result<Self, ScaffoldContractError> {
+        let value = Self {
+            inspected_objects,
+            held,
+            touch_gain,
+        };
+        value.validate()?;
+        Ok(value)
+    }
+    fn validate(&self) -> Result<(), ScaffoldContractError> {
+        if self.inspected_objects > crate::cognitive_work::MAX_COGNITIVE_WORK_COUNTER - 3
+            || (self.held && self.inspected_objects == 0)
+            || !self.touch_gain.is_finite()
+            || self.touch_gain < 0.0
+        {
+            return Err(ScaffoldContractError::InvalidPerceptionFrame);
+        }
+        Ok(())
+    }
+    pub const fn inspected_objects(&self) -> u64 {
+        self.inspected_objects
+    }
+    pub const fn held(&self) -> bool {
+        self.held
+    }
+    pub const fn touch_gain(&self) -> f32 {
+        self.touch_gain
+    }
+    pub fn calibrated_output(&self) -> f32 {
+        (f32::from(self.held) * self.touch_gain).clamp(0.0, 1.0)
+    }
+    pub const fn work_units(&self) -> u64 {
+        self.inspected_objects + 3
+    }
+}
+
+impl<'de> Deserialize<'de> for GripProprioceptionV1 {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Wire {
+            inspected_objects: u64,
+            held: bool,
+            touch_gain: f32,
+        }
+        let wire = Wire::deserialize(deserializer)?;
+        Self::new(wire.inspected_objects, wire.held, wire.touch_gain).map_err(D::Error::custom)
+    }
+}
+
 #[repr(u16)]
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum SensorProfile {
@@ -371,6 +436,8 @@ pub struct PerceptionFrameDraft {
     grounded_object_slots: Vec<GroundedObjectSlotV1>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     orientation_repertoire: Option<OrientationRepertoireProvenance>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    grip_proprioception: Option<GripProprioceptionV1>,
     base_digest: PerceptionBaseDigest,
 }
 
@@ -413,6 +480,7 @@ impl PerceptionFrameDraft {
             profile_provenance,
             grounded_object_slots,
             None,
+            None,
         )
     }
 
@@ -444,6 +512,7 @@ impl PerceptionFrameDraft {
             profile_provenance,
             grounded_object_slots,
             Some(OrientationRepertoireProvenance::GroundedOrientationV3),
+            None,
         )
     }
 
@@ -459,6 +528,7 @@ impl PerceptionFrameDraft {
         profile_provenance: SensorProfileProvenance,
         grounded_object_slots: Vec<GroundedObjectSlotV1>,
         orientation_repertoire: Option<OrientationRepertoireProvenance>,
+        grip_proprioception: Option<GripProprioceptionV1>,
     ) -> Result<Self, ScaffoldContractError> {
         let schema_version = SchemaVersions::CURRENT.perception.raw();
         validate_frame_base(
@@ -473,6 +543,7 @@ impl PerceptionFrameDraft {
             profile_provenance,
             &grounded_object_slots,
             orientation_repertoire,
+            grip_proprioception,
         )?;
         let base_digest = compute_base_digest(
             schema_version,
@@ -486,6 +557,7 @@ impl PerceptionFrameDraft {
             profile_provenance,
             &grounded_object_slots,
             orientation_repertoire,
+            grip_proprioception,
         );
         Ok(Self {
             schema_version,
@@ -499,8 +571,33 @@ impl PerceptionFrameDraft {
             profile_provenance,
             grounded_object_slots,
             orientation_repertoire,
+            grip_proprioception,
             base_digest,
         })
+    }
+
+    /// Bind a measured observation without altering any input or candidate.
+    pub fn with_grip_proprioception(
+        mut self,
+        receipt: GripProprioceptionV1,
+    ) -> Result<Self, ScaffoldContractError> {
+        self.grip_proprioception = Some(receipt);
+        Self::new_with_orientation_repertoire(
+            self.organism_id,
+            self.tick,
+            self.sensor_profile,
+            self.sensory,
+            self.body,
+            self.homeostasis,
+            self.candidates,
+            self.profile_provenance,
+            self.grounded_object_slots,
+            self.orientation_repertoire,
+            self.grip_proprioception,
+        )
+    }
+    pub const fn grip_proprioception(&self) -> Option<GripProprioceptionV1> {
+        self.grip_proprioception
     }
 
     pub const fn schema_version(&self) -> u16 {
@@ -583,6 +680,7 @@ impl PerceptionFrameDraft {
             self.profile_provenance,
             self.grounded_object_slots,
             self.orientation_repertoire,
+            self.grip_proprioception,
         )
     }
 
@@ -604,6 +702,7 @@ impl PerceptionFrameDraft {
             self.profile_provenance,
             self.grounded_object_slots,
             self.orientation_repertoire,
+            self.grip_proprioception,
         )
     }
 
@@ -620,6 +719,7 @@ impl PerceptionFrameDraft {
             self.profile_provenance,
             self.grounded_object_slots,
             self.orientation_repertoire,
+            self.grip_proprioception,
         )
     }
 }
@@ -638,6 +738,7 @@ impl Validate for PerceptionFrameDraft {
             self.profile_provenance,
             &self.grounded_object_slots,
             self.orientation_repertoire,
+            self.grip_proprioception,
         )?;
         let expected = compute_base_digest(
             self.schema_version,
@@ -651,6 +752,7 @@ impl Validate for PerceptionFrameDraft {
             self.profile_provenance,
             &self.grounded_object_slots,
             self.orientation_repertoire,
+            self.grip_proprioception,
         );
         if expected == self.base_digest {
             Ok(())
@@ -679,6 +781,8 @@ impl<'de> Deserialize<'de> for PerceptionFrameDraft {
             grounded_object_slots: Vec<GroundedObjectSlotV1>,
             #[serde(default)]
             orientation_repertoire: Option<OrientationRepertoireProvenance>,
+            #[serde(default)]
+            grip_proprioception: Option<GripProprioceptionV1>,
             base_digest: PerceptionBaseDigest,
         }
 
@@ -695,6 +799,7 @@ impl<'de> Deserialize<'de> for PerceptionFrameDraft {
             wire.profile_provenance,
             &wire.grounded_object_slots,
             wire.orientation_repertoire,
+            wire.grip_proprioception,
         )
         .map_err(D::Error::custom)?;
         let expected = compute_base_digest(
@@ -709,6 +814,7 @@ impl<'de> Deserialize<'de> for PerceptionFrameDraft {
             wire.profile_provenance,
             &wire.grounded_object_slots,
             wire.orientation_repertoire,
+            wire.grip_proprioception,
         );
         if expected != wire.base_digest {
             return Err(D::Error::custom("perception base digest mismatch"));
@@ -725,6 +831,7 @@ impl<'de> Deserialize<'de> for PerceptionFrameDraft {
             profile_provenance: wire.profile_provenance,
             grounded_object_slots: wire.grounded_object_slots,
             orientation_repertoire: wire.orientation_repertoire,
+            grip_proprioception: wire.grip_proprioception,
             base_digest: wire.base_digest,
         })
     }
@@ -843,6 +950,10 @@ impl PerceptionFrame {
             grounded_object_slots,
         )?
         .finalize(PerceptionContextBlock::empty())
+    }
+
+    pub const fn grip_proprioception(&self) -> Option<GripProprioceptionV1> {
+        self.base.grip_proprioception()
     }
 
     pub const fn grounded_orientation_repertoire(&self) -> bool {
@@ -972,7 +1083,17 @@ fn validate_frame_base(
     profile_provenance: SensorProfileProvenance,
     grounded_object_slots: &[GroundedObjectSlotV1],
     orientation_repertoire: Option<OrientationRepertoireProvenance>,
+    grip_proprioception: Option<GripProprioceptionV1>,
 ) -> Result<(), ScaffoldContractError> {
+    if let Some(receipt) = grip_proprioception {
+        receipt.validate()?;
+        if sensor_profile != SensorProfile::GroundedObjectSlotsV1
+            || sensory.channels.tactile_contact[2].to_bits()
+                != receipt.calibrated_output().to_bits()
+        {
+            return Err(ScaffoldContractError::InvalidPerceptionFrame);
+        }
+    }
     if orientation_repertoire == Some(OrientationRepertoireProvenance::GroundedOrientationV3)
         && sensor_profile != SensorProfile::GroundedObjectSlotsV1
     {
@@ -1200,6 +1321,7 @@ fn compute_base_digest(
     profile_provenance: SensorProfileProvenance,
     grounded_object_slots: &[GroundedObjectSlotV1],
     orientation_repertoire: Option<OrientationRepertoireProvenance>,
+    grip_proprioception: Option<GripProprioceptionV1>,
 ) -> PerceptionBaseDigest {
     let mut builder = CanonicalDigestBuilder::new(PERCEPTION_BASE_DOMAIN);
     builder.write_u16(schema_version);
@@ -1226,6 +1348,15 @@ fn compute_base_digest(
     if orientation_repertoire == Some(OrientationRepertoireProvenance::GroundedOrientationV3) {
         builder.write_u64(0x6d6f746f725f7633);
         builder.write_u16(3);
+    }
+    // Absence writes nothing, preserving every legacy canonical digest.
+    if let Some(receipt) = grip_proprioception {
+        builder.write_u64(0x677269705f763031);
+        builder.write_u64(receipt.inspected_objects);
+        builder.write_u16(u16::from(receipt.held));
+        builder
+            .write_f32(receipt.touch_gain)
+            .expect("validated grip calibration");
     }
     PerceptionBaseDigest(builder.finish256())
 }
@@ -1737,5 +1868,126 @@ fn encode_u64_words(builder: &mut CanonicalDigestBuilder, values: &[u64]) {
     builder.write_sequence_len(values.len());
     for value in values {
         builder.write_u64(*value);
+    }
+}
+
+#[cfg(test)]
+mod grip_proprioception_tests {
+    use super::*;
+    fn fixture(output: f32) -> PerceptionFrameDraft {
+        let owner = OrganismId(2306);
+        let tick = Tick::new(1);
+        let profile = SensorProfile::GroundedObjectSlotsV1;
+        let mut channels = SensoryChannels::ZERO;
+        channels.tactile_contact[2] = output;
+        let candidate = ActionCandidate::new(
+            0,
+            ActionId(1),
+            ActionKind::Idle,
+            CandidateActionFamily::Idle,
+            CandidateObservationRef::None,
+            ActionTarget::NONE,
+            CandidateFeatureVector::zero(),
+            Confidence::new(1.0).unwrap(),
+            NormalizedScalar::new(0.0).unwrap(),
+            DurationTicks::new(1),
+            DurationTicks::new(1),
+        )
+        .unwrap();
+        PerceptionFrameDraft::new(
+            owner,
+            tick,
+            profile,
+            SensorySnapshot::new(owner, tick, Vec3f::ZERO, channels, Default::default()).unwrap(),
+            BodySnapshot {
+                pose: Pose::IDENTITY,
+                velocity: Velocity::ZERO,
+            },
+            HomeostaticSnapshot::baseline(tick),
+            vec![candidate],
+            SensorProfileProvenance::new(profile, crate::SensoryAbiVersion::CURRENT, tick).unwrap(),
+            vec![],
+        )
+        .unwrap()
+    }
+    #[test]
+    fn grip_receipt_binds_count_and_survives_all_rebinding() {
+        let r = GripProprioceptionV1::new(7, true, 0.5).unwrap();
+        assert_eq!(r.work_units(), 10);
+        let d = fixture(0.5).with_grip_proprioception(r).unwrap();
+        for rebuilt in [
+            d.clone().with_candidates(d.candidates().to_vec()).unwrap(),
+            d.clone().with_semantic_context(None).unwrap(),
+            d.clone().with_remembered_novelty(0.0).unwrap(),
+        ] {
+            assert_eq!(rebuilt.grip_proprioception(), Some(r));
+            rebuilt.validate().unwrap();
+        }
+        let bytes = serde_json::to_vec(&d).unwrap();
+        assert_eq!(
+            serde_json::from_slice::<PerceptionFrameDraft>(&bytes).unwrap(),
+            d
+        );
+        assert_eq!(
+            d.clone()
+                .finalize(PerceptionContextBlock::empty())
+                .unwrap()
+                .grip_proprioception(),
+            Some(r)
+        );
+        let mut v = serde_json::to_value(&d).unwrap();
+        v["grip_proprioception"]["inspected_objects"] = 8.into();
+        assert!(serde_json::from_value::<PerceptionFrameDraft>(v).is_err());
+        let mut v = serde_json::to_value(&d).unwrap();
+        v["sensory"]["channels"]["tactile_contact"][2] = serde_json::json!(0.0);
+        assert!(serde_json::from_value::<PerceptionFrameDraft>(v).is_err());
+
+        assert_ne!(
+            d.base_digest(),
+            fixture(0.5)
+                .with_grip_proprioception(GripProprioceptionV1::new(8, true, 0.5).unwrap())
+                .unwrap()
+                .base_digest()
+        );
+    }
+    #[test]
+    fn grip_receipt_checks_calibration_and_bounded_work() {
+        assert!(fixture(0.0)
+            .with_grip_proprioception(GripProprioceptionV1::new(1, true, 1.0).unwrap())
+            .is_err());
+        assert!(GripProprioceptionV1::new(0, true, 1.0).is_err());
+        assert!(GripProprioceptionV1::new(u64::MAX, false, 1.0).is_err());
+        assert!(GripProprioceptionV1::new(1, false, f32::NAN).is_err());
+        assert_eq!(
+            GripProprioceptionV1::new(3, true, 2.0)
+                .unwrap()
+                .calibrated_output(),
+            1.0
+        );
+        assert_eq!(
+            GripProprioceptionV1::new(3, true, 0.0)
+                .unwrap()
+                .calibrated_output(),
+            0.0
+        );
+    }
+    #[test]
+    fn legacy_absence_does_not_add_wire_field_or_digest_data() {
+        let d = fixture(0.0);
+        let bytes = serde_json::to_vec(&d).unwrap();
+        assert!(!std::str::from_utf8(&bytes)
+            .unwrap()
+            .contains("grip_proprioception"));
+        assert_eq!(
+            serde_json::to_vec(&serde_json::from_slice::<PerceptionFrameDraft>(&bytes).unwrap())
+                .unwrap(),
+            bytes
+        );
+        let mut v = serde_json::to_value(&d).unwrap();
+        v["grip_proprioception"] = serde_json::Value::Null;
+        assert_eq!(
+            serde_json::from_value::<PerceptionFrameDraft>(v).unwrap(),
+            d
+        );
     }
 }

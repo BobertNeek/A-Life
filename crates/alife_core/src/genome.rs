@@ -99,6 +99,8 @@ pub struct CognitiveArchitectureGenomeParameters {
     memory_candidate_bound: Option<f32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     inherited_motor_layout: Option<u16>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    grip_proprioception: Option<bool>,
     attention_capacity: u8,
     active_concept_limit: u16,
     active_gap_limit: u8,
@@ -124,8 +126,26 @@ pub const COGNITIVE_ARCHITECTURE_ORIENTATION_SCHEMA_VERSION: u16 = 2;
 pub const COGNITIVE_ARCHITECTURE_GROUNDED_ORIENTATION_SCHEMA_VERSION: u16 = 3;
 /// Explicit inherited memory-bound extension. Old readers reject schema four.
 pub const COGNITIVE_ARCHITECTURE_MEMORY_BOUND_SCHEMA_VERSION: u16 = 4;
+/// Fresh inherited access to calibrated self-grip sensing; never a save migration.
+pub const COGNITIVE_ARCHITECTURE_GRIP_SCHEMA_VERSION: u16 = 5;
 
 impl CognitiveArchitectureGenomeParameters {
+    /// Enable existing tactile lane two as truthful self-grip proprioception.
+    /// This changes inherited identity, not sensory width or action policy.
+    pub fn with_grip_proprioception_v5(mut self) -> Result<Self, ScaffoldContractError> {
+        let layout = self.motor_layout_schema_version();
+        let bound = self.memory_candidate_bound();
+        self.schema_version = COGNITIVE_ARCHITECTURE_GRIP_SCHEMA_VERSION;
+        self.inherited_motor_layout = Some(layout);
+        self.memory_candidate_bound = Some(bound);
+        self.grip_proprioception = Some(true);
+        self.validate_contract()?;
+        Ok(self)
+    }
+    pub const fn grip_proprioception(&self) -> bool {
+        matches!(self.grip_proprioception, Some(true))
+    }
+
     /// Fresh genetic construction only; changing this changes phenotype identity.
     /// The cognitive-context bound remains 0.5. Existing motor layout is retained.
     pub fn with_memory_candidate_bound_v4(
@@ -133,7 +153,9 @@ impl CognitiveArchitectureGenomeParameters {
         bound: f32,
     ) -> Result<Self, ScaffoldContractError> {
         let layout = self.motor_layout_schema_version();
-        self.schema_version = COGNITIVE_ARCHITECTURE_MEMORY_BOUND_SCHEMA_VERSION;
+        if !self.grip_proprioception() {
+            self.schema_version = COGNITIVE_ARCHITECTURE_MEMORY_BOUND_SCHEMA_VERSION;
+        }
         self.memory_candidate_bound = Some(bound);
         self.inherited_motor_layout = Some(layout);
         self.validate_contract()?;
@@ -152,7 +174,7 @@ impl CognitiveArchitectureGenomeParameters {
         }
     }
     fn set_motor_layout(&mut self, layout: u16) {
-        if self.schema_version == COGNITIVE_ARCHITECTURE_MEMORY_BOUND_SCHEMA_VERSION {
+        if matches!(self.schema_version, 4 | 5) {
             self.inherited_motor_layout = Some(layout);
         } else {
             self.schema_version = layout;
@@ -225,6 +247,7 @@ impl CognitiveArchitectureGenomeParameters {
             schema_version: COGNITIVE_ARCHITECTURE_SCHEMA_VERSION,
             memory_candidate_bound: None,
             inherited_motor_layout: None,
+            grip_proprioception: None,
             attention_capacity,
             active_concept_limit,
             active_gap_limit,
@@ -252,6 +275,7 @@ impl CognitiveArchitectureGenomeParameters {
             schema_version: COGNITIVE_ARCHITECTURE_SCHEMA_VERSION,
             memory_candidate_bound: None,
             inherited_motor_layout: None,
+            grip_proprioception: None,
             attention_capacity: 1,
             active_concept_limit: 16,
             active_gap_limit: 4,
@@ -429,6 +453,9 @@ impl CognitiveArchitectureGenomeParameters {
             };
             child = child.with_memory_candidate_bound_v4(bound)?;
         }
+        if self.grip_proprioception() || other.grip_proprioception() {
+            child = child.with_grip_proprioception_v5()?;
+        }
         child.validate_for_brain_class(class)?;
         Ok(child)
     }
@@ -473,6 +500,9 @@ impl CognitiveArchitectureGenomeParameters {
             digest.write_u16(self.motor_layout_schema_version());
             digest.write_f32(bound)?;
         }
+        if let Some(grip) = self.grip_proprioception {
+            digest.write_u8(u8::from(grip));
+        }
         Ok(())
     }
 
@@ -513,7 +543,14 @@ impl CognitiveArchitectureGenomeParameters {
     }
 
     fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
-        let extended = self.schema_version == COGNITIVE_ARCHITECTURE_MEMORY_BOUND_SCHEMA_VERSION;
+        let extended = matches!(self.schema_version, 4 | 5);
+        if (self.schema_version == COGNITIVE_ARCHITECTURE_GRIP_SCHEMA_VERSION
+            && self.grip_proprioception != Some(true))
+            || (self.schema_version != COGNITIVE_ARCHITECTURE_GRIP_SCHEMA_VERSION
+                && self.grip_proprioception.is_some())
+        {
+            return Err(ScaffoldContractError::ScalarOutOfRange);
+        }
         if extended {
             if !matches!(self.inherited_motor_layout, Some(1..=3))
                 || !self
@@ -531,6 +568,7 @@ impl CognitiveArchitectureGenomeParameters {
                 | COGNITIVE_ARCHITECTURE_ORIENTATION_SCHEMA_VERSION
                 | COGNITIVE_ARCHITECTURE_GROUNDED_ORIENTATION_SCHEMA_VERSION
                 | COGNITIVE_ARCHITECTURE_MEMORY_BOUND_SCHEMA_VERSION
+                | COGNITIVE_ARCHITECTURE_GRIP_SCHEMA_VERSION
         ) || self.attention_capacity == 0
             || usize::from(self.attention_capacity) > crate::attention::MAX_FOCAL_TARGETS
             || self.active_concept_limit == 0
@@ -607,15 +645,21 @@ impl<'de> Deserialize<'de> for CognitiveArchitectureGenomeParameters {
                     }
                     let schema_version: u16 = next(&mut seq)?;
                     let (memory_candidate_bound, inherited_motor_layout) =
-                        if schema_version == COGNITIVE_ARCHITECTURE_MEMORY_BOUND_SCHEMA_VERSION {
+                        if matches!(schema_version, 4 | 5) {
                             (next(&mut seq)?, next(&mut seq)?)
                         } else {
                             (None, None)
                         };
+                    let grip_proprioception = if schema_version == 5 {
+                        next(&mut seq)?
+                    } else {
+                        None
+                    };
                     let value = CognitiveArchitectureGenomeParameters {
                         schema_version,
                         memory_candidate_bound,
                         inherited_motor_layout,
+                        grip_proprioception,
                         attention_capacity: next(&mut seq)?,
                         active_concept_limit: next(&mut seq)?,
                         active_gap_limit: next(&mut seq)?,
@@ -640,7 +684,7 @@ impl<'de> Deserialize<'de> for CognitiveArchitectureGenomeParameters {
                     Ok(value)
                 }
             }
-            return deserializer.deserialize_tuple(20, Positional);
+            return deserializer.deserialize_tuple(21, Positional);
         }
         #[derive(Deserialize)]
         struct Wire {
@@ -649,6 +693,8 @@ impl<'de> Deserialize<'de> for CognitiveArchitectureGenomeParameters {
             memory_candidate_bound: Option<f32>,
             #[serde(default)]
             inherited_motor_layout: Option<u16>,
+            #[serde(default)]
+            grip_proprioception: Option<bool>,
             attention_capacity: u8,
             active_concept_limit: u16,
             active_gap_limit: u8,
@@ -672,6 +718,7 @@ impl<'de> Deserialize<'de> for CognitiveArchitectureGenomeParameters {
             schema_version: wire.schema_version,
             memory_candidate_bound: wire.memory_candidate_bound,
             inherited_motor_layout: wire.inherited_motor_layout,
+            grip_proprioception: wire.grip_proprioception,
             attention_capacity: wire.attention_capacity,
             active_concept_limit: wire.active_concept_limit,
             active_gap_limit: wire.active_gap_limit,
@@ -2747,6 +2794,106 @@ mod inherited_memory_bound_tests {
         assert!(changed.grounded_orientation_repertoire());
         assert_eq!(changed.memory_candidate_bound(), 4.0);
     }
+    #[test]
+    fn grip_v5_roundtrip_strict_identity_and_builder_composition() {
+        let base = CognitiveArchitectureGenomeParameters::canonical_default();
+        for old in [
+            base,
+            base.with_independent_orientation_v2(2).unwrap(),
+            base.with_grounded_orientation_v3(3).unwrap(),
+            base.with_memory_candidate_bound_v4(1.0).unwrap(),
+        ] {
+            assert!(!old.grip_proprioception());
+            assert!(serde_json::to_value(old)
+                .unwrap()
+                .get("grip_proprioception")
+                .is_none());
+            let new = old.with_grip_proprioception_v5().unwrap();
+            assert!(new.grip_proprioception());
+            assert_eq!(new.schema_version(), 5);
+            assert_eq!(
+                new.motor_layout_schema_version(),
+                old.motor_layout_schema_version()
+            );
+            assert_eq!(new.memory_candidate_bound(), old.memory_candidate_bound());
+            let bytes = bincode::serde::encode_to_vec(new, bincode::config::standard()).unwrap();
+            let (restored, used) = bincode::serde::decode_from_slice::<
+                CognitiveArchitectureGenomeParameters,
+                _,
+            >(&bytes, bincode::config::standard())
+            .unwrap();
+            assert_eq!(restored, new);
+            assert_eq!(used, bytes.len());
+            let wire = serde_json::to_value(new).unwrap();
+            assert_eq!(
+                serde_json::from_value::<CognitiveArchitectureGenomeParameters>(wire.clone())
+                    .unwrap(),
+                new
+            );
+            for bad_value in [serde_json::Value::Null, serde_json::Value::Bool(false)] {
+                let mut bad = wire.clone();
+                bad["grip_proprioception"] = bad_value;
+                assert!(
+                    serde_json::from_value::<CognitiveArchitectureGenomeParameters>(bad).is_err()
+                );
+            }
+            for version in 1..=4 {
+                let mut bad = wire.clone();
+                bad["schema_version"] = version.into();
+                assert!(
+                    serde_json::from_value::<CognitiveArchitectureGenomeParameters>(bad).is_err()
+                );
+            }
+        }
+        let a = base
+            .with_grip_proprioception_v5()
+            .unwrap()
+            .with_memory_candidate_bound_v4(1.0)
+            .unwrap()
+            .with_grounded_orientation_v3(3)
+            .unwrap();
+        let b = base
+            .with_grounded_orientation_v3(3)
+            .unwrap()
+            .with_memory_candidate_bound_v4(1.0)
+            .unwrap()
+            .with_grip_proprioception_v5()
+            .unwrap();
+        assert_eq!(a, b);
+        assert_eq!(a.schema_version(), 5);
+    }
+
+    #[test]
+    fn grip_inheritance_retains_existing_mapping_draws() {
+        let base = CognitiveArchitectureGenomeParameters::canonical_default()
+            .with_memory_candidate_bound_v4(1.0)
+            .unwrap();
+        let grip = base.with_grip_proprioception_v5().unwrap();
+        let mut old_calls = 0;
+        base.map_inherited_parameters(&base, crate::BrainCapacityClass::N2048_ID, |a, _, _, _| {
+            old_calls += 1;
+            Ok(a)
+        })
+        .unwrap();
+        for (left, right) in [(base, grip), (grip, base), (grip, grip)] {
+            let mut calls = 0;
+            let child = left
+                .map_inherited_parameters(
+                    &right,
+                    crate::BrainCapacityClass::N2048_ID,
+                    |a, _, _, _| {
+                        calls += 1;
+                        Ok(a)
+                    },
+                )
+                .unwrap();
+            assert_eq!(calls, old_calls);
+            assert!(child.grip_proprioception());
+            assert_eq!(child.memory_candidate_bound(), 1.0);
+            assert_eq!(child.motor_layout_schema_version(), 1);
+        }
+    }
+
     #[test]
     fn reciprocal_extension_crosses_and_identity_are_preserved() {
         let legacy = CognitiveArchitectureGenomeParameters::canonical_default();

@@ -279,11 +279,11 @@ impl CandidateDecoderPlan {
             let architecture = phenotype.cognitive_architecture();
             if plan.max_candidate_gain().to_bits()
                 != architecture.memory_candidate_bound().to_bits()
-                || (plan.schema_version() == 2) != (architecture.schema_version() == 4)
+                || (plan.schema_version() == 2) != (matches!(architecture.schema_version(), 4 | 5))
             {
                 return Err(ScaffoldContractError::PhenotypeCompile);
             }
-        } else if phenotype.cognitive_architecture().schema_version() == 4 {
+        } else if matches!(phenotype.cognitive_architecture().schema_version(), 4 | 5) {
             return Err(ScaffoldContractError::PhenotypeCompile);
         }
         let capacity = crate::BrainCapacityClass::supported_for_id(phenotype.brain_class_id())?;

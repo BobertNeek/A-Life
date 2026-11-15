@@ -4602,6 +4602,28 @@ impl HeadlessWorld {
                         )?;
                     }
                 }
+                // Explicit inherited self-proprioception. This reports occupancy of
+                // the organism's own grip, not object kind or candidate identity.
+                // Count a complete authoritative scan, including entries that do
+                // not match, so accounting does not depend on iteration order.
+                let grip_proprioception = if profile == SensorProfile::GroundedObjectSlotsV1
+                    && architecture.is_some_and(|a| a.grip_proprioception())
+                {
+                    let mut inspected_objects = 0_u64;
+                    let mut held = false;
+                    for object in self.objects.values() {
+                        inspected_objects += 1;
+                        held |= object.carried_by == Some(organism_id);
+                    }
+                    let gain =
+                        embodiment.map_or(1.0, |body| body.sensor_gain(SensorCapability::Touch));
+                    let receipt =
+                        alife_core::GripProprioceptionV1::new(inspected_objects, held, gain)?;
+                    sensory.channels.tactile_contact[2] = receipt.calibrated_output();
+                    Some(receipt)
+                } else {
+                    None
+                };
                 // Player cues are present in every grounded profile. Environmental touch
                 // is already calibrated by the terrain helper; calibrate each
                 // player touch once, then max-mix without attenuating that contact.
@@ -4669,7 +4691,12 @@ impl HeadlessWorld {
                         slots,
                     )
                 };
-                draft.map(|draft| (draft, Some(binding)))
+                let draft = draft?;
+                let draft = match grip_proprioception {
+                    Some(receipt) => draft.with_grip_proprioception(receipt)?,
+                    None => draft,
+                };
+                Ok((draft, Some(binding)))
             }
         }
     }
@@ -16000,3 +16027,6 @@ mod profile_transfer_geometry2183_tests {
         }
     }
 }
+
+#[cfg(test)]
+mod grip_proprioception_tests;

@@ -46,6 +46,9 @@ impl CognitiveArchitecturePlan {
     pub const fn motor_layout_schema_version(&self) -> u16 {
         self.parameters.motor_layout_schema_version()
     }
+    pub const fn grip_proprioception(&self) -> bool {
+        self.parameters.grip_proprioception()
+    }
     pub const fn memory_candidate_bound(&self) -> f32 {
         self.parameters.memory_candidate_bound()
     }
