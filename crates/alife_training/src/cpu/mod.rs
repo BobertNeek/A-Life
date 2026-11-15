@@ -503,3 +503,12 @@ pub use maze_program::{MazeBlockedHistory2346,MAZE_RECURRENT_EDGES2346};
 
 #[cfg(test)]
 mod maze_program_tests;
+
+mod observed_map2349;
+mod route_policy2349;
+mod goal_route2349;
+mod navigation2349;
+pub use navigation2349::{NavigationState2349,NavigationReceipt2349};
+
+#[cfg(test)]
+mod navigation2349_tests;

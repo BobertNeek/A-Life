@@ -35,6 +35,7 @@ pub enum CpuHostError {
 }
 #[derive(Clone)]
 struct Resident {
+    navigation2349: Option<NavigationState2349>,
     maze_blocked2346: Option<MazeBlockedHistory2346>,
     active_approach_intent2327: Option<ActiveApproachIntent2327>,
     joint_comparison_mode: Option<u16>,
@@ -94,6 +95,8 @@ struct CpuReplayEvent {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CpuResidentCheckpoint {
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub navigation2349: Option<NavigationState2349>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub maze_blocked2346: Option<MazeBlockedHistory2346>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub active_approach_intent2327: Option<ActiveApproachIntent2327>,
@@ -118,6 +121,8 @@ pub struct CpuResidentCheckpoint {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CpuCanonicalCheckpoint {
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub experienced_navigation2349: Option<u16>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub maze_program2346: Option<u16>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub candidate_opportunity_coverage2313: Option<u16>,
@@ -141,6 +146,7 @@ pub struct CpuCanonicalCheckpoint {
 /// chemistry, memories, predictor, neural traces, sleep, sequence and RNG counter.
 #[derive(Clone)]
 pub struct CpuCanonicalHost {
+    experienced_navigation2349: Option<u16>,
     maze_program2346: Option<u16>,
     candidate_opportunity_coverage2313: Option<u16>,
     #[cfg(test)]
@@ -159,6 +165,7 @@ pub struct CpuCanonicalHost {
 }
 #[derive(Clone)]
 pub struct CpuCollectedDecision {
+    pub navigation2349: Option<NavigationReceipt2349>,
     pub active_approach_opportunity2327: Option<ActiveApproachOpportunityRow2327>,
     pub approach_attention_feedback2325: Option<ApproachAttentionFeedback2325>,
     /// Present only for the versioned plan-2 JSON wire; not an auxiliary reward.
@@ -312,6 +319,8 @@ pub struct MemoryPlanRow2242 {
 #[derive(Clone, serde::Deserialize)]
 struct CollectedDecisionFlat2242 {
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    navigation2349: Option<NavigationReceipt2349>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     active_approach_opportunity2327: Option<ActiveApproachOpportunityRow2327>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     approach_attention_feedback2325: Option<ApproachAttentionFeedback2325>,
@@ -353,6 +362,7 @@ impl From<CollectedDecisionFlat2242> for CpuCollectedDecision {
     fn from(flat: CollectedDecisionFlat2242) -> Self {
         Self {
             memory_plan2242: None,
+            navigation2349: flat.navigation2349,
             active_approach_opportunity2327: flat.active_approach_opportunity2327,
             approach_attention_feedback2325: flat.approach_attention_feedback2325,
             joint_membership2177: flat.joint_membership2177,
@@ -377,10 +387,13 @@ impl From<CollectedDecisionFlat2242> for CpuCollectedDecision {
     }
 }
 impl CpuCollectedDecision {
+    fn validate_navigation2349(&self)->Result<(),CpuHostError>{if let Some(r)=&self.navigation2349{r.validate_row(self.patch.pre_action().perception(),self.patch.header().sequence_id,&self.replay_tick)?;}Ok(())}
     pub(super) fn validate_memory_plan2242(
         &self,
         phenotype: &alife_core::BrainPhenotype,
     ) -> Result<(), crate::TrainingError> {
+        self.validate_navigation2349().map_err(|_|super::invalid())?;
+        if let Some(nav)=&self.navigation2349{for(c,bits)in self.patch.pre_action().perception().candidates().iter().zip(&nav.base_bits){let family=phenotype.candidate_decoder().families().iter().find(|f|f.family()==c.family).ok_or_else(super::invalid)?;if family.innate_contribution(self.patch.pre_action().perception().homeostasis().drives,c.features).to_bits()!=*bits{return Err(super::invalid())}}}
         self.patch.validate_contract()?;
         if self.patch.decision().neural_evidence()?.phenotype_hash != phenotype.phenotype_hash() {
             return Err(super::invalid());
@@ -406,7 +419,7 @@ impl CpuCollectedDecision {
 impl<'de> serde::Deserialize<'de> for CpuCollectedDecision {
     fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
         if !d.is_human_readable() {
-            return CollectedDecisionFlat2242::deserialize(d).map(Into::into);
+            let row:Self=CollectedDecisionFlat2242::deserialize(d)?.into();row.validate_navigation2349().map_err(serde::de::Error::custom)?;return Ok(row);
         }
         let value = serde_json::Value::deserialize(d)?;
         if value.get("memory_plan2_record_v1").is_some() {
@@ -439,11 +452,10 @@ impl<'de> serde::Deserialize<'de> for CpuCollectedDecision {
                 ));
             }
             row.memory_plan2242 = Some(payload.plan);
+            row.validate_navigation2349().map_err(serde::de::Error::custom)?;
             Ok(row)
         } else {
-            serde_json::from_value::<CollectedDecisionFlat2242>(value)
-                .map(Into::into)
-                .map_err(serde::de::Error::custom)
+            let row:Self=serde_json::from_value::<CollectedDecisionFlat2242>(value).map_err(serde::de::Error::custom)?.into();row.validate_navigation2349().map_err(serde::de::Error::custom)?;Ok(row)
         }
     }
 }
@@ -733,6 +745,8 @@ impl serde::Serialize for CpuCollectedDecision {
         #[derive(serde::Serialize)]
         struct Flat<'a> {
             #[serde(skip_serializing_if = "Option::is_none")]
+            navigation2349: &'a Option<NavigationReceipt2349>,
+            #[serde(skip_serializing_if = "Option::is_none")]
             active_approach_opportunity2327: &'a Option<ActiveApproachOpportunityRow2327>,
             #[serde(skip_serializing_if = "Option::is_none")]
             approach_attention_feedback2325: &'a Option<ApproachAttentionFeedback2325>,
@@ -758,6 +772,7 @@ impl serde::Serialize for CpuCollectedDecision {
             patch: &'a ExperiencePatch,
         }
         let flat = Flat {
+            navigation2349: &self.navigation2349,
             active_approach_opportunity2327: &self.active_approach_opportunity2327,
             approach_attention_feedback2325: &self.approach_attention_feedback2325,
             joint_membership2177: &self.joint_membership2177,
@@ -896,6 +911,7 @@ impl CpuCanonicalHost {
             residents.insert(
                 id.raw(),
                 Resident {
+                    navigation2349: None,
                     maze_blocked2346: None,
                     active_approach_intent2327: None,
                     joint_comparison_mode: None,
@@ -941,6 +957,7 @@ impl CpuCanonicalHost {
             fail_joint_membership_after_admission: false,
             #[cfg(test)]
             fail_ingest_outcome_binding2286: false,
+            experienced_navigation2349: None,
             maze_program2346: None,
             candidate_opportunity_coverage2313: None,
             joint_membership2177: None,
@@ -1200,6 +1217,57 @@ impl CpuCanonicalHost {
     }
 
     /// Explicit research sensing/repertoire capability, never a genome migration.
+    /// Explicit innate graph comparator, not acquired neural learning. Original remains immutable.
+    pub fn fork_with_experienced_navigation_for_research2349(&self,founder:&CpuFoundationTrainer)->Result<Self,CpuHostError>{self.fork_navigation_mode2349(founder,1)}
+    /// Separate innate known-route comparator, never a state migration or learned skill.
+    pub fn fork_with_graph_goal_route_for_research2349(&self,founder:&CpuFoundationTrainer)->Result<Self,CpuHostError>{self.fork_navigation_mode2349(founder,2)}
+    fn fork_navigation_mode2349(&self,founder:&CpuFoundationTrainer,mode:u16)->Result<Self,CpuHostError>{
+        let before=self.checkpoint(founder)?;
+        if before.schema_version!=19||self.maze_program2346!=Some(1)||self.experienced_navigation2349.is_some()||self.residents.is_empty()||self.world.organism_registry().iter().any(|r|!r.lifecycle().is_alive()){return Err(CpuHostError::State("navigation requires living CP19 retained source"));}
+        let mut next=self.clone();next.experienced_navigation2349=Some(mode);
+        for (&raw,r) in &mut next.residents {let mut navigation=NavigationState2349::empty(OrganismId(raw))?;navigation.version=mode;r.navigation2349=Some(navigation);r.sealed_authority=None;}
+        next.seal_all_residents()?;let after=next.checkpoint(founder)?;let mut norm=after.clone();norm.schema_version=19;norm.experienced_navigation2349=None;
+        for r in &mut norm.residents {r.navigation2349=None;}
+        // Verify each world record differs ONLY by the correctly derived new brain seal.
+        let old=before.world.world.organism_records.as_ref().ok_or(CpuHostError::State("missing original records"))?;
+        let new=norm.world.world.organism_records.as_mut().ok_or(CpuHostError::State("missing new records"))?;
+        if old.len()!=new.len(){return Err(CpuHostError::State("navigation changed record population"));}
+        for (a,b) in old.iter().zip(new.iter_mut()) {let mut expected=a.clone();expected.seal_cognitive_subsystems(a.biochemistry().tick,b.state_graph().brain.content_digest,a.state_graph().memory.content_digest)?;if serde_json::to_vec(&expected)?!=serde_json::to_vec(b)?{return Err(CpuHostError::State("navigation changed old private record"));}*b=a.clone();}
+        if serde_json::to_vec(&norm)?!=serde_json::to_vec(&before)?{return Err(CpuHostError::State("navigation altered retained state outside identity"));}
+        let cold=Self::from_checkpoint(after.clone(),founder)?;if serde_json::to_vec(&after)?!=serde_json::to_vec(&cold.checkpoint(founder)?)?{return Err(CpuHostError::State("navigation cold mismatch"));}Ok(next)
+    }
+    /// Preserve an acquired map and every historical receipt; change only its future controller.
+    pub fn fork_acquired_graph_with_goal_route_for_research2353(&self,founder:&CpuFoundationTrainer)->Result<Self,CpuHostError>{
+        let before=self.checkpoint(founder)?;
+        if before.schema_version!=20||self.maze_program2346!=Some(1)||self.experienced_navigation2349!=Some(1)||self.residents.is_empty()||self.world.organism_registry().iter().any(|r|!r.lifecycle().is_alive()){return Err(CpuHostError::State("goal route upgrade requires living CP20 mode1 retained source"));}
+        let mut next=self.clone();next.experienced_navigation2349=Some(2);
+        for r in next.residents.values_mut(){let navigation=r.navigation2349.as_mut().ok_or(CpuHostError::State("missing acquired map"))?;if navigation.version!=1{return Err(CpuHostError::State("acquired map controller mismatch"));}navigation.version=2;r.sealed_authority=None;}
+        next.seal_all_residents()?;let after=next.checkpoint(founder)?;let mut norm=after.clone();norm.experienced_navigation2349=Some(1);
+        for r in &mut norm.residents {r.navigation2349.as_mut().ok_or(CpuHostError::State("missing upgraded map"))?.version=1;}
+        // Verify each world record differs ONLY by the correctly derived new brain seal.
+        let old=before.world.world.organism_records.as_ref().ok_or(CpuHostError::State("missing original records"))?;
+        let new=norm.world.world.organism_records.as_mut().ok_or(CpuHostError::State("missing new records"))?;
+        if old.len()!=new.len(){return Err(CpuHostError::State("navigation changed record population"));}
+        for (a,b) in old.iter().zip(new.iter_mut()) {let mut expected=a.clone();expected.seal_cognitive_subsystems(a.biochemistry().tick,b.state_graph().brain.content_digest,a.state_graph().memory.content_digest)?;if serde_json::to_vec(&expected)?!=serde_json::to_vec(b)?{return Err(CpuHostError::State("navigation changed old private record"));}*b=a.clone();}
+        if serde_json::to_vec(&norm)?!=serde_json::to_vec(&before)?{return Err(CpuHostError::State("navigation altered retained state outside identity"));}
+        let cold=Self::from_checkpoint(after.clone(),founder)?;if serde_json::to_vec(&after)?!=serde_json::to_vec(&cold.checkpoint(founder)?)?{return Err(CpuHostError::State("navigation cold mismatch"));}Ok(next)
+    }
+    /// Preserve an acquired map and every historical receipt; change only its future controller.
+    pub fn fork_acquired_graph_with_validated_map_for_research2356(&self,founder:&CpuFoundationTrainer)->Result<Self,CpuHostError>{
+        let before=self.checkpoint(founder)?;
+        if before.schema_version!=20||self.maze_program2346!=Some(1)||self.experienced_navigation2349!=Some(1)||self.residents.is_empty()||self.world.organism_registry().iter().any(|r|!r.lifecycle().is_alive()){return Err(CpuHostError::State("validated map upgrade requires living CP20 mode1 retained source"));}
+        let mut next=self.clone();next.experienced_navigation2349=Some(3);
+        for r in next.residents.values_mut(){let navigation=r.navigation2349.as_mut().ok_or(CpuHostError::State("missing acquired map"))?;if navigation.version!=1{return Err(CpuHostError::State("acquired map controller mismatch"));}navigation.version=3;r.sealed_authority=None;}
+        next.seal_all_residents()?;let after=next.checkpoint(founder)?;let mut norm=after.clone();norm.experienced_navigation2349=Some(1);
+        for r in &mut norm.residents {r.navigation2349.as_mut().ok_or(CpuHostError::State("missing upgraded map"))?.version=1;}
+        // Verify each world record differs ONLY by the correctly derived new brain seal.
+        let old=before.world.world.organism_records.as_ref().ok_or(CpuHostError::State("missing original records"))?;
+        let new=norm.world.world.organism_records.as_mut().ok_or(CpuHostError::State("missing new records"))?;
+        if old.len()!=new.len(){return Err(CpuHostError::State("navigation changed record population"));}
+        for (a,b) in old.iter().zip(new.iter_mut()) {let mut expected=a.clone();expected.seal_cognitive_subsystems(a.biochemistry().tick,b.state_graph().brain.content_digest,a.state_graph().memory.content_digest)?;if serde_json::to_vec(&expected)?!=serde_json::to_vec(b)?{return Err(CpuHostError::State("navigation changed old private record"));}*b=a.clone();}
+        if serde_json::to_vec(&norm)?!=serde_json::to_vec(&before)?{return Err(CpuHostError::State("navigation altered retained state outside identity"));}
+        let cold=Self::from_checkpoint(after.clone(),founder)?;if serde_json::to_vec(&after)?!=serde_json::to_vec(&cold.checkpoint(founder)?)?{return Err(CpuHostError::State("navigation cold mismatch"));}Ok(next)
+    }
     pub fn fork_with_maze_program_for_research2346(&self,founder:&CpuFoundationTrainer)->Result<Self,CpuHostError>{
         self.validate_founder(founder)?;let before=self.checkpoint(founder)?;
         if before.schema_version!=18||self.maze_program2346.is_some()||self.candidate_opportunity_coverage2313!=Some(3)||self.residents.values().any(|r|r.maze_blocked2346.is_some()){return Err(CpuHostError::State("maze program requires original CP18 cap3"));}
@@ -1587,6 +1655,7 @@ impl CpuCanonicalHost {
             .values()
             .map(|r| {
                 Ok(CpuResidentCheckpoint {
+                    navigation2349: r.navigation2349.clone(),
                     maze_blocked2346: r.maze_blocked2346.clone(),
                     active_approach_intent2327: r.active_approach_intent2327.clone(),
                     memory_readout: r.memory_readout.clone(),
@@ -1608,11 +1677,12 @@ impl CpuCanonicalHost {
             })
             .collect::<Result<_, CpuHostError>>()?;
         Ok(CpuCanonicalCheckpoint {
+            experienced_navigation2349: self.experienced_navigation2349,
             maze_program2346: self.maze_program2346,
             candidate_opportunity_coverage2313: self.candidate_opportunity_coverage2313,
             joint_membership2177: self.joint_membership2177,
             terminal_context2135: self.terminal_context2135.clone(),
-            schema_version: if self.maze_program2346==Some(1) {19} else if self.candidate_opportunity_coverage2313 == Some(3) {
+            schema_version: if matches!(self.experienced_navigation2349,Some(1|2|3)){20} else if self.maze_program2346==Some(1) {19} else if self.candidate_opportunity_coverage2313 == Some(3) {
                 18
             } else if self.candidate_opportunity_coverage2313 == Some(2) {
                 17
@@ -1658,7 +1728,7 @@ impl CpuCanonicalHost {
         }
         if let Some(version) = checkpoint.candidate_opportunity_coverage2313 {
             if !matches!(version, 1..=3)
-                || checkpoint.schema_version != if checkpoint.maze_program2346==Some(1){19}else{match version {3=>18,2=>17,_=>16}}
+                || checkpoint.schema_version != if matches!(checkpoint.experienced_navigation2349,Some(1|2|3)){20}else if checkpoint.maze_program2346==Some(1){19}else{match version {3=>18,2=>17,_=>16}}
                 || !matches!(checkpoint.joint_membership2177, Some(14 | 15))
                 || founder.phenotype().sensor_profile() != SensorProfile::GroundedObjectSlotsV1
             {
@@ -1671,9 +1741,13 @@ impl CpuCanonicalHost {
                 "CP16 requires explicit candidate opportunity adapter",
             ));
         }
-        if checkpoint.maze_program2346.is_some() && (checkpoint.maze_program2346!=Some(1)||checkpoint.schema_version!=19||checkpoint.candidate_opportunity_coverage2313!=Some(3)) {return Err(CpuHostError::State("invalid maze program identity"));}
+        if checkpoint.maze_program2346.is_some() && (checkpoint.maze_program2346!=Some(1)||!matches!(checkpoint.schema_version,19|20)||checkpoint.candidate_opportunity_coverage2313!=Some(3)) {return Err(CpuHostError::State("invalid maze program identity"));}
         if checkpoint.schema_version==19&&checkpoint.maze_program2346!=Some(1){return Err(CpuHostError::State("CP19 requires maze program"));}
+        if checkpoint.experienced_navigation2349.is_some() && (!matches!(checkpoint.experienced_navigation2349,Some(1|2|3))||checkpoint.schema_version!=20||checkpoint.maze_program2346!=Some(1)){return Err(CpuHostError::State("invalid CP20 navigation identity"));}
+        if checkpoint.schema_version==20&&!matches!(checkpoint.experienced_navigation2349,Some(1|2|3)){return Err(CpuHostError::State("CP20 requires navigation"));}
+        if checkpoint.residents.iter().any(|r|r.navigation2349.is_some()!=(matches!(checkpoint.experienced_navigation2349,Some(1|2|3)))){return Err(CpuHostError::State("navigation resident capability mismatch"));}
         for resident in &checkpoint.residents {
+            if let Some(n)=&resident.navigation2349{if Some(n.version)!=checkpoint.experienced_navigation2349{return Err(CpuHostError::State("navigation controller identity mismatch"));}}
             if let Some(h)=&resident.maze_blocked2346 {h.validate()?;if checkpoint.maze_program2346!=Some(1)||h.source_sequence.raw()>=resident.next_sequence {return Err(CpuHostError::State("invalid blocked history identity"));}}
             if let Some(intent) = &resident.active_approach_intent2327 {
                 if checkpoint.candidate_opportunity_coverage2313 != Some(3) {return Err(CpuHostError::State("active intent requires CP18 coverage3"));}
@@ -1695,7 +1769,7 @@ impl CpuCanonicalHost {
                         10 | 11 => 13,
                         12 | 13 => 14,
                         14 | 15 => {
-                            if checkpoint.maze_program2346==Some(1) {19} else if checkpoint.candidate_opportunity_coverage2313 == Some(3) {
+                            if matches!(checkpoint.experienced_navigation2349,Some(1|2|3)){20}else if checkpoint.maze_program2346==Some(1) {19} else if checkpoint.candidate_opportunity_coverage2313 == Some(3) {
                                 18
                             } else if checkpoint.candidate_opportunity_coverage2313 == Some(2) {
                                 17
@@ -1786,6 +1860,7 @@ impl CpuCanonicalHost {
             {
                 return Err(CpuHostError::State("checkpoint causal boundary mismatch"));
             }
+            if let Some(nav)=&r.navigation2349 {nav.validate(id,r.next_sequence)?;}
             if let Some(h)=&r.maze_blocked2346 {h.validate()?;if h.organism_id!=id||h.source_tick>=world.tick(){return Err(CpuHostError::State("blocked history causal boundary mismatch"));}}
             if let Some(intent)=&r.active_approach_intent2327 {
                 if intent.organism_id!=id || intent.source_tick>=world.tick() {return Err(CpuHostError::State("active intent causal boundary mismatch"));}
@@ -1850,6 +1925,7 @@ impl CpuCanonicalHost {
                 }
             }
             let mut resident = Resident {
+                navigation2349: r.navigation2349,
                 maze_blocked2346: r.maze_blocked2346,
                 active_approach_intent2327: r.active_approach_intent2327,
                 joint_comparison_mode: checkpoint.joint_membership2177,
@@ -1899,6 +1975,7 @@ impl CpuCanonicalHost {
             fail_joint_membership_after_admission: false,
             #[cfg(test)]
             fail_ingest_outcome_binding2286: false,
+            experienced_navigation2349: checkpoint.experienced_navigation2349,
             maze_program2346: checkpoint.maze_program2346,
             candidate_opportunity_coverage2313: checkpoint.candidate_opportunity_coverage2313,
             joint_membership2177: checkpoint.joint_membership2177,
@@ -2425,6 +2502,7 @@ impl CpuCanonicalHost {
             } else {
                 0
             };
+            let mut navigation2349=if let Some(nav)=&mut r.navigation2349 {Some(nav.prepare(&perception_world,&frame,sequence,p,&mut context)?)}else{None};
             let mut output = r.neural.advance(founder, context, &effects)?;
             if let Some(receipt) = &terminal_context2135 {
                 apply_terminal2135(receipt, &mut output.candidate_logits)
@@ -2673,6 +2751,7 @@ impl CpuCanonicalHost {
                 r.active_approach_intent2327=after.clone();
                 Some(ActiveApproachOpportunityRow2327 {frame_digest:frame.frame_digest(),before,after,selection:active_selection2327.ok_or(CpuHostError::State("active mode lacks selector proof"))?,intent_work_units})
             }else{None};
+            let navigation_outcome_work2349=if let Some(nav)=&mut r.navigation2349 {let work=nav.after_actual(&frame,sequence,&action,&receipt.joint)?;let proof=navigation2349.as_mut().ok_or(CpuHostError::State("missing navigation input receipt"))?;proof.seal_outcome_work(work)?;nav.last_receipt=Some(proof.clone());proof.outcome_work_units}else{0};
             let maze_outcome_work2346=if self.maze_program2346==Some(1){
                 let (history,work)=MazeBlockedHistory2346::from_outcome(&frame,sequence,&receipt.joint)?;
                 r.maze_blocked2346=history;work+1 // pending state assignment
@@ -2682,6 +2761,7 @@ impl CpuCanonicalHost {
                 work_synapses,
                 dendritic_work,
                 cognitive.attention.budget_receipt.work_units
+                    + navigation2349.as_ref().map_or(0,|r|r.work_units) + navigation_outcome_work2349
                     + maze_sense_work2346 + maze_outcome_work2346
                     + frame.maze_heading_work_units()
                     + frame.maze_blocked_sense2346().map_or(0, |s|s.work_units())
@@ -2882,6 +2962,7 @@ impl CpuCanonicalHost {
                         additional_work_ops: readout_work,
                     });
             decisions.push(CpuCollectedDecision {
+                navigation2349,
                 active_approach_opportunity2327,
                 approach_attention_feedback2325,
                 memory_plan2242: founder
@@ -3064,6 +3145,7 @@ fn resident_digest(
             sampling_counter,
         ),
     )?;
+    let ordinary=match &r.navigation2349 {Some(nav)=>json_digest(b"ALIFE-CPU-OBSERVED-MAP-2349",&(ordinary,nav))?,None=>ordinary};
     let ordinary=match &r.maze_blocked2346 {Some(history)=>json_digest(b"ALIFE-CPU-MAZE-BLOCKED-V1",&(ordinary,history))?,None=>ordinary};
     let ordinary=match &r.active_approach_intent2327 {Some(intent)=>json_digest(b"ALIFE-CPU-ACTIVE-APPROACH-INTENT-V1",&(ordinary,intent))?,None=>ordinary};
     let ordinary = match r.joint_comparison_mode {
