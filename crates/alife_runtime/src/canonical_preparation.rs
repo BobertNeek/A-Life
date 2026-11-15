@@ -608,6 +608,8 @@ pub struct CanonicalPreparedFrame {
     pub frame: PerceptionFrame,
     pub memory_recall: FinalizedMemoryRecall,
     pub joint_comparison_sources: Option<Vec<alife_core::memory::JointMembershipSourceV1>>,
+    /// Ordinary component basis finalized against its own context, not the joint frame.
+    pub joint_ordinary_success2275: Option<(PerceptionFrame, FinalizedMemoryRecall)>,
 }
 pub struct CanonicalPreparationOutcome {
     pub result: Result<CanonicalPreparedFrame, ScaffoldContractError>,
@@ -770,6 +772,18 @@ pub fn prepare_canonical_frame_joint_contact_query_withheld2273(
     prepare_canonical_frame_impl(input, memory, topology, predictor, measure, false, 7)
 }
 
+/// Full-query Contact application with an independent ordinary success basis.
+/// Applied/withheld CPU projection consumes precisely the same preparation.
+pub fn prepare_canonical_frame_joint_contact_success2275(
+    input: &CanonicalPreparationInput,
+    memory: &MemorySidecarState,
+    topology: &TopologySidecar,
+    predictor: &GroundedSuccessorPredictor,
+    measure: bool,
+) -> CanonicalPreparationOutcome {
+    prepare_canonical_frame_impl(input, memory, topology, predictor, measure, false, 8)
+}
+
 fn prepare_canonical_frame_impl(
     input: &CanonicalPreparationInput,
     memory: &MemorySidecarState,
@@ -874,7 +888,16 @@ fn prepare_canonical_frame_impl(
         preparation_stage = "routed recall";
         let leaf_started = measure.then(std::time::Instant::now);
         let mut joint_comparison_sources = None;
-        let routed_recall = if matches!(joint_membership, 6 | 7) {
+        let mut joint_ordinary_success2275 = None;
+        let routed_recall = if joint_membership == 8 {
+            let (joint, sources, ordinary) =
+                memory.recall_frame_joint_contact_success_basis2275(&routed_draft)?;
+            let (ordinary_frame, ordinary) = ordinary.finalize(routed_draft.clone())?;
+            ordinary.validate_for_frame(&ordinary_frame)?;
+            joint_ordinary_success2275 = Some((ordinary_frame, ordinary));
+            joint_comparison_sources = Some(sources);
+            joint
+        } else if matches!(joint_membership, 6 | 7) {
             let (p, sources) = memory.recall_frame_joint_contact_query_comparison2273(
                 &routed_draft,
                 joint_membership == 6,
@@ -945,6 +968,7 @@ fn prepare_canonical_frame_impl(
             frame,
             memory_recall,
             joint_comparison_sources,
+            joint_ordinary_success2275,
         })
     })();
     CanonicalPreparationOutcome {

@@ -91,3 +91,53 @@ ordinary routing.
 This isolated cost hypothesis is not evidence of a behavioral winner: capture
 cost and acquisition-history differences remain, and application can independently
 change decisions. No default promotion follows from API correctness tests.
+
+## Opt-in ordinary success-component projection (2275)
+
+Fresh CPU hosts may explicitly select `enable_joint_contact_success_projection2275`
+with `apply_projection=true` (mode 8) or false (mode 9). Checkpoint schema 12 and
+live receipt schema 6 identify cost revision 2 of this policy; existing modes and acquired states
+are not migrated. This is not a default route or a demonstrated behavioral win.
+
+Both modes perform the full all-family membership query, capture/admission, and
+Contact application of mode 4. They do not use the reduced-query plan of modes
+6/7. One ordinary lookup also retains its original family provenance. Only the
+Contact candidate decoder's lane 33 can be replaced with ordinary family success
+multiplied by ordinary retrieval confidence. Mode 9 computes the same value but
+withholds this one-component projection. Both still report joint Contact recall
+as applied. Raw joint values, confidence, sources, cognitive context, other 53
+candidate inputs, and all non-Contact decoder rows are unchanged by projection.
+
+Success is shared bundle AND-success, not standalone confidence or per-member
+causal credit. Shared valence, danger and energy remain joint estimates; this
+policy does not reinterpret them as isolated action rewards. A zero-support
+ordinary query projects exact zero with no invented sources: this means no
+ordinary success evidence, not an observed member or bundle failure. Raw joint
+success and its positive joint provenance remain unchanged. Positive ordinary
+success support is retained, rather than universally ablated.
+
+The transient ordinary basis is finalized against its own context and matched
+by organism, tick, base frame, bank generation/digest and candidate decision keys.
+An explicit receipt reports ordinary raw success/confidence/count/best source,
+full ordinary provenance, joint weighted success, projected value, and actual
+output. Existing joint source receipts remain separate. Both modes charge the
+same declared additional logical copying, validation, provenance and component
+selection work, not wall-clock instructions. They are not work-matched to mode 4.
+
+This isolates an application hypothesis from separate query/capture/history
+cost effects. It adds no learner, reward, privileged object-kind or chemistry
+gate, and does not claim to repair all observed failures. GPU/default behavior is
+unchanged. New research rows remain ineligible for ordinary training admission.
+
+The projection's declared work is included exactly once in both the pre-action
+ATP affordability accounting and the actual shared cognitive-work interval
+charged to physiology. The live query-work receipt includes it once; Core recall
+work includes basis preparation but not the CPU projection. Native tests reconcile
+these components with the sealed patch and measured biological debit, rather
+than testing only applied/withheld work equality.
+
+Pre-publication cost-revision-1 checkpoints (schema 11) remain historical only.
+The corrected authority digest seals cost revision 2 separately for modes 8/9.
+Both original schema-11 checkpoints and schema-only edits to 12 are rejected;
+there is no implicit migration or resealing of those acquired lives. Modes 0–7
+retain their previous checkpoint schemas, authority domains and behavior.
