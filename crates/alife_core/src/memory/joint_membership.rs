@@ -275,6 +275,31 @@ impl MemoryBank {
         )
     }
 
+    /// Full global joint application plus a bounded same-lookup Ingest basis.
+    /// The deterministic transform tariff is precharged once with lookup work.
+    pub fn recall_frame_joint_ingest_outcome_basis2286(
+        &self,
+        draft: &PerceptionFrameDraft,
+    ) -> Result<
+        (
+            PreparedMemoryRecall,
+            Vec<JointMembershipSourceV1>,
+            OrdinaryIngestOutcomeBasis2286,
+        ),
+        ScaffoldContractError,
+    > {
+        let (ordinary, basis) = self.recall_frame_impl_with_ingest_basis2286(draft, false, true)?;
+        let basis = basis.ok_or(ScaffoldContractError::InvalidMemoryQuery)?;
+        let (mut joint, queried) =
+            self.joint_comparison_from_prepared2275(ordinary, draft, true, false)?;
+        joint.receipt.execution_evidence_work = joint
+            .receipt
+            .execution_evidence_work
+            .checked_add(basis.evidence().work.total()?)
+            .ok_or(ScaffoldContractError::ScalarOutOfRange)?;
+        Ok((joint, queried, basis))
+    }
+
     fn recall_frame_joint_comparison_impl(
         &self,
         draft: &PerceptionFrameDraft,

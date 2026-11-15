@@ -610,6 +610,7 @@ pub struct CanonicalPreparedFrame {
     pub joint_comparison_sources: Option<Vec<alife_core::memory::JointMembershipSourceV1>>,
     /// Ordinary component basis finalized against its own context, not the joint frame.
     pub joint_ordinary_success2275: Option<(PerceptionFrame, FinalizedMemoryRecall)>,
+    pub joint_ingest_outcome_basis2286: Option<OrdinaryIngestOutcomeBasis2286>,
 }
 pub struct CanonicalPreparationOutcome {
     pub result: Result<CanonicalPreparedFrame, ScaffoldContractError>,
@@ -804,6 +805,17 @@ pub fn prepare_canonical_frame_joint_non_ingest_withheld2278(
     prepare_canonical_frame_impl(input, memory, topology, predictor, measure, false, 11)
 }
 
+/// Full global joint context with bounded ordinary Ingest outcome evidence.
+pub fn prepare_canonical_frame_joint_ingest_outcome2286(
+    input: &CanonicalPreparationInput,
+    memory: &MemorySidecarState,
+    topology: &TopologySidecar,
+    predictor: &GroundedSuccessorPredictor,
+    measure: bool,
+) -> CanonicalPreparationOutcome {
+    prepare_canonical_frame_impl(input, memory, topology, predictor, measure, false, 12)
+}
+
 fn prepare_canonical_frame_impl(
     input: &CanonicalPreparationInput,
     memory: &MemorySidecarState,
@@ -909,7 +921,14 @@ fn prepare_canonical_frame_impl(
         let leaf_started = measure.then(std::time::Instant::now);
         let mut joint_comparison_sources = None;
         let mut joint_ordinary_success2275 = None;
-        let routed_recall = if matches!(joint_membership, 10 | 11) {
+        let mut joint_ingest_outcome_basis2286 = None;
+        let routed_recall = if joint_membership == 12 {
+            let (joint, sources, basis) =
+                memory.recall_frame_joint_ingest_outcome_basis2286(&routed_draft)?;
+            joint_ingest_outcome_basis2286 = Some(basis);
+            joint_comparison_sources = Some(sources);
+            joint
+        } else if matches!(joint_membership, 10 | 11) {
             let (p, sources) = memory.recall_frame_joint_non_ingest_comparison2278(
                 &routed_draft,
                 joint_membership == 10,
@@ -996,6 +1015,7 @@ fn prepare_canonical_frame_impl(
             memory_recall,
             joint_comparison_sources,
             joint_ordinary_success2275,
+            joint_ingest_outcome_basis2286,
         })
     })();
     CanonicalPreparationOutcome {

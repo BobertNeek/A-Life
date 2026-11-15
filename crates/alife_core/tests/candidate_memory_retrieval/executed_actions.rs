@@ -1069,3 +1069,30 @@ fn non_ingest2278_zero_and_subnormal_support_preserve_exact_full_query_policy() 
         }
     }
 }
+
+#[test]
+fn ingest2286_retains_existing_ordinary_confidence_underflow_contract() {
+    // Deliberate checked storage fixture, not an edited acquired World life.
+    let mut wire = serde_json::to_value(joint_fixture()).unwrap();
+    wire["candidate_store"]["records"]["1"]["confidence"] = serde_json::json!(f32::from_bits(1));
+    let bank: MemoryBank = serde_json::from_value(wire).unwrap();
+    for tick in [3, 1_000_000] {
+        let probe = probe_for_object(tick, slot(0, 71, 0.4, [0., 0.8, 0.9]));
+        let ordinary = bank.recall_frame(&probe);
+        let next = bank.recall_frame_joint_ingest_outcome_basis2286(&probe);
+        match ordinary {
+            Ok(ordinary) => {
+                let (_, _, basis) = next.unwrap();
+                let c = &ordinary.context().candidates[0];
+                let b = &basis.evidence().rows[0];
+                assert_eq!(b.confidence, c.family_confidence.raw());
+                assert_eq!(b.source_count, c.family_source_count);
+                assert_eq!(
+                    b.support_eligible,
+                    c.family_source_count > 0 && c.family_confidence.raw() > 0.
+                );
+            }
+            Err(error) => assert_eq!(next.err(), Some(error)),
+        }
+    }
+}

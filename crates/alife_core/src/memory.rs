@@ -33,6 +33,11 @@ pub use executed_action::{
     ExecutedActionMemoryV1, ExecutedActionRecallV1, ExecutionEvidenceInspectionV1,
 };
 
+mod ingest_outcome_basis2286;
+pub use ingest_outcome_basis2286::{
+    IngestOutcomeWork2286, OrdinaryIngestOutcomeBasis2286, OrdinaryIngestOutcomeEvidence2286,
+    OrdinaryIngestOutcomeRow2286,
+};
 mod family_provenance;
 pub use family_provenance::{MemoryFamilySourceV1, MemoryFamilySourcesV1};
 
@@ -1134,6 +1139,17 @@ impl MemoryBank {
         draft: &PerceptionFrameDraft,
         collect_sources: bool,
     ) -> Result<PreparedMemoryRecall, ScaffoldContractError> {
+        self.recall_frame_impl_with_ingest_basis2286(draft, collect_sources, false)
+            .map(|(p, _)| p)
+    }
+
+    fn recall_frame_impl_with_ingest_basis2286(
+        &self,
+        draft: &PerceptionFrameDraft,
+        collect_sources: bool,
+        ingest_basis: bool,
+    ) -> Result<(PreparedMemoryRecall, Option<OrdinaryIngestOutcomeBasis2286>), ScaffoldContractError>
+    {
         self.config.validate_contract()?;
         if self.len != 0 {
             return Err(ScaffoldContractError::MemoryModeConflict);
@@ -1156,7 +1172,17 @@ impl MemoryBank {
             family_counts[slot][usize::from(candidate.family.raw())] += 1;
         }
         let mut target_cache = std::collections::BTreeMap::new();
-        let mut family_cache = std::collections::BTreeMap::new();
+        let mut family_cache =
+            std::collections::BTreeMap::<_, (u16, candidate_recall::FamilyRecallResult)>::new();
+        let mut basis_rows = Vec::new();
+        let mut basis_work = IngestOutcomeWork2286 {
+            selection: 0,
+            provenance_capture: 0,
+            provenance_cache_copy: 0,
+            basis_construction: 16,
+            support_validation: 0,
+            cpu_transform: 16,
+        };
         let mut family_sources =
             collect_sources.then(|| Vec::with_capacity(draft.candidates().len()));
         let mut candidate_queries = Vec::with_capacity(draft.candidates().len());
@@ -1169,6 +1195,10 @@ impl MemoryBank {
         let mut social_recognition = std::collections::BTreeMap::new();
 
         for candidate in draft.candidates() {
+            let capture_ingest = ingest_basis && candidate.family == CandidateActionFamily::Ingest;
+            if ingest_basis {
+                basis_work.selection += 1;
+            }
             let query = MemoryQueryEncoderV2::encode_validated_candidate(draft, candidate)?;
             let (target_bucket, family_bucket) = keys_for_query(&query);
             let has_target = query.tracked_object_id().is_some();
@@ -1199,13 +1229,24 @@ impl MemoryBank {
                     (result, None)
                 }
             };
-            let (family, family_reused_from) = match family_cache_key
+            let (mut family, family_reused_from) = match family_cache_key
                 .as_ref()
                 .and_then(|key| family_cache.get(key))
             {
-                Some((index, result)) => (Clone::clone(result), Some(*index)),
+                Some((index, result)) => {
+                    if capture_ingest {
+                        basis_work.provenance_cache_copy +=
+                            ingest_outcome_basis2286::provenance_tariff(
+                                result
+                                    .provenance
+                                    .as_ref()
+                                    .ok_or(ScaffoldContractError::InvalidMemoryQuery)?,
+                            );
+                    }
+                    (Clone::clone(result), Some(*index))
+                }
                 None => {
-                    let result = if collect_sources {
+                    let result = if collect_sources || capture_ingest {
                         candidate_recall::recall_family_channel_with_provenance(
                             &self.candidate_store,
                             &query,
@@ -1216,6 +1257,15 @@ impl MemoryBank {
                     } else {
                         recall_family_channel(&self.candidate_store, &query, &family_bucket)?
                     };
+                    if capture_ingest {
+                        basis_work.provenance_capture +=
+                            ingest_outcome_basis2286::provenance_tariff(
+                                result
+                                    .provenance
+                                    .as_ref()
+                                    .ok_or(ScaffoldContractError::InvalidMemoryQuery)?,
+                            );
+                    }
                     exact_bucket_reads = exact_bucket_reads.saturating_add(1);
                     neighbor_bucket_reads = neighbor_bucket_reads.saturating_add(
                         neighbor_family_keys(&family_bucket).len().saturating_sub(1) as u32
@@ -1223,6 +1273,15 @@ impl MemoryBank {
                     );
                     similarity_evaluations = similarity_evaluations.saturating_add(result.searched);
                     if let Some(key) = family_cache_key {
+                        if capture_ingest {
+                            basis_work.provenance_cache_copy +=
+                                ingest_outcome_basis2286::provenance_tariff(
+                                    result
+                                        .provenance
+                                        .as_ref()
+                                        .ok_or(ScaffoldContractError::InvalidMemoryQuery)?,
+                                );
+                        }
                         family_cache.insert(key, (candidate.candidate_index, result.clone()));
                     }
                     (result, None)
@@ -1258,6 +1317,34 @@ impl MemoryBank {
                         .clone()
                         .ok_or(ScaffoldContractError::InvalidMemoryQuery)?,
                 );
+            }
+            if capture_ingest {
+                let sources = *family
+                    .provenance
+                    .take()
+                    .ok_or(ScaffoldContractError::InvalidMemoryQuery)?;
+                basis_work.basis_construction +=
+                    12 + ingest_outcome_basis2286::provenance_tariff(&sources);
+                let (support_eligible, support_work) = ingest_outcome_basis2286::validate_support(
+                    &sources,
+                    family.source_count,
+                    family.best_source,
+                    family.confidence.raw(),
+                    draft.organism_id(),
+                    profile,
+                )?;
+                basis_work.support_validation += support_work;
+                basis_rows.push(OrdinaryIngestOutcomeRow2286 {
+                    candidate_index: candidate.candidate_index,
+                    query_digest: query.canonical_digest(),
+                    values: [family.values[0], family.values[3]],
+                    confidence: family.confidence.raw(),
+                    source_count: family.source_count,
+                    best_source: family.best_source,
+                    sources,
+                    provenance_valid: true,
+                    support_eligible,
+                });
             }
             candidate_contexts.push(CandidateMemoryContextV1 {
                 candidate_index: candidate.candidate_index,
@@ -1326,7 +1413,26 @@ impl MemoryBank {
         // Re-encoding this freshly derived private result is a debug diagnostic.
         #[cfg(debug_assertions)]
         prepared.validate_for_draft(draft)?;
-        Ok(prepared)
+        let basis = if ingest_basis {
+            basis_work.cpu_transform +=
+                draft.candidates().len() as u64 + 17 * basis_rows.len() as u64;
+            Some(OrdinaryIngestOutcomeBasis2286 {
+                evidence: OrdinaryIngestOutcomeEvidence2286 {
+                    organism_id: draft.organism_id(),
+                    tick: draft.tick(),
+                    profile,
+                    base_frame_digest: draft.base_digest(),
+                    bank_digest: prepared.receipt.bank_digest,
+                    input_generation: prepared.receipt.input_generation,
+                    candidate_count: prepared.receipt.candidate_count,
+                    rows: basis_rows,
+                    work: basis_work,
+                },
+            })
+        } else {
+            None
+        };
+        Ok((prepared, basis))
     }
 
     pub fn observe_sealed_patch(

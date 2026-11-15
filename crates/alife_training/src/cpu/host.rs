@@ -133,6 +133,8 @@ pub struct CpuCanonicalCheckpoint {
 pub struct CpuCanonicalHost {
     #[cfg(test)]
     fail_joint_membership_after_admission: bool,
+    #[cfg(test)]
+    fail_ingest_outcome_binding2286: bool,
     joint_membership2177: Option<u16>,
     terminal_context2135: Option<TerminalContextConfig2135>,
     world: HeadlessWorld,
@@ -322,6 +324,8 @@ pub struct JointMembershipLiveReceipt2177 {
     pub comparison: Option<JointMembershipComparison2182>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub success_projection2275: Option<JointContactSuccessProjection2275>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ingest_outcome_projection2286: Option<JointIngestOutcomeProjection2286>,
     pub query_work: u64,
     pub admission_planning_work: u64,
     pub admission_reserved_work: u64,
@@ -453,6 +457,109 @@ fn project_joint_contact_success2275(
         apply,
         ordinary_query: b.clone(),
         work,
+        candidates,
+    })
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct JointIngestOutcomeProjection2286 {
+    pub apply: bool,
+    pub component_mask: u8,
+    pub cost_revision: u16,
+    pub requires_positive_ordinary_support: bool,
+    pub ordinary: OrdinaryIngestOutcomeEvidence2286,
+    pub actual_cpu_ops: u64,
+    pub candidates: Vec<JointIngestOutcomeCandidate2286>,
+}
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct JointIngestOutcomeCandidate2286 {
+    pub candidate_index: u16,
+    pub support_eligible: bool,
+    pub applied: bool,
+    pub joint_values: [f32; 2],
+    pub joint_confidence: f32,
+    pub joint_source_count: u16,
+    pub joint_best_source: Option<MemoryId>,
+    pub joint_weighted: [f32; 2],
+    pub ordinary_weighted: [f32; 2],
+    pub output_weighted: [f32; 2],
+}
+fn project_joint_ingest_outcome2286(
+    frame: &PerceptionFrame,
+    joint: &FinalizedMemoryRecall,
+    basis: OrdinaryIngestOutcomeBasis2286,
+    tick: &mut crate::TrainingReplayTick,
+    apply: bool,
+) -> Result<JointIngestOutcomeProjection2286, CpuHostError> {
+    if tick.candidates.len() != frame.candidates().len() {
+        return Err(CpuHostError::State(
+            "Ingest projection candidate count mismatch",
+        ));
+    }
+    let mut actual = basis.validate_for_recall(frame, joint)?;
+    let ordinary = basis.into_evidence();
+    let mut candidates = Vec::with_capacity(ordinary.rows.len());
+    for row in &ordinary.rows {
+        let i = usize::from(row.candidate_index);
+        let encoded = &mut tick.candidates[i];
+        actual += 1; // Executed destination-family binding event.
+        if encoded.family != CandidateActionFamily::Ingest {
+            return Err(CpuHostError::State(
+                "Ingest projection destination mismatch",
+            ));
+        }
+        let eligible = row.source_count > 0 && row.confidence > 0.0 && row.provenance_valid;
+        let apply_row = apply && eligible;
+        actual += 1; // Actual fixed support-gate event in both arms.
+        if eligible != row.support_eligible {
+            return Err(CpuHostError::State("Ingest support eligibility mismatch"));
+        }
+        let raw = &joint.context().candidates[i];
+        let mut old = [0.; 2];
+        let mut weighted = [0.; 2];
+        let mut output = [0.; 2];
+        for (component, lane) in [32, 35].into_iter().enumerate() {
+            old[component] = encoded.decoder_inputs[lane];
+            actual += 1; // component read
+            weighted[component] = row.values[component] * row.confidence;
+            actual += 1; // product
+            output[component] = if apply_row {
+                weighted[component]
+            } else {
+                old[component]
+            };
+            actual += 1;
+            encoded.decoder_inputs[lane] = output[component];
+            actual += 1; // assignment even withheld
+            actual += 1; // emitted component receipt event below
+        }
+        candidates.push(JointIngestOutcomeCandidate2286 {
+            candidate_index: row.candidate_index,
+            support_eligible: eligible,
+            applied: apply_row,
+            joint_values: [raw.family_value[0], raw.family_value[3]],
+            joint_confidence: raw.family_confidence.raw(),
+            joint_source_count: raw.family_source_count,
+            joint_best_source: raw.best_family_source,
+            joint_weighted: old,
+            ordinary_weighted: weighted,
+            output_weighted: output,
+        });
+    }
+    if actual != ordinary.work.cpu_transform {
+        return Err(CpuHostError::State(
+            "Ingest projection actual/precharged work mismatch",
+        ));
+    }
+    Ok(JointIngestOutcomeProjection2286 {
+        apply,
+        component_mask: 9,
+        cost_revision: 1,
+        requires_positive_ordinary_support: true,
+        ordinary,
+        actual_cpu_ops: actual,
         candidates,
     })
 }
@@ -690,6 +797,8 @@ impl CpuCanonicalHost {
         let mut host = Self {
             #[cfg(test)]
             fail_joint_membership_after_admission: false,
+            #[cfg(test)]
+            fail_ingest_outcome_binding2286: false,
             joint_membership2177: None,
             terminal_context2135: None,
             world,
@@ -912,6 +1021,23 @@ impl CpuCanonicalHost {
         Ok(())
     }
 
+    /// Fresh global-joint Ingest valence/energy projection, component mask 9.
+    pub fn enable_joint_ingest_outcome_projection2286(
+        &mut self,
+        founder: &CpuFoundationTrainer,
+        apply_projection: bool,
+    ) -> Result<(), CpuHostError> {
+        let mut next = self.clone();
+        next.validate_joint_membership_enable(founder)?;
+        next.joint_membership2177 = Some(if apply_projection { 12 } else { 13 });
+        for resident in next.residents.values_mut() {
+            resident.joint_comparison_mode = next.joint_membership2177;
+        }
+        next.seal_all_residents()?;
+        *self = next;
+        Ok(())
+    }
+
     pub fn world(&self) -> &HeadlessWorld {
         &self.world
     }
@@ -1115,6 +1241,7 @@ impl CpuCanonicalHost {
                     Some(6 | 7) => 10,
                     Some(8 | 9) => 12,
                     Some(10 | 11) => 13,
+                    Some(12 | 13) => 14,
                     _ => 7,
                 }
             } else if self.residents.values().any(|r| r.memory_readout.is_some()) {
@@ -1149,7 +1276,7 @@ impl CpuCanonicalHost {
             .iter()
             .any(|r| r.memory_readout.is_some());
         if let Some(version) = checkpoint.joint_membership2177 {
-            if !matches!(version, 1..=11)
+            if !matches!(version, 1..=13)
                 || checkpoint.schema_version
                     != match version {
                         1 => 8,
@@ -1157,6 +1284,7 @@ impl CpuCanonicalHost {
                         6 | 7 => 10,
                         8 | 9 => 12,
                         10 | 11 => 13,
+                        12 | 13 => 14,
                         _ => 7,
                     }
                 || has_readout
@@ -1343,6 +1471,8 @@ impl CpuCanonicalHost {
         let host = Self {
             #[cfg(test)]
             fail_joint_membership_after_admission: false,
+            #[cfg(test)]
+            fail_ingest_outcome_binding2286: false,
             joint_membership2177: checkpoint.joint_membership2177,
             terminal_context2135: checkpoint.terminal_context2135.clone(),
             world,
@@ -1625,7 +1755,9 @@ impl CpuCanonicalHost {
                     "semantic preparation changed ordinary perception",
                 ));
             }
-            let prepare_frame = if self.joint_membership2177 == Some(10) {
+            let prepare_frame = if matches!(self.joint_membership2177, Some(12 | 13)) {
+                prepare_canonical_frame_joint_ingest_outcome2286
+            } else if self.joint_membership2177 == Some(10) {
                 prepare_canonical_frame_joint_non_ingest_applied2278
             } else if self.joint_membership2177 == Some(11) {
                 prepare_canonical_frame_joint_non_ingest_withheld2278
@@ -1696,6 +1828,7 @@ impl CpuCanonicalHost {
                             Some(6 | 7) => 4,
                             Some(8 | 9) => 6,
                             Some(10 | 11) => 7,
+                            Some(12 | 13) => 8,
                             _ => 2,
                         },
                         sources: recall.receipt().joint_membership_sources.clone(),
@@ -1703,7 +1836,7 @@ impl CpuCanonicalHost {
                             JointMembershipComparison2182 {
                                 apply: matches!(
                                     self.joint_membership2177,
-                                    Some(2 | 4 | 6 | 8 | 9 | 10)
+                                    Some(2 | 4 | 6 | 8 | 9 | 10 | 12 | 13)
                                 ),
                                 applied_family2266: matches!(
                                     self.joint_membership2177,
@@ -1719,6 +1852,7 @@ impl CpuCanonicalHost {
                             }
                         }),
                         success_projection2275: None,
+                        ingest_outcome_projection2286: None,
                         query_work: recall.receipt().execution_evidence_work,
                         admission_planning_work: 0,
                         admission_reserved_work: 0,
@@ -1796,6 +1930,25 @@ impl CpuCanonicalHost {
                     .checked_add(projection.work)
                     .ok_or(CpuHostError::State("projection work overflow"))?;
                 receipt.success_projection2275 = Some(projection);
+            }
+            if let Some(basis) = prepared.joint_ingest_outcome_basis2286 {
+                #[cfg(test)]
+                if self.fail_ingest_outcome_binding2286 {
+                    context.candidates.pop();
+                }
+                let projection = project_joint_ingest_outcome2286(
+                    &frame,
+                    &recall,
+                    basis,
+                    &mut context,
+                    self.joint_membership2177 == Some(12),
+                )?;
+                // Complete deterministic transform work was precharged exactly
+                // once by Core, in the same receipt used by actual physiology.
+                joint_membership2177
+                    .as_mut()
+                    .ok_or(CpuHostError::State("Ingest projection without mode"))?
+                    .ingest_outcome_projection2286 = Some(projection);
             }
             context.microstep_count = u32::from(activity.microsteps);
             let readout_work = if let Some(config) = &r.memory_readout {
@@ -2415,6 +2568,17 @@ fn resident_digest(
         Some(mode @ (10 | 11)) => json_digest(
             b"ALIFE-CPU-JOINT-NON-INGEST-2278-V1",
             &(ordinary, mode, 191_u8),
+        )?,
+        Some(mode @ (12 | 13)) => json_digest(
+            b"ALIFE-CPU-JOINT-INGEST-SUPPORTED-OUTCOME-2286-V1",
+            &(
+                ordinary,
+                mode,
+                CandidateActionFamily::Ingest,
+                9_u8,
+                1_u16,
+                true,
+            ),
         )?,
         Some(mode) => json_digest(b"ALIFE-CPU-JOINT-COMPARISON-PRIVATE-V1", &(ordinary, mode))?,
     };
