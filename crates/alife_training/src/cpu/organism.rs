@@ -179,11 +179,7 @@ impl CpuOrganismState {
         let tick = effects.source_tick.raw();
         let p = founder.phenotype();
         if self.pending.is_some()
-            || founder
-                .weights()
-                .iter()
-                .zip(p.synapses())
-                .any(|(w, s)| w.to_bits() != s.genetic_weight().to_bits())
+            || !founder.live_readout_policy_is_valid()
             || self.checkpoint.last_outcome_tick.is_some_and(|t| tick < t)
             || self
                 .checkpoint
@@ -342,11 +338,7 @@ impl CpuOrganismState {
     ) -> Result<(), TrainingError> {
         let p = founder.phenotype();
         if p.phenotype_hash() != self.checkpoint.phenotype_hash
-            || founder
-                .weights()
-                .iter()
-                .zip(p.synapses())
-                .any(|(w, s)| w.to_bits() != s.genetic_weight().to_bits())
+            || !founder.live_readout_policy_is_valid()
         {
             return Err(invalid());
         }
