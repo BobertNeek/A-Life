@@ -246,6 +246,17 @@ pub struct GroundedSensingFrame {
 }
 
 impl GroundedSensingFrame {
+    /// Test-only reconstruction from retained native observations; never gameplay input.
+    #[cfg(test)]
+    pub(crate) fn from_parts_for_opportunity_audit(
+        sensory: SensorySnapshot, body: BodySnapshot, slots: Vec<GroundedObjectSlotV1>,
+        transports: Vec<GroundedObjectTransport>,
+    ) -> Result<Self, ScaffoldContractError> {
+        if slots.len() != transports.len() || slots.iter().zip(&transports).enumerate().any(|(i,(s,t))| s.slot_index as usize != i || s.slot_index != t.slot_index) {
+            return Err(ScaffoldContractError::InvalidPerceptionFrame);
+        }
+        Ok(Self { sensory, body, slots, transports })
+    }
     /// Calibrate the observed view after identity tracking, so a body's changing
     /// sensitivity does not change the physical descriptor used for identity.
     pub(crate) fn calibrate(
