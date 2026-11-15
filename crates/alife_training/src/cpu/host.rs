@@ -739,6 +739,24 @@ impl CpuCanonicalHost {
         Ok(())
     }
 
+    /// Fresh-only Contact route candidate. Modes 6/7 are sealed into resident
+    /// authority and schema 10; existing acquired checkpoints are never migrated.
+    pub fn enable_joint_membership_contact_query_comparison2273(
+        &mut self,
+        founder: &CpuFoundationTrainer,
+        apply: bool,
+    ) -> Result<(), CpuHostError> {
+        let mut next = self.clone();
+        next.validate_joint_membership_enable(founder)?;
+        next.joint_membership2177 = Some(if apply { 6 } else { 7 });
+        for resident in next.residents.values_mut() {
+            resident.joint_comparison_mode = next.joint_membership2177;
+        }
+        next.seal_all_residents()?;
+        *self = next;
+        Ok(())
+    }
+
     pub fn world(&self) -> &HeadlessWorld {
         &self.world
     }
@@ -939,6 +957,7 @@ impl CpuCanonicalHost {
                 match self.joint_membership2177 {
                     Some(1) => 8,
                     Some(4 | 5) => 9,
+                    Some(6 | 7) => 10,
                     _ => 7,
                 }
             } else if self.residents.values().any(|r| r.memory_readout.is_some()) {
@@ -973,11 +992,12 @@ impl CpuCanonicalHost {
             .iter()
             .any(|r| r.memory_readout.is_some());
         if let Some(version) = checkpoint.joint_membership2177 {
-            if !matches!(version, 1..=5)
+            if !matches!(version, 1..=7)
                 || checkpoint.schema_version
                     != match version {
                         1 => 8,
                         4 | 5 => 9,
+                        6 | 7 => 10,
                         _ => 7,
                     }
                 || has_readout
@@ -1446,7 +1466,11 @@ impl CpuCanonicalHost {
                     "semantic preparation changed ordinary perception",
                 ));
             }
-            let prepare_frame = if self.joint_membership2177 == Some(4) {
+            let prepare_frame = if self.joint_membership2177 == Some(6) {
+                prepare_canonical_frame_joint_contact_query_applied2273
+            } else if self.joint_membership2177 == Some(7) {
+                prepare_canonical_frame_joint_contact_query_withheld2273
+            } else if self.joint_membership2177 == Some(4) {
                 prepare_canonical_frame_joint_contact_applied2266
             } else if self.joint_membership2177 == Some(5) {
                 prepare_canonical_frame_joint_contact_withheld2266
@@ -1504,15 +1528,16 @@ impl CpuCanonicalHost {
                         schema_version: match self.joint_membership2177 {
                             Some(1) => 1,
                             Some(4 | 5) => 3,
+                            Some(6 | 7) => 4,
                             _ => 2,
                         },
                         sources: recall.receipt().joint_membership_sources.clone(),
                         comparison: prepared.joint_comparison_sources.map(|queried_sources| {
                             JointMembershipComparison2182 {
-                                apply: matches!(self.joint_membership2177, Some(2 | 4)),
+                                apply: matches!(self.joint_membership2177, Some(2 | 4 | 6)),
                                 applied_family2266: matches!(
                                     self.joint_membership2177,
-                                    Some(4 | 5)
+                                    Some(4..=7)
                                 )
                                 .then_some(CandidateActionFamily::Contact),
                                 queried_sources,

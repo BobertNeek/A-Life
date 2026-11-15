@@ -926,3 +926,68 @@ fn joint_comparison_has_equal_work_and_truthful_applied_sources() {
         withheld.finalize(probe).unwrap();
     }
 }
+
+#[test]
+fn contact_query2273_support_boundaries_preserve_estimator_and_fallback() {
+    // Storage-only fixture, not an acquired World checkpoint or body claim.
+    let object = slot(0, 72, 0.4, [0., 0.8, 0.9]);
+    let source_draft = probe_for_object(1, object.clone())
+        .with_candidates(vec![candidate_for_family(
+            &object,
+            0,
+            CandidateActionFamily::Contact,
+        )])
+        .unwrap();
+    let mut member = fact(1, 72, false);
+    member.query = empty_bank()
+        .recall_frame(&source_draft)
+        .unwrap()
+        .finalize(source_draft)
+        .unwrap()
+        .1
+        .candidate_keys()[0]
+        .query()
+        .clone();
+    for (confidence, tick, usable) in [
+        (0., 3, false),
+        (f32::from_bits(1), 3, true),
+        (f32::from_bits(1), 1_000_000, false),
+        (f32::from_bits(16), 1_000_000, true),
+        (0.6, 3, true),
+    ] {
+        let bank = fixture_with_secondary(&member);
+        let mut wire = serde_json::to_value(bank).unwrap();
+        let event = serde_json::json!({"schema_version":1,"sealed_causal_digest":[4,3,2,1],"members":serde_json::to_vec(&vec![member.clone()]).unwrap(),"shared_family_value":[-0.6,0.0,0.7,-0.1],"event_confidence":confidence});
+        wire["candidate_store"]["records"]["1"]["schema_version"] = serde_json::json!(3);
+        wire["candidate_store"]["records"]["1"]["joint_event"] =
+            serde_json::json!(serde_json::to_vec(&event).unwrap());
+        let bank: MemoryBank = serde_json::from_value(wire).unwrap();
+        let probe = probe_for_object(tick, object.clone())
+            .with_candidates(vec![candidate_for_family(&object, 0, CandidateActionFamily::Contact), candidate_for_family(&object, 1, CandidateActionFamily::Ingest)])
+            .unwrap();
+        let ordinary = bank.recall_frame(&probe).unwrap();
+        let (old, _) = bank
+            .recall_frame_joint_contact_comparison2266(&probe, true)
+            .unwrap();
+        let (a, aq) = bank
+            .recall_frame_joint_contact_query_comparison2273(&probe, true)
+            .unwrap();
+        let (b, bq) = bank
+            .recall_frame_joint_contact_query_comparison2273(&probe, false)
+            .unwrap();
+        assert_eq!(a.context(), old.context());
+        assert_eq!(b.context(), ordinary.context());
+        assert_eq!(!aq.is_empty(), usable);
+        assert_eq!(aq, bq);
+        assert_eq!(
+            a.receipt().execution_evidence_work,
+            b.receipt().execution_evidence_work
+        );
+        assert!(a.receipt().execution_evidence_work < old.receipt().execution_evidence_work);
+        if !usable {
+            assert_eq!(a.context(), ordinary.context());
+        }
+        a.finalize(probe.clone()).unwrap();
+        b.finalize(probe).unwrap();
+    }
+}

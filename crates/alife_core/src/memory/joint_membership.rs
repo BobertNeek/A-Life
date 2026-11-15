@@ -431,6 +431,167 @@ impl MemoryBank {
         p.validate_for_draft(draft)?;
         Ok(p)
     }
+    /// Contact-query-only comparison. Ordinary recall executes once; only Contact
+    /// candidates enter membership lookup. Capture/admission are unchanged.
+    /// Applied and withheld routes execute equal logical work on an identical bank.
+    pub fn recall_frame_joint_contact_query_comparison2273(
+        &self,
+        draft: &PerceptionFrameDraft,
+        apply: bool,
+    ) -> Result<(PreparedMemoryRecall, Vec<JointMembershipSourceV1>), ScaffoldContractError> {
+        let mut p = self.recall_frame(draft)?;
+        let mut queried = Vec::new();
+        p.receipt.schema_version = RECORD_SCHEMA;
+        let mut work = 0u64;
+        for (i, q) in p.candidate_queries.iter().enumerate() {
+            if q.action_family() != CandidateActionFamily::Contact {
+                continue;
+            }
+            let mut seen = BTreeSet::new();
+            let mut selected = Vec::new();
+            let Some(key) = executed_action::key(q) else {
+                continue;
+            };
+            if self.candidate_store.joint_membership_index.is_empty() {
+                continue;
+            }
+            work += 1; // Exact member namespace index lookup.
+                       // Latest matching event sequences, not record IDs (merged IDs stay old).
+            for (_, id) in self
+                .candidate_store
+                .joint_membership_index
+                .get(&key)
+                .into_iter()
+                .flatten()
+                .rev()
+                .take(MEMORY_FAMILY_SEARCH_CAP)
+            {
+                work += 1;
+                let record = &self.candidate_store.records[&id.raw()];
+                let Some(e) = &record.joint_event else {
+                    continue;
+                };
+                let first = &e.event.members.facts()[0];
+                if first.event_tick > q.tick() {
+                    continue;
+                }
+                for f in e.event.members.facts() {
+                    work += 1;
+                    if !matches(&f.query, q) {
+                        continue;
+                    }
+                    let similarity = family_similarity(q.features(), f.query.features());
+                    if similarity < MEMORY_MIN_SIMILARITY {
+                        continue;
+                    }
+                    let age = q.tick().raw().saturating_sub(first.event_tick.raw()) as f32;
+                    let retention = (1.0 / (1.0 + age / 16384.0)).max(0.05);
+                    // Confidence is ultimately a f32. Compute its unnormalized
+                    // support in f64 so intermediate weighting cannot erase a
+                    // usable subnormal. This is representability, not a biological
+                    // confidence floor. Unusable events must not occupy top-K.
+                    let support = f64::from(e.event.event_confidence)
+                        * f64::from(similarity)
+                        * f64::from(retention);
+                    if support as f32 <= 0.0 {
+                        continue;
+                    }
+                    let key = (f.query.organism_id().raw(), f.source_sequence_id.raw());
+                    if seen.insert(key) {
+                        selected.push((record.memory_id, e, similarity, support));
+                    }
+                }
+            }
+            selected.sort_by(|a, b| {
+                work += 1; // Actual comparison in deterministic ranking.
+                b.2.total_cmp(&a.2)
+                    .then_with(|| b.1.sequence().cmp(&a.1.sequence()))
+                    .then_with(|| a.0.raw().cmp(&b.0.raw()))
+            });
+            selected.truncate(MEMORY_RECALL_TOP_K);
+            if selected.is_empty() {
+                continue;
+            }
+            let total: f32 = selected.iter().map(|x| x.2).sum();
+            let mut values = [0.0; MEMORY_VALUE_V1_COUNT];
+            // Algebraically the old normalized confidence is the mean of
+            // confidence * similarity * retention. Delay rounding until after
+            // that mean; dividing each f32 subnormal by K can round it to zero.
+            let confidence =
+                (selected.iter().map(|x| x.3).sum::<f64>() / selected.len() as f64) as f32;
+            if confidence <= 0.0 {
+                continue;
+            }
+            let family_confidence = Confidence::new(confidence.clamp(0.0, 1.0))?;
+            for (id, e, score, _) in &selected {
+                let f = &e.event.members.facts()[0];
+                for (v, source) in values.iter_mut().zip(e.event.shared_family_value) {
+                    *v += source * (*score / total);
+                }
+                queried.push(JointMembershipSourceV1 {
+                    candidate_index: q.candidate_index(),
+                    memory_id: *id,
+                    source_sequence_id: f.source_sequence_id,
+                    bundle_digest: f.bundle_digest,
+                });
+                work += 1;
+            }
+            let c = &mut p.context.candidates[i];
+            // Save/select/assign seven scalar fields for both routes. No
+            // non-Contact save/restore and no second ordinary lookup.
+            let old = (
+                c.family_value,
+                c.family_confidence,
+                c.family_source_count,
+                c.best_family_source,
+            );
+            c.family_value = values.map(|v| v.clamp(-1.0, 1.0));
+            c.family_confidence = family_confidence;
+            c.family_source_count = selected.len() as u16;
+            c.best_family_source = Some(selected[0].0);
+            let chosen = if apply {
+                (
+                    c.family_value,
+                    c.family_confidence,
+                    c.family_source_count,
+                    c.best_family_source,
+                )
+            } else {
+                old
+            };
+            c.family_value = chosen.0;
+            c.family_confidence = chosen.1;
+            c.family_source_count = chosen.2;
+            c.best_family_source = chosen.3;
+            work += 21; // Save seven, construct seven, select/assign seven.
+        }
+        // Both routes copy query provenance and encode/hash once only if a
+        // usable Contact estimate exists. A frame without Contact queries does
+        // no membership lookup, comparison, or redundant encoding work.
+        p.receipt.joint_membership_sources = queried.clone();
+        work += queried.len() as u64;
+        if !apply {
+            p.receipt.joint_membership_sources.clear();
+        }
+        if !queried.is_empty() {
+            p.encoded_context = p.context.to_perception_context_block()?;
+            p.receipt.context_digest = p.encoded_context.canonical_digest();
+            work += 2 * p.encoded_context.values().len() as u64;
+        }
+        p.receipt.execution_evidence_work = p
+            .receipt
+            .execution_evidence_work
+            .checked_add(work)
+            .ok_or(ScaffoldContractError::ScalarOutOfRange)?;
+        if queried.is_empty() {
+            // Ordinary recall already validated the unchanged context and draft.
+            // Only the receipt schema/work changed; avoid a redundant full hash.
+            p.receipt.validate_contract()?;
+        } else {
+            p.validate_for_draft(draft)?;
+        }
+        Ok((p, queried))
+    }
 }
 
 pub(super) fn index_insert(

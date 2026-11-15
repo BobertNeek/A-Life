@@ -748,6 +748,28 @@ pub fn prepare_canonical_frame_joint_contact_withheld2266(
     prepare_canonical_frame_impl(input, memory, topology, predictor, measure, false, 5)
 }
 
+/// Fresh Contact-only CPU candidate, Contact-only membership queries.
+pub fn prepare_canonical_frame_joint_contact_query_applied2273(
+    input: &CanonicalPreparationInput,
+    memory: &MemorySidecarState,
+    topology: &TopologySidecar,
+    predictor: &GroundedSuccessorPredictor,
+    measure: bool,
+) -> CanonicalPreparationOutcome {
+    prepare_canonical_frame_impl(input, memory, topology, predictor, measure, false, 6)
+}
+
+/// Cost-matched Contact-only candidate control, Contact queries with replacement withheld.
+pub fn prepare_canonical_frame_joint_contact_query_withheld2273(
+    input: &CanonicalPreparationInput,
+    memory: &MemorySidecarState,
+    topology: &TopologySidecar,
+    predictor: &GroundedSuccessorPredictor,
+    measure: bool,
+) -> CanonicalPreparationOutcome {
+    prepare_canonical_frame_impl(input, memory, topology, predictor, measure, false, 7)
+}
+
 fn prepare_canonical_frame_impl(
     input: &CanonicalPreparationInput,
     memory: &MemorySidecarState,
@@ -852,7 +874,14 @@ fn prepare_canonical_frame_impl(
         preparation_stage = "routed recall";
         let leaf_started = measure.then(std::time::Instant::now);
         let mut joint_comparison_sources = None;
-        let routed_recall = if matches!(joint_membership, 4 | 5) {
+        let routed_recall = if matches!(joint_membership, 6 | 7) {
+            let (p, sources) = memory.recall_frame_joint_contact_query_comparison2273(
+                &routed_draft,
+                joint_membership == 6,
+            )?;
+            joint_comparison_sources = Some(sources);
+            p
+        } else if matches!(joint_membership, 4 | 5) {
             let (p, sources) = memory
                 .recall_frame_joint_contact_comparison2266(&routed_draft, joint_membership == 4)?;
             joint_comparison_sources = Some(sources);

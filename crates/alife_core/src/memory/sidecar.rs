@@ -581,6 +581,20 @@ impl MemorySidecarState {
             .recall_frame_joint_contact_comparison2266(draft, apply)
     }
 
+    pub fn recall_frame_joint_contact_query_comparison2273(
+        &self,
+        draft: &PerceptionFrameDraft,
+        apply: bool,
+    ) -> Result<(PreparedMemoryRecall, Vec<JointMembershipSourceV1>), ScaffoldContractError> {
+        if draft.organism_id() != self.organism_id
+            || draft.profile_provenance().identity() != self.profile
+        {
+            return Err(ScaffoldContractError::BrainOwnershipMismatch);
+        }
+        self.bank
+            .recall_frame_joint_contact_query_comparison2273(draft, apply)
+    }
+
     pub fn observe_sealed_patch(
         &mut self,
         patch: &ExperiencePatch,
