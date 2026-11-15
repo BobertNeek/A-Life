@@ -1911,3 +1911,624 @@ fn non_ingest2278_populated_intervals_bill_exact_routed_query_and_physiology() {
         );
     }
 }
+
+#[test]
+fn ingest2286_fresh_modes_bound1_cold_continuation_and_migration_boundaries() {
+    for apply in [false, true] {
+        let (mut host, trainer) = super::super::memory_bound_row_tests::fixture_bound2266(1.0);
+        assert_eq!(
+            trainer
+                .phenotype()
+                .candidate_decoder()
+                .memory_channel()
+                .unwrap()
+                .max_candidate_gain(),
+            1.0
+        );
+        let founder = serde_json::to_vec(&trainer.checkpoint()).unwrap();
+        host.enable_joint_ingest_outcome_projection2286(&trainer, apply)
+            .unwrap();
+        let first = host.checkpoint(&trainer).unwrap();
+        assert_eq!(first.schema_version, 14);
+        assert_eq!(
+            first.joint_membership2177,
+            Some(if apply { 12 } else { 13 })
+        );
+        for _ in 0..4 {
+            let step = host.step(&trainer, 1.0).unwrap();
+            for row in step.decisions {
+                assert_eq!(row.memory_plan2242.as_ref().unwrap().memory_bound, 1.0);
+                let r = row.joint_membership2177.as_ref().unwrap();
+                assert_eq!(r.schema_version, 8);
+                assert_eq!(r.comparison.as_ref().unwrap().applied_family2266, None);
+                assert_eq!(r.comparison.as_ref().unwrap().apply, true);
+                assert!(r.admission_actual_work <= r.admission_reserved_work);
+                assert!(r.success_projection2275.is_none());
+                let projection = r.ingest_outcome_projection2286.as_ref().unwrap();
+                assert_eq!(projection.apply, apply);
+                assert!(projection.requires_positive_ordinary_support);
+                assert_eq!(projection.component_mask, 9);
+                assert_eq!(projection.cost_revision, 1);
+                assert_eq!(
+                    projection.actual_cpu_ops,
+                    projection.ordinary.work.cpu_transform
+                );
+                for c in &projection.candidates {
+                    assert_eq!(c.applied, apply && c.support_eligible);
+                }
+                assert_eq!(r.comparison.as_ref().unwrap().applied_family_mask2278, None);
+                // Plan-2 has its existing matching-reader envelope. Diagnostic
+                // research rows still cannot enter the ordinary PPO cohort.
+                let bytes = serde_json::to_vec(&row).unwrap();
+                let decoded: CpuCollectedDecision = serde_json::from_slice(&bytes).unwrap();
+                assert_eq!(bytes, serde_json::to_vec(&decoded).unwrap());
+                let value = CpuValueHead::from_checkpoint(crate::PpoValueHeadCheckpoint {
+                    feature_count: trainer.phenotype().neuron_count(),
+                    optimizer_step: 0,
+                    parameters: vec![0.; (trainer.phenotype().neuron_count() as usize + 1) * 3],
+                    last_updated_policy_version: None,
+                })
+                .unwrap();
+                let phenotype = host
+                    .world
+                    .organism_registry()
+                    .iter()
+                    .next()
+                    .unwrap()
+                    .phenotype();
+                assert!(cpu_training_windows(
+                    &[decoded],
+                    None,
+                    &trainer,
+                    &value,
+                    phenotype,
+                    2266,
+                    crate::PpoConfig::default(),
+                    2,
+                    0
+                )
+                .is_err());
+            }
+        }
+        let cp = host.checkpoint(&trainer).unwrap();
+        let mut cold = CpuCanonicalHost::from_checkpoint(cp.clone(), &trainer).unwrap();
+        assert_eq!(
+            serde_json::to_vec(&cp).unwrap(),
+            serde_json::to_vec(&cold.checkpoint(&trainer).unwrap()).unwrap()
+        );
+        let a = host.step(&trainer, 1.0).unwrap();
+        let b = cold.step(&trainer, 1.0).unwrap();
+        assert_eq!(
+            serde_json::to_vec(&a.decisions).unwrap(),
+            serde_json::to_vec(&b.decisions).unwrap()
+        );
+        assert_eq!(
+            serde_json::to_vec(&host.checkpoint(&trainer).unwrap()).unwrap(),
+            serde_json::to_vec(&cold.checkpoint(&trainer).unwrap()).unwrap()
+        );
+        for mode in [
+            None,
+            Some(0),
+            Some(1),
+            Some(2),
+            Some(3),
+            Some(4),
+            Some(5),
+            Some(6),
+            Some(7),
+            Some(8),
+            Some(9),
+            Some(10),
+            Some(11),
+            Some(12),
+            Some(13),
+            Some(14),
+            Some(u16::MAX),
+        ] {
+            if mode == cp.joint_membership2177 {
+                continue;
+            }
+            let mut bad = cp.clone();
+            bad.joint_membership2177 = mode;
+            bad.schema_version = match mode {
+                Some(1) => 8,
+                Some(2 | 3) => 7,
+                Some(4 | 5) => 9,
+                Some(6 | 7) => 10,
+                Some(8 | 9) => 12,
+                Some(10 | 11) => 13,
+                Some(12 | 13) => 14,
+                _ => 2,
+            };
+            assert!(
+                CpuCanonicalHost::from_checkpoint(bad, &trainer).is_err(),
+                "accepted mode {mode:?}"
+            );
+        }
+        for schema in [2, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15] {
+            let mut bad = cp.clone();
+            bad.schema_version = schema;
+            assert!(CpuCanonicalHost::from_checkpoint(bad, &trainer).is_err());
+        }
+        let before = serde_json::to_vec(&host.checkpoint(&trainer).unwrap()).unwrap();
+        assert!(host
+            .enable_joint_ingest_outcome_projection2286(&trainer, !apply)
+            .is_err());
+        assert_eq!(
+            before,
+            serde_json::to_vec(&host.checkpoint(&trainer).unwrap()).unwrap()
+        );
+        assert_eq!(founder, serde_json::to_vec(&trainer.checkpoint()).unwrap());
+    }
+    let (mut ordinary, trainer) = food_fixture(false, true);
+    ordinary.step(&trainer, 1.).unwrap();
+    let ordinary_cp = ordinary.checkpoint(&trainer).unwrap();
+    let before = serde_json::to_vec(&ordinary_cp).unwrap();
+    for mode in [12, 13] {
+        let mut edited = ordinary_cp.clone();
+        edited.schema_version = 14;
+        edited.joint_membership2177 = Some(mode);
+        assert!(CpuCanonicalHost::from_checkpoint(edited, &trainer).is_err());
+    }
+    assert!(ordinary
+        .enable_joint_ingest_outcome_projection2286(&trainer, true)
+        .is_err());
+    assert_eq!(
+        before,
+        serde_json::to_vec(&ordinary.checkpoint(&trainer).unwrap()).unwrap()
+    );
+}
+
+#[test]
+fn ingest2286_populated_actual_work_and_malformed_binding_rollback() {
+    for apply in [false, true] {
+        let (mut host, trainer) = food_fixture(false, false);
+        host.enable_joint_ingest_outcome_projection2286(&trainer, apply)
+            .unwrap();
+        let saved = serde_json::to_vec(&host.checkpoint(&trainer).unwrap()).unwrap();
+        let mut failed = host.snapshot();
+        failed.fail_ingest_outcome_binding2286 = true;
+        assert!(failed.step(&trainer, 1.).is_err());
+        assert_eq!(
+            saved,
+            serde_json::to_vec(&failed.checkpoint(&trainer).unwrap()).unwrap()
+        );
+        let mut queried = 0;
+        for _ in 0..16 {
+            let pre = host.snapshot();
+            for row in host.step(&trainer, 1.).unwrap().decisions {
+                let frame = row.patch.pre_action().perception();
+                let wire = serde_json::to_value(frame).unwrap();
+                let draft: PerceptionFrameDraft =
+                    serde_json::from_value(wire["base"].clone()).unwrap();
+                assert_eq!(draft.base_digest(), frame.base_digest());
+                let bank = &pre.residents[&row.organism_id.raw()].memory;
+                let ordinary = bank.recall_frame(&draft).unwrap();
+                let (global, gq) = bank.recall_frame_joint_comparison(&draft, true).unwrap();
+                let live = row.joint_membership2177.as_ref().unwrap();
+                let projection = live.ingest_outcome_projection2286.as_ref().unwrap();
+                queried += gq.len();
+                assert_eq!(live.sources, gq);
+                assert_eq!(live.comparison.as_ref().unwrap().queried_sources, gq);
+                assert_eq!(
+                    live.query_work,
+                    global.receipt().execution_evidence_work
+                        + projection.ordinary.work.total().unwrap()
+                );
+                assert_eq!(live.query_work, row.executed_action_recall_work);
+                assert_eq!(
+                    projection.actual_cpu_ops,
+                    projection.ordinary.work.cpu_transform
+                );
+                let r = ordinary.receipt();
+                let base = u64::from(r.exact_bucket_reads)
+                    + u64::from(r.neighbor_bucket_reads)
+                    + u64::from(r.similarity_evaluations);
+                let charged = row.patch.cognitive_work().unwrap();
+                assert_eq!(
+                    charged.memory_ops,
+                    base + global.receipt().execution_evidence_work
+                        + projection.ordinary.work.total().unwrap()
+                        + live.admission_planning_work
+                        + live.admission_reserved_work
+                );
+                let record = host.world.organism_registry().get(row.organism_id).unwrap();
+                assert_eq!(record.cognitive_work(), charged);
+                let (policy, debit, before, after) = row.cognitive_cost_capture.unwrap();
+                let p = record.phenotype();
+                let expected = policy.energy_debit(charged).unwrap()
+                    * p.body.metabolic_turnover
+                    * (ContinuousLocus::midpoint_value(0.52, 0.60)
+                        - p.chemistry.brain_atp_efficiency)
+                        .exp2();
+                assert_eq!(debit, expected.min(before));
+                assert_eq!(record.cognitive_energy_debit(), debit);
+                assert!((before - after - debit).abs() < 2e-6);
+                eprintln!(
+                    "INGEST2286_ACCOUNTING {}",
+                    serde_json::json!({
+                        "apply":apply,"tick":frame.tick().raw(),"base":base,
+                        "global_query":global.receipt().execution_evidence_work,
+                        "basis_work":projection.ordinary.work,
+                        "actual_cpu":projection.actual_cpu_ops,"query_work":live.query_work,
+                        "planning":live.admission_planning_work,"reserved":live.admission_reserved_work,
+                        "actual_memory_ops":charged.memory_ops,"debit":debit,"expected_debit":expected.min(before),
+                        "ingest_rows":projection.ordinary.rows.len(),"eligible":projection.candidates.iter().filter(|c|c.support_eligible).count()
+                    })
+                );
+            }
+        }
+        assert!(queried > 0);
+    }
+}
+
+fn ingest2286_tick(
+    frame: &PerceptionFrame,
+    recall: &FinalizedMemoryRecall,
+) -> crate::TrainingReplayTick {
+    crate::TrainingReplayTick {
+        encoded_inputs: vec![0.25],
+        projection_gain: 1.,
+        local_threshold_shift: 0.,
+        microstep_count: 1,
+        enabled_routes: vec![],
+        effective_weight_offsets: vec![],
+        structural_synapses: vec![],
+        candidates: frame
+            .candidates()
+            .iter()
+            .enumerate()
+            .map(|(i, c)| {
+                let mut inputs = std::array::from_fn(|n| n as f32 / 54.);
+                let m = &recall.context().candidates[i];
+                for k in 0..4 {
+                    inputs[32 + k] = m.family_value[k] * m.family_confidence.raw();
+                }
+                crate::TrainingReplayCandidate {
+                    family: c.family,
+                    decoder_inputs: inputs,
+                    innate_bias: 0.,
+                    memory_readout: None,
+                }
+            })
+            .collect(),
+    }
+}
+
+#[test]
+fn ingest2286_same_lookup_bounded_basis_and_only_supported_two_lanes() {
+    let (mut host, trainer) = food_fixture(false, false);
+    host.enable_joint_membership_comparison2182(&trainer, false)
+        .unwrap();
+    let mut joint_sources = 0;
+    for _ in 0..24 {
+        host.step(&trainer, 1.).unwrap();
+        for (draft, _) in host.semantic_prior_inputs(&trainer).unwrap() {
+            let bank = &host.residents[&draft.organism_id().raw()].memory;
+            let before = serde_json::to_vec(&bank.export_active_bank().unwrap()).unwrap();
+            let (global, gq) = bank.recall_frame_joint_comparison(&draft, true).unwrap();
+            let (joint, q, basis) = bank
+                .recall_frame_joint_ingest_outcome_basis2286(&draft)
+                .unwrap();
+            assert_eq!(global.context(), joint.context());
+            assert_eq!(gq, q);
+            joint_sources += q.len();
+            assert_eq!(
+                alife_runtime::canonical_preparation::cognitive_memory_context_for_recall(
+                    draft.organism_id(),
+                    ExperienceSequenceId(999),
+                    &global
+                )
+                .unwrap(),
+                alife_runtime::canonical_preparation::cognitive_memory_context_for_recall(
+                    draft.organism_id(),
+                    ExperienceSequenceId(999),
+                    &joint
+                )
+                .unwrap()
+            );
+            let (frame, joint) = joint.finalize(draft.clone()).unwrap();
+            let tick = ingest2286_tick(&frame, &joint);
+            let mut applied = tick.clone();
+            let a = project_joint_ingest_outcome2286(&frame, &joint, basis, &mut applied, true)
+                .unwrap();
+            let (_, _, basis2) = bank
+                .recall_frame_joint_ingest_outcome_basis2286(&draft)
+                .unwrap();
+            let mut withheld = tick.clone();
+            let b = project_joint_ingest_outcome2286(&frame, &joint, basis2, &mut withheld, false)
+                .unwrap();
+            assert_eq!(withheld, tick);
+            assert_eq!(a.ordinary.work, b.ordinary.work);
+            for c in &a.candidates {
+                let i = usize::from(c.candidate_index);
+                assert_eq!(c.applied, c.support_eligible);
+                for (k, lane) in [32, 35].into_iter().enumerate() {
+                    assert_eq!(
+                        applied.candidates[i].decoder_inputs[lane],
+                        if c.support_eligible {
+                            c.ordinary_weighted[k]
+                        } else {
+                            c.joint_weighted[k]
+                        }
+                    );
+                    applied.candidates[i].decoder_inputs[lane] =
+                        tick.candidates[i].decoder_inputs[lane];
+                }
+            }
+            assert_eq!(applied, tick);
+            assert_eq!(
+                before,
+                serde_json::to_vec(&bank.export_active_bank().unwrap()).unwrap()
+            );
+            let (_, _, wrong) = bank
+                .recall_frame_joint_ingest_outcome_basis2286(&draft)
+                .unwrap();
+            let mut malformed = tick.clone();
+            malformed.candidates.pop();
+            assert!(
+                project_joint_ingest_outcome2286(&frame, &joint, wrong, &mut malformed, true)
+                    .is_err()
+            );
+        }
+    }
+    assert!(joint_sources > 0);
+}
+
+#[test]
+fn ingest2286_zero_one_mixed_cache_positive_absent_and_weighted_underflow() {
+    let (mut host, trainer) = food_fixture(false, false);
+    let (draft, _) = host.semantic_prior_inputs(&trainer).unwrap().remove(0);
+    let mut ingest = draft
+        .candidates()
+        .iter()
+        .find(|c| c.family == CandidateActionFamily::Ingest)
+        .unwrap()
+        .clone();
+    ingest.candidate_index = 0;
+    let mut duplicate = ingest.clone();
+    duplicate.candidate_index = 1;
+    duplicate.action_id = ActionId(990);
+    let mut other = draft
+        .candidates()
+        .iter()
+        .find(|c| c.family == CandidateActionFamily::Contact)
+        .unwrap()
+        .clone();
+    other.candidate_index = 2;
+    let one = draft.clone().with_candidates(vec![ingest.clone()]).unwrap();
+    let mut bank = MemoryBank::new(
+        MemoryBankConfig::new(8, 64, 4, 0.72, Confidence::new(0.).unwrap()).unwrap(),
+    )
+    .unwrap();
+    let patch = success2275_checked_fixture_patch(&bank, 1, one.clone(), 0.8, 0., |_| {});
+    patch.validate_contract().unwrap();
+    bank.observe_sealed_patch(&patch).unwrap();
+    let mut wire = serde_json::to_value(&bank).unwrap();
+    wire["candidate_store"]["records"]["1"]["confidence"] = serde_json::json!(f32::from_bits(1));
+    let tiny: MemoryBank = serde_json::from_value(wire).unwrap();
+    let empty = MemoryBank::new(
+        MemoryBankConfig::new(8, 64, 4, 0.72, Confidence::new(0.).unwrap()).unwrap(),
+    )
+    .unwrap();
+    for (bank, supported, underflow) in [
+        (&empty, false, false),
+        (&bank, true, false),
+        (&tiny, true, true),
+    ] {
+        for mode in 0..3 {
+            let candidates = match mode {
+                0 => {
+                    let mut c = other.clone();
+                    c.candidate_index = 0;
+                    vec![c]
+                }
+                1 => vec![ingest.clone()],
+                _ => vec![ingest.clone(), duplicate.clone(), other.clone()],
+            };
+            let d = draft.clone().with_candidates(candidates).unwrap();
+            let n = d.candidates().len() as u64;
+            let (global, _) = bank.recall_frame_joint_comparison(&d, true).unwrap();
+            let (joint, _, basis) = bank
+                .recall_frame_joint_ingest_outcome_basis2286(&d)
+                .unwrap();
+            assert_eq!(global.context(), joint.context());
+            let e = basis.evidence();
+            let m = e.rows.len() as u64;
+            assert_eq!(
+                m,
+                match mode {
+                    0 => 0,
+                    1 => 1,
+                    _ => 2,
+                }
+            );
+            assert_eq!(e.work.selection, n);
+            assert_eq!(e.work.cpu_transform, 16 + n + 17 * m);
+            let provenance: u64 = e
+                .rows
+                .iter()
+                .map(|r| 4 + 16 * r.sources.sources.iter().flatten().count() as u64)
+                .sum();
+            assert_eq!(e.work.basis_construction, 16 + 12 * m + provenance);
+            assert_eq!(e.work.support_validation, 4 * m + provenance);
+            if m == 0 {
+                assert_eq!(e.work.total().unwrap(), 32 + 2 * n);
+                assert_eq!(e.work.provenance_capture, 0);
+                assert_eq!(e.work.provenance_cache_copy, 0);
+            } else {
+                let per = 4 + 16 * u64::from(supported);
+                assert_eq!(e.work.provenance_capture, per);
+                assert_eq!(
+                    e.work.provenance_cache_copy,
+                    if m == 2 { 2 * per } else { 0 }
+                );
+            }
+            assert_eq!(
+                joint.receipt().execution_evidence_work,
+                global.receipt().execution_evidence_work + e.work.total().unwrap()
+            );
+            let (frame, joint) = joint.finalize(d.clone()).unwrap();
+            let tick = ingest2286_tick(&frame, &joint);
+            let mut projected = tick.clone();
+            let output =
+                project_joint_ingest_outcome2286(&frame, &joint, basis, &mut projected, true)
+                    .unwrap();
+            for (row, c) in output.ordinary.rows.iter().zip(&output.candidates) {
+                assert_eq!(row.support_eligible, supported);
+                assert_eq!(c.applied, supported);
+                if supported {
+                    assert!(row.source_count > 0 && row.confidence > 0.);
+                    assert!(row.best_source.is_some());
+                    if underflow {
+                        assert_eq!(c.ordinary_weighted[1], 0.);
+                        assert!(row.values[1] != 0.);
+                    }
+                } else {
+                    assert_eq!(row.source_count, 0);
+                    assert!(row.best_source.is_none());
+                    assert!(row.sources.sources.iter().all(Option::is_none));
+                    assert_eq!(c.output_weighted, c.joint_weighted);
+                }
+                for (k, lane) in [32, 35].into_iter().enumerate() {
+                    assert_eq!(
+                        c.ordinary_weighted[k].to_bits(),
+                        (row.values[k] * row.confidence).to_bits()
+                    );
+                    projected.candidates[usize::from(row.candidate_index)].decoder_inputs[lane] =
+                        tick.candidates[usize::from(row.candidate_index)].decoder_inputs[lane];
+                }
+            }
+            assert_eq!(projected, tick);
+            let (_, _, basis) = bank
+                .recall_frame_joint_ingest_outcome_basis2286(&d)
+                .unwrap();
+            let (foreign_frame, foreign) =
+                empty.recall_frame(&d).unwrap().finalize(d.clone()).unwrap();
+            if supported {
+                assert!(basis.validate_for_recall(&foreign_frame, &foreign).is_err());
+            }
+        }
+    }
+}
+
+#[test]
+fn ingest2286_positive_ordinary_and_different_joint_change_exactly_two_components() {
+    // Explicit checked storage fixture, not a measured World outcome or an edit
+    // to an acquired life. Ordinary and joint estimates intentionally disagree.
+    let (mut host, trainer) = food_fixture(false, false);
+    let (draft, _) = host.semantic_prior_inputs(&trainer).unwrap().remove(0);
+    let mut c = draft
+        .candidates()
+        .iter()
+        .find(|c| c.family == CandidateActionFamily::Ingest)
+        .unwrap()
+        .clone();
+    c.candidate_index = 0;
+    let draft = draft.with_candidates(vec![c]).unwrap();
+    let mut bank = MemoryBank::new(
+        MemoryBankConfig::new(8, 64, 4, 0.72, Confidence::new(0.).unwrap()).unwrap(),
+    )
+    .unwrap();
+    let patch = success2275_checked_fixture_patch(&bank, 1, draft.clone(), 0.8, 0., |_| {});
+    bank.observe_sealed_patch(&patch).unwrap();
+    let (_, ordinary) = bank
+        .recall_frame(&draft)
+        .unwrap()
+        .finalize(draft.clone())
+        .unwrap();
+    let query = ordinary.candidate_keys()[0].query().clone();
+    let target = draft.candidates()[0].target.entity;
+    let fact = ExecutedActionMemoryV1 {
+        query: query.clone(),
+        source_sequence_id: ExperienceSequenceId(1),
+        event_tick: Tick::new(draft.tick().raw() + 1),
+        bundle_digest: [1, 2, 3, 4],
+        receipt: alife_core::experience::ChannelPhysicalOutcome::new(
+            MotorChannel::Manipulation,
+            PhysicalActionOutcome {
+                contact: PhysicalContactKind::Touch,
+                target_entity: target,
+                displacement: Vec3f::ZERO,
+                collision_normal: None,
+                energy_cost: NormalizedScalar::new(0.1).unwrap(),
+            },
+        )
+        .unwrap()
+        .with_execution_evidence(
+            ExecutedChannelEvidenceV1::new(query.action_id(), target, true, BodyEventDelta::zero())
+                .unwrap(),
+        )
+        .unwrap(),
+    };
+    let facts = serde_json::to_vec(&vec![fact]).unwrap();
+    let event = serde_json::json!({"schema_version":1,"sealed_causal_digest":[4,3,2,1],"members":facts,"shared_family_value":[-0.6,1.0,0.7,-0.8],"event_confidence":0.3});
+    let mut wire = serde_json::to_value(&bank).unwrap();
+    let record = &mut wire["candidate_store"]["records"]["1"];
+    record["schema_version"] = serde_json::json!(3);
+    record["executed_actions_json"] = event["members"].clone();
+    record["joint_event"] = serde_json::json!(serde_json::to_vec(&event).unwrap());
+    let bank: MemoryBank = serde_json::from_value(wire).unwrap();
+    // Probe after the recorded event, never bypass temporal eligibility.
+    let now = Tick::new(draft.tick().raw() + 2);
+    let draft = PerceptionFrameDraft::new(
+        draft.organism_id(),
+        now,
+        draft.sensor_profile(),
+        SensorySnapshot::new(
+            draft.organism_id(),
+            now,
+            draft.sensory().observer_position,
+            draft.sensory().channels,
+            Default::default(),
+        )
+        .unwrap(),
+        draft.body(),
+        HomeostaticSnapshot::new(
+            now,
+            draft.homeostasis().drives,
+            draft.homeostasis().hormones,
+        )
+        .unwrap(),
+        draft.candidates().to_vec(),
+        SensorProfileProvenance::new(draft.sensor_profile(), SensoryAbiVersion::CURRENT, now)
+            .unwrap(),
+        draft.grounded_object_slots().to_vec(),
+    )
+    .unwrap();
+    let (joint, sources, basis) = bank
+        .recall_frame_joint_ingest_outcome_basis2286(&draft)
+        .unwrap();
+    assert!(!sources.is_empty());
+    assert!(basis.evidence().rows[0].support_eligible);
+    assert!(basis.evidence().rows[0].source_count > 0);
+    let (frame, joint) = joint.finalize(draft).unwrap();
+    let original = ingest2286_tick(&frame, &joint);
+    let mut transformed = original.clone();
+    let receipt =
+        project_joint_ingest_outcome2286(&frame, &joint, basis, &mut transformed, true).unwrap();
+    assert!(receipt.candidates[0].applied);
+    for lane in [32, 35] {
+        assert_ne!(
+            transformed.candidates[0].decoder_inputs[lane].to_bits(),
+            original.candidates[0].decoder_inputs[lane].to_bits(),
+            "supported component must actually change"
+        );
+    }
+    for lane in [33, 34] {
+        assert_eq!(
+            transformed.candidates[0].decoder_inputs[lane].to_bits(),
+            original.candidates[0].decoder_inputs[lane].to_bits()
+        );
+    }
+    for (k, lane) in [32, 35].into_iter().enumerate() {
+        let row = &receipt.ordinary.rows[0];
+        assert_eq!(
+            transformed.candidates[0].decoder_inputs[lane].to_bits(),
+            (row.values[k] * row.confidence).to_bits()
+        );
+        transformed.candidates[0].decoder_inputs[lane] =
+            original.candidates[0].decoder_inputs[lane];
+    }
+    assert_eq!(transformed, original);
+}

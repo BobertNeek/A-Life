@@ -166,3 +166,56 @@ modes 0–9 retain their bytes, work and private seals, including cost revision 
 for modes 8/9. Historical schema-11 projection states remain rejected. Acquired
 states are not migrated or resealed. This is a fresh experimental candidate,
 not a default or a demonstrated behavioral winner.
+
+## Supported ordinary Ingest outcome projection (2286)
+
+Fresh CPU API `enable_joint_ingest_outcome_projection2286(&trainer,
+apply_projection)` selects modes 12/13, checkpoint schema 14 and live receipt
+schema 8. Both apply full global joint recall, with comparison.apply=true and no
+family mask. Mode 12 replaces only Ingest decoder inputs 32 (valence) and 35
+(energy) when the same ordinary lookup has source_count>0, positive aggregate
+confidence, and valid owner/profile/family/count/best-source provenance. Mode 13
+computes the identical basis and products but withholds projection. Absent
+ordinary support retains every joint input unchanged; it is not failure evidence.
+Positive support whose weighted value underflows to zero remains eligible. Old
+Core-invalid confidence/source tuples remain invalid, not silently repaired.
+
+Raw global joint values/confidence/sources and cognitive context remain intact.
+Joint success 33, danger 34, all other 52 decoder inputs, and non-Ingest rows are
+not overwritten. Shared joint outcomes still do not identify isolated causal
+credit. This is neither a new learner/reward nor an object-kind/chemistry gate,
+and does not change defaults or establish a behavioral winner.
+
+Core captures only Ingest's two ordinary raw values, confidence/count/best,
+query digest and at most four existing source facts, during the original ordinary
+family aggregation. Family-specific cache reuse is preserved. An opaque owned
+basis binds organism/tick/profile/base/bank/generation/candidate identities; its
+wire evidence cannot be deserialized into an operational basis. No full ordinary
+PreparedRecall/frame/receipt is cloned, no second lookup/finalization is made,
+and no extra context encoding or hash is requested. Query digest getters copy
+already cached four-word identities. Runtime carries the basis transiently and
+CPU consumes it by value once.
+
+Fixed logical event tariffs, not measured hardware instructions or physical
+words, are reported separately:
+
+- selection: N candidate-family events;
+- provenance capture: sum over unique Ingest aggregates of 4+16*S;
+- cache copy: sum over actual Ingest provenance cache insert/hit clones of 4+16*S;
+- basis construction: 16 + sum over M Ingest rows of 12+4+16*S;
+- support validation: sum over M rows of 4+4+16*S;
+- CPU transform: 16+N+17*M.
+
+Here M<=N and S<=4. Zero Ingest rows cost exactly 32+2*N additional logical
+operations, with no provenance capture. Core includes the complete deterministic
+transform cost once in execution_evidence_work. CPU independently counts actual
+binding, eligibility, component reads, two products, selections, two assignments
+and receipt events, checks equality with the precharged component, and does not
+charge again. Both arms execute the products and assignments even when support
+is absent. Actual physiology and affordability consume the same complete work
+receipt. Failures roll back the atomic step.
+
+The private policy identity binds Ingest, component mask 9, positive ordinary
+support, and cost revision 1. Modes 0–11 retain their prior wire/seal/work behavior;
+no acquired lives are migrated. The provisional unconditional zero-support
+projection was considered but never qualified or used to create new states.
