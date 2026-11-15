@@ -35,6 +35,7 @@ pub enum CpuHostError {
 }
 #[derive(Clone)]
 struct Resident {
+    active_approach_intent2327: Option<ActiveApproachIntent2327>,
     joint_comparison_mode: Option<u16>,
     memory_readout: Option<FrozenMemoryReadoutConstructionV1>,
     memory_readout_digest: Option<[u64; 4]>,
@@ -91,6 +92,8 @@ struct CpuReplayEvent {
 }
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CpuResidentCheckpoint {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_approach_intent2327: Option<ActiveApproachIntent2327>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub memory_readout: Option<FrozenMemoryReadoutConstructionV1>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -150,6 +153,7 @@ pub struct CpuCanonicalHost {
 }
 #[derive(Clone)]
 pub struct CpuCollectedDecision {
+    pub active_approach_opportunity2327: Option<ActiveApproachOpportunityRow2327>,
     pub approach_attention_feedback2325: Option<ApproachAttentionFeedback2325>,
     /// Present only for the versioned plan-2 JSON wire; not an auxiliary reward.
     pub memory_plan2242: Option<MemoryPlanRow2242>,
@@ -181,6 +185,37 @@ pub struct CpuCollectedDecision {
     pub brain_work: BrainWorkCounters,
     pub biological_reward: f32,
     pub patch: ExperiencePatch,
+}
+
+/// Final opportunity proof plus authenticated intent transition. No inferred reward.
+#[derive(Debug,Clone,serde::Serialize,serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ActiveApproachOpportunityRow2327 {
+    pub frame_digest: PerceptionFrameDigest,
+    pub before: Option<ActiveApproachIntent2327>,
+    pub after: Option<ActiveApproachIntent2327>,
+    pub selection: alife_world::ActiveApproachOpportunityReceipt,
+    /// Actual intent reads/copies/update, separately from selection work.
+    pub intent_work_units: u64,
+}
+
+/// Authenticated memory of one actual successful selected Approach, not a goal.
+#[derive(Debug,Clone,PartialEq,serde::Serialize,serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ActiveApproachIntent2327 {
+    pub source_frame_digest: PerceptionFrameDigest,
+    pub source_tick: Tick,
+    pub organism_id: OrganismId,
+    pub selected_candidate: u16,
+    pub executed: ExecutedChannelEvidenceV1,
+    pub tracked_object_id: TrackedObjectId,
+    pub target_entity: WorldEntityId,
+}
+impl ActiveApproachIntent2327 {
+    fn validate(&self)->Result<(),CpuHostError>{
+        self.organism_id.validate()?;self.tracked_object_id.validate()?;self.target_entity.validate()?;self.executed.validate_contract()?;
+        if self.selected_candidate as usize>=MAX_ACTION_CANDIDATES || self.executed.primitive.raw()!=101 || !self.executed.succeeded || self.executed.command_target!=Some(self.target_entity){return Err(CpuHostError::State("invalid active Approach source"));}Ok(())
+    }
 }
 
 /// Native post-execution attention feedback, never a forced action or reward.
@@ -271,6 +306,8 @@ pub struct MemoryPlanRow2242 {
 #[derive(Clone, serde::Deserialize)]
 struct CollectedDecisionFlat2242 {
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    active_approach_opportunity2327: Option<ActiveApproachOpportunityRow2327>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     approach_attention_feedback2325: Option<ApproachAttentionFeedback2325>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub joint_membership2177: Option<JointMembershipLiveReceipt2177>,
@@ -310,6 +347,7 @@ impl From<CollectedDecisionFlat2242> for CpuCollectedDecision {
     fn from(flat: CollectedDecisionFlat2242) -> Self {
         Self {
             memory_plan2242: None,
+            active_approach_opportunity2327: flat.active_approach_opportunity2327,
             approach_attention_feedback2325: flat.approach_attention_feedback2325,
             joint_membership2177: flat.joint_membership2177,
             #[cfg(test)]
@@ -689,6 +727,8 @@ impl serde::Serialize for CpuCollectedDecision {
         #[derive(serde::Serialize)]
         struct Flat<'a> {
             #[serde(skip_serializing_if = "Option::is_none")]
+            active_approach_opportunity2327: &'a Option<ActiveApproachOpportunityRow2327>,
+            #[serde(skip_serializing_if = "Option::is_none")]
             approach_attention_feedback2325: &'a Option<ApproachAttentionFeedback2325>,
             #[serde(skip_serializing_if = "Option::is_none")]
             joint_membership2177: &'a Option<JointMembershipLiveReceipt2177>,
@@ -712,6 +752,7 @@ impl serde::Serialize for CpuCollectedDecision {
             patch: &'a ExperiencePatch,
         }
         let flat = Flat {
+            active_approach_opportunity2327: &self.active_approach_opportunity2327,
             approach_attention_feedback2325: &self.approach_attention_feedback2325,
             joint_membership2177: &self.joint_membership2177,
             executed_action_recall: &self.executed_action_recall,
@@ -849,6 +890,7 @@ impl CpuCanonicalHost {
             residents.insert(
                 id.raw(),
                 Resident {
+                    active_approach_intent2327: None,
                     joint_comparison_mode: None,
                     memory_readout: None,
                     memory_readout_digest: None,
@@ -1147,6 +1189,15 @@ impl CpuCanonicalHost {
         next.seal_all_residents()?;
         *self = next;
         Ok(())
+    }
+
+    /// Explicit additive active-opportunity continuity, initially without intent.
+    pub fn fork_with_active_approach_opportunity_for_research(&self, founder: &CpuFoundationTrainer) -> Result<Self,CpuHostError> {
+        self.validate_founder(founder)?;
+        if self.candidate_opportunity_coverage2313 != Some(2) || self.residents.values().any(|r|r.active_approach_intent2327.is_some()) {return Err(CpuHostError::State("active opportunity requires CP17 coverage2 without intent"));}
+        let before=self.checkpoint(founder)?;let mut next=self.clone();next.candidate_opportunity_coverage2313=Some(3);let after=next.checkpoint(founder)?;let mut normalized=after.clone();normalized.schema_version=before.schema_version;normalized.candidate_opportunity_coverage2313=before.candidate_opportunity_coverage2313;
+        if serde_json::to_vec(&normalized)?!=serde_json::to_vec(&before)? {return Err(CpuHostError::State("active opportunity attachment changed state"));}
+        let cold=Self::from_checkpoint(after.clone(),founder)?;if serde_json::to_vec(&cold.checkpoint(founder)?)?!=serde_json::to_vec(&after)? {return Err(CpuHostError::State("active opportunity cold attachment changed state"));}Ok(next)
     }
 
     /// Explicit experimental action-to-attention feedback on an immutable copy.
@@ -1511,6 +1562,7 @@ impl CpuCanonicalHost {
             .values()
             .map(|r| {
                 Ok(CpuResidentCheckpoint {
+                    active_approach_intent2327: r.active_approach_intent2327.clone(),
                     memory_readout: r.memory_readout.clone(),
                     terminal_channel2135: r.terminal_channel2135.clone(),
                     neural: r.neural.checkpoint()?,
@@ -1533,7 +1585,9 @@ impl CpuCanonicalHost {
             candidate_opportunity_coverage2313: self.candidate_opportunity_coverage2313,
             joint_membership2177: self.joint_membership2177,
             terminal_context2135: self.terminal_context2135.clone(),
-            schema_version: if self.candidate_opportunity_coverage2313 == Some(2) {
+            schema_version: if self.candidate_opportunity_coverage2313 == Some(3) {
+                18
+            } else if self.candidate_opportunity_coverage2313 == Some(2) {
                 17
             } else if self.candidate_opportunity_coverage2313.is_some() {
                 16
@@ -1576,8 +1630,8 @@ impl CpuCanonicalHost {
             ));
         }
         if let Some(version) = checkpoint.candidate_opportunity_coverage2313 {
-            if !matches!(version, 1 | 2)
-                || checkpoint.schema_version != if version == 2 { 17 } else { 16 }
+            if !matches!(version, 1..=3)
+                || checkpoint.schema_version != match version {3=>18,2=>17,_=>16}
                 || !matches!(checkpoint.joint_membership2177, Some(14 | 15))
                 || founder.phenotype().sensor_profile() != SensorProfile::GroundedObjectSlotsV1
             {
@@ -1585,10 +1639,16 @@ impl CpuCanonicalHost {
                     "invalid candidate opportunity adapter identity",
                 ));
             }
-        } else if matches!(checkpoint.schema_version, 16 | 17) {
+        } else if matches!(checkpoint.schema_version, 16..=18) {
             return Err(CpuHostError::State(
                 "CP16 requires explicit candidate opportunity adapter",
             ));
+        }
+        for resident in &checkpoint.residents {
+            if let Some(intent) = &resident.active_approach_intent2327 {
+                if checkpoint.candidate_opportunity_coverage2313 != Some(3) {return Err(CpuHostError::State("active intent requires CP18 coverage3"));}
+                intent.validate()?;
+            }
         }
         let has_readout = checkpoint
             .residents
@@ -1605,7 +1665,9 @@ impl CpuCanonicalHost {
                         10 | 11 => 13,
                         12 | 13 => 14,
                         14 | 15 => {
-                            if checkpoint.candidate_opportunity_coverage2313 == Some(2) {
+                            if checkpoint.candidate_opportunity_coverage2313 == Some(3) {
+                                18
+                            } else if checkpoint.candidate_opportunity_coverage2313 == Some(2) {
                                 17
                             } else if checkpoint.candidate_opportunity_coverage2313.is_some() {
                                 16
@@ -1694,6 +1756,9 @@ impl CpuCanonicalHost {
             {
                 return Err(CpuHostError::State("checkpoint causal boundary mismatch"));
             }
+            if let Some(intent)=&r.active_approach_intent2327 {
+                if intent.organism_id!=id || intent.source_tick>=world.tick() {return Err(CpuHostError::State("active intent causal boundary mismatch"));}
+            }
             validate_record_founder(record, founder)?;
             r.language_grounding.validate_contract()?;
             if r.memory.last_observed_sequence_id_raw != r.next_sequence - 1
@@ -1754,6 +1819,7 @@ impl CpuCanonicalHost {
                 }
             }
             let mut resident = Resident {
+                active_approach_intent2327: r.active_approach_intent2327,
                 joint_comparison_mode: checkpoint.joint_membership2177,
                 memory_readout_digest: r.memory_readout.as_ref().map(|c| c.digest()).transpose()?,
                 memory_readout: r.memory_readout,
@@ -2086,6 +2152,11 @@ impl CpuCanonicalHost {
                     record.biochemistry().homeostasis,
                 )?
             };
+            let mut active_intent_read_work2327=0;
+            let candidate_binding=if self.candidate_opportunity_coverage2313==Some(3) {
+                active_intent_read_work2327=1+r.active_approach_intent2327.as_ref().map_or(0, |_|1);
+                candidate_binding.map(|b|b.with_active_approach(r.active_approach_intent2327.as_ref().map(|i|i.tracked_object_id)))
+            }else{candidate_binding};
             let ordinary = draft.clone().with_semantic_context(None)?;
             let draft = prepare(draft, sequence)?;
             if draft.clone().with_semantic_context(None)? != ordinary {
@@ -2142,6 +2213,7 @@ impl CpuCanonicalHost {
             if let Some(h) = preparation.hysteresis {
                 r.hysteresis = h;
             }
+            let active_selection2327=prepared.active_approach_opportunity;
             let frame = prepared.frame;
             let recall = prepared.memory_recall;
             let mut activity = cpu_activity_budget(
@@ -2534,16 +2606,33 @@ impl CpuCanonicalHost {
                         .count() as u64
                 })
                 .sum::<u64>();
-            let approach_attention_feedback2325 = if self.candidate_opportunity_coverage2313 == Some(2) {
+            let approach_attention_feedback2325 = if matches!(self.candidate_opportunity_coverage2313,Some(2|3)) {
                 let feedback = approach_attention_feedback(&frame, &action, &receipt.joint, &self.world, r.hysteresis)?;
                 if feedback.nominated { r.hysteresis = feedback.after; }
                 Some(feedback)
             } else { None };
+            let active_approach_opportunity2327=if self.candidate_opportunity_coverage2313==Some(3) {
+                let before=r.active_approach_intent2327.clone();
+                // Intent presence/identity read, seven-field snapshot copy when present,
+                // checked feedback/proof presence, nominated predicate, five row writes
+                // and one resident assignment.
+                let mut intent_work_units=active_intent_read_work2327+9+before.as_ref().map_or(0, |_|7);
+                let feedback=approach_attention_feedback2325.as_ref().ok_or(CpuHostError::State("active mode lacks Approach feedback"))?;
+                let after=if feedback.nominated {
+                    // Seven source-field writes, four checked option extractions,
+                    // and seven-field clone into resident state.
+                    intent_work_units+=18;
+                    Some(ActiveApproachIntent2327 {source_frame_digest:feedback.frame_digest,source_tick:feedback.source_tick,organism_id:feedback.organism_id,selected_candidate:feedback.selected_candidate.ok_or(CpuHostError::State("active source candidate missing"))?,executed:feedback.executed.ok_or(CpuHostError::State("active source execution missing"))?,tracked_object_id:feedback.tracked_object_id.ok_or(CpuHostError::State("active source identity missing"))?,target_entity:feedback.target_entity.ok_or(CpuHostError::State("active source target missing"))?})
+                }else{None};
+                r.active_approach_intent2327=after.clone();
+                Some(ActiveApproachOpportunityRow2327 {frame_digest:frame.frame_digest(),before,after,selection:active_selection2327.ok_or(CpuHostError::State("active mode lacks selector proof"))?,intent_work_units})
+            }else{None};
             let work = CognitiveWorkCounters::new(
                 work_neurons,
                 work_synapses,
                 dendritic_work,
                 cognitive.attention.budget_receipt.work_units
+                    + active_approach_opportunity2327.as_ref().map_or(0,|r|r.intent_work_units+r.selection.work_units)
                     + approach_attention_feedback2325.as_ref().map_or(0, |r| r.work_units)
                     + frame.grip_proprioception().map_or(0, |r| r.work_units())
                     + frame
@@ -2740,6 +2829,7 @@ impl CpuCanonicalHost {
                         additional_work_ops: readout_work,
                     });
             decisions.push(CpuCollectedDecision {
+                active_approach_opportunity2327,
                 approach_attention_feedback2325,
                 memory_plan2242: founder
                     .phenotype()
@@ -2921,6 +3011,7 @@ fn resident_digest(
             sampling_counter,
         ),
     )?;
+    let ordinary=match &r.active_approach_intent2327 {Some(intent)=>json_digest(b"ALIFE-CPU-ACTIVE-APPROACH-INTENT-V1",&(ordinary,intent))?,None=>ordinary};
     let ordinary = match r.joint_comparison_mode {
         None => ordinary,
         // Cost revision 2 cannot resume a research life whose projection work
@@ -3077,3 +3168,7 @@ mod grip_proprioception_tests;
 #[cfg(test)]
 #[path = "approach_attention_feedback_tests.rs"]
 mod approach_attention_feedback_tests;
+
+#[cfg(test)]
+#[path="active_approach_opportunity_tests.rs"]
+mod active_approach_opportunity_tests;

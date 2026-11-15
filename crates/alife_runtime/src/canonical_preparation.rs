@@ -156,6 +156,23 @@ pub fn apply_predecision_attention_evidence(
 
 /// Integrate world-bound opportunities before the existing deterministic routing.
 /// Synthetic/unbound drafts retain the original routing-only behavior.
+/// Explicit active-opportunity overlay; legacy routing remains byte-equivalent.
+fn route_observed_focal_candidates_with_active(
+    draft: &PerceptionFrameDraft, attention: &AttentionFrame,
+    binding: Option<&GroundedCandidateBinding>,
+) -> Result<(PerceptionFrameDraft,Option<alife_world::ActiveApproachOpportunityReceipt>),ScaffoldContractError> {
+    if let Some(binding)=binding.filter(|b|b.active_approach_enabled()) {
+        attention.validate_contract()?;
+        if attention.organism_id!=draft.organism_id() || attention.world_tick!=draft.tick() {return Err(ScaffoldContractError::InvalidPerceptionFrame);}
+        let focal=attention.focal_targets.first().and_then(|i|if let StableFocusIdentity::TrackedObject(id)=i{Some(*id)}else{None});
+        let charged=draft.candidate_opportunity_coverage().map_or(0,|r|r.work_units());
+        let(candidates,coverage,proof)=binding.candidates_for_focus_with_active_opportunity(draft,focal,charged)?;
+        let observed=match coverage {Some(receipt)=>draft.clone().with_candidates_and_opportunity_coverage(candidates,receipt)?,None=>draft.clone().with_candidates(candidates)?};
+        return Ok((route_focal_candidates(&observed,attention)?,Some(proof)));
+    }
+    Ok((route_observed_focal_candidates(draft,attention,binding)?,None))
+}
+
 pub fn route_observed_focal_candidates(
     draft: &PerceptionFrameDraft,
     attention: &AttentionFrame,
@@ -617,6 +634,7 @@ pub struct CanonicalPreparationInput {
 }
 #[derive(Debug, PartialEq)]
 pub struct CanonicalPreparedFrame {
+    pub active_approach_opportunity: Option<alife_world::ActiveApproachOpportunityReceipt>,
     pub frame: PerceptionFrame,
     pub memory_recall: FinalizedMemoryRecall,
     pub joint_comparison_sources: Option<Vec<alife_core::memory::JointMembershipSourceV1>>,
@@ -932,8 +950,8 @@ fn prepare_canonical_frame_impl(
         )?;
         hysteresis = Some(attention.hysteresis);
         preparation_stage = "focal routing";
-        let routed_draft =
-            route_observed_focal_candidates(draft, &attention, input.candidate_binding.as_ref())?;
+        let (routed_draft,active_approach_opportunity) =
+            route_observed_focal_candidates_with_active(draft, &attention, input.candidate_binding.as_ref())?;
         let novelty = selected_focal_novelty(&attention);
         let routed_draft = routed_draft.with_remembered_novelty(novelty)?;
         timing.attention_context_wall_ns = timing
@@ -1040,6 +1058,7 @@ fn prepare_canonical_frame_impl(
             .saturating_add(topology_concept_started.map_or(0, elapsed_ns));
 
         Ok(CanonicalPreparedFrame {
+            active_approach_opportunity,
             frame,
             memory_recall,
             joint_comparison_sources,
