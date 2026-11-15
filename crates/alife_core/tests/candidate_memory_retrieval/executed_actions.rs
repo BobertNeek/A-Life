@@ -963,7 +963,10 @@ fn contact_query2273_support_boundaries_preserve_estimator_and_fallback() {
             serde_json::json!(serde_json::to_vec(&event).unwrap());
         let bank: MemoryBank = serde_json::from_value(wire).unwrap();
         let probe = probe_for_object(tick, object.clone())
-            .with_candidates(vec![candidate_for_family(&object, 0, CandidateActionFamily::Contact), candidate_for_family(&object, 1, CandidateActionFamily::Ingest)])
+            .with_candidates(vec![
+                candidate_for_family(&object, 0, CandidateActionFamily::Contact),
+                candidate_for_family(&object, 1, CandidateActionFamily::Ingest),
+            ])
             .unwrap();
         let ordinary = bank.recall_frame(&probe).unwrap();
         let (old, _) = bank
@@ -989,5 +992,80 @@ fn contact_query2273_support_boundaries_preserve_estimator_and_fallback() {
         }
         a.finalize(probe.clone()).unwrap();
         b.finalize(probe).unwrap();
+    }
+}
+
+#[test]
+fn non_ingest2278_zero_and_subnormal_support_preserve_exact_full_query_policy() {
+    // Checked storage fixture only, not a fabricated native World outcome.
+    for family in [
+        CandidateActionFamily::Contact,
+        CandidateActionFamily::Ingest,
+    ] {
+        for (confidence, tick, usable) in [
+            (0., 3, false),
+            (f32::from_bits(1), 3, true),
+            (f32::from_bits(1), 1_000_000, false),
+            (f32::from_bits(16), 1_000_000, true),
+        ] {
+            let object = slot(0, 72, 0.4, [0., 0.8, 0.9]);
+            let draft = probe_for_object(1, object)
+                .with_candidates(vec![candidate_for_family(&object, 0, family)])
+                .unwrap();
+            let (_, recall) = empty_bank()
+                .recall_frame(&draft)
+                .unwrap()
+                .finalize(draft)
+                .unwrap();
+            let mut member = fact(1, 72, true);
+            member.query = recall.candidate_keys()[0].query().clone();
+            let mut wire = serde_json::to_value(joint_confidence_fixture(confidence)).unwrap();
+            let bytes: Vec<u8> = serde_json::from_value(
+                wire["candidate_store"]["records"]["1"]["joint_event"].clone(),
+            )
+            .unwrap();
+            let mut event: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+            event["members"] = serde_json::json!(serde_json::to_vec(&vec![member]).unwrap());
+            wire["candidate_store"]["records"]["1"]["joint_event"] =
+                serde_json::json!(serde_json::to_vec(&event).unwrap());
+            let bank: MemoryBank = serde_json::from_value(wire).unwrap();
+            let probe = probe_for_object(tick, object)
+                .with_candidates(vec![candidate_for_family(&object, 0, family)])
+                .unwrap();
+            let plain = bank.recall_frame(&probe).unwrap();
+            let (global, queries) = bank.recall_frame_joint_comparison(&probe, true).unwrap();
+            let (applied, aq) = bank
+                .recall_frame_joint_non_ingest_comparison2278(&probe, true)
+                .unwrap();
+            let (withheld, wq) = bank
+                .recall_frame_joint_non_ingest_comparison2278(&probe, false)
+                .unwrap();
+            assert_eq!(!queries.is_empty(), usable);
+            assert_eq!(queries, aq);
+            assert_eq!(queries, wq);
+            assert_eq!(
+                applied.context(),
+                if family == CandidateActionFamily::Ingest {
+                    plain.context()
+                } else {
+                    global.context()
+                }
+            );
+            assert_eq!(withheld.context(), plain.context());
+            assert_eq!(
+                applied.receipt().execution_evidence_work,
+                global.receipt().execution_evidence_work
+            );
+            assert_eq!(
+                withheld.receipt().execution_evidence_work,
+                global.receipt().execution_evidence_work
+            );
+            assert_eq!(
+                !applied.receipt().joint_membership_sources.is_empty(),
+                usable && family != CandidateActionFamily::Ingest
+            );
+            applied.finalize(probe.clone()).unwrap();
+            withheld.finalize(probe).unwrap();
+        }
     }
 }

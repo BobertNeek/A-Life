@@ -1552,3 +1552,362 @@ fn success2275_projection_work_is_charged_once_in_actual_biological_interval() {
         }
     }
 }
+
+#[test]
+fn non_ingest2278_fresh_modes_bound1_cold_continuation_and_migration_boundaries() {
+    for apply in [false, true] {
+        let (mut host, trainer) = super::super::memory_bound_row_tests::fixture_bound2266(1.0);
+        assert_eq!(
+            trainer
+                .phenotype()
+                .candidate_decoder()
+                .memory_channel()
+                .unwrap()
+                .max_candidate_gain(),
+            1.0
+        );
+        let founder = serde_json::to_vec(&trainer.checkpoint()).unwrap();
+        host.enable_joint_membership_non_ingest_comparison2278(&trainer, apply)
+            .unwrap();
+        let first = host.checkpoint(&trainer).unwrap();
+        assert_eq!(first.schema_version, 13);
+        assert_eq!(
+            first.joint_membership2177,
+            Some(if apply { 10 } else { 11 })
+        );
+        for _ in 0..4 {
+            let step = host.step(&trainer, 1.0).unwrap();
+            for row in step.decisions {
+                assert_eq!(row.memory_plan2242.as_ref().unwrap().memory_bound, 1.0);
+                let r = row.joint_membership2177.as_ref().unwrap();
+                assert_eq!(r.schema_version, 7);
+                assert_eq!(r.comparison.as_ref().unwrap().applied_family2266, None);
+                assert_eq!(r.comparison.as_ref().unwrap().apply, apply);
+                assert!(r.admission_actual_work <= r.admission_reserved_work);
+                assert!(r.success_projection2275.is_none());
+                assert_eq!(
+                    r.comparison.as_ref().unwrap().applied_family_mask2278,
+                    Some(191)
+                );
+                // Plan-2 has its existing matching-reader envelope. Diagnostic
+                // research rows still cannot enter the ordinary PPO cohort.
+                let bytes = serde_json::to_vec(&row).unwrap();
+                let decoded: CpuCollectedDecision = serde_json::from_slice(&bytes).unwrap();
+                assert_eq!(bytes, serde_json::to_vec(&decoded).unwrap());
+                let value = CpuValueHead::from_checkpoint(crate::PpoValueHeadCheckpoint {
+                    feature_count: trainer.phenotype().neuron_count(),
+                    optimizer_step: 0,
+                    parameters: vec![0.; (trainer.phenotype().neuron_count() as usize + 1) * 3],
+                    last_updated_policy_version: None,
+                })
+                .unwrap();
+                let phenotype = host
+                    .world
+                    .organism_registry()
+                    .iter()
+                    .next()
+                    .unwrap()
+                    .phenotype();
+                assert!(cpu_training_windows(
+                    &[decoded],
+                    None,
+                    &trainer,
+                    &value,
+                    phenotype,
+                    2266,
+                    crate::PpoConfig::default(),
+                    2,
+                    0
+                )
+                .is_err());
+            }
+        }
+        let cp = host.checkpoint(&trainer).unwrap();
+        let mut cold = CpuCanonicalHost::from_checkpoint(cp.clone(), &trainer).unwrap();
+        assert_eq!(
+            serde_json::to_vec(&cp).unwrap(),
+            serde_json::to_vec(&cold.checkpoint(&trainer).unwrap()).unwrap()
+        );
+        let a = host.step(&trainer, 1.0).unwrap();
+        let b = cold.step(&trainer, 1.0).unwrap();
+        assert_eq!(
+            serde_json::to_vec(&a.decisions).unwrap(),
+            serde_json::to_vec(&b.decisions).unwrap()
+        );
+        assert_eq!(
+            serde_json::to_vec(&host.checkpoint(&trainer).unwrap()).unwrap(),
+            serde_json::to_vec(&cold.checkpoint(&trainer).unwrap()).unwrap()
+        );
+        for mode in [
+            None,
+            Some(0),
+            Some(1),
+            Some(2),
+            Some(3),
+            Some(4),
+            Some(5),
+            Some(6),
+            Some(7),
+            Some(8),
+            Some(9),
+            Some(10),
+            Some(11),
+            Some(12),
+            Some(u16::MAX),
+        ] {
+            if mode == cp.joint_membership2177 {
+                continue;
+            }
+            let mut bad = cp.clone();
+            bad.joint_membership2177 = mode;
+            bad.schema_version = match mode {
+                Some(1) => 8,
+                Some(2 | 3) => 7,
+                Some(4 | 5) => 9,
+                Some(6 | 7) => 10,
+                Some(8 | 9) => 12,
+                Some(10 | 11) => 13,
+                _ => 2,
+            };
+            assert!(
+                CpuCanonicalHost::from_checkpoint(bad, &trainer).is_err(),
+                "accepted mode {mode:?}"
+            );
+        }
+        for schema in [2, 5, 6, 7, 8, 9, 10, 11, 12, 14] {
+            let mut bad = cp.clone();
+            bad.schema_version = schema;
+            assert!(CpuCanonicalHost::from_checkpoint(bad, &trainer).is_err());
+        }
+        let before = serde_json::to_vec(&host.checkpoint(&trainer).unwrap()).unwrap();
+        assert!(host
+            .enable_joint_membership_non_ingest_comparison2278(&trainer, !apply)
+            .is_err());
+        assert_eq!(
+            before,
+            serde_json::to_vec(&host.checkpoint(&trainer).unwrap()).unwrap()
+        );
+        assert_eq!(founder, serde_json::to_vec(&trainer.checkpoint()).unwrap());
+    }
+    let (mut ordinary, trainer) = food_fixture(false, true);
+    ordinary.step(&trainer, 1.).unwrap();
+    let ordinary_cp = ordinary.checkpoint(&trainer).unwrap();
+    let before = serde_json::to_vec(&ordinary_cp).unwrap();
+    for mode in [10, 11] {
+        let mut edited = ordinary_cp.clone();
+        edited.schema_version = 13;
+        edited.joint_membership2177 = Some(mode);
+        assert!(CpuCanonicalHost::from_checkpoint(edited, &trainer).is_err());
+    }
+    assert!(ordinary
+        .enable_joint_membership_non_ingest_comparison2278(&trainer, true)
+        .is_err());
+    assert_eq!(
+        before,
+        serde_json::to_vec(&ordinary.checkpoint(&trainer).unwrap()).unwrap()
+    );
+}
+
+#[test]
+fn non_ingest2278_exact_application_mask_full_query_provenance_and_work() {
+    let (mut host, trainer) = food_fixture(false, false);
+    host.enable_joint_membership_comparison2182(&trainer, false)
+        .unwrap();
+    let (mut ingest, mut other, mut changed) = (0, 0, 0);
+    for step in 0..33 {
+        if step > 0 {
+            host.step(&trainer, 1.).unwrap();
+        }
+        for (draft, _) in host.semantic_prior_inputs(&trainer).unwrap() {
+            let bank = &host.residents[&draft.organism_id().raw()].memory;
+            let before = serde_json::to_vec(&bank.export_active_bank().unwrap()).unwrap();
+            let ordinary = bank.recall_frame(&draft).unwrap();
+            let (global, queries) = bank.recall_frame_joint_comparison(&draft, true).unwrap();
+            let (applied, aq) = bank
+                .recall_frame_joint_non_ingest_comparison2278(&draft, true)
+                .unwrap();
+            let (withheld, wq) = bank
+                .recall_frame_joint_non_ingest_comparison2278(&draft, false)
+                .unwrap();
+            assert_eq!(aq, queries);
+            assert_eq!(wq, queries);
+            assert_eq!(
+                applied.receipt().execution_evidence_work,
+                global.receipt().execution_evidence_work
+            );
+            assert_eq!(
+                withheld.receipt().execution_evidence_work,
+                global.receipt().execution_evidence_work
+            );
+            assert_eq!(withheld.context(), ordinary.context());
+            assert!(withheld.receipt().joint_membership_sources.is_empty());
+            let expected: Vec<_> = queries
+                .iter()
+                .filter(|q| {
+                    draft.candidates()[q.candidate_index as usize].family
+                        != CandidateActionFamily::Ingest
+                })
+                .cloned()
+                .collect();
+            assert_eq!(applied.receipt().joint_membership_sources, expected);
+            for (i, c) in draft.candidates().iter().enumerate() {
+                let is_ingest = c.family == CandidateActionFamily::Ingest;
+                let ref_context = if is_ingest {
+                    ordinary.context()
+                } else {
+                    global.context()
+                };
+                assert_eq!(applied.context().candidates[i], ref_context.candidates[i]);
+                let count = queries
+                    .iter()
+                    .filter(|q| q.candidate_index as usize == i)
+                    .count();
+                if is_ingest {
+                    ingest += count;
+                } else {
+                    other += count;
+                    changed += usize::from(
+                        global.context().candidates[i] != ordinary.context().candidates[i],
+                    );
+                }
+                let mask = 191_u8 & (1_u8 << c.family.raw());
+                assert_eq!(mask != 0, !is_ingest);
+            }
+            if step == 0 {
+                assert!(queries.is_empty());
+                assert_eq!(applied.context(), ordinary.context());
+            }
+            assert_eq!(
+                before,
+                serde_json::to_vec(&bank.export_active_bank().unwrap()).unwrap()
+            );
+            applied.finalize(draft.clone()).unwrap();
+            withheld.finalize(draft).unwrap();
+        }
+    }
+    assert!(
+        ingest > 0 && other > 0 && changed > 0,
+        "authentic eligible Ingest and non-Ingest required"
+    );
+}
+
+#[test]
+fn non_ingest2278_native_no_projection_exact_cost_and_atomic_failure() {
+    let (base, trainer) = food_fixture(false, false);
+    let mut first = None;
+    for apply in [false, true] {
+        let mut host = base.snapshot();
+        host.enable_joint_membership_non_ingest_comparison2278(&trainer, apply)
+            .unwrap();
+        let cp = serde_json::to_vec(&host.checkpoint(&trainer).unwrap()).unwrap();
+        let mut failed = host.snapshot();
+        failed.fail_joint_membership_after_admission = true;
+        assert!(failed.step(&trainer, 1.).is_err());
+        assert_eq!(
+            cp,
+            serde_json::to_vec(&failed.checkpoint(&trainer).unwrap()).unwrap()
+        );
+        let row = host.step(&trainer, 1.).unwrap().decisions.remove(0);
+        let receipt = row.joint_membership2177.as_ref().unwrap();
+        assert!(receipt.success_projection2275.is_none());
+        assert_eq!(receipt.query_work, row.executed_action_recall_work);
+        let (mut ordinary, _) = food_fixture(false, false);
+        let ordinary_row = ordinary.step(&trainer, 1.).unwrap().decisions.remove(0);
+        assert_eq!(row.replay_tick, ordinary_row.replay_tick);
+        let charged = row.patch.cognitive_work().unwrap();
+        assert_eq!(
+            charged.memory_ops,
+            ordinary_row.patch.cognitive_work().unwrap().memory_ops
+                + receipt.query_work
+                + receipt.admission_planning_work
+                + receipt.admission_reserved_work
+        );
+        let record = host.world.organism_registry().get(row.organism_id).unwrap();
+        let (policy, debit, before, after) = row.cognitive_cost_capture.unwrap();
+        let phenotype = record.phenotype();
+        let expected = policy.energy_debit(charged).unwrap()
+            * phenotype.body.metabolic_turnover
+            * (ContinuousLocus::midpoint_value(0.52, 0.60)
+                - phenotype.chemistry.brain_atp_efficiency)
+                .exp2();
+        assert_eq!(debit, expected.min(before));
+        assert!((before - after - debit).abs() < 2e-6);
+        let tuple = (
+            receipt.query_work,
+            receipt.admission_planning_work,
+            receipt.admission_reserved_work,
+            receipt.admission_actual_work,
+            charged.memory_ops,
+        );
+        if let Some(previous) = first {
+            assert_eq!(tuple, previous);
+        } else {
+            first = Some(tuple);
+        }
+    }
+}
+
+#[test]
+fn non_ingest2278_populated_intervals_bill_exact_routed_query_and_physiology() {
+    for apply in [false, true] {
+        let (mut host, trainer) = food_fixture(false, false);
+        host.enable_joint_membership_non_ingest_comparison2278(&trainer, apply)
+            .unwrap();
+        let mut genuine_queries = 0;
+        for _ in 0..16 {
+            // Diagnostic snapshot only. Production performs no extra lookup.
+            let pre_step = host.snapshot();
+            for row in host.step(&trainer, 1.).unwrap().decisions {
+                let frame = row.patch.pre_action().perception();
+                // The serialized, validated base preserves the ACTUAL routed
+                // candidates, semantic context and all profile capabilities.
+                let wire = serde_json::to_value(frame).unwrap();
+                let draft: PerceptionFrameDraft =
+                    serde_json::from_value(wire["base"].clone()).unwrap();
+                assert_eq!(draft.base_digest(), frame.base_digest());
+                let bank = &pre_step.residents[&row.organism_id.raw()].memory;
+                let before = serde_json::to_vec(&bank.export_active_bank().unwrap()).unwrap();
+                let ordinary = bank.recall_frame(&draft).unwrap();
+                let raw = ordinary.receipt();
+                assert_eq!(raw.base_frame_digest, frame.base_digest());
+                assert_eq!(
+                    before,
+                    serde_json::to_vec(&bank.export_active_bank().unwrap()).unwrap()
+                );
+                let receipt = row.joint_membership2177.as_ref().unwrap();
+                assert!(receipt.success_projection2275.is_none());
+                genuine_queries += receipt.comparison.as_ref().unwrap().queried_sources.len();
+                assert_eq!(receipt.query_work, row.executed_action_recall_work);
+                let base = u64::from(raw.exact_bucket_reads)
+                    + u64::from(raw.neighbor_bucket_reads)
+                    + u64::from(raw.similarity_evaluations);
+                let expected = base
+                    + receipt.query_work
+                    + receipt.admission_planning_work
+                    + receipt.admission_reserved_work;
+                let charged = row.patch.cognitive_work().unwrap();
+                assert_eq!(
+                    charged.memory_ops, expected,
+                    "populated actual interval must include full query and admission exactly once"
+                );
+                let record = host.world.organism_registry().get(row.organism_id).unwrap();
+                assert_eq!(record.cognitive_work(), charged);
+                let (policy, debit, before_energy, after_energy) =
+                    row.cognitive_cost_capture.unwrap();
+                let phenotype = record.phenotype();
+                let requested = policy.energy_debit(charged).unwrap()
+                    * phenotype.body.metabolic_turnover
+                    * (ContinuousLocus::midpoint_value(0.52, 0.60)
+                        - phenotype.chemistry.brain_atp_efficiency)
+                        .exp2();
+                assert_eq!(debit, requested.min(before_energy));
+                assert_eq!(record.cognitive_energy_debit(), debit);
+                assert!((before_energy - after_energy - debit).abs() < 2e-6);
+            }
+        }
+        assert!(
+            genuine_queries > 0,
+            "populated eligible membership required for each arm"
+        );
+    }
+}

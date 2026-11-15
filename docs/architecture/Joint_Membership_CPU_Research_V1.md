@@ -141,3 +141,28 @@ The corrected authority digest seals cost revision 2 separately for modes 8/9.
 Both original schema-11 checkpoints and schema-only edits to 12 are rejected;
 there is no implicit migration or resealing of those acquired lives. Modes 0–7
 retain their previous checkpoint schemas, authority domains and behavior.
+
+## Full-query non-Ingest application mask (2278)
+
+`enable_joint_membership_non_ingest_comparison2278(&trainer, apply)` is a
+fresh-only opt-in CPU research comparison. Mode 10 applies mask 191, bits 0–5
+and 7: Idle, Rest, Inspect, Approach, Avoid, Contact, Other. Ingest (bit 6) retains
+its complete ordinary family value/confidence/source-count/best-source tuple.
+Mode 11 withholds all family replacement. Both retain ordinary target context.
+
+Both arms make the same full all-family membership query, one routed ordinary
+lookup, and unchanged capture/admission. At matched bank and draft, applied
+non-Ingest estimates exactly match the existing all-family mode 2; withheld
+estimates match ordinary recall. Queried provenance includes all families;
+applied provenance is filtered by mask and is empty when withheld. The optional
+`applied_family_mask2278: 191` receipt identifies the scope without mislabeling it
+as Contact-only. There is no ordinary-success basis or CPU projection, reduced
+query plan, extra tariff, learner, reward, object-kind or chemistry gate.
+
+The existing full-comparison logical work tariff is unchanged and charged to the
+actual shared biological interval. Checkpoint schema 13, live receipt schema 7,
+and a separate private non-Ingest authority domain identify modes 10/11. Old
+modes 0–9 retain their bytes, work and private seals, including cost revision 2
+for modes 8/9. Historical schema-11 projection states remain rejected. Acquired
+states are not migrated or resealed. This is a fresh experimental candidate,
+not a default or a demonstrated behavioral winner.

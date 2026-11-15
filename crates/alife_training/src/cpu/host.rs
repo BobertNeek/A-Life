@@ -336,6 +336,9 @@ pub struct JointMembershipComparison2182 {
     /// Absent on historical all-family comparison rows.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub applied_family2266: Option<CandidateActionFamily>,
+    /// Explicit all-but-Ingest mask; absent on modes 0–9.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub applied_family_mask2278: Option<u8>,
     pub queried_sources: Vec<alife_core::memory::JointMembershipSourceV1>,
 }
 
@@ -892,6 +895,23 @@ impl CpuCanonicalHost {
         Ok(())
     }
 
+    /// Fresh-only full-query non-Ingest mask (191), checkpoint schema 13.
+    pub fn enable_joint_membership_non_ingest_comparison2278(
+        &mut self,
+        founder: &CpuFoundationTrainer,
+        apply: bool,
+    ) -> Result<(), CpuHostError> {
+        let mut next = self.clone();
+        next.validate_joint_membership_enable(founder)?;
+        next.joint_membership2177 = Some(if apply { 10 } else { 11 });
+        for resident in next.residents.values_mut() {
+            resident.joint_comparison_mode = next.joint_membership2177;
+        }
+        next.seal_all_residents()?;
+        *self = next;
+        Ok(())
+    }
+
     pub fn world(&self) -> &HeadlessWorld {
         &self.world
     }
@@ -1094,6 +1114,7 @@ impl CpuCanonicalHost {
                     Some(4 | 5) => 9,
                     Some(6 | 7) => 10,
                     Some(8 | 9) => 12,
+                    Some(10 | 11) => 13,
                     _ => 7,
                 }
             } else if self.residents.values().any(|r| r.memory_readout.is_some()) {
@@ -1128,13 +1149,14 @@ impl CpuCanonicalHost {
             .iter()
             .any(|r| r.memory_readout.is_some());
         if let Some(version) = checkpoint.joint_membership2177 {
-            if !matches!(version, 1..=9)
+            if !matches!(version, 1..=11)
                 || checkpoint.schema_version
                     != match version {
                         1 => 8,
                         4 | 5 => 9,
                         6 | 7 => 10,
                         8 | 9 => 12,
+                        10 | 11 => 13,
                         _ => 7,
                     }
                 || has_readout
@@ -1603,7 +1625,11 @@ impl CpuCanonicalHost {
                     "semantic preparation changed ordinary perception",
                 ));
             }
-            let prepare_frame = if matches!(self.joint_membership2177, Some(8 | 9)) {
+            let prepare_frame = if self.joint_membership2177 == Some(10) {
+                prepare_canonical_frame_joint_non_ingest_applied2278
+            } else if self.joint_membership2177 == Some(11) {
+                prepare_canonical_frame_joint_non_ingest_withheld2278
+            } else if matches!(self.joint_membership2177, Some(8 | 9)) {
                 prepare_canonical_frame_joint_contact_success2275
             } else if self.joint_membership2177 == Some(6) {
                 prepare_canonical_frame_joint_contact_query_applied2273
@@ -1669,17 +1695,26 @@ impl CpuCanonicalHost {
                             Some(4 | 5) => 3,
                             Some(6 | 7) => 4,
                             Some(8 | 9) => 6,
+                            Some(10 | 11) => 7,
                             _ => 2,
                         },
                         sources: recall.receipt().joint_membership_sources.clone(),
                         comparison: prepared.joint_comparison_sources.map(|queried_sources| {
                             JointMembershipComparison2182 {
-                                apply: matches!(self.joint_membership2177, Some(2 | 4 | 6 | 8 | 9)),
+                                apply: matches!(
+                                    self.joint_membership2177,
+                                    Some(2 | 4 | 6 | 8 | 9 | 10)
+                                ),
                                 applied_family2266: matches!(
                                     self.joint_membership2177,
                                     Some(4..=9)
                                 )
                                 .then_some(CandidateActionFamily::Contact),
+                                applied_family_mask2278: matches!(
+                                    self.joint_membership2177,
+                                    Some(10 | 11)
+                                )
+                                .then_some(191),
                                 queried_sources,
                             }
                         }),
@@ -2377,6 +2412,10 @@ fn resident_digest(
         // Cost revision 2 cannot resume a research life whose projection work
         // was absent from its biological intervals, even after header editing.
         Some(mode @ (8 | 9)) => json_digest(b"ALIFE-CPU-JOINT-SUCCESS-COST-V2", &(ordinary, mode))?,
+        Some(mode @ (10 | 11)) => json_digest(
+            b"ALIFE-CPU-JOINT-NON-INGEST-2278-V1",
+            &(ordinary, mode, 191_u8),
+        )?,
         Some(mode) => json_digest(b"ALIFE-CPU-JOINT-COMPARISON-PRIVATE-V1", &(ordinary, mode))?,
     };
     let ordinary = match r.memory_readout_digest {

@@ -784,6 +784,26 @@ pub fn prepare_canonical_frame_joint_contact_success2275(
     prepare_canonical_frame_impl(input, memory, topology, predictor, measure, false, 8)
 }
 
+/// Full-query all-but-Ingest applied/withheld route, without success projection.
+pub fn prepare_canonical_frame_joint_non_ingest_applied2278(
+    input: &CanonicalPreparationInput,
+    memory: &MemorySidecarState,
+    topology: &TopologySidecar,
+    predictor: &GroundedSuccessorPredictor,
+    measure: bool,
+) -> CanonicalPreparationOutcome {
+    prepare_canonical_frame_impl(input, memory, topology, predictor, measure, false, 10)
+}
+pub fn prepare_canonical_frame_joint_non_ingest_withheld2278(
+    input: &CanonicalPreparationInput,
+    memory: &MemorySidecarState,
+    topology: &TopologySidecar,
+    predictor: &GroundedSuccessorPredictor,
+    measure: bool,
+) -> CanonicalPreparationOutcome {
+    prepare_canonical_frame_impl(input, memory, topology, predictor, measure, false, 11)
+}
+
 fn prepare_canonical_frame_impl(
     input: &CanonicalPreparationInput,
     memory: &MemorySidecarState,
@@ -889,7 +909,14 @@ fn prepare_canonical_frame_impl(
         let leaf_started = measure.then(std::time::Instant::now);
         let mut joint_comparison_sources = None;
         let mut joint_ordinary_success2275 = None;
-        let routed_recall = if joint_membership == 8 {
+        let routed_recall = if matches!(joint_membership, 10 | 11) {
+            let (p, sources) = memory.recall_frame_joint_non_ingest_comparison2278(
+                &routed_draft,
+                joint_membership == 10,
+            )?;
+            joint_comparison_sources = Some(sources);
+            p
+        } else if joint_membership == 8 {
             let (joint, sources, ordinary) =
                 memory.recall_frame_joint_contact_success_basis2275(&routed_draft)?;
             let (ordinary_frame, ordinary) = ordinary.finalize(routed_draft.clone())?;

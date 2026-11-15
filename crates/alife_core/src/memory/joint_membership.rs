@@ -2,6 +2,23 @@
 use super::*;
 use std::collections::BTreeSet;
 
+/// Application policy only: all policies query the same membership bank.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum JointApplicationScope2278 {
+    All,
+    Contact,
+    NonIngest,
+}
+impl JointApplicationScope2278 {
+    fn includes(self, family: CandidateActionFamily) -> bool {
+        match self {
+            Self::All => true,
+            Self::Contact => family == CandidateActionFamily::Contact,
+            Self::NonIngest => family != CandidateActionFamily::Ingest,
+        }
+    }
+}
+
 pub(super) const RECORD_SCHEMA: u16 = 3;
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -242,6 +259,22 @@ impl MemoryBank {
         self.recall_frame_joint_comparison_impl(draft, apply, true)
     }
 
+    /// Full-query comparison applying every family except Ingest. Ingest's
+    /// entire ordinary family tuple remains intact; query/capture is unfiltered.
+    pub fn recall_frame_joint_non_ingest_comparison2278(
+        &self,
+        draft: &PerceptionFrameDraft,
+        apply: bool,
+    ) -> Result<(PreparedMemoryRecall, Vec<JointMembershipSourceV1>), ScaffoldContractError> {
+        let ordinary = self.recall_frame(draft)?;
+        self.joint_comparison_with_scope2278(
+            ordinary,
+            draft,
+            apply,
+            JointApplicationScope2278::NonIngest,
+        )
+    }
+
     fn recall_frame_joint_comparison_impl(
         &self,
         draft: &PerceptionFrameDraft,
@@ -296,6 +329,25 @@ impl MemoryBank {
         apply: bool,
         contact_only: bool,
     ) -> Result<(PreparedMemoryRecall, Vec<JointMembershipSourceV1>), ScaffoldContractError> {
+        self.joint_comparison_with_scope2278(
+            ordinary,
+            draft,
+            apply,
+            if contact_only {
+                JointApplicationScope2278::Contact
+            } else {
+                JointApplicationScope2278::All
+            },
+        )
+    }
+
+    fn joint_comparison_with_scope2278(
+        &self,
+        ordinary: PreparedMemoryRecall,
+        draft: &PerceptionFrameDraft,
+        apply: bool,
+        scope: JointApplicationScope2278,
+    ) -> Result<(PreparedMemoryRecall, Vec<JointMembershipSourceV1>), ScaffoldContractError> {
         let families: Vec<_> = ordinary
             .context
             .candidates
@@ -318,9 +370,7 @@ impl MemoryBank {
             .zip(&p.candidate_queries)
             .zip(families)
         {
-            let chosen = if apply
-                && (!contact_only || q.action_family() == CandidateActionFamily::Contact)
-            {
+            let chosen = if apply && scope.includes(q.action_family()) {
                 (
                     c.family_value,
                     c.family_confidence,
@@ -346,12 +396,12 @@ impl MemoryBank {
             .execution_evidence_work
             .checked_add(comparison_work)
             .ok_or(ScaffoldContractError::ScalarOutOfRange)?;
-        if contact_only {
+        if scope != JointApplicationScope2278::All {
             p.receipt.joint_membership_sources.retain(|source| {
                 apply
                     && p.candidate_queries.iter().any(|q| {
                         q.candidate_index() == source.candidate_index
-                            && q.action_family() == CandidateActionFamily::Contact
+                            && scope.includes(q.action_family())
                     })
             });
         } else if !apply {
