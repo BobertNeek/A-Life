@@ -320,6 +320,8 @@ pub struct JointMembershipLiveReceipt2177 {
     pub sources: Vec<alife_core::memory::JointMembershipSourceV1>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub comparison: Option<JointMembershipComparison2182>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub success_projection2275: Option<JointContactSuccessProjection2275>,
     pub query_work: u64,
     pub admission_planning_work: u64,
     pub admission_reserved_work: u64,
@@ -335,6 +337,121 @@ pub struct JointMembershipComparison2182 {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub applied_family2266: Option<CandidateActionFamily>,
     pub queried_sources: Vec<alife_core::memory::JointMembershipSourceV1>,
+}
+
+/// Explicit CPU decoder policy. Raw joint recall and cognitive context are not
+/// rewritten: only the ordinary success component is projected to Contact 33.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct JointContactSuccessProjection2275 {
+    pub apply: bool,
+    pub ordinary_query: MemoryRecallReceipt,
+    pub work: u64,
+    pub candidates: Vec<JointContactSuccessCandidate2275>,
+}
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct JointContactSuccessCandidate2275 {
+    pub candidate_index: u16,
+    pub ordinary_success: f32,
+    pub ordinary_confidence: f32,
+    pub ordinary_source_count: u16,
+    pub ordinary_best_source: Option<MemoryId>,
+    pub ordinary_sources: MemoryFamilySourcesV1,
+    pub joint_weighted_success: f32,
+    pub projected_weighted_success: f32,
+    pub output_weighted_success: f32,
+}
+
+fn project_joint_contact_success2275(
+    frame: &PerceptionFrame,
+    joint: &FinalizedMemoryRecall,
+    ordinary_frame: &PerceptionFrame,
+    ordinary: &FinalizedMemoryRecall,
+    tick: &mut crate::TrainingReplayTick,
+    apply: bool,
+) -> Result<JointContactSuccessProjection2275, CpuHostError> {
+    // Each recall validates against its OWN finalized context. Cross-binding
+    // never accepts an arbitrary scalar or a basis from another private bank.
+    joint.validate_for_frame(frame)?;
+    ordinary.validate_for_frame(ordinary_frame)?;
+    let a = joint.receipt();
+    let b = ordinary.receipt();
+    let sources = ordinary
+        .family_sources()
+        .ok_or(CpuHostError::State("projection lacks ordinary provenance"))?;
+    if frame.base_digest() != ordinary_frame.base_digest()
+        || frame.organism_id() != ordinary_frame.organism_id()
+        || frame.tick() != ordinary_frame.tick()
+        || a.bank_digest != b.bank_digest
+        || a.input_generation != b.input_generation
+        || a.organism_id_raw != b.organism_id_raw
+        || joint.candidate_keys().len() != ordinary.candidate_keys().len()
+        || joint
+            .candidate_keys()
+            .iter()
+            .zip(ordinary.candidate_keys())
+            .any(|(a, b)| a.query() != b.query())
+        || frame.candidates().len() != tick.candidates.len()
+        || sources.len() != tick.candidates.len()
+        || joint.context().candidates.len() != tick.candidates.len()
+        || ordinary.context().candidates.len() != tick.candidates.len()
+    {
+        return Err(CpuHostError::State(
+            "projection ordinary/joint binding mismatch",
+        ));
+    }
+    let mut candidates = Vec::new();
+    // Logical tariff: binding checks, two immutable recall validations/context
+    // reads, one candidate family check, component selection/copy, and complete
+    // source provenance copying. Both apply/withhold perform the same assignment.
+    let mut work = 16 + 4 * joint.context().candidates.len() as u64 * 16;
+    for (i, (native, encoded)) in frame
+        .candidates()
+        .iter()
+        .zip(&mut tick.candidates)
+        .enumerate()
+    {
+        if native.family != encoded.family {
+            return Err(CpuHostError::State("projection candidate family mismatch"));
+        }
+        work += 1;
+        if native.family != CandidateActionFamily::Contact {
+            continue;
+        }
+        let c = &ordinary.context().candidates[i];
+        let j = &joint.context().candidates[i];
+        let joint_value = j.family_value[1] * j.family_confidence.raw().clamp(0.0, 1.0);
+        if c.candidate_index as usize != i
+            || j.candidate_index as usize != i
+            || encoded.decoder_inputs[33].to_bits() != joint_value.to_bits()
+        {
+            return Err(CpuHostError::State(
+                "projection candidate component mismatch",
+            ));
+        }
+        let value = c.family_value[1] * c.family_confidence.raw().clamp(0.0, 1.0);
+        let output = if apply { value } else { joint_value };
+        work += 12 + 16 * sources[i].sources.iter().flatten().count() as u64;
+        candidates.push(JointContactSuccessCandidate2275 {
+            candidate_index: c.candidate_index,
+            ordinary_success: c.family_value[1],
+            ordinary_confidence: c.family_confidence.raw(),
+            ordinary_source_count: c.family_source_count,
+            ordinary_best_source: c.best_family_source,
+            ordinary_sources: sources[i].clone(),
+            joint_weighted_success: joint_value,
+            projected_weighted_success: value,
+            output_weighted_success: output,
+        });
+        encoded.decoder_inputs[33] = output;
+    }
+    Ok(JointContactSuccessProjection2275 {
+        apply,
+        ordinary_query: b.clone(),
+        work,
+        candidates,
+    })
 }
 
 fn charge_joint_membership_work(
@@ -757,6 +874,24 @@ impl CpuCanonicalHost {
         Ok(())
     }
 
+    /// Fresh-only full-query Contact success-component projection (schema 12, cost revision 2).
+    /// Both modes apply joint Contact recall; mode 9 withholds only lane 33 projection.
+    pub fn enable_joint_contact_success_projection2275(
+        &mut self,
+        founder: &CpuFoundationTrainer,
+        apply_projection: bool,
+    ) -> Result<(), CpuHostError> {
+        let mut next = self.clone();
+        next.validate_joint_membership_enable(founder)?;
+        next.joint_membership2177 = Some(if apply_projection { 8 } else { 9 });
+        for resident in next.residents.values_mut() {
+            resident.joint_comparison_mode = next.joint_membership2177;
+        }
+        next.seal_all_residents()?;
+        *self = next;
+        Ok(())
+    }
+
     pub fn world(&self) -> &HeadlessWorld {
         &self.world
     }
@@ -958,6 +1093,7 @@ impl CpuCanonicalHost {
                     Some(1) => 8,
                     Some(4 | 5) => 9,
                     Some(6 | 7) => 10,
+                    Some(8 | 9) => 12,
                     _ => 7,
                 }
             } else if self.residents.values().any(|r| r.memory_readout.is_some()) {
@@ -992,12 +1128,13 @@ impl CpuCanonicalHost {
             .iter()
             .any(|r| r.memory_readout.is_some());
         if let Some(version) = checkpoint.joint_membership2177 {
-            if !matches!(version, 1..=7)
+            if !matches!(version, 1..=9)
                 || checkpoint.schema_version
                     != match version {
                         1 => 8,
                         4 | 5 => 9,
                         6 | 7 => 10,
+                        8 | 9 => 12,
                         _ => 7,
                     }
                 || has_readout
@@ -1466,7 +1603,9 @@ impl CpuCanonicalHost {
                     "semantic preparation changed ordinary perception",
                 ));
             }
-            let prepare_frame = if self.joint_membership2177 == Some(6) {
+            let prepare_frame = if matches!(self.joint_membership2177, Some(8 | 9)) {
+                prepare_canonical_frame_joint_contact_success2275
+            } else if self.joint_membership2177 == Some(6) {
                 prepare_canonical_frame_joint_contact_query_applied2273
             } else if self.joint_membership2177 == Some(7) {
                 prepare_canonical_frame_joint_contact_query_withheld2273
@@ -1529,20 +1668,22 @@ impl CpuCanonicalHost {
                             Some(1) => 1,
                             Some(4 | 5) => 3,
                             Some(6 | 7) => 4,
+                            Some(8 | 9) => 6,
                             _ => 2,
                         },
                         sources: recall.receipt().joint_membership_sources.clone(),
                         comparison: prepared.joint_comparison_sources.map(|queried_sources| {
                             JointMembershipComparison2182 {
-                                apply: matches!(self.joint_membership2177, Some(2 | 4 | 6)),
+                                apply: matches!(self.joint_membership2177, Some(2 | 4 | 6 | 8 | 9)),
                                 applied_family2266: matches!(
                                     self.joint_membership2177,
-                                    Some(4..=7)
+                                    Some(4..=9)
                                 )
                                 .then_some(CandidateActionFamily::Contact),
                                 queried_sources,
                             }
                         }),
+                        success_projection2275: None,
                         query_work: recall.receipt().execution_evidence_work,
                         admission_planning_work: 0,
                         admission_reserved_work: 0,
@@ -1602,6 +1743,25 @@ impl CpuCanonicalHost {
                     })
                     .collect(),
             )?;
+            if let Some((ordinary_frame, ordinary)) = prepared.joint_ordinary_success2275 {
+                let projection = project_joint_contact_success2275(
+                    &frame,
+                    &recall,
+                    &ordinary_frame,
+                    &ordinary,
+                    &mut context,
+                    self.joint_membership2177 == Some(8),
+                )?;
+                charge_joint_membership_work(&mut activity, projection.work)?;
+                let receipt = joint_membership2177
+                    .as_mut()
+                    .ok_or(CpuHostError::State("projection without joint mode"))?;
+                receipt.query_work = receipt
+                    .query_work
+                    .checked_add(projection.work)
+                    .ok_or(CpuHostError::State("projection work overflow"))?;
+                receipt.success_projection2275 = Some(projection);
+            }
             context.microstep_count = u32::from(activity.microsteps);
             let readout_work = if let Some(config) = &r.memory_readout {
                 let work = super::memory_binding::bind_prepared_memory_readout(
@@ -1855,9 +2015,11 @@ impl CpuCanonicalHost {
                         .as_ref()
                         .map_or(0, |r| r.reserved_work_units)
                     + readout_work
-                    + joint_membership2177
-                        .as_ref()
-                        .map_or(0, |r| r.admission_planning_work + r.admission_reserved_work),
+                    + joint_membership2177.as_ref().map_or(0, |r| {
+                        r.admission_planning_work
+                            + r.admission_reserved_work
+                            + r.success_projection2275.as_ref().map_or(0, |p| p.work)
+                    }),
                 cognitive.concept.active_concepts.len() as u64,
                 cognitive.gap.active_gaps.len() as u64,
                 prediction.error.len() as u64,
@@ -2212,6 +2374,9 @@ fn resident_digest(
     )?;
     let ordinary = match r.joint_comparison_mode {
         None => ordinary,
+        // Cost revision 2 cannot resume a research life whose projection work
+        // was absent from its biological intervals, even after header editing.
+        Some(mode @ (8 | 9)) => json_digest(b"ALIFE-CPU-JOINT-SUCCESS-COST-V2", &(ordinary, mode))?,
         Some(mode) => json_digest(b"ALIFE-CPU-JOINT-COMPARISON-PRIVATE-V1", &(ordinary, mode))?,
     };
     let ordinary = match r.memory_readout_digest {

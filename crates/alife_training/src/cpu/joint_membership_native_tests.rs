@@ -1010,3 +1010,545 @@ fn contact2273_empty_bank_equal_control_work_and_unchanged_admission() {
     assert_eq!(rows[0].action, rows[1].action);
     assert_eq!(rows[1].action, rows[2].action);
 }
+
+#[test]
+fn success2275_fresh_modes_bound1_cold_continuation_and_migration_boundaries() {
+    for apply in [false, true] {
+        let (mut host, trainer) = super::super::memory_bound_row_tests::fixture_bound2266(1.0);
+        assert_eq!(
+            trainer
+                .phenotype()
+                .candidate_decoder()
+                .memory_channel()
+                .unwrap()
+                .max_candidate_gain(),
+            1.0
+        );
+        let founder = serde_json::to_vec(&trainer.checkpoint()).unwrap();
+        host.enable_joint_contact_success_projection2275(&trainer, apply)
+            .unwrap();
+        let first = host.checkpoint(&trainer).unwrap();
+        assert_eq!(first.schema_version, 12);
+        assert_eq!(first.joint_membership2177, Some(if apply { 8 } else { 9 }));
+        for _ in 0..4 {
+            let step = host.step(&trainer, 1.0).unwrap();
+            for row in step.decisions {
+                assert_eq!(row.memory_plan2242.as_ref().unwrap().memory_bound, 1.0);
+                let r = row.joint_membership2177.as_ref().unwrap();
+                assert_eq!(r.schema_version, 6);
+                assert_eq!(
+                    r.comparison.as_ref().unwrap().applied_family2266,
+                    Some(CandidateActionFamily::Contact)
+                );
+                assert_eq!(r.comparison.as_ref().unwrap().apply, true);
+                assert!(r.admission_actual_work <= r.admission_reserved_work);
+                assert_eq!(r.success_projection2275.as_ref().unwrap().apply, apply);
+                // Plan-2 has its existing matching-reader envelope. Diagnostic
+                // research rows still cannot enter the ordinary PPO cohort.
+                let bytes = serde_json::to_vec(&row).unwrap();
+                let decoded: CpuCollectedDecision = serde_json::from_slice(&bytes).unwrap();
+                assert_eq!(bytes, serde_json::to_vec(&decoded).unwrap());
+                let value = CpuValueHead::from_checkpoint(crate::PpoValueHeadCheckpoint {
+                    feature_count: trainer.phenotype().neuron_count(),
+                    optimizer_step: 0,
+                    parameters: vec![0.; (trainer.phenotype().neuron_count() as usize + 1) * 3],
+                    last_updated_policy_version: None,
+                })
+                .unwrap();
+                let phenotype = host
+                    .world
+                    .organism_registry()
+                    .iter()
+                    .next()
+                    .unwrap()
+                    .phenotype();
+                assert!(cpu_training_windows(
+                    &[decoded],
+                    None,
+                    &trainer,
+                    &value,
+                    phenotype,
+                    2266,
+                    crate::PpoConfig::default(),
+                    2,
+                    0
+                )
+                .is_err());
+            }
+        }
+        let cp = host.checkpoint(&trainer).unwrap();
+        let mut cold = CpuCanonicalHost::from_checkpoint(cp.clone(), &trainer).unwrap();
+        assert_eq!(
+            serde_json::to_vec(&cp).unwrap(),
+            serde_json::to_vec(&cold.checkpoint(&trainer).unwrap()).unwrap()
+        );
+        let a = host.step(&trainer, 1.0).unwrap();
+        let b = cold.step(&trainer, 1.0).unwrap();
+        assert_eq!(
+            serde_json::to_vec(&a.decisions).unwrap(),
+            serde_json::to_vec(&b.decisions).unwrap()
+        );
+        assert_eq!(
+            serde_json::to_vec(&host.checkpoint(&trainer).unwrap()).unwrap(),
+            serde_json::to_vec(&cold.checkpoint(&trainer).unwrap()).unwrap()
+        );
+        for mode in [
+            None,
+            Some(0),
+            Some(1),
+            Some(2),
+            Some(3),
+            Some(4),
+            Some(5),
+            Some(6),
+            Some(7),
+            Some(8),
+            Some(9),
+            Some(10),
+            Some(u16::MAX),
+        ] {
+            if mode == cp.joint_membership2177 {
+                continue;
+            }
+            let mut bad = cp.clone();
+            bad.joint_membership2177 = mode;
+            bad.schema_version = match mode {
+                Some(1) => 8,
+                Some(2 | 3) => 7,
+                Some(4 | 5) => 9,
+                Some(6 | 7) => 10,
+                Some(8 | 9) => 12,
+                _ => 2,
+            };
+            assert!(
+                CpuCanonicalHost::from_checkpoint(bad, &trainer).is_err(),
+                "accepted mode {mode:?}"
+            );
+        }
+        for schema in [2, 5, 6, 7, 8, 9, 10, 11, 13] {
+            let mut bad = cp.clone();
+            bad.schema_version = schema;
+            assert!(CpuCanonicalHost::from_checkpoint(bad, &trainer).is_err());
+        }
+        let before = serde_json::to_vec(&host.checkpoint(&trainer).unwrap()).unwrap();
+        assert!(host
+            .enable_joint_contact_success_projection2275(&trainer, !apply)
+            .is_err());
+        assert_eq!(
+            before,
+            serde_json::to_vec(&host.checkpoint(&trainer).unwrap()).unwrap()
+        );
+        assert_eq!(founder, serde_json::to_vec(&trainer.checkpoint()).unwrap());
+    }
+    let (mut ordinary, trainer) = food_fixture(false, true);
+    ordinary.step(&trainer, 1.).unwrap();
+    let ordinary_cp = ordinary.checkpoint(&trainer).unwrap();
+    let before = serde_json::to_vec(&ordinary_cp).unwrap();
+    for mode in [8, 9] {
+        let mut edited = ordinary_cp.clone();
+        edited.schema_version = 12;
+        edited.joint_membership2177 = Some(mode);
+        assert!(CpuCanonicalHost::from_checkpoint(edited, &trainer).is_err());
+    }
+    assert!(ordinary
+        .enable_joint_contact_success_projection2275(&trainer, true)
+        .is_err());
+    assert_eq!(
+        before,
+        serde_json::to_vec(&ordinary.checkpoint(&trainer).unwrap()).unwrap()
+    );
+}
+
+#[test]
+fn success2275_same_bank_component_only_projection_and_truthful_sources() {
+    let (mut host, trainer) = food_fixture(false, false);
+    host.enable_joint_membership_contact_comparison2266(&trainer, false)
+        .unwrap();
+
+    let mut absent = 0;
+    for _ in 0..48 {
+        host.step(&trainer, 1.).unwrap();
+        for (draft, _) in host.semantic_prior_inputs(&trainer).unwrap() {
+            let r = &host.residents[&draft.organism_id().raw()];
+            let before = serde_json::to_vec(&r.memory.export_active_bank().unwrap()).unwrap();
+            let (joint, queries, ordinary) = r
+                .memory
+                .recall_frame_joint_contact_success_basis2275(&draft)
+                .unwrap();
+            let (old, old_queries) = r
+                .memory
+                .recall_frame_joint_contact_comparison2266(&draft, true)
+                .unwrap();
+            assert_eq!(joint.context(), old.context());
+            assert_eq!(
+                alife_runtime::canonical_preparation::cognitive_memory_context_for_recall(
+                    draft.organism_id(),
+                    ExperienceSequenceId(9000),
+                    &joint
+                )
+                .unwrap(),
+                alife_runtime::canonical_preparation::cognitive_memory_context_for_recall(
+                    draft.organism_id(),
+                    ExperienceSequenceId(9000),
+                    &old
+                )
+                .unwrap()
+            );
+            assert_eq!(queries, old_queries);
+            assert_eq!(
+                joint.receipt().joint_membership_sources,
+                old.receipt().joint_membership_sources
+            );
+
+            let (frame, joint) = joint.finalize(draft.clone()).unwrap();
+            let (_, old) = old.finalize(draft.clone()).unwrap();
+            assert_eq!(joint.cognitive_context(), old.cognitive_context());
+            let (ordinary_frame, ordinary) = ordinary.finalize(draft.clone()).unwrap();
+            assert!(joint.family_sources().is_none());
+            let tick = crate::TrainingReplayTick {
+                encoded_inputs: vec![0.25],
+                projection_gain: 1.,
+                local_threshold_shift: 0.,
+                microstep_count: 1,
+                enabled_routes: vec![],
+                effective_weight_offsets: vec![],
+                structural_synapses: vec![],
+                candidates: frame
+                    .candidates()
+                    .iter()
+                    .enumerate()
+                    .map(|(i, c)| {
+                        let mut decoder_inputs = std::array::from_fn(|n| n as f32 / 54.);
+                        let m = &joint.context().candidates[i];
+                        decoder_inputs[33] =
+                            m.family_value[1] * m.family_confidence.raw().clamp(0., 1.);
+                        crate::TrainingReplayCandidate {
+                            family: c.family,
+                            decoder_inputs,
+                            innate_bias: 0.,
+                            memory_readout: None,
+                        }
+                    })
+                    .collect(),
+            };
+            let mut applied = tick.clone();
+            let mut withheld = tick.clone();
+            let a = project_joint_contact_success2275(
+                &frame,
+                &joint,
+                &ordinary_frame,
+                &ordinary,
+                &mut applied,
+                true,
+            )
+            .unwrap();
+            let b = project_joint_contact_success2275(
+                &frame,
+                &joint,
+                &ordinary_frame,
+                &ordinary,
+                &mut withheld,
+                false,
+            )
+            .unwrap();
+            assert_eq!(tick, withheld);
+            assert_eq!(a.work, b.work);
+            for c in &a.candidates {
+                let i = c.candidate_index as usize;
+                assert_eq!(
+                    applied.candidates[i].decoder_inputs[33],
+                    c.ordinary_success * c.ordinary_confidence
+                );
+                if c.ordinary_source_count == 0 {
+                    absent += 1;
+                    assert_eq!(c.projected_weighted_success, 0.);
+                    assert!(c.ordinary_best_source.is_none());
+                    assert!(c.ordinary_sources.sources.iter().all(Option::is_none));
+                } else if c.projected_weighted_success > 0. {
+                    assert!(c.ordinary_best_source.is_some());
+                }
+            }
+            for (i, c) in applied.candidates.iter_mut().enumerate() {
+                if c.family == CandidateActionFamily::Contact {
+                    c.decoder_inputs[33] = tick.candidates[i].decoder_inputs[33];
+                }
+            }
+            assert_eq!(applied, tick); // All other 53 lanes, all non-Contact rows, and global context exact.
+            if draft.candidates().len() > 1 {
+                let changed = draft
+                    .clone()
+                    .with_candidates(draft.candidates()[..draft.candidates().len() - 1].to_vec())
+                    .unwrap();
+                let (foreign_frame, foreign) = r
+                    .memory
+                    .recall_frame_with_family_sources(&changed)
+                    .unwrap()
+                    .finalize(changed)
+                    .unwrap();
+                assert!(project_joint_contact_success2275(
+                    &frame,
+                    &joint,
+                    &foreign_frame,
+                    &foreign,
+                    &mut tick.clone(),
+                    true
+                )
+                .is_err());
+            }
+            let mut bad = tick.clone();
+            bad.candidates.pop();
+            assert!(project_joint_contact_success2275(
+                &frame,
+                &joint,
+                &ordinary_frame,
+                &ordinary,
+                &mut bad,
+                true
+            )
+            .is_err());
+            assert_eq!(
+                before,
+                serde_json::to_vec(&r.memory.export_active_bank().unwrap()).unwrap()
+            );
+        }
+    }
+    assert!(absent > 0, "no absent-support fixture");
+}
+
+#[test]
+fn success2275_native_applied_withheld_equal_work_and_only_component_difference() {
+    let (base, trainer) = food_fixture(false, false);
+    let mut applied = base.snapshot();
+    let mut withheld = base.snapshot();
+    applied
+        .enable_joint_contact_success_projection2275(&trainer, true)
+        .unwrap();
+    withheld
+        .enable_joint_contact_success_projection2275(&trainer, false)
+        .unwrap();
+    let a = applied.step(&trainer, 1.).unwrap();
+    let b = withheld.step(&trainer, 1.).unwrap();
+    assert_eq!(a.decisions.len(), b.decisions.len());
+    for (a, b) in a.decisions.iter().zip(&b.decisions) {
+        assert_eq!(a.initial, b.initial);
+        assert_eq!(a.brain_work, b.brain_work);
+        let ar = a.joint_membership2177.as_ref().unwrap();
+        let br = b.joint_membership2177.as_ref().unwrap();
+        assert_eq!(ar.query_work, br.query_work);
+        assert_eq!(ar.admission_planning_work, br.admission_planning_work);
+        assert_eq!(ar.admission_actual_work, br.admission_actual_work);
+        let mut actual = a.replay_tick.clone();
+        for (x, y) in actual.candidates.iter_mut().zip(&b.replay_tick.candidates) {
+            if x.family == CandidateActionFamily::Contact {
+                x.decoder_inputs[33] = y.decoder_inputs[33];
+            }
+        }
+        assert_eq!(actual, b.replay_tick);
+    }
+}
+
+fn success2275_checked_fixture_patch(
+    recall_bank: &MemoryBank,
+    sequence_raw: u64,
+    draft: PerceptionFrameDraft,
+    reward: f32,
+    pain: f32,
+    edit_outcome: impl FnOnce(&mut PostActionOutcome),
+) -> ExperiencePatch {
+    let owner = draft.organism_id();
+    let tick = draft.tick();
+    let tick_raw = tick.raw();
+    let sequence = ExperienceSequenceId(sequence_raw);
+    let target_entity = draft.candidates()[0].target.entity;
+    let (frame, finalized) = recall_bank
+        .recall_frame(&draft)
+        .unwrap()
+        .finalize(draft)
+        .unwrap();
+    let selected = &frame.candidates()[0];
+    let decision = DecisionSnapshot::from_neural_selection(
+        sequence,
+        PhenotypeHash([1, 2, 3, 4]),
+        sequence_raw,
+        (sequence_raw & 1) as u8,
+        &frame,
+        NeuralActionSelection {
+            candidate_index: 0,
+            logit: 0.7,
+            confidence: Confidence::new(0.8).unwrap(),
+            active_tiles: 8,
+            active_synapses: 64,
+        },
+        selected
+            .to_command(owner, Confidence::new(0.8).unwrap())
+            .unwrap(),
+    )
+    .unwrap()
+    .with_finalized_memory_recall(&frame, &finalized, 0)
+    .unwrap();
+    let spec = BrainClassSpec::for_tier(BrainScaleTier::Nano512);
+    let genome = BrainGenome::scaffold(321, spec.id);
+    let development = DevelopmentState::new(genome.id, tick, NormalizedScalar::new(0.5).unwrap())
+        .with_enabled_lobes([
+            LobeKind::PerceptualIntegration,
+            LobeKind::TemporalPredictive,
+            LobeKind::ActionPlanning,
+        ]);
+    let pre_action = PreActionSnapshot::from_neural_frame(
+        sequence,
+        spec.id,
+        PhenotypeHash([1, 2, 3, 4]),
+        genome.id,
+        genome.schema_version,
+        development,
+        frame,
+    )
+    .unwrap();
+    let mut outcome = PostActionOutcome::new(
+        owner,
+        sequence,
+        Tick::new(tick_raw + 1),
+        reward >= 0.0,
+        PhysicalActionOutcome {
+            contact: PhysicalContactKind::Touch,
+            target_entity,
+            displacement: Vec3f::ZERO,
+            collision_normal: None,
+            energy_cost: NormalizedScalar::new(0.1).unwrap(),
+        },
+        HomeostaticDelta {
+            drives: DriveDelta {
+                pain,
+                fear: pain,
+                brain_atp: -0.1,
+                ..DriveDelta::zero()
+            },
+            hormones: EndocrineDelta::zero(),
+        },
+        SignedValence::new(reward).unwrap(),
+        NormalizedScalar::new(if reward < 0.0 { 0.5 } else { 0.0 }).unwrap(),
+        NormalizedScalar::new(pain).unwrap(),
+        SignedValence::new(-0.1).unwrap(),
+        NormalizedScalar::new(pain.max(0.1)).unwrap(),
+    )
+    .unwrap();
+    edit_outcome(&mut outcome);
+    ExperiencePatchBuilder::new(sequence)
+        .record_pre_action(pre_action)
+        .unwrap()
+        .record_decision(decision)
+        .unwrap()
+        .record_outcome(outcome)
+        .unwrap()
+        .seal()
+        .unwrap()
+}
+
+#[test]
+fn success2275_positive_contact_support_is_not_zero_ablation() {
+    // A deliberately constructed, contract-sealed unit fixture, not a sampled
+    // body outcome or an edit to any acquired checkpoint. Contact is explicitly
+    // the representative action so ordinary recall has positive success support.
+    let (mut host, trainer) = food_fixture(false, false);
+    let (draft, _) = host.semantic_prior_inputs(&trainer).unwrap().remove(0);
+    let mut contact = draft
+        .candidates()
+        .iter()
+        .find(|c| c.family == CandidateActionFamily::Contact)
+        .unwrap()
+        .clone();
+    contact.candidate_index = 0;
+    let draft = draft.with_candidates(vec![contact]).unwrap();
+    let mut bank = MemoryBank::new(
+        MemoryBankConfig::new(8, 64, 4, 0.72, Confidence::new(0.).unwrap()).unwrap(),
+    )
+    .unwrap();
+    let patch = success2275_checked_fixture_patch(&bank, 1, draft.clone(), 0.8, 0., |_| {});
+    patch.validate_contract().unwrap();
+    bank.observe_sealed_patch(&patch).unwrap();
+    let (joint, _, ordinary) = bank
+        .recall_frame_joint_contact_success_basis2275(&draft)
+        .unwrap();
+    let (frame, joint) = joint.finalize(draft.clone()).unwrap();
+    let (of, ordinary) = ordinary.finalize(draft).unwrap();
+    let c = &ordinary.context().candidates[0];
+    assert!(c.family_source_count > 0);
+    assert!(c.family_value[1] > 0.);
+    assert!(c.family_confidence.raw() > 0.);
+    let mut inputs = [0.125; 54];
+    inputs[33] = joint.context().candidates[0].family_value[1]
+        * joint.context().candidates[0].family_confidence.raw();
+    let mut tick = crate::TrainingReplayTick {
+        encoded_inputs: vec![0.5],
+        projection_gain: 1.,
+        local_threshold_shift: 0.,
+        microstep_count: 1,
+        enabled_routes: vec![],
+        effective_weight_offsets: vec![],
+        structural_synapses: vec![],
+        candidates: vec![crate::TrainingReplayCandidate {
+            family: CandidateActionFamily::Contact,
+            decoder_inputs: inputs,
+            innate_bias: 0.,
+            memory_readout: None,
+        }],
+    };
+    let before = tick.clone();
+    let receipt =
+        project_joint_contact_success2275(&frame, &joint, &of, &ordinary, &mut tick, true).unwrap();
+    let r = &receipt.candidates[0];
+    assert!(r.projected_weighted_success > 0.);
+    assert_eq!(
+        tick.candidates[0].decoder_inputs[33],
+        c.family_value[1] * c.family_confidence.raw()
+    );
+    assert!(r.ordinary_sources.sources.iter().any(Option::is_some));
+    tick.candidates[0].decoder_inputs[33] = before.candidates[0].decoder_inputs[33];
+    assert_eq!(tick, before);
+}
+
+#[test]
+fn success2275_projection_work_is_charged_once_in_actual_biological_interval() {
+    for apply in [false, true] {
+        let (mut host, trainer) = food_fixture(false, false);
+        host.enable_joint_contact_success_projection2275(&trainer, apply)
+            .unwrap();
+        for _ in 0..8 {
+            for row in host.step(&trainer, 1.).unwrap().decisions {
+                let receipt = row.joint_membership2177.as_ref().unwrap();
+                let projection = receipt.success_projection2275.as_ref().unwrap();
+                assert!(projection.work > 0);
+                let ordinary = &projection.ordinary_query;
+                let base = u64::from(ordinary.exact_bucket_reads)
+                    + u64::from(ordinary.neighbor_bucket_reads)
+                    + u64::from(ordinary.similarity_evaluations);
+                // This existing row field is the exact Core recall work, including
+                // basis capture/finalization, but excluding CPU-only projection.
+                let core_and_basis = row.executed_action_recall_work;
+                assert_eq!(receipt.query_work, core_and_basis + projection.work);
+                let expected = base
+                    + core_and_basis
+                    + projection.work
+                    + receipt.admission_planning_work
+                    + receipt.admission_reserved_work;
+                let charged = row.patch.cognitive_work().unwrap();
+                assert_eq!(
+                    charged.memory_ops, expected,
+                    "CPU projection must enter actual physiology exactly once"
+                );
+                let record = host.world.organism_registry().get(row.organism_id).unwrap();
+                assert_eq!(record.cognitive_work(), charged);
+                let (policy, actual, before, after) = row.cognitive_cost_capture.unwrap();
+                let phenotype = record.phenotype();
+                let requested = policy.energy_debit(charged).unwrap()
+                    * phenotype.body.metabolic_turnover
+                    * (ContinuousLocus::midpoint_value(0.52, 0.60)
+                        - phenotype.chemistry.brain_atp_efficiency)
+                        .exp2();
+                assert_eq!(actual, requested.min(before));
+                assert_eq!(record.cognitive_energy_debit(), actual);
+                assert!((before - after - actual).abs() < 2.0e-6);
+            }
+        }
+    }
+}

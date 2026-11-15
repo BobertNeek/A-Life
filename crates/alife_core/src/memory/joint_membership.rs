@@ -249,6 +249,53 @@ impl MemoryBank {
         contact_only: bool,
     ) -> Result<(PreparedMemoryRecall, Vec<JointMembershipSourceV1>), ScaffoldContractError> {
         let ordinary = self.recall_frame(draft)?;
+        self.joint_comparison_from_prepared2275(ordinary, draft, apply, contact_only)
+    }
+
+    /// One ordinary lookup supplies both the full-query Contact context and an
+    /// independently bound ordinary component basis. Neither bank is mutated.
+    pub fn recall_frame_joint_contact_success_basis2275(
+        &self,
+        draft: &PerceptionFrameDraft,
+    ) -> Result<
+        (
+            PreparedMemoryRecall,
+            Vec<JointMembershipSourceV1>,
+            PreparedMemoryRecall,
+        ),
+        ScaffoldContractError,
+    > {
+        let ordinary = self.recall_frame_with_family_sources(draft)?;
+        let mut input = ordinary.clone();
+        // These sources describe ordinary aggregation, not joint estimates.
+        input.family_sources = None;
+        let (mut joint, queried) =
+            self.joint_comparison_from_prepared2275(input, draft, true, true)?;
+        // Logical transient-basis tariff: copy context/receipt and provenance,
+        // finalize/hash and validate its own frame. No second bank lookup.
+        let source_count = ordinary.family_sources.as_ref().map_or(0, |rows| {
+            rows.iter()
+                .map(|r| r.sources.iter().flatten().count() as u64)
+                .sum::<u64>()
+        });
+        let work = 4 * ordinary.encoded_context.values().len() as u64
+            + 16 * source_count
+            + 16 * ordinary.context.candidates.len() as u64;
+        joint.receipt.execution_evidence_work = joint
+            .receipt
+            .execution_evidence_work
+            .checked_add(work)
+            .ok_or(ScaffoldContractError::ScalarOutOfRange)?;
+        Ok((joint, queried, ordinary))
+    }
+
+    fn joint_comparison_from_prepared2275(
+        &self,
+        ordinary: PreparedMemoryRecall,
+        draft: &PerceptionFrameDraft,
+        apply: bool,
+        contact_only: bool,
+    ) -> Result<(PreparedMemoryRecall, Vec<JointMembershipSourceV1>), ScaffoldContractError> {
         let families: Vec<_> = ordinary
             .context
             .candidates
