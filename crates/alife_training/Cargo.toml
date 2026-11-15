@@ -77,3 +77,13 @@ required-features = ["cpu-backend"]
 [[example]]
 name = "memory_readout_population"
 required-features = ["cpu-backend"]
+
+[[example]]
+name = "corner_tournament"
+path = "examples/corner_tournament/main.rs"
+required-features = ["cpu-backend"]
+
+[[example]]
+name = "corner_proposals"
+path = "examples/corner_proposals.rs"
+required-features = ["cpu-backend"]
