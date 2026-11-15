@@ -1911,6 +1911,30 @@ impl HeadlessWorld {
         Ok(())
     }
 
+    /// Explicit experimenter counterfactual COPY of a still-living world.
+    /// Disables only the existing age-death cutoff, not biological aging, health
+    /// or energy death. Never revives a dead/terminal record or mutates the source.
+    pub fn fork_without_age_death_for_research(&self) -> Result<Self, ScaffoldContractError> {
+        if self.disable_age_death || self.organism_registry.iter().next().is_none() {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
+        for record in self.organism_registry.iter() {
+            if !record.lifecycle().is_alive()
+                || PassiveBodyUpkeepPolicy::is_terminal_with_age_death(
+                    &record.biochemistry().body,
+                    record.age_at(self.tick)?.raw(),
+                    record.phenotype(),
+                    true,
+                )
+            {
+                return Err(ScaffoldContractError::InvalidDecisionEvidence);
+            }
+        }
+        let mut fork = self.clone();
+        fork.disable_age_death = true;
+        Ok(fork)
+    }
+
     pub fn terrain_binding(&self) -> Option<crate::TerrainBinding> {
         self.terrain.as_ref().map(crate::WorldTerrain::binding)
     }
@@ -4382,14 +4406,24 @@ impl HeadlessWorld {
     }
 
     pub fn perception_frame_draft_with_candidate_coverage2313(
-        &mut self, organism_id: OrganismId, tick: Tick, profile: SensorProfile,
-        homeostasis: HomeostaticSnapshot, phase: u64,
-    ) -> Result<(PerceptionFrameDraft, Option<GroundedCandidateBinding>), ScaffoldContractError> {
+        &mut self,
+        organism_id: OrganismId,
+        tick: Tick,
+        profile: SensorProfile,
+        homeostasis: HomeostaticSnapshot,
+        phase: u64,
+    ) -> Result<(PerceptionFrameDraft, Option<GroundedCandidateBinding>), ScaffoldContractError>
+    {
         if profile != SensorProfile::GroundedObjectSlotsV1 {
             return Err(ScaffoldContractError::SensorProfileMismatch);
         }
         self.perception_frame_draft_with_availability_and_coverage(
-            organism_id, tick, profile, homeostasis, None, None,
+            organism_id,
+            tick,
+            profile,
+            homeostasis,
+            None,
+            None,
             Some(crate::CandidateOpportunityCoveragePlan::new(phase)),
         )
     }
@@ -4405,7 +4439,13 @@ impl HeadlessWorld {
     ) -> Result<(PerceptionFrameDraft, Option<GroundedCandidateBinding>), ScaffoldContractError>
     {
         self.perception_frame_draft_with_availability_and_coverage(
-            organism_id, tick, profile, homeostasis, index, availability, None,
+            organism_id,
+            tick,
+            profile,
+            homeostasis,
+            index,
+            availability,
+            None,
         )
     }
 
@@ -4530,27 +4570,40 @@ impl HeadlessWorld {
                 });
                 let (candidates, opportunity_receipt) = if let Some(plan) = coverage {
                     crate::enumerate_grounded_candidates_with_coverage(
-                        &grounded, profile, active_contact, None,
-                        orientation_architecture.is_some(), plan, 0,
-                    )?
-                } else { (if let Some(a) = &orientation_architecture {
-                    enumerate_grounded_candidates_with_orientation_v3(
                         &grounded,
                         profile,
                         active_contact,
                         None,
-                        a,
+                        orientation_architecture.is_some(),
+                        plan,
+                        0,
                     )?
                 } else {
-                    enumerate_grounded_candidates(&grounded, profile, active_contact)?
-                }, None) };
+                    (
+                        if let Some(a) = &orientation_architecture {
+                            enumerate_grounded_candidates_with_orientation_v3(
+                                &grounded,
+                                profile,
+                                active_contact,
+                                None,
+                                a,
+                            )?
+                        } else {
+                            enumerate_grounded_candidates(&grounded, profile, active_contact)?
+                        },
+                        None,
+                    )
+                };
                 let binding = GroundedCandidateBinding::new(
                     grounded.clone(),
                     profile,
                     active_contact,
                     orientation_architecture.is_some(),
                 );
-                let binding = match coverage { Some(plan) => binding.with_coverage(plan), None => binding };
+                let binding = match coverage {
+                    Some(plan) => binding.with_coverage(plan),
+                    None => binding,
+                };
                 let (mut sensory, body, slots, transports) = grounded.into_parts();
                 // Bind only already observed bodies to personal recognition.
                 // Physical identity is not a friendly label or learned affinity.
@@ -16069,3 +16122,6 @@ mod profile_transfer_geometry2183_tests {
 
 #[cfg(test)]
 mod grip_proprioception_tests;
+
+#[cfg(test)]
+mod age_policy_fork_tests;
