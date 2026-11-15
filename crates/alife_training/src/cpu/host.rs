@@ -1038,6 +1038,23 @@ impl CpuCanonicalHost {
         Ok(())
     }
 
+    /// Fresh direct global query, preserving supported projection semantics.
+    pub fn enable_joint_ingest_direct2295(
+        &mut self,
+        founder: &CpuFoundationTrainer,
+        apply_projection: bool,
+    ) -> Result<(), CpuHostError> {
+        let mut next = self.clone();
+        next.validate_joint_membership_enable(founder)?;
+        next.joint_membership2177 = Some(if apply_projection { 14 } else { 15 });
+        for resident in next.residents.values_mut() {
+            resident.joint_comparison_mode = next.joint_membership2177;
+        }
+        next.seal_all_residents()?;
+        *self = next;
+        Ok(())
+    }
+
     pub fn world(&self) -> &HeadlessWorld {
         &self.world
     }
@@ -1242,6 +1259,7 @@ impl CpuCanonicalHost {
                     Some(8 | 9) => 12,
                     Some(10 | 11) => 13,
                     Some(12 | 13) => 14,
+                    Some(14 | 15) => 15,
                     _ => 7,
                 }
             } else if self.residents.values().any(|r| r.memory_readout.is_some()) {
@@ -1276,7 +1294,7 @@ impl CpuCanonicalHost {
             .iter()
             .any(|r| r.memory_readout.is_some());
         if let Some(version) = checkpoint.joint_membership2177 {
-            if !matches!(version, 1..=13)
+            if !matches!(version, 1..=15)
                 || checkpoint.schema_version
                     != match version {
                         1 => 8,
@@ -1285,6 +1303,7 @@ impl CpuCanonicalHost {
                         8 | 9 => 12,
                         10 | 11 => 13,
                         12 | 13 => 14,
+                        14 | 15 => 15,
                         _ => 7,
                     }
                 || has_readout
@@ -1755,7 +1774,9 @@ impl CpuCanonicalHost {
                     "semantic preparation changed ordinary perception",
                 ));
             }
-            let prepare_frame = if matches!(self.joint_membership2177, Some(12 | 13)) {
+            let prepare_frame = if matches!(self.joint_membership2177, Some(14 | 15)) {
+                prepare_canonical_frame_joint_ingest_direct2295
+            } else if matches!(self.joint_membership2177, Some(12 | 13)) {
                 prepare_canonical_frame_joint_ingest_outcome2286
             } else if self.joint_membership2177 == Some(10) {
                 prepare_canonical_frame_joint_non_ingest_applied2278
@@ -1829,6 +1850,7 @@ impl CpuCanonicalHost {
                             Some(8 | 9) => 6,
                             Some(10 | 11) => 7,
                             Some(12 | 13) => 8,
+                            Some(14 | 15) => 9,
                             _ => 2,
                         },
                         sources: recall.receipt().joint_membership_sources.clone(),
@@ -1836,7 +1858,7 @@ impl CpuCanonicalHost {
                             JointMembershipComparison2182 {
                                 apply: matches!(
                                     self.joint_membership2177,
-                                    Some(2 | 4 | 6 | 8 | 9 | 10 | 12 | 13)
+                                    Some(2 | 4 | 6 | 8 | 9 | 10 | 12 | 13 | 14 | 15)
                                 ),
                                 applied_family2266: matches!(
                                     self.joint_membership2177,
@@ -1936,13 +1958,16 @@ impl CpuCanonicalHost {
                 if self.fail_ingest_outcome_binding2286 {
                     context.candidates.pop();
                 }
-                let projection = project_joint_ingest_outcome2286(
+                let mut projection = project_joint_ingest_outcome2286(
                     &frame,
                     &recall,
                     basis,
                     &mut context,
-                    self.joint_membership2177 == Some(12),
+                    matches!(self.joint_membership2177, Some(12 | 14)),
                 )?;
+                if matches!(self.joint_membership2177, Some(14 | 15)) {
+                    projection.cost_revision = 2;
+                }
                 // Complete deterministic transform work was precharged exactly
                 // once by Core, in the same receipt used by actual physiology.
                 joint_membership2177
@@ -2577,6 +2602,17 @@ fn resident_digest(
                 CandidateActionFamily::Ingest,
                 9_u8,
                 1_u16,
+                true,
+            ),
+        )?,
+        Some(mode @ (14 | 15)) => json_digest(
+            b"ALIFE-CPU-JOINT-INGEST-DIRECT-2295-V1",
+            &(
+                ordinary,
+                mode,
+                CandidateActionFamily::Ingest,
+                9_u8,
+                2_u16,
                 true,
             ),
         )?,

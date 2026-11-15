@@ -816,6 +816,17 @@ pub fn prepare_canonical_frame_joint_ingest_outcome2286(
     prepare_canonical_frame_impl(input, memory, topology, predictor, measure, false, 12)
 }
 
+/// Direct global lookup with fresh work identity.
+pub fn prepare_canonical_frame_joint_ingest_direct2295(
+    input: &CanonicalPreparationInput,
+    memory: &MemorySidecarState,
+    topology: &TopologySidecar,
+    predictor: &GroundedSuccessorPredictor,
+    measure: bool,
+) -> CanonicalPreparationOutcome {
+    prepare_canonical_frame_impl(input, memory, topology, predictor, measure, false, 14)
+}
+
 fn prepare_canonical_frame_impl(
     input: &CanonicalPreparationInput,
     memory: &MemorySidecarState,
@@ -922,7 +933,13 @@ fn prepare_canonical_frame_impl(
         let mut joint_comparison_sources = None;
         let mut joint_ordinary_success2275 = None;
         let mut joint_ingest_outcome_basis2286 = None;
-        let routed_recall = if joint_membership == 12 {
+        let routed_recall = if joint_membership == 14 {
+            let (joint, sources, basis) =
+                memory.recall_frame_joint_ingest_direct2295(&routed_draft)?;
+            joint_ingest_outcome_basis2286 = Some(basis);
+            joint_comparison_sources = Some(sources);
+            joint
+        } else if joint_membership == 12 {
             let (joint, sources, basis) =
                 memory.recall_frame_joint_ingest_outcome_basis2286(&routed_draft)?;
             joint_ingest_outcome_basis2286 = Some(basis);

@@ -2502,12 +2502,28 @@ fn ingest2286_positive_ordinary_and_different_joint_change_exactly_two_component
     assert!(!sources.is_empty());
     assert!(basis.evidence().rows[0].support_eligible);
     assert!(basis.evidence().rows[0].source_count > 0);
+    let (direct, direct_sources, direct_basis) =
+        bank.recall_frame_joint_ingest_direct2295(&draft).unwrap();
+    assert_eq!(joint.context(), direct.context());
+    assert_eq!(sources, direct_sources);
+    assert_eq!(basis.evidence(), direct_basis.evidence());
+    let (direct_frame, direct_recall) = direct.finalize(draft.clone()).unwrap();
+    let mut direct_tick = ingest2286_tick(&direct_frame, &direct_recall);
+    project_joint_ingest_outcome2286(
+        &direct_frame,
+        &direct_recall,
+        direct_basis,
+        &mut direct_tick,
+        true,
+    )
+    .unwrap();
     let (frame, joint) = joint.finalize(draft).unwrap();
     let original = ingest2286_tick(&frame, &joint);
     let mut transformed = original.clone();
     let receipt =
         project_joint_ingest_outcome2286(&frame, &joint, basis, &mut transformed, true).unwrap();
     assert!(receipt.candidates[0].applied);
+    assert_eq!(direct_tick, transformed);
     for lane in [32, 35] {
         assert_ne!(
             transformed.candidates[0].decoder_inputs[lane].to_bits(),
@@ -2531,4 +2547,314 @@ fn ingest2286_positive_ordinary_and_different_joint_change_exactly_two_component
             original.candidates[0].decoder_inputs[lane];
     }
     assert_eq!(transformed, original);
+}
+
+#[test]
+fn direct2295_fresh_modes_bound1_cold_continuation_and_migration_boundaries() {
+    for apply in [false, true] {
+        let (mut host, trainer) = super::super::memory_bound_row_tests::fixture_bound2266(1.0);
+        assert_eq!(
+            trainer
+                .phenotype()
+                .candidate_decoder()
+                .memory_channel()
+                .unwrap()
+                .max_candidate_gain(),
+            1.0
+        );
+        let founder = serde_json::to_vec(&trainer.checkpoint()).unwrap();
+        host.enable_joint_ingest_direct2295(&trainer, apply)
+            .unwrap();
+        let first = host.checkpoint(&trainer).unwrap();
+        assert_eq!(first.schema_version, 15);
+        assert_eq!(
+            first.joint_membership2177,
+            Some(if apply { 14 } else { 15 })
+        );
+        for _ in 0..4 {
+            let step = host.step(&trainer, 1.0).unwrap();
+            for row in step.decisions {
+                assert_eq!(row.memory_plan2242.as_ref().unwrap().memory_bound, 1.0);
+                let r = row.joint_membership2177.as_ref().unwrap();
+                assert_eq!(r.schema_version, 9);
+                assert_eq!(r.comparison.as_ref().unwrap().applied_family2266, None);
+                assert_eq!(r.comparison.as_ref().unwrap().apply, true);
+                assert!(r.admission_actual_work <= r.admission_reserved_work);
+                assert!(r.success_projection2275.is_none());
+                let projection = r.ingest_outcome_projection2286.as_ref().unwrap();
+                assert_eq!(projection.apply, apply);
+                assert!(projection.requires_positive_ordinary_support);
+                assert_eq!(projection.component_mask, 9);
+                assert_eq!(projection.cost_revision, 2);
+                assert_eq!(
+                    projection.actual_cpu_ops,
+                    projection.ordinary.work.cpu_transform
+                );
+                for c in &projection.candidates {
+                    assert_eq!(c.applied, apply && c.support_eligible);
+                }
+                assert_eq!(r.comparison.as_ref().unwrap().applied_family_mask2278, None);
+                // Plan-2 has its existing matching-reader envelope. Diagnostic
+                // research rows still cannot enter the ordinary PPO cohort.
+                let bytes = serde_json::to_vec(&row).unwrap();
+                let decoded: CpuCollectedDecision = serde_json::from_slice(&bytes).unwrap();
+                assert_eq!(bytes, serde_json::to_vec(&decoded).unwrap());
+                let value = CpuValueHead::from_checkpoint(crate::PpoValueHeadCheckpoint {
+                    feature_count: trainer.phenotype().neuron_count(),
+                    optimizer_step: 0,
+                    parameters: vec![0.; (trainer.phenotype().neuron_count() as usize + 1) * 3],
+                    last_updated_policy_version: None,
+                })
+                .unwrap();
+                let phenotype = host
+                    .world
+                    .organism_registry()
+                    .iter()
+                    .next()
+                    .unwrap()
+                    .phenotype();
+                assert!(cpu_training_windows(
+                    &[decoded],
+                    None,
+                    &trainer,
+                    &value,
+                    phenotype,
+                    2266,
+                    crate::PpoConfig::default(),
+                    2,
+                    0
+                )
+                .is_err());
+            }
+        }
+        let cp = host.checkpoint(&trainer).unwrap();
+        let mut cold = CpuCanonicalHost::from_checkpoint(cp.clone(), &trainer).unwrap();
+        assert_eq!(
+            serde_json::to_vec(&cp).unwrap(),
+            serde_json::to_vec(&cold.checkpoint(&trainer).unwrap()).unwrap()
+        );
+        let a = host.step(&trainer, 1.0).unwrap();
+        let b = cold.step(&trainer, 1.0).unwrap();
+        assert_eq!(
+            serde_json::to_vec(&a.decisions).unwrap(),
+            serde_json::to_vec(&b.decisions).unwrap()
+        );
+        assert_eq!(
+            serde_json::to_vec(&host.checkpoint(&trainer).unwrap()).unwrap(),
+            serde_json::to_vec(&cold.checkpoint(&trainer).unwrap()).unwrap()
+        );
+        for mode in [
+            None,
+            Some(0),
+            Some(1),
+            Some(2),
+            Some(3),
+            Some(4),
+            Some(5),
+            Some(6),
+            Some(7),
+            Some(8),
+            Some(9),
+            Some(10),
+            Some(11),
+            Some(12),
+            Some(13),
+            Some(14),
+            Some(15),
+            Some(16),
+            Some(u16::MAX),
+        ] {
+            if mode == cp.joint_membership2177 {
+                continue;
+            }
+            let mut bad = cp.clone();
+            bad.joint_membership2177 = mode;
+            bad.schema_version = match mode {
+                Some(1) => 8,
+                Some(2 | 3) => 7,
+                Some(4 | 5) => 9,
+                Some(6 | 7) => 10,
+                Some(8 | 9) => 12,
+                Some(10 | 11) => 13,
+                Some(12 | 13) => 14,
+                Some(14 | 15) => 15,
+                _ => 2,
+            };
+            assert!(
+                CpuCanonicalHost::from_checkpoint(bad, &trainer).is_err(),
+                "accepted mode {mode:?}"
+            );
+        }
+        for schema in [2, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16] {
+            let mut bad = cp.clone();
+            bad.schema_version = schema;
+            assert!(CpuCanonicalHost::from_checkpoint(bad, &trainer).is_err());
+        }
+        let before = serde_json::to_vec(&host.checkpoint(&trainer).unwrap()).unwrap();
+        assert!(host
+            .enable_joint_ingest_direct2295(&trainer, !apply)
+            .is_err());
+        assert_eq!(
+            before,
+            serde_json::to_vec(&host.checkpoint(&trainer).unwrap()).unwrap()
+        );
+        assert_eq!(founder, serde_json::to_vec(&trainer.checkpoint()).unwrap());
+    }
+    let (mut ordinary, trainer) = food_fixture(false, true);
+    ordinary.step(&trainer, 1.).unwrap();
+    let ordinary_cp = ordinary.checkpoint(&trainer).unwrap();
+    let before = serde_json::to_vec(&ordinary_cp).unwrap();
+    for mode in [14, 15] {
+        let mut edited = ordinary_cp.clone();
+        edited.schema_version = 15;
+        edited.joint_membership2177 = Some(mode);
+        assert!(CpuCanonicalHost::from_checkpoint(edited, &trainer).is_err());
+    }
+    assert!(ordinary
+        .enable_joint_ingest_direct2295(&trainer, true)
+        .is_err());
+    assert_eq!(
+        before,
+        serde_json::to_vec(&ordinary.checkpoint(&trainer).unwrap()).unwrap()
+    );
+}
+
+#[test]
+fn direct2295_same_bank_global_basis_and_exact_actual_work() {
+    let (mut host, trainer) = food_fixture(false, false);
+    host.enable_joint_ingest_outcome_projection2286(&trainer, true)
+        .unwrap();
+    let mut populated = 0;
+    let mut empty = 0;
+    for tick in 0..24 {
+        if tick > 0 {
+            host.step(&trainer, 1.).unwrap();
+        }
+        for (draft, _) in host.semantic_prior_inputs(&trainer).unwrap() {
+            let bank = &host.residents[&draft.organism_id().raw()].memory;
+            let before = serde_json::to_vec(&bank.export_active_bank().unwrap()).unwrap();
+            let (old, sources, old_basis) = bank
+                .recall_frame_joint_ingest_outcome_basis2286(&draft)
+                .unwrap();
+            let (direct, dsources, basis) =
+                bank.recall_frame_joint_ingest_direct2295(&draft).unwrap();
+            assert_eq!(old.context(), direct.context());
+            assert_eq!(sources, dsources);
+            assert_eq!(old_basis.evidence(), basis.evidence());
+            let n = draft.candidates().len() as u64;
+            let k = sources
+                .iter()
+                .map(|s| s.candidate_index)
+                .collect::<std::collections::BTreeSet<_>>()
+                .len() as u64;
+            let l = old
+                .context()
+                .to_perception_context_block()
+                .unwrap()
+                .values()
+                .len() as u64;
+            let eliminated = 14 * n - 7 * k + if sources.is_empty() { 2 * l } else { 0 };
+            assert!(eliminated > 0);
+            assert_eq!(
+                old.receipt().execution_evidence_work - direct.receipt().execution_evidence_work,
+                eliminated
+            );
+            if sources.is_empty() {
+                empty += 1;
+            } else {
+                populated += 1;
+            }
+            let (of, or) = old.finalize(draft.clone()).unwrap();
+            let (df, dr) = direct.finalize(draft).unwrap();
+            assert_eq!(of, df);
+            let mut a = ingest2286_tick(&of, &or);
+            let mut b = ingest2286_tick(&df, &dr);
+            project_joint_ingest_outcome2286(&of, &or, old_basis, &mut a, true).unwrap();
+            project_joint_ingest_outcome2286(&df, &dr, basis, &mut b, true).unwrap();
+            assert_eq!(a, b);
+            assert_eq!(
+                before,
+                serde_json::to_vec(&bank.export_active_bank().unwrap()).unwrap()
+            );
+        }
+    }
+    assert!(empty > 0 && populated > 0);
+}
+
+#[test]
+fn direct2295_populated_actual_work_and_malformed_binding_rollback() {
+    for apply in [false, true] {
+        let (mut host, trainer) = food_fixture(false, false);
+        host.enable_joint_ingest_direct2295(&trainer, apply)
+            .unwrap();
+        let saved = serde_json::to_vec(&host.checkpoint(&trainer).unwrap()).unwrap();
+        let mut failed = host.snapshot();
+        failed.fail_ingest_outcome_binding2286 = true;
+        assert!(failed.step(&trainer, 1.).is_err());
+        assert_eq!(
+            saved,
+            serde_json::to_vec(&failed.checkpoint(&trainer).unwrap()).unwrap()
+        );
+        let mut queried = 0;
+        for _ in 0..16 {
+            let pre = host.snapshot();
+            for row in host.step(&trainer, 1.).unwrap().decisions {
+                let frame = row.patch.pre_action().perception();
+                let wire = serde_json::to_value(frame).unwrap();
+                let draft: PerceptionFrameDraft =
+                    serde_json::from_value(wire["base"].clone()).unwrap();
+                assert_eq!(draft.base_digest(), frame.base_digest());
+                let bank = &pre.residents[&row.organism_id.raw()].memory;
+                let ordinary = bank.recall_frame(&draft).unwrap();
+                let (global, gq, _) = bank.recall_frame_joint_ingest_direct2295(&draft).unwrap();
+                let live = row.joint_membership2177.as_ref().unwrap();
+                let projection = live.ingest_outcome_projection2286.as_ref().unwrap();
+                queried += gq.len();
+                assert_eq!(live.sources, gq);
+                assert_eq!(live.comparison.as_ref().unwrap().queried_sources, gq);
+                assert_eq!(live.query_work, global.receipt().execution_evidence_work);
+                assert_eq!(live.query_work, row.executed_action_recall_work);
+                assert_eq!(
+                    projection.actual_cpu_ops,
+                    projection.ordinary.work.cpu_transform
+                );
+                let r = ordinary.receipt();
+                let base = u64::from(r.exact_bucket_reads)
+                    + u64::from(r.neighbor_bucket_reads)
+                    + u64::from(r.similarity_evaluations);
+                let charged = row.patch.cognitive_work().unwrap();
+                assert_eq!(
+                    charged.memory_ops,
+                    base + global.receipt().execution_evidence_work
+                        + live.admission_planning_work
+                        + live.admission_reserved_work
+                );
+                let record = host.world.organism_registry().get(row.organism_id).unwrap();
+                assert_eq!(record.cognitive_work(), charged);
+                let (policy, debit, before, after) = row.cognitive_cost_capture.unwrap();
+                let p = record.phenotype();
+                let expected = policy.energy_debit(charged).unwrap()
+                    * p.body.metabolic_turnover
+                    * (ContinuousLocus::midpoint_value(0.52, 0.60)
+                        - p.chemistry.brain_atp_efficiency)
+                        .exp2();
+                assert_eq!(debit, expected.min(before));
+                assert_eq!(record.cognitive_energy_debit(), debit);
+                assert!((before - after - debit).abs() < 2e-6);
+                eprintln!(
+                    "DIRECT2295_ACCOUNTING {}",
+                    serde_json::json!({
+                        "apply":apply,"tick":frame.tick().raw(),"base":base,
+                        "global_query":global.receipt().execution_evidence_work,
+                        "basis_work":projection.ordinary.work,
+                        "actual_cpu":projection.actual_cpu_ops,"query_work":live.query_work,
+                        "planning":live.admission_planning_work,"reserved":live.admission_reserved_work,
+                        "actual_memory_ops":charged.memory_ops,"debit":debit,"expected_debit":expected.min(before),
+                        "ingest_rows":projection.ordinary.rows.len(),"eligible":projection.candidates.iter().filter(|c|c.support_eligible).count()
+                    })
+                );
+            }
+        }
+        assert!(queried > 0);
+    }
 }
