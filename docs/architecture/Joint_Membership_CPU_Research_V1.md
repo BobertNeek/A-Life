@@ -57,3 +57,37 @@ Exact untouched-family recall does not imply identical downstream cognitive
 projection or neural choices, since Contact input changes can affect the shared
 network. This is a source/runtime candidate, not a demonstrated behavioral repair,
 a new reward/learner, a checkpoint migration, or a production/GPU selection.
+
+
+## Contact-query-only comparison (modes 6/7, checkpoint schema 10)
+
+`enable_joint_membership_contact_query_comparison2273(founder, apply)` is a
+fresh-only opt-in research construction, never a migration or default. Mode 6
+applies Contact membership estimates; mode 7 queries identically but withholds
+replacement. Resident authority binds the mode. Existing modes 0–5 retain their
+wire, checkpoint, and work contracts. Live receipt schema 4 identifies this query
+plan; `comparison.applied_family2266` is Contact in both modes. Queried and applied
+source receipts remain distinct.
+
+Unlike modes 4/5, only Contact candidates enter membership lookup/search. Ordinary
+recall executes once at the routed recall boundary. Non-Contact family fields and
+all target fields remain ordinary. The Contact estimator, eligibility, ranking,
+retention, shared bundle outcomes, and support rules are unchanged. In particular,
+the second family value is shared mechanical success, not confidence. This plan
+introduces no component projection, reward, learner, or genetic change.
+
+All executed membership capture and admission remain unchanged. Logical query
+work counts the actual selected index/search/sort/source operations, seven-field
+save/construction/assignment for usable Contact estimates, provenance copy, and
+one encode/hash when sources exist. Withheld and applied routes do equal work on
+identical bank/draft inputs. Empty/no-Contact queries avoid redundant context
+encoding and validate only the changed receipt. The metric is logical work, not
+machine instructions or wall time. Empty and relevant mixed-family fixtures have lower declared work than modes
+4/5; reduction is not universal. A single usable all-Contact candidate can cost
+seven more scalar units because this plan explicitly charges construction as
+well as save/assignment. This is not a claim of equal work to modes 4/5 or
+ordinary routing.
+
+This isolated cost hypothesis is not evidence of a behavioral winner: capture
+cost and acquisition-history differences remain, and application can independently
+change decisions. No default promotion follows from API correctness tests.
