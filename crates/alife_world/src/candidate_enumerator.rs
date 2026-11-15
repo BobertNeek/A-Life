@@ -444,7 +444,10 @@ fn coverage_selection(
     let mut residual = Vec::new();
     for i in roster {
         work += 3; // visit and two reservation comparisons
-        if Some(i) != contact && Some(i) != focal {
+        // Evaluate both billed identity comparisons, even for the contact slot.
+        let is_contact = Some(i) == contact;
+        let is_focal = Some(i) == focal;
+        if !is_contact && !is_focal {
             residual.push(i);
             work += 1;
         }
