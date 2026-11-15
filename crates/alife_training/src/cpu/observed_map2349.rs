@@ -103,6 +103,14 @@ impl ObservedMap {
   if next.goal.is_some()&&sequence.raw().saturating_sub(next.goal_set_at)>64{next.goal=None;work.field_updates+=1;}
   let prior_yaw=next.yaw;let d=rotate(motion.displacement,next.yaw);work.transforms+=1;
   next.position=[next.position[0]+d[0],next.position[1]+d[1]];next.yaw+=motion.yaw_delta;work.field_updates+=4;
+  // A successful edge must contain only authenticated movement since its anchor.
+  // Even a sub-spacing passive displacement breaks that continuity. Keep old
+  // graph evidence, but establish a fresh exact-position anchor without reusing
+  // a nearby old node (which could smuggle the passive segment into a later edge).
+  let moved_x=motion.displacement[0]!=0.;let moved_y=motion.displacement[1]!=0.;
+  let passive=!motion.executed_traversal;work.comparisons+=3;
+  let break_traversal=passive&&(moved_x||moved_y);
+  if break_traversal {next.last_visit=None;work.field_updates+=1;}
   if let Some(id)=next.last_visit {
    for n in &mut next.visit_nodes {work.node_visits+=1;work.comparisons+=1;if n.id==id {
     if (motion.executed_traversal&&d[0]*d[0]+d[1]*d[1]>1e-12) || motion.zero_step_blocked {
@@ -138,11 +146,12 @@ impl ObservedMap {
   let anchor=previous.is_none()||moved>=ANCHOR_SPACING||(motion.blocked&&moved>1e-6);
   if anchor {
    let mut existing=None;
-   for n in &next.visit_nodes{work.node_visits+=1;work.comparisons+=1;
+   if !break_traversal {for n in &next.visit_nodes{work.node_visits+=1;work.comparisons+=1;
     let d=[n.position[0]-next.position[0],n.position[1]-next.position[1]];
     let close=d[0]*d[0]+d[1]*d[1]<=LOOP_RADIUS*LOOP_RADIUS;
     let mut shared=false;for a in &signature{for b in &n.observed_signature{work.comparisons+=1;shared|=a==b;}}
     if close&&shared&&Some(n.id)!=next.last_visit{if existing.map_or(true,|id|n.id<id){existing=Some(n.id)}}
+   }
    }
    let id=if let Some(id)=existing{id}else{
     if next.visit_nodes.len()==NODE_CAP {
@@ -171,4 +180,19 @@ impl ObservedMap {
   for n in &mut next.visit_nodes {work.node_visits+=1;if Some(n.id)!=next.last_visit{n.confidence*=0.99;work.field_updates+=1}}
   work.validation_checks+=next.validate_counted()?;Ok((next,work))
  }
+}
+
+#[cfg(test)]
+mod passive_anchor_regression2364 {
+use super::*;use alife_core::Confidence;
+fn motion(d:[f32;2],executed:bool)->MeasuredMotion{MeasuredMotion{displacement:d,yaw_delta:0.,blocked:false,zero_step_blocked:false,executed_traversal:executed}}
+fn step(m:&ObservedMap,n:u64,d:[f32;2],executed:bool)->ObservedMap{m.observe(ExperienceSequenceId(n),&[],8.,0.,motion(d,executed),None).unwrap().0}
+fn cold(m:&ObservedMap)->ObservedMap{let bytes=m.encode().unwrap();let n=ObservedMap::decode(&bytes).unwrap();assert_eq!(bytes,n.encode().unwrap());n}
+#[test]fn exact_review_passive_point3_then_actual_point2_no_fake_half_edge(){for yaw in [0.,std::f32::consts::FRAC_PI_2]{let mut initial=motion([0.;2],false);initial.yaw_delta=yaw;let a=ObservedMap::default().observe(ExperienceSequenceId(1),&[],8.,0.,initial,None).unwrap().0;let old=a.visited_nodes().to_vec();let b=cold(&step(&a,2,[0.3,0.],false));assert!(b.edges().is_empty());assert_eq!(b.visited_nodes()[0].position,old[0].position);assert_eq!(b.visited_nodes()[0].id,old[0].id);let c=cold(&step(&b,3,[0.2,0.],true));assert!(c.edges().is_empty());assert_eq!(c.visited_nodes().len(),2);}}
+#[test]fn passive_point1_then_actual_point4_only_actual_displacement(){let a=step(&ObservedMap::default(),1,[0.;2],false);let b=cold(&step(&a,2,[0.1,0.],false));let c=step(&b,3,[0.4,0.],true);assert_eq!(c.edges().len(),1);assert_eq!(c.edges()[0].from,b.current_visit().unwrap());assert_eq!(c.edges()[0].displacement[0].to_bits(),(c.position()[0]-b.position()[0]).to_bits());assert!(c.edges()[0].displacement[0]<0.41);}
+#[test]fn signed_zero_and_rotation_do_not_break_normal_anchor(){let a=step(&ObservedMap::default(),1,[0.;2],false);let mut z=motion([-0.,0.],false);z.yaw_delta=std::f32::consts::FRAC_PI_2;let (b,w)=a.observe(ExperienceSequenceId(2),&[],8.,0.,z,None).unwrap();assert_eq!(a.current_visit(),b.current_visit());assert_eq!(b.visited_nodes().len(),1);assert!(w.comparisons>=3);let c=step(&cold(&b),3,[0.5,0.],true);assert_eq!(c.edges().len(),1);assert_eq!(c.edges()[0].from,a.current_visit().unwrap());assert_eq!(c.edges()[0].successes,1);}
+#[test]fn passive_near_identical_landmark_must_not_reuse_stale_anchor(){let a=step(&ObservedMap::default(),1,[0.;2],false);let b=step(&a,2,[0.01,0.],false);assert_ne!(a.current_visit(),b.current_visit());assert_eq!(b.visited_nodes().len(),2);assert!(b.edges().is_empty());let c=step(&b,3,[0.5,0.],true);assert_eq!(c.edges()[0].from,b.current_visit().unwrap());}
+fn visible()->GroundedObjectSlotV1{GroundedObjectSlotV1{slot_index:0,tracked_object_id:TrackedObjectId(1),bearing:[0.,1.],distance:0.5,relative_velocity:[0.;3],color:[0.;3],material:[0.;3],shape:[0.;3],chemical:[0.;3],contact:0.,proprioception:[0.;2],temperature:0.,terrain:[0.;2],confidence:Confidence::new(1.).unwrap()}}
+#[test]fn shared_landmark_cannot_loop_match_passive_near_anchor(){let slots=[visible()];let(a,_)=ObservedMap::default().observe(ExperienceSequenceId(1),&slots,8.,0.,motion([0.;2],false),None).unwrap();let(b,_)=a.observe(ExperienceSequenceId(2),&slots,8.,0.,motion([0.01,0.],false),None).unwrap();assert_ne!(a.current_visit(),b.current_visit());assert_eq!(b.visited_nodes().len(),2);assert!(b.edges().is_empty());let c=b.observe(ExperienceSequenceId(3),&slots,8.,0.,motion([0.5,0.],true),None).unwrap().0;assert_eq!(c.edges()[0].from,b.current_visit().unwrap());}
+
 }
