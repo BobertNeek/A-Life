@@ -11,7 +11,7 @@ fn fallback(map:&ObservedMap,slots:&[GroundedObjectSlotV1],gaze:f32,candidates:&
 pub fn preference(map:&ObservedMap,slots:&[GroundedObjectSlotV1],gaze:f32,candidates:&[ActionCandidate])->Result<GoalRouteDecision,String>{
  let mut work=map.validate_counted()?;
  if candidates.len()>32||slots.len()>alife_core::MAX_GROUNDED_OBJECT_SLOTS||!gaze.is_finite(){return Err("invalid goal-route input".into())}
- let mut goal=None;for n in map.nodes(){work+=2;if Some(n.id)==map.goal(){goal=Some(n);break}}
+ let mut goal=None;for n in map.nodes(){work+=2;if Some(n.id)==map.goal(){work+=1;if map.frame_version2367()==3{work+=1;if !map.landmark_position_verified2367(n){continue}}goal=Some(n);break}}
  let Some(goal)=goal else{return fallback(map,slots,gaze,candidates,work)};
  let nodes=map.visited_nodes();let mut start=None;for(i,n)in nodes.iter().enumerate(){work+=2;if Some(n.id)==map.current_visit(){start=Some(i);break}}
  let Some(start)=start else{return fallback(map,slots,gaze,candidates,work)};

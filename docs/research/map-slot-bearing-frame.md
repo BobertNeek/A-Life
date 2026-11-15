@@ -1,0 +1,11 @@
+# Observed-map bearing-frame correction
+
+This CPU-only research fix distinguishes the GroundedObjectSlotsV1 world-XZ bearing contract from egocentric TerrainVision observations. Map frame version 3 converts the supported V1 bearings using actual body orientation into its attachment-relative odometric coordinates. It does not alter neural sensing, actions, policy weights, learned neural stores, physiology, or game defaults.
+
+New research maps use frame version 3. Retained version-2 maps require the explicit immutable `fork_acquired_graph_with_world_slot_frame_for_research2367` operation. Migration preserves original landmark coordinates, identities, confidence, visit topology, goals, and historical receipts. It does not reconstruct a route. Old landmark coordinates remain unverified until genuine reobservation; stored-goal routing falls back instead of consuming unverified coordinates. Corrected observed landmarks remain available through roster absence with ordinary confidence decay.
+
+The serialized map version and optional per-landmark provenance distinguish corrected data. Version-2 readers reject version 3; invalid verification flags and contradictory legacy/new metadata are rejected. Actual extra validation, provenance updates, and coordinate-conversion checks are charged through native work accounting. Prior receipts are not rewritten. The passive-motion anchor fix remains intact.
+
+Portable native qualification covers synthetic host cold/replay/sampler/private preservation and charged work, five passive-anchor regressions, and four map-frame regressions: unknown-preserving migration and fallback, reobservation/absence/revisit, rotated scene bearings, and malformed provenance. Private retained-state qualification is separate evidence, not a portable test dependency. Ground-level geometry is covered; mapping a three-dimensional range to two-dimensional coordinates remains an elevation limitation.
+
+Earlier research meals and work measurements remain real outcomes, but spatial frame errors confound claims of learned route recall. This fix alone establishes neither maze mastery nor behavioral efficiency. No GPU/full-game validation or automatic adoption is claimed.
