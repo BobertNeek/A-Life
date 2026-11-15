@@ -112,6 +112,8 @@ pub struct CpuResidentCheckpoint {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CpuCanonicalCheckpoint {
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub candidate_opportunity_coverage2313: Option<u16>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub joint_membership2177: Option<u16>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub terminal_context2135: Option<TerminalContextConfig2135>,
@@ -131,6 +133,7 @@ pub struct CpuCanonicalCheckpoint {
 /// chemistry, memories, predictor, neural traces, sleep, sequence and RNG counter.
 #[derive(Clone)]
 pub struct CpuCanonicalHost {
+    candidate_opportunity_coverage2313: Option<u16>,
     #[cfg(test)]
     fail_joint_membership_after_admission: bool,
     #[cfg(test)]
@@ -799,6 +802,7 @@ impl CpuCanonicalHost {
             fail_joint_membership_after_admission: false,
             #[cfg(test)]
             fail_ingest_outcome_binding2286: false,
+            candidate_opportunity_coverage2313: None,
             joint_membership2177: None,
             terminal_context2135: None,
             world,
@@ -1055,6 +1059,36 @@ impl CpuCanonicalHost {
         Ok(())
     }
 
+    /// Explicit retained-life experimental opportunity adapter. No genotype,
+    /// phenotype, neural, memory, world, sampling or founder mutation occurs.
+    /// Saved identity becomes CP16; disabling or hand-editing is not a migration.
+    pub fn enable_candidate_opportunity_coverage2313(
+        &mut self, founder: &CpuFoundationTrainer,
+    ) -> Result<(), CpuHostError> {
+        self.validate_founder(founder)?;
+        if self.candidate_opportunity_coverage2313.is_some()
+            || !matches!(self.joint_membership2177, Some(14 | 15))
+            || founder.phenotype().sensor_profile() != SensorProfile::GroundedObjectSlotsV1
+        {
+            return Err(CpuHostError::State("candidate adapter requires unchanged mode14/15 Slots policy"));
+        }
+        let before = serde_json::to_value(self.checkpoint(founder)?)?;
+        self.candidate_opportunity_coverage2313 = Some(1);
+        let result = (|| {
+            let mut old = before;
+            let mut new = serde_json::to_value(self.checkpoint(founder)?)?;
+            old.as_object_mut().unwrap().remove("schema_version");
+            new.as_object_mut().unwrap().remove("schema_version");
+            new.as_object_mut().unwrap().remove("candidate_opportunity_coverage2313");
+            if serde_json::to_vec(&old)? != serde_json::to_vec(&new)? {
+                return Err(CpuHostError::State("candidate adapter attachment changed retained state"));
+            }
+            Ok(())
+        })();
+        if result.is_err() { self.candidate_opportunity_coverage2313 = None; }
+        result
+    }
+
     pub fn world(&self) -> &HeadlessWorld {
         &self.world
     }
@@ -1249,9 +1283,12 @@ impl CpuCanonicalHost {
             })
             .collect::<Result<_, CpuHostError>>()?;
         Ok(CpuCanonicalCheckpoint {
+            candidate_opportunity_coverage2313: self.candidate_opportunity_coverage2313,
             joint_membership2177: self.joint_membership2177,
             terminal_context2135: self.terminal_context2135.clone(),
-            schema_version: if self.joint_membership2177.is_some() {
+            schema_version: if self.candidate_opportunity_coverage2313.is_some() {
+                16
+            } else if self.joint_membership2177.is_some() {
                 match self.joint_membership2177 {
                     Some(1) => 8,
                     Some(4 | 5) => 9,
@@ -1289,6 +1326,16 @@ impl CpuCanonicalHost {
                 "version1 CPU checkpoint lacks tracked-object identity; exact private-life restore requires version2",
             ));
         }
+        if let Some(version) = checkpoint.candidate_opportunity_coverage2313 {
+            if version != 1 || checkpoint.schema_version != 16
+                || !matches!(checkpoint.joint_membership2177, Some(14 | 15))
+                || founder.phenotype().sensor_profile() != SensorProfile::GroundedObjectSlotsV1
+            {
+                return Err(CpuHostError::State("invalid candidate opportunity adapter identity"));
+            }
+        } else if checkpoint.schema_version == 16 {
+            return Err(CpuHostError::State("CP16 requires explicit candidate opportunity adapter"));
+        }
         let has_readout = checkpoint
             .residents
             .iter()
@@ -1303,7 +1350,7 @@ impl CpuCanonicalHost {
                         8 | 9 => 12,
                         10 | 11 => 13,
                         12 | 13 => 14,
-                        14 | 15 => 15,
+                        14 | 15 => if checkpoint.candidate_opportunity_coverage2313.is_some() { 16 } else { 15 },
                         _ => 7,
                     }
                 || has_readout
@@ -1492,6 +1539,7 @@ impl CpuCanonicalHost {
             fail_joint_membership_after_admission: false,
             #[cfg(test)]
             fail_ingest_outcome_binding2286: false,
+            candidate_opportunity_coverage2313: checkpoint.candidate_opportunity_coverage2313,
             joint_membership2177: checkpoint.joint_membership2177,
             terminal_context2135: checkpoint.terminal_context2135.clone(),
             world,
@@ -1760,13 +1808,15 @@ impl CpuCanonicalHost {
                 &receptors,
                 &NeuralReceptorPhenotype::compile(p)?,
             )?;
-            let (draft, candidate_binding) = perception_world
-                .perception_frame_draft_with_bindings(
-                    id,
-                    tick,
-                    p.sensor_profile(),
-                    record.biochemistry().homeostasis,
-                )?;
+            let (draft, candidate_binding) = if self.candidate_opportunity_coverage2313.is_some() {
+                perception_world.perception_frame_draft_with_candidate_coverage2313(
+                    id, tick, p.sensor_profile(), record.biochemistry().homeostasis, sequence.raw(),
+                )?
+            } else {
+                perception_world.perception_frame_draft_with_bindings(
+                    id, tick, p.sensor_profile(), record.biochemistry().homeostasis,
+                )?
+            };
             let ordinary = draft.clone().with_semantic_context(None)?;
             let draft = prepare(draft, sequence)?;
             if draft.clone().with_semantic_context(None)? != ordinary {
@@ -2220,7 +2270,8 @@ impl CpuCanonicalHost {
                 work_synapses,
                 dendritic_work,
                 cognitive.attention.budget_receipt.work_units
-                    + frame.grip_proprioception().map_or(0, |r| r.work_units()),
+                    + frame.grip_proprioception().map_or(0, |r| r.work_units())
+                    + frame.candidate_opportunity_coverage().map_or(0, |r| r.work_units()),
                 u64::from(memory.exact_bucket_reads)
                     + u64::from(memory.neighbor_bucket_reads)
                     + u64::from(memory.similarity_evaluations)

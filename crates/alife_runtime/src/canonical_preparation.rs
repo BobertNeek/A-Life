@@ -165,6 +165,18 @@ pub fn route_observed_focal_candidates(
     if attention.organism_id != draft.organism_id() || attention.world_tick != draft.tick() {
         return Err(ScaffoldContractError::InvalidDecisionEvidence);
     }
+    if let Some(binding) = binding.filter(|binding| binding.coverage_plan().is_some()) {
+        let focal = attention.focal_targets.first().and_then(|identity| {
+            if let StableFocusIdentity::TrackedObject(id) = identity { Some(*id) } else { None }
+        });
+        let initial_work = draft.candidate_opportunity_coverage().map_or(0, |r| r.work_units());
+        let (candidates, receipt) = binding.candidates_for_focus_with_coverage(draft, focal, initial_work)?;
+        let observed = match receipt {
+            Some(receipt) => draft.clone().with_candidates_and_opportunity_coverage(candidates, receipt)?,
+            None => draft.clone().with_candidates(candidates)?,
+        };
+        return route_focal_candidates(&observed, attention);
+    }
     let Some(StableFocusIdentity::TrackedObject(focal_object)) = attention.focal_targets.first()
     else {
         return route_focal_candidates(draft, attention);

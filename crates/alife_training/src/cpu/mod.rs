@@ -17,6 +17,8 @@ mod host;
 mod memory_binding;
 #[cfg(test)]
 mod memory_bound_row_tests;
+#[cfg(test)]
+mod candidate_opportunity_coverage_tests;
 pub use memory_binding::{CpuMemoryReadoutReceiptV1, FrozenMemoryReadoutConstructionV1};
 mod input;
 mod objective;

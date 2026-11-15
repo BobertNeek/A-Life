@@ -1,0 +1,11 @@
+# Experimental residual opportunity coverage (2313)
+
+This is an explicit CPU retained-life adapter, not an inherited or acquired skill and not a demonstrated feeding fix. Existing mode14/15, genotype, phenotype, world, learned/private state and founder Adam remain unchanged. Native attachment changes only checkpoint schema15→16 and optional adapter identity `candidate_opportunity_coverage2313=1`. Legacy None retains its previous schema and serialized behavior. Old readers reject schema16.
+
+Under crowding, candidate enumeration protects the observed own-grip/active-contact reservation and first attention focal object, then admits one rotating unreserved observed object, filling remaining capacity by distance and stable identity. All six action families compete normally; no policy mask, object-kind preference, target-ID desirability, reward override or RNG draw is introduced. The sensory16-slot and candidate32 ABI widths are unchanged. Slots has four object opportunities (orientation repertoire three), not four physical sensory slots.
+
+Rotation phase is the persisted experience sequence. Stable membership/reservations provide bounded eventual residual coverage; changing membership or reservations do not imply the same guarantee. Disappeared, consumed or offscreen objects are not recovered from hidden world state. Actual selector visits/comparisons/moves and validation/rerouting passes are charged through the authenticated receipt into focal_target_ops. Logical-work accounting is not a measured runtime speed claim.
+
+Motivation: actual2312 postpractice Food2 was grounded/peripheral320/320 but candidate0/320 and focal0/320 among six observed objects. The prepractice branch already had Food2 candidates320/320 yet Avoid276/Approach21 and no meal. Thus the adapter restores opportunity, not a sole explanation or guaranteed solution for learned avoidance. Existing harm memories and reduced harm remain intact.
+
+Qualification must separately establish native attach preservation, legacy disabled replay, receipt/protection/coverage/cost, cold identity and actual paired efficacy. CPU-only results do not constitute full-game/GPU coverage. No acquired state/genotype/checkpoint artifacts are published.
