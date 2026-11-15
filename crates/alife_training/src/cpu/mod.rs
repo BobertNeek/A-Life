@@ -192,7 +192,8 @@ impl CpuFoundationTrainer {
                 .all(|(index, (weight, synapse))| {
                     weight.is_finite()
                         && (weight.to_bits() == synapse.genetic_weight().to_bits()
-                            || readout_calibration_coordinate(&self.phenotype, index))
+                            || readout_calibration_coordinate(&self.phenotype, index)
+                            || (maze_program::recurrent_coordinate(&self.phenotype,index) && weight.abs()<=16.))
                 })
     }
 
@@ -496,3 +497,9 @@ mod readout_calibration_tests;
 
 #[cfg(test)]
 mod age_policy_fork_tests;
+
+mod maze_program;
+pub use maze_program::{MazeBlockedHistory2346,MAZE_RECURRENT_EDGES2346};
+
+#[cfg(test)]
+mod maze_program_tests;
