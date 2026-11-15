@@ -1063,14 +1063,17 @@ impl CpuCanonicalHost {
     /// phenotype, neural, memory, world, sampling or founder mutation occurs.
     /// Saved identity becomes CP16; disabling or hand-editing is not a migration.
     pub fn enable_candidate_opportunity_coverage2313(
-        &mut self, founder: &CpuFoundationTrainer,
+        &mut self,
+        founder: &CpuFoundationTrainer,
     ) -> Result<(), CpuHostError> {
         self.validate_founder(founder)?;
         if self.candidate_opportunity_coverage2313.is_some()
             || !matches!(self.joint_membership2177, Some(14 | 15))
             || founder.phenotype().sensor_profile() != SensorProfile::GroundedObjectSlotsV1
         {
-            return Err(CpuHostError::State("candidate adapter requires unchanged mode14/15 Slots policy"));
+            return Err(CpuHostError::State(
+                "candidate adapter requires unchanged mode14/15 Slots policy",
+            ));
         }
         let before = serde_json::to_value(self.checkpoint(founder)?)?;
         self.candidate_opportunity_coverage2313 = Some(1);
@@ -1079,14 +1082,95 @@ impl CpuCanonicalHost {
             let mut new = serde_json::to_value(self.checkpoint(founder)?)?;
             old.as_object_mut().unwrap().remove("schema_version");
             new.as_object_mut().unwrap().remove("schema_version");
-            new.as_object_mut().unwrap().remove("candidate_opportunity_coverage2313");
+            new.as_object_mut()
+                .unwrap()
+                .remove("candidate_opportunity_coverage2313");
             if serde_json::to_vec(&old)? != serde_json::to_vec(&new)? {
-                return Err(CpuHostError::State("candidate adapter attachment changed retained state"));
+                return Err(CpuHostError::State(
+                    "candidate adapter attachment changed retained state",
+                ));
             }
             Ok(())
         })();
-        if result.is_err() { self.candidate_opportunity_coverage2313 = None; }
+        if result.is_err() {
+            self.candidate_opportunity_coverage2313 = None;
+        }
         result
+    }
+
+    /// Explicit manual calibration of this simulator branch's readout policy.
+    /// This does not claim learning and never migrates genes or retained biology.
+    /// Stage on a clone; commit only after exact-state and native cold validation.
+    pub fn rebase_readout_policy(
+        &mut self,
+        previous: &CpuFoundationTrainer,
+        next: &CpuFoundationTrainer,
+    ) -> Result<(), CpuHostError> {
+        self.validate_founder(previous)?;
+        if serde_json::to_vec(previous.phenotype())? != serde_json::to_vec(next.phenotype())?
+            || previous.source_foundation.encode_canonical()?
+                != next.source_foundation.encode_canonical()?
+            || previous.replay_execution() != next.replay_execution()
+        {
+            return Err(CpuHostError::State(
+                "readout calibration changed source, phenotype or execution",
+            ));
+        }
+        let old = previous.checkpoint();
+        let mut normalized = next.checkpoint();
+        if old.weights.len() != normalized.weights.len() {
+            return Err(CpuHostError::State(
+                "readout calibration weight length changed",
+            ));
+        }
+        let mut changed = false;
+        for (index, (a, b)) in old.weights.iter().zip(&normalized.weights).enumerate() {
+            if a.to_bits() != b.to_bits() {
+                if !b.is_finite()
+                    || !super::readout_calibration_coordinate(previous.phenotype(), index)
+                {
+                    return Err(CpuHostError::State(
+                        "readout calibration changed forbidden coordinate",
+                    ));
+                }
+                changed = true;
+            }
+        }
+        if !changed {
+            return Err(CpuHostError::State(
+                "readout calibration requires changed weight bits",
+            ));
+        }
+        normalized.weights.clone_from(&old.weights);
+        if serde_json::to_vec(&old)? != serde_json::to_vec(&normalized)? {
+            return Err(CpuHostError::State(
+                "readout calibration changed optimizer or checkpoint metadata",
+            ));
+        }
+        let before = self.checkpoint(previous)?;
+        let mut staged = self.clone();
+        staged.founder_weight_digest = weight_digest(next)?;
+        if staged.founder_weight_digest == self.founder_weight_digest {
+            return Err(CpuHostError::State(
+                "readout calibration requires distinct policy digest",
+            ));
+        }
+        let after = staged.checkpoint(next)?;
+        let mut normalized_after = after.clone();
+        normalized_after.founder_weight_digest = before.founder_weight_digest;
+        if serde_json::to_vec(&before)? != serde_json::to_vec(&normalized_after)? {
+            return Err(CpuHostError::State(
+                "readout calibration changed retained state",
+            ));
+        }
+        let cold = Self::from_checkpoint(after.clone(), next)?;
+        if serde_json::to_vec(&cold.checkpoint(next)?)? != serde_json::to_vec(&after)? {
+            return Err(CpuHostError::State(
+                "readout calibration cold restore changed retained state",
+            ));
+        }
+        *self = staged;
+        Ok(())
     }
 
     pub fn world(&self) -> &HeadlessWorld {
@@ -1327,14 +1411,19 @@ impl CpuCanonicalHost {
             ));
         }
         if let Some(version) = checkpoint.candidate_opportunity_coverage2313 {
-            if version != 1 || checkpoint.schema_version != 16
+            if version != 1
+                || checkpoint.schema_version != 16
                 || !matches!(checkpoint.joint_membership2177, Some(14 | 15))
                 || founder.phenotype().sensor_profile() != SensorProfile::GroundedObjectSlotsV1
             {
-                return Err(CpuHostError::State("invalid candidate opportunity adapter identity"));
+                return Err(CpuHostError::State(
+                    "invalid candidate opportunity adapter identity",
+                ));
             }
         } else if checkpoint.schema_version == 16 {
-            return Err(CpuHostError::State("CP16 requires explicit candidate opportunity adapter"));
+            return Err(CpuHostError::State(
+                "CP16 requires explicit candidate opportunity adapter",
+            ));
         }
         let has_readout = checkpoint
             .residents
@@ -1350,7 +1439,13 @@ impl CpuCanonicalHost {
                         8 | 9 => 12,
                         10 | 11 => 13,
                         12 | 13 => 14,
-                        14 | 15 => if checkpoint.candidate_opportunity_coverage2313.is_some() { 16 } else { 15 },
+                        14 | 15 => {
+                            if checkpoint.candidate_opportunity_coverage2313.is_some() {
+                                16
+                            } else {
+                                15
+                            }
+                        }
                         _ => 7,
                     }
                 || has_readout
@@ -1810,11 +1905,18 @@ impl CpuCanonicalHost {
             )?;
             let (draft, candidate_binding) = if self.candidate_opportunity_coverage2313.is_some() {
                 perception_world.perception_frame_draft_with_candidate_coverage2313(
-                    id, tick, p.sensor_profile(), record.biochemistry().homeostasis, sequence.raw(),
+                    id,
+                    tick,
+                    p.sensor_profile(),
+                    record.biochemistry().homeostasis,
+                    sequence.raw(),
                 )?
             } else {
                 perception_world.perception_frame_draft_with_bindings(
-                    id, tick, p.sensor_profile(), record.biochemistry().homeostasis,
+                    id,
+                    tick,
+                    p.sensor_profile(),
+                    record.biochemistry().homeostasis,
                 )?
             };
             let ordinary = draft.clone().with_semantic_context(None)?;
@@ -2271,7 +2373,9 @@ impl CpuCanonicalHost {
                 dendritic_work,
                 cognitive.attention.budget_receipt.work_units
                     + frame.grip_proprioception().map_or(0, |r| r.work_units())
-                    + frame.candidate_opportunity_coverage().map_or(0, |r| r.work_units()),
+                    + frame
+                        .candidate_opportunity_coverage()
+                        .map_or(0, |r| r.work_units()),
                 u64::from(memory.exact_bucket_reads)
                     + u64::from(memory.neighbor_bucket_reads)
                     + u64::from(memory.similarity_evaluations)

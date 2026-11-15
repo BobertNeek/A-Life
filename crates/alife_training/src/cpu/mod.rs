@@ -6,6 +6,8 @@
 pub mod decision_context;
 
 mod activity;
+#[cfg(test)]
+mod candidate_opportunity_coverage_tests;
 mod cohort;
 mod collector_output;
 mod collector_shard;
@@ -17,8 +19,6 @@ mod host;
 mod memory_binding;
 #[cfg(test)]
 mod memory_bound_row_tests;
-#[cfg(test)]
-mod candidate_opportunity_coverage_tests;
 pub use memory_binding::{CpuMemoryReadoutReceiptV1, FrozenMemoryReadoutConstructionV1};
 mod input;
 mod objective;
@@ -144,6 +144,56 @@ impl CpuFoundationTrainer {
         )?;
         result.checkpoint = checkpoint;
         Ok(result)
+    }
+
+    /// Manual experimenter readout calibration, not an optimizer/learning step or
+    /// genetic migration. Only requested decoder weight bits change; inherited
+    /// source identity, all Adam state and process-local replay execution remain.
+    pub fn calibrated_readout_copy(&self, edits: &[(u32, f32)]) -> Result<Self, TrainingError> {
+        if edits.is_empty() {
+            return Err(invalid());
+        }
+        let mut checkpoint = self.checkpoint();
+        let mut seen = std::collections::BTreeSet::new();
+        let mut changed = false;
+        for &(coordinate, weight) in edits {
+            let index = coordinate as usize;
+            if !weight.is_finite()
+                || !seen.insert(coordinate)
+                || !readout_calibration_coordinate(&self.phenotype, index)
+            {
+                return Err(invalid());
+            }
+            changed |= checkpoint.weights[index].to_bits() != weight.to_bits();
+            checkpoint.weights[index] = weight;
+        }
+        if !changed {
+            return Err(invalid());
+        }
+        let mut calibrated = Self::from_checkpoint(
+            self.phenotype.clone(),
+            self.source_foundation.clone(),
+            checkpoint,
+        )?;
+        calibrated.set_replay_execution(self.replay_execution());
+        Ok(calibrated)
+    }
+
+    /// Live organism eligibility: manual calibration is restricted to the three
+    /// readout heads. Recurrent and every other coordinate stay genetic-bitexact.
+    /// The host separately binds the exact policy by founder_weight_digest.
+    fn live_readout_policy_is_valid(&self) -> bool {
+        self.weights().len() == self.phenotype.synapses().len()
+            && self
+                .weights()
+                .iter()
+                .zip(self.phenotype.synapses())
+                .enumerate()
+                .all(|(index, (weight, synapse))| {
+                    weight.is_finite()
+                        && (weight.to_bits() == synapse.genetic_weight().to_bits()
+                            || readout_calibration_coordinate(&self.phenotype, index))
+                })
     }
 
     pub fn restore_checkpoint(
@@ -432,3 +482,14 @@ mod terminal_context;
 pub use terminal_context::*;
 mod terminal_observation;
 pub use terminal_observation::*;
+
+/// Bounded readout-only coordinate domain shared by calibration and host rebase.
+fn readout_calibration_coordinate(phenotype: &BrainPhenotype, index: usize) -> bool {
+    matches!(phenotype.synapses().get(index).map(|s| s.kind()),
+        Some(alife_core::CompiledSynapseKind::Decoder(c)) if matches!(c.head(),
+            alife_core::DecoderHeadKind::ActionCandidate |
+            alife_core::DecoderHeadKind::MemoryContext |
+            alife_core::DecoderHeadKind::CognitiveContext))
+}
+#[cfg(test)]
+mod readout_calibration_tests;
