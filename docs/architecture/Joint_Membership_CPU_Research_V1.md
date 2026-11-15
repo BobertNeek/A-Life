@@ -219,3 +219,29 @@ The private policy identity binds Ingest, component mask 9, positive ordinary
 support, and cost revision 1. Modes 0–11 retain their prior wire/seal/work behavior;
 no acquired lives are migrated. The provisional unconditional zero-support
 projection was considered but never qualified or used to create new states.
+
+## Direct global supported outcome route (2295)
+
+`enable_joint_ingest_direct2295(&trainer, apply_projection)` is a fresh-only
+opt-in CPU comparison, modes14/15, CP15/live9, cost revision2. It retains exactly
+the supported ordinary Ingest32/35 projection semantics of12/13 and all global
+joint evidence, including valid shared danger/valence from multi-action events.
+It does not blank absent ordinary evidence or change the selected/default brain.
+
+The global estimator is already applied in both arms. This route bypasses the
+legacy comparator's per-candidate snapshot and redundant family select/assign
+and second encoding/hash. It reuses the same ordinary lookup/bounded basis and
+same joint search. The direct estimator bills seven scalar destination writes
+per replaced candidate K, a provenance-copy event per queried source, and2L
+logical encode/hash events only when usable joint sources exist. If none exist,
+the already validated ordinary context/encoding/digest is returned unchanged.
+Thus at the exact same bank/draft, old query work minus new query work is
+14N-7K, plus2L when no usable joint sources exist. These are logical event counts,
+not machine instructions or a measured wall-clock speedup. Existing basis,
+projection, admission and biology work remain charged once and are not waived.
+
+Modes0–13 retain their existing work, wire bytes, private seals and acquired
+continuation. Fresh modes14/15 have a distinct authority domain; edited old
+checkpoints cannot migrate or reseal into them. Changing real cost may alter
+preparation physiology and later learning even when same-bank decisions are
+identical. No actual-body efficacy follows from source qualification alone.

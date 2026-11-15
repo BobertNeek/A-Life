@@ -300,6 +300,37 @@ impl MemoryBank {
         Ok((joint, queried, basis))
     }
 
+    /// Fresh direct-global route: no comparator save/select/re-encoding pass.
+    /// Same ordinary basis and global evidence; only executed work is billed.
+    pub fn recall_frame_joint_ingest_direct2295(
+        &self,
+        draft: &PerceptionFrameDraft,
+    ) -> Result<
+        (
+            PreparedMemoryRecall,
+            Vec<JointMembershipSourceV1>,
+            OrdinaryIngestOutcomeBasis2286,
+        ),
+        ScaffoldContractError,
+    > {
+        let (ordinary, basis) = self.recall_frame_impl_with_ingest_basis2286(draft, false, true)?;
+        let basis = basis.ok_or(ScaffoldContractError::InvalidMemoryQuery)?;
+        let mut joint = self.apply_joint_membership_impl2295(ordinary, draft, true)?;
+        let queried = joint.receipt.joint_membership_sources.clone();
+        let work = basis
+            .evidence()
+            .work
+            .total()?
+            .checked_add(queried.len() as u64)
+            .ok_or(ScaffoldContractError::ScalarOutOfRange)?;
+        joint.receipt.execution_evidence_work = joint
+            .receipt
+            .execution_evidence_work
+            .checked_add(work)
+            .ok_or(ScaffoldContractError::ScalarOutOfRange)?;
+        Ok((joint, queried, basis))
+    }
+
     fn recall_frame_joint_comparison_impl(
         &self,
         draft: &PerceptionFrameDraft,
@@ -440,8 +471,17 @@ impl MemoryBank {
 
     fn apply_joint_membership(
         &self,
+        p: PreparedMemoryRecall,
+        draft: &PerceptionFrameDraft,
+    ) -> Result<PreparedMemoryRecall, ScaffoldContractError> {
+        self.apply_joint_membership_impl2295(p, draft, false)
+    }
+
+    fn apply_joint_membership_impl2295(
+        &self,
         mut p: PreparedMemoryRecall,
         draft: &PerceptionFrameDraft,
+        direct: bool,
     ) -> Result<PreparedMemoryRecall, ScaffoldContractError> {
         p.receipt.schema_version = RECORD_SCHEMA;
         let mut work = 0u64;
@@ -542,15 +582,29 @@ impl MemoryBank {
             c.family_confidence = family_confidence;
             c.family_source_count = selected.len() as u16;
             c.best_family_source = Some(selected[0].0);
+            if direct {
+                work += 7;
+            } // Four values, confidence, count, best-source assignments.
         }
         p.receipt.execution_evidence_work = p
             .receipt
             .execution_evidence_work
             .checked_add(work)
             .ok_or(ScaffoldContractError::ScalarOutOfRange)?;
-        p.encoded_context = p.context.to_perception_context_block()?;
-        p.receipt.context_digest = p.encoded_context.canonical_digest();
-        p.validate_for_draft(draft)?;
+        // With no usable replacement, ordinary context/encoding/digest are already valid.
+        // Legacy modes intentionally retain their original work and encode path.
+        if !direct || !p.receipt.joint_membership_sources.is_empty() {
+            p.encoded_context = p.context.to_perception_context_block()?;
+            p.receipt.context_digest = p.encoded_context.canonical_digest();
+            if direct {
+                p.receipt.execution_evidence_work = p
+                    .receipt
+                    .execution_evidence_work
+                    .checked_add(2 * p.encoded_context.values().len() as u64)
+                    .ok_or(ScaffoldContractError::ScalarOutOfRange)?;
+            }
+            p.validate_for_draft(draft)?;
+        }
         Ok(p)
     }
     /// Contact-query-only comparison. Ordinary recall executes once; only Contact
