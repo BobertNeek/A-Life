@@ -1413,7 +1413,7 @@ impl CpuCanonicalHost {
         if founder.phenotype().sensor_profile() != SensorProfile::GroundedObjectSlotsV1
             || before.schema_version != 20
             || self.maze_program2346 != Some(1)
-            || !matches!(self.experienced_navigation2349, Some(1 | 2 | 3))
+            || !matches!(self.experienced_navigation2349, Some(1..=3))
             || self.residents.is_empty()
             || self
                 .world
@@ -2155,7 +2155,7 @@ impl CpuCanonicalHost {
             candidate_opportunity_coverage2313: self.candidate_opportunity_coverage2313,
             joint_membership2177: self.joint_membership2177,
             terminal_context2135: self.terminal_context2135.clone(),
-            schema_version: if matches!(self.experienced_navigation2349, Some(1 | 2 | 3)) {
+            schema_version: if matches!(self.experienced_navigation2349, Some(1..=3)) {
                 20
             } else if self.maze_program2346 == Some(1) {
                 19
@@ -2206,7 +2206,7 @@ impl CpuCanonicalHost {
         if let Some(version) = checkpoint.candidate_opportunity_coverage2313 {
             if !matches!(version, 1..=3)
                 || checkpoint.schema_version
-                    != if matches!(checkpoint.experienced_navigation2349, Some(1 | 2 | 3)) {
+                    != if matches!(checkpoint.experienced_navigation2349, Some(1..=3)) {
                         20
                     } else if checkpoint.maze_program2346 == Some(1) {
                         19
@@ -2240,20 +2240,20 @@ impl CpuCanonicalHost {
             return Err(CpuHostError::State("CP19 requires maze program"));
         }
         if checkpoint.experienced_navigation2349.is_some()
-            && (!matches!(checkpoint.experienced_navigation2349, Some(1 | 2 | 3))
+            && (!matches!(checkpoint.experienced_navigation2349, Some(1..=3))
                 || checkpoint.schema_version != 20
                 || checkpoint.maze_program2346 != Some(1))
         {
             return Err(CpuHostError::State("invalid CP20 navigation identity"));
         }
         if checkpoint.schema_version == 20
-            && !matches!(checkpoint.experienced_navigation2349, Some(1 | 2 | 3))
+            && !matches!(checkpoint.experienced_navigation2349, Some(1..=3))
         {
             return Err(CpuHostError::State("CP20 requires navigation"));
         }
         if checkpoint.residents.iter().any(|r| {
             r.navigation2349.is_some()
-                != (matches!(checkpoint.experienced_navigation2349, Some(1 | 2 | 3)))
+                != (matches!(checkpoint.experienced_navigation2349, Some(1..=3)))
         }) {
             return Err(CpuHostError::State(
                 "navigation resident capability mismatch",
@@ -2297,7 +2297,7 @@ impl CpuCanonicalHost {
                         10 | 11 => 13,
                         12 | 13 => 14,
                         14 | 15 => {
-                            if matches!(checkpoint.experienced_navigation2349, Some(1 | 2 | 3)) {
+                            if matches!(checkpoint.experienced_navigation2349, Some(1..=3)) {
                                 20
                             } else if checkpoint.maze_program2346 == Some(1) {
                                 19

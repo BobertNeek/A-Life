@@ -225,8 +225,10 @@ impl ObservedMap {
         slots: &[GroundedObjectSlotV1],
         target: TrackedObjectId,
     ) -> Result<(Self, MapWork), String> {
-        let mut work = MapWork::default();
-        work.validation_checks = self.validate_counted()?;
+        let mut work = MapWork {
+            validation_checks: self.validate_counted()?,
+            ..Default::default()
+        };
         if sequence.raw() != self.sequence || slots.len() > MAX_GROUNDED_OBJECT_SLOTS {
             return Err("approach nomination chronology".into());
         }
@@ -263,8 +265,10 @@ impl ObservedMap {
         sequence: ExperienceSequenceId,
         consumed: TrackedObjectId,
     ) -> Result<(Self, MapWork), String> {
-        let mut work = MapWork::default();
-        work.validation_checks = self.validate_counted()?;
+        let mut work = MapWork {
+            validation_checks: self.validate_counted()?,
+            ..Default::default()
+        };
         if sequence.raw() != self.sequence {
             return Err("consumption chronology".into());
         }
@@ -436,8 +440,10 @@ impl ObservedMap {
         {
             return Err("invalid observation chronology/geometry".into());
         }
-        let mut work = MapWork::default();
-        work.validation_checks = initial_checks;
+        let mut work = MapWork {
+            validation_checks: initial_checks,
+            ..Default::default()
+        };
         for (i, s) in slots.iter().enumerate() {
             work.observed_validations += 1;
             s.validate_contract().map_err(|e| format!("{e:?}"))?;
@@ -647,10 +653,12 @@ impl ObservedMap {
                             shared |= a == b;
                         }
                     }
-                    if close && shared && Some(n.id) != next.last_visit {
-                        if existing.map_or(true, |id| n.id < id) {
-                            existing = Some(n.id)
-                        }
+                    if close
+                        && shared
+                        && Some(n.id) != next.last_visit
+                        && existing.is_none_or(|id| n.id < id)
+                    {
+                        existing = Some(n.id)
                     }
                 }
             }

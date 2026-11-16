@@ -102,7 +102,7 @@ pub fn preference(
             if done[i] || !costs[i].is_finite() {
                 continue;
             }
-            if selected.map_or(true, |j| {
+            if selected.is_none_or(|j| {
                 costs[i] < costs[j] || (costs[i] == costs[j] && nodes[i].id < nodes[j].id)
             }) {
                 selected = Some(i);
@@ -145,8 +145,7 @@ pub fn preference(
             }
             if !done[v]
                 && (total < costs[v]
-                    || (total == costs[v]
-                        && previous[v].map_or(true, |p| nodes[u].id < nodes[p].id)))
+                    || (total == costs[v] && previous[v].is_none_or(|p| nodes[u].id < nodes[p].id)))
             {
                 costs[v] = total;
                 previous[v] = Some(u);

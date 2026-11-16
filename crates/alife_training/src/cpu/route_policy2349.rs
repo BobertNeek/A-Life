@@ -76,8 +76,10 @@ fn preference_inner(
     validation: u64,
 ) -> Result<RoutePreference, String> {
     // Validated path counts one token access; all slot/candidate checks remain below.
-    let mut work = RouteWork::default();
-    work.validation_checks = validation;
+    let mut work = RouteWork {
+        validation_checks: validation,
+        ..Default::default()
+    };
     if slots.len() > alife_core::MAX_GROUNDED_OBJECT_SLOTS
         || candidates.len() > 32
         || !gaze_yaw.is_finite()
@@ -121,7 +123,7 @@ fn preference_inner(
         work.comparisons += 1;
         if best
             .as_ref()
-            .map_or(true, |b| key < (b.0, b.1, b.2, b.3, b.4))
+            .is_none_or(|b| key < (b.0, b.1, b.2, b.3, b.4))
         {
             best = Some((
                 attempts,
@@ -170,7 +172,7 @@ fn preference_inner(
                     ((1.0 - (e.confidence() * n.confidence).clamp(0.0, 1.0)) * 1024.0) as u32;
                 let key = (uncertainty, n.visits, n.id);
                 work.comparisons += 1;
-                if chosen.as_ref().map_or(true, |c| key < (c.0, c.1, c.2)) {
+                if chosen.as_ref().is_none_or(|c| key < (c.0, c.1, c.2)) {
                     chosen = Some((key.0, key.1, key.2, angle(dy.atan2(dx) - map.yaw())));
                     work.writes += 1
                 }
