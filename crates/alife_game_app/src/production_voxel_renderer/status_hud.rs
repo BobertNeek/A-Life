@@ -899,8 +899,7 @@ fn count_urgent_creatures(frame: Option<&LiveBrainPresentationFrameResource>) ->
     };
     frame
         .current
-        .organism_snapshots()
-        .into_iter()
+        .organisms()
         .filter(|row| {
             !row.object.consumed
                 && row.lifecycle.is_alive()

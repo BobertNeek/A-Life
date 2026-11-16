@@ -124,6 +124,11 @@ impl LiveBrainPresentationFrame {
         self.organisms_by_world_id.values().cloned().collect()
     }
 
+    /// Borrow presentation rows without cloning their genomes and phenotypes.
+    pub fn organisms(&self) -> impl ExactSizeIterator<Item = &WorldOrganismPresentationRow> {
+        self.organisms_by_world_id.values()
+    }
+
     pub fn organism_count(&self) -> usize {
         self.organisms_by_world_id.len()
     }

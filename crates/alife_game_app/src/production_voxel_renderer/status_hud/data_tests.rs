@@ -585,3 +585,26 @@ fn urgent_population_status_tints_count_and_sets_accessible_description() {
         None
     );
 }
+
+#[test]
+fn organism_iterator_borrows_canonical_rows_with_exact_remaining_length() {
+    let world = authoritative_world();
+    let frame = LiveBrainPresentationFrameResource::from_authoritative_world(&world).unwrap();
+    let mut rows = frame.current.organisms();
+    assert_eq!(rows.len(), frame.current.organism_count());
+    assert_eq!(rows.len(), 2);
+    let first = rows.next().unwrap();
+    assert!(std::ptr::eq(
+        first,
+        frame.current.organism(first.world_entity_id).unwrap()
+    ));
+    assert_eq!(rows.len(), 1);
+    let second = rows.next().unwrap();
+    assert!(std::ptr::eq(
+        second,
+        frame.current.organism(second.world_entity_id).unwrap()
+    ));
+    assert_ne!(first.world_entity_id, second.world_entity_id);
+    assert_eq!(rows.len(), 0);
+    assert!(rows.next().is_none());
+}
