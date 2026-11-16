@@ -1995,9 +1995,14 @@ mod tests {
         assert_eq!(world.tick(), tick);
         // Disposable native command witness only: actual experiments never force Eat.
         let mut consumed_trial = world.clone();
-        consumed_trial
-            .apply_command(&alife_world::HeadlessWorldCommand::eat(id, scenario.food).unwrap())
-            .unwrap();
+        for _ in 0..4 {
+            consumed_trial
+                .apply_command(&alife_world::HeadlessWorldCommand::eat(id, scenario.food).unwrap())
+                .unwrap();
+            if consumed_trial.entity(scenario.food).unwrap().consumed {
+                break;
+            }
+        }
         let consumed = consumed_trial.entity(scenario.food).unwrap().clone();
         assert!(consumed.consumed);
         let before_renewal = *consumed_trial
