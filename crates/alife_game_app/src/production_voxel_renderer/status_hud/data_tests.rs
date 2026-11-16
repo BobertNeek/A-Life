@@ -498,3 +498,113 @@ fn debug_care_line_reports_the_last_observed_response_and_marks_unknown_as_unkno
         "Petted and Scolded, applied at tick 7, whole-tick snapshots: loneliness 0.61 to 0.55"
     );
 }
+
+#[test]
+fn urgent_population_status_tints_count_and_sets_accessible_description() {
+    let mut calm_world = authoritative_world();
+    let calm_frame =
+        LiveBrainPresentationFrameResource::from_authoritative_world(&calm_world).unwrap();
+    assert_eq!(count_urgent_creatures(None), 0);
+    assert_eq!(count_urgent_creatures(Some(&calm_frame)), 0);
+
+    let hungry_id = OrganismId(1);
+    let hungry_entity = calm_world.entity_id("agent").unwrap();
+    let mut hungry_record = calm_world
+        .organism_registry()
+        .get(hungry_id)
+        .unwrap()
+        .clone();
+    let mut hungry_chem = *hungry_record.biochemistry();
+    hungry_chem.homeostasis.drives.hunger = 0.85;
+    let hungry_tick = Tick::ZERO;
+    hungry_record = WorldOrganismRecord::new(
+        hungry_id,
+        hungry_entity,
+        hungry_record.genome().clone(),
+        hungry_record.phenotype().clone(),
+        hungry_chem,
+        hungry_tick,
+    )
+    .unwrap();
+    calm_world
+        .replace_organism_record_exact(hungry_record)
+        .unwrap();
+    let frame = LiveBrainPresentationFrameResource::from_authoritative_world(&calm_world).unwrap();
+    assert_eq!(count_urgent_creatures(Some(&frame)), 1);
+
+    let mut ui_world = World::new();
+    spawn(&mut ui_world);
+    set_status(&mut ui_world, 2, false, false);
+    set_urgent_status(&mut ui_world, 1);
+    let count_color = ui_world
+        .query_filtered::<&TextColor, With<Count>>()
+        .single(&ui_world)
+        .unwrap()
+        .0;
+    assert_eq!(count_color, URGENT_INK);
+    let status_desc = ui_world
+        .query_filtered::<&AccessibilityNode, With<StatusRoot>>()
+        .single(&ui_world)
+        .unwrap()
+        .description();
+    assert_eq!(status_desc, Some("Urgent care needed: 1"));
+
+    set_urgent_status(&mut ui_world, 0);
+    let reset_color = ui_world
+        .query_filtered::<&TextColor, With<Count>>()
+        .single(&ui_world)
+        .unwrap()
+        .0;
+    assert_eq!(reset_color, INK);
+    assert_eq!(
+        ui_world
+            .query_filtered::<&AccessibilityNode, With<StatusRoot>>()
+            .single(&ui_world)
+            .unwrap()
+            .description(),
+        None
+    );
+
+    // Calling set_status alone also restores the default count color and clears description.
+    set_urgent_status(&mut ui_world, 2);
+    set_status(&mut ui_world, 2, true, false);
+    assert_eq!(
+        ui_world
+            .query_filtered::<&TextColor, With<Count>>()
+            .single(&ui_world)
+            .unwrap()
+            .0,
+        INK
+    );
+    assert_eq!(
+        ui_world
+            .query_filtered::<&AccessibilityNode, With<StatusRoot>>()
+            .single(&ui_world)
+            .unwrap()
+            .description(),
+        None
+    );
+}
+
+#[test]
+fn organism_iterator_borrows_canonical_rows_with_exact_remaining_length() {
+    let world = authoritative_world();
+    let frame = LiveBrainPresentationFrameResource::from_authoritative_world(&world).unwrap();
+    let mut rows = frame.current.organisms();
+    assert_eq!(rows.len(), frame.current.organism_count());
+    assert_eq!(rows.len(), 2);
+    let first = rows.next().unwrap();
+    assert!(std::ptr::eq(
+        first,
+        frame.current.organism(first.world_entity_id).unwrap()
+    ));
+    assert_eq!(rows.len(), 1);
+    let second = rows.next().unwrap();
+    assert!(std::ptr::eq(
+        second,
+        frame.current.organism(second.world_entity_id).unwrap()
+    ));
+    assert_ne!(first.world_entity_id, second.world_entity_id);
+    assert_eq!(rows.len(), 0);
+    assert!(rows.next().is_none());
+}

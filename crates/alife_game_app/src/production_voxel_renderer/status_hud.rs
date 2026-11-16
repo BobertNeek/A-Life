@@ -221,6 +221,7 @@ struct Icons(BTreeMap<&'static str, Handle<Image>>);
 const PANEL: Color = Color::srgb(0.075, 0.115, 0.135);
 const CARD: Color = Color::srgb(0.050, 0.075, 0.090);
 const INK: Color = Color::srgb(0.98, 0.96, 0.84);
+const URGENT_INK: Color = Color::srgb(0.96, 0.72, 0.32);
 const HEADER_HEIGHT: f32 = 36.0;
 const EMBEDDED: [(&str, &[u8]); 13] = [
     (
@@ -892,6 +893,22 @@ fn selected_name(
     row.filter(|row| valid_row(stable_id, organism_id, row))
         .map(|row| row.object.label.clone())
 }
+fn count_urgent_creatures(frame: Option<&LiveBrainPresentationFrameResource>) -> usize {
+    let Some(frame) = frame else {
+        return 0;
+    };
+    frame
+        .current
+        .organisms()
+        .filter(|row| {
+            !row.object.consumed
+                && row.lifecycle.is_alive()
+                && (QUANTITIES
+                    .into_iter()
+                    .any(|q| q.value(row).is_some_and(|v| q.warning(v))))
+        })
+        .count()
+}
 fn set_status(world: &mut World, count: usize, paused: bool, fast: bool) {
     let playback = if paused {
         "paused"
@@ -905,6 +922,7 @@ fn set_status(world: &mut World, count: usize, paused: bool, fast: bool) {
         .iter_mut(world)
     {
         accessible.set_label(format!("Rendered creatures: {count}. Playback: {playback}"));
+        accessible.clear_description();
     }
     let handle = world.resource::<Icons>().0[if paused {
         "paused"
@@ -922,13 +940,37 @@ fn set_status(world: &mut World, count: usize, paused: bool, fast: bool) {
             image.image = handle.clone();
         }
     }
-    for mut text in world
-        .query_filtered::<&mut Text, With<Count>>()
+    for (mut text, mut color) in world
+        .query_filtered::<(&mut Text, &mut TextColor), With<Count>>()
         .iter_mut(world)
     {
         let next = count.to_string();
         if text.0 != next {
             text.0 = next;
+        }
+        if color.0 != INK {
+            color.0 = INK;
+        }
+    }
+}
+fn set_urgent_status(world: &mut World, urgent_count: usize) {
+    let target_color = if urgent_count > 0 { URGENT_INK } else { INK };
+    for mut color in world
+        .query_filtered::<&mut TextColor, With<Count>>()
+        .iter_mut(world)
+    {
+        if color.0 != target_color {
+            color.0 = target_color;
+        }
+    }
+    for mut accessible in world
+        .query_filtered::<&mut AccessibilityNode, With<StatusRoot>>()
+        .iter_mut(world)
+    {
+        if urgent_count > 0 {
+            accessible.set_description(format!("Urgent care needed: {urgent_count}"));
+        } else {
+            accessible.clear_description();
         }
     }
 }
@@ -1006,6 +1048,9 @@ pub(super) fn sync(world: &mut World) {
         .map(|stable_id| selected_readout(world, stable_id));
     set_readout(world, readout.as_ref(), debug);
     set_status(world, count, paused, fast);
+    let urgent_count =
+        count_urgent_creatures(world.get_resource::<LiveBrainPresentationFrameResource>());
+    set_urgent_status(world, urgent_count);
     let size = world
         .query_filtered::<&Window, With<PrimaryWindow>>()
         .iter(world)

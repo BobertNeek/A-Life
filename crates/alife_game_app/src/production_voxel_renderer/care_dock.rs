@@ -743,12 +743,11 @@ pub(super) fn sync(world: &mut World) {
                 food_tile(selected).is_some(),
                 care_target(r.runtime.world(), selected).is_some(),
                 care_target(r.runtime.world(), selected).is_some()
-                    && !r
-                        .runtime
+                    && r.runtime
                         .world()
                         .entity_id("player-plaything")
                         .and_then(|id| r.runtime.world().entity(id))
-                        .is_some_and(|o| o.carried_by.is_some()),
+                        .is_none_or(|o| o.carried_by.is_none()),
                 care_target(r.runtime.world(), selected).is_some(),
                 care_target(r.runtime.world(), selected).is_some(),
                 care_target(r.runtime.world(), selected).is_some(),

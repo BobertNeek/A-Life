@@ -43,11 +43,44 @@ pub(super) struct HandInteraction {
     pub held: Option<WorldEntityId>,
     release_until: f64,
     pub position: Option<Vec3>,
+    last_tile_click: Option<(VoxelTileCoord, f64)>,
+    resume_follow_after_drop: bool,
 }
 #[derive(Component)]
 pub(super) struct GodHand;
 #[derive(Component)]
 struct HandSource(Handle<Gltf>);
+
+fn hold_activation_delay_secs(kind: StableVoxelRefKind) -> f64 {
+    match kind {
+        StableVoxelRefKind::Resource => 0.08,
+        _ => 0.25,
+    }
+}
+
+fn should_recenter_camera_on_click(
+    hovered: Option<StableVoxelObjectRef>,
+    now: f64,
+    last_tile_click: &mut Option<(VoxelTileCoord, f64)>,
+) -> bool {
+    let Some(tile) = hovered
+        .filter(|s| s.kind == StableVoxelRefKind::Tile)
+        .and_then(|s| s.tile)
+    else {
+        *last_tile_click = None;
+        return false;
+    };
+    let is_double_click = last_tile_click.is_some_and(|(prev_tile, prev_at)| {
+        prev_tile == tile && (0.0..=0.35).contains(&(now - prev_at))
+    });
+    if is_double_click {
+        *last_tile_click = None;
+        true
+    } else {
+        *last_tile_click = Some((tile, now));
+        false
+    }
+}
 
 fn grab_intent_target(
     hovered: Option<StableVoxelObjectRef>,
@@ -152,6 +185,95 @@ fn contact_id(hand: &HandInteraction) -> Option<WorldEntityId> {
         .or_else(|| hand.pressed.and_then(|(target, _, _)| target.stable_id))
 }
 
+#[cfg(any(feature = "gpu-runtime", test))]
+/// Ring radii (metres) searched around the cursor when the exact carry point is unsupported.
+const HOLD_SLIDE_RADII: [f32; 4] = [0.45, 0.9, 1.5, 2.2];
+
+#[cfg(any(feature = "gpu-runtime", test))]
+/// Ordered ground points for carrying an object toward `desired`.
+///
+/// The exact cursor point is tried first. When it lies on a boulder, shoreline, or steep bank
+/// the world rejects it, so nearby rings are searched starting from the side facing the
+/// object's current carry position (`current`). The held creature or food therefore slides
+/// along the obstacle boundary under the hand instead of freezing on the far side of it.
+/// The world remains the only authority that accepts or rejects each candidate.
+fn hold_slide_candidates(
+    desired: Vec3f,
+    current: Option<Vec3f>,
+    terrain_bound: bool,
+) -> Vec<Vec3f> {
+    use std::f32::consts::{FRAC_PI_2, FRAC_PI_4, PI};
+    let lateral = |p: Vec3f| if terrain_bound { p.z } else { p.y };
+    let at = |dx: f32, dl: f32| {
+        if terrain_bound {
+            Vec3f::new(desired.x + dx, desired.y, desired.z + dl)
+        } else {
+            Vec3f::new(desired.x + dx, desired.y + dl, desired.z)
+        }
+    };
+    let toward_current = current
+        .map(|c| (lateral(c) - lateral(desired), c.x - desired.x))
+        .filter(|(dl, dx)| dl.hypot(*dx) > 1.0e-4)
+        .map_or(0.0, |(dl, dx)| dl.atan2(dx));
+    let mut candidates = Vec::with_capacity(1 + HOLD_SLIDE_RADII.len() * 8);
+    candidates.push(desired);
+    for radius in HOLD_SLIDE_RADII {
+        for offset in [
+            0.0,
+            FRAC_PI_4,
+            -FRAC_PI_4,
+            FRAC_PI_2,
+            -FRAC_PI_2,
+            3.0 * FRAC_PI_4,
+            -3.0 * FRAC_PI_4,
+            PI,
+        ] {
+            let angle = toward_current + offset;
+            candidates.push(at(radius * angle.cos(), radius * angle.sin()));
+        }
+    }
+    candidates
+}
+
+#[cfg(any(feature = "gpu-runtime", test))]
+/// Moves the current player hold to the first world-accepted slide candidate.
+/// Returns the accepted ground point, or `None` when the hold stays where it was.
+fn slide_player_hold(
+    desired: Vec3f,
+    current: Option<Vec3f>,
+    terrain_bound: bool,
+    mut try_move: impl FnMut(Vec3f) -> bool,
+) -> Option<Vec3f> {
+    // Ordinary open-ground movement needs neither allocation nor a ring search.
+    if try_move(desired) {
+        return Some(desired);
+    }
+    hold_slide_candidates(desired, current, terrain_bound)
+        .into_iter()
+        .skip(1)
+        .find(|candidate| try_move(*candidate))
+}
+
+#[cfg(any(feature = "gpu-runtime", test))]
+/// Live selection reference for a creature after it has been set down, so the HUD,
+/// care dock, and speech target the creature at its landing tile.
+fn dropped_creature_selection(
+    id: WorldEntityId,
+    ground: Vec3f,
+    terrain_bound: bool,
+) -> StableVoxelObjectRef {
+    let tile = VoxelTileCoord::new(
+        ground.x.floor() as i32,
+        if terrain_bound { ground.z } else { ground.y }.floor() as i32,
+    );
+    StableVoxelObjectRef {
+        kind: StableVoxelRefKind::Creature,
+        stable_id: Some(id),
+        chunk: VoxelChunkCoord::for_tile(16, tile),
+        tile: Some(tile),
+    }
+}
+
 #[allow(
     clippy::too_many_arguments,
     reason = "Bevy injects independent ECS system parameters."
@@ -162,12 +284,13 @@ pub(super) fn input(
     keyboard: Res<ButtonInput<KeyCode>>,
     windows: Query<&Window, With<PrimaryWindow>>,
     mut hand: ResMut<HandInteraction>,
-    selection: Res<Fvr03ProductionVoxelSelectionResource>,
+    mut selection: ResMut<Fvr03ProductionVoxelSelectionResource>,
     mut follow: ResMut<Fvr04ProductionCreatureFollowResource>,
     #[cfg(feature = "gpu-runtime")] mut runtime: Option<
         NonSendMut<ProductionGpuBrainRuntimeResource>,
     >,
     mut frame: Option<ResMut<LiveBrainPresentationFrameResource>>,
+    #[cfg(feature = "gpu-runtime")] mut ux: Option<ResMut<Fvr05ProductionUxStateResource>>,
     terrain: Option<Res<creature_grounding::SelectedTerrain>>,
     #[cfg(feature = "gpu-runtime")] surface: Res<creature_grounding::RenderedTerrainSurface>,
     creatures: Query<
@@ -180,6 +303,9 @@ pub(super) fn input(
         return;
     };
     let now = time.elapsed_secs_f64();
+    if !window.focused || keyboard.just_pressed(KeyCode::Escape) {
+        hand.last_tile_click = None;
+    }
     if mouse.just_pressed(MouseButton::Left) && window.focused {
         #[cfg(feature = "gpu-runtime")]
         let grab_target = grab_intent_target(
@@ -193,9 +319,11 @@ pub(super) fn input(
             .hovered
             .filter(|s| s.kind == StableVoxelRefKind::Creature)
         {
+            hand.last_tile_click = None;
             follow.target_stable_id = s.stable_id;
             follow.enabled = true;
-        } else if selection.hovered.is_some() {
+        } else if should_recenter_camera_on_click(selection.hovered, now, &mut hand.last_tile_click)
+        {
             follow.enabled = false;
             if let (Some(target), Some(terrain)) = (hand.ground, terrain.as_ref()) {
                 for mut camera in &mut cameras {
@@ -209,15 +337,58 @@ pub(super) fn input(
     if let Some(runtime) = runtime.as_deref_mut() {
         if hand.held.is_some() && runtime.runtime.world().player_held_object() != hand.held {
             hand.held = None;
+            hand.resume_follow_after_drop = false;
             hand.release_until = now + 0.18;
         }
         let cancel = !window.focused
             || keyboard.just_pressed(KeyCode::Escape)
             || !mouse.pressed(MouseButton::Left);
         if cancel {
-            if hand.held.take().is_some() || runtime.runtime.world().player_held_object().is_some()
-            {
-                let _ = runtime.runtime.release_player_hold();
+            if hand.held.is_some() || runtime.runtime.world().player_held_object().is_some() {
+                // A deliberate drop (button released in a focused window) keeps the creature in
+                // the player's attention, as in Black & White: the HUD, care dock, and speech stay
+                // on it at its landing tile, and the camera resumes following it.
+                let natural_drop = window.focused && !keyboard.just_pressed(KeyCode::Escape);
+                let released = match runtime.runtime.release_player_hold() {
+                    Ok(released) => released,
+                    Err(error) => {
+                        // The world still owns this hold. Retain local contact and follow
+                        // intent so a later successful retry can finish the same gesture.
+                        hand.pressed = None;
+                        if let Some(ux) = ux.as_deref_mut() {
+                            ux.last_error = Some(error.to_string());
+                            ux.last_action = "Hand release failed; hold retained".into();
+                        }
+                        if let Some(frame) = frame.as_deref_mut() {
+                            frame.refresh_world_objects(runtime.runtime.world());
+                        }
+                        return;
+                    }
+                };
+                hand.held = None;
+                let resume_follow = std::mem::take(&mut hand.resume_follow_after_drop);
+                if let Some(ux) = ux.as_deref_mut() {
+                    if ux.last_action == "Hand release failed; hold retained" {
+                        ux.last_error = None;
+                        ux.last_action = "Hand released".into();
+                    }
+                }
+                if let Some(released) = released {
+                    let world = runtime.runtime.world();
+                    let terrain_bound = world.terrain().is_some();
+                    let landed = world
+                        .entity(released)
+                        .filter(|o| o.kind == WorldObjectKind::Agent && o.organism_id.is_some())
+                        .map(|o| o.position);
+                    if let (true, Some(ground)) = (natural_drop, landed) {
+                        selection.selected =
+                            Some(dropped_creature_selection(released, ground, terrain_bound));
+                        follow.target_stable_id = Some(released);
+                        if resume_follow {
+                            follow.enabled = true;
+                        }
+                    }
+                }
                 if let Some(frame) = frame.as_deref_mut() {
                     frame.refresh_world_objects(runtime.runtime.world());
                 }
@@ -225,7 +396,7 @@ pub(super) fn input(
             }
             hand.pressed = None;
         } else if let Some((target, started, _)) = hand.pressed {
-            if hand.held.is_none() && now - started >= 0.25 {
+            if hand.held.is_none() && now - started >= hold_activation_delay_secs(target.kind) {
                 if let Some(id) = target.stable_id.filter(|_| {
                     matches!(
                         target.kind,
@@ -234,7 +405,12 @@ pub(super) fn input(
                 }) {
                     if runtime.runtime.begin_player_hold(id).is_ok() {
                         hand.held = Some(id);
-                        follow.enabled = false;
+                        hand.resume_follow_after_drop = target.kind == StableVoxelRefKind::Creature
+                            && follow.enabled
+                            && follow.target_stable_id == Some(id);
+                        if target.kind == StableVoxelRefKind::Creature {
+                            follow.enabled = false;
+                        }
                     }
                 }
                 hand.pressed = None;
@@ -242,8 +418,15 @@ pub(super) fn input(
         }
         if hand.held.is_some() {
             if let Some(p) = hand.ground {
-                let ground = Vec3f::new(p.x, p.y, p.z);
-                let _ = runtime.runtime.move_player_hold(ground);
+                let desired = Vec3f::new(p.x, p.y, p.z);
+                let terrain_bound = runtime.runtime.world().terrain().is_some();
+                let current = hand
+                    .held
+                    .and_then(|id| runtime.runtime.world().entity(id))
+                    .map(|object| object.position);
+                let _ = slide_player_hold(desired, current, terrain_bound, |candidate| {
+                    runtime.runtime.move_player_hold(candidate).is_ok()
+                });
             }
             if let Some(frame) = frame.as_deref_mut() {
                 frame.refresh_world_objects(runtime.runtime.world());
@@ -271,6 +454,7 @@ pub(super) fn input(
     {
         hand.position = hand.ground.map(|p| p + Vec3::Y * 1.0);
         let _ = &mut frame;
+        let _ = &mut selection;
     }
 }
 
@@ -455,6 +639,8 @@ pub(super) fn cancel_for_menu(world: &mut World) {
     );
     if let Some(mut hand) = world.get_resource_mut::<HandInteraction>() {
         hand.held = None;
+        hand.resume_follow_after_drop = false;
+        hand.last_tile_click = None;
     }
 }
 
@@ -862,5 +1048,178 @@ mod tests {
             assert!((3.0 * pointer_scale(extent, false) / extent - 0.125).abs() < 0.0001);
             assert_eq!(pointer_scale(extent, true), 1.0);
         }
+    }
+    #[test]
+    fn single_clicks_on_ground_or_resources_do_not_teleport_camera_until_double_click() {
+        let tile_a = VoxelTileCoord::new(4, 7);
+        let tile_b = VoxelTileCoord::new(5, 7);
+        let ref_tile_a = StableVoxelObjectRef {
+            kind: StableVoxelRefKind::Tile,
+            stable_id: None,
+            chunk: VoxelChunkCoord::for_tile(16, tile_a),
+            tile: Some(tile_a),
+        };
+        let ref_tile_b = StableVoxelObjectRef {
+            kind: StableVoxelRefKind::Tile,
+            stable_id: None,
+            chunk: VoxelChunkCoord::for_tile(16, tile_b),
+            tile: Some(tile_b),
+        };
+        let ref_food = target(StableVoxelRefKind::Resource, Some(WorldEntityId(9)));
+        let mut last = None;
+
+        // Single click on ground records the tile without recentering.
+        assert!(!should_recenter_camera_on_click(
+            Some(ref_tile_a),
+            1.0,
+            &mut last
+        ));
+        assert_eq!(last, Some((tile_a, 1.0)));
+
+        // Clicking a resource clears the double-click chain without recentering.
+        assert!(!should_recenter_camera_on_click(
+            Some(ref_food),
+            1.1,
+            &mut last
+        ));
+        assert_eq!(last, None);
+
+        // Clicking two different tiles rapidly does not recenter.
+        assert!(!should_recenter_camera_on_click(
+            Some(ref_tile_a),
+            2.0,
+            &mut last
+        ));
+        assert!(!should_recenter_camera_on_click(
+            Some(ref_tile_b),
+            2.15,
+            &mut last
+        ));
+        assert_eq!(last, Some((tile_b, 2.15)));
+
+        // Double-clicking the same tile within 0.35s recenters and consumes the state.
+        assert!(should_recenter_camera_on_click(
+            Some(ref_tile_b),
+            2.40,
+            &mut last
+        ));
+        assert_eq!(last, None);
+    }
+
+    #[test]
+    fn resource_pickup_activates_snappier_than_creature_lift() {
+        assert!(
+            hold_activation_delay_secs(StableVoxelRefKind::Resource)
+                < hold_activation_delay_secs(StableVoxelRefKind::Creature)
+        );
+        assert_eq!(
+            hold_activation_delay_secs(StableVoxelRefKind::Resource),
+            0.08
+        );
+        assert_eq!(
+            hold_activation_delay_secs(StableVoxelRefKind::Creature),
+            0.25
+        );
+    }
+
+    #[test]
+    fn carried_objects_slide_around_rejected_points_toward_the_carry_side() {
+        let desired = Vec3f::new(10.0, 2.0, 10.0);
+        let candidates = hold_slide_candidates(desired, Some(Vec3f::new(7.0, 3.3, 10.0)), true);
+        assert_eq!(
+            candidates[0], desired,
+            "exact cursor point is always tried first"
+        );
+        assert_eq!(candidates.len(), 1 + HOLD_SLIDE_RADII.len() * 8);
+        // The first ring candidate faces the object's current (-X) side and stays on the ground plane.
+        assert!((candidates[1].x - (10.0 - HOLD_SLIDE_RADII[0])).abs() < 1.0e-4);
+        assert!((candidates[1].z - 10.0).abs() < 1.0e-4);
+        assert_eq!(candidates[1].y, 2.0);
+
+        // A boulder of radius 1.0 under the cursor: the hold slides to the nearest accepted point.
+        let accepted = slide_player_hold(desired, Some(Vec3f::new(7.0, 3.3, 10.0)), true, |p| {
+            (p.x - 10.0).hypot(p.z - 10.0) > 1.0
+        })
+        .unwrap();
+        assert!((accepted.x - (10.0 - HOLD_SLIDE_RADII[2])).abs() < 1.0e-4);
+        assert!((accepted.z - 10.0).abs() < 1.0e-4);
+
+        // Legacy flat worlds slide on the X/Y plane and keep Z untouched.
+        let flat = hold_slide_candidates(Vec3f::new(4.0, 6.0, 0.0), None, false);
+        assert!(flat.iter().all(|p| p.z == 0.0));
+        assert!(flat.iter().skip(1).any(|p| (p.y - 6.0).abs() > 0.1));
+
+        // Nothing accepted (e.g. open water everywhere): the hold stays where it was.
+        assert_eq!(slide_player_hold(desired, None, true, |_| false), None);
+    }
+
+    #[test]
+    fn dropped_creature_stays_selected_at_its_landing_tile() {
+        let id = WorldEntityId(42);
+        let terrain = dropped_creature_selection(id, Vec3f::new(12.7, 3.1, -4.2), true);
+        assert_eq!(terrain.kind, StableVoxelRefKind::Creature);
+        assert_eq!(terrain.stable_id, Some(id));
+        assert_eq!(terrain.tile, Some(VoxelTileCoord::new(12, -5)));
+        assert_eq!(
+            terrain.chunk,
+            VoxelChunkCoord::for_tile(16, VoxelTileCoord::new(12, -5))
+        );
+        let flat = dropped_creature_selection(id, Vec3f::new(3.2, 9.9, 0.0), false);
+        assert_eq!(flat.tile, Some(VoxelTileCoord::new(3, 9)));
+    }
+    #[test]
+    fn tile_double_click_rejects_elapsed_and_rewound_time_and_consumes_pairs() {
+        let tile = VoxelTileCoord::new(4, 7);
+        let hovered = Some(StableVoxelObjectRef {
+            kind: StableVoxelRefKind::Tile,
+            stable_id: None,
+            chunk: VoxelChunkCoord::for_tile(16, tile),
+            tile: Some(tile),
+        });
+        let mut last = None;
+        assert!(!should_recenter_camera_on_click(hovered, 2.0, &mut last));
+        assert!(!should_recenter_camera_on_click(hovered, 1.9, &mut last));
+        assert!(!should_recenter_camera_on_click(hovered, 3.0, &mut last));
+        assert!(should_recenter_camera_on_click(hovered, 3.2, &mut last));
+        assert!(!should_recenter_camera_on_click(hovered, 3.3, &mut last));
+        assert!(!should_recenter_camera_on_click(None, 3.4, &mut last));
+        assert!(!should_recenter_camera_on_click(hovered, 3.5, &mut last));
+    }
+
+    #[test]
+    fn accepted_carry_target_stops_probing_immediately() {
+        let desired = Vec3f::new(1.0, 2.0, 3.0);
+        let mut attempts = 0;
+        assert_eq!(
+            slide_player_hold(desired, None, true, |candidate| {
+                attempts += 1;
+                assert_eq!(candidate, desired);
+                true
+            }),
+            Some(desired)
+        );
+        assert_eq!(attempts, 1);
+    }
+    #[test]
+    fn slide_uses_world_rejection_and_drops_at_accepted_ground() {
+        let mut world = alife_world::HeadlessScenarioBuilder::new(17)
+            .food("food", Vec3f::ZERO, 0.5)
+            .obstacle("rock", Vec3f::new(4.0, 0.0, 0.0), 0.8)
+            .build()
+            .unwrap();
+        let id = world.entity_id("food").unwrap();
+        world.begin_player_hold(id).unwrap();
+        let current = world.entity(id).unwrap().position;
+        let desired = Vec3f::new(4.0, 0.0, 0.0);
+        let accepted = slide_player_hold(desired, Some(current), false, |point| {
+            world.move_player_hold(point).is_ok()
+        })
+        .unwrap();
+        assert_ne!(accepted, desired);
+        assert!(accepted.x < desired.x);
+        assert_eq!(world.player_held_object(), Some(id));
+        assert_eq!(world.release_player_hold().unwrap(), Some(id));
+        assert_eq!(world.entity(id).unwrap().position, accepted);
+        assert_eq!(world.player_held_object(), None);
     }
 }

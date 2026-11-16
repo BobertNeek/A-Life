@@ -84,8 +84,67 @@ fn camera_pan_axis(keys: Vec2, cursor: Option<Vec2>, window_size: Vec2, focused:
     axis.clamp_length_max(1.0)
 }
 
+fn drag_pan_world_delta(
+    drag_pixels: Vec2,
+    window_height: f32,
+    extent: f32,
+    scale: f32,
+    right: Vec3,
+    forward: Vec3,
+) -> Vec3 {
+    if !drag_pixels.is_finite()
+        || !window_height.is_finite()
+        || window_height <= 1.0
+        || !extent.is_finite()
+        || extent <= 0.0
+        || !scale.is_finite()
+        || scale <= 0.0
+        || !right.is_finite()
+        || !forward.is_finite()
+    {
+        return Vec3::ZERO;
+    }
+    let world_per_pixel = (extent * scale) / window_height;
+    let delta = (-right * drag_pixels.x + forward * drag_pixels.y) * world_per_pixel;
+    if delta.is_finite() {
+        delta
+    } else {
+        Vec3::ZERO
+    }
+}
+
+fn sample_drag_delta(
+    anchor: &mut Option<Vec2>,
+    cursor: Option<Vec2>,
+    active: bool,
+    fresh_press: bool,
+) -> Vec2 {
+    if !active || fresh_press {
+        *anchor = None;
+    }
+    let Some(cursor) = cursor.filter(|p| active && p.is_finite()) else {
+        *anchor = None;
+        return Vec2::ZERO;
+    };
+    let delta = anchor.map_or(Vec2::ZERO, |previous| cursor - previous);
+    *anchor = Some(cursor);
+    if delta.is_finite() {
+        delta
+    } else {
+        Vec2::ZERO
+    }
+}
+
+#[allow(
+    clippy::too_many_arguments,
+    reason = "Bevy injects independent ECS system parameters."
+)]
 pub(super) fn pan_camera(
     keyboard: Res<ButtonInput<KeyCode>>,
+    mouse: Option<Res<ButtonInput<MouseButton>>>,
+    mut drag_anchor: Local<Option<Vec2>>,
+    mut drag_frame: Local<Option<u32>>,
+    frame: Option<Res<bevy::diagnostic::FrameCount>>,
     time: Res<Time>,
     windows: bevy::prelude::Query<&bevy::window::Window, With<bevy::window::PrimaryWindow>>,
     scene: Res<Fvr03ProductionVoxelSceneResource>,
@@ -94,17 +153,28 @@ pub(super) fn pan_camera(
         (&mut Transform, &Projection),
         With<Fvr03ProductionVoxelCamera>,
     >,
+    ux: Option<Res<Fvr05ProductionUxStateResource>>,
     #[cfg(feature = "gpu-runtime")] conversation: Option<
         Res<crate::ProductionConversationLineageUiState>,
     >,
 ) {
+    // Input run conditions can skip this system while a menu owns the pointer.
+    // Never replay the cursor travel accumulated during that interruption.
+    if let Some(frame) = frame {
+        if drag_frame.is_none_or(|previous| previous.wrapping_add(1) != frame.0) {
+            *drag_anchor = None;
+        }
+        *drag_frame = Some(frame.0);
+    }
     #[cfg(feature = "gpu-runtime")]
     if conversation
         .as_ref()
         .is_some_and(|state| state.blocks_world_shortcuts())
     {
+        *drag_anchor = None;
         return;
     }
+    let player_mode = ux.as_ref().is_none_or(|state| !state.debug_mode);
     // A snap wins over a cursor left resting at an edge for this frame.
     if [
         KeyCode::Home,
@@ -115,12 +185,55 @@ pub(super) fn pan_camera(
     ]
     .into_iter()
     .any(|key| keyboard.just_pressed(key))
+        || (player_mode
+            && (keyboard.just_pressed(KeyCode::Tab) || keyboard.just_pressed(KeyCode::KeyN)))
     {
+        *drag_anchor = None;
         return;
     }
     let Ok(window) = windows.single() else {
+        *drag_anchor = None;
         return;
     };
+    let middle_dragging = window.focused
+        && mouse
+            .as_ref()
+            .is_some_and(|m| m.pressed(MouseButton::Middle));
+    let drag_delta = sample_drag_delta(
+        &mut drag_anchor,
+        window.cursor_position(),
+        middle_dragging,
+        mouse
+            .as_ref()
+            .is_some_and(|m| m.just_pressed(MouseButton::Middle)),
+    );
+    if middle_dragging {
+        if drag_delta == Vec2::ZERO {
+            return;
+        }
+        follow.enabled = false;
+        let extent = production_camera_extent(scene.profile_id);
+        let window_height = window.height();
+        for (mut camera, projection) in &mut cameras {
+            let (extent, scale) = match projection {
+                Projection::Orthographic(p) => (
+                    match p.scaling_mode {
+                        ScalingMode::FixedVertical { viewport_height } => viewport_height,
+                        _ => extent,
+                    },
+                    p.scale,
+                ),
+                _ => (extent, 1.0),
+            };
+            let right = camera.rotation * Vec3::X;
+            let forward = camera.rotation * Vec3::NEG_Z;
+            let right = Vec3::new(right.x, 0.0, right.z).normalize_or_zero();
+            let forward = Vec3::new(forward.x, 0.0, forward.z).normalize_or_zero();
+            camera.translation +=
+                drag_pan_world_delta(drag_delta, window_height, extent, scale, right, forward);
+        }
+        return;
+    }
     let keys = Vec2::new(
         f32::from(keyboard.pressed(KeyCode::ArrowRight))
             - f32::from(keyboard.pressed(KeyCode::ArrowLeft)),
@@ -388,6 +501,240 @@ mod tests {
         assert_eq!(
             camera_pan_axis(Vec2::ZERO, Some(Vec2::new(-100.0, 200.0)), size, true),
             Vec2::ZERO
+        );
+    }
+
+    #[test]
+    fn middle_mouse_drag_pan_scales_world_motion_to_viewport_and_ignores_non_finite_samples() {
+        let delta = drag_pan_world_delta(
+            Vec2::new(100.0, -50.0),
+            600.0,
+            30.0,
+            2.0,
+            Vec3::X,
+            Vec3::NEG_Z,
+        );
+        // 60 world units across 600px => 0.1 world units per pixel.
+        // Dragging right (+100x) pulls the world right by moving the camera left (-10x);
+        // dragging up (-50y) moves the camera backward along -forward (+5z).
+        assert!((delta - Vec3::new(-10.0, 0.0, 5.0)).length() < 1e-5);
+        assert_eq!(
+            drag_pan_world_delta(Vec2::NAN, 600.0, 30.0, 1.0, Vec3::X, Vec3::NEG_Z),
+            Vec3::ZERO
+        );
+        assert_eq!(
+            drag_pan_world_delta(Vec2::ONE, 0.0, 30.0, 1.0, Vec3::X, Vec3::NEG_Z),
+            Vec3::ZERO
+        );
+    }
+    #[test]
+    fn drag_samples_reset_after_release_focus_loss_missing_cursor_and_new_press() {
+        let mut anchor = None;
+        assert_eq!(
+            sample_drag_delta(&mut anchor, Some(Vec2::ONE), true, true),
+            Vec2::ZERO
+        );
+        assert_eq!(
+            sample_drag_delta(&mut anchor, Some(Vec2::splat(3.0)), true, false),
+            Vec2::splat(2.0)
+        );
+        for (cursor, active, fresh) in [
+            (Some(Vec2::splat(100.0)), false, false),
+            (None, true, false),
+            (Some(Vec2::NAN), true, false),
+            (Some(Vec2::splat(200.0)), true, true),
+        ] {
+            assert_eq!(
+                sample_drag_delta(&mut anchor, cursor, active, fresh),
+                Vec2::ZERO
+            );
+            if !fresh {
+                assert_eq!(anchor, None);
+            }
+            assert_eq!(
+                sample_drag_delta(&mut anchor, Some(Vec2::splat(200.0)), true, true),
+                Vec2::ZERO
+            );
+        }
+    }
+
+    #[test]
+    fn invalid_and_overflowing_drag_projection_is_ignored() {
+        for (extent, scale, right) in [
+            (0.0, 1.0, Vec3::X),
+            (30.0, -1.0, Vec3::X),
+            (30.0, f32::INFINITY, Vec3::X),
+            (30.0, 1.0, Vec3::NAN),
+            (f32::MAX, f32::MAX, Vec3::X),
+        ] {
+            assert_eq!(
+                drag_pan_world_delta(Vec2::ONE, 600.0, extent, scale, right, Vec3::NEG_Z),
+                Vec3::ZERO
+            );
+        }
+    }
+    fn camera_scene(profile_id: ProductionFrontendProfileId) -> Fvr03ProductionVoxelSceneResource {
+        Fvr03ProductionVoxelSceneResource {
+            schema: FVR03_PRODUCTION_VOXEL_RENDERER_SCHEMA,
+            schema_version: FVR03_PRODUCTION_VOXEL_RENDERER_SCHEMA_VERSION,
+            snapshot_schema: "CPU camera fixture".into(),
+            profile_id,
+            population: 1,
+            renderer_profile: String::new(),
+            backend_id: FVR10_RENDERER_BACKEND_ID,
+            uses_internal_voxel_terrain_mesh: false,
+            visible_chunk_count: 0,
+            resident_chunk_count: 0,
+            tile_mesh_count: 0,
+            creature_render_count: 0,
+            creature_material_bucket_count: 0,
+            creature_lod: Fvr04CreatureLod::CompactVoxel,
+            creature_root_count: 0,
+            creature_part_entity_count: 0,
+            creature_join_cover_count: 0,
+            creature_part_family_count: 0,
+            creature_mixed_assembly_count: 0,
+            creature_shared_mesh_handle_count: 0,
+            selection_ref_count: 0,
+            dirty_chunk_count: 0,
+            estimated_resident_bytes: 0,
+            draw_radius_chunks: 0,
+            target_fps: 30,
+            performance_artifact_path: None,
+            material_counts: BTreeMap::new(),
+            average_resource_bias: 0.,
+            average_hazard_pressure: 0.,
+            production_dressing_count: 0,
+            production_vfx_marker_count: 0,
+            production_gpu_vfx_emitter_count: 0,
+            production_vfx_budget_state: "CPU fixture",
+            production_visuals_display_only: true,
+            production_vfx_uses_hanabi_gpu_particles: false,
+            mesh_stats: Fvr09TerrainMeshStats {
+                mode: Fvr09MesherMode::LayeredGridQuads,
+                visible_voxels: 0,
+                naive_visible_faces: 0,
+                emitted_quads: 0,
+                face_reduction_ratio: 0.,
+                remesh_time_micros: 0,
+                dirty_chunks: 0,
+                cached_chunks: 0,
+                skipped_chunks: 0,
+                remesh_budget_chunks_per_frame: 0,
+                material_palette_version: "fixture",
+                vertex_color_face_variation: false,
+                top_side_color_separation: false,
+                variation_bucket_count: 0,
+                cache_key: String::new(),
+            },
+            visible_tiles: BTreeSet::new(),
+            visible_chunks: BTreeSet::new(),
+            tile_summaries_by_tile: BTreeMap::new(),
+            creature_refs_by_tile: BTreeMap::new(),
+            selection_positions_by_raw_id: BTreeMap::new(),
+        }
+    }
+    #[derive(Resource)]
+    struct PanEnabled(bool);
+
+    #[test]
+    fn middle_drag_owns_edges_and_does_not_replay_skipped_modal_frames() {
+        let mut app = App::new();
+        app.init_resource::<ButtonInput<KeyCode>>()
+            .init_resource::<ButtonInput<MouseButton>>()
+            .init_resource::<Time>()
+            .insert_resource(bevy::diagnostic::FrameCount(0))
+            .insert_resource(PanEnabled(true))
+            .insert_resource(camera_scene(ProductionFrontendProfileId::Balanced1080p))
+            .insert_resource(Fvr04ProductionCreatureFollowResource {
+                enabled: true,
+                target_stable_id: None,
+            })
+            .add_systems(
+                Update,
+                pan_camera.run_if(|enabled: Res<PanEnabled>| enabled.0),
+            );
+        let window = app
+            .world_mut()
+            .spawn((
+                Window {
+                    resolution: WindowResolution::new(800, 600),
+                    focused: true,
+                    ..default()
+                },
+                PrimaryWindow,
+            ))
+            .id();
+        app.world_mut()
+            .get_mut::<Window>(window)
+            .unwrap()
+            .set_cursor_position(Some(Vec2::new(799.0, 300.0)));
+        let camera = app
+            .world_mut()
+            .spawn((
+                Fvr03ProductionVoxelCamera {
+                    mode: Fvr03ProductionVoxelCameraMode::OrthographicIsometric,
+                },
+                Transform::default(),
+                Projection::Orthographic(OrthographicProjection {
+                    scaling_mode: ScalingMode::FixedVertical {
+                        viewport_height: 60.0,
+                    },
+                    ..OrthographicProjection::default_3d()
+                }),
+            ))
+            .id();
+        app.world_mut()
+            .resource_mut::<Time>()
+            .advance_by(std::time::Duration::from_secs_f32(0.016));
+        app.world_mut()
+            .resource_mut::<ButtonInput<MouseButton>>()
+            .press(MouseButton::Middle);
+        app.update();
+        assert_eq!(
+            app.world().get::<Transform>(camera).unwrap().translation,
+            Vec3::ZERO
+        );
+        assert!(
+            app.world()
+                .resource::<Fvr04ProductionCreatureFollowResource>()
+                .enabled
+        );
+        app.world_mut()
+            .resource_mut::<ButtonInput<MouseButton>>()
+            .clear();
+        app.world_mut()
+            .resource_mut::<bevy::diagnostic::FrameCount>()
+            .0 += 1;
+        app.world_mut()
+            .get_mut::<Window>(window)
+            .unwrap()
+            .set_cursor_position(Some(Vec2::new(699.0, 300.0)));
+        app.update();
+        assert!((app.world().get::<Transform>(camera).unwrap().translation.x - 10.0).abs() < 1e-5);
+        assert!(
+            !app.world()
+                .resource::<Fvr04ProductionCreatureFollowResource>()
+                .enabled
+        );
+        let before_modal = app.world().get::<Transform>(camera).unwrap().translation;
+        app.world_mut().resource_mut::<PanEnabled>().0 = false;
+        app.world_mut()
+            .resource_mut::<bevy::diagnostic::FrameCount>()
+            .0 += 1;
+        app.update();
+        app.world_mut()
+            .get_mut::<Window>(window)
+            .unwrap()
+            .set_cursor_position(Some(Vec2::new(100.0, 300.0)));
+        app.world_mut().resource_mut::<PanEnabled>().0 = true;
+        app.world_mut()
+            .resource_mut::<bevy::diagnostic::FrameCount>()
+            .0 += 1;
+        app.update();
+        assert_eq!(
+            app.world().get::<Transform>(camera).unwrap().translation,
+            before_modal
         );
     }
 }

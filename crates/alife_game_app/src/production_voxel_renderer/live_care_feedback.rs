@@ -53,6 +53,7 @@ pub(super) struct CareWord;
 ///   codebook gains an approval/disapproval word.
 /// - slap (negative physical) -> "retreat": the creature reads the hit as
 ///   a reason to move away.
+///
 /// A receipt may carry several kinds at once (a pet and a praise queued
 /// before one tick, a scold with a slap). The word comes from the receipt's
 /// display kind: negative dominates, and among positives a pet outranks
