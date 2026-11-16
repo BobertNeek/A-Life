@@ -4640,7 +4640,7 @@ fn spawn_fvr05_production_ux_ui(app: &mut App) {
 }
 
 const V0_PLAYER_CONTROL_HINTS: &str =
-    "Click Select | Hold Carry | Wheel Zoom | Edges Pan | E Food | C Pet | J Play | K Praise | V Scold | B Slap | Enter Speak | Space Pause | F1 Help";
+    "Click Select | Hold Carry | Tab Next | N Urgent | Wheel Zoom | Edges Pan | E Food | C Pet | J Play | K Praise | V Scold | B Slap | Enter Speak | Space Pause | F1 Help";
 
 fn spawn_v0_player_experience_ui(app: &mut App) {
     status_hud::spawn(app.world_mut());
@@ -4691,7 +4691,7 @@ fn sync_v0_player_control_strip(
         return;
     }
     let mut text = if ux.show_help {
-        "F1 Close help | Space Pause | 1 1x | 2 Max | 3 Headless max (closes window) | S Save | L Load\nClick Select | E Food on ground | G Move food | C Pet | J Offer play | K Praise reward | V Scold | B Slap\nEnter Speak | Y Lineage | Arrows/Edges Pan | Home Find creature | F Follow | PgUp/PgDn Next creature | R Reset view\nF6 Speech text | F7 Narration | F8 Translation | F3 Debug".to_string()
+        "F1 Close help | Space Pause | 1 1x | 2 Max | 3 Headless max (closes window) | S Save | L Load\nClick Select | E Food on ground | G Move food | C Pet | J Offer play | K Praise reward | V Scold | B Slap\nEnter Speak | Y Lineage | Arrows/Edges Pan | Home Find creature | F Follow | Tab/Shift+Tab or PgUp/PgDn Next creature | N Urgent | R Reset view\nF6 Speech text | F7 Narration | F8 Translation | F3 Debug".to_string()
     } else {
         V0_PLAYER_CONTROL_HINTS.to_string()
     };
@@ -5596,6 +5596,80 @@ fn handle_fvr03_camera_mode_input(
     }
 }
 
+fn creature_care_urgency_score(row: &WorldOrganismPresentationRow) -> Option<f32> {
+    if row.object.consumed || !row.lifecycle.is_alive() {
+        return None;
+    }
+    let normalized = |v: f32| (v.is_finite() && (0.0..=1.0).contains(&v)).then_some(v);
+    let h = &row.biochemistry.homeostasis;
+    let needs = [
+        normalized(h.drives.hunger),
+        normalized(row.biochemistry.body.energy).map(|e| 1.0 - e),
+        normalized(h.drives.fatigue),
+        normalized(h.drives.fear),
+        normalized(h.hormones.sleep_pressure),
+    ];
+    let mut warning_bonus = 0.0f32;
+    let mut max_need = 0.0f32;
+    let mut any_valid = false;
+    for need in needs.into_iter().flatten() {
+        any_valid = true;
+        if need >= 0.65 {
+            warning_bonus += 1.0 + (need - 0.65) * 2.0;
+        }
+        max_need = max_need.max(need);
+    }
+    let score = warning_bonus + max_need * 0.25;
+    any_valid.then_some(score)
+}
+
+fn most_urgent_creature_index(
+    creatures: &[StableVoxelObjectRef],
+    frame: Option<&LiveBrainPresentationFrame>,
+    current: Option<WorldEntityId>,
+) -> Option<usize> {
+    let frame = frame?;
+    let mut scored = creatures
+        .iter()
+        .enumerate()
+        .filter_map(|(index, creature)| {
+            let id = creature.stable_id?;
+            let score = frame.organism(id).and_then(creature_care_urgency_score)?;
+            Some((index, id, score))
+        })
+        .collect::<Vec<_>>();
+    if scored.is_empty() {
+        return None;
+    }
+    let warnings = scored
+        .iter()
+        .copied()
+        .filter(|(_, _, score)| *score >= 1.0)
+        .collect::<Vec<_>>();
+    if warnings.len() >= 2 {
+        if let Some(pos) = current.and_then(|id| warnings.iter().position(|(_, wid, _)| *wid == id))
+        {
+            return Some(warnings[(pos + 1) % warnings.len()].0);
+        }
+    }
+    scored.sort_by(|a, b| b.2.total_cmp(&a.2).then_with(|| a.0.cmp(&b.0)));
+    let top_score = scored[0].2;
+    if let Some(current_id) = current {
+        if let Some((index, _, _)) = scored
+            .iter()
+            .copied()
+            .find(|(_, id, score)| *id != current_id && (top_score - *score) <= 1e-4)
+        {
+            return Some(index);
+        }
+    }
+    Some(scored[0].0)
+}
+
+#[allow(
+    clippy::too_many_arguments,
+    reason = "Bevy injects independent ECS system parameters."
+)]
 fn handle_fvr04_camera_follow_input(
     keyboard: Res<ButtonInput<KeyCode>>,
     mut selection: ResMut<Fvr03ProductionVoxelSelectionResource>,
@@ -5604,6 +5678,8 @@ fn handle_fvr04_camera_follow_input(
         &ProductionCreatureAssemblyRoot,
         &Fvr03ProductionVoxelCreatureMarker,
     )>,
+    ux: Option<Res<Fvr05ProductionUxStateResource>>,
+    frame: Option<Res<LiveBrainPresentationFrameResource>>,
     #[cfg(feature = "gpu-runtime")] conversation: Option<
         Res<crate::ProductionConversationLineageUiState>,
     >,
@@ -5615,18 +5691,25 @@ fn handle_fvr04_camera_follow_input(
     {
         return;
     }
-    let previous = keyboard.just_pressed(KeyCode::PageUp);
-    let next = keyboard.just_pressed(KeyCode::PageDown);
+    let player_mode = ux.as_ref().is_none_or(|state| !state.debug_mode);
+    let shift = keyboard.pressed(KeyCode::ShiftLeft) || keyboard.pressed(KeyCode::ShiftRight);
+    let tab_cycle = player_mode && keyboard.just_pressed(KeyCode::Tab);
+    let previous = keyboard.just_pressed(KeyCode::PageUp) || (tab_cycle && shift);
+    let next = keyboard.just_pressed(KeyCode::PageDown) || (tab_cycle && !shift);
+    let urgent = player_mode && keyboard.just_pressed(KeyCode::KeyN);
     let recover = keyboard.just_pressed(KeyCode::Home);
-    if !previous && !next && !recover && !keyboard.just_pressed(KeyCode::KeyF) {
+    if !previous && !next && !urgent && !recover && !keyboard.just_pressed(KeyCode::KeyF) {
         return;
     }
-    let mut selected_creature = selection.selected.and_then(|selection| {
-        (selection.kind == StableVoxelRefKind::Creature)
-            .then_some(selection.stable_id)
-            .flatten()
-    });
-    if previous || next || recover || selected_creature.is_none() {
+    let mut selected_creature = selection
+        .selected
+        .and_then(|selection| {
+            (selection.kind == StableVoxelRefKind::Creature)
+                .then_some(selection.stable_id)
+                .flatten()
+        })
+        .or(follow.target_stable_id);
+    if previous || next || urgent || recover || selected_creature.is_none() {
         let mut creatures = roots
             .iter()
             .map(|(root, marker)| StableVoxelObjectRef {
@@ -5641,13 +5724,22 @@ fn handle_fvr04_camera_follow_input(
             let current = creatures
                 .iter()
                 .position(|creature| creature.stable_id == selected_creature);
-            let index = match current {
+            let urgent_index = if urgent {
+                most_urgent_creature_index(
+                    &creatures,
+                    frame.as_deref().map(|frame| &frame.current),
+                    selected_creature,
+                )
+            } else {
+                None
+            };
+            let index = urgent_index.unwrap_or_else(|| match current {
                 Some(index) if previous => (index + creatures.len() - 1) % creatures.len(),
                 Some(index) if next => (index + 1) % creatures.len(),
                 Some(index) => index,
                 None if previous => creatures.len() - 1,
                 None => 0,
-            };
+            });
             selection.selected = Some(creatures[index]);
             selected_creature = creatures[index].stable_id;
         }
@@ -5655,6 +5747,7 @@ fn handle_fvr04_camera_follow_input(
     if let Some(stable_id) = selected_creature {
         follow.enabled = previous
             || next
+            || urgent
             || recover
             || follow.target_stable_id != Some(stable_id)
             || !follow.enabled;
@@ -7440,5 +7533,154 @@ mod tests {
             &non_agent_frame,
         ));
         assert_eq!(non_agent_transform, original);
+    }
+    #[test]
+    fn tab_and_shift_tab_cycle_creatures_and_key_n_jumps_to_urgent_needs() {
+        use alife_core::{
+            BiochemistryState, BrainCapacityClass, CreatureGenome, FoundationGeneticIdentity,
+        };
+        use alife_world::WorldOrganismRecord;
+
+        let mut world = HeadlessScenarioBuilder::new(33)
+            .agent("calm", OrganismId(1), Vec3f::ZERO)
+            .agent("hungry", OrganismId(2), Vec3f::new(4.0, 0.0, 0.0))
+            .agent("tired", OrganismId(3), Vec3f::new(8.0, 0.0, 0.0))
+            .build()
+            .unwrap();
+        let calm_id = world.entity_id("calm").unwrap();
+        let hungry_id = world.entity_id("hungry").unwrap();
+        let tired_id = world.entity_id("tired").unwrap();
+
+        let genome = CreatureGenome::early_mammal_founder(
+            33,
+            FoundationGeneticIdentity::new(10, 1, 7, BrainCapacityClass::N512_ID).unwrap(),
+        )
+        .unwrap();
+        let phenotype = genome.express().unwrap();
+
+        for (label, org_id, hunger, fatigue, energy) in [
+            ("calm", OrganismId(1), 0.1, 0.1, 0.9),
+            ("hungry", OrganismId(2), 0.92, 0.2, 0.25),
+            ("tired", OrganismId(3), 0.2, 0.80, 0.8),
+        ] {
+            let entity = world.entity_id(label).unwrap();
+            let mut chemistry =
+                BiochemistryState::new_with_age(&phenotype, Tick::ZERO, Tick::ZERO).unwrap();
+            chemistry.homeostasis.drives.hunger = hunger;
+            chemistry.homeostasis.drives.fatigue = fatigue;
+            chemistry.body.set_energy(energy).unwrap();
+            world
+                .register_organism_record(
+                    WorldOrganismRecord::new(
+                        org_id,
+                        entity,
+                        genome.clone(),
+                        phenotype.clone(),
+                        chemistry,
+                        Tick::ZERO,
+                    )
+                    .unwrap(),
+                )
+                .unwrap();
+        }
+
+        let frame = LiveBrainPresentationFrameResource::from_authoritative_world(&world).unwrap();
+        let refs: Vec<StableVoxelObjectRef> = [calm_id, hungry_id, tired_id]
+            .into_iter()
+            .map(|id| {
+                let tile = VoxelTileCoord::new(id.raw() as i32, 0);
+                StableVoxelObjectRef {
+                    kind: StableVoxelRefKind::Creature,
+                    stable_id: Some(id),
+                    chunk: VoxelChunkCoord::for_tile(16, tile),
+                    tile: Some(tile),
+                }
+            })
+            .collect();
+
+        // KeyN jumps from a comfortable creature to the most distressed one (`hungry`),
+        // then cycles across all warning-level creatures (`hungry` <-> `tired`).
+        assert_eq!(
+            most_urgent_creature_index(&refs, Some(&frame.current), Some(calm_id)),
+            Some(1)
+        );
+        assert_eq!(
+            most_urgent_creature_index(&refs, Some(&frame.current), Some(hungry_id)),
+            Some(2)
+        );
+        assert_eq!(
+            most_urgent_creature_index(&refs, Some(&frame.current), Some(tired_id)),
+            Some(1)
+        );
+
+        let mut app = App::new();
+        app.init_resource::<ButtonInput<KeyCode>>();
+        app.insert_resource(Fvr03ProductionVoxelSelectionResource {
+            selected: Some(refs[0]),
+            hovered: None,
+        });
+        app.insert_resource(Fvr04ProductionCreatureFollowResource {
+            enabled: false,
+            target_stable_id: Some(calm_id),
+        });
+        app.insert_resource(frame);
+        for (entity_id, org_id) in [(calm_id, 1), (hungry_id, 2), (tired_id, 3)] {
+            app.world_mut().spawn((
+                ProductionCreatureAssemblyRoot {
+                    stable_id: entity_id,
+                    organism_id: OrganismId(org_id),
+                    display_only: true,
+                },
+                Fvr03ProductionVoxelCreatureMarker {
+                    stable_id: entity_id,
+                    tile: VoxelTileCoord::new(entity_id.raw() as i32, 0),
+                },
+            ));
+        }
+        app.add_systems(Update, handle_fvr04_camera_follow_input);
+
+        // `KeyN` jumps to `hungry`.
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::KeyN);
+        app.world_mut().run_schedule(Update);
+        assert_eq!(
+            app.world()
+                .resource::<Fvr04ProductionCreatureFollowResource>()
+                .target_stable_id,
+            Some(hungry_id)
+        );
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .reset_all();
+
+        // `Tab` advances from `hungry` to `tired`.
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::Tab);
+        app.world_mut().run_schedule(Update);
+        assert_eq!(
+            app.world()
+                .resource::<Fvr04ProductionCreatureFollowResource>()
+                .target_stable_id,
+            Some(tired_id)
+        );
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .reset_all();
+
+        // `Shift+Tab` cycles back from `tired` to `hungry`.
+        {
+            let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
+            keys.press(KeyCode::ShiftLeft);
+            keys.press(KeyCode::Tab);
+        }
+        app.world_mut().run_schedule(Update);
+        assert_eq!(
+            app.world()
+                .resource::<Fvr04ProductionCreatureFollowResource>()
+                .target_stable_id,
+            Some(hungry_id)
+        );
     }
 }
