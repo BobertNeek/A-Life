@@ -516,7 +516,7 @@ fn urgent_population_status_tints_count_and_sets_accessible_description() {
         .clone();
     let mut hungry_chem = *hungry_record.biochemistry();
     hungry_chem.homeostasis.drives.hunger = 0.85;
-    let hungry_tick = hungry_record.tick();
+    let hungry_tick = Tick::ZERO;
     hungry_record = WorldOrganismRecord::new(
         hungry_id,
         hungry_entity,
