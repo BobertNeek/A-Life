@@ -90,7 +90,7 @@ impl NavigationReceipt2349 {
             || self.candidate_digest == [0; 4]
             || self.map_before == [0; 4]
             || self.map_observed == [0; 4]
-            || !matches!(self.version, 1 | 2 | 3)
+            || !matches!(self.version, 1..=3)
             || self.base_bits.len() != self.output_bits.len()
             || self.base_bits.len() != self.route.candidate_bias.len()
             || self.base_bits.is_empty()
@@ -229,7 +229,7 @@ impl NavigationState2349 {
         })
     }
     pub fn validate(&self, id: OrganismId, next_sequence: u64) -> Result<(), CpuHostError> {
-        if !matches!(self.version, 1 | 2 | 3) || self.organism_id != id {
+        if !matches!(self.version, 1..=3) || self.organism_id != id {
             return Err(err("graph resident identity"));
         }
         self.map.validate().map_err(err)?;
