@@ -301,10 +301,17 @@ fn care_food_position_in_gaze(
     world: &alife_world::HeadlessWorld,
     id: OrganismId,
 ) -> Option<alife_core::Vec3f> {
+    care_food_position_in_gaze_for_food(world, id, world.entity_id("food-01")?)
+}
+
+fn care_food_position_in_gaze_for_food(
+    world: &alife_world::HeadlessWorld,
+    id: OrganismId,
+    food: alife_core::WorldEntityId,
+) -> Option<alife_core::Vec3f> {
     let record = world.organism_registry().get(id)?;
     let body = world.entity(record.world_entity_id())?;
     let gaze = body.body_yaw + body.head_yaw;
-    let food = world.entity_id("food-01")?;
     if !world.entity(food).is_some_and(care_food_ready) {
         return None;
     }
@@ -394,7 +401,45 @@ pub(super) fn prepare_cue_free_food_placement(
 ) -> Result<ContinuousCareAssistance> {
     // Qualification and rejected placement are disposable; never leave a partial public edit.
     let mut trial = world.clone();
-    let care = prepare_care_assistance(&mut trial, id)?;
+    let source_id = trial
+        .entity_id("food-01")
+        .ok_or("cue-free source food missing")?;
+    let source = trial
+        .entity(source_id)
+        .ok_or("cue-free source food missing")?
+        .clone();
+    if source.kind != alife_world::WorldObjectKind::Food
+        || source.nutrition <= 0.0
+        || source.hazard_pain != 0.0
+        || source.carried_by.is_some()
+    {
+        return Err("cue-free source is not safe unheld food".into());
+    }
+    let food = if source.consumed {
+        let fresh = trial.editor_spawn_object(alife_world::WorldEditorSpawnSpec {
+            label: format!("cue-free-food-opportunity-{}", trial.tick().raw()),
+            kind: alife_world::WorldObjectKind::Food,
+            organism_id: None,
+            position: source.position,
+            nutrition: source.nutrition,
+            hazard_pain: source.hazard_pain,
+            radius: source.radius,
+            token_id: source.token_id,
+        })?;
+        trial.set_grounded_physical_properties(fresh, source.grounded_physical.clone())?;
+        fresh
+    } else {
+        source_id
+    };
+    let position = care_food_position_in_gaze_for_food(&trial, id, food)
+        .ok_or("no native cue-free food placement")?;
+    if !crate::foundation_training::relocate_unheld_foundation_food(&mut trial, food, position)? {
+        return Err("cue-free food placement refused".into());
+    }
+    let care = ContinuousCareAssistance {
+        food,
+        start_tick: trial.tick().raw(),
+    };
     if !trial.safe_food_eat_is_available(id, care.food) {
         return Err("cue-free near-food placement has no native Eat opportunity".into());
     }
@@ -411,8 +456,11 @@ pub(super) fn prepare_cue_free_food_placement_with_receipt(
         .into_iter()
         .map(alife_world::WorldObjectSaveState::from)
         .collect::<Vec<_>>();
+    let source_id = world
+        .entity_id("food-01")
+        .ok_or("cue-free source food missing")?;
     let placed = prepare_cue_free_food_placement(world, id)?;
-    let receipt = serde_json::json!({"kind":"cue-free-near-food-placement-v1","food_target":placed.food.raw(),
+    let receipt = serde_json::json!({"kind":"cue-free-near-food-placement-v1","source_food":source_id.raw(),"food_target":placed.food.raw(),"fresh_opportunity":placed.food != source_id,
         "objects_before":before,"objects_after":world.object_snapshots().into_iter().map(alife_world::WorldObjectSaveState::from).collect::<Vec<_>>(),
         "world_tick":world.tick().raw(),"forced_action":false,"teacher_cues_emitted":0,
         "native_safe_eat_available":true,"private_or_body_reset":false,"reward_override":false});
@@ -1945,6 +1993,49 @@ mod tests {
             before
         );
         assert_eq!(world.tick(), tick);
+        // Disposable native command witness only: actual experiments never force Eat.
+        let mut consumed_trial = world.clone();
+        consumed_trial
+            .apply_command(&alife_world::HeadlessWorldCommand::eat(id, scenario.food).unwrap())
+            .unwrap();
+        let consumed = consumed_trial.entity(scenario.food).unwrap().clone();
+        assert!(consumed.consumed);
+        let before_renewal = *consumed_trial
+            .organism_registry()
+            .get(id)
+            .unwrap()
+            .biochemistry();
+        let (renewed, renewal) =
+            prepare_cue_free_food_placement_with_receipt(&mut consumed_trial, id).unwrap();
+        assert_ne!(renewed.food, scenario.food);
+        assert_eq!(consumed_trial.entity(scenario.food).unwrap(), &consumed);
+        assert_eq!(
+            consumed_trial
+                .entity(renewed.food)
+                .unwrap()
+                .grounded_physical,
+            consumed.grounded_physical
+        );
+        assert_eq!(
+            consumed_trial.entity(renewed.food).unwrap().nutrition,
+            consumed.nutrition
+        );
+        assert_eq!(
+            consumed_trial.entity(renewed.food).unwrap().radius,
+            consumed.radius
+        );
+        assert_eq!(
+            *consumed_trial
+                .organism_registry()
+                .get(id)
+                .unwrap()
+                .biochemistry(),
+            before_renewal
+        );
+        assert_eq!(consumed_trial.tick(), tick);
+        assert_eq!(renewal["fresh_opportunity"], true);
+        assert!(consumed_trial.safe_food_eat_is_available(id, renewed.food));
+
         assert!(care_food_ready(world.entity(scenario.food).unwrap()));
         let subject = world
             .entity(world.organism_registry().get(id).unwrap().world_entity_id())
