@@ -2034,6 +2034,8 @@ pub fn spawn_fvr03_production_voxel_scene(
                 .run_if(care_dock::world_input_allowed),
             camera_view_input_systems(),
             handle_fvr04_camera_follow_input
+                .after(god_hand::input)
+                .before(handle_fvr05_production_ux_input)
                 .after(menu::handle_input)
                 .run_if(menu::world_input_allowed)
                 .run_if(care_dock::world_input_allowed),

@@ -290,6 +290,7 @@ pub(super) fn input(
         NonSendMut<ProductionGpuBrainRuntimeResource>,
     >,
     mut frame: Option<ResMut<LiveBrainPresentationFrameResource>>,
+    #[cfg(feature = "gpu-runtime")] mut ux: Option<ResMut<Fvr05ProductionUxStateResource>>,
     terrain: Option<Res<creature_grounding::SelectedTerrain>>,
     #[cfg(feature = "gpu-runtime")] surface: Res<creature_grounding::RenderedTerrainSurface>,
     creatures: Query<
@@ -343,14 +344,36 @@ pub(super) fn input(
             || keyboard.just_pressed(KeyCode::Escape)
             || !mouse.pressed(MouseButton::Left);
         if cancel {
-            if hand.held.take().is_some() || runtime.runtime.world().player_held_object().is_some()
-            {
+            if hand.held.is_some() || runtime.runtime.world().player_held_object().is_some() {
                 // A deliberate drop (button released in a focused window) keeps the creature in
                 // the player's attention, as in Black & White: the HUD, care dock, and speech stay
                 // on it at its landing tile, and the camera resumes following it.
                 let natural_drop = window.focused && !keyboard.just_pressed(KeyCode::Escape);
+                let released = match runtime.runtime.release_player_hold() {
+                    Ok(released) => released,
+                    Err(error) => {
+                        // The world still owns this hold. Retain local contact and follow
+                        // intent so a later successful retry can finish the same gesture.
+                        hand.pressed = None;
+                        if let Some(ux) = ux.as_deref_mut() {
+                            ux.last_error = Some(error.to_string());
+                            ux.last_action = "Hand release failed; hold retained".into();
+                        }
+                        if let Some(frame) = frame.as_deref_mut() {
+                            frame.refresh_world_objects(runtime.runtime.world());
+                        }
+                        return;
+                    }
+                };
+                hand.held = None;
                 let resume_follow = std::mem::take(&mut hand.resume_follow_after_drop);
-                if let Ok(Some(released)) = runtime.runtime.release_player_hold() {
+                if let Some(ux) = ux.as_deref_mut() {
+                    if ux.last_action == "Hand release failed; hold retained" {
+                        ux.last_error = None;
+                        ux.last_action = "Hand released".into();
+                    }
+                }
+                if let Some(released) = released {
                     let world = runtime.runtime.world();
                     let terrain_bound = world.terrain().is_some();
                     let landed = world
