@@ -243,6 +243,22 @@ fn preserve_endpoint(
         "source_current_sha256":digest(baseline_bytes),"zero_step_equality":zero_step_equality}),
     )
 }
+fn zero_step_preservation_valid(endpoint: &serde_json::Value) -> bool {
+    let Some(equal) = endpoint
+        .get("zero_step_equality")
+        .filter(|value| !value.is_null())
+    else {
+        return true;
+    };
+    [
+        "world_json_byteequal",
+        "sleep_journal_byteequal",
+        "private_asset_closure_byteequal",
+        "saved_sampling_equal",
+    ]
+    .iter()
+    .all(|field| equal.get(*field).and_then(serde_json::Value::as_bool) == Some(true))
+}
 fn qualified(complete: bool, unchanged: bool, cue_free: bool, endpoint_preserved: bool) -> bool {
     complete && unchanged && cue_free && endpoint_preserved
 }
@@ -622,7 +638,9 @@ pub fn evaluate_saved_life_retention(
         &digest(&serde_json::to_vec(&request)?),
         endpoint_seeds,
     );
-    let endpoint_preserved = endpoint.is_ok();
+    let endpoint_preserved = endpoint
+        .as_ref()
+        .is_ok_and(|value| zero_step_preservation_valid(value));
     // A terminal copy is accepted only after the native final closure binds
     // its exact frozen compiler/heads; death itself is not an integrity veto.
     if !alive && endpoint_preserved {
@@ -825,6 +843,13 @@ mod tests {
     }
     #[test]
     fn restore_only_is_explicitly_zero_zero_and_nonce_is_not_a_new_sampling_seed() {
+        assert!(zero_step_preservation_valid(&serde_json::json!({})));
+        assert!(!zero_step_preservation_valid(
+            &serde_json::json!({"zero_step_equality":{"world_json_byteequal":false}})
+        ));
+        assert!(zero_step_preservation_valid(
+            &serde_json::json!({"zero_step_equality":{"world_json_byteequal":true,"sleep_journal_byteequal":true,"private_asset_closure_byteequal":true,"saved_sampling_equal":true}})
+        ));
         let r = SavedLifeRetentionRequest {
             schema: 2,
             evaluation_nonce: 71,
