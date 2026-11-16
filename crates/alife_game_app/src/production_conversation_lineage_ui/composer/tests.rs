@@ -54,11 +54,11 @@ fn control(world: &mut World, c: Control) -> Entity {
 #[test]
 fn wordless_controls_stay_fixed_above_long_drafts_at_four_viewports_and_error_gutters() {
     let mut fixtures = Vec::new();
-    for size in [
-        Vec2::new(1280.0, 720.0),
-        Vec2::new(640.0, 360.0),
-        Vec2::new(320.0, 480.0),
-        Vec2::new(320.0, 240.0),
+    for (size, dock_height) in [
+        (Vec2::new(1280.0, 720.0), 72.0),
+        (Vec2::new(640.0, 360.0), 72.0),
+        (Vec2::new(320.0, 480.0), 128.0),
+        (Vec2::new(320.0, 240.0), 56.0),
     ] {
         for error in [false, true] {
             let draft = "x".repeat(MAX_TYPED_CHARS);
@@ -72,7 +72,14 @@ fn wordless_controls_stay_fixed_above_long_drafts_at_four_viewports_and_error_gu
             let root = entity::<ProductionSpeechComposerBounds>(app.world_mut());
             let root_box = bounds(app.world(), root);
             assert!(contains((Vec2::ZERO, size), root_box));
-            assert!(root_box.1.y <= size.y - if error { 108.0 } else { 92.0 } + 0.1);
+            // Reserve the responsive dock plus its inset and the error gutter.
+            // The compact two-row/short layouts do not have the desktop height.
+            let clearance = dock_height + if error { 36.0 } else { 20.0 };
+            assert!(
+                (root_box.1.y - (size.y - clearance)).abs() <= 0.1,
+                "composer bottom {:?} must clear dock at {size:?}, error={error}",
+                root_box.1
+            );
             let mut boxes = Vec::new();
             for c in CONTROLS {
                 let e = control(app.world_mut(), c);
