@@ -158,19 +158,45 @@ pub fn apply_predecision_attention_evidence(
 /// Synthetic/unbound drafts retain the original routing-only behavior.
 /// Explicit active-opportunity overlay; legacy routing remains byte-equivalent.
 fn route_observed_focal_candidates_with_active(
-    draft: &PerceptionFrameDraft, attention: &AttentionFrame,
+    draft: &PerceptionFrameDraft,
+    attention: &AttentionFrame,
     binding: Option<&GroundedCandidateBinding>,
-) -> Result<(PerceptionFrameDraft,Option<alife_world::ActiveApproachOpportunityReceipt>),ScaffoldContractError> {
-    if let Some(binding)=binding.filter(|b|b.active_approach_enabled()) {
+) -> Result<
+    (
+        PerceptionFrameDraft,
+        Option<alife_world::ActiveApproachOpportunityReceipt>,
+    ),
+    ScaffoldContractError,
+> {
+    if let Some(binding) = binding.filter(|b| b.active_approach_enabled()) {
         attention.validate_contract()?;
-        if attention.organism_id!=draft.organism_id() || attention.world_tick!=draft.tick() {return Err(ScaffoldContractError::InvalidPerceptionFrame);}
-        let focal=attention.focal_targets.first().and_then(|i|if let StableFocusIdentity::TrackedObject(id)=i{Some(*id)}else{None});
-        let charged=draft.candidate_opportunity_coverage().map_or(0,|r|r.work_units());
-        let(candidates,coverage,proof)=binding.candidates_for_focus_with_active_opportunity(draft,focal,charged)?;
-        let observed=match coverage {Some(receipt)=>draft.clone().with_candidates_and_opportunity_coverage(candidates,receipt)?,None=>draft.clone().with_candidates(candidates)?};
-        return Ok((route_focal_candidates(&observed,attention)?,Some(proof)));
+        if attention.organism_id != draft.organism_id() || attention.world_tick != draft.tick() {
+            return Err(ScaffoldContractError::InvalidPerceptionFrame);
+        }
+        let focal = attention.focal_targets.first().and_then(|i| {
+            if let StableFocusIdentity::TrackedObject(id) = i {
+                Some(*id)
+            } else {
+                None
+            }
+        });
+        let charged = draft
+            .candidate_opportunity_coverage()
+            .map_or(0, |r| r.work_units());
+        let (candidates, coverage, proof) =
+            binding.candidates_for_focus_with_active_opportunity(draft, focal, charged)?;
+        let observed = match coverage {
+            Some(receipt) => draft
+                .clone()
+                .with_candidates_and_opportunity_coverage(candidates, receipt)?,
+            None => draft.clone().with_candidates(candidates)?,
+        };
+        return Ok((route_focal_candidates(&observed, attention)?, Some(proof)));
     }
-    Ok((route_observed_focal_candidates(draft,attention,binding)?,None))
+    Ok((
+        route_observed_focal_candidates(draft, attention, binding)?,
+        None,
+    ))
 }
 
 pub fn route_observed_focal_candidates(
@@ -184,12 +210,21 @@ pub fn route_observed_focal_candidates(
     }
     if let Some(binding) = binding.filter(|binding| binding.coverage_plan().is_some()) {
         let focal = attention.focal_targets.first().and_then(|identity| {
-            if let StableFocusIdentity::TrackedObject(id) = identity { Some(*id) } else { None }
+            if let StableFocusIdentity::TrackedObject(id) = identity {
+                Some(*id)
+            } else {
+                None
+            }
         });
-        let initial_work = draft.candidate_opportunity_coverage().map_or(0, |r| r.work_units());
-        let (candidates, receipt) = binding.candidates_for_focus_with_coverage(draft, focal, initial_work)?;
+        let initial_work = draft
+            .candidate_opportunity_coverage()
+            .map_or(0, |r| r.work_units());
+        let (candidates, receipt) =
+            binding.candidates_for_focus_with_coverage(draft, focal, initial_work)?;
         let observed = match receipt {
-            Some(receipt) => draft.clone().with_candidates_and_opportunity_coverage(candidates, receipt)?,
+            Some(receipt) => draft
+                .clone()
+                .with_candidates_and_opportunity_coverage(candidates, receipt)?,
             None => draft.clone().with_candidates(candidates)?,
         };
         return route_focal_candidates(&observed, attention);
@@ -950,8 +985,12 @@ fn prepare_canonical_frame_impl(
         )?;
         hysteresis = Some(attention.hysteresis);
         preparation_stage = "focal routing";
-        let (routed_draft,active_approach_opportunity) =
-            route_observed_focal_candidates_with_active(draft, &attention, input.candidate_binding.as_ref())?;
+        let (routed_draft, active_approach_opportunity) =
+            route_observed_focal_candidates_with_active(
+                draft,
+                &attention,
+                input.candidate_binding.as_ref(),
+            )?;
         let novelty = selected_focal_novelty(&attention);
         let routed_draft = routed_draft.with_remembered_novelty(novelty)?;
         timing.attention_context_wall_ns = timing

@@ -110,7 +110,8 @@ fn fixture_kind(profile: SensorProfile, hazard: bool) -> (CpuCanonicalHost, CpuF
     game.creatures[0].weights.genetic_fixed_digest =
         PortableAssetDigest::for_bytes(&serde_json::to_vec(&genome).unwrap()).0;
     let mask = alife_training::StageTrainableMask::recurrent_only(&p).unwrap();
-    let trainer = CpuFoundationTrainer::new(p, asset, mask, alife_training::AdamWConfig::default()).unwrap();
+    let trainer =
+        CpuFoundationTrainer::new(p, asset, mask, alife_training::AdamWConfig::default()).unwrap();
     (
         CpuCanonicalHost::new_cohort(game, &trainer, 2306).unwrap(),
         trainer,
@@ -121,11 +122,13 @@ fn cpbytes(h: &CpuCanonicalHost, t: &CpuFoundationTrainer) -> Vec<u8> {
 }
 fn interface() -> (CpuCanonicalHost, CpuFoundationTrainer) {
     let (mut h, t) = fixture(SensorProfile::GroundedObjectSlotsV1);
-    let mut edits=vec![(26144u32,f32::from_bits(0x80000000)),(26146,0.)];edits.extend((30048..30088).map(|i|(i,0.4)));
+    let mut edits = vec![(26144u32, f32::from_bits(0x80000000)), (26146, 0.)];
+    edits.extend((30048..30088).map(|i| (i, 0.4)));
     // Synthetic fixture uses only declared public g0/Inspect setup. No private
     // selected-program artifact is a compile-time test dependency.
-    let calibrated=t.calibrated_readout_copy(&edits).unwrap();
-    h.rebase_readout_policy(&t,&calibrated).unwrap();let t=calibrated;
+    let calibrated = t.calibrated_readout_copy(&edits).unwrap();
+    h.rebase_readout_policy(&t, &calibrated).unwrap();
+    let t = calibrated;
 
     h.enable_joint_ingest_direct2295(&t, true).unwrap();
     h.enable_candidate_opportunity_coverage2313(&t).unwrap();
@@ -222,15 +225,218 @@ fn maze_calibration_is_exact_finite_bounded_and_explicit() {
     );
 }
 
-#[test]fn maze_bridge_graph_semantics_are_native_not_label_ranges(){let(_,t)=interface();let p=t.phenotype();for &(i,source,target)in &MAZE_RECURRENT_EDGES2346{let e=&p.synapses()[i];assert_eq!((e.source(),e.target()),(source,target));assert!(matches!(e.kind(),CompiledSynapseKind::Recurrent));}for (i,family)in [(10366,CandidateActionFamily::Approach),(10423,CandidateActionFamily::Approach),(10362,CandidateActionFamily::Inspect),(10419,CandidateActionFamily::Inspect)]{let target=p.synapses()[i].target();let families=p.synapses().iter().filter_map(|s|match s.kind(){CompiledSynapseKind::Decoder(c)if s.source()==target&&c.head()==DecoderHeadKind::ActionCandidate=>Some(c.family()),_=>None}).collect::<Vec<_>>();assert!(!families.is_empty());assert!(families.iter().all(|&f|f==family));}assert!(p.sensor_encoder().assignments().iter().any(|a|a.source_group()==SensorEncoderSourceGroup::SensoryChannel&&a.source_index()==39&&a.target_neuron()==49));}
 #[test]
-fn actual_step_collision_then_sleep_cold_and_once_awake_sensor(){
- let(old,t)=interface();let mut h=old.fork_with_maze_program_for_research2346(&t).unwrap();let own=h.world().organism_registry().iter().next().unwrap().organism_id();let near=h.world().entity_id("near").unwrap();h.world_mut().editor_move_object(near,Vec3f::new(-100.,0.,0.)).unwrap();
- h.world_mut().editor_spawn_object(WorldEditorSpawnSpec{label:"synthetic-contact-wall".into(),kind:WorldObjectKind::Obstacle,organism_id:None,position:Vec3f::new(0.6,0.,0.),nutrition:0.,hazard_pain:0.,radius:0.35,token_id:None}).unwrap();
- let edits=t.phenotype().synapses().iter().enumerate().filter_map(|(i,s)|match s.kind(){CompiledSynapseKind::Decoder(c)if c.head()==DecoderHeadKind::ActionCandidate&&c.family()==CandidateActionFamily::Approach=>Some((i as u32,if matches!(c.input_lane(),1|23){16.}else{0.})),_=>None}).collect::<Vec<_>>();let next=t.calibrated_maze_program_copy2346(&edits).unwrap();h.rebase_maze_program_policy2346(&t,&next).unwrap();let original_adam=serde_json::to_vec(&next.checkpoint()).unwrap();
- let mut direct=h.world().clone();let cmd=ActionCommand::structured(own,ActionId(105),ActionKind::Move,ActionTarget::NONE,Intensity::new(1.).unwrap(),DurationTicks::new(1),Confidence::new(1.).unwrap(),0,None,None,None).unwrap();let direct_result=direct.apply_command(&cmd).unwrap();println!("DIRECT_STEP {}",serde_json::to_string(&direct_result.execution).unwrap());
- let first=h.step(&next,1.).unwrap();let row=&first.decisions[0];let joint=row.patch.outcome().joint.as_ref().unwrap();println!("SAMPLED {:?} JOINT {}",row.action,serde_json::to_string(joint).unwrap());assert!(joint.channel_outcomes.iter().any(|c|c.channel==MotorChannel::Locomotion&&c.physical.contact==PhysicalContactKind::Blocked&&c.execution_evidence.is_some_and(|e|e.primitive.raw()==105)));
- let work=row.patch.cognitive_work().unwrap();let rec=h.world().organism_registry().get(own).unwrap();assert_eq!(rec.cognitive_work(),work);let raw=alife_core::cognitive_work::CognitiveWorkCostPolicy::enabled(1.0e-6).unwrap().energy_debit(work).unwrap();let ph=rec.phenotype();let expected=raw*ph.body.metabolic_turnover*(ContinuousLocus::midpoint_value(0.52,0.60)-ph.chemistry.brain_atp_efficiency).exp2();assert_eq!(expected.to_bits(),rec.cognitive_energy_debit().to_bits());let f=row.patch.pre_action().perception();let extra=row.active_approach_opportunity2327.as_ref().unwrap();let base=row.patch.pre_action().cognitive_context.as_ref().unwrap().attention.budget_receipt.work_units+extra.intent_work_units+extra.selection.work_units+row.approach_attention_feedback2325.as_ref().unwrap().work_units+f.grip_proprioception().map_or(0,|s|s.work_units())+f.candidate_opportunity_coverage().map_or(0,|s|s.work_units());assert_eq!(work.focal_target_ops,base+331);
- let history=h.checkpoint(&next).unwrap().residents[0].maze_blocked2346.clone().unwrap();assert!(history.blocked);assert_eq!(history.primitive.raw(),105);
- h.request_recovery_sleep(own).unwrap();let cp=h.checkpoint(&next).unwrap();let mut cold=CpuCanonicalHost::from_checkpoint(cp,&next).unwrap();let mut sleeping=0;let mut delivered=false;for _ in 0..512{let a=h.step(&next,1.).unwrap();let b=cold.step(&next,1.).unwrap();assert_eq!(serde_json::to_vec(&a.decisions).unwrap(),serde_json::to_vec(&b.decisions).unwrap());assert_eq!(cpbytes(&h,&next),cpbytes(&cold,&next));if a.decisions.is_empty(){sleeping+=1;assert_eq!(h.checkpoint(&next).unwrap().residents[0].maze_blocked2346,Some(history.clone()));continue;}let f=a.decisions[0].patch.pre_action().perception();let receipt=f.maze_blocked_sense2346().unwrap();assert_eq!(receipt.source_sequence,history.source_sequence);assert!(receipt.blocked);assert!(f.sensory().channels.tactile_contact[7]>0.);let second=h.step(&next,1.).unwrap();if let Some(row)=second.decisions.first(){assert_ne!(row.patch.pre_action().perception().maze_blocked_sense2346().unwrap().source_sequence,history.source_sequence);}delivered=true;break;}assert!(sleeping>0&&delivered);assert_eq!(original_adam,serde_json::to_vec(&next.checkpoint()).unwrap());
+fn maze_bridge_graph_semantics_are_native_not_label_ranges() {
+    let (_, t) = interface();
+    let p = t.phenotype();
+    for &(i, source, target) in &MAZE_RECURRENT_EDGES2346 {
+        let e = &p.synapses()[i];
+        assert_eq!((e.source(), e.target()), (source, target));
+        assert!(matches!(e.kind(), CompiledSynapseKind::Recurrent));
+    }
+    for (i, family) in [
+        (10366, CandidateActionFamily::Approach),
+        (10423, CandidateActionFamily::Approach),
+        (10362, CandidateActionFamily::Inspect),
+        (10419, CandidateActionFamily::Inspect),
+    ] {
+        let target = p.synapses()[i].target();
+        let families = p
+            .synapses()
+            .iter()
+            .filter_map(|s| match s.kind() {
+                CompiledSynapseKind::Decoder(c)
+                    if s.source() == target && c.head() == DecoderHeadKind::ActionCandidate =>
+                {
+                    Some(c.family())
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert!(!families.is_empty());
+        assert!(families.iter().all(|&f| f == family));
+    }
+    assert!(p
+        .sensor_encoder()
+        .assignments()
+        .iter()
+        .any(
+            |a| a.source_group() == SensorEncoderSourceGroup::SensoryChannel
+                && a.source_index() == 39
+                && a.target_neuron() == 49
+        ));
+}
+#[test]
+fn actual_step_collision_then_sleep_cold_and_once_awake_sensor() {
+    let (old, t) = interface();
+    let mut h = old.fork_with_maze_program_for_research2346(&t).unwrap();
+    let own = h
+        .world()
+        .organism_registry()
+        .iter()
+        .next()
+        .unwrap()
+        .organism_id();
+    let near = h.world().entity_id("near").unwrap();
+    h.world_mut()
+        .editor_move_object(near, Vec3f::new(-100., 0., 0.))
+        .unwrap();
+    h.world_mut()
+        .editor_spawn_object(WorldEditorSpawnSpec {
+            label: "synthetic-contact-wall".into(),
+            kind: WorldObjectKind::Obstacle,
+            organism_id: None,
+            position: Vec3f::new(0.6, 0., 0.),
+            nutrition: 0.,
+            hazard_pain: 0.,
+            radius: 0.35,
+            token_id: None,
+        })
+        .unwrap();
+    let edits = t
+        .phenotype()
+        .synapses()
+        .iter()
+        .enumerate()
+        .filter_map(|(i, s)| match s.kind() {
+            CompiledSynapseKind::Decoder(c)
+                if c.head() == DecoderHeadKind::ActionCandidate
+                    && c.family() == CandidateActionFamily::Approach =>
+            {
+                Some((
+                    i as u32,
+                    if matches!(c.input_lane(), 1 | 23) {
+                        16.
+                    } else {
+                        0.
+                    },
+                ))
+            }
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    let next = t.calibrated_maze_program_copy2346(&edits).unwrap();
+    h.rebase_maze_program_policy2346(&t, &next).unwrap();
+    let original_adam = serde_json::to_vec(&next.checkpoint()).unwrap();
+    let mut direct = h.world().clone();
+    let cmd = ActionCommand::structured(
+        own,
+        ActionId(105),
+        ActionKind::Move,
+        ActionTarget::NONE,
+        Intensity::new(1.).unwrap(),
+        DurationTicks::new(1),
+        Confidence::new(1.).unwrap(),
+        0,
+        None,
+        None,
+        None,
+    )
+    .unwrap();
+    let direct_result = direct.apply_command(&cmd).unwrap();
+    println!(
+        "DIRECT_STEP {}",
+        serde_json::to_string(&direct_result.execution).unwrap()
+    );
+    let first = h.step(&next, 1.).unwrap();
+    let row = &first.decisions[0];
+    let joint = row.patch.outcome().joint.as_ref().unwrap();
+    println!(
+        "SAMPLED {:?} JOINT {}",
+        row.action,
+        serde_json::to_string(joint).unwrap()
+    );
+    assert!(joint
+        .channel_outcomes
+        .iter()
+        .any(|c| c.channel == MotorChannel::Locomotion
+            && c.physical.contact == PhysicalContactKind::Blocked
+            && c.execution_evidence
+                .is_some_and(|e| e.primitive.raw() == 105)));
+    let work = row.patch.cognitive_work().unwrap();
+    let rec = h.world().organism_registry().get(own).unwrap();
+    assert_eq!(rec.cognitive_work(), work);
+    let raw = alife_core::cognitive_work::CognitiveWorkCostPolicy::enabled(1.0e-6)
+        .unwrap()
+        .energy_debit(work)
+        .unwrap();
+    let ph = rec.phenotype();
+    let expected = raw
+        * ph.body.metabolic_turnover
+        * (ContinuousLocus::midpoint_value(0.52, 0.60) - ph.chemistry.brain_atp_efficiency).exp2();
+    assert_eq!(expected.to_bits(), rec.cognitive_energy_debit().to_bits());
+    let f = row.patch.pre_action().perception();
+    let extra = row.active_approach_opportunity2327.as_ref().unwrap();
+    let base = row
+        .patch
+        .pre_action()
+        .cognitive_context
+        .as_ref()
+        .unwrap()
+        .attention
+        .budget_receipt
+        .work_units
+        + extra.intent_work_units
+        + extra.selection.work_units
+        + row
+            .approach_attention_feedback2325
+            .as_ref()
+            .unwrap()
+            .work_units
+        + f.grip_proprioception().map_or(0, |s| s.work_units())
+        + f.candidate_opportunity_coverage()
+            .map_or(0, |s| s.work_units());
+    assert_eq!(work.focal_target_ops, base + 331);
+    let history = h.checkpoint(&next).unwrap().residents[0]
+        .maze_blocked2346
+        .clone()
+        .unwrap();
+    assert!(history.blocked);
+    assert_eq!(history.primitive.raw(), 105);
+    h.request_recovery_sleep(own).unwrap();
+    let cp = h.checkpoint(&next).unwrap();
+    let mut cold = CpuCanonicalHost::from_checkpoint(cp, &next).unwrap();
+    let mut sleeping = 0;
+    let mut delivered = false;
+    for _ in 0..512 {
+        let a = h.step(&next, 1.).unwrap();
+        let b = cold.step(&next, 1.).unwrap();
+        assert_eq!(
+            serde_json::to_vec(&a.decisions).unwrap(),
+            serde_json::to_vec(&b.decisions).unwrap()
+        );
+        assert_eq!(cpbytes(&h, &next), cpbytes(&cold, &next));
+        if a.decisions.is_empty() {
+            sleeping += 1;
+            assert_eq!(
+                h.checkpoint(&next).unwrap().residents[0].maze_blocked2346,
+                Some(history.clone())
+            );
+            continue;
+        }
+        let f = a.decisions[0].patch.pre_action().perception();
+        let receipt = f.maze_blocked_sense2346().unwrap();
+        assert_eq!(receipt.source_sequence, history.source_sequence);
+        assert!(receipt.blocked);
+        assert!(f.sensory().channels.tactile_contact[7] > 0.);
+        let second = h.step(&next, 1.).unwrap();
+        if let Some(row) = second.decisions.first() {
+            assert_ne!(
+                row.patch
+                    .pre_action()
+                    .perception()
+                    .maze_blocked_sense2346()
+                    .unwrap()
+                    .source_sequence,
+                history.source_sequence
+            );
+        }
+        delivered = true;
+        break;
+    }
+    assert!(sleeping > 0 && delivered);
+    assert_eq!(
+        original_adam,
+        serde_json::to_vec(&next.checkpoint()).unwrap()
+    );
 }

@@ -671,9 +671,7 @@ pub fn evaluate_saved_life_retention(
             .finalization_deadline_unix_seconds
             .unwrap_or(request.deadline_unix_seconds),
     );
-    let endpoint_preserved = endpoint
-        .as_ref()
-        .is_ok_and(|value| zero_step_preservation_valid(value));
+    let endpoint_preserved = endpoint.as_ref().is_ok_and(zero_step_preservation_valid);
     // A terminal copy is accepted only after the native final closure binds
     // its exact frozen compiler/heads; death itself is not an integrity veto.
     if !alive && endpoint_preserved {

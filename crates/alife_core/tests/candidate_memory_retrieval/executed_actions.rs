@@ -931,7 +931,7 @@ fn joint_comparison_has_equal_work_and_truthful_applied_sources() {
 fn contact_query2273_support_boundaries_preserve_estimator_and_fallback() {
     // Storage-only fixture, not an acquired World checkpoint or body claim.
     let object = slot(0, 72, 0.4, [0., 0.8, 0.9]);
-    let source_draft = probe_for_object(1, object.clone())
+    let source_draft = probe_for_object(1, object)
         .with_candidates(vec![candidate_for_family(
             &object,
             0,
@@ -962,7 +962,7 @@ fn contact_query2273_support_boundaries_preserve_estimator_and_fallback() {
         wire["candidate_store"]["records"]["1"]["joint_event"] =
             serde_json::json!(serde_json::to_vec(&event).unwrap());
         let bank: MemoryBank = serde_json::from_value(wire).unwrap();
-        let probe = probe_for_object(tick, object.clone())
+        let probe = probe_for_object(tick, object)
             .with_candidates(vec![
                 candidate_for_family(&object, 0, CandidateActionFamily::Contact),
                 candidate_for_family(&object, 1, CandidateActionFamily::Ingest),

@@ -472,7 +472,7 @@ pub(super) fn prepare_cue_free_food_placement(
             radius: source.radius,
             token_id: source.token_id,
         })?;
-        trial.set_grounded_physical_properties(fresh, source.grounded_physical.clone())?;
+        trial.set_grounded_physical_properties(fresh, source.grounded_physical)?;
         fresh
     } else {
         source_id
@@ -2063,7 +2063,7 @@ mod tests {
             prepare_cue_free_food_placement_with_receipt(&mut consumed_trial, id).unwrap();
         assert_ne!(renewed.food, scenario.food);
         assert_eq!(consumed_trial.entity(scenario.food).unwrap(), &consumed);
-        let mut expected_static_descriptor = consumed.grounded_physical.clone();
+        let mut expected_static_descriptor = consumed.grounded_physical;
         expected_static_descriptor.velocity = alife_core::Vec3f::ZERO;
         assert_eq!(
             consumed_trial
@@ -2616,8 +2616,8 @@ mod tests {
         let life = output.join("life");
         materialize_current_training_life(&checkpoint, &life).unwrap();
         let (_, loaded) = crate::GpuDurableSaveManifest::open_loaded(
-            &life.join("world.json"),
-            &life.join("world-assets"),
+            life.join("world.json"),
+            life.join("world-assets"),
         )
         .unwrap();
         let mut world = loaded.save.restore_headless_world().unwrap();
