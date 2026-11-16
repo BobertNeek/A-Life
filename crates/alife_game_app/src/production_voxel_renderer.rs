@@ -5722,6 +5722,9 @@ fn handle_fvr04_camera_follow_input(
             })
             .collect::<Vec<_>>();
         creatures.sort_unstable_by_key(|creature| creature.stable_id.map(WorldEntityId::raw));
+        if urgent && creatures.is_empty() {
+            return;
+        }
         if !creatures.is_empty() {
             let current = creatures
                 .iter()
@@ -5735,6 +5738,10 @@ fn handle_fvr04_camera_follow_input(
             } else {
                 None
             };
+            // Urgency requires authoritative evidence; it is not a synonym for Home.
+            if urgent && urgent_index.is_none() {
+                return;
+            }
             let index = urgent_index.unwrap_or_else(|| match current {
                 Some(index) if previous => (index + creatures.len() - 1) % creatures.len(),
                 Some(index) if next => (index + 1) % creatures.len(),
@@ -6932,6 +6939,25 @@ mod tests {
             ));
         }
         app.add_systems(Update, handle_fvr04_camera_follow_input);
+        // Rendered roots are not evidence of urgent needs. N must not choose
+        // an arbitrary first creature while the authoritative frame is absent.
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::KeyN);
+        app.world_mut().run_schedule(Update);
+        assert!(app
+            .world()
+            .resource::<Fvr03ProductionVoxelSelectionResource>()
+            .selected
+            .is_none());
+        let follow = app
+            .world()
+            .resource::<Fvr04ProductionCreatureFollowResource>();
+        assert!(!follow.enabled);
+        assert_eq!(follow.target_stable_id, None);
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .reset_all();
         for (key, expected) in [
             (KeyCode::Home, 1),
             (KeyCode::PageDown, 2),
