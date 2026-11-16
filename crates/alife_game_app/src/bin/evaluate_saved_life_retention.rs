@@ -19,7 +19,10 @@ fn main() -> Result<(), Error> {
             serde_json::json!({
                 "kind":"saved-life-retention-v2", "request_schema":2,
                 "restores_saved_life":true, "requires_saved_sampling_stream":true,
-                "offline_actor_updates":false, "offline_value_updates":false,
+                "offline_optimizer_updates":false, "offline_value_updates":false,
+                "explicit_direct_weight_calibration":true, "navigation_tasks": ["moving_prey", "autonomous_prey", "l_corner", "two_turn_maze"],
+                "moving_prey_scope":"externally propelled edible food proxy, not autonomous prey ecology",
+                "autonomous_prey_scope":"persistent native ecological critter with independent reactive fleeing and wandering; not a second neural learner",
                 "ordinary_private_learning_active":true, "requires_prior_off":true,
                 "rejects_existing_teacher_cues":true, "allows_passive_label_only_teacher_objects":true,
                 "preserves_final_private_current":true, "requires_admitted_or_fresh_session_nonce":true, "restore_only_bounds":[0,0],
@@ -33,10 +36,10 @@ fn main() -> Result<(), Error> {
     use std::io::Read;
     let mut bytes = Vec::new();
     std::fs::File::open(request_path)?
-        .take(4097)
+        .take(262145)
         .read_to_end(&mut bytes)?;
-    if bytes.len() > 4096 {
-        return Err("retention request exceeds 4096 bytes".into());
+    if bytes.len() > 262144 {
+        return Err("retention request exceeds 262144 bytes".into());
     }
     let request: alife_game_app::SavedLifeRetentionRequest = serde_json::from_slice(&bytes)?;
     let result = std::thread::Builder::new()

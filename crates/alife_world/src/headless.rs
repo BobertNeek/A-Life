@@ -4,6 +4,7 @@
 
 mod partial_observability_v1;
 pub use partial_observability_v1::{GroundedAvailabilityFrameV1, GroundedSourceAvailabilityV1};
+mod autonomous_critters;
 mod awake_translation;
 mod contact_withdrawal;
 mod grounded_path;
@@ -2793,6 +2794,7 @@ impl HeadlessWorld {
             }
         }
 
+        candidate.advance_autonomous_critters();
         candidate.speech.retire_expired(candidate.tick);
         let _ = candidate.advance_ecology();
         Ok(next_tick)
@@ -3120,6 +3122,17 @@ impl HeadlessWorld {
                 return Err(ScaffoldContractError::InvalidId);
             };
             if object.kind != WorldObjectKind::Food {
+                return Err(ScaffoldContractError::InvalidId);
+            }
+        }
+        for c in &ecology.autonomous_critters {
+            let o = self
+                .entity(c.object_id)
+                .ok_or(ScaffoldContractError::InvalidId)?;
+            if o.kind != WorldObjectKind::Food
+                || o.organism_id.is_some()
+                || c.last_tick.raw() > self.tick.raw()
+            {
                 return Err(ScaffoldContractError::InvalidId);
             }
         }
@@ -3913,6 +3926,9 @@ impl HeadlessWorld {
             self.detach_carried_objects(organism_id);
             self.ingestion_observations.remove(&organism_id.raw());
         }
+        self.ecology
+            .autonomous_critters
+            .retain(|c| c.object_id != id);
         self.rebuild_ecology_metrics();
         Ok(object)
     }
@@ -4256,6 +4272,17 @@ impl HeadlessWorld {
             }
         }
         state.ecology.validate()?;
+        for c in &state.ecology.autonomous_critters {
+            let o = objects
+                .get(&c.object_id.raw())
+                .ok_or(ScaffoldContractError::InvalidId)?;
+            if o.kind != WorldObjectKind::Food
+                || o.organism_id.is_some()
+                || c.last_tick.raw() > state.tick.raw()
+            {
+                return Err(ScaffoldContractError::InvalidId);
+            }
+        }
         for resource in &state.ecology.resources {
             let Some(object) = objects.get(&resource.object_id.raw()) else {
                 return Err(ScaffoldContractError::InvalidId);

@@ -2252,6 +2252,17 @@ impl WorldSaveState {
             }
         }
         self.ecology.validate()?;
+        for c in &self.ecology.autonomous_critters {
+            if c.last_tick.raw() > self.tick.raw()
+                || !self.objects.iter().any(|o| {
+                    o.id == c.object_id
+                        && o.kind == WorldObjectKind::Food
+                        && o.organism_id.is_none()
+                })
+            {
+                return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));
+            }
+        }
         if let Some(voxel_backend) = &self.voxel_backend {
             if voxel_backend.world_seed != self.seed {
                 return Err(PersistenceError::InvalidConfig {
