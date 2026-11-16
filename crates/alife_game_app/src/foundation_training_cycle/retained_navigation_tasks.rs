@@ -753,7 +753,9 @@ mod tests {
     fn autonomous_prey_moves_only_in_native_tick_and_preserves_agents() {
         let mut w = HeadlessScenarioBuilder::new(23)
             .agent("subject", OrganismId(1), Vec3f::ZERO)
-            .agent("nursery-teacher", OrganismId(2), Vec3f::ZERO)
+            // Keep the passive teacher off the subject sightline: coincident opaque
+            // agents legitimately occlude one another under native optical sensing.
+            .agent("nursery-teacher", OrganismId(2), Vec3f::new(0.0, 0.0, 2.0))
             .build()
             .unwrap();
         let agents = [
