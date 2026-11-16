@@ -84,13 +84,15 @@ fn camera_pan_axis(keys: Vec2, cursor: Option<Vec2>, window_size: Vec2, focused:
     axis.clamp_length_max(1.0)
 }
 
+/// Invert the orthographic screen projection restricted to the horizontal ground plane.
+/// Camera translation is opposite screen-right drag and along screen-up for downward drag.
 fn drag_pan_world_delta(
     drag_pixels: Vec2,
     window_height: f32,
     extent: f32,
     scale: f32,
     right: Vec3,
-    forward: Vec3,
+    up: Vec3,
 ) -> Vec3 {
     if !drag_pixels.is_finite()
         || !window_height.is_finite()
@@ -100,12 +102,23 @@ fn drag_pan_world_delta(
         || !scale.is_finite()
         || scale <= 0.0
         || !right.is_finite()
-        || !forward.is_finite()
+        || !up.is_finite()
     {
         return Vec3::ZERO;
     }
+    // A level camera has no finite vertical-drag solution on a horizontal plane.
+    // Reject near-singular views rather than amplifying cursor noise without bound.
+    let determinant = right.x * up.z - right.z * up.x;
+    if !determinant.is_finite() || determinant.abs() <= 1.0e-3 {
+        return Vec3::ZERO;
+    }
     let world_per_pixel = (extent * scale) / window_height;
-    let delta = (-right * drag_pixels.x + forward * drag_pixels.y) * world_per_pixel;
+    let screen = Vec2::new(-drag_pixels.x, drag_pixels.y) * world_per_pixel;
+    let delta = Vec3::new(
+        (screen.x * up.z - right.z * screen.y) / determinant,
+        0.0,
+        (right.x * screen.y - screen.x * up.x) / determinant,
+    );
     if delta.is_finite() {
         delta
     } else {
@@ -215,22 +228,17 @@ pub(super) fn pan_camera(
         let extent = production_camera_extent(scene.profile_id);
         let window_height = window.height();
         for (mut camera, projection) in &mut cameras {
-            let (extent, scale) = match projection {
-                Projection::Orthographic(p) => (
-                    match p.scaling_mode {
-                        ScalingMode::FixedVertical { viewport_height } => viewport_height,
-                        _ => extent,
-                    },
-                    p.scale,
-                ),
-                _ => (extent, 1.0),
+            let Projection::Orthographic(p) = projection else {
+                continue;
+            };
+            let extent = match p.scaling_mode {
+                ScalingMode::FixedVertical { viewport_height } => viewport_height,
+                _ => extent,
             };
             let right = camera.rotation * Vec3::X;
-            let forward = camera.rotation * Vec3::NEG_Z;
-            let right = Vec3::new(right.x, 0.0, right.z).normalize_or_zero();
-            let forward = Vec3::new(forward.x, 0.0, forward.z).normalize_or_zero();
+            let up = camera.rotation * Vec3::Y;
             camera.translation +=
-                drag_pan_world_delta(drag_delta, window_height, extent, scale, right, forward);
+                drag_pan_world_delta(drag_delta, window_height, extent, p.scale, right, up);
         }
         return;
     }
@@ -573,6 +581,91 @@ mod tests {
             );
         }
     }
+    fn assert_drag_roundtrip(rotation: Quat, drag: Vec2, extent: f32, scale: f32, height: f32) {
+        let right = rotation * Vec3::X;
+        let up = rotation * Vec3::Y;
+        let delta = drag_pan_world_delta(drag, height, extent, scale, right, up);
+        assert!(delta.is_finite());
+        assert_eq!(delta.y, 0.0);
+        let pixels_per_world = height / (extent * scale);
+        // Moving the camera shifts a fixed world point in the opposite direction.
+        let observed_pixels = Vec2::new(-right.dot(delta), up.dot(delta)) * pixels_per_world;
+        assert!(
+            (observed_pixels - drag).length() < 0.002,
+            "{observed_pixels:?} != {drag:?}"
+        );
+    }
+
+    #[test]
+    fn ground_drag_tracks_cursor_at_every_production_initial_and_follow_pitch() {
+        for &profile in ProductionFrontendProfileId::all() {
+            let extent = production_camera_extent(profile);
+            for mode in [
+                Fvr03ProductionVoxelCameraMode::OrthographicIsometric,
+                Fvr03ProductionVoxelCameraMode::Orbit,
+            ] {
+                for transform in [
+                    crate::terrain_lighting::production_camera_transform(mode, extent),
+                    crate::terrain_lighting::production_follow_camera_transform(
+                        mode,
+                        extent,
+                        Vec3::new(83.0, 7.0, -46.0),
+                    ),
+                ] {
+                    for scale in [9.8 / extent, 1.0, 1600.0 / extent] {
+                        for height in [480.0, 720.0, 2160.0] {
+                            for drag in [
+                                Vec2::new(100.0, 0.0),
+                                Vec2::new(0.0, 100.0),
+                                Vec2::new(-123.0, 71.0),
+                            ] {
+                                assert_drag_roundtrip(
+                                    transform.rotation,
+                                    drag,
+                                    extent,
+                                    scale,
+                                    height,
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn ground_drag_handles_top_down_roll_and_pitch_limits_without_poisoning_camera() {
+        for pitch in [0.002_f32, 0.25, 0.75, std::f32::consts::FRAC_PI_2] {
+            for yaw in [0.0_f32, 1.0, -2.0] {
+                for roll in [0.0_f32, 0.6] {
+                    let rotation = Quat::from_rotation_y(yaw)
+                        * Quat::from_rotation_x(-pitch)
+                        * Quat::from_rotation_z(roll);
+                    assert_drag_roundtrip(rotation, Vec2::new(71.0, -93.0), 30.0, 2.0, 600.0);
+                }
+            }
+        }
+        for pitch in [0.0_f32, 1.0e-5, -1.0e-5] {
+            let rotation = Quat::from_rotation_x(-pitch);
+            assert_eq!(
+                drag_pan_world_delta(
+                    Vec2::ONE,
+                    600.0,
+                    30.0,
+                    1.0,
+                    rotation * Vec3::X,
+                    rotation * Vec3::Y
+                ),
+                Vec3::ZERO
+            );
+        }
+        assert_eq!(
+            drag_pan_world_delta(Vec2::ONE, 600.0, 30.0, 1.0, Vec3::X, Vec3::X),
+            Vec3::ZERO
+        );
+    }
+
     fn camera_scene(profile_id: ProductionFrontendProfileId) -> Fvr03ProductionVoxelSceneResource {
         Fvr03ProductionVoxelSceneResource {
             schema: FVR03_PRODUCTION_VOXEL_RENDERER_SCHEMA,
@@ -669,13 +762,19 @@ mod tests {
             .get_mut::<Window>(window)
             .unwrap()
             .set_cursor_position(Some(Vec2::new(799.0, 300.0)));
+        let production_transform = crate::terrain_lighting::production_follow_camera_transform(
+            Fvr03ProductionVoxelCameraMode::OrthographicIsometric,
+            30.0,
+            Vec3::ZERO,
+        );
+        let initial_position = production_transform.translation;
         let camera = app
             .world_mut()
             .spawn((
                 Fvr03ProductionVoxelCamera {
                     mode: Fvr03ProductionVoxelCameraMode::OrthographicIsometric,
                 },
-                Transform::default(),
+                production_transform,
                 Projection::Orthographic(OrthographicProjection {
                     scaling_mode: ScalingMode::FixedVertical {
                         viewport_height: 60.0,
@@ -693,7 +792,7 @@ mod tests {
         app.update();
         assert_eq!(
             app.world().get::<Transform>(camera).unwrap().translation,
-            Vec3::ZERO
+            initial_position
         );
         assert!(
             app.world()
@@ -709,9 +808,13 @@ mod tests {
         app.world_mut()
             .get_mut::<Window>(window)
             .unwrap()
-            .set_cursor_position(Some(Vec2::new(699.0, 300.0)));
+            .set_cursor_position(Some(Vec2::new(699.0, 350.0)));
         app.update();
-        assert!((app.world().get::<Transform>(camera).unwrap().translation.x - 10.0).abs() < 1e-5);
+        let delta = app.world().get::<Transform>(camera).unwrap().translation - initial_position;
+        let right = production_transform.rotation * Vec3::X;
+        let up = production_transform.rotation * Vec3::Y;
+        let projected_motion = Vec2::new(-right.dot(delta), up.dot(delta)) * 10.0;
+        assert!((projected_motion - Vec2::new(-100.0, 50.0)).length() < 0.002);
         assert!(
             !app.world()
                 .resource::<Fvr04ProductionCreatureFollowResource>()
