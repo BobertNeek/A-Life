@@ -395,6 +395,52 @@ pub(super) fn prepare_care_assistance(
     })
 }
 
+fn cue_free_food_position_in_gaze(
+    world: &alife_world::HeadlessWorld,
+    id: OrganismId,
+    food: alife_core::WorldEntityId,
+) -> Option<alife_core::Vec3f> {
+    let body = world.entity(world.organism_registry().get(id)?.world_entity_id())?;
+    let gaze = body.body_yaw + body.head_yaw;
+    // Food-only public geometry: test finite real reachable offers, never move/hide the observer or social agent.
+    for height in [0.0_f32, 0.2, 0.4, 0.6] {
+        for distance in [1.2_f32, 1.0, 0.8, 0.6, 0.4, 0.2] {
+            if distance.hypot(height) > 1.25 {
+                continue;
+            }
+            for offset in [0.0_f32, 0.35, -0.35, 0.7, -0.7] {
+                let yaw = gaze + offset;
+                let wanted = alife_core::Vec3f::new(
+                    body.position.x + distance * yaw.cos(),
+                    body.position.y + height,
+                    body.position.z + distance * yaw.sin(),
+                );
+                if world
+                    .terrain()
+                    .is_some_and(|terrain| !terrain.walkable(wanted.x, wanted.z))
+                {
+                    continue;
+                }
+                let mut trial = world.clone();
+                if !matches!(
+                    crate::foundation_training::relocate_unheld_foundation_food(
+                        &mut trial, food, wanted
+                    ),
+                    Ok(true)
+                ) {
+                    continue;
+                }
+                if trial.safe_food_eat_is_available(id, food)
+                    && care_food_is_offered_in_trial(&mut trial, id, food)
+                {
+                    return Some(wanted);
+                }
+            }
+        }
+    }
+    None
+}
+
 pub(super) fn prepare_cue_free_food_placement(
     world: &mut alife_world::HeadlessWorld,
     id: OrganismId,
@@ -431,7 +477,7 @@ pub(super) fn prepare_cue_free_food_placement(
     } else {
         source_id
     };
-    let position = care_food_position_in_gaze_for_food(&trial, id, food)
+    let position = cue_free_food_position_in_gaze(&trial, id, food)
         .ok_or("no native cue-free food placement")?;
     if !crate::foundation_training::relocate_unheld_foundation_food(&mut trial, food, position)? {
         return Err("cue-free food placement refused".into());
@@ -1973,10 +2019,13 @@ mod tests {
             prepare_cue_free_food_placement_with_receipt(&mut cue_free_trial, id).unwrap();
         assert!(cue_free_trial.safe_food_eat_is_available(id, cue_free.food));
         let scenario = prepare_care_assistance(&mut world, id).unwrap();
-        assert_eq!(
-            cue_free_trial.canonical_signature_digest().unwrap(),
-            world.canonical_signature_digest().unwrap()
-        );
+        for object in world
+            .object_snapshots()
+            .into_iter()
+            .filter(|object| object.id != scenario.food)
+        {
+            assert_eq!(cue_free_trial.entity(object.id), Some(&object));
+        }
         assert_eq!(
             serde_json::to_value(world.audible_utterances()).unwrap(),
             speech_before
@@ -2551,5 +2600,60 @@ mod tests {
         let restored_tick = 1_000_000u64;
         assert!((restored_tick + 8191).saturating_sub(restored_tick) < tick_limit(512).unwrap());
         assert!((restored_tick + 8192).saturating_sub(restored_tick) >= tick_limit(512).unwrap());
+    }
+    #[test]
+    fn optional_exact_current_cue_free_geometry_probe() {
+        let Ok(source) = std::env::var("ALIFE_CUE_FREE_PROBE_CURRENT") else {
+            return;
+        };
+        let output =
+            std::path::PathBuf::from(std::env::var("ALIFE_CUE_FREE_PROBE_OUTPUT").unwrap());
+        let original = std::fs::read(&source).unwrap();
+        std::fs::create_dir(&output).unwrap();
+        let _budget = alife_storage::OutputBudget::register(&output, 1024 * 1024 * 1024).unwrap();
+        let _validation = current::validation_scope(&output).unwrap();
+        let checkpoint = read_current_training_checkpoint(std::path::Path::new(&source)).unwrap();
+        let life = output.join("life");
+        materialize_current_training_life(&checkpoint, &life).unwrap();
+        let (_, loaded) = crate::GpuDurableSaveManifest::open_loaded(
+            &life.join("world.json"),
+            &life.join("world-assets"),
+        )
+        .unwrap();
+        let mut world = loaded.save.restore_headless_world().unwrap();
+        let id = world
+            .organism_registry()
+            .iter()
+            .next()
+            .unwrap()
+            .organism_id();
+        let tick = world.tick();
+        let body_before = *world.organism_registry().get(id).unwrap().biochemistry();
+        let teacher_before = world
+            .entity_id("nursery-teacher")
+            .and_then(|teacher| world.entity(teacher))
+            .cloned();
+        let (care, receipt) = prepare_cue_free_food_placement_with_receipt(&mut world, id).unwrap();
+        assert!(world.safe_food_eat_is_available(id, care.food));
+        assert!(care_food_is_offered(&world, id, care.food));
+        assert_eq!(world.tick(), tick);
+        assert_eq!(
+            *world.organism_registry().get(id).unwrap().biochemistry(),
+            body_before
+        );
+        assert_eq!(
+            world
+                .entity_id("nursery-teacher")
+                .and_then(|teacher| world.entity(teacher))
+                .cloned(),
+            teacher_before
+        );
+        assert_eq!(std::fs::read(&source).unwrap(), original);
+        std::fs::write(
+            output.join("NATIVE-FOOD-GEOMETRY-PROBE.json"),
+            serde_json::to_vec_pretty(&receipt).unwrap(),
+        )
+        .unwrap();
+        println!("NATIVE_EXACT_CURRENT_GEOMETRY_PASS {}", output.display());
     }
 }
