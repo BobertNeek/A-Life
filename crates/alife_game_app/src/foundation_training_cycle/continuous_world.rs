@@ -2014,12 +2014,14 @@ mod tests {
             prepare_cue_free_food_placement_with_receipt(&mut consumed_trial, id).unwrap();
         assert_ne!(renewed.food, scenario.food);
         assert_eq!(consumed_trial.entity(scenario.food).unwrap(), &consumed);
+        let mut expected_static_descriptor = consumed.grounded_physical.clone();
+        expected_static_descriptor.velocity = alife_core::Vec3f::ZERO;
         assert_eq!(
             consumed_trial
                 .entity(renewed.food)
                 .unwrap()
                 .grounded_physical,
-            consumed.grounded_physical
+            expected_static_descriptor
         );
         assert_eq!(
             consumed_trial.entity(renewed.food).unwrap().nutrition,
