@@ -272,7 +272,13 @@ impl SameIndividualCurrentV1 {
         )?;
         if self.counting_scope != "retained-same-individual-ppo-since-first-tag"
             || self.schema != 1
-            || self.kind != "same-individual-ppo-v1"
+            || !(self.kind == "same-individual-ppo-v1"
+                || self.kind == "same-individual-direct-weights-v1")
+            || (self.kind == "same-individual-direct-weights-v1"
+                && (p.completed_updates != 0
+                    || p.trained_rows != 0
+                    || p.world_tick != p.session_start_world_tick
+                    || current.handoff.value.optimizer_step != self.baseline_value_optimizer_step))
             || current.handoff.continuation != FoundationContinuationKindV1::SameIndividual
             || p.session_nonce == 0
             || p.session_nonce == current.seed
@@ -348,6 +354,46 @@ impl CurrentTrainingCheckpointV1 {
             return Err("same-individual baseline bytes differ from admitted source state".into());
         }
         Ok(format!("{:x}", Sha256::digest(bytes)))
+    }
+
+    /// Native direct-weight successor. All Adam/value state is retained exactly; edits are not PPO.
+    pub fn same_individual_direct_weight_successor(
+        &self,
+        baseline_bytes: &[u8],
+        handoff: FoundationTrainingHandoffV1,
+        life: CurrentLifeCheckpointV1,
+        progress: SameIndividualProgressV1,
+        seeds: CheckpointSeedsV1,
+    ) -> Result<Self> {
+        let old = &self.handoff.actor;
+        let new = &handoff.actor;
+        let bits_equal = |a: &[f32], b: &[f32]| {
+            a.len() == b.len() && a.iter().zip(b).all(|(a, b)| a.to_bits() == b.to_bits())
+        };
+        if progress.trained_rows != 0
+            || progress.completed_updates != 0
+            || progress.world_tick != progress.session_start_world_tick
+            || handoff.policy_version != self.handoff.policy_version
+            || old.optimizer_step != new.optimizer_step
+            || old.update_ages != new.update_ages
+            || !bits_equal(&old.first_moment, &new.first_moment)
+            || !bits_equal(&old.second_moment, &new.second_moment)
+            || sha(&self.handoff.value)? != sha(&handoff.value)?
+            || bits_equal(&old.weights, &new.weights)
+        {
+            return Err(
+                "direct calibration changed optimizer/value/time state or has no real weight edits"
+                    .into(),
+            );
+        }
+        let mut next =
+            self.same_individual_successor(baseline_bytes, handoff, life, progress, seeds)?;
+        next.same_individual
+            .as_mut()
+            .ok_or("calibration tag missing")?
+            .kind = "same-individual-direct-weights-v1".into();
+        next.validate()?;
+        Ok(next)
     }
 
     pub fn same_individual_successor(

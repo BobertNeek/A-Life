@@ -50,6 +50,28 @@ impl N2048LivePolicyTransition {
         )
     }
 
+    /// Explicit research calibration: change immutable weight identity without inventing a PPO update.
+    /// The numerical version remains the PPO sequence; foundation/phenotype digests distinguish this policy.
+    pub fn calibrate_existing_policy(
+        previous_inputs: &PhenotypeCompilerInputs,
+        policy_version: u64,
+        next_asset: FoundationWeightAsset,
+    ) -> Result<Self, ScaffoldContractError> {
+        if previous_inputs
+            .live_policy()
+            .map(|marker| marker.policy_version)
+            != Some(policy_version)
+        {
+            return Err(ScaffoldContractError::PhenotypeCompile);
+        }
+        Self::prepare_bound(
+            previous_inputs,
+            Some(policy_version),
+            policy_version,
+            next_asset,
+        )
+    }
+
     /// A legacy private packet predates explicit runtime policy provenance.
     /// Install the admitted global head without inventing its private policy age.
     pub fn adopt_existing_policy(
