@@ -2544,6 +2544,7 @@ mod tests {
     #[test]
     fn observation_off_preserves_exact_prior_resume_without_delivering_hints() {
         let mut enabled = prior();
+        enabled.require_rich_information();
         enabled
             .cache
             .insert(bounded_context(&draft(), &[]), output());
