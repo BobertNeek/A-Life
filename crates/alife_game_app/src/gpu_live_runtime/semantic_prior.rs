@@ -149,6 +149,7 @@ struct Pending {
 }
 #[derive(Default)]
 struct Life {
+    suspended_resume: Option<Vec<u8>>,
     controller: DevelopmentalPriorController,
     pending: Option<Pending>,
     active: Option<(String, SemanticPriorPacket, LocalSlmPriorOutput)>,
@@ -563,6 +564,14 @@ impl RuntimeSemanticPrior {
         let tick = draft.tick();
         // Organism/sequence corruption is not an optional provider failure.
         SemanticPriorRequest::new(id, sequence)?;
+        if self
+            .lives
+            .get(&id.raw())
+            .is_some_and(|life| life.suspended_resume.is_some())
+        {
+            return Ok(draft);
+        }
+
         if draft.sensor_profile() != alife_core::SensorProfile::GroundedTerrainVisionV1 {
             self.lives.entry(id.raw()).or_default().input_status =
                 PriorInputStatus::UnsupportedProfile;
@@ -1008,6 +1017,9 @@ impl RuntimeSemanticPrior {
         let Some(life) = self.lives.get(&id) else {
             return Ok(None);
         };
+        if let Some(bytes) = &life.suspended_resume {
+            return Ok(Some(bytes.clone()));
+        }
         let state = PriorResume {
             schema: 1,
             provider: self.metrics.provider_identity.clone(),
@@ -1030,6 +1042,23 @@ impl RuntimeSemanticPrior {
         id: u64,
         tick: u64,
         bytes: &[u8],
+    ) -> Result<(), alife_core::ScaffoldContractError> {
+        self.restore_life_options(id, tick, bytes, false)
+    }
+    pub fn restore_life_preserving_disabled(
+        &mut self,
+        id: u64,
+        tick: u64,
+        bytes: &[u8],
+    ) -> Result<(), alife_core::ScaffoldContractError> {
+        self.restore_life_options(id, tick, bytes, true)
+    }
+    fn restore_life_options(
+        &mut self,
+        id: u64,
+        tick: u64,
+        bytes: &[u8],
+        preserve_disabled: bool,
     ) -> Result<(), alife_core::ScaffoldContractError> {
         use alife_core::Validate;
         let invalid = || alife_core::ScaffoldContractError::InvalidSparseProjectionSchema;
@@ -1065,6 +1094,22 @@ impl RuntimeSemanticPrior {
                 return Err(invalid());
             }
         }
+        if preserve_disabled {
+            if self.metrics.backend != "off" || self.queue.is_some() || self.deterministic.is_some()
+            {
+                return Err(invalid());
+            }
+            self.next_request = self.next_request.max(state.next_request);
+            self.lives.insert(
+                id,
+                Life {
+                    suspended_resume: Some(bytes.to_vec()),
+                    controller: state.controller,
+                    ..Default::default()
+                },
+            );
+            return Ok(());
+        }
         let provider_changed = state.provider != self.metrics.provider_identity;
         if provider_changed {
             // Swapping an optional service drops only its validated old hints,
@@ -1082,6 +1127,7 @@ impl RuntimeSemanticPrior {
         self.lives.insert(
             id,
             Life {
+                suspended_resume: None,
                 controller: state.controller,
                 pending: None,
                 active: if provider_changed { None } else { state.active },
@@ -2494,5 +2540,35 @@ mod tests {
             reenabled.lives[&5].controller.developmental_gain(),
             before.developmental_gain()
         );
+    }
+    #[test]
+    fn observation_off_preserves_exact_prior_resume_without_delivering_hints() {
+        let mut enabled = prior();
+        enabled.require_rich_information();
+        enabled
+            .cache
+            .insert(bounded_context(&draft(), &[]), output());
+        enabled.prepare(draft(), ExperienceSequenceId(1)).unwrap();
+        let bytes = enabled.snapshot(5).unwrap().unwrap();
+        let saved: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert!(!saved["active"].is_null());
+        let mut off = prior();
+        off.queue = None;
+        off.deterministic = None;
+        off.metrics.backend = "off".into();
+        off.metrics.provider_identity = "off-state-carrier".into();
+        off.restore_life_preserving_disabled(5, 0, &bytes).unwrap();
+        assert_eq!(off.snapshot(5).unwrap().unwrap(), bytes);
+        let unaided = off.prepare(draft(), ExperienceSequenceId(2)).unwrap();
+        assert!(unaided.sensory().semantic_context.is_none());
+        assert_eq!(off.snapshot(5).unwrap().unwrap(), bytes);
+        assert_eq!(off.metrics.requests, 0);
+        assert!(off
+            .restore_life_preserving_disabled(5, 0, b"invalid")
+            .is_err());
+        let mut not_off = prior();
+        assert!(not_off
+            .restore_life_preserving_disabled(5, 0, &bytes)
+            .is_err());
     }
 }

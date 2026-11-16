@@ -367,7 +367,7 @@ pub fn evaluate_saved_life_retention(
         .collect::<Vec<_>>();
     let backend = GpuClosedLoopBackend::new_required(GpuRuntimeProfile::production_v1())?;
     receipt["hardware"] = serde_json::to_value(backend.hardware_receipt())?;
-    let mut runtime = GpuLiveBrainRuntime::restore_foundation_rehearsal(
+    let mut runtime = GpuLiveBrainRuntime::restore_foundation_observation(
         backend,
         world,
         world_seed,
