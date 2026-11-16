@@ -2064,6 +2064,7 @@ fn run_exact_population_checkpoint_finalize_worker(
 
 #[derive(Debug, Clone, Copy)]
 struct GpuLiveRuntimeConstructionOptions {
+    preserve_disabled_prior_resume: bool,
     audited_cognition: bool,
     #[cfg(feature = "foundation-training")]
     training_sampling: Option<alife_gpu_backend::GpuTrainingSamplingConfig>,
@@ -2077,6 +2078,7 @@ struct GpuLiveRuntimeConstructionOptions {
 impl GpuLiveRuntimeConstructionOptions {
     const fn production() -> Self {
         Self {
+            preserve_disabled_prior_resume: false,
             audited_cognition: false,
             #[cfg(feature = "foundation-training")]
             training_sampling: None,
@@ -2095,6 +2097,7 @@ impl GpuLiveRuntimeConstructionOptions {
 
     const fn benchmark(homeostatic_parameters: HomeostaticParameters) -> Self {
         Self {
+            preserve_disabled_prior_resume: false,
             audited_cognition: false,
             #[cfg(feature = "foundation-training")]
             training_sampling: None,
@@ -2108,6 +2111,7 @@ impl GpuLiveRuntimeConstructionOptions {
 
     const fn causal_acceptance() -> Self {
         Self {
+            preserve_disabled_prior_resume: false,
             audited_cognition: true,
             #[cfg(feature = "foundation-training")]
             training_sampling: None,
@@ -2125,6 +2129,7 @@ impl GpuLiveRuntimeConstructionOptions {
     #[cfg(feature = "gpu-tests")]
     const fn soak() -> Self {
         Self {
+            preserve_disabled_prior_resume: false,
             audited_cognition: true,
             #[cfg(feature = "foundation-training")]
             training_sampling: None,
@@ -6231,6 +6236,43 @@ impl GpuLiveBrainRuntime {
         )
     }
 
+    /// Frozen-head observation preserves disabled provider history without delivering it.
+    #[cfg(feature = "foundation-training")]
+    #[allow(clippy::too_many_arguments)]
+    pub fn restore_foundation_observation(
+        backend: GpuClosedLoopBackend,
+        world: HeadlessWorld,
+        deterministic_seed: u64,
+        brain_class: BrainScaleTier,
+        store: &GpuCheckpointAssetStore,
+        manifest: &AssetManifest,
+        checkpoints: &[GpuBrainSaveState],
+        sampling: alife_gpu_backend::GpuTrainingSamplingConfig,
+    ) -> Result<Self, GameAppShellError> {
+        sampling.validate()?;
+        if sampling.demonstrator.is_some()
+            || checkpoints
+                .iter()
+                .any(|state| state.pending_eligibility.is_some())
+        {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
+        }
+        let mut options = GpuLiveRuntimeConstructionOptions::production();
+        options.training_sampling = Some(sampling);
+        options.audited_cognition = true;
+        options.preserve_disabled_prior_resume = true;
+        Self::restore_with_checkpoint_options(
+            backend,
+            world,
+            deterministic_seed,
+            brain_class,
+            store,
+            manifest,
+            checkpoints,
+            options,
+        )
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn restore_with_checkpoint_options(
         backend: GpuClosedLoopBackend,
@@ -6410,7 +6452,15 @@ impl GpuLiveBrainRuntime {
                         &mut runtime.semantic_prior,
                         &exact_cognitive_state.private_semantic_prior,
                     ) {
-                        prior.restore_life(organism_id.raw(), world_tick.raw(), bytes)?;
+                        if options.preserve_disabled_prior_resume {
+                            prior.restore_life_preserving_disabled(
+                                organism_id.raw(),
+                                world_tick.raw(),
+                                bytes,
+                            )?;
+                        } else {
+                            prior.restore_life(organism_id.raw(), world_tick.raw(), bytes)?;
+                        }
                     }
                     runtime.restore_private_training_sampling(
                         organism_id,
