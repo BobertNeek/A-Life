@@ -1,4 +1,4 @@
-//! Read-only saved-life evaluation, never a training or checkpoint publication entrypoint.
+//! Frozen-head saved-life evaluation. Publishes only its advanced copy endpoint, never the source store.
 use std::{ffi::OsString, path::PathBuf};
 
 type Error = Box<dyn std::error::Error>;
@@ -17,11 +17,12 @@ fn main() -> Result<(), Error> {
         println!(
             "{}",
             serde_json::json!({
-                "kind":"saved-life-retention-v1", "request_schema":1,
+                "kind":"saved-life-retention-v2", "request_schema":2,
                 "restores_saved_life":true, "requires_saved_sampling_stream":true,
                 "offline_actor_updates":false, "offline_value_updates":false,
                 "ordinary_private_learning_active":true, "requires_prior_off":true,
-                "rejects_existing_teacher_cues":true,
+                "rejects_existing_teacher_cues":true, "allows_passive_label_only_teacher_objects":true,
+                "preserves_final_private_current":true, "requires_admitted_or_fresh_session_nonce":true, "restore_only_bounds":[0,0],
                 "max_decisions":256, "max_world_ticks":8192, "max_deadline_seconds":600
             })
         );
