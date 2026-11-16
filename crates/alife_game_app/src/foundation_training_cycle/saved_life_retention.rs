@@ -18,16 +18,24 @@ pub struct SavedLifeRetentionRequest {
     pub schema: u16,
     /// Assessment identity only; never changes the saved sampling seed or stream.
     pub evaluation_nonce: u64,
+    /// Explicit public near-food task setup, identical to the retained PPO placement-only mode.
+    #[serde(default, skip_serializing_if = "retention_false")]
+    pub cue_free_food_placement: bool,
     pub max_decisions: usize,
     pub max_world_ticks: u64,
     pub deadline_unix_seconds: u64,
     pub max_output_bytes: u64,
 }
 
+fn retention_false(value: &bool) -> bool {
+    !*value
+}
+
 impl SavedLifeRetentionRequest {
     pub fn validate(&self, now: u64) -> Result<()> {
         if self.schema != 2
             || self.evaluation_nonce == 0
+            || (self.cue_free_food_placement && self.max_decisions == 0)
             || !((self.max_decisions == 0 && self.max_world_ticks == 0)
                 || ((1..=256).contains(&self.max_decisions)
                     && (1..=8192).contains(&self.max_world_ticks)))
@@ -378,6 +386,13 @@ pub fn evaluate_saved_life_retention(
         cycle_sampling_config(world_seed, baseline.handoff.policy_version, 1.0)?,
     )?;
     runtime.rebind_durable_checkpoint_boundary(&save_path, &assets, &loaded.save)?;
+    if request.cue_free_food_placement {
+        let (_, setup) = super::continuous_world::prepare_cue_free_food_placement_with_receipt(
+            runtime.world_mut(),
+            id,
+        )?;
+        receipt["public_task_setup"] = setup;
+    }
     if !runtime.foundation_training_sampling_was_restored(id) {
         return Err("retention refuses an invented replacement sampling stream".into());
     }
@@ -751,6 +766,7 @@ mod tests {
             SavedLifeRetentionRequest {
                 schema: 2,
                 evaluation_nonce: 71,
+                cue_free_food_placement: false,
                 max_decisions: 2,
                 max_world_ticks: 8,
                 deadline_unix_seconds: now().unwrap() + 600,
@@ -761,6 +777,7 @@ mod tests {
         let request = SavedLifeRetentionRequest {
             schema: 2,
             evaluation_nonce: 71,
+            cue_free_food_placement: false,
             max_decisions: 2,
             max_world_ticks: 8,
             deadline_unix_seconds: now().unwrap() + 600,
@@ -807,6 +824,7 @@ mod tests {
             SavedLifeRetentionRequest {
                 schema: 2,
                 evaluation_nonce: 71,
+                cue_free_food_placement: false,
                 max_decisions: 0,
                 max_world_ticks: 8,
                 deadline_unix_seconds: now().unwrap() + 600,
@@ -853,12 +871,16 @@ mod tests {
         let r = SavedLifeRetentionRequest {
             schema: 2,
             evaluation_nonce: 71,
+            cue_free_food_placement: false,
             max_decisions: 0,
             max_world_ticks: 0,
             deadline_unix_seconds: 200,
             max_output_bytes: 512 * 1024 * 1024,
         };
         r.validate(100).unwrap();
+        let mut with_placement = r.clone();
+        with_placement.cue_free_food_placement = true;
+        assert!(with_placement.validate(100).is_err());
         let mut bad = r.clone();
         bad.max_world_ticks = 1;
         assert!(bad.validate(100).is_err());
@@ -874,6 +896,7 @@ mod tests {
         let r = SavedLifeRetentionRequest {
             schema: 2,
             evaluation_nonce: 71,
+            cue_free_food_placement: false,
             max_decisions: 128,
             max_world_ticks: 2048,
             deadline_unix_seconds: 200,

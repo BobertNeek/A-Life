@@ -54,6 +54,12 @@ pub struct ResidentContinuousRequest {
     /// Opt-in training-only ordinary food placement and spatial language cues.
     #[serde(default, skip_serializing_if = "is_false")]
     pub care_assistance: bool,
+    /// Public near-food placement only. Never emits spatial language cues or follows the learner.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub cue_free_food_placement: bool,
+    /// Keep validated inherited external-prior history suspended while future delivery is off.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub preserve_disabled_prior_history: bool,
     /// Opt-in sparse supervised Eat loss on grounded, reachable safe food.
     /// Zero keeps the production PPO objective and request identity unchanged.
     #[serde(default, skip_serializing_if = "is_zero")]
@@ -74,6 +80,7 @@ fn is_false(value: &bool) -> bool {
 
 pub fn validate_resident_continuous_request(r: &ResidentContinuousRequest, now: u64) -> Result<()> {
     if r.schema != 1
+        || (r.care_assistance && r.cue_free_food_placement)
         || r.seed_range[0] == 0
         || r.seed_range[0] > r.seed_range[1]
         || !(1..=10_000_000).contains(&r.total_trained_decisions)
@@ -1102,6 +1109,8 @@ mod tests {
             decisions_per_update: 10,
             snapshot_every_updates: 2,
             care_assistance: false,
+            cue_free_food_placement: false,
+            preserve_disabled_prior_history: false,
             safe_food_imitation_coefficient: 0.0,
             sampling_temperature: 1.,
             collection_cutoff_unix_seconds: 200,
@@ -1460,5 +1469,20 @@ mod tests {
             read_outcome(&run, &o, "continuous-terminal.bin").unwrap(),
             Some(event)
         );
+    }
+    #[test]
+    fn cue_free_placement_is_explicit_and_not_spatial_cue_assistance() {
+        let mut r = request();
+        let legacy = serde_json::to_value(&r).unwrap();
+        assert!(legacy.get("cue_free_food_placement").is_none());
+        assert!(legacy.get("preserve_disabled_prior_history").is_none());
+        r.cue_free_food_placement = true;
+        r.preserve_disabled_prior_history = true;
+        validate_resident_continuous_request(&r, 100).unwrap();
+        let roundtrip: ResidentContinuousRequest =
+            serde_json::from_value(serde_json::to_value(&r).unwrap()).unwrap();
+        assert_eq!(roundtrip, r);
+        r.care_assistance = true;
+        assert!(validate_resident_continuous_request(&r, 100).is_err());
     }
 }

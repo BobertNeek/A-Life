@@ -365,12 +365,12 @@ fn care_food_position_in_gaze(
     None
 }
 
-struct ContinuousCareAssistance {
-    food: alife_core::WorldEntityId,
+pub(super) struct ContinuousCareAssistance {
+    pub(super) food: alife_core::WorldEntityId,
     start_tick: u64,
 }
 
-fn prepare_care_assistance(
+pub(super) fn prepare_care_assistance(
     world: &mut alife_world::HeadlessWorld,
     id: OrganismId,
 ) -> Result<ContinuousCareAssistance> {
@@ -386,6 +386,37 @@ fn prepare_care_assistance(
         food,
         start_tick: world.tick().raw(),
     })
+}
+
+pub(super) fn prepare_cue_free_food_placement(
+    world: &mut alife_world::HeadlessWorld,
+    id: OrganismId,
+) -> Result<ContinuousCareAssistance> {
+    // Qualification and rejected placement are disposable; never leave a partial public edit.
+    let mut trial = world.clone();
+    let care = prepare_care_assistance(&mut trial, id)?;
+    if !trial.safe_food_eat_is_available(id, care.food) {
+        return Err("cue-free near-food placement has no native Eat opportunity".into());
+    }
+    *world = trial;
+    Ok(care)
+}
+
+pub(super) fn prepare_cue_free_food_placement_with_receipt(
+    world: &mut alife_world::HeadlessWorld,
+    id: OrganismId,
+) -> Result<(ContinuousCareAssistance, serde_json::Value)> {
+    let before = world
+        .object_snapshots()
+        .into_iter()
+        .map(alife_world::WorldObjectSaveState::from)
+        .collect::<Vec<_>>();
+    let placed = prepare_cue_free_food_placement(world, id)?;
+    let receipt = serde_json::json!({"kind":"cue-free-near-food-placement-v1","food_target":placed.food.raw(),
+        "objects_before":before,"objects_after":world.object_snapshots().into_iter().map(alife_world::WorldObjectSaveState::from).collect::<Vec<_>>(),
+        "world_tick":world.tick().raw(),"forced_action":false,"teacher_cues_emitted":0,
+        "native_safe_eat_available":true,"private_or_body_reset":false,"reward_override":false});
+    Ok((placed, receipt))
 }
 
 fn expose_care_cue(
@@ -732,7 +763,12 @@ pub(super) fn run_same_individual_world(
         .collect::<Vec<_>>();
     let backend = GpuClosedLoopBackend::new_required(GpuRuntimeProfile::production_v1())?;
     let hardware = backend.hardware_receipt().clone();
-    let mut runtime = GpuLiveBrainRuntime::restore_foundation_rehearsal(
+    let restore = if request.preserve_disabled_prior_history {
+        GpuLiveBrainRuntime::restore_foundation_observation
+    } else {
+        GpuLiveBrainRuntime::restore_foundation_rehearsal
+    };
+    let mut runtime = restore(
         backend,
         world,
         world_seed,
@@ -777,6 +813,9 @@ pub(super) fn run_same_individual_world(
         }
         Some(_) => return Err("saved live policy is not the admitted global policy".into()),
         None => {
+            if request.cue_free_food_placement {
+                return Err("matched cue-free training requires an admitted live policy, not legacy sleep/adoption".into());
+            }
             // Legacy fresh-cohort Current paired a PRE-PPO individual with newer
             // global heads. Adopt those accepted heads once, preserving all
             // mutable private state; do not pretend the private actor was newer.
@@ -836,6 +875,22 @@ pub(super) fn run_same_individual_world(
         let mut care_cue_deferrals = 0u64;
         let mut care_food_repositions = 0u64;
         let mut care_initial_food_placements = 0u64;
+        if request.cue_free_food_placement {
+            let (scenario, setup) =
+                prepare_cue_free_food_placement_with_receipt(runtime.world_mut(), id)?;
+            let mut evidence = ContinuousFoodEvidence {
+                target: scenario.food,
+                outcome: crate::FoundationFoodOutcome::new(id, scenario.food),
+                provenance: FoodMealProvenance::default(),
+            };
+            evidence
+                .provenance
+                .repositioned(runtime.world().tick().raw());
+            food.insert(scenario.food.raw(), evidence);
+            care_initial_food_placements = 1;
+            care_scenario = Some(scenario);
+            on_update(setup)?;
+        }
         let mut last_care_cue_tick = None;
         let mut last_food_token_heard = None;
         let mut captured_meal_provenance = MealProvenanceSummary::default();
@@ -905,7 +960,7 @@ pub(super) fn run_same_individual_world(
             let mut meal_links = Vec::new();
             let mut care_rows = Vec::new();
             let care_before = care_world_observation(runtime.world(), id);
-            if let Some(scenario) = care_scenario.as_ref() {
+            if let Some(scenario) = care_scenario.as_ref().filter(|_| request.care_assistance) {
                 let observation = care_world_observation(runtime.world(), id);
                 let far = observation["food"].as_array().is_some_and(|foods| {
                     foods.iter().any(|food| {
@@ -979,7 +1034,9 @@ pub(super) fn run_same_individual_world(
                 if request.care_assistance {
                     if care_scenario.is_none() {
                         let tick = runtime.world().tick().raw();
-                        let recovery = if care_cue_due(tick, 0, true, last_care_cue_tick) {
+                        let recovery = if request.care_assistance
+                            && care_cue_due(tick, 0, true, last_care_cue_tick)
+                        {
                             repair_overlapping_care_teacher(runtime.world_mut(), id)?
                         } else {
                             None
@@ -1022,7 +1079,7 @@ pub(super) fn run_same_individual_world(
                                 .repositioned(runtime.world().tick().raw());
                             on_update(serde_json::json!({"kind":"continuous-care-assistance-v1",
                             "session_nonce":session_nonce,"world_tick":runtime.world().tick().raw(),
-                            "mode":"ordinary_feeding_scene_and_spatial_eat_food_cues",
+                            "mode":if request.care_assistance {"ordinary_feeding_scene_and_spatial_eat_food_cues"} else {"public_near_food_placement_without_cues"},
                             "food_target":scenario.food.raw(),"reward_override":false,
                             "biology_override":false,"forced_action":false,
                             "state":care_world_observation(runtime.world(), id)}))?;
@@ -1035,7 +1092,14 @@ pub(super) fn run_same_individual_world(
                             .world()
                             .entity(scenario.food)
                             .is_some_and(|food| !food.consumed);
-                        if care_cue_due(tick, scenario.start_tick, available, last_care_cue_tick) {
+                        if request.care_assistance
+                            && care_cue_due(
+                                tick,
+                                scenario.start_tick,
+                                available,
+                                last_care_cue_tick,
+                            )
+                        {
                             // Ordinary food can regrow after an actual meal while the
                             // learner walks away within a 512-decision window. Keep
                             // the assistance explicit and bounded to the cue cadence.
@@ -1536,7 +1600,7 @@ pub(super) fn run_same_individual_world(
                 "observed_food_entity_count":food.len(),"semantic_prior":compact_prior(&runtime, care_cue_emissions),
                 "safe_food_imitation_coefficient":request.safe_food_imitation_coefficient,
                 "care_assistance_requested":request.care_assistance,
-                "care_assistance_active":care_scenario.is_some(),"care_cue_emissions":care_cue_emissions,"care_cue_deferrals":care_cue_deferrals,
+                "care_assistance_active":request.care_assistance && care_scenario.is_some(),"cue_free_food_placement_requested":request.cue_free_food_placement,"cue_free_food_placement_active":request.cue_free_food_placement && care_scenario.is_some(),"preserve_disabled_prior_history":request.preserve_disabled_prior_history,"care_cue_emissions":care_cue_emissions,"care_cue_deferrals":care_cue_deferrals,
                 "care_food_repositions":care_food_repositions,
                 "care_initial_food_placements":care_initial_food_placements,
                 "care_before":care_before,"care_after":care_after,
@@ -1641,7 +1705,7 @@ pub(super) fn run_same_individual_world(
                 "semantic_prior":compact_prior(&runtime, care_cue_emissions),
                 "safe_food_imitation_coefficient":request.safe_food_imitation_coefficient,
                 "care_assistance_requested":request.care_assistance,
-                "care_assistance_active":care_scenario.is_some(),"care_cue_emissions":care_cue_emissions,"care_cue_deferrals":care_cue_deferrals,
+                "care_assistance_active":request.care_assistance && care_scenario.is_some(),"cue_free_food_placement_requested":request.cue_free_food_placement,"cue_free_food_placement_active":request.cue_free_food_placement && care_scenario.is_some(),"preserve_disabled_prior_history":request.preserve_disabled_prior_history,"care_cue_emissions":care_cue_emissions,"care_cue_deferrals":care_cue_deferrals,
                 "care_food_repositions":care_food_repositions,
                 "care_initial_food_placements":care_initial_food_placements,
                 "snapshot_seconds":snapshot_seconds,"producer_seconds":started.elapsed().as_secs_f64(),
@@ -1851,7 +1915,31 @@ mod tests {
         let id = world.organism_entity_ids()[0].0;
         let before = *world.organism_registry().get(id).unwrap().biochemistry();
         let tick = world.tick();
+        let speech_before = serde_json::to_value(world.audible_utterances()).unwrap();
+        let teacher_before = world
+            .entity_id("nursery-teacher")
+            .and_then(|teacher| world.entity(teacher))
+            .cloned();
+        let mut cue_free_trial = world.clone();
+        let (cue_free, _) =
+            prepare_cue_free_food_placement_with_receipt(&mut cue_free_trial, id).unwrap();
+        assert!(cue_free_trial.safe_food_eat_is_available(id, cue_free.food));
         let scenario = prepare_care_assistance(&mut world, id).unwrap();
+        assert_eq!(
+            cue_free_trial.canonical_signature_digest().unwrap(),
+            world.canonical_signature_digest().unwrap()
+        );
+        assert_eq!(
+            serde_json::to_value(world.audible_utterances()).unwrap(),
+            speech_before
+        );
+        assert_eq!(
+            world
+                .entity_id("nursery-teacher")
+                .and_then(|teacher| world.entity(teacher))
+                .cloned(),
+            teacher_before
+        );
         assert_eq!(
             *world.organism_registry().get(id).unwrap().biochemistry(),
             before
