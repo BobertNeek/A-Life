@@ -7598,6 +7598,22 @@ mod tests {
             })
             .collect();
 
+        assert_eq!(most_urgent_creature_index(&refs, None, Some(calm_id)), None);
+        assert_eq!(
+            most_urgent_creature_index(&[], Some(&frame.current), None),
+            None
+        );
+        let mut invalid = frame.current.organism(hungry_id).unwrap().clone();
+        invalid.object.consumed = true;
+        assert_eq!(creature_care_urgency_score(&invalid), None);
+        invalid.object.consumed = false;
+        invalid.biochemistry.homeostasis.drives.hunger = f32::NAN;
+        invalid.biochemistry.homeostasis.drives.fatigue = f32::NAN;
+        invalid.biochemistry.homeostasis.drives.fear = f32::NAN;
+        invalid.biochemistry.homeostasis.hormones.sleep_pressure = f32::NAN;
+        invalid.biochemistry.body.energy = f32::NAN;
+        assert_eq!(creature_care_urgency_score(&invalid), None);
+
         // KeyN jumps from a comfortable creature to the most distressed one (`hungry`),
         // then cycles across all warning-level creatures (`hungry` <-> `tired`).
         assert_eq!(
