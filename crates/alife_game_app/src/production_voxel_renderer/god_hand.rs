@@ -244,8 +244,13 @@ fn slide_player_hold(
     terrain_bound: bool,
     mut try_move: impl FnMut(Vec3f) -> bool,
 ) -> Option<Vec3f> {
+    // Ordinary open-ground movement needs neither allocation nor a ring search.
+    if try_move(desired) {
+        return Some(desired);
+    }
     hold_slide_candidates(desired, current, terrain_bound)
         .into_iter()
+        .skip(1)
         .find(|candidate| try_move(*candidate))
 }
 
