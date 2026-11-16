@@ -18,19 +18,36 @@ pub struct SavedLifeRetentionRequest {
     pub schema: u16,
     /// Assessment identity only; never changes the saved sampling seed or stream.
     pub evaluation_nonce: u64,
+    /// Explicit public near-food task setup, identical to the retained PPO placement-only mode.
+    #[serde(default, skip_serializing_if = "retention_false")]
+    pub cue_free_food_placement: bool,
     pub max_decisions: usize,
     pub max_world_ticks: u64,
     pub deadline_unix_seconds: u64,
+    /// Persistence-only finalization, at most120 seconds beyond collection. No extra biological steps.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub finalization_deadline_unix_seconds: Option<u64>,
     pub max_output_bytes: u64,
+}
+
+fn retention_false(value: &bool) -> bool {
+    !*value
 }
 
 impl SavedLifeRetentionRequest {
     pub fn validate(&self, now: u64) -> Result<()> {
         if self.schema != 2
             || self.evaluation_nonce == 0
+            || (self.cue_free_food_placement && self.max_decisions == 0)
             || !((self.max_decisions == 0 && self.max_world_ticks == 0)
                 || ((1..=256).contains(&self.max_decisions)
                     && (1..=8192).contains(&self.max_world_ticks)))
+            || self
+                .finalization_deadline_unix_seconds
+                .is_some_and(|deadline| {
+                    deadline < self.deadline_unix_seconds
+                        || deadline > self.deadline_unix_seconds.saturating_add(120)
+                })
             || self.deadline_unix_seconds <= now
             || self.deadline_unix_seconds > now.saturating_add(600)
             || !(64 * 1024 * 1024..=8 * 1024 * 1024 * 1024).contains(&self.max_output_bytes)
@@ -155,7 +172,13 @@ fn preserve_endpoint(
     temperature: f32,
     request_sha256: &str,
     seeds: alife_training::CheckpointSeedsV1,
+    finalization_deadline_unix_seconds: u64,
 ) -> Result<serde_json::Value> {
+    let final_world_tick = runtime.world().tick();
+    runtime.quiesce_live_foundation_checkpoint(finalization_deadline_unix_seconds)?;
+    if runtime.world().tick() != final_world_tick {
+        return Err("persistence-only finalization advanced the world".into());
+    }
     let exact = runtime.capture_portable_checkpoint()?;
     let published = crate::GpuDurableSaveManifest::publish_snapshot(save_path, assets, &exact)?;
     if published.save != exact {
@@ -239,7 +262,7 @@ fn preserve_endpoint(
         serde_json::json!({"path":"final.alife-checkpoint","sha256":digest(&bytes),
         "world_tick":runtime.world().tick().raw(),"same_individual":true,
         "actor_value_Adam_unchanged":true,"offline_trained_rows":0,"offline_updates":0,
-        "private_world_memory_neural_and_sampling_preserved":true,"living_continuation":alive,
+        "private_world_memory_neural_and_sampling_preserved":true,"living_continuation":alive,"persistence_only_checkpoint_quiesced":true,"finalization_deadline_unix_seconds":finalization_deadline_unix_seconds,
         "source_current_sha256":digest(baseline_bytes),"zero_step_equality":zero_step_equality}),
     )
 }
@@ -378,6 +401,13 @@ pub fn evaluate_saved_life_retention(
         cycle_sampling_config(world_seed, baseline.handoff.policy_version, 1.0)?,
     )?;
     runtime.rebind_durable_checkpoint_boundary(&save_path, &assets, &loaded.save)?;
+    if request.cue_free_food_placement {
+        let (_, setup) = super::continuous_world::prepare_cue_free_food_placement_with_receipt(
+            runtime.world_mut(),
+            id,
+        )?;
+        receipt["public_task_setup"] = setup;
+    }
     if !runtime.foundation_training_sampling_was_restored(id) {
         return Err("retention refuses an invented replacement sampling stream".into());
     }
@@ -637,6 +667,9 @@ pub fn evaluate_saved_life_retention(
         sampling_temperature,
         &digest(&serde_json::to_vec(&request)?),
         endpoint_seeds,
+        request
+            .finalization_deadline_unix_seconds
+            .unwrap_or(request.deadline_unix_seconds),
     );
     let endpoint_preserved = endpoint
         .as_ref()
@@ -751,9 +784,11 @@ mod tests {
             SavedLifeRetentionRequest {
                 schema: 2,
                 evaluation_nonce: 71,
+                cue_free_food_placement: false,
                 max_decisions: 2,
                 max_world_ticks: 8,
                 deadline_unix_seconds: now().unwrap() + 600,
+                finalization_deadline_unix_seconds: None,
                 max_output_bytes: 512 * 1024 * 1024,
             },
         );
@@ -761,9 +796,11 @@ mod tests {
         let request = SavedLifeRetentionRequest {
             schema: 2,
             evaluation_nonce: 71,
+            cue_free_food_placement: false,
             max_decisions: 2,
             max_world_ticks: 8,
             deadline_unix_seconds: now().unwrap() + 600,
+            finalization_deadline_unix_seconds: None,
             max_output_bytes: 512 * 1024 * 1024,
         };
         assert!(evaluate_saved_life_retention(&current, &output, request.clone()).is_err());
@@ -807,9 +844,11 @@ mod tests {
             SavedLifeRetentionRequest {
                 schema: 2,
                 evaluation_nonce: 71,
+                cue_free_food_placement: false,
                 max_decisions: 0,
                 max_world_ticks: 8,
                 deadline_unix_seconds: now().unwrap() + 600,
+                finalization_deadline_unix_seconds: None,
                 max_output_bytes: 512 * 1024 * 1024,
             }
         )
@@ -853,12 +892,17 @@ mod tests {
         let r = SavedLifeRetentionRequest {
             schema: 2,
             evaluation_nonce: 71,
+            cue_free_food_placement: false,
             max_decisions: 0,
             max_world_ticks: 0,
             deadline_unix_seconds: 200,
+            finalization_deadline_unix_seconds: None,
             max_output_bytes: 512 * 1024 * 1024,
         };
         r.validate(100).unwrap();
+        let mut with_placement = r.clone();
+        with_placement.cue_free_food_placement = true;
+        assert!(with_placement.validate(100).is_err());
         let mut bad = r.clone();
         bad.max_world_ticks = 1;
         assert!(bad.validate(100).is_err());
@@ -874,12 +918,21 @@ mod tests {
         let r = SavedLifeRetentionRequest {
             schema: 2,
             evaluation_nonce: 71,
+            cue_free_food_placement: false,
             max_decisions: 128,
             max_world_ticks: 2048,
             deadline_unix_seconds: 200,
+            finalization_deadline_unix_seconds: None,
             max_output_bytes: 2 * 1024 * 1024 * 1024,
         };
         r.validate(100).unwrap();
+        let mut finalization = r.clone();
+        finalization.finalization_deadline_unix_seconds = Some(320);
+        finalization.validate(100).unwrap();
+        finalization.finalization_deadline_unix_seconds = Some(321);
+        assert!(finalization.validate(100).is_err());
+        finalization.finalization_deadline_unix_seconds = Some(199);
+        assert!(finalization.validate(100).is_err());
         let mut unknown = serde_json::to_value(&r).unwrap();
         unknown["train"] = serde_json::json!(true);
         assert!(serde_json::from_value::<SavedLifeRetentionRequest>(unknown).is_err());
