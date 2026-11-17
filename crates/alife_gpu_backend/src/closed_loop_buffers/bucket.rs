@@ -3642,17 +3642,28 @@ impl GpuFixedSlotUpload {
         for local in 0..decoder_count {
             old_global_for_new[new_recurrent + local] = Some(old_recurrent + local);
         }
-        let live_replay_sample_counts = live_replay_spans
-            .into_iter()
-            .map(|span| (span.local_synapse_id, span.sample_count))
-            .collect::<BTreeMap<_, _>>();
-        for span in &mut fresh_replay_spans {
-            span.sample_count = usize::try_from(span.local_synapse_id)
-                .ok()
-                .and_then(|new_index| old_global_for_new.get(new_index).copied().flatten())
-                .and_then(|old_index| u32::try_from(old_index).ok())
-                .and_then(|old_index| live_replay_sample_counts.get(&old_index).copied())
-                .unwrap_or(0);
+        // Replay samples belong to the *live* capture spans, not the freshly
+        // compiled canonical plan. Preserve their slot/order/count and remap
+        // only the addressed synapse identity. Re-selecting canonical spans
+        // would attach historical eligibility samples to different synapses.
+        if fresh_replay_spans.len() != live_replay_spans.len() {
+            return Err(GpuClosedLoopError::MalformedUpload);
+        }
+        let mut new_global_for_old = vec![None; old_total];
+        for (new, old) in old_global_for_new.iter().enumerate() {
+            if let Some(old) = old {
+                new_global_for_old[*old] = Some(new);
+            }
+        }
+        for (fresh, live) in fresh_replay_spans.iter_mut().zip(live_replay_spans) {
+            let new_id = new_global_for_old
+                .get(live.local_synapse_id as usize)
+                .copied()
+                .flatten()
+                .ok_or(GpuClosedLoopError::MalformedUpload)?;
+            *fresh = live;
+            fresh.local_synapse_id =
+                u32::try_from(new_id).map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
         }
 
         let live_source = live_words.clone();
@@ -5105,6 +5116,213 @@ mod fixed_arena_tests {
                 mutable_base,
             ),
             Err(GpuClosedLoopError::MalformedUpload)
+        );
+    }
+
+    #[test]
+    fn live_replay_capture_identity_and_history_survive_lifetime_addition() {
+        let capacity = BrainCapacityClass::n512();
+        let genome = BrainGenome::scaffold(705, capacity.id());
+        let development =
+            DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(0.35).unwrap());
+        let phenotype = PhenotypeCompiler::compile(
+            &genome,
+            &capacity,
+            &development,
+            SensorProfile::GroundedObjectSlotsV1,
+        )
+        .unwrap();
+        let plan = GpuFixedClassArenaPlan::new(capacity, 1, 512 * 1024 * 1024).unwrap();
+        let previous = plan.prepare_slot_upload(0, 1, &phenotype).unwrap();
+        let base = previous.ranges.mutable_state_words.start;
+        let ranges = &previous.ranges.layout;
+        let canonical = read_pod_prefix::<GpuReplaySynapseSpanRecord>(
+            &previous.mutable_state_words,
+            base,
+            &ranges.replay_span_words,
+            previous.brain_slot.counts.replay_capture_synapses,
+        )
+        .unwrap();
+        let inherited = phenotype
+            .synapses()
+            .iter()
+            .filter(|s| s.kind() == alife_core::CompiledSynapseKind::Recurrent)
+            .nth(previous.record().recurrent_synapse_count as usize / 2)
+            .unwrap();
+        let addition = AddLifetimeSynapse {
+            source: inherited.source(),
+            target: inherited.target(),
+            route: u32::from(inherited.route_index()),
+            initial_weight: 0.125,
+            evidence: alife_core::CoactivationEvidence {
+                region: inherited.route_index(),
+                source: inherited.source(),
+                target: inherited.target(),
+                coactivation: 1,
+                eligibility: 1,
+                concept_gap_support: 0,
+            },
+        };
+        let old_edges = recurrent_edge_identities(&previous).unwrap();
+        // Restore may retain a non-canonical but valid capture plan. Select an
+        // uncaptured neighbor while keeping ascending IDs and original slots.
+        let mut tested = false;
+        'search: for i in 0..canonical.len().saturating_sub(1) {
+            for replacement in canonical[i].local_synapse_id + 1..canonical[i + 1].local_synapse_id
+            {
+                let mut spans = canonical.clone();
+                spans[i].local_synapse_id = replacement;
+                for span in &mut spans {
+                    span.sample_count = 3;
+                }
+                let mut live = previous.mutable_state_words.clone();
+                let mut state: GpuSlotLearningStateRecord =
+                    read_pod_at(&live, base, ranges.learning_state_words.start).unwrap();
+                state.replay_event_count = 3;
+                store_pod_at(&mut live, base, ranges.learning_state_words.start, &state).unwrap();
+                store_pod_slice_at(&mut live, base, ranges.replay_span_words.start, &spans)
+                    .unwrap();
+                // Distinct synthetic sample words catch any accidental history
+                // reset/reordering; this is a buffer contract, not learned data.
+                let sample_begin = (ranges.replay_sample_words.start - base) as usize;
+                let sample_end = (ranges.replay_sample_words.end - base) as usize;
+                for (j, word) in live[sample_begin..sample_end].iter_mut().enumerate() {
+                    *word = 0x12340000u32.wrapping_add(j as u32);
+                }
+                if validate_learning_slot_layout(
+                    previous.record(),
+                    previous.counts(),
+                    ranges,
+                    &previous.immutable_plan_words,
+                    previous.ranges.immutable_plan_words.start,
+                    &previous.immutable_weight_words,
+                    previous.ranges.immutable_weight_words.start,
+                    &live,
+                    base,
+                )
+                .is_err()
+                {
+                    continue;
+                }
+                let mut next = plan
+                    .prepare_slot_upload(0, 1, &phenotype)
+                    .unwrap()
+                    .with_added_lifetime_synapse(&addition)
+                    .unwrap()
+                    .with_remapped_live_mutable_state(&previous, live.clone())
+                    .unwrap();
+                let actual = read_pod_prefix::<GpuReplaySynapseSpanRecord>(
+                    &next.mutable_state_words,
+                    base,
+                    &ranges.replay_span_words,
+                    spans.len(),
+                )
+                .unwrap();
+                let new_edges = recurrent_edge_identities(&next).unwrap();
+                let old_rec = previous.record().recurrent_synapse_count;
+                let new_rec = next.record().recurrent_synapse_count;
+                for (old, new) in spans.iter().zip(&actual) {
+                    assert_eq!(old.sample_start, new.sample_start);
+                    assert_eq!(old.sample_count, new.sample_count);
+                    assert_eq!(old.reserved, new.reserved);
+                    if old.local_synapse_id < old_rec {
+                        assert_eq!(
+                            old_edges[old.local_synapse_id as usize],
+                            new_edges[new.local_synapse_id as usize]
+                        );
+                    } else {
+                        assert_eq!(
+                            old.local_synapse_id - old_rec,
+                            new.local_synapse_id - new_rec
+                        );
+                    }
+                }
+                assert_eq!(
+                    &live[sample_begin..sample_end],
+                    &next.mutable_state_words[sample_begin..sample_end]
+                );
+                // An unchanged topology must retain a valid restored capture plan
+                // byte-for-byte, rather than canonicalizing its identities.
+                let unchanged = plan
+                    .prepare_slot_upload(0, 1, &phenotype)
+                    .unwrap()
+                    .with_remapped_live_mutable_state(&previous, live.clone())
+                    .unwrap();
+                assert_eq!(unchanged.mutable_state_words, live);
+
+                // Dropping a captured lifetime edge must fail instead of reusing
+                // its historical samples for a different canonical edge.
+                let mut remaining = BTreeMap::<_, usize>::new();
+                for edge in &old_edges {
+                    *remaining.entry(*edge).or_default() += 1;
+                }
+                let added_id = new_edges
+                    .iter()
+                    .position(|edge| {
+                        let count = remaining.entry(*edge).or_default();
+                        if *count == 0 {
+                            true
+                        } else {
+                            *count -= 1;
+                            false
+                        }
+                    })
+                    .unwrap();
+                // Newly inserted edges normally have a disabled receptor. Give
+                // this synthetic edge an existing enabled receptor so the test
+                // starts from a valid capture layout before removing the edge.
+                let plan_base = next.ranges.immutable_plan_words.start;
+                let mut metadata = read_pod_prefix::<GpuSynapseLearningMetadata>(
+                    &next.immutable_plan_words,
+                    plan_base,
+                    &ranges.synapse_learning_metadata_words,
+                    next.record().synapse_count as usize,
+                )
+                .unwrap();
+                metadata[added_id].receptor_index =
+                    metadata[actual[0].local_synapse_id as usize].receptor_index;
+                store_pod_slice_at(
+                    &mut next.immutable_plan_words,
+                    plan_base,
+                    ranges.synapse_learning_metadata_words.start,
+                    &metadata,
+                )
+                .unwrap();
+                let mut captured_addition = actual.clone();
+                captured_addition[0].local_synapse_id = added_id as u32;
+                let mut next_live = next.mutable_state_words.clone();
+                store_pod_slice_at(
+                    &mut next_live,
+                    base,
+                    ranges.replay_span_words.start,
+                    &captured_addition,
+                )
+                .unwrap();
+                validate_learning_slot_layout(
+                    next.record(),
+                    next.counts(),
+                    ranges,
+                    &next.immutable_plan_words,
+                    next.ranges.immutable_plan_words.start,
+                    &next.immutable_weight_words,
+                    next.ranges.immutable_weight_words.start,
+                    &next_live,
+                    base,
+                )
+                .unwrap();
+                assert!(matches!(
+                    plan.prepare_slot_upload(0, 1, &phenotype)
+                        .unwrap()
+                        .with_remapped_live_mutable_state(&next, next_live),
+                    Err(GpuClosedLoopError::MalformedUpload)
+                ));
+                tested = true;
+                break 'search;
+            }
+        }
+        assert!(
+            tested,
+            "fixture needs a valid noncanonical live capture identity"
         );
     }
 
