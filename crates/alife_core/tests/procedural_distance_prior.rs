@@ -87,7 +87,19 @@ fn legacy_creature_expression_and_serialization_remain_exact() {
 #[test]
 fn new_birth_gain_is_explicit_bound_and_identity_bearing() {
     let fresh = founder(96001);
-    let genome = fresh.express().unwrap().brain_genome;
+    let fresh_bytes = serde_json::to_vec(&fresh).unwrap();
+    let restored_founder: CreatureGenome = serde_json::from_slice(&fresh_bytes).unwrap();
+    assert_eq!(restored_founder, fresh);
+    assert_eq!(serde_json::to_vec(&restored_founder).unwrap(), fresh_bytes);
+    assert_eq!(
+        restored_founder.brain.construction.maternal_distance_gain,
+        6.0
+    );
+    assert_eq!(
+        restored_founder.brain.construction.paternal_distance_gain,
+        6.0
+    );
+    let genome = restored_founder.express().unwrap().brain_genome;
     assert_eq!(genome.procedural_distance_gain, 6.0);
     assert_eq!(
         BrainGenome::scaffold(96001, BrainCapacityClass::N1024_ID).procedural_distance_gain,
@@ -203,6 +215,7 @@ fn exact_foundation_weights_are_not_recalibrated_by_birth_gain() {
             asset.clone(),
         )
         .unwrap();
+        assert_eq!(compiled.synapses().len(), weights.len());
         assert!(compiled
             .synapses()
             .iter()
