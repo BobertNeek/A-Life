@@ -38,6 +38,12 @@ fn default_sampling_temperature() -> f32 {
     1.0
 }
 
+mod retained_direct_weights;
+pub use retained_direct_weights::DirectWeightEditRequest;
+mod retained_navigation_tasks;
+pub use retained_navigation_tasks::{
+    TaskKind as RetainedNavigationTaskKind, TaskSpec as RetainedNavigationTaskSpec,
+};
 mod saved_life_retention;
 pub use saved_life_retention::{evaluate_saved_life_retention, SavedLifeRetentionRequest};
 

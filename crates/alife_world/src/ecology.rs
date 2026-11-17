@@ -263,6 +263,8 @@ impl EcologySensorySummary {
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct EcologyState {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub autonomous_critters: Vec<AutonomousCritterState>,
     pub schema: String,
     pub schema_version: u16,
     pub config: EcologyConfig,
@@ -277,6 +279,7 @@ impl Default for EcologyState {
         Self {
             schema: G07_ECOLOGY_SCHEMA.to_string(),
             schema_version: G07_ECOLOGY_SCHEMA_VERSION,
+            autonomous_critters: Vec::new(),
             config: EcologyConfig::default(),
             zones: Vec::new(),
             resources: Vec::new(),
@@ -292,6 +295,16 @@ impl EcologyState {
             return Err(ScaffoldContractError::ScalarOutOfRange);
         }
         self.config.validate()?;
+        if self.autonomous_critters.len() > self.config.max_resource_records {
+            return Err(ScaffoldContractError::ScalarOutOfRange);
+        }
+        let mut critter_ids = BTreeSet::new();
+        for critter in &self.autonomous_critters {
+            critter.validate()?;
+            if !critter_ids.insert(critter.object_id.raw()) {
+                return Err(ScaffoldContractError::InvalidId);
+            }
+        }
         if self.zones.len() > self.config.max_zones
             || self.resources.len() > self.config.max_resource_records
             || self.spawn_policies.len() > self.config.max_resource_records
@@ -492,4 +505,54 @@ fn distance(a: Vec3f, b: Vec3f) -> f32 {
     let dy = a.y - b.y;
     let dz = a.z - b.z;
     (dx * dx + dy * dy + dz * dz).sqrt()
+}
+
+/// Persisted state for a simple autonomous ecological animal, not a neural organism.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AutonomousCritterState {
+    pub object_id: WorldEntityId,
+    pub rng_state: u64,
+    pub speed_per_tick: f32,
+    pub sight_radius: f32,
+    pub heading: f32,
+    pub turn_in_ticks: u16,
+    pub last_tick: Tick,
+    pub last_threat: Option<WorldEntityId>,
+    pub last_mode: CritterMode,
+    pub last_before: Vec3f,
+    pub last_after: Vec3f,
+    pub moved_ticks: u64,
+    pub fleeing_ticks: u64,
+    pub blocked_ticks: u64,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CritterMode {
+    Wander,
+    Flee,
+    Blocked,
+    Held,
+    Consumed,
+}
+impl AutonomousCritterState {
+    pub fn validate(&self) -> Result<(), ScaffoldContractError> {
+        self.object_id.validate()?;
+        if self.rng_state == 0
+            || !self.speed_per_tick.is_finite()
+            || !(0.001..=0.08).contains(&self.speed_per_tick)
+            || !self.sight_radius.is_finite()
+            || !(0.1..=12.0).contains(&self.sight_radius)
+            || !self.heading.is_finite()
+            || self.turn_in_ticks > 32
+        {
+            return Err(ScaffoldContractError::ScalarOutOfRange);
+        }
+        self.last_before.validate()?;
+        self.last_after.validate()?;
+        if let Some(id) = self.last_threat {
+            id.validate()?;
+        }
+        Ok(())
+    }
 }

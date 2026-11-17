@@ -89,7 +89,12 @@ impl CandidateOpportunityCoveragePlan {
 /// Diagnostic outcome of the additive active-opportunity overlay, never a score.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum ActiveApproachOpportunityReason {
-    Uncrowded, NoActive, Unobserved, AlreadySelected, NoSpareCapacity, Admitted,
+    Uncrowded,
+    NoActive,
+    Unobserved,
+    AlreadySelected,
+    NoSpareCapacity,
+    Admitted,
 }
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -139,7 +144,11 @@ impl GroundedCandidateBinding {
         }
     }
 
-    pub(crate) fn with_maze_heading2346(mut self)->Self{self.grounded_orientation_v3=true;self.maze_heading2346=true;self}
+    pub(crate) fn with_maze_heading2346(mut self) -> Self {
+        self.grounded_orientation_v3 = true;
+        self.maze_heading2346 = true;
+        self
+    }
     pub fn with_coverage(mut self, plan: CandidateOpportunityCoveragePlan) -> Self {
         let capacity = if self.profile.has_terrain_vision() || self.grounded_orientation_v3 {
             3
@@ -158,23 +167,44 @@ impl GroundedCandidateBinding {
         self.active_approach = Some(active);
         self
     }
-    pub const fn active_approach_enabled(&self) -> bool { self.active_approach.is_some() }
+    pub const fn active_approach_enabled(&self) -> bool {
+        self.active_approach.is_some()
+    }
 
     /// Validate the unchanged initial V1 draft, recompute its normal focal selection,
     /// then replace only an unprotected nearest-prefill tail slot if possible.
     #[allow(clippy::type_complexity)]
     pub fn candidates_for_focus_with_active_opportunity(
-        &self, draft: &PerceptionFrameDraft, focal_object: Option<TrackedObjectId>,
+        &self,
+        draft: &PerceptionFrameDraft,
+        focal_object: Option<TrackedObjectId>,
         already_charged_work: u64,
-    ) -> Result<(Vec<ActionCandidate>, Option<CandidateOpportunityCoverageV1>, ActiveApproachOpportunityReceipt), ScaffoldContractError> {
-        let active = self.active_approach.ok_or(ScaffoldContractError::InvalidPerceptionFrame)?;
+    ) -> Result<
+        (
+            Vec<ActionCandidate>,
+            Option<CandidateOpportunityCoverageV1>,
+            ActiveApproachOpportunityReceipt,
+        ),
+        ScaffoldContractError,
+    > {
+        let active = self
+            .active_approach
+            .ok_or(ScaffoldContractError::InvalidPerceptionFrame)?;
         if self.coverage_plan.is_none() {
-            if already_charged_work != 0 { return Err(ScaffoldContractError::InvalidPerceptionFrame); }
+            if already_charged_work != 0 {
+                return Err(ScaffoldContractError::InvalidPerceptionFrame);
+            }
             let candidates = self.candidates_for_focus(draft, focal_object)?;
             let mut proof = ActiveApproachOpportunityReceipt {
-                requested_id: active, observed_slot: None, original_selected_slots: Vec::new(),
-                final_selected_slots: Vec::new(), protected_contact: None, protected_focal: None,
-                protected_rotation: None, admitted: false, reason: ActiveApproachOpportunityReason::Uncrowded,
+                requested_id: active,
+                observed_slot: None,
+                original_selected_slots: Vec::new(),
+                final_selected_slots: Vec::new(),
+                protected_contact: None,
+                protected_focal: None,
+                protected_rotation: None,
+                admitted: false,
+                reason: ActiveApproachOpportunityReason::Uncrowded,
                 work_units: 12, // receipt fields plus mode/initial-work branch checks
             };
             // All observed objects are already admitted; no replacement or synthetic protection.
@@ -184,34 +214,50 @@ impl GroundedCandidateBinding {
                     let mut present = false;
                     for &old in &proof.original_selected_slots {
                         proof.work_units += 1;
-                        if old == index { present = true; break; }
+                        if old == index {
+                            present = true;
+                            break;
+                        }
                     }
                     if !present {
                         proof.original_selected_slots.push(index);
-                        proof.final_selected_slots.push(index); proof.work_units += 2;
+                        proof.final_selected_slots.push(index);
+                        proof.work_units += 2;
                     }
                 }
             }
             for slot in self.grounded.slots() {
                 proof.work_units += 2; // visit and identity comparison
                 if Some(slot.tracked_object_id) == active {
-                    proof.observed_slot = Some(slot.slot_index); proof.work_units += 1;
+                    proof.observed_slot = Some(slot.slot_index);
+                    proof.work_units += 1;
                 }
             }
             return Ok((candidates, None, proof));
         }
-        let (original, receipt) = self.candidates_for_focus_with_coverage(draft, focal_object, already_charged_work)?;
+        let (original, receipt) =
+            self.candidates_for_focus_with_coverage(draft, focal_object, already_charged_work)?;
         let receipt = receipt.ok_or(ScaffoldContractError::InvalidPerceptionFrame)?;
         let mut overlay = active_opportunity_overlay(self.grounded.slots(), &receipt, active)?;
         let mut candidates = original;
         if overlay.admitted {
             // Replace exactly one existing six-action object group, not a second
             // full candidate build. Original indices and all primitive semantics stay.
-            let observed = overlay.observed_slot.ok_or(ScaffoldContractError::InvalidPerceptionFrame)?;
+            let observed = overlay
+                .observed_slot
+                .ok_or(ScaffoldContractError::InvalidPerceptionFrame)?;
             let mut displaced = None;
-            for (&old, &new) in overlay.original_selected_slots.iter().zip(&overlay.final_selected_slots) {
+            for (&old, &new) in overlay
+                .original_selected_slots
+                .iter()
+                .zip(&overlay.final_selected_slots)
+            {
                 overlay.work_units += 2; // pair visit/equality
-                if old != new { displaced = Some(old); overlay.work_units += 1; break; }
+                if old != new {
+                    displaced = Some(old);
+                    overlay.work_units += 1;
+                    break;
+                }
             }
             let displaced = displaced.ok_or(ScaffoldContractError::InvalidPerceptionFrame)?;
             let slot = &self.grounded.slots()[observed as usize];
@@ -221,30 +267,54 @@ impl GroundedCandidateBinding {
                 return Err(ScaffoldContractError::InvalidPerceptionFrame);
             }
             let features = slot.candidate_features()?;
-            let target = ActionTarget::new(Some(transport.transport_entity),Some(transport.target_position));
+            let target = ActionTarget::new(
+                Some(transport.transport_entity),
+                Some(transport.target_position),
+            );
             // One bounded feature materialization/validation and target construction.
             overlay.work_units += 2 * CANDIDATE_FEATURE_COUNT as u64 + 2;
             let mut changed = 0;
             for c in &mut candidates {
                 overlay.work_units += 2; // visit and observation comparison
                 if c.observation == CandidateObservationRef::ObjectSlot(displaced) {
-                    *c = ActionCandidate::new(c.candidate_index,c.action_id,c.kind,c.family,
-                        CandidateObservationRef::ObjectSlot(observed),target,features,
-                        slot.confidence,c.required_effort,c.min_duration,c.max_duration)?;
+                    *c = ActionCandidate::new(
+                        c.candidate_index,
+                        c.action_id,
+                        c.kind,
+                        c.family,
+                        CandidateObservationRef::ObjectSlot(observed),
+                        target,
+                        features,
+                        slot.confidence,
+                        c.required_effort,
+                        c.min_duration,
+                        c.max_duration,
+                    )?;
                     // Eleven field writes, bounded descriptor validation, replacement write.
                     overlay.work_units += 12 + CANDIDATE_FEATURE_COUNT as u64;
                     changed += 1;
                 }
             }
             overlay.work_units += 1;
-            if changed != OBJECT_ACTIONS.len() { return Err(ScaffoldContractError::InvalidPerceptionFrame); }
+            if changed != OBJECT_ACTIONS.len() {
+                return Err(ScaffoldContractError::InvalidPerceptionFrame);
+            }
         }
         let bound = if overlay.admitted {
             // Seven receipt fields plus bounded selected-index copy/validation.
             overlay.work_units += 7 + 3 * overlay.final_selected_slots.len() as u64;
-            CandidateOpportunityCoverageV1::new(receipt.observed_slots(), receipt.capacity(),
-                receipt.contact_slot(), receipt.focal_slot(), receipt.phase(), overlay.final_selected_slots.clone(), receipt.work_units())?
-        } else { receipt };
+            CandidateOpportunityCoverageV1::new(
+                receipt.observed_slots(),
+                receipt.capacity(),
+                receipt.contact_slot(),
+                receipt.focal_slot(),
+                receipt.phase(),
+                overlay.final_selected_slots.clone(),
+                receipt.work_units(),
+            )?
+        } else {
+            receipt
+        };
         Ok((candidates, Some(bound), overlay))
     }
 
@@ -446,10 +516,35 @@ pub fn enumerate_grounded_candidates_with_coverage(
     plan: CandidateOpportunityCoveragePlan,
     already_charged_work: u64,
 ) -> Result<(Vec<ActionCandidate>, Option<CandidateOpportunityCoverageV1>), ScaffoldContractError> {
-    enumerate_grounded_candidates_with_coverage_impl(grounded,profile,active_contact,focal_object,grounded_orientation_v3,plan,already_charged_work,false)
+    enumerate_grounded_candidates_with_coverage_impl(
+        grounded,
+        profile,
+        active_contact,
+        focal_object,
+        grounded_orientation_v3,
+        plan,
+        already_charged_work,
+        false,
+    )
 }
-pub fn enumerate_maze_heading2346(grounded:&GroundedSensingFrame,profile:SensorProfile,active_contact:Option<WorldEntityId>,focal_object:Option<TrackedObjectId>,plan:CandidateOpportunityCoveragePlan,already_charged_work:u64)->Result<(Vec<ActionCandidate>,Option<CandidateOpportunityCoverageV1>),ScaffoldContractError>{
-    enumerate_grounded_candidates_with_coverage_impl(grounded,profile,active_contact,focal_object,true,plan,already_charged_work,true)
+pub fn enumerate_maze_heading2346(
+    grounded: &GroundedSensingFrame,
+    profile: SensorProfile,
+    active_contact: Option<WorldEntityId>,
+    focal_object: Option<TrackedObjectId>,
+    plan: CandidateOpportunityCoveragePlan,
+    already_charged_work: u64,
+) -> Result<(Vec<ActionCandidate>, Option<CandidateOpportunityCoverageV1>), ScaffoldContractError> {
+    enumerate_grounded_candidates_with_coverage_impl(
+        grounded,
+        profile,
+        active_contact,
+        focal_object,
+        true,
+        plan,
+        already_charged_work,
+        true,
+    )
 }
 #[allow(clippy::too_many_arguments)]
 fn enumerate_grounded_candidates_with_coverage_impl(
@@ -523,14 +618,20 @@ fn enumerate_grounded_candidates_with_coverage_impl(
 /// each examined slot/index, equality or reservation predicate and each state write
 /// below is charged explicitly. This is logical selector work, not runtime timing.
 fn active_opportunity_overlay(
-    slots: &[alife_core::GroundedObjectSlotV1], base: &CandidateOpportunityCoverageV1,
+    slots: &[alife_core::GroundedObjectSlotV1],
+    base: &CandidateOpportunityCoverageV1,
     active: Option<TrackedObjectId>,
 ) -> Result<ActiveApproachOpportunityReceipt, ScaffoldContractError> {
     let mut r = ActiveApproachOpportunityReceipt {
-        requested_id: active, observed_slot: None,
-        original_selected_slots: base.selected_slots().to_vec(), final_selected_slots: base.selected_slots().to_vec(),
-        protected_contact: base.contact_slot(), protected_focal: base.focal_slot(), protected_rotation: None,
-        admitted: false, reason: ActiveApproachOpportunityReason::NoActive,
+        requested_id: active,
+        observed_slot: None,
+        original_selected_slots: base.selected_slots().to_vec(),
+        final_selected_slots: base.selected_slots().to_vec(),
+        protected_contact: base.contact_slot(),
+        protected_focal: base.focal_slot(),
+        protected_rotation: None,
+        admitted: false,
+        reason: ActiveApproachOpportunityReason::NoActive,
         work_units: 12 + 2 * base.selected_slots().len() as u64,
     };
     // The V1 selector writes unique contact/focal then exactly one rotating residual.
@@ -539,34 +640,54 @@ fn active_opportunity_overlay(
         r.work_units += 3;
         let contact = Some(slot) == r.protected_contact;
         let focal = Some(slot) == r.protected_focal;
-        if !contact && !focal { r.protected_rotation = Some(slot); r.work_units += 1; break; }
+        if !contact && !focal {
+            r.protected_rotation = Some(slot);
+            r.work_units += 1;
+            break;
+        }
     }
     r.work_units += 1;
-    let Some(active) = active else { return Ok(r); };
+    let Some(active) = active else {
+        return Ok(r);
+    };
     for slot in slots {
         r.work_units += 2;
-        if slot.tracked_object_id == active { r.observed_slot = Some(slot.slot_index); r.work_units += 1; break; }
+        if slot.tracked_object_id == active {
+            r.observed_slot = Some(slot.slot_index);
+            r.work_units += 1;
+            break;
+        }
     }
     r.work_units += 1;
     let Some(observed) = r.observed_slot else {
-        r.reason = ActiveApproachOpportunityReason::Unobserved; r.work_units += 1; return Ok(r);
+        r.reason = ActiveApproachOpportunityReason::Unobserved;
+        r.work_units += 1;
+        return Ok(r);
     };
     for &slot in &r.final_selected_slots {
         r.work_units += 2;
-        if slot == observed { r.reason = ActiveApproachOpportunityReason::AlreadySelected; r.work_units += 1; return Ok(r); }
+        if slot == observed {
+            r.reason = ActiveApproachOpportunityReason::AlreadySelected;
+            r.work_units += 1;
+            return Ok(r);
+        }
     }
     for index in (0..r.final_selected_slots.len()).rev() {
-        let slot = r.final_selected_slots[index]; r.work_units += 4;
+        let slot = r.final_selected_slots[index];
+        r.work_units += 4;
         let contact = Some(slot) == r.protected_contact;
         let focal = Some(slot) == r.protected_focal;
         let rotation = Some(slot) == r.protected_rotation;
         if !contact && !focal && !rotation {
             r.final_selected_slots[index] = observed;
-            r.admitted = true; r.reason = ActiveApproachOpportunityReason::Admitted; r.work_units += 3;
+            r.admitted = true;
+            r.reason = ActiveApproachOpportunityReason::Admitted;
+            r.work_units += 3;
             return Ok(r);
         }
     }
-    r.reason = ActiveApproachOpportunityReason::NoSpareCapacity; r.work_units += 1;
+    r.reason = ActiveApproachOpportunityReason::NoSpareCapacity;
+    r.work_units += 1;
     Ok(r)
 }
 
@@ -640,7 +761,7 @@ fn coverage_selection(
     let mut residual = Vec::new();
     for i in roster {
         work += 3; // visit and two reservation comparisons
-        // Evaluate both billed identity comparisons, even for the contact slot.
+                   // Evaluate both billed identity comparisons, even for the contact slot.
         let is_contact = Some(i) == contact;
         let is_focal = Some(i) == focal;
         if !is_contact && !is_focal {
@@ -708,7 +829,14 @@ fn enumerate_grounded_candidates_impl(
     focal_object: Option<TrackedObjectId>,
     grounded_orientation_v3: bool,
 ) -> Result<Vec<ActionCandidate>, ScaffoldContractError> {
-    enumerate_grounded_candidates_impl_heading(grounded,profile,active_contact,focal_object,grounded_orientation_v3,false)
+    enumerate_grounded_candidates_impl_heading(
+        grounded,
+        profile,
+        active_contact,
+        focal_object,
+        grounded_orientation_v3,
+        false,
+    )
 }
 fn enumerate_grounded_candidates_impl_heading(
     grounded: &GroundedSensingFrame,
@@ -813,35 +941,36 @@ fn enumerate_grounded_candidates_selected(
                 DurationTicks::new(1),
             )?);
         }
-        if !heading_only { for (action_id, bearing_sin, bearing_cos) in [
-            (HeadlessActionIds::LOOK_LEFT, 1.0, 0.0),
-            (HeadlessActionIds::LOOK_RIGHT, -1.0, 0.0),
-            (HeadlessActionIds::LOOK_CENTER, 0.0, 1.0),
-            (HeadlessActionIds::HOLD_GAZE, 0.0, 0.0),
-        ] {
-            // The GPU decoder scores features, not ActionId. Without a
-            // distinct feature vectors the gaze choices would tie forever.
-            let mut look_features = [0.0; CANDIDATE_FEATURE_COUNT];
-            look_features[CANDIDATE_FEATURE_BEARING_SIN_LANE] = bearing_sin;
-            look_features[CANDIDATE_FEATURE_BEARING_COS_LANE] = bearing_cos;
-            look_features[CANDIDATE_FEATURE_RESERVED_START_LANE] = 1.0;
-            candidates.push(ActionCandidate::new(
-                u16::try_from(candidates.len())
-                    .map_err(|_| ScaffoldContractError::InvalidActionCandidate)?,
-                action_id,
-                ActionKind::Look,
-                CandidateActionFamily::Inspect,
-                CandidateObservationRef::None,
-                ActionTarget::NONE,
-                CandidateFeatureVector(look_features).with_intrinsic_action_basis(ActionKind::Look),
-                Confidence::new(1.0)?,
-                NormalizedScalar::new(0.02)?,
-                DurationTicks::new(1),
-                DurationTicks::new(1),
-            )?);
+        if !heading_only {
+            for (action_id, bearing_sin, bearing_cos) in [
+                (HeadlessActionIds::LOOK_LEFT, 1.0, 0.0),
+                (HeadlessActionIds::LOOK_RIGHT, -1.0, 0.0),
+                (HeadlessActionIds::LOOK_CENTER, 0.0, 1.0),
+                (HeadlessActionIds::HOLD_GAZE, 0.0, 0.0),
+            ] {
+                // The GPU decoder scores features, not ActionId. Without a
+                // distinct feature vectors the gaze choices would tie forever.
+                let mut look_features = [0.0; CANDIDATE_FEATURE_COUNT];
+                look_features[CANDIDATE_FEATURE_BEARING_SIN_LANE] = bearing_sin;
+                look_features[CANDIDATE_FEATURE_BEARING_COS_LANE] = bearing_cos;
+                look_features[CANDIDATE_FEATURE_RESERVED_START_LANE] = 1.0;
+                candidates.push(ActionCandidate::new(
+                    u16::try_from(candidates.len())
+                        .map_err(|_| ScaffoldContractError::InvalidActionCandidate)?,
+                    action_id,
+                    ActionKind::Look,
+                    CandidateActionFamily::Inspect,
+                    CandidateObservationRef::None,
+                    ActionTarget::NONE,
+                    CandidateFeatureVector(look_features)
+                        .with_intrinsic_action_basis(ActionKind::Look),
+                    Confidence::new(1.0)?,
+                    NormalizedScalar::new(0.02)?,
+                    DurationTicks::new(1),
+                    DurationTicks::new(1),
+                )?);
+            }
         }
-    }
-
     }
     let selected = if let Some(selected) = selected_override {
         selected
@@ -1222,24 +1351,51 @@ mod opportunity_coverage_tests {
     }
     #[test]
     fn maze_heading_has_only_three_exact_native_primitives_and_capacity_three() {
-        let g=fixture(8,false);
-        let contact=Some(g.transports()[7].transport_entity);
-        let focal=Some(g.slots()[6].tracked_object_id);
+        let g = fixture(8, false);
+        let contact = Some(g.transports()[7].transport_entity);
+        let focal = Some(g.slots()[6].tracked_object_id);
         for phase in 0..6 {
-            let (c,r)=enumerate_maze_heading2346(&g,SensorProfile::GroundedObjectSlotsV1,contact,focal,CandidateOpportunityCoveragePlan::new(phase),0).unwrap();
-            let (_,old)=enumerate_grounded_candidates_with_coverage(&g,SensorProfile::GroundedObjectSlotsV1,contact,focal,true,CandidateOpportunityCoveragePlan::new(phase),0).unwrap();
-            assert_eq!(r,old); // same contact/focus/rotating set and selector work
-            assert_eq!(r.as_ref().unwrap().capacity(),3);
-            assert!(c.len()<=32);
-            for (id,sin,cos) in [(105,0.0,1.0),(604,1.0,0.0),(605,-1.0,0.0)] {
-                let matches=c.iter().filter(|c|c.action_id.raw()==id).collect::<Vec<_>>();
-                assert_eq!(matches.len(),1);let a=matches[0];
-                assert_eq!(a.observation,CandidateObservationRef::None);assert_eq!(a.target,ActionTarget::NONE);
-                let mut expected=[0.0;CANDIDATE_FEATURE_COUNT];expected[0]=sin;expected[1]=cos;expected[19]=1.0;
-                let expected=CandidateFeatureVector(expected).with_intrinsic_action_basis(a.kind);
-                assert_eq!(a.features.0.map(f32::to_bits),expected.0.map(f32::to_bits));
+            let (c, r) = enumerate_maze_heading2346(
+                &g,
+                SensorProfile::GroundedObjectSlotsV1,
+                contact,
+                focal,
+                CandidateOpportunityCoveragePlan::new(phase),
+                0,
+            )
+            .unwrap();
+            let (_, old) = enumerate_grounded_candidates_with_coverage(
+                &g,
+                SensorProfile::GroundedObjectSlotsV1,
+                contact,
+                focal,
+                true,
+                CandidateOpportunityCoveragePlan::new(phase),
+                0,
+            )
+            .unwrap();
+            assert_eq!(r, old); // same contact/focus/rotating set and selector work
+            assert_eq!(r.as_ref().unwrap().capacity(), 3);
+            assert!(c.len() <= 32);
+            for (id, sin, cos) in [(105, 0.0, 1.0), (604, 1.0, 0.0), (605, -1.0, 0.0)] {
+                let matches = c
+                    .iter()
+                    .filter(|c| c.action_id.raw() == id)
+                    .collect::<Vec<_>>();
+                assert_eq!(matches.len(), 1);
+                let a = matches[0];
+                assert_eq!(a.observation, CandidateObservationRef::None);
+                assert_eq!(a.target, ActionTarget::NONE);
+                let mut expected = [0.0; CANDIDATE_FEATURE_COUNT];
+                expected[0] = sin;
+                expected[1] = cos;
+                expected[19] = 1.0;
+                let expected = CandidateFeatureVector(expected).with_intrinsic_action_basis(a.kind);
+                assert_eq!(a.features.0.map(f32::to_bits), expected.0.map(f32::to_bits));
             }
-            assert!(!c.iter().any(|a|matches!(a.action_id.raw(),601|602|603|606)));
+            assert!(!c
+                .iter()
+                .any(|a| matches!(a.action_id.raw(), 601 | 602 | 603 | 606)));
         }
     }
     #[test]
@@ -1454,64 +1610,195 @@ mod opportunity_coverage_tests {
                 let focal_index = (contact_index + 1) % g.slots().len();
                 let contact = Some(g.transports()[contact_index].transport_entity);
                 let focal = Some(g.slots()[focal_index].tracked_object_id);
-                let (_, base) = enumerate_grounded_candidates_with_coverage(&g, SensorProfile::GroundedObjectSlotsV1, contact, focal, false, CandidateOpportunityCoveragePlan::new(phase), 0).unwrap();
+                let (_, base) = enumerate_grounded_candidates_with_coverage(
+                    &g,
+                    SensorProfile::GroundedObjectSlotsV1,
+                    contact,
+                    focal,
+                    false,
+                    CandidateOpportunityCoveragePlan::new(phase),
+                    0,
+                )
+                .unwrap();
                 let base = base.unwrap();
                 let active = (0..8).find(|i| !base.selected_slots().contains(i)).unwrap();
-                let overlay = active_opportunity_overlay(g.slots(), &base, Some(g.slots()[active as usize].tracked_object_id)).unwrap();
+                let overlay = active_opportunity_overlay(
+                    g.slots(),
+                    &base,
+                    Some(g.slots()[active as usize].tracked_object_id),
+                )
+                .unwrap();
                 assert!(overlay.admitted);
-                assert_eq!(&overlay.final_selected_slots[..3], &base.selected_slots()[..3]);
+                assert_eq!(
+                    &overlay.final_selected_slots[..3],
+                    &base.selected_slots()[..3]
+                );
                 assert_eq!(overlay.final_selected_slots[3], active);
                 assert_eq!(overlay.protected_rotation, Some(base.selected_slots()[2]));
-                assert_eq!(overlay.final_selected_slots.iter().copied().collect::<BTreeSet<_>>().len(),4);
-                assert!(overlay.work_units>0);
-                let (_, baseline_again) = enumerate_grounded_candidates_with_coverage(&g, SensorProfile::GroundedObjectSlotsV1, contact, focal, false, CandidateOpportunityCoveragePlan::new(phase), 0).unwrap();
-                assert_eq!(base,baseline_again.unwrap());
+                assert_eq!(
+                    overlay
+                        .final_selected_slots
+                        .iter()
+                        .copied()
+                        .collect::<BTreeSet<_>>()
+                        .len(),
+                    4
+                );
+                assert!(overlay.work_units > 0);
+                let (_, baseline_again) = enumerate_grounded_candidates_with_coverage(
+                    &g,
+                    SensorProfile::GroundedObjectSlotsV1,
+                    contact,
+                    focal,
+                    false,
+                    CandidateOpportunityCoveragePlan::new(phase),
+                    0,
+                )
+                .unwrap();
+                assert_eq!(base, baseline_again.unwrap());
             }
         }
     }
     #[test]
     fn active_overlay_duplicate_missing_none_and_no_spare_leave_selection() {
-        let g=fixture(8,false);
-        for capacity in [0,1,3] {
-            let selected=match capacity {0=>vec![],1=>vec![2],_=>vec![0,1,2]};
-            let base=CandidateOpportunityCoverageV1::new(8,capacity, if capacity==3 {Some(0)} else {None},if capacity==3 {Some(1)} else {None},0,selected,50).unwrap();
-            let r=active_opportunity_overlay(g.slots(),&base,Some(g.slots()[7].tracked_object_id)).unwrap();
-            assert!(!r.admitted);assert_eq!(r.reason,ActiveApproachOpportunityReason::NoSpareCapacity);assert_eq!(r.final_selected_slots,base.selected_slots());
+        let g = fixture(8, false);
+        for capacity in [0, 1, 3] {
+            let selected = match capacity {
+                0 => vec![],
+                1 => vec![2],
+                _ => vec![0, 1, 2],
+            };
+            let base = CandidateOpportunityCoverageV1::new(
+                8,
+                capacity,
+                if capacity == 3 { Some(0) } else { None },
+                if capacity == 3 { Some(1) } else { None },
+                0,
+                selected,
+                50,
+            )
+            .unwrap();
+            let r =
+                active_opportunity_overlay(g.slots(), &base, Some(g.slots()[7].tracked_object_id))
+                    .unwrap();
+            assert!(!r.admitted);
+            assert_eq!(r.reason, ActiveApproachOpportunityReason::NoSpareCapacity);
+            assert_eq!(r.final_selected_slots, base.selected_slots());
         }
-        let base=CandidateOpportunityCoverageV1::new(8,4,Some(0),Some(0),0,vec![0,1,2,3],50).unwrap();
-        let r=active_opportunity_overlay(g.slots(),&base,Some(g.slots()[7].tracked_object_id)).unwrap();
-        assert!(r.admitted);assert_eq!(r.protected_rotation,Some(1));assert_eq!(r.final_selected_slots,vec![0,1,2,7]);
-        let r=active_opportunity_overlay(g.slots(),&base,Some(g.slots()[0].tracked_object_id)).unwrap();assert_eq!(r.reason,ActiveApproachOpportunityReason::AlreadySelected);assert_eq!(r.final_selected_slots,base.selected_slots());
-        let r=active_opportunity_overlay(g.slots(),&base,None).unwrap();assert_eq!(r.reason,ActiveApproachOpportunityReason::NoActive);assert_eq!(r.final_selected_slots,base.selected_slots());
-        let r=active_opportunity_overlay(&g.slots()[..7],&base,Some(g.slots()[7].tracked_object_id)).unwrap();assert_eq!(r.reason,ActiveApproachOpportunityReason::Unobserved);assert_eq!(r.final_selected_slots,base.selected_slots());
+        let base =
+            CandidateOpportunityCoverageV1::new(8, 4, Some(0), Some(0), 0, vec![0, 1, 2, 3], 50)
+                .unwrap();
+        let r = active_opportunity_overlay(g.slots(), &base, Some(g.slots()[7].tracked_object_id))
+            .unwrap();
+        assert!(r.admitted);
+        assert_eq!(r.protected_rotation, Some(1));
+        assert_eq!(r.final_selected_slots, vec![0, 1, 2, 7]);
+        let r = active_opportunity_overlay(g.slots(), &base, Some(g.slots()[0].tracked_object_id))
+            .unwrap();
+        assert_eq!(r.reason, ActiveApproachOpportunityReason::AlreadySelected);
+        assert_eq!(r.final_selected_slots, base.selected_slots());
+        let r = active_opportunity_overlay(g.slots(), &base, None).unwrap();
+        assert_eq!(r.reason, ActiveApproachOpportunityReason::NoActive);
+        assert_eq!(r.final_selected_slots, base.selected_slots());
+        let r = active_opportunity_overlay(
+            &g.slots()[..7],
+            &base,
+            Some(g.slots()[7].tracked_object_id),
+        )
+        .unwrap();
+        assert_eq!(r.reason, ActiveApproachOpportunityReason::Unobserved);
+        assert_eq!(r.final_selected_slots, base.selected_slots());
     }
     #[test]
     fn active_binding_validates_initial_draft_and_bills_overlay_separately() {
-        for count in [3,8] {
-            let g=fixture(count,false);let plan=CandidateOpportunityCoveragePlan::new(3);
-            let(c,initial)=enumerate_grounded_candidates_with_coverage(&g,SensorProfile::GroundedObjectSlotsV1,None,None,false,plan,0).unwrap();
-            let(sensory,body,slots,_)=g.clone().into_parts();
-            let mut draft=PerceptionFrameDraft::new(OrganismId(1),Tick::ZERO,SensorProfile::GroundedObjectSlotsV1,sensory,body,alife_core::HomeostaticSnapshot::baseline(Tick::ZERO),c,alife_core::SensorProfileProvenance::new(SensorProfile::GroundedObjectSlotsV1,alife_core::SensoryAbiVersion::CURRENT,Tick::ZERO).unwrap(),slots).unwrap();
-            if let Some(r)=&initial {draft=draft.with_opportunity_coverage(r.clone()).unwrap();}
-            let binding=GroundedCandidateBinding::new(g.clone(),SensorProfile::GroundedObjectSlotsV1,None,false).with_coverage(plan);
+        for count in [3, 8] {
+            let g = fixture(count, false);
+            let plan = CandidateOpportunityCoveragePlan::new(3);
+            let (c, initial) = enumerate_grounded_candidates_with_coverage(
+                &g,
+                SensorProfile::GroundedObjectSlotsV1,
+                None,
+                None,
+                false,
+                plan,
+                0,
+            )
+            .unwrap();
+            let (sensory, body, slots, _) = g.clone().into_parts();
+            let mut draft = PerceptionFrameDraft::new(
+                OrganismId(1),
+                Tick::ZERO,
+                SensorProfile::GroundedObjectSlotsV1,
+                sensory,
+                body,
+                alife_core::HomeostaticSnapshot::baseline(Tick::ZERO),
+                c,
+                alife_core::SensorProfileProvenance::new(
+                    SensorProfile::GroundedObjectSlotsV1,
+                    alife_core::SensoryAbiVersion::CURRENT,
+                    Tick::ZERO,
+                )
+                .unwrap(),
+                slots,
+            )
+            .unwrap();
+            if let Some(r) = &initial {
+                draft = draft.with_opportunity_coverage(r.clone()).unwrap();
+            }
+            let binding = GroundedCandidateBinding::new(
+                g.clone(),
+                SensorProfile::GroundedObjectSlotsV1,
+                None,
+                false,
+            )
+            .with_coverage(plan);
             assert!(!binding.active_approach_enabled());
-            let work=initial.as_ref().map_or(0,|r|r.work_units());
-            assert!(binding.candidates_for_focus_with_active_opportunity(&draft,None,work).is_err());
-            let (old,oldreceipt)=if count==8 {binding.candidates_for_focus_with_coverage(&draft,None,work).unwrap()}else{(binding.candidates_for_focus(&draft,None).unwrap(),None)};
-            let active=binding.clone().with_active_approach(None);assert!(active.active_approach_enabled());
-            let(new,newreceipt,proof)=active.candidates_for_focus_with_active_opportunity(&draft,None,work).unwrap();
-            assert_eq!(old,new);assert_eq!(oldreceipt,newreceipt);assert!(proof.work_units>0);
-            let encoded=serde_json::to_vec(&proof).unwrap();assert_eq!(proof,serde_json::from_slice::<ActiveApproachOpportunityReceipt>(&encoded).unwrap());
-            assert!(active.candidates_for_focus_with_active_opportunity(&draft,None,work+1).is_err());
-            if count==8 {
-                let base=newreceipt.unwrap();let idx=(0..8).find(|i|!base.selected_slots().contains(i)).unwrap();
-                let with=binding.with_active_approach(Some(g.slots()[idx as usize].tracked_object_id));
-                let(c,r,p)=with.candidates_for_focus_with_active_opportunity(&draft,None,work).unwrap();assert!(p.admitted);let r=r.unwrap();assert_eq!(r.work_units(),base.work_units());assert!(r.selected_slots().contains(&idx));assert!(c.len()<=32);
-                draft.with_candidates_and_opportunity_coverage(c,r).unwrap();
+            let work = initial.as_ref().map_or(0, |r| r.work_units());
+            assert!(binding
+                .candidates_for_focus_with_active_opportunity(&draft, None, work)
+                .is_err());
+            let (old, oldreceipt) = if count == 8 {
+                binding
+                    .candidates_for_focus_with_coverage(&draft, None, work)
+                    .unwrap()
+            } else {
+                (binding.candidates_for_focus(&draft, None).unwrap(), None)
+            };
+            let active = binding.clone().with_active_approach(None);
+            assert!(active.active_approach_enabled());
+            let (new, newreceipt, proof) = active
+                .candidates_for_focus_with_active_opportunity(&draft, None, work)
+                .unwrap();
+            assert_eq!(old, new);
+            assert_eq!(oldreceipt, newreceipt);
+            assert!(proof.work_units > 0);
+            let encoded = serde_json::to_vec(&proof).unwrap();
+            assert_eq!(
+                proof,
+                serde_json::from_slice::<ActiveApproachOpportunityReceipt>(&encoded).unwrap()
+            );
+            assert!(active
+                .candidates_for_focus_with_active_opportunity(&draft, None, work + 1)
+                .is_err());
+            if count == 8 {
+                let base = newreceipt.unwrap();
+                let idx = (0..8).find(|i| !base.selected_slots().contains(i)).unwrap();
+                let with =
+                    binding.with_active_approach(Some(g.slots()[idx as usize].tracked_object_id));
+                let (c, r, p) = with
+                    .candidates_for_focus_with_active_opportunity(&draft, None, work)
+                    .unwrap();
+                assert!(p.admitted);
+                let r = r.unwrap();
+                assert_eq!(r.work_units(), base.work_units());
+                assert!(r.selected_slots().contains(&idx));
+                assert!(c.len() <= 32);
+                draft
+                    .with_candidates_and_opportunity_coverage(c, r)
+                    .unwrap();
             }
         }
     }
-
 }
 
 #[cfg(test)]

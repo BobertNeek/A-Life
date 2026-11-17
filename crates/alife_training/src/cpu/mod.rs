@@ -193,7 +193,8 @@ impl CpuFoundationTrainer {
                     weight.is_finite()
                         && (weight.to_bits() == synapse.genetic_weight().to_bits()
                             || readout_calibration_coordinate(&self.phenotype, index)
-                            || (maze_program::recurrent_coordinate(&self.phenotype,index) && weight.abs()<=16.))
+                            || (maze_program::recurrent_coordinate(&self.phenotype, index)
+                                && weight.abs() <= 16.))
                 })
     }
 
@@ -499,16 +500,16 @@ mod readout_calibration_tests;
 mod age_policy_fork_tests;
 
 mod maze_program;
-pub use maze_program::{MazeBlockedHistory2346,MAZE_RECURRENT_EDGES2346};
+pub use maze_program::{MazeBlockedHistory2346, MAZE_RECURRENT_EDGES2346};
 
 #[cfg(test)]
 mod maze_program_tests;
 
-mod observed_map2349;
-mod route_policy2349;
 mod goal_route2349;
 mod navigation2349;
-pub use navigation2349::{NavigationState2349,NavigationReceipt2349};
+mod observed_map2349;
+mod route_policy2349;
+pub use navigation2349::{NavigationReceipt2349, NavigationState2349};
 
 #[cfg(test)]
 mod navigation2349_tests;

@@ -568,22 +568,55 @@ impl PerceptionContextKind {
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct MazeBlockedSense2346 {
- pub organism_id: OrganismId, pub source_tick: Tick,
- pub source_sequence: crate::ExperienceSequenceId, pub source_frame_digest: PerceptionFrameDigest,
- pub primitive: ActionId, pub blocked: bool, pub touch_gain: f32,
+    pub organism_id: OrganismId,
+    pub source_tick: Tick,
+    pub source_sequence: crate::ExperienceSequenceId,
+    pub source_frame_digest: PerceptionFrameDigest,
+    pub primitive: ActionId,
+    pub blocked: bool,
+    pub touch_gain: f32,
 }
 impl MazeBlockedSense2346 {
- pub fn new(organism_id:OrganismId,source_tick:Tick,source_sequence:crate::ExperienceSequenceId,source_frame_digest:PerceptionFrameDigest,primitive:ActionId,blocked:bool,touch_gain:f32)->Result<Self,ScaffoldContractError>{
-  let r=Self{organism_id,source_tick,source_sequence,source_frame_digest,primitive,blocked,touch_gain};r.validate()?;Ok(r)
- }
- pub fn validate(&self)->Result<(),ScaffoldContractError>{
-  self.organism_id.validate()?;self.source_sequence.validate()?;
-  if !matches!(self.primitive.raw(),101|102|105)||!self.touch_gain.is_finite()||self.touch_gain<0. {return Err(ScaffoldContractError::InvalidPerceptionFrame);}Ok(())
- }
- pub fn calibrated_output(&self)->f32{((if self.blocked {1.0_f32} else {0.0_f32})*self.touch_gain).clamp(0.,1.)}
- /// Fixed semantic tariff: seven receipt fields, six source/finite predicates,
- /// three gain/clamp/output operations, one sensory write. Not CPU instructions.
- pub const fn work_units(&self)->u64{17}
+    pub fn new(
+        organism_id: OrganismId,
+        source_tick: Tick,
+        source_sequence: crate::ExperienceSequenceId,
+        source_frame_digest: PerceptionFrameDigest,
+        primitive: ActionId,
+        blocked: bool,
+        touch_gain: f32,
+    ) -> Result<Self, ScaffoldContractError> {
+        let r = Self {
+            organism_id,
+            source_tick,
+            source_sequence,
+            source_frame_digest,
+            primitive,
+            blocked,
+            touch_gain,
+        };
+        r.validate()?;
+        Ok(r)
+    }
+    pub fn validate(&self) -> Result<(), ScaffoldContractError> {
+        self.organism_id.validate()?;
+        self.source_sequence.validate()?;
+        if !matches!(self.primitive.raw(), 101 | 102 | 105)
+            || !self.touch_gain.is_finite()
+            || self.touch_gain < 0.
+        {
+            return Err(ScaffoldContractError::InvalidPerceptionFrame);
+        }
+        Ok(())
+    }
+    pub fn calibrated_output(&self) -> f32 {
+        ((if self.blocked { 1.0_f32 } else { 0.0_f32 }) * self.touch_gain).clamp(0., 1.)
+    }
+    /// Fixed semantic tariff: seven receipt fields, six source/finite predicates,
+    /// three gain/clamp/output operations, one sensory write. Not CPU instructions.
+    pub const fn work_units(&self) -> u64 {
+        17
+    }
 }
 
 /// World-authenticated self-capability, not a sensor profile or a scored action.
@@ -591,7 +624,9 @@ impl MazeBlockedSense2346 {
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum OrientationRepertoireProvenance {
     GroundedOrientationV3,
-    ResearchHeading2346 { blocked: Option<MazeBlockedSense2346> },
+    ResearchHeading2346 {
+        blocked: Option<MazeBlockedSense2346>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -714,7 +749,7 @@ impl PerceptionFrameDraft {
             candidates,
             profile_provenance,
             grounded_object_slots,
-            Some(OrientationRepertoireProvenance::ResearchHeading2346 {blocked:None}),
+            Some(OrientationRepertoireProvenance::ResearchHeading2346 { blocked: None }),
             None,
             None,
         )
@@ -829,19 +864,57 @@ impl PerceptionFrameDraft {
             self.candidate_opportunity_coverage,
         )
     }
-    pub fn with_maze_blocked_sense2346(mut self, receipt:MazeBlockedSense2346)->Result<Self,ScaffoldContractError>{
-        if !self.maze_heading2346(){return Err(ScaffoldContractError::InvalidPerceptionFrame);}
-        self.sensory.channels.tactile_contact[7]=receipt.calibrated_output();
-        self.orientation_repertoire=Some(OrientationRepertoireProvenance::ResearchHeading2346{blocked:Some(receipt)});
-        Self::new_with_orientation_repertoire(self.organism_id,self.tick,self.sensor_profile,self.sensory,self.body,self.homeostasis,self.candidates,self.profile_provenance,self.grounded_object_slots,self.orientation_repertoire,self.grip_proprioception,self.candidate_opportunity_coverage)
+    pub fn with_maze_blocked_sense2346(
+        mut self,
+        receipt: MazeBlockedSense2346,
+    ) -> Result<Self, ScaffoldContractError> {
+        if !self.maze_heading2346() {
+            return Err(ScaffoldContractError::InvalidPerceptionFrame);
+        }
+        self.sensory.channels.tactile_contact[7] = receipt.calibrated_output();
+        self.orientation_repertoire = Some(OrientationRepertoireProvenance::ResearchHeading2346 {
+            blocked: Some(receipt),
+        });
+        Self::new_with_orientation_repertoire(
+            self.organism_id,
+            self.tick,
+            self.sensor_profile,
+            self.sensory,
+            self.body,
+            self.homeostasis,
+            self.candidates,
+            self.profile_provenance,
+            self.grounded_object_slots,
+            self.orientation_repertoire,
+            self.grip_proprioception,
+            self.candidate_opportunity_coverage,
+        )
     }
     /// Canonical CP19 preparation performs three descriptor passes: world construction,
     /// binding validation, final focus construction. Each materializes three primitives
     /// with 24 features and 11 descriptor/validation units: 3 * 3 * 35 = 315.
     /// Semantic units, not machine instructions; coverage/overlay work is separate.
-    pub const fn maze_heading_work_units(&self)->u64{if self.maze_heading2346(){315}else{0}}
-    pub const fn maze_heading2346(&self)->bool{matches!(self.orientation_repertoire,Some(OrientationRepertoireProvenance::ResearchHeading2346{..}))}
-    pub const fn maze_blocked_sense2346(&self)->Option<&MazeBlockedSense2346>{match &self.orientation_repertoire{Some(OrientationRepertoireProvenance::ResearchHeading2346{blocked})=>blocked.as_ref(),_=>None}}
+    pub const fn maze_heading_work_units(&self) -> u64 {
+        if self.maze_heading2346() {
+            315
+        } else {
+            0
+        }
+    }
+    pub const fn maze_heading2346(&self) -> bool {
+        matches!(
+            self.orientation_repertoire,
+            Some(OrientationRepertoireProvenance::ResearchHeading2346 { .. })
+        )
+    }
+    pub const fn maze_blocked_sense2346(&self) -> Option<&MazeBlockedSense2346> {
+        match &self.orientation_repertoire {
+            Some(OrientationRepertoireProvenance::ResearchHeading2346 { blocked }) => {
+                blocked.as_ref()
+            }
+            _ => None,
+        }
+    }
     pub const fn grip_proprioception(&self) -> Option<GripProprioceptionV1> {
         self.grip_proprioception
     }
@@ -1215,9 +1288,15 @@ impl PerceptionFrame {
         self.base.grip_proprioception()
     }
 
-    pub const fn maze_heading_work_units(&self)->u64{self.base.maze_heading_work_units()}
-    pub const fn maze_heading2346(&self)->bool{self.base.maze_heading2346()}
-    pub const fn maze_blocked_sense2346(&self)->Option<&MazeBlockedSense2346>{self.base.maze_blocked_sense2346()}
+    pub const fn maze_heading_work_units(&self) -> u64 {
+        self.base.maze_heading_work_units()
+    }
+    pub const fn maze_heading2346(&self) -> bool {
+        self.base.maze_heading2346()
+    }
+    pub const fn maze_blocked_sense2346(&self) -> Option<&MazeBlockedSense2346> {
+        self.base.maze_blocked_sense2346()
+    }
     pub const fn grounded_orientation_repertoire(&self) -> bool {
         self.base.grounded_orientation_repertoire()
     }
@@ -1360,15 +1439,30 @@ fn validate_frame_base(
             return Err(ScaffoldContractError::InvalidPerceptionFrame);
         }
     }
-    if orientation_repertoire.is_some()
-        && sensor_profile != SensorProfile::GroundedObjectSlotsV1
-    {
+    if orientation_repertoire.is_some() && sensor_profile != SensorProfile::GroundedObjectSlotsV1 {
         return Err(ScaffoldContractError::InvalidPerceptionFrame);
     }
-    if let Some(OrientationRepertoireProvenance::ResearchHeading2346{blocked})=orientation_repertoire {
-        if candidates.iter().any(|c|matches!(c.action_id.raw(),601|602|603|606)){return Err(ScaffoldContractError::InvalidPerceptionFrame);}
-        let output=if let Some(r)=blocked {r.validate()?;if r.organism_id!=organism_id||r.source_tick>=tick{return Err(ScaffoldContractError::InvalidPerceptionFrame);}r.calibrated_output()}else{0.};
-        if sensory.channels.tactile_contact[7].to_bits()!=output.to_bits(){return Err(ScaffoldContractError::InvalidPerceptionFrame);}
+    if let Some(OrientationRepertoireProvenance::ResearchHeading2346 { blocked }) =
+        orientation_repertoire
+    {
+        if candidates
+            .iter()
+            .any(|c| matches!(c.action_id.raw(), 601 | 602 | 603 | 606))
+        {
+            return Err(ScaffoldContractError::InvalidPerceptionFrame);
+        }
+        let output = if let Some(r) = blocked {
+            r.validate()?;
+            if r.organism_id != organism_id || r.source_tick >= tick {
+                return Err(ScaffoldContractError::InvalidPerceptionFrame);
+            }
+            r.calibrated_output()
+        } else {
+            0.
+        };
+        if sensory.channels.tactile_contact[7].to_bits() != output.to_bits() {
+            return Err(ScaffoldContractError::InvalidPerceptionFrame);
+        }
     }
     ensure_current_version(SchemaKind::Perception, schema_version)
         .map_err(|_| ScaffoldContractError::InvalidPerceptionFrame)?;
@@ -1612,9 +1706,23 @@ fn compute_base_digest(
         builder.write_u64(0x6d6f746f725f7633);
         builder.write_u16(3);
     }
-    if let Some(OrientationRepertoireProvenance::ResearchHeading2346{blocked})=orientation_repertoire {
-        builder.write_u64(0x6d617a655f323334);builder.write_u16(1);builder.write_bool(blocked.is_some());
-        if let Some(r)=blocked {builder.write_u64(r.organism_id.raw());builder.write_u64(r.source_tick.raw());builder.write_u64(r.source_sequence.raw());for v in r.source_frame_digest.0{builder.write_u64(v);}builder.write_u32(r.primitive.raw());builder.write_bool(r.blocked);builder.write_f32(r.touch_gain).expect("validated gain");}
+    if let Some(OrientationRepertoireProvenance::ResearchHeading2346 { blocked }) =
+        orientation_repertoire
+    {
+        builder.write_u64(0x6d617a655f323334);
+        builder.write_u16(1);
+        builder.write_bool(blocked.is_some());
+        if let Some(r) = blocked {
+            builder.write_u64(r.organism_id.raw());
+            builder.write_u64(r.source_tick.raw());
+            builder.write_u64(r.source_sequence.raw());
+            for v in r.source_frame_digest.0 {
+                builder.write_u64(v);
+            }
+            builder.write_u32(r.primitive.raw());
+            builder.write_bool(r.blocked);
+            builder.write_f32(r.touch_gain).expect("validated gain");
+        }
     }
     // Absence writes nothing, preserving every legacy canonical digest.
     if let Some(receipt) = grip_proprioception {
@@ -2196,22 +2304,62 @@ mod grip_proprioception_tests {
     }
     #[test]
     fn maze_receipt_owner_time_lane_and_rebinding_are_authenticated() {
-        let d=fixture(0.0);
-        let d=PerceptionFrameDraft::new_with_maze_heading2346(d.organism_id,d.tick,d.sensor_profile,d.sensory,d.body,d.homeostasis,d.candidates,d.profile_provenance,d.grounded_object_slots).unwrap();
-        let r=MazeBlockedSense2346::new(OrganismId(2306),Tick::ZERO,crate::ExperienceSequenceId(1),PerceptionFrameDigest([1,2,3,4]),ActionId(105),true,0.5).unwrap();
-        let bound=d.clone().with_maze_blocked_sense2346(r).unwrap();
-        assert_eq!(bound.sensory.channels.tactile_contact[7].to_bits(),0.5_f32.to_bits());
-        assert_eq!(bound.maze_heading_work_units(),315);
-        for rebuilt in [bound.clone().with_candidates(bound.candidates().to_vec()).unwrap(),bound.clone().with_semantic_context(None).unwrap()] {
-            assert_eq!(rebuilt.maze_blocked_sense2346(),Some(&r));
-            assert_eq!(serde_json::from_slice::<PerceptionFrameDraft>(&serde_json::to_vec(&rebuilt).unwrap()).unwrap(),rebuilt);
+        let d = fixture(0.0);
+        let d = PerceptionFrameDraft::new_with_maze_heading2346(
+            d.organism_id,
+            d.tick,
+            d.sensor_profile,
+            d.sensory,
+            d.body,
+            d.homeostasis,
+            d.candidates,
+            d.profile_provenance,
+            d.grounded_object_slots,
+        )
+        .unwrap();
+        let r = MazeBlockedSense2346::new(
+            OrganismId(2306),
+            Tick::ZERO,
+            crate::ExperienceSequenceId(1),
+            PerceptionFrameDigest([1, 2, 3, 4]),
+            ActionId(105),
+            true,
+            0.5,
+        )
+        .unwrap();
+        let bound = d.clone().with_maze_blocked_sense2346(r).unwrap();
+        assert_eq!(
+            bound.sensory.channels.tactile_contact[7].to_bits(),
+            0.5_f32.to_bits()
+        );
+        assert_eq!(bound.maze_heading_work_units(), 315);
+        for rebuilt in [
+            bound
+                .clone()
+                .with_candidates(bound.candidates().to_vec())
+                .unwrap(),
+            bound.clone().with_semantic_context(None).unwrap(),
+        ] {
+            assert_eq!(rebuilt.maze_blocked_sense2346(), Some(&r));
+            assert_eq!(
+                serde_json::from_slice::<PerceptionFrameDraft>(
+                    &serde_json::to_vec(&rebuilt).unwrap()
+                )
+                .unwrap(),
+                rebuilt
+            );
         }
-        let mut wrong=r;wrong.organism_id=OrganismId(9);assert!(d.clone().with_maze_blocked_sense2346(wrong).is_err());
-        wrong=r;wrong.source_tick=Tick::new(1);assert!(d.clone().with_maze_blocked_sense2346(wrong).is_err());
+        let mut wrong = r;
+        wrong.organism_id = OrganismId(9);
+        assert!(d.clone().with_maze_blocked_sense2346(wrong).is_err());
+        wrong = r;
+        wrong.source_tick = Tick::new(1);
+        assert!(d.clone().with_maze_blocked_sense2346(wrong).is_err());
         assert!(fixture(0.0).with_maze_blocked_sense2346(r).is_err());
-        let mut forged=serde_json::to_value(&bound).unwrap();forged["sensory"]["channels"]["tactile_contact"][7]=serde_json::json!(0.0);
+        let mut forged = serde_json::to_value(&bound).unwrap();
+        forged["sensory"]["channels"]["tactile_contact"][7] = serde_json::json!(0.0);
         assert!(serde_json::from_value::<PerceptionFrameDraft>(forged).is_err());
-        assert_ne!(d.base_digest(),bound.base_digest());
+        assert_ne!(d.base_digest(), bound.base_digest());
     }
     #[test]
     fn grip_receipt_binds_count_and_survives_all_rebinding() {

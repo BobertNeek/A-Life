@@ -290,10 +290,18 @@ jobs:
             founder_promoted = $false
             workflow_run = "https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
           } | ConvertTo-Json -Depth 3 | Set-Content -LiteralPath (Join-Path $taskArtifact.FullName 'build-receipt.json') -Encoding utf8
+      # Keep provenance after disposable binaries expire; preserve the bundled receipt.
+      - name: Upload Windows build receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: windows-training-receipt-${{ github.sha }}
+          path: target/windows-training-artifact/build-receipt.json
+          if-no-files-found: error
+          retention-days: 7
       - name: Upload executable and receipt
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: windows-training-${{ github.sha }}
           path: target/windows-training-artifact
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 2

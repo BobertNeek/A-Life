@@ -18,8 +18,16 @@ enum Recipe {
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct Request {
- asset:PathBuf,genome:PathBuf,actor_checkpoint:PathBuf,founder_checkpoint:PathBuf,outdir:PathBuf,
- edits:Vec<(u32,u32)>,fixture_id:u8,horizon:usize,temperature:f32,observe:bool,
+    asset: PathBuf,
+    genome: PathBuf,
+    actor_checkpoint: PathBuf,
+    founder_checkpoint: PathBuf,
+    outdir: PathBuf,
+    edits: Vec<(u32, u32)>,
+    fixture_id: u8,
+    horizon: usize,
+    temperature: f32,
+    observe: bool,
 }
 fn validate_temperature(temperature: f32) -> Result<()> {
     if temperature.to_bits() != 1_f32.to_bits() {
@@ -58,7 +66,9 @@ fn identity(
     if bytes(record.genome())? != bytes(g)? {
         return Err("exactgenome mismatch".into());
     }
-    if t.weights().len()!=32768 || t.weights().iter().any(|w|!w.is_finite()) {return Err("invalidpolicy".into());}
+    if t.weights().len() != 32768 || t.weights().iter().any(|w| !w.is_finite()) {
+        return Err("invalidpolicy".into());
+    }
     Ok(record.organism_id())
 }
 fn trainer_value(t: &CpuFoundationTrainer) -> Result<u32> {
@@ -471,48 +481,332 @@ fn sha(path: &Path) -> Result<String> {
     use sha2::{Digest, Sha256};
     Ok(format!("{:x}", Sha256::digest(fs::read(path)?)))
 }
-fn load(r:&Request)->Result<(CpuCanonicalHost,CpuFoundationTrainer,CreatureGenome,Value)> {
- validate_temperature(r.temperature)?;if !r.observe||r.horizon!=1024||r.fixture_id>1{return Err("requires1024/T1/observe/fixture0or1".into());}
- let a=FoundationWeightAsset::decode_canonical(&fs::read(&r.asset)?)?;let g:CreatureGenome=serde_json::from_slice(&fs::read(&r.genome)?)?;
- if g.n2048_foundation_candidate.as_ref().ok_or("asset")?.encode_canonical()?!=a.encode_canonical()?{return Err("pairmismatch".into());}
- let p=compile(&a,&g)?;let f:FoundationTrainerCheckpoint=serde_json::from_slice(&fs::read(&r.founder_checkpoint)?)?;let original=bytes(&f)?;let t=CpuFoundationTrainer::from_checkpoint(p,a,f)?;
- if bytes(&t.checkpoint())?!=original{return Err("founderrestore".into());}
- for(i,(w,s))in t.weights().iter().zip(t.phenotype().synapses()).enumerate(){let b=if i==26144{0x80000000}else if i==26146{0}else if(30048..30088).contains(&i){0x3ecccccd}else{s.genetic_weight().to_bits()};if w.to_bits()!=b{return Err(format!("commonbaseweight{i}").into());}}
- let cp=read_cpu_private_checkpoint(&r.actor_checkpoint)?;let raw=bytes(&cp)?;let h=CpuCanonicalHost::from_checkpoint(cp,&t)?;let own=identity(&h,&t,&g,Recipe::Candidate)?;
- if h.world().tick().raw()!=626||h.checkpoint(&t)?.sampling_counter!=626||!alive(&h,own)||bytes(&h.checkpoint(&t)?)?!=raw{return Err("requireshealthyacquired626cold".into());}
- let rec=h.world().organism_registry().get(own).ok_or("actor")?;let b=rec.biochemistry();
- if b.body.health<0.99||b.body.injury>0.001{return Err("unhealthymazeparent".into());}
- let pins=json!({"asset":{"path":r.asset,"sha256":sha(&r.asset)?},"genome":{"path":r.genome,"sha256":sha(&r.genome)?},"actor":{"path":r.actor_checkpoint.join("collector-checkpoint.json.zst"),"sha256":sha(&r.actor_checkpoint.join("collector-checkpoint.json.zst"))?},"founder":{"path":r.founder_checkpoint,"sha256":sha(&r.founder_checkpoint)?}});Ok((h,t,g,pins))
+fn load(
+    r: &Request,
+) -> Result<(
+    CpuCanonicalHost,
+    CpuFoundationTrainer,
+    CreatureGenome,
+    Value,
+)> {
+    validate_temperature(r.temperature)?;
+    if !r.observe || r.horizon != 1024 || r.fixture_id > 1 {
+        return Err("requires1024/T1/observe/fixture0or1".into());
+    }
+    let a = FoundationWeightAsset::decode_canonical(&fs::read(&r.asset)?)?;
+    let g: CreatureGenome = serde_json::from_slice(&fs::read(&r.genome)?)?;
+    if g.n2048_foundation_candidate
+        .as_ref()
+        .ok_or("asset")?
+        .encode_canonical()?
+        != a.encode_canonical()?
+    {
+        return Err("pairmismatch".into());
+    }
+    let p = compile(&a, &g)?;
+    let f: FoundationTrainerCheckpoint = serde_json::from_slice(&fs::read(&r.founder_checkpoint)?)?;
+    let original = bytes(&f)?;
+    let t = CpuFoundationTrainer::from_checkpoint(p, a, f)?;
+    if bytes(&t.checkpoint())? != original {
+        return Err("founderrestore".into());
+    }
+    for (i, (w, s)) in t.weights().iter().zip(t.phenotype().synapses()).enumerate() {
+        let b = if i == 26144 {
+            0x80000000
+        } else if i == 26146 {
+            0
+        } else if (30048..30088).contains(&i) {
+            0x3ecccccd
+        } else {
+            s.genetic_weight().to_bits()
+        };
+        if w.to_bits() != b {
+            return Err(format!("commonbaseweight{i}").into());
+        }
+    }
+    let cp = read_cpu_private_checkpoint(&r.actor_checkpoint)?;
+    let raw = bytes(&cp)?;
+    let h = CpuCanonicalHost::from_checkpoint(cp, &t)?;
+    let own = identity(&h, &t, &g, Recipe::Candidate)?;
+    if h.world().tick().raw() != 626
+        || h.checkpoint(&t)?.sampling_counter != 626
+        || !alive(&h, own)
+        || bytes(&h.checkpoint(&t)?)? != raw
+    {
+        return Err("requireshealthyacquired626cold".into());
+    }
+    let rec = h.world().organism_registry().get(own).ok_or("actor")?;
+    let b = rec.biochemistry();
+    if b.body.health < 0.99 || b.body.injury > 0.001 {
+        return Err("unhealthymazeparent".into());
+    }
+    let pins = json!({"asset":{"path":r.asset,"sha256":sha(&r.asset)?},"genome":{"path":r.genome,"sha256":sha(&r.genome)?},"actor":{"path":r.actor_checkpoint.join("collector-checkpoint.json.zst"),"sha256":sha(&r.actor_checkpoint.join("collector-checkpoint.json.zst"))?},"founder":{"path":r.founder_checkpoint,"sha256":sha(&r.founder_checkpoint)?}});
+    Ok((h, t, g, pins))
 }
-fn policy(original:&CpuCanonicalHost,base:&CpuFoundationTrainer,g:&CreatureGenome,edits:&[(u32,u32)])->Result<(CpuCanonicalHost,CpuFoundationTrainer,Value)>{
- let before=base.checkpoint();let source=original.checkpoint(base)?;let mut used=std::collections::BTreeSet::new();let mut e=Vec::new();
- for &(i,bits)in edits{let w=f32::from_bits(bits);let s=base.phenotype().synapses().get(i as usize).ok_or("index")?;if !used.insert(i)||!w.is_finite()||!matches!(s.kind(),CompiledSynapseKind::Decoder(c)if c.head()==DecoderHeadKind::ActionCandidate&&matches!(c.family(),CandidateActionFamily::Approach|CandidateActionFamily::Avoid)){return Err("editsmustuniqueApproachAvoidActionCandidate".into());}if base.weights()[i as usize].to_bits()!=bits{e.push((i,w));}}
- let next=if e.is_empty(){CpuFoundationTrainer::from_checkpoint(base.phenotype().clone(),g.n2048_foundation_candidate.clone().ok_or("asset")?,before.clone())?}else{base.calibrated_readout_copy(&e)?};let mut expected=before.clone();for&(i,w)in&e{expected.weights[i as usize]=w;}if bytes(&next.checkpoint())?!=bytes(&expected)?{return Err("otherfounderAdamchange".into());}
- let mut h=original.snapshot();if !e.is_empty(){h.rebase_readout_policy(base,&next)?;}let after=h.checkpoint(&next)?;let mut expectedcp=source.clone();expectedcp.founder_weight_digest=after.founder_weight_digest;if bytes(&after)?!=bytes(&expectedcp)?{return Err("otherprivateworldchange".into());}
- let cold=CpuCanonicalHost::from_checkpoint(after.clone(),&next)?;if bytes(&cold.checkpoint(&next)?)?!=bytes(&after)?{return Err("policycold".into());}
- Ok((h,next,json!({"changed_coordinates":e.len(),"requested_edits":edits,"only_founder_weights_and_host_digest":true,"all_private_genotype_Adam_world_preserved":true,"cold_exact":true,"operator_policy_not_acquired_skill":true})))
+fn policy(
+    original: &CpuCanonicalHost,
+    base: &CpuFoundationTrainer,
+    g: &CreatureGenome,
+    edits: &[(u32, u32)],
+) -> Result<(CpuCanonicalHost, CpuFoundationTrainer, Value)> {
+    let before = base.checkpoint();
+    let source = original.checkpoint(base)?;
+    let mut used = std::collections::BTreeSet::new();
+    let mut e = Vec::new();
+    for &(i, bits) in edits {
+        let w = f32::from_bits(bits);
+        let s = base.phenotype().synapses().get(i as usize).ok_or("index")?;
+        if !used.insert(i)
+            || !w.is_finite()
+            || !matches!(s.kind(),CompiledSynapseKind::Decoder(c)if c.head()==DecoderHeadKind::ActionCandidate&&matches!(c.family(),CandidateActionFamily::Approach|CandidateActionFamily::Avoid))
+        {
+            return Err("editsmustuniqueApproachAvoidActionCandidate".into());
+        }
+        if base.weights()[i as usize].to_bits() != bits {
+            e.push((i, w));
+        }
+    }
+    let next = if e.is_empty() {
+        CpuFoundationTrainer::from_checkpoint(
+            base.phenotype().clone(),
+            g.n2048_foundation_candidate.clone().ok_or("asset")?,
+            before.clone(),
+        )?
+    } else {
+        base.calibrated_readout_copy(&e)?
+    };
+    let mut expected = before.clone();
+    for &(i, w) in &e {
+        expected.weights[i as usize] = w;
+    }
+    if bytes(&next.checkpoint())? != bytes(&expected)? {
+        return Err("otherfounderAdamchange".into());
+    }
+    let mut h = original.snapshot();
+    if !e.is_empty() {
+        h.rebase_readout_policy(base, &next)?;
+    }
+    let after = h.checkpoint(&next)?;
+    let mut expectedcp = source.clone();
+    expectedcp.founder_weight_digest = after.founder_weight_digest;
+    if bytes(&after)? != bytes(&expectedcp)? {
+        return Err("otherprivateworldchange".into());
+    }
+    let cold = CpuCanonicalHost::from_checkpoint(after.clone(), &next)?;
+    if bytes(&cold.checkpoint(&next)?)? != bytes(&after)? {
+        return Err("policycold".into());
+    }
+    Ok((
+        h,
+        next,
+        json!({"changed_coordinates":e.len(),"requested_edits":edits,"only_founder_weights_and_host_digest":true,"all_private_genotype_Adam_world_preserved":true,"cold_exact":true,"operator_policy_not_acquired_skill":true}),
+    ))
 }
-fn fixture(h:&mut CpuCanonicalHost,t:&CpuFoundationTrainer,g:&CreatureGenome,id:u8)->Result<(WorldEntityId,Value)>{
- let own=identity(h,t,g,Recipe::Candidate)?;let before=h.checkpoint(t)?;let old=objects(h);let actor=h.world().entity(h.world().organism_registry().get(own).ok_or("actor")?.world_entity_id()).ok_or("body")?;let pos=actor.position;let yaw=actor.body_yaw;let sign=if id==0{1.}else{-1.};let mut events=Vec::new();let mut walls=Vec::new();let specs=[(1.2,-1.65),(1.2,-1.10),(1.2,-0.55),(1.2,0.),(1.2,0.55),(1.75,-1.65),(2.30,-1.65)];
- for(i,(forward,lateral))in specs.into_iter().enumerate(){let l=sign*lateral;let p=Vec3f::new(pos.x+forward*yaw.cos()-l*yaw.sin(),pos.y,pos.z+forward*yaw.sin()+l*yaw.cos());let o=h.world_mut().editor_spawn_object(WorldEditorSpawnSpec{label:format!("2341-corner-wall-{i}"),kind:WorldObjectKind::Obstacle,organism_id:None,position:p,nutrition:0.,hazard_pain:0.,radius:0.35,token_id:None})?;walls.push(o);events.push(object(h.world().entity(o).ok_or("wall")?));}
- let p=Vec3f::new(pos.x+2.6*yaw.cos(),pos.y,pos.z+2.6*yaw.sin());let goal=h.world_mut().editor_spawn_object(WorldEditorSpawnSpec{label:"2341-corner-goal".into(),kind:WorldObjectKind::Food,organism_id:None,position:p,nutrition:0.6,hazard_pain:0.,radius:0.3,token_id:None})?;let mut props=h.world().entity(goal).ok_or("goal")?.grounded_physical;props.chemical=[0.;3];h.world_mut().set_grounded_physical_properties(goal,props)?;events.push(object(h.world().entity(goal).ok_or("goal")?));
- for o in&old{let n=h.world().entity(WorldEntityId(o["id"].as_u64().ok_or("id")?)).ok_or("oldobject")?;if bytes(o)?!=bytes(&object(n))?{return Err("fixturechangedoldobject".into());}}
- let after=h.checkpoint(t)?;let mut a=serde_json::to_value(&before)?;let mut b=serde_json::to_value(&after)?;
- // Exact old organism/private/sampling and all nonpublic world fields remain byteequal.
- for key in ["next_entity_id","next_spawn_sequence"]{if b["world"]["world"][key].as_u64()!=a["world"]["world"][key].as_u64().map(|n|n+8){return Err("fixtureallocatornot+8".into());}}
- let refs=b["world"]["world"]["voxel_backend"]["world_resource_refs"].as_array().ok_or("refs")?;let fresh=refs.iter().filter(|x|x["stable_id"].as_u64()==Some(goal.raw())).collect::<Vec<_>>();if fresh.len()!=1||fresh[0]["kind"]!="Food"{return Err("goalref".into());}let tile=VoxelTileCoord::new(p.x.round()as i32,p.z.round()as i32);let size=b["world"]["world"]["voxel_backend"]["profile_budget"]["chunk_tile_size"].as_u64().ok_or("size")?;let chunk=VoxelChunkCoord::for_tile(u16::try_from(size)?,tile);if fresh[0]["tile"]!=serde_json::to_value(tile)?||fresh[0]["chunk"]!=serde_json::to_value(chunk)?{return Err("derivedgoalref".into());}
- b["world"]["world"]["voxel_backend"]["world_resource_refs"]=Value::Array(refs.iter().filter(|x|x["stable_id"].as_u64()!=Some(goal.raw())).cloned().collect());
- let active=h.world().object_snapshots().iter().filter(|o|o.kind==WorldObjectKind::Food&&!o.consumed).count();
- if b["world"]["world"]["ecology"]["metrics"]["active_resources"].as_u64()!=Some(active as u64){return Err("resourcecount".into());}b["world"]["world"]["ecology"]["metrics"]["active_resources"]=a["world"]["world"]["ecology"]["metrics"]["active_resources"].clone();
- for k in ["objects","next_entity_id","next_spawn_sequence","last_touched_entities"]{a["world"]["world"].as_object_mut().ok_or("world")?.remove(k);b["world"]["world"].as_object_mut().ok_or("world")?.remove(k);}
- if bytes(&a)?!=bytes(&b)?{return Err("fixturechangedprivateorotherworld".into());}
- Ok((goal,json!({"fixture_id":id,"actor_origin":pos,"actor_yaw":yaw,"native_locomotion_body_radius":h.world().terrain().map_or(LocomotionLimits::default().body_radius,|t|t.limits().body_radius),"walls":walls,"goal":goal,"objects":events,"old_objects_and_private_RNG_unchanged":true,"public_zero_pain_solid_obstacles":true,"goal_visibility_not_assumed_hidden":true,"no_route_waypoint_or_action_forcing":true})))
+fn fixture(
+    h: &mut CpuCanonicalHost,
+    t: &CpuFoundationTrainer,
+    g: &CreatureGenome,
+    id: u8,
+) -> Result<(WorldEntityId, Value)> {
+    let own = identity(h, t, g, Recipe::Candidate)?;
+    let before = h.checkpoint(t)?;
+    let old = objects(h);
+    let actor = h
+        .world()
+        .entity(
+            h.world()
+                .organism_registry()
+                .get(own)
+                .ok_or("actor")?
+                .world_entity_id(),
+        )
+        .ok_or("body")?;
+    let pos = actor.position;
+    let yaw = actor.body_yaw;
+    let sign = if id == 0 { 1. } else { -1. };
+    let mut events = Vec::new();
+    let mut walls = Vec::new();
+    let specs = [
+        (1.2, -1.65),
+        (1.2, -1.10),
+        (1.2, -0.55),
+        (1.2, 0.),
+        (1.2, 0.55),
+        (1.75, -1.65),
+        (2.30, -1.65),
+    ];
+    for (i, (forward, lateral)) in specs.into_iter().enumerate() {
+        let l = sign * lateral;
+        let p = Vec3f::new(
+            pos.x + forward * yaw.cos() - l * yaw.sin(),
+            pos.y,
+            pos.z + forward * yaw.sin() + l * yaw.cos(),
+        );
+        let o = h.world_mut().editor_spawn_object(WorldEditorSpawnSpec {
+            label: format!("2341-corner-wall-{i}"),
+            kind: WorldObjectKind::Obstacle,
+            organism_id: None,
+            position: p,
+            nutrition: 0.,
+            hazard_pain: 0.,
+            radius: 0.35,
+            token_id: None,
+        })?;
+        walls.push(o);
+        events.push(object(h.world().entity(o).ok_or("wall")?));
+    }
+    let p = Vec3f::new(pos.x + 2.6 * yaw.cos(), pos.y, pos.z + 2.6 * yaw.sin());
+    let goal = h.world_mut().editor_spawn_object(WorldEditorSpawnSpec {
+        label: "2341-corner-goal".into(),
+        kind: WorldObjectKind::Food,
+        organism_id: None,
+        position: p,
+        nutrition: 0.6,
+        hazard_pain: 0.,
+        radius: 0.3,
+        token_id: None,
+    })?;
+    let mut props = h.world().entity(goal).ok_or("goal")?.grounded_physical;
+    props.chemical = [0.; 3];
+    h.world_mut()
+        .set_grounded_physical_properties(goal, props)?;
+    events.push(object(h.world().entity(goal).ok_or("goal")?));
+    for o in &old {
+        let n = h
+            .world()
+            .entity(WorldEntityId(o["id"].as_u64().ok_or("id")?))
+            .ok_or("oldobject")?;
+        if bytes(o)? != bytes(&object(n))? {
+            return Err("fixturechangedoldobject".into());
+        }
+    }
+    let after = h.checkpoint(t)?;
+    let mut a = serde_json::to_value(&before)?;
+    let mut b = serde_json::to_value(&after)?;
+    // Exact old organism/private/sampling and all nonpublic world fields remain byteequal.
+    for key in ["next_entity_id", "next_spawn_sequence"] {
+        if b["world"]["world"][key].as_u64() != a["world"]["world"][key].as_u64().map(|n| n + 8) {
+            return Err("fixtureallocatornot+8".into());
+        }
+    }
+    let refs = b["world"]["world"]["voxel_backend"]["world_resource_refs"]
+        .as_array()
+        .ok_or("refs")?;
+    let fresh = refs
+        .iter()
+        .filter(|x| x["stable_id"].as_u64() == Some(goal.raw()))
+        .collect::<Vec<_>>();
+    if fresh.len() != 1 || fresh[0]["kind"] != "Food" {
+        return Err("goalref".into());
+    }
+    let tile = VoxelTileCoord::new(p.x.round() as i32, p.z.round() as i32);
+    let size = b["world"]["world"]["voxel_backend"]["profile_budget"]["chunk_tile_size"]
+        .as_u64()
+        .ok_or("size")?;
+    let chunk = VoxelChunkCoord::for_tile(u16::try_from(size)?, tile);
+    if fresh[0]["tile"] != serde_json::to_value(tile)?
+        || fresh[0]["chunk"] != serde_json::to_value(chunk)?
+    {
+        return Err("derivedgoalref".into());
+    }
+    b["world"]["world"]["voxel_backend"]["world_resource_refs"] = Value::Array(
+        refs.iter()
+            .filter(|x| x["stable_id"].as_u64() != Some(goal.raw()))
+            .cloned()
+            .collect(),
+    );
+    let active = h
+        .world()
+        .object_snapshots()
+        .iter()
+        .filter(|o| o.kind == WorldObjectKind::Food && !o.consumed)
+        .count();
+    if b["world"]["world"]["ecology"]["metrics"]["active_resources"].as_u64() != Some(active as u64)
+    {
+        return Err("resourcecount".into());
+    }
+    b["world"]["world"]["ecology"]["metrics"]["active_resources"] =
+        a["world"]["world"]["ecology"]["metrics"]["active_resources"].clone();
+    for k in [
+        "objects",
+        "next_entity_id",
+        "next_spawn_sequence",
+        "last_touched_entities",
+    ] {
+        a["world"]["world"]
+            .as_object_mut()
+            .ok_or("world")?
+            .remove(k);
+        b["world"]["world"]
+            .as_object_mut()
+            .ok_or("world")?
+            .remove(k);
+    }
+    if bytes(&a)? != bytes(&b)? {
+        return Err("fixturechangedprivateorotherworld".into());
+    }
+    Ok((
+        goal,
+        json!({"fixture_id":id,"actor_origin":pos,"actor_yaw":yaw,"native_locomotion_body_radius":h.world().terrain().map_or(LocomotionLimits::default().body_radius,|t|t.limits().body_radius),"walls":walls,"goal":goal,"objects":events,"old_objects_and_private_RNG_unchanged":true,"public_zero_pain_solid_obstacles":true,"goal_visibility_not_assumed_hidden":true,"no_route_waypoint_or_action_forcing":true}),
+    ))
 }
-fn execute(r:&Request)->Result<Value>{
- if r.outdir.exists(){return Err("createonlyoutdir".into());}let(original,base,g,inputs)=load(r)?;let originalcp=bytes(&original.checkpoint(&base)?)?;let(mut h,t,transition)=policy(&original,&base,&g,&r.edits)?;fs::create_dir(&r.outdir)?;save_boundary(&r.outdir,"SOURCE-ORIGIN",&original,&base,1.)?;save_boundary(&r.outdir,"POLICY-START",&h,&t,1.)?;fs::write(r.outdir.join("FOUNDER-BEFORE.json"),bytes(&base.checkpoint())?)?;fs::write(r.outdir.join("TRANSITION.json"),bytes(&transition)?)?;fs::write(r.outdir.join("INPUT-PINS.json"),bytes(&inputs)?)?;
- let(goal,events)=fixture(&mut h,&t,&g,r.fixture_id)?;fs::write(r.outdir.join("PUBLIC-EVENTS.json"),bytes(&events)?)?;let result=run_inner(&mut h,&t,&g,&r.outdir,r.horizon,true,1.,Recipe::Candidate,&[goal],false,false)?;
- if bytes(&original.checkpoint(&base)?)?!=originalcp{return Err("originalchanged".into());}for key in["asset","genome","actor","founder"]{if sha(Path::new(inputs[key]["path"].as_str().ok_or("path")?))?!=inputs[key]["sha256"].as_str().ok_or("sha")?{return Err("inputchanged".into());}}
- fs::write(r.outdir.join("COMPLETE.json"),bytes(&json!({"complete":true,"all_original_inputs_unchanged":true,"fixture_id":r.fixture_id,"edits":r.edits}))?)?;Ok(result)
+fn execute(r: &Request) -> Result<Value> {
+    if r.outdir.exists() {
+        return Err("createonlyoutdir".into());
+    }
+    let (original, base, g, inputs) = load(r)?;
+    let originalcp = bytes(&original.checkpoint(&base)?)?;
+    let (mut h, t, transition) = policy(&original, &base, &g, &r.edits)?;
+    fs::create_dir(&r.outdir)?;
+    save_boundary(&r.outdir, "SOURCE-ORIGIN", &original, &base, 1.)?;
+    save_boundary(&r.outdir, "POLICY-START", &h, &t, 1.)?;
+    fs::write(
+        r.outdir.join("FOUNDER-BEFORE.json"),
+        bytes(&base.checkpoint())?,
+    )?;
+    fs::write(r.outdir.join("TRANSITION.json"), bytes(&transition)?)?;
+    fs::write(r.outdir.join("INPUT-PINS.json"), bytes(&inputs)?)?;
+    let (goal, events) = fixture(&mut h, &t, &g, r.fixture_id)?;
+    fs::write(r.outdir.join("PUBLIC-EVENTS.json"), bytes(&events)?)?;
+    let result = run_inner(
+        &mut h,
+        &t,
+        &g,
+        &r.outdir,
+        r.horizon,
+        true,
+        1.,
+        Recipe::Candidate,
+        &[goal],
+        false,
+        false,
+    )?;
+    if bytes(&original.checkpoint(&base)?)? != originalcp {
+        return Err("originalchanged".into());
+    }
+    for key in ["asset", "genome", "actor", "founder"] {
+        if sha(Path::new(inputs[key]["path"].as_str().ok_or("path")?))?
+            != inputs[key]["sha256"].as_str().ok_or("sha")?
+        {
+            return Err("inputchanged".into());
+        }
+    }
+    fs::write(
+        r.outdir.join("COMPLETE.json"),
+        bytes(
+            &json!({"complete":true,"all_original_inputs_unchanged":true,"fixture_id":r.fixture_id,"edits":r.edits}),
+        )?,
+    )?;
+    Ok(result)
 }
-fn main()->Result<()>{let a=std::env::args().collect::<Vec<_>>();if a.len()!=2{return Err("usage request.json".into());}let r:Request=serde_json::from_slice(&fs::read(&a[1])?)?;println!("{}",execute(&r)?);Ok(())}
-#[cfg(test)]mod tests;
+fn main() -> Result<()> {
+    let a = std::env::args().collect::<Vec<_>>();
+    if a.len() != 2 {
+        return Err("usage request.json".into());
+    }
+    let r: Request = serde_json::from_slice(&fs::read(&a[1])?)?;
+    println!("{}", execute(&r)?);
+    Ok(())
+}
+#[cfg(test)]
+mod tests;

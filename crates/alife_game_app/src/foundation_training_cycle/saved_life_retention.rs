@@ -12,6 +12,17 @@ use std::{
 
 const MAX_TRACE_BYTES: usize = 16 * 1024 * 1024;
 
+/// Observer serialization only. The caller supplies the already sealed decision
+/// perception, never a fresh world observation or a second GPU inference.
+fn observer_sealed_sensory(channels: &alife_core::SensoryChannels) -> serde_json::Value {
+    serde_json::json!({
+        "schema_version": 1,
+        "source": "sealed_patch.pre_action.perception.sensory.channels",
+        "visual_affordance": channels.visual_affordance,
+        "smell_chemistry": channels.smell_chemistry
+    })
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SavedLifeRetentionRequest {
@@ -21,6 +32,10 @@ pub struct SavedLifeRetentionRequest {
     /// Explicit public near-food task setup, identical to the retained PPO placement-only mode.
     #[serde(default, skip_serializing_if = "retention_false")]
     pub cue_free_food_placement: bool,
+    #[serde(default)]
+    pub direct_weights: Option<DirectWeightEditRequest>,
+    #[serde(default)]
+    pub navigation_task: Option<RetainedNavigationTaskSpec>,
     pub max_decisions: usize,
     pub max_world_ticks: u64,
     pub deadline_unix_seconds: u64,
@@ -36,9 +51,16 @@ fn retention_false(value: &bool) -> bool {
 
 impl SavedLifeRetentionRequest {
     pub fn validate(&self, now: u64) -> Result<()> {
+        if let Some(task) = self.navigation_task {
+            task.validate()?;
+        }
+        if self.navigation_task.is_some() && self.max_decisions == 0 {
+            return Err("navigation task requires biological steps".into());
+        }
         if self.schema != 2
             || self.evaluation_nonce == 0
-            || (self.cue_free_food_placement && self.max_decisions == 0)
+            || (self.cue_free_food_placement
+                && (self.max_decisions == 0 || self.navigation_task.is_some()))
             || !((self.max_decisions == 0 && self.max_world_ticks == 0)
                 || ((1..=256).contains(&self.max_decisions)
                     && (1..=8192).contains(&self.max_world_ticks)))
@@ -326,9 +348,10 @@ pub fn evaluate_saved_life_retention(
         output.join("request.json"),
         serde_json::to_vec_pretty(&request)?,
     )?;
-    let baseline = read_current_training_checkpoint(&source)?;
+    let mut baseline = read_current_training_checkpoint(&source)?;
+    let mut baseline_bytes = original.clone();
     baseline.require_living_continuation()?;
-    let actor_sha = digest(&serde_json::to_vec(&baseline.handoff.actor)?);
+    let mut actor_sha = digest(&serde_json::to_vec(&baseline.handoff.actor)?);
     let value_sha = digest(&serde_json::to_vec(&baseline.handoff.value)?);
     let life = output.join("life");
     materialize_current_training_life(&baseline, &life)?;
@@ -420,6 +443,30 @@ pub fn evaluate_saved_life_retention(
     if !prior_off(runtime.semantic_prior_metrics()) {
         return Err("retention prior is not dormant and off".into());
     }
+    if let Some(edit) = &request.direct_weights {
+        let (next, bytes, calibration) = retained_direct_weights::install_and_seal_direct_weights(
+            &mut runtime,
+            &baseline,
+            &baseline_bytes,
+            &life,
+            &save_path,
+            &assets,
+            &output,
+            id,
+            edit,
+            request.deadline_unix_seconds,
+        )?;
+        baseline = next;
+        baseline_bytes = bytes;
+        actor_sha = digest(&serde_json::to_vec(&baseline.handoff.actor)?);
+        receipt["direct_weight_calibration"] = calibration;
+        receipt["calibrated_actor_sha256"] = serde_json::json!(actor_sha);
+    }
+    let mut task = request
+        .navigation_task
+        .map(|spec| retained_navigation_tasks::configure(runtime.world_mut(), id, spec))
+        .transpose()?;
+    receipt["navigation_task_setup"] = serde_json::to_value(&task)?;
     receipt["sampling_before"] =
         serde_json::to_value(runtime.foundation_training_sampling_state())?;
     let rows_path = output.join("rows.jsonl");
@@ -525,6 +572,17 @@ pub fn evaluate_saved_life_retention(
         {
             return Err("retention observed a non-canonical tick/row boundary".into());
         }
+        if after_tick != before_tick {
+            if let Some(state) = &mut task {
+                let observation = retained_navigation_tasks::advance_after_actual_tick(
+                    runtime.world_mut(),
+                    id,
+                    state,
+                    steps.last().map(|step| &step.patch),
+                )?;
+                receipt["navigation_task_result"] = serde_json::to_value(observation)?;
+            }
+        }
         if let Some(step) = steps.pop() {
             if step.frame.organism_id() != id || step.frame.tick() != before_tick {
                 return Err("retention row identity mismatch".into());
@@ -545,6 +603,10 @@ pub fn evaluate_saved_life_retention(
                 .any(|h| h.source_kind == alife_core::UtteranceSourceKind::Teacher);
             cue_free &= !heard && TeacherCues::observe(runtime.world()).clear();
             let mut events = Vec::new();
+            // Reuse the bounded before/after ownership observations below.
+            // No extra world queries, dispatch, or biology-facing inputs.
+            let mut food_ownership = Vec::with_capacity(foods.len());
+            let mut learner_carried_food_ids = Vec::new();
             for (raw, (target, before, nutrition, hazard_pain)) in &foods {
                 let observation = FoodOutcomeObservation {
                     organism: id,
@@ -554,6 +616,15 @@ pub fn evaluate_saved_life_retention(
                     before: *before,
                     after: ownership(runtime.world(), *target),
                 };
+                food_ownership.push(serde_json::json!({
+                    "target": raw, "before": observation.before, "after": observation.after
+                }));
+                if observation
+                    .after
+                    .is_some_and(|o| o.owner == Some(id) && !o.consumed)
+                {
+                    learner_carried_food_ids.push(*raw);
+                }
                 if !observation.matches_step(&step) {
                     return Err("retention food/row identity mismatch".into());
                 }
@@ -570,12 +641,58 @@ pub fn evaluate_saved_life_retention(
                         "nourished":event.nourished}));
                 }
             }
+            // Read only the CPU snapshot already captured for this inference boundary.
+            // No additional GPU dispatch/readback or sampler advancement is performed.
+            let motor_snapshot = &step.after_inference;
+            let activation = crate::foundation_training::snapshot_activation(motor_snapshot)?;
+            let decoder = motor_snapshot.phenotype.candidate_decoder();
+            let motor_start = usize::try_from(decoder.motor_start())
+                .map_err(|_| "retention motor start conversion overflow")?;
+            let motor_width = usize::from(decoder.motor_width());
+            let motor_end = motor_start
+                .checked_add(motor_width)
+                .ok_or("retention motor range overflow")?;
+            let motor_activations = activation
+                .get(motor_start..motor_end)
+                .ok_or("retention motor range outside captured activation bank")?;
+            // Observer-only copies of already captured GPU behavior and native candidates.
+            // This adds no dispatch, sampling, selection, or biological work. The receipt
+            // contains logits, candidate-major decoder inputs/stride, masks, factor log
+            // probabilities, sampling identity, and representative/motor indices. Invalid
+            // logits serialize as null; the receipt's masks identify eligible candidates.
+            // Keep this inside the existing cumulative MAX_TRACE_BYTES check below.
             let row = serde_json::json!({"row":rows,"organism":id.raw(),"decision_tick":before_tick.raw(),
                 "outcome_tick":after_tick.raw(),"frame_digest":step.frame.frame_digest(),
                 "selected_action":step.patch.decision().selected_action,"selected_bundle":step.patch.selected_bundle(),
                 "physical":step.patch.outcome().physical,"joint_physical":step.patch.outcome().joint,
                 "physiology":physiology(&measured),"food_events":events,"teacher_heard":heard,
+                "observer_sealed_sensory":observer_sealed_sensory(
+                    &step.patch.pre_action().perception().sensory().channels),
+                "observer_food_ownership":{
+                    "schema_version":1,
+                    "scope":"food_entities_present_before_tick",
+                    "decision_tick":before_tick.raw(),
+                    "outcome_tick":after_tick.raw(),
+                    "learner_carried_food_ids_after":learner_carried_food_ids,
+                    "entities":food_ownership
+                },
                 "on_policy_log_probability":step.behavior.on_policy_log_probability()?,
+                "observer_policy_diagnostics":{
+                    "schema_version":1,
+                    "behavior":&step.behavior,
+                    "candidates":step.frame.candidates(),
+                    "motor_snapshot":{
+                        "source":"after_inference_active_activation_bank",
+                        "motor_start":decoder.motor_start(),
+                        "motor_width":decoder.motor_width(),
+                        "activations":motor_activations,
+                        "tick":motor_snapshot.tick,
+                        "active_activation_side":motor_snapshot.active_activation_side,
+                        "logical_dispatch_generation":motor_snapshot.logical_dispatch_generation,
+                        "active_weight_generation":motor_snapshot.active_weight_generation,
+                        "active_weight_bank":motor_snapshot.active_weight_bank
+                    }
+                },
                 "cognitive_work":step.patch.cognitive_work(),"full_outcome":step.patch.outcome(),
                 "observer_pose_before":before_pose,"observer_pose_after":after_pose,
                 "observer_diagnostics_not_biologically_charged":true});
@@ -656,7 +773,7 @@ pub fn evaluate_saved_life_retention(
     let endpoint = preserve_endpoint(
         &mut runtime,
         &baseline,
-        &original,
+        &baseline_bytes,
         &life,
         &save_path,
         &assets,
@@ -671,9 +788,7 @@ pub fn evaluate_saved_life_retention(
             .finalization_deadline_unix_seconds
             .unwrap_or(request.deadline_unix_seconds),
     );
-    let endpoint_preserved = endpoint
-        .as_ref()
-        .is_ok_and(|value| zero_step_preservation_valid(value));
+    let endpoint_preserved = endpoint.as_ref().is_ok_and(zero_step_preservation_valid);
     // A terminal copy is accepted only after the native final closure binds
     // its exact frozen compiler/heads; death itself is not an integrity veto.
     if !alive && endpoint_preserved {
@@ -696,7 +811,7 @@ pub fn evaluate_saved_life_retention(
             && cue_free
             && endpoint_preserved
     );
-    receipt["retention_scope"] = serde_json::json!("Frozen-head feeding observation only; not memory causality, maze mastery or generalization");
+    receipt["retention_scope"] = serde_json::json!("Frozen-head native observation after optional direct-weight edit; moving prey is moving-food proxy; single-layout outcomes are not generalization");
     let complete = matches!(
         stop,
         "decision_limit" | "world_tick_limit" | "natural_death" | "restore_only"
@@ -785,6 +900,8 @@ mod tests {
                 schema: 2,
                 evaluation_nonce: 71,
                 cue_free_food_placement: false,
+                direct_weights: None,
+                navigation_task: None,
                 max_decisions: 2,
                 max_world_ticks: 8,
                 deadline_unix_seconds: now().unwrap() + 600,
@@ -797,6 +914,8 @@ mod tests {
             schema: 2,
             evaluation_nonce: 71,
             cue_free_food_placement: false,
+            direct_weights: None,
+            navigation_task: None,
             max_decisions: 2,
             max_world_ticks: 8,
             deadline_unix_seconds: now().unwrap() + 600,
@@ -845,6 +964,8 @@ mod tests {
                 schema: 2,
                 evaluation_nonce: 71,
                 cue_free_food_placement: false,
+                direct_weights: None,
+                navigation_task: None,
                 max_decisions: 0,
                 max_world_ticks: 8,
                 deadline_unix_seconds: now().unwrap() + 600,
@@ -853,6 +974,31 @@ mod tests {
             }
         )
         .is_err());
+    }
+    #[test]
+    fn observer_sensory_serializes_exact_existing_channels_without_mutation() {
+        let mut channels = alife_core::SensoryChannels::ZERO;
+        for (i, v) in channels.visual_affordance.iter_mut().enumerate() {
+            *v = i as f32 / 16.0;
+        }
+        for (i, v) in channels.smell_chemistry.iter_mut().enumerate() {
+            *v = i as f32 / 8.0;
+        }
+        let before = channels;
+        let encoded = observer_sealed_sensory(&channels);
+        assert_eq!(channels, before);
+        assert_eq!(
+            encoded["visual_affordance"],
+            serde_json::json!(before.visual_affordance)
+        );
+        assert_eq!(
+            encoded["smell_chemistry"],
+            serde_json::json!(before.smell_chemistry)
+        );
+        assert_eq!(encoded["visual_affordance"].as_array().unwrap().len(), 16);
+        assert_eq!(encoded["smell_chemistry"].as_array().unwrap().len(), 8);
+        assert!(serde_json::to_vec(&encoded).unwrap().len() < 2048);
+        assert_eq!(MAX_TRACE_BYTES, 16 * 1024 * 1024);
     }
     #[test]
     fn passive_teacher_label_is_observed_not_deleted_or_treated_as_emission() {
@@ -893,6 +1039,8 @@ mod tests {
             schema: 2,
             evaluation_nonce: 71,
             cue_free_food_placement: false,
+            direct_weights: None,
+            navigation_task: None,
             max_decisions: 0,
             max_world_ticks: 0,
             deadline_unix_seconds: 200,
@@ -900,6 +1048,14 @@ mod tests {
             max_output_bytes: 512 * 1024 * 1024,
         };
         r.validate(100).unwrap();
+        let mut with_navigation = r.clone();
+        with_navigation.navigation_task = Some(RetainedNavigationTaskSpec {
+            kind: RetainedNavigationTaskKind::TwoTurnMaze,
+            rotation_radians: 0.0,
+            mirror: false,
+            prey_speed_per_tick: 0.0,
+        });
+        assert!(with_navigation.validate(100).is_err());
         let mut with_placement = r.clone();
         with_placement.cue_free_food_placement = true;
         assert!(with_placement.validate(100).is_err());
@@ -919,6 +1075,8 @@ mod tests {
             schema: 2,
             evaluation_nonce: 71,
             cue_free_food_placement: false,
+            direct_weights: None,
+            navigation_task: None,
             max_decisions: 128,
             max_world_ticks: 2048,
             deadline_unix_seconds: 200,

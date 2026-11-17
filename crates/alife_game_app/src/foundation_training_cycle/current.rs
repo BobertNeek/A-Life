@@ -207,6 +207,24 @@ pub fn seal_same_individual_training_checkpoint(
     )
 }
 
+/// Seal explicit manual-weight calibration without counting an optimizer update.
+pub fn seal_same_individual_direct_weight_checkpoint(
+    baseline: &CurrentTrainingCheckpointV1,
+    baseline_bytes: &[u8],
+    handoff: alife_training::FoundationTrainingHandoffV1,
+    life_directory: &Path,
+    progress: SameIndividualProgressV1,
+    seeds: CheckpointSeedsV1,
+) -> Result<CurrentTrainingCheckpointV1> {
+    baseline.same_individual_direct_weight_successor(
+        baseline_bytes,
+        handoff,
+        life::capture(life_directory)?,
+        progress,
+        seeds,
+    )
+}
+
 pub fn inspect_current_training_checkpoint(path: &Path) -> Result<serde_json::Value> {
     let checkpoint = read_current_training_checkpoint(path)?;
     let asset = checkpoint

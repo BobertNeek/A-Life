@@ -434,7 +434,7 @@ fn player_care_receipt_loads_slice2_single_kind_strings() {
     world.try_advance_tick().unwrap();
     let receipt = world.last_player_care(organism).unwrap();
     // Rewrite to the slice-2 shape: one kind string under "kind".
-    let mut value = serde_json::to_value(&receipt).unwrap();
+    let mut value = serde_json::to_value(receipt).unwrap();
     value.as_object_mut().unwrap().remove("kinds");
     value
         .as_object_mut()
@@ -443,7 +443,7 @@ fn player_care_receipt_loads_slice2_single_kind_strings() {
     let loaded: PlayerCareReceipt = serde_json::from_value(value).unwrap();
     assert_eq!(loaded, receipt);
     // The removed pair loads as both kinds.
-    let mut value = serde_json::to_value(&receipt).unwrap();
+    let mut value = serde_json::to_value(receipt).unwrap();
     value.as_object_mut().unwrap().remove("kinds");
     value
         .as_object_mut()

@@ -48,7 +48,7 @@ impl MazeBlockedHistory2346 {
     pub fn validate(&self) -> Result<(), ScaffoldContractError> {
         self.organism_id.validate()?;
         self.source_sequence.validate()?;
-        if self.source_frame.0 == [0;4] || !matches!(self.primitive.raw(), 101 | 102 | 105) {
+        if self.source_frame.0 == [0; 4] || !matches!(self.primitive.raw(), 101 | 102 | 105) {
             return Err(ScaffoldContractError::InvalidDecisionEvidence);
         }
         Ok(())
