@@ -5035,7 +5035,7 @@ impl HeadlessWorld {
             // The contacted object itself must not occlude its own surface.
             if distance(observer.position, object.position)
                 <= object.radius.max(HEADLESS_CONTACT_RADIUS)
-                && self.solid_segment_clear_from(
+                && self.tactile_segment_clear_from(
                     observer.position,
                     object.position,
                     Some(object.id),
@@ -7601,6 +7601,37 @@ impl HeadlessWorld {
 
     fn solid_segment_clear(&self, start: Vec3f, end: Vec3f) -> bool {
         self.solid_segment_clear_from(start, end, None, self.objects.values())
+    }
+
+    // Touch occlusion uses actual geometry, not the broad action-reach
+    // envelope: neighboring small tiles must not hide contacted surfaces.
+    fn tactile_segment_clear_from<'a>(
+        &self,
+        start: Vec3f,
+        end: Vec3f,
+        ignored: Option<WorldEntityId>,
+        mut obstacles: impl Iterator<Item = &'a WorldObject>,
+    ) -> bool {
+        if obstacles.any(|object| {
+            Some(object.id) != ignored
+                && object.kind == WorldObjectKind::Obstacle
+                && !object.consumed
+                && distance(
+                    object.position,
+                    closest_point_on_segment(object.position, start, end),
+                ) <= object.radius
+        }) {
+            return false;
+        }
+        solid_segment_clear_among(
+            start,
+            end,
+            ignored,
+            std::iter::empty::<&WorldObject>(),
+            self.terrain
+                .iter()
+                .flat_map(|terrain| terrain.surface().obstacles.iter()),
+        )
     }
 
     fn solid_segment_clear_from<'a>(

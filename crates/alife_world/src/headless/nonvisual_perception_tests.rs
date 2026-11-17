@@ -1288,3 +1288,54 @@ fn indexed_nonvisual_dense_own_cell_never_bypasses_snapshot_validation() {
         );
     }
 }
+
+#[test]
+fn adjacent_small_wall_tiles_do_not_hide_tactile_contact() {
+    let mut world = sparse_world(Vec3f::ZERO, 128);
+    // Actual blocked learner geometry translated to the origin.
+    for (label, position) in [
+        ("tile-a", Vec3f::new(-0.459751, 0.0, 0.320300)),
+        ("tile-b", Vec3f::new(-0.683393, 0.0, -0.126890)),
+    ] {
+        let id = insert_food(&mut world, label, position, [0.0; 2]);
+        let object = world.objects.get_mut(&id.raw()).unwrap();
+        object.kind = WorldObjectKind::Obstacle;
+        object.radius = 0.35;
+    }
+    let (draft, _, _) = assert_packet_matches(&world);
+    assert_eq!(draft.sensory().channels.tactile_contact[0], 1.0);
+    assert!(!world.solid_segment_clear_from(
+        Vec3f::ZERO,
+        Vec3f::new(-0.459751, 0.0, 0.320300),
+        None,
+        world.objects.values(),
+    ));
+}
+
+#[test]
+fn real_intervening_wall_still_blocks_target_temperature_touch() {
+    let mut world = sparse_world(Vec3f::ZERO, 128);
+    let target = insert_food(
+        &mut world,
+        "warm-target",
+        Vec3f::new(0.7, 0.0, 0.0),
+        [0.0; 2],
+    );
+    world
+        .objects
+        .get_mut(&target.raw())
+        .unwrap()
+        .grounded_physical
+        .surface_temperature = 0.8;
+    let wall = insert_food(&mut world, "blocker", Vec3f::new(0.35, 0.0, 0.0), [0.0; 2]);
+    let object = world.objects.get_mut(&wall.raw()).unwrap();
+    object.kind = WorldObjectKind::Obstacle;
+    object.radius = 0.1;
+    object.grounded_physical.surface_temperature = 0.0;
+    let (draft, _, _) = assert_packet_matches(&world);
+    assert_eq!(draft.sensory().channels.tactile_contact[0], 1.0);
+    assert_eq!(draft.sensory().channels.tactile_contact[3], 0.0);
+    world.objects.get_mut(&wall.raw()).unwrap().consumed = true;
+    let (clear, _, _) = assert_packet_matches(&world);
+    assert_eq!(clear.sensory().channels.tactile_contact[3], 0.8);
+}
