@@ -11,6 +11,36 @@ def compact_colors(path):
     binary = raw[28+size:]
     colors = {p['attributes']['COLOR_0'] for m in doc.get('meshes', [])
               for p in m['primitives'] if 'COLOR_0' in p['attributes']}
+    # Replacing a whole view is safe only when it belongs to this accessor.
+    # glTF permits multiple accessors (or images) to share the same bytes.
+    # Reject unsupported layouts before changing metadata or writing the file.
+    for index in colors:
+        accessor = doc['accessors'][index]
+        if accessor['componentType'] == 5121:
+            continue
+        if 'sparse' in accessor:
+            raise ValueError(f'COLOR_0 accessor {index} uses unsupported sparse storage')
+        other_attribute = any(
+            value == index and semantic != 'COLOR_0'
+            for mesh in doc.get('meshes', [])
+            for primitive in mesh['primitives']
+            for attributes in [primitive.get('attributes', {}),
+                               *primitive.get('targets', [])]
+            for semantic, value in attributes.items())
+        if other_attribute:
+            raise ValueError(f'COLOR_0 accessor {index} also serves another attribute')
+        view_index = accessor['bufferView']
+        aliases = [i for i, other in enumerate(doc['accessors'])
+                   if i != index and other.get('bufferView') == view_index]
+        sparse_alias = any(
+            part.get('bufferView') == view_index
+            for other in doc['accessors']
+            for part in (other.get('sparse', {}).get('indices', {}),
+                         other.get('sparse', {}).get('values', {})))
+        image_alias = any(image.get('bufferView') == view_index
+                          for image in doc.get('images', []))
+        if aliases or sparse_alias or image_alias:
+            raise ValueError(f'COLOR_0 accessor {index} shares bufferView {view_index}')
     replacements = {}
     for index in colors:
         accessor = doc['accessors'][index]
