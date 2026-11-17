@@ -89,6 +89,9 @@ const HEAD_SWIVEL_STEP: f32 = 20.0_f32.to_radians();
 const VISION_HALF_ANGLE: f32 = 110.0_f32.to_radians();
 const VISION_EYE_HEIGHT: f32 = 1.0;
 const VISION_RAY_PITCH: f32 = -0.18;
+// A horizontal lane is a vertical visual column, not a single elevation slice.
+// Supplemental downward samples cover nearby low solids from the same eye.
+const VISION_LOWER_RAY_PITCHES: [f32; 7] = [-0.35, -0.6, -1.0, -1.7, -3.0, -5.5, -10.0];
 const MAX_VISIBLE_ENTITIES: usize = 16;
 // A pathological contact radius must never enumerate an unbounded empty cube.
 const MAX_NONVISUAL_QUERY_CELLS: u64 = 4_096;
@@ -1028,6 +1031,132 @@ mod terrain_vision_tests {
         assert!(world.apply_command(&look).unwrap().execution.succeeded);
         assert!(world.agent_for(OrganismId(1)).unwrap().head_yaw > 0.0);
         assert!(!seen(&world, behind));
+    }
+
+    #[test]
+    fn low_wall_in_front_is_visible_without_flat_ground_false_alarm() {
+        for (near, far, height) in [(0.35, 0.45, 0.4), (0.6, 0.8, 0.25), (1.0, 1.2, 0.5)] {
+            let mut world = HeadlessScenarioBuilder::new(60_019)
+                .agent("observer", OrganismId(1), Vec3f::ZERO)
+                .build()
+                .unwrap();
+            let clear = world.terrain_vision_fan(world.agent_for(OrganismId(1)).unwrap());
+            assert!(clear.iter().all(|range| *range > 0.65));
+            let terrain = crate::WorldTerrain::new(
+                crate::TerrainData {
+                    width: 17,
+                    depth: 17,
+                    origin_x: -8.0,
+                    origin_z: -8.0,
+                    spacing: 1.0,
+                    heights: vec![0.0; 17 * 17],
+                    obstacles: vec![[near, -1.0, far, 1.0, 0.0, height]],
+                    water_level: None,
+                },
+                crate::LocomotionLimits::default(),
+            )
+            .unwrap();
+            world
+                .enable_terrain_for_new_game(terrain, Vec3f::ZERO)
+                .unwrap();
+            let observer = world.agent_for(OrganismId(1)).unwrap();
+            let seen = world.terrain_vision_fan(observer);
+            assert!(
+                seen[7] < 0.2 && seen[8] < 0.2,
+                "low wall missed: near={near} height={height} ranges={seen:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn supplemental_vision_uses_nearest_opaque_surface() {
+        let mut world = HeadlessScenarioBuilder::new(60_021)
+            .agent("observer", OrganismId(1), Vec3f::ZERO)
+            .build()
+            .unwrap();
+        let origin = Vec3f::new(0.0, VISION_EYE_HEIGHT, 0.0);
+        let direction = normalize(Vec3f::new(1.0, -0.35, 0.0));
+        let mut ids = Vec::new();
+        for (label, distance) in [("near", 1.0), ("far", 2.0)] {
+            let center = add(origin, scale(direction, distance));
+            let id = world
+                .editor_spawn_object(WorldEditorSpawnSpec {
+                    label: label.into(),
+                    kind: WorldObjectKind::Obstacle,
+                    organism_id: None,
+                    position: Vec3f::new(center.x, center.y - 0.05, center.z),
+                    nutrition: 0.0,
+                    hazard_pain: 0.0,
+                    radius: 0.1,
+                    token_id: None,
+                })
+                .unwrap();
+            world.editor_set_optical_opacity(id, 1.0).unwrap();
+            ids.push(id);
+        }
+        let observer = world.agent_for(OrganismId(1)).unwrap().id;
+        let near = world
+            .first_sight_hit_with_surface(origin, direction, 8.0, observer, None)
+            .unwrap();
+        assert!(near.1 && (near.0 - 0.9).abs() < 0.01);
+        world.editor_set_optical_opacity(ids[0], 0.0).unwrap();
+        let far = world
+            .first_sight_hit_with_surface(origin, direction, 8.0, observer, None)
+            .unwrap();
+        assert!(far.1 && (far.0 - 1.9).abs() < 0.01);
+    }
+
+    #[test]
+    fn overhead_solid_does_not_become_a_low_obstacle() {
+        let mut world = HeadlessScenarioBuilder::new(60_022)
+            .agent("observer", OrganismId(1), Vec3f::ZERO)
+            .build()
+            .unwrap();
+        let clear = world.terrain_vision_fan(world.agent_for(OrganismId(1)).unwrap());
+        let overhead = world
+            .editor_spawn_object(WorldEditorSpawnSpec {
+                label: "overhead".into(),
+                kind: WorldObjectKind::Obstacle,
+                organism_id: None,
+                position: Vec3f::new(0.5, 2.0, 0.0),
+                nutrition: 0.0,
+                hazard_pain: 0.0,
+                radius: 0.2,
+                token_id: None,
+            })
+            .unwrap();
+        world.editor_set_optical_opacity(overhead, 1.0).unwrap();
+        let observer = world.agent_for(OrganismId(1)).unwrap();
+        assert_eq!(
+            clear.map(f32::to_bits),
+            world.terrain_vision_fan(observer).map(f32::to_bits)
+        );
+        // Object-directed sight still sees overhead objects in horizontal FOV.
+        assert!(world.object_in_sight(observer, world.entity(overhead).unwrap()));
+    }
+
+    #[test]
+    fn supplemental_low_vision_respects_ground_occlusion() {
+        let mut world = HeadlessScenarioBuilder::new(60_020)
+            .agent("observer", OrganismId(1), Vec3f::ZERO)
+            .build()
+            .unwrap();
+        let clear = world.terrain_vision_fan(world.agent_for(OrganismId(1)).unwrap());
+        let underground = world
+            .editor_spawn_object(WorldEditorSpawnSpec {
+                label: "underground".into(),
+                kind: WorldObjectKind::Obstacle,
+                organism_id: None,
+                position: Vec3f::new(0.5, -1.0, 0.0),
+                nutrition: 0.0,
+                hazard_pain: 0.0,
+                radius: 0.2,
+                token_id: None,
+            })
+            .unwrap();
+        world.editor_set_optical_opacity(underground, 1.0).unwrap();
+        let blocked = world.terrain_vision_fan(world.agent_for(OrganismId(1)).unwrap());
+        assert_eq!(clear.map(f32::to_bits), blocked.map(f32::to_bits));
     }
 
     #[test]
@@ -5141,6 +5270,23 @@ impl HeadlessWorld {
             {
                 *range = (hit / HEADLESS_VISION_RADIUS).clamp(0.0, 1.0);
             }
+            // Keep the original terrain-floor baseline. Taking the minimum of
+            // all downward ground hits would make empty flat ground look like
+            // an obstacle. Only an opaque object/box winning the SAME ray's
+            // nearest-hit test contributes supplemental range; ground still
+            // occludes it, including slopes and objects below the surface.
+            for pitch in VISION_LOWER_RAY_PITCHES {
+                let direction = normalize(Vec3f::new(yaw.cos(), pitch, yaw.sin()));
+                if let Some((hit, true)) = self.first_sight_hit_with_surface(
+                    eye,
+                    direction,
+                    HEADLESS_VISION_RADIUS,
+                    observer.id,
+                    None,
+                ) {
+                    *range = range.min((hit / HEADLESS_VISION_RADIUS).clamp(0.0, 1.0));
+                }
+            }
         }
         rays
     }
@@ -5153,8 +5299,23 @@ impl HeadlessWorld {
         observer: WorldEntityId,
         target: Option<WorldEntityId>,
     ) -> Option<f32> {
+        self.first_sight_hit_with_surface(origin, direction, max_range, observer, target)
+            .map(|(distance, _)| distance)
+    }
+
+    /// Return range and whether the nearest surface is an opaque object/box.
+    /// Ground has priority on equal-distance intersections.
+    fn first_sight_hit_with_surface(
+        &self,
+        origin: Vec3f,
+        direction: Vec3f,
+        max_range: f32,
+        observer: WorldEntityId,
+        target: Option<WorldEntityId>,
+    ) -> Option<(f32, bool)> {
         let mut nearest = max_range;
         let mut found = false;
+        let mut solid_surface = false;
         for object in self.objects.values() {
             if object.id == observer
                 || Some(object.id) == target
@@ -5171,6 +5332,7 @@ impl HeadlessWorld {
             if let Some(hit) = sight_sphere_hit(origin, direction, center, object.radius, nearest) {
                 nearest = hit;
                 found = true;
+                solid_surface = true;
             }
         }
         if let Some(terrain) = self.terrain.as_ref() {
@@ -5178,12 +5340,13 @@ impl HeadlessWorld {
                 if let Some(hit) = sight_box_hit(origin, direction, *bounds, nearest) {
                     nearest = hit;
                     found = true;
+                    solid_surface = true;
                 }
             }
         }
         let mut previous = 0.0;
-        let mut distance_along = 0.25;
-        while distance_along <= nearest {
+        let mut distance_along = 0.25_f32.min(nearest);
+        loop {
             let point = add(origin, scale(direction, distance_along));
             let ground = self.terrain.as_ref().map_or(Some(0.0), |terrain| {
                 terrain.surface().height(point.x, point.z)
@@ -5205,12 +5368,16 @@ impl HeadlessWorld {
                 }
                 nearest = high;
                 found = true;
+                solid_surface = false;
+                break;
+            }
+            if distance_along >= nearest {
                 break;
             }
             previous = distance_along;
-            distance_along += 0.25;
+            distance_along = (distance_along + 0.25).min(nearest);
         }
-        found.then_some(nearest)
+        found.then_some((nearest, solid_surface))
     }
 
     pub fn perception_frame(

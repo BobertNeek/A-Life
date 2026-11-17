@@ -380,6 +380,18 @@ fn is_legacy_turnover_rate(value: &f32) -> bool {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BrainConstructionChromosome {
+    /// Whole, linked birth-prior alleles; absent legacy values are identity gain.
+    /// They never contain or rewrite acquired neural weights.
+    #[serde(
+        default = "crate::genome::legacy_distance_gain",
+        skip_serializing_if = "crate::genome::is_legacy_distance_gain"
+    )]
+    pub maternal_distance_gain: f32,
+    #[serde(
+        default = "crate::genome::legacy_distance_gain",
+        skip_serializing_if = "crate::genome::is_legacy_distance_gain"
+    )]
+    pub paternal_distance_gain: f32,
     pub maternal_architecture: crate::genome::CognitiveArchitectureGenomeParameters,
     pub paternal_architecture: crate::genome::CognitiveArchitectureGenomeParameters,
     pub maternal_learning: crate::PlasticityGenomeParameters,
@@ -389,6 +401,8 @@ pub struct BrainConstructionChromosome {
 impl Default for BrainConstructionChromosome {
     fn default() -> Self {
         Self {
+            maternal_distance_gain: 1.0,
+            paternal_distance_gain: 1.0,
             maternal_architecture:
                 crate::genome::CognitiveArchitectureGenomeParameters::canonical_default(),
             paternal_architecture:
@@ -403,6 +417,8 @@ impl BrainConstructionChromosome {
         self == &Self::default()
     }
     fn validate(&self) -> Result<(), ScaffoldContractError> {
+        crate::genome::validate_distance_gain(self.maternal_distance_gain)?;
+        crate::genome::validate_distance_gain(self.paternal_distance_gain)?;
         self.maternal_architecture.validate_contract()?;
         self.paternal_architecture.validate_contract()?;
         self.maternal_learning.validate_contract()?;
@@ -1026,7 +1042,11 @@ impl CreatureGenome {
                 ),
             },
             brain: BrainChromosome {
-                construction: BrainConstructionChromosome::default(),
+                construction: BrainConstructionChromosome {
+                    maternal_distance_gain: 6.0,
+                    paternal_distance_gain: 6.0,
+                    ..BrainConstructionChromosome::default()
+                },
                 brain_class: DiscreteLocus::new(
                     DiscreteAllele::new(class, dominant),
                     DiscreteAllele::new(class, recessive),
@@ -1641,6 +1661,8 @@ fn express_brain_genome(
     let brain_class_id = source.expressed_brain_class()?;
     let mut genome = BrainGenome::scaffold(source.conception_seed, brain_class_id);
     let construction = &source.brain.construction;
+    genome.procedural_distance_gain =
+        (construction.maternal_distance_gain + construction.paternal_distance_gain) * 0.5;
     let architecture = construction
         .maternal_architecture
         .map_inherited_parameters(
@@ -2493,14 +2515,14 @@ fn recombine_brain(
         &mut context.rng,
     );
     let class = maternal.expressed_brain_class()?;
-    let (maternal_architecture, maternal_learning) = construction_gamete(
+    let (maternal_architecture, maternal_learning, maternal_distance_gain) = construction_gamete(
         &maternal.construction,
         &mut maternal_selector,
         context,
         AlleleSide::Maternal,
         class,
     )?;
-    let (paternal_architecture, paternal_learning) = construction_gamete(
+    let (paternal_architecture, paternal_learning, paternal_distance_gain) = construction_gamete(
         &paternal.construction,
         &mut paternal_selector,
         context,
@@ -2509,6 +2531,8 @@ fn recombine_brain(
     )?;
     let result = BrainChromosome {
         construction: BrainConstructionChromosome {
+            maternal_distance_gain,
+            paternal_distance_gain,
             maternal_architecture,
             paternal_architecture,
             maternal_learning,
@@ -2687,6 +2711,7 @@ fn construction_gamete(
     (
         crate::genome::CognitiveArchitectureGenomeParameters,
         crate::PlasticityGenomeParameters,
+        f32,
     ),
     ScaffoldContractError,
 > {
@@ -2721,7 +2746,14 @@ fn construction_gamete(
         &chromosome.paternal_learning
     };
     let learning = learning.with_inherited_decoder_policies_from(credit_source);
-    Ok((architecture, learning))
+    // This whole birth-prior allele is linked to the existing decoder-policy
+    // homolog. No new RNG draws: legacy reproduction keeps its exact stream.
+    let distance_gain = if selector.select_maternal_homolog {
+        chromosome.maternal_distance_gain
+    } else {
+        chromosome.paternal_distance_gain
+    };
+    Ok((architecture, learning, distance_gain))
 }
 
 fn recombine_chemistry(

@@ -471,10 +471,14 @@ fn homologous_chemistry_and_brain_settings_recombine_and_survive_extreme_mutatio
     use alife_core::{AlleleSide, BiologicalValueProfile};
     let mut mother = early_mammal(0xE10_6101);
     let mut father = early_mammal(0xE10_6102);
-    let legacy_json = serde_json::to_value(&mother).unwrap();
+    // New founders opt into the revised distance birth prior. Exercise the
+    // actual legacy omitted-construction shape separately from those parents.
+    let mut legacy = mother.clone();
+    legacy.brain.construction = Default::default();
+    let legacy_json = serde_json::to_value(&legacy).unwrap();
     assert!(legacy_json["brain"].get("construction").is_none());
     let restored: CreatureGenome = serde_json::from_value(legacy_json).unwrap();
-    assert_eq!(restored.express().unwrap(), mother.express().unwrap());
+    assert_eq!(restored.express().unwrap(), legacy.express().unwrap());
     let profile = BiologicalValueProfile {
         energy: 0.8,
         ..BiologicalValueProfile::default()

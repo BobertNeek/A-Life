@@ -509,6 +509,12 @@ fn encode_genome(
     d.write_f32(g.innate_priority.reflex_strength)?;
     d.write_f32(g.innate_priority.food_attraction)?;
     d.write_f32(g.innate_priority.hazard_aversion)?;
+    // Preserve every legacy compiler-input digest: absent/identity gain writes
+    // no new bytes. The opt-in birth prior receives an explicit domain tag.
+    if !crate::genome::is_legacy_distance_gain(&g.procedural_distance_gain) {
+        d.write_utf8("alife.procedural-distance-prior.v1");
+        d.write_f32(g.procedural_distance_gain)?;
+    }
     for seed in [
         g.seeds.species_seed,
         g.seeds.genome_id_seed,

@@ -2,15 +2,21 @@ use alife_core::*;
 use alife_world::*;
 
 fn fixture() -> HeadlessWorld {
+    fixture_with_distance_gain(6.0)
+}
+
+fn fixture_with_distance_gain(gain: f32) -> HeadlessWorld {
     let mut world = HeadlessScenarioBuilder::new(921)
         .agent("a", OrganismId(1), Vec3f::ZERO)
         .build()
         .unwrap();
-    let genome = CreatureGenome::early_mammal_founder(
+    let mut genome = CreatureGenome::early_mammal_founder(
         922,
         FoundationGeneticIdentity::new(10, 1, 7, BrainCapacityClass::N512_ID).unwrap(),
     )
     .unwrap();
+    genome.brain.construction.maternal_distance_gain = gain;
+    genome.brain.construction.paternal_distance_gain = gain;
     let phenotype = genome.express().unwrap();
     let record = WorldOrganismRecord::newborn(
         OrganismId(1),
@@ -47,7 +53,8 @@ fn prechange_record_bytes_and_body_identity_remain_exact_without_a_pulse() {
             (digest ^ u64::from(*byte)).wrapping_mul(0x100000001b3)
         })
     }
-    let world = fixture();
+    // This golden predates the explicit distance-prior revision.
+    let world = fixture_with_distance_gain(1.0);
     let record = world.organism_registry().get(OrganismId(1)).unwrap();
     let bytes = serde_json::to_vec(record).unwrap();
     assert_eq!(bytes.len(), 42485);

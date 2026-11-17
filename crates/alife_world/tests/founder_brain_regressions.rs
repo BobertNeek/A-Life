@@ -169,7 +169,7 @@ fn fresh_procedural_founders_prefer_nearer_identical_observations() {
         BrainCapacityClass::n1024(),
         BrainCapacityClass::n2048(),
     ] {
-        for seed in [41, 96001, 96002] {
+        for seed in [41, 42, 43, 96001, 96002, 96003, 96004] {
             let brain = brain(seed, &capacity);
             let properties =
                 GroundedPhysicalProperties::deterministic_for_kind(WorldObjectKind::Food, 2);
@@ -221,7 +221,9 @@ fn fresh_procedural_founders_prefer_nearer_identical_observations() {
                     decode(&brain, &near_motor, near, near_frame.homeostasis().drives);
                 assert!(
                     actual_near_score > far_score,
-                    "the complete near observation and recurrent path must also prefer proximity"
+                    "class={:?} seed={seed} family={:?}: the complete near observation must prefer proximity ({actual_near_score} <= {far_score})",
+                    capacity.id(),
+                    far.family
                 );
                 let finite_difference =
                     (far_score - near_score) / (far.features.0[2] - near.features.0[2]);

@@ -78,7 +78,11 @@ fn legacy_serialization_witness() {
         BrainCapacityClass::N2048_ID,
     )
     .unwrap();
-    let raw = CreatureGenome::early_mammal_founder(701, identity).unwrap();
+    // This witness predates the explicit procedural-distance birth prior.
+    // Reconstruct the historical parents, rather than today's new founders.
+    let mut raw = CreatureGenome::early_mammal_founder(701, identity).unwrap();
+    raw.brain.construction.maternal_distance_gain = 1.0;
+    raw.brain.construction.paternal_distance_gain = 1.0;
     let e = raw.express().unwrap();
     let d = e
         .development_state_at(Tick::new(u64::from(
@@ -98,10 +102,10 @@ fn legacy_serialization_witness() {
     )
     .unwrap();
     let mother = raw.with_n2048_foundation_candidate(a.clone()).unwrap();
-    let father = CreatureGenome::early_mammal_founder(702, identity)
-        .unwrap()
-        .with_n2048_foundation_candidate(a)
-        .unwrap();
+    let mut father = CreatureGenome::early_mammal_founder(702, identity).unwrap();
+    father.brain.construction.maternal_distance_gain = 1.0;
+    father.brain.construction.paternal_distance_gain = 1.0;
+    let father = father.with_n2048_foundation_candidate(a).unwrap();
     rows.push(digest(
         &CreatureGenome::reproduce(&mother, &father, 703).unwrap(),
     ));
