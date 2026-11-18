@@ -902,6 +902,28 @@
       "size_bytes": 69572,
       "source": "generated:lantern-orchard",
       "usage_category": "environment-dressing"
+    },
+    {
+      "asset_id": "nursery-understory",
+      "author": "Qualia art",
+      "digest": "fnv1a64:fd615c88b8c56578",
+      "external": false,
+      "final_art": false,
+      "generated": true,
+      "generator": {
+        "config_path": "scripts/build_nursery_understory.py",
+        "date": "2026-11-18",
+        "seed": "85403",
+        "tool": "Blender-5.2.1 LTS"
+      },
+      "license": "A-Life-Generated-Source",
+      "license_ref": "README.md",
+      "local_path": "crates/alife_game_app/assets/care/nursery/understory.glb",
+      "placeholder": false,
+      "replacement_policy": "edit-blender-source-and-refresh-manifest",
+      "size_bytes": 3233004,
+      "source": "generated:nursery-understory",
+      "usage_category": "environment-dressing"
     }
   ],
   "pack_id": "production-voxel-v1",
