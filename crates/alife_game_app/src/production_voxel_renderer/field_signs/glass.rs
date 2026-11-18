@@ -7,6 +7,11 @@ use bevy::{a11y::AccessibilityNode, prelude::*};
 struct Lens;
 #[derive(Component)]
 struct Glyph;
+#[derive(Component)]
+struct OpticalMark;
+#[derive(Resource)]
+struct Marks([Handle<Image>; 2]);
+pub(in crate::production_voxel_renderer) const SIGN_SECONDS: f32 = 3.6;
 #[derive(Resource)]
 struct Art([Handle<Image>; 4]);
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -124,6 +129,23 @@ pub(in crate::production_voxel_renderer) fn spawn(world: &mut World, parent: Ent
     world.entity_mut(root).insert(Lens);
     world.entity_mut(icon).insert(Glyph);
     world.insert_resource(Art(art));
+    let marks = signs!("locator", "afterimage").map(|(_, b)| care_dock::decode_png(world, b));
+    world.spawn((
+        Name::new("Fieldglass optical mark"),
+        OpticalMark,
+        Node {
+            position_type: PositionType::Absolute,
+            width: Val::Px(64.),
+            height: Val::Px(48.),
+            ..default()
+        },
+        ImageNode::new(marks[0].clone()),
+        Visibility::Hidden,
+        GlobalZIndex(1),
+        bevy::ui::FocusPolicy::Pass,
+        bevy::picking::Pickable::IGNORE,
+    ));
+    world.insert_resource(Marks(marks));
 }
 pub(in crate::production_voxel_renderer) fn sync(world: &mut World, debug: bool) {
     let last = world.resource::<care_dock::State>().last_gift;
@@ -141,6 +163,7 @@ pub(in crate::production_voxel_renderer) fn sync(world: &mut World, debug: bool)
                 .and_then(|r| sighting(r.runtime.world(), last))
         })
         .flatten();
+    sync_mark(world, seen.as_ref());
     let info = seen.map(|s| s.condition.art());
     if let Some((slot, _)) = info {
         let handle = world.resource::<Art>().0[slot].clone();
@@ -168,6 +191,49 @@ pub(in crate::production_voxel_renderer) fn sync(world: &mut World, debug: bool)
         }
     }
 }
+// A consumed gift leaves no food mesh. Rather than invent a replacement,
+// briefly register the fieldglass' own image against its recorded position.
+fn sync_mark(world: &mut World, seen: Option<&Sighting>) {
+    let target = seen.and_then(|s| {
+        let (focus, age) = world.resource::<care_dock::State>().framing?;
+        if focus.gift != Some(s.gift) {
+            return None;
+        }
+        let p = Vec3::new(s.point.x, 0., s.point.y);
+        let terrain = world.get_resource::<creature_grounding::RenderedTerrainSurface>()?;
+        let at = Vec3::new(p.x, terrain.height(p)? + 0.04, p.z);
+        let (camera, pose) = world
+            .query_filtered::<(&Camera, &GlobalTransform), With<Fvr03ProductionVoxelCamera>>()
+            .single(world)
+            .ok()?;
+        let center = camera.world_to_viewport(pose, at).ok()?;
+        let scale = world
+            .get_resource::<bevy::ui::UiScale>()
+            .map_or(1., |s| s.0);
+        let icon = usize::from(s.condition == Condition::Consumed);
+        let opacity = ((SIGN_SECONDS - age) / 0.65).clamp(0., 1.);
+        Some((
+            center / scale,
+            world.resource::<Marks>().0[icon].clone(),
+            opacity,
+        ))
+    });
+    for (mut node, mut image, mut view) in world
+        .query_filtered::<(&mut Node, &mut ImageNode, &mut Visibility), With<OpticalMark>>()
+        .iter_mut(world)
+    {
+        if let Some((p, handle, opacity)) = &target {
+            node.left = Val::Px(p.x - 32.);
+            node.top = Val::Px(p.y - 32.);
+            image.image = handle.clone();
+            image.color = Color::WHITE.with_alpha(*opacity);
+            view.set_if_neq(Visibility::Inherited);
+        } else {
+            view.set_if_neq(Visibility::Hidden);
+        }
+    }
+}
+
 #[cfg(test)]
 pub(in crate::production_voxel_renderer) fn image_path(
     world: &World,

@@ -1,6 +1,7 @@
-"""Paint four images for a Hand lens: actual loose food, toy, carried or consumed."""
+"""Paint Hand fieldglass states and their temporary optical marks."""
 
 from pathlib import Path
+
 from PIL import Image, ImageDraw
 
 out = Path(__file__).resolve().parents[1] / "assets/ui/fieldglass"
@@ -30,3 +31,18 @@ for state in ("food", "toy", "carried", "consumed"):
         d.line([(78, 86), (88, 60)], fill=mint, width=6)
         d.ellipse((84, 51, 103, 63), fill=mint)
     im.resize((64, 64), Image.Resampling.LANCZOS).save(out / f"{state}.png")
+
+# In-world optics, not an item or a reward. The split arcs surround a live
+# target; the little empty cup is the same husk pictured in the consumed lens.
+for state in ("locator", "afterimage"):
+    im = Image.new("RGBA", (256, 192))
+    d = ImageDraw.Draw(im)
+    for start, end in ((22, 76), (105, 159), (201, 248), (290, 338)):
+        for w, c in ((10, "#285049cc"), (4, "#d6f6e2fa")):
+            d.arc((24, 91, 232, 166), start, end, fill=c, width=w)
+    if state == "afterimage":
+        for w, c in ((13, "#285049ee"), (6, ivory)):
+            d.arc((98, 48, 157, 98), 2, 178, fill=c, width=w)
+            d.line([(127, 76), (138, 46)], fill=c, width=w)
+        d.ellipse((134, 32, 159, 47), fill=mint, outline="#285049", width=3)
+    im.resize((128, 96), Image.Resampling.LANCZOS).save(out / f"{state}.png")

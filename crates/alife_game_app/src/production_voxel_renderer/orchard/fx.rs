@@ -221,6 +221,13 @@ pub(in crate::production_voxel_renderer) fn frame_hand_focus(
         return;
     }
     let dt = time.delta_secs().min(0.1);
+    // A gift's optical mark briefly outlasts the camera move. Do not keep
+    // steering the camera once it has arrived.
+    if age >= 0.85 {
+        dock.framing = (focus.gift.is_some() && age + dt < field_signs::glass::SIGN_SECONDS)
+            .then_some((focus, age + dt));
+        return;
+    }
     let settle = age + dt >= 0.85;
     let blend = if settle { 1. } else { 1. - (-7.5 * dt).exp() };
     let point = if let Some(id) = focus.gift {
@@ -252,5 +259,5 @@ pub(in crate::production_voxel_renderer) fn frame_hand_focus(
             }
         }
     }
-    dock.framing = (!settle).then_some((focus, age + dt));
+    dock.framing = (!settle || focus.gift.is_some()).then_some((focus, age + dt));
 }

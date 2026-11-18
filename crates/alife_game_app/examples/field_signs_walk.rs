@@ -42,6 +42,7 @@ mod playtest {
         next: f32,
         detailed_since: Option<f32>,
         last_report: u64,
+        observed_contacts: BTreeSet<(u64, u64, u64)>,
         release: Option<KeyCode>,
         before: BTreeSet<u64>,
         gift: Option<alife_core::WorldEntityId>,
@@ -66,6 +67,7 @@ mod playtest {
         mut walk: ResMut<Walk>,
         frame: Res<LiveBrainPresentationFrameResource>,
         names: Query<&Name, With<Mesh3d>>,
+        optics: Query<(&Name, &Visibility), Without<Mesh3d>>,
         controls: Query<(Entity, &AccessibilityNode)>,
         cameras: Query<(&Camera, &GlobalTransform), With<Fvr03ProductionVoxelCamera>>,
         mut keys: ResMut<ButtonInput<KeyCode>>,
@@ -75,6 +77,36 @@ mod playtest {
     ) {
         if let Some(key) = walk.release.take() {
             keys.release(key);
+        }
+        // Observe every published frame before throttling the screenshot driver.
+        // A disappearing food alone cannot identify an eater.
+        for summary in &frame.current.tick_summaries {
+            if !summary.patch_sealed
+                || summary.world_tick_after.raw() > frame.current.authoritative_world_tick.raw()
+            {
+                continue;
+            }
+            let Some(trace) = &summary.motor_execution else {
+                continue;
+            };
+            for receipt in &trace.channel_receipts {
+                if receipt.command.channel != alife_core::MotorChannel::Manipulation
+                    || receipt.command.primitive != alife_world::HeadlessActionIds::EAT
+                    || receipt.physical.contact != alife_core::PhysicalContactKind::Consumed
+                {
+                    continue;
+                }
+                if let Some(object) = receipt.physical.target_entity {
+                    let row = (
+                        summary.world_tick_after.raw(),
+                        summary.organism_id.raw(),
+                        object.raw(),
+                    );
+                    if walk.observed_contacts.insert(row) {
+                        writeln!(walk.log, "sealed_eat\t{}\t{}\t{}", row.0, row.1, row.2).unwrap();
+                    }
+                }
+            }
         }
         let now = time.elapsed_secs();
         if now < walk.next {
@@ -196,6 +228,13 @@ mod playtest {
                     1,
                     "looking duplicated the gift"
                 );
+                assert!(
+                    optics
+                        .iter()
+                        .any(|(name, v)| name.as_str() == "Fieldglass optical mark"
+                            && *v != Visibility::Hidden),
+                    "the optical mark must identify even a consumed gift's otherwise empty site"
+                );
                 let revisit = walk.phase == 7;
                 walk.photo(
                     &mut commands,
@@ -274,6 +313,7 @@ mod playtest {
             next: 7.,
             detailed_since: None,
             last_report: 0,
+            observed_contacts: BTreeSet::new(),
             release: None,
             before: BTreeSet::new(),
             gift: None,
