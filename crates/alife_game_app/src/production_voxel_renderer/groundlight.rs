@@ -122,9 +122,11 @@ fn seat(
         let Ok((area, source, care)) = sources.get(child.parent()) else {
             continue;
         };
+        // The shared opaque-contact treatment must not disclose a transparent
+        // body (or mark the ground beneath something a creature actually holds).
         let lifted = care
             .and_then(|id| frame.as_ref()?.current.object(id.0))
-            .is_some_and(|body| body.carried_by.is_some());
+            .is_some_and(|body| !can_cast(body));
         let state = (*source, lifted);
         if !surface.is_changed() && pool.last == Some(state) {
             continue;
@@ -137,6 +139,10 @@ fn seat(
             visible.set_if_neq(Visibility::Hidden);
         }
     }
+}
+
+fn can_cast(body: &alife_world::WorldObject) -> bool {
+    body.carried_by.is_none() && body.optical_opacity >= 1.0 && body.optical_opacity.is_finite()
 }
 
 fn penumbra() -> Mesh {
@@ -213,6 +219,23 @@ mod tests {
             }
         }
     }
+    #[test]
+    fn translucent_and_carried_objects_never_gain_an_opaque_contact_cue() {
+        let world = alife_world::HeadlessScenarioBuilder::new(4)
+            .food("glass fruit", Vec3f::ZERO, 0.3)
+            .build()
+            .unwrap();
+        let mut fruit = world.object_snapshots().remove(0);
+        assert!(can_cast(&fruit));
+        for opacity in [0.0, 0.6, f32::NAN] {
+            fruit.optical_opacity = opacity;
+            assert!(!can_cast(&fruit));
+        }
+        fruit.optical_opacity = 1.;
+        fruit.carried_by = Some(OrganismId(2));
+        assert!(!can_cast(&fruit));
+    }
+
     #[test]
     fn prints_share_assets_follow_moving_sources_and_leave_with_them() {
         let mut app = App::new();

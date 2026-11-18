@@ -4,7 +4,7 @@ A pear, rattle and chime table used to share one 30 cm vertical offset. On the n
 
 The optical center for the Hand, picking and art now uses the shipped mesh's resting depth and the individual body's shape. A real grip retains its previous attachment offset. The rattle's ring is not a perfect sphere; this is its neutral support height, not a second physics simulation. Neither a canonical elevated position nor any physical color is changed.
 
-A soft dark edge under actual keepsakes, bowls, silverbell drifts and ceramic waystones follows the slope of the rendered soil. Each print leaves with its source. A creature's grip, a body distinctly above or below the ground, or missing ground leaves no contact print. The normal habitat and field camera also apply the same single-pass edge smoothing; the minimum profile keeps it disabled.
+A soft dark edge under actual keepsakes, bowls, silverbell drifts and ceramic waystones follows the slope of the rendered soil. Each print leaves with its source. A creature's grip, a translucent keepsake, a body distinctly above or below the ground, or missing ground leaves no contact print. The normal habitat and field camera also apply the same single-pass edge smoothing; the minimum profile keeps it disabled.
 
 Branch: `qualia/groundlight-20261118`. This is a display treatment within Cassidy's wordless, cozy soft-sci-fi Black & White × Creatures 3 / Docking Station direction. The selected Hearthling, all biology, brains, learning, training and weights are unchanged. No new onscreen text.
 
