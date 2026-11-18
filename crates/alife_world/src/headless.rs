@@ -9,6 +9,7 @@ mod awake_translation;
 mod contact_withdrawal;
 mod grounded_path;
 mod orchard;
+mod rolling_toys;
 mod translation_endpoint;
 pub use awake_translation::{
     AwakeTranslationIntervalReceipt, TranslationTimeMetric, VoluntaryTimeProvenance,
@@ -2028,6 +2029,8 @@ pub struct HeadlessWorld {
     /// never yet cared for has no entry (unknown, not hostile).
     last_familiarity: BTreeMap<u64, PlayerFamiliarity>,
     player_hold: Option<player_hand::PlayerHold>,
+    toy_rolls: BTreeMap<u64, [f32; 2]>,
+    last_chime_strike: Option<(Tick, WorldEntityId)>,
     tracked_objects: TrackedObjectRegistry,
     habitats: HabitatAuthority,
     organism_registry: WorldOrganismRegistry,
@@ -2279,6 +2282,8 @@ impl HeadlessWorld {
             last_player_care: BTreeMap::new(),
             last_familiarity: BTreeMap::new(),
             player_hold: None,
+            toy_rolls: BTreeMap::new(),
+            last_chime_strike: None,
             tracked_objects: TrackedObjectRegistry::new(
                 seed,
                 DEFAULT_TRACKED_OBJECT_CAPACITY_PER_ORGANISM,
@@ -3064,6 +3069,7 @@ impl HeadlessWorld {
         }
 
         candidate.advance_autonomous_critters();
+        candidate.advance_toy_rolls();
         candidate.speech.retire_expired(candidate.tick);
         let _ = candidate.advance_ecology();
         Ok(next_tick)
@@ -3567,6 +3573,16 @@ impl HeadlessWorld {
             digest.write_bytes(
                 &serde_json::to_vec(hold).map_err(|_| ScaffoldContractError::InvalidId)?,
             );
+        }
+        if !self.toy_rolls.is_empty() {
+            // An unplayed world retains its historical canonical signature.
+            digest.write_bytes(b"rolling-toys-v1");
+            digest.write_sequence_len(self.toy_rolls.len());
+            for (&id, &[x, z]) in &self.toy_rolls {
+                digest.write_u64(id);
+                write_f32_bits(&mut digest, x);
+                write_f32_bits(&mut digest, z);
+            }
         }
         for object in self.objects.values() {
             write_world_object_signature(&mut digest, object)?;
@@ -4196,6 +4212,7 @@ impl HeadlessWorld {
             .objects
             .remove(&id.raw())
             .ok_or(ScaffoldContractError::InvalidId)?;
+        self.toy_rolls.remove(&id.raw());
         self.labels.remove(&object.label);
         self.last_touched_entities.retain(|touched| *touched != id);
         if self
@@ -4254,6 +4271,7 @@ impl HeadlessWorld {
             .ok_or(ScaffoldContractError::InvalidId)?;
         object.grounded_physical.velocity = displacement;
         object.position = position;
+        self.toy_rolls.remove(&id.raw());
         if let Some(carrier) = carrier {
             self.sync_carried_pose(carrier)?;
         }
@@ -4442,6 +4460,7 @@ impl HeadlessWorld {
             last_familiarity: self.last_familiarity.clone(),
             ingestion_observations: self.ingestion_observations.clone(),
             player_hold: self.player_hold.clone(),
+            toy_rolls: self.toy_rolls.clone(),
             last_creature_utterance_ticks: self
                 .last_creature_utterance_ticks
                 .iter()
@@ -4548,6 +4567,7 @@ impl HeadlessWorld {
         if state.next_utterance_id == 0 || state.next_utterance_id <= max_utterance_id {
             return Err(ScaffoldContractError::InvalidId);
         }
+        state.validate_toy_rolls()?;
         let mut cooldown_organisms = std::collections::BTreeSet::new();
         for (organism, tick) in &state.last_creature_utterance_ticks {
             organism.validate()?;
@@ -4628,6 +4648,8 @@ impl HeadlessWorld {
             last_player_care: state.last_player_care.clone(),
             last_familiarity: state.last_familiarity.clone(),
             player_hold: state.player_hold.clone(),
+            toy_rolls: state.toy_rolls.clone(),
+            last_chime_strike: None,
             last_creature_utterance_ticks: state
                 .last_creature_utterance_ticks
                 .iter()

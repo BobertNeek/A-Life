@@ -230,6 +230,7 @@ impl HeadlessWorld {
         )?;
         // No fallible work after finish_action's final velocity commit.
         for object in staged {
+            self.toy_rolls.remove(&object.id.raw());
             self.objects.insert(object.id.raw(), object);
         }
         result.grip_transfers = transfers;

@@ -51,7 +51,10 @@ impl HeadlessWorld {
             last_ground: ground,
         });
         match self.move_player_hold_to(ground, true) {
-            Ok(position) => Ok(position),
+            Ok(position) => {
+                self.toy_rolls.remove(&id.raw());
+                Ok(position)
+            }
             Err(error) => {
                 self.player_hold = None;
                 Err(error)

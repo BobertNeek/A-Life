@@ -96,7 +96,24 @@ pub(super) fn sync_care_objects(
     let translation = |position| care_object_center(position, highlands.is_some(), &surface);
     for (entity, marker, mut transform) in &mut object_entities {
         if let Some(object) = objects.remove(&marker.0.raw()) {
-            transform.translation = translation(object.position);
+            let next = translation(object.position);
+            let travel = Vec3::new(
+                next.x - transform.translation.x,
+                0.,
+                next.z - transform.translation.z,
+            );
+            let distance = travel.length();
+            if object.kind == WorldObjectKind::Ball
+                && object.carried_by.is_none()
+                && (0.0001..=0.72).contains(&distance)
+            {
+                // Roll from observed travel, never elapsed time: a paused ball cannot spin.
+                transform.rotate(Quat::from_axis_angle(
+                    Vec3::Y.cross(travel) / distance,
+                    distance / object.radius,
+                ));
+            }
+            transform.translation = next;
         } else {
             commands.entity(entity).despawn();
         }
@@ -124,11 +141,16 @@ pub(super) fn sync_care_objects(
                     return; // A headless projection has transforms, not drawable assets.
                 };
                 let material = materials.add(StandardMaterial {
-                    base_color: Color::srgb(
-                        physical.color[0],
-                        physical.color[1],
-                        physical.color[2],
-                    ),
+                    // A thin colored glaze lets the rattle's brass spindle and the
+                    // table's three porcelain pads read through their shared body hue.
+                    base_color: {
+                        let [r, g, b] = if object.kind == WorldObjectKind::Food {
+                            physical.color
+                        } else {
+                            physical.color.map(|channel| 0.53 + 0.47 * channel)
+                        };
+                        Color::srgb(r, g, b)
+                    },
                     perceptual_roughness: physical.material[0].clamp(0.05, 1.0),
                     ..default()
                 });

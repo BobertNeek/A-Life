@@ -70,7 +70,7 @@ impl Action {
         match self {
             Self::Food => "Place food. Select ground first. E.",
             Self::Pet => "Offer a pet. Select a living creature first. C.",
-            Self::Toy => "Offer a toy. Select a living creature first. J.",
+            Self::Toy => "Offer a toy to a selected creature, or roll a selected ball toward its chime table. J.",
             Self::Praise => "Offer praise. Select a living creature first. K.",
             Self::Scold => "Offer a scold. Select a living creature first. V.",
             Self::Slap => "Offer a slap. Select a living creature first. B.",
@@ -93,6 +93,7 @@ pub(super) enum Evidence {
     Queued,
     /// The world API returned a physical food/ball identity, not a biological effect.
     Placed(WorldEntityId),
+    Rolled(WorldEntityId),
     Rejected,
     Unavailable,
 }
@@ -187,11 +188,14 @@ impl State {
         }
     }
     pub(super) fn record(&mut self, action: Action, evidence: Evidence) {
-        if let Evidence::Placed(id) = evidence {
+        if let Evidence::Placed(id) | Evidence::Rolled(id) = evidence {
             self.last_gift = Some(id);
         }
         self.evidence[action.index()] = evidence;
-        if matches!(evidence, Evidence::Queued | Evidence::Placed(_)) {
+        if matches!(
+            evidence,
+            Evidence::Queued | Evidence::Placed(_) | Evidence::Rolled(_)
+        ) {
             self.invitation.dismissed = true;
         }
     }
@@ -251,7 +255,7 @@ pub(crate) fn dock_size(viewport: Vec2) -> Vec2 {
         Vec2::new(WIDTH, HEIGHT)
     }
 }
-const EMBEDDED: [(&str, &[u8]); 13] = [
+const EMBEDDED: [(&str, &[u8]); 14] = [
     (
         "select",
         include_bytes!("../../../../assets/ui/status_hud/selection.png"),
@@ -271,6 +275,10 @@ const EMBEDDED: [(&str, &[u8]); 13] = [
     (
         "toy",
         include_bytes!("../../../../assets/ui/care_dock/toy.png"),
+    ),
+    (
+        "roll",
+        include_bytes!("../../../../assets/ui/care_dock/roll.png"),
     ),
     (
         "praise",
@@ -760,6 +768,18 @@ pub(super) fn contextual_target(
                 .then_some(point);
         }
     }
+    if action == Action::Toy {
+        if let Some(ball) = selected.filter(|s| {
+            s.stable_id.is_some_and(|id| {
+                world
+                    .entity(id)
+                    .is_some_and(|o| o.kind == WorldObjectKind::Ball)
+            })
+        }) {
+            // Even a held ball stays the target: never turn a rejected shove into a new offer.
+            return Some(ball);
+        }
+    }
     let id = selected
         .filter(|s| s.kind == StableVoxelRefKind::Creature)
         .or_else(|| pointed.filter(|s| s.kind == StableVoxelRefKind::Creature))
@@ -836,6 +856,7 @@ trait CarePort {
     fn world(&self) -> &alife_world::HeadlessWorld;
     fn food(&mut self, position: Vec3f) -> Result<WorldEntityId, GameAppShellError>;
     fn toy(&mut self, organism: OrganismId) -> Result<WorldEntityId, GameAppShellError>;
+    fn roll(&mut self, id: WorldEntityId, offset: [f32; 2]) -> Result<(), GameAppShellError>;
     fn care(
         &mut self,
         organism: OrganismId,
@@ -853,6 +874,9 @@ impl CarePort for crate::GpuLiveBrainRuntime {
     }
     fn toy(&mut self, organism: OrganismId) -> Result<WorldEntityId, GameAppShellError> {
         self.offer_player_play(organism)
+    }
+    fn roll(&mut self, id: WorldEntityId, offset: [f32; 2]) -> Result<(), GameAppShellError> {
+        self.roll_player_toy(id, offset)
     }
     fn care(
         &mut self,
@@ -885,6 +909,15 @@ fn dispatch_core(
             Vec3f::new(tile.x as f32 + 0.5, tile.z as f32 + 0.5, 0.0)
         };
         return port.food(position).map(Evidence::Placed);
+    }
+    if let Some(ball) = selected
+        .and_then(|s| s.stable_id)
+        .and_then(|id| port.world().entity(id))
+        .filter(|o| action == Action::Toy && o.kind == WorldObjectKind::Ball)
+    {
+        let id = ball.id;
+        let aim = toy_play::default_aim(port.world(), ball);
+        return port.roll(id, aim.to_array()).map(|()| Evidence::Rolled(id));
     }
     let (organism, source) = care_target(port.world(), selected).ok_or_else(|| {
         GameAppShellError::InvalidProductionFrontend {
@@ -942,6 +975,9 @@ pub(super) fn dispatch(
                 ux.last_error = None;
                 ux.last_action = match (action, evidence) {
                     (Action::Food, _) => "Food placed".into(),
+                    (Action::Toy, Evidence::Rolled(_)) => {
+                        "Ball nudged; no creature action inferred".into()
+                    }
                     (Action::Toy, _) => {
                         "Plaything offered; physical ball placed, creature response unconfirmed"
                             .into()
@@ -1088,6 +1124,21 @@ pub(super) fn sync(world: &mut World) {
         node.bottom = Val::Px(if compact { -3.0 } else { -11.0 });
     }
     #[cfg(feature = "gpu-runtime")]
+    let selected_ball = world
+        .get_non_send_resource::<ProductionGpuBrainRuntimeResource>()
+        .and_then(|r| {
+            let live = r.runtime.world();
+            selected
+                .and_then(|s| s.stable_id)
+                .filter(|id| {
+                    live.entity(*id)
+                        .is_some_and(|o| o.kind == WorldObjectKind::Ball)
+                })
+                .map(|id| live.can_roll_toy(id))
+        });
+    #[cfg(not(feature = "gpu-runtime"))]
+    let selected_ball = None::<bool>;
+    #[cfg(feature = "gpu-runtime")]
     let availability = world
         .get_non_send_resource::<ProductionGpuBrainRuntimeResource>()
         .map(|r| {
@@ -1104,7 +1155,7 @@ pub(super) fn sync(world: &mut World) {
             [
                 creature || food_tile(selected).is_some(),
                 creature,
-                creature && free_toy,
+                selected_ball.unwrap_or(creature && free_toy),
                 creature,
                 creature,
                 creature,
@@ -1176,6 +1227,30 @@ pub(super) fn sync(world: &mut World) {
             node.set_hidden();
         }
     }
+    let toy_icon = world.resource::<Icons>().0[if selected_ball.is_some() {
+        "roll"
+    } else {
+        "toy"
+    }]
+    .clone();
+    for (glyph, mut image) in world.query::<(&Glyph, &mut ImageNode)>().iter_mut(world) {
+        if glyph.0 == Action::Toy && image.image != toy_icon {
+            image.image = toy_icon.clone();
+        }
+    }
+    let label = if selected_ball.is_some() {
+        "Roll this ball toward its chime table. J."
+    } else {
+        Action::Toy.accessible_label()
+    };
+    for (action, mut node) in world
+        .query::<(&Action, &mut AccessibilityNode)>()
+        .iter_mut(world)
+    {
+        if *action == Action::Toy && node.label() != Some(label) {
+            node.set_label(label);
+        }
+    }
     apply_feedback(world, availability, evidence, error);
     super::orchard::sync_tool(world, selected, debug);
     #[cfg(feature = "gpu-runtime")]
@@ -1197,7 +1272,7 @@ fn apply_feedback(
             Evidence::Unavailable => Some("unavailable"),
             _ if !availability[marker.0.index()] => Some("unavailable"),
             Evidence::Queued => Some("pending"),
-            Evidence::Placed(_) => Some("placement"),
+            Evidence::Placed(_) | Evidence::Rolled(_) => Some("placement"),
             Evidence::None => None,
         };
         if let Some(cue) = cue {

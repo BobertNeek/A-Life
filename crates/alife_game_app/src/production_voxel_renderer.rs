@@ -89,6 +89,8 @@ mod phase31_slow_frame_ranking;
 pub(crate) mod sanctuary_ink;
 pub(crate) mod status_hud;
 mod terrain_water;
+#[cfg(any(feature = "gpu-runtime", test))]
+mod toy_play;
 mod ux_input;
 use crate::{
     creature_visual_snapshot_from_parts_with_appearance,
@@ -2016,6 +2018,8 @@ pub fn spawn_fvr03_production_voxel_scene(
             .before(bevy::transform::TransformSystems::Propagate),
     );
     graphics_capture::install(app);
+    #[cfg(feature = "gpu-runtime")]
+    toy_play::install(app);
     #[cfg(feature = "gpu-runtime")]
     app.init_resource::<field_signs::Trail>();
     #[cfg(feature = "gpu-runtime")]

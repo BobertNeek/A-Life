@@ -480,8 +480,12 @@ pub(super) fn input(
                 frame.refresh_world_objects(runtime.runtime.world());
             }
         }
-        // Pending Grab and Carry contact the same canonical creature/object.
-        if let Some(id) = contact_id(&hand).or_else(|| hand.stroke.map(|(id, _)| id)) {
+        // The pointing fingertip belongs on the picked body, not one metre above
+        // the terrain behind it. A committed hold or stroke still takes priority.
+        let contact = contact_id(&hand)
+            .or_else(|| hand.stroke.map(|(id, _)| id))
+            .or_else(|| selection.hovered.and_then(|target| target.stable_id));
+        if let Some(id) = contact {
             hand.position = runtime.runtime.world().entity(id).map(|object| {
                 let scale = creatures
                     .iter()

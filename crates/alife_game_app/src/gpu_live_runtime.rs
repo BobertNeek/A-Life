@@ -8195,6 +8195,14 @@ impl GpuLiveBrainRuntime {
         move_food_in_world(&mut self.world, source, position)
     }
 
+    pub fn roll_player_toy(
+        &mut self,
+        id: WorldEntityId,
+        offset: [f32; 2],
+    ) -> Result<(), GameAppShellError> {
+        Ok(self.world.roll_player_toy(id, offset)?)
+    }
+
     pub fn begin_player_hold(&mut self, source: WorldEntityId) -> Result<Vec3f, GameAppShellError> {
         Ok(self.world.begin_player_hold(source)?)
     }
@@ -8245,9 +8253,28 @@ impl GpuLiveBrainRuntime {
             .filter(|record| record.lifecycle().is_alive())
             .and_then(|record| self.world.entity(record.world_entity_id()))
             .ok_or(ScaffoldContractError::InvalidId)?;
-        let mut position = object.position;
-        position.x += 1.5 * object.body_yaw.cos();
-        position.z += 1.5 * object.body_yaw.sin();
+        let ground = |mut p: Vec3f, radius: f32| -> Result<Vec3f, ScaffoldContractError> {
+            if let Some(terrain) = self.world.terrain() {
+                let mut limits = terrain.limits();
+                limits.body_radius = radius;
+                let surface = terrain.surface();
+                if !surface.walkable_with(p.x, p.z, limits) {
+                    return Err(ScaffoldContractError::InvalidActionDecision);
+                }
+                p.y = surface
+                    .height(p.x, p.z)
+                    .ok_or(ScaffoldContractError::InvalidId)?;
+            }
+            Ok(p)
+        };
+        let position = ground(
+            Vec3f::new(
+                object.position.x + 1.5 * object.body_yaw.cos(),
+                object.position.y,
+                object.position.z + 1.5 * object.body_yaw.sin(),
+            ),
+            0.3,
+        )?;
         let mut staged = self.world.clone();
         let toy = if let Some(id) = staged.entity_id("player-plaything") {
             let toy = staged.entity(id).ok_or(ScaffoldContractError::InvalidId)?;
@@ -8270,7 +8297,10 @@ impl GpuLiveBrainRuntime {
         };
         // The activity toy has a persistent fixed location after placement.
         if staged.entity_id("player-activity-toy").is_none() {
-            let station_position = Vec3f::new(position.x + 1.5, position.y, position.z + 1.5);
+            let station_position = ground(
+                Vec3f::new(position.x + 1.5, position.y, position.z + 1.5),
+                0.5,
+            )?;
             staged.spawn_toy("player-activity-toy", station_position, false)?;
         }
         self.world = staged;
