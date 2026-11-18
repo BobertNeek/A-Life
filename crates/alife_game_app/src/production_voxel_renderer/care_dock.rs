@@ -255,7 +255,7 @@ pub(crate) fn dock_size(viewport: Vec2) -> Vec2 {
         Vec2::new(WIDTH, HEIGHT)
     }
 }
-const EMBEDDED: [(&str, &[u8]); 13] = [
+const EMBEDDED: [(&str, &[u8]); 14] = [
     (
         "select",
         include_bytes!("../../../../assets/ui/status_hud/selection.png"),
@@ -275,6 +275,10 @@ const EMBEDDED: [(&str, &[u8]); 13] = [
     (
         "toy",
         include_bytes!("../../../../assets/ui/care_dock/toy.png"),
+    ),
+    (
+        "roll",
+        include_bytes!("../../../../assets/ui/care_dock/roll.png"),
     ),
     (
         "praise",
@@ -1120,6 +1124,21 @@ pub(super) fn sync(world: &mut World) {
         node.bottom = Val::Px(if compact { -3.0 } else { -11.0 });
     }
     #[cfg(feature = "gpu-runtime")]
+    let selected_ball = world
+        .get_non_send_resource::<ProductionGpuBrainRuntimeResource>()
+        .and_then(|r| {
+            let live = r.runtime.world();
+            selected
+                .and_then(|s| s.stable_id)
+                .filter(|id| {
+                    live.entity(*id)
+                        .is_some_and(|o| o.kind == WorldObjectKind::Ball)
+                })
+                .map(|id| live.can_roll_toy(id))
+        });
+    #[cfg(not(feature = "gpu-runtime"))]
+    let selected_ball = None::<bool>;
+    #[cfg(feature = "gpu-runtime")]
     let availability = world
         .get_non_send_resource::<ProductionGpuBrainRuntimeResource>()
         .map(|r| {
@@ -1136,7 +1155,7 @@ pub(super) fn sync(world: &mut World) {
             [
                 creature || food_tile(selected).is_some(),
                 creature,
-                creature && free_toy,
+                selected_ball.unwrap_or(creature && free_toy),
                 creature,
                 creature,
                 creature,
@@ -1206,6 +1225,30 @@ pub(super) fn sync(world: &mut World) {
             node.clear_hidden();
         } else {
             node.set_hidden();
+        }
+    }
+    let toy_icon = world.resource::<Icons>().0[if selected_ball.is_some() {
+        "roll"
+    } else {
+        "toy"
+    }]
+    .clone();
+    for (glyph, mut image) in world.query::<(&Glyph, &mut ImageNode)>().iter_mut(world) {
+        if glyph.0 == Action::Toy && image.image != toy_icon {
+            image.image = toy_icon.clone();
+        }
+    }
+    let label = if selected_ball.is_some() {
+        "Roll this ball toward its chime table. J."
+    } else {
+        Action::Toy.accessible_label()
+    };
+    for (action, mut node) in world
+        .query::<(&Action, &mut AccessibilityNode)>()
+        .iter_mut(world)
+    {
+        if *action == Action::Toy && node.label() != Some(label) {
+            node.set_label(label);
         }
     }
     apply_feedback(world, availability, evidence, error);

@@ -141,11 +141,16 @@ pub(super) fn sync_care_objects(
                     return; // A headless projection has transforms, not drawable assets.
                 };
                 let material = materials.add(StandardMaterial {
-                    base_color: Color::srgb(
-                        physical.color[0],
-                        physical.color[1],
-                        physical.color[2],
-                    ),
+                    // A thin colored glaze lets the rattle's brass spindle and the
+                    // table's three porcelain pads read through their shared body hue.
+                    base_color: {
+                        let [r, g, b] = if object.kind == WorldObjectKind::Food {
+                            physical.color
+                        } else {
+                            physical.color.map(|channel| 0.53 + 0.47 * channel)
+                        };
+                        Color::srgb(r, g, b)
+                    },
                     perceptual_roughness: physical.material[0].clamp(0.05, 1.0),
                     ..default()
                 });

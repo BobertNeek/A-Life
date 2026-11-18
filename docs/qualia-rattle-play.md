@@ -22,4 +22,3 @@ cargo rustc --locked -p alife_game_app --features production-voxel-frontend --ex
 ```
 
 Earlier orchard runs produced harvests, but did not establish that a resident ate a harvested pear. The subsequent fifteen-minute fieldglass run found the identical directly placed food still loose. Neither result promises a biological reaction to this rattle.
-

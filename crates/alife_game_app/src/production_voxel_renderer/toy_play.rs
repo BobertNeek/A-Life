@@ -214,7 +214,7 @@ mod live {
                         p.y = surface.height(p).unwrap_or(start.y)
                             + 0.085
                             + (f * std::f32::consts::PI).sin() * 0.10;
-                        Transform::from_translation(p).with_scale(Vec3::splat(0.032 + f * 0.035))
+                        Transform::from_translation(p).with_scale(Vec3::splat(0.048 + f * 0.038))
                     }),
                 Sign::Ripple(i) => strike.and_then(|(p, age)| {
                     let phase = age * 1.6 - f32::from(*i) * 0.29;

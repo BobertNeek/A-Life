@@ -46,7 +46,19 @@ fn mid_roll_save_resumes_exactly_and_invalid_motion_is_rejected() {
     ticks(&mut w, 3);
     let json = serde_json::to_string(&w.save_state()).unwrap();
     let mut saved: crate::WorldSaveState = serde_json::from_str(&json).unwrap();
-    let mut resumed = HeadlessWorld::from_save_state(&saved).unwrap();
+    let portable = crate::PortableSaveFile::from_headless_world(
+        "rattle",
+        &w,
+        crate::RuntimeConfig::deterministic_default(w.seed(), alife_core::BrainScaleTier::Nano512),
+        crate::AssetManifest::empty(),
+        vec![],
+    )
+    .unwrap();
+    let mut resumed =
+        crate::PortableSaveFile::from_json_str(&portable.to_json_string_pretty().unwrap())
+            .unwrap()
+            .restore_headless_world()
+            .unwrap();
     assert_eq!(
         w.canonical_signature_digest().unwrap(),
         resumed.canonical_signature_digest().unwrap()
@@ -143,4 +155,37 @@ fn bound_ball_follows_the_ground_height_and_stops_before_water() {
     let end = w.entity(ball).unwrap().position;
     assert!((2.5..=3.).contains(&end.x));
     assert!(w.toy_rolls.is_empty());
+}
+
+#[test]
+fn resident_acquisition_catches_a_still_rolling_ball_without_releasing_or_duplicating_it() {
+    let organism = OrganismId(1);
+    let mut w = HeadlessScenarioBuilder::new(1643)
+        .agent("resident", organism, Vec3f::ZERO)
+        .build()
+        .unwrap();
+    let ball = w
+        .spawn_toy("rattle", Vec3f::new(0.7, 0., 0.), true)
+        .unwrap();
+    w.roll_player_toy(ball, [4., 0.]).unwrap();
+    let grab = ActionCommand::structured(
+        organism,
+        HeadlessActionIds::GRAB,
+        ActionKind::Interact,
+        alife_core::ActionTarget::new(Some(ball), None),
+        Intensity::new(1.).unwrap(),
+        alife_core::DurationTicks::new(1),
+        Confidence::new(1.).unwrap(),
+        0,
+        None,
+        None,
+        None,
+    )
+    .unwrap();
+    let result = w.apply_command(&grab).unwrap();
+    assert!(result.execution.succeeded && w.toy_rolls.is_empty());
+    assert_eq!(w.entity(ball).unwrap().carried_by, Some(organism));
+    assert!(w.roll_player_toy(ball, [4., 0.]).is_err());
+    assert!(w.last_chime_strike().is_none());
+    assert_eq!(w.object_count(), 2);
 }

@@ -530,6 +530,7 @@ fn embedded_cues_are_distinct_nonempty_images() {
         let edge = match name {
             "select" => 96, // Shared with the selected-creature HUD.
             "toward" => 48,
+            "roll" => 64,
             action if ACTIONS.iter().any(|a| a.icon() == action) => 64,
             _ => 16, // Compact evidence markers.
         };

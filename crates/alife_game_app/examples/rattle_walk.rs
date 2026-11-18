@@ -162,12 +162,12 @@ mod walk {
                 mouse.press(MouseButton::Right);
             }
             8 => {
-                let target = walk.start + (walk.start - walk.parked).normalize() * 1.8;
+                let target = walk.parked + Vec3::new(-2.5, 0., 1.5);
                 point(target);
                 walk.next = now + 0.24;
             }
             9 => {
-                let target = walk.start + (walk.start - walk.parked).normalize() * 1.8;
+                let target = walk.parked + Vec3::new(-2.5, 0., 1.5);
                 point(target);
                 mouse.release(MouseButton::Right);
                 walk.next = now + 2.5;
@@ -195,7 +195,7 @@ mod walk {
                 assert_eq!(selection.selected.and_then(|s| s.stable_id), Some(ball.id));
                 let (entity, _) = controls
                     .iter()
-                    .find(|(_, n)| n.label().is_some_and(|s| s.starts_with("Offer a toy")))
+                    .find(|(_, n)| n.label().is_some_and(|s| s.starts_with("Roll this ball")))
                     .unwrap();
                 actions.write(ActionRequest(accesskit::ActionRequest {
                     action: accesskit::Action::Click,
