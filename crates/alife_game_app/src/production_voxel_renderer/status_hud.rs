@@ -491,6 +491,8 @@ pub(super) fn spawn(world: &mut World) {
         HeldFood,
         Visibility::Hidden,
     ));
+    #[cfg(feature = "gpu-runtime")]
+    crate::production_conversation_lineage_ui::kinship::open_button(world, identity);
     let mut rename_accessibility = accesskit::Node::new(accesskit::Role::Button);
     rename_accessibility.set_label("Name selected creature");
     rename_accessibility.add_action(accesskit::Action::Click);
@@ -681,19 +683,16 @@ fn set_readout(world: &mut World, readout: Option<&Readout>, debug: bool) {
     }
     let id = readout.map(|r| r.stable_id);
     // Fold all 64 bits: late generations should not share the same five bars.
-    let signature = id
-        .unwrap_or(0)
-        .wrapping_mul(0x9e37_79b9_7f4a_7c15)
-        .rotate_right(19);
+    let crest = ink::Crest::new(id.unwrap_or(0));
     for (mut pigment, mut accessible) in world
         .query_filtered::<(&mut BackgroundColor, &mut AccessibilityNode), With<Identity>>()
         .iter_mut(world)
     {
-        pigment.0 = Color::hsl((signature % 360) as f32, 0.52, 0.72);
+        pigment.0 = crest.pigment();
         accessible.set_value(id.map_or_else(String::new, |id| format!("#{id}")));
     }
     for (bar, mut node) in world.query::<(&CrestBar, &mut Node)>().iter_mut(world) {
-        node.height = Val::Px(4.0 + 2.0 * ((signature >> (3 * bar.0)) & 7) as f32);
+        node.height = Val::Px(crest.bar_height(bar.0));
     }
     let name = readout.and_then(|r| r.name.as_deref());
     for mut accessible in world

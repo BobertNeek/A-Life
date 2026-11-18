@@ -96,9 +96,32 @@ pub(super) enum Evidence {
     Rejected,
     Unavailable,
 }
+#[derive(Default)]
+struct FirstGesture {
+    elapsed: f32,
+    dismissed: bool,
+    recalled: bool,
+}
+impl FirstGesture {
+    fn visible(&mut self, eligible: bool, unknown: bool, delta: f32) -> bool {
+        if !eligible || self.dismissed || !(unknown || self.recalled) {
+            return false;
+        }
+        self.elapsed = (self.elapsed + delta.clamp(0., 1.)).min(16.);
+        (1.0..16.).contains(&self.elapsed)
+    }
+    fn recall(&mut self) {
+        *self = Self {
+            elapsed: 1.,
+            recalled: true,
+            dismissed: false,
+        };
+    }
+}
 #[derive(Resource, Default)]
 pub(crate) struct State {
     pending: Option<Action>,
+    invitation: FirstGesture,
     captured: bool,
     release_gate: bool,
     pressed: [bool; 7],
@@ -108,6 +131,9 @@ pub(crate) struct State {
     evidence: [Evidence; 7],
 }
 impl State {
+    pub(super) fn recall_invitation(&mut self) {
+        self.invitation.recall();
+    }
     pub(super) fn take_pending(&mut self) -> Option<Action> {
         self.pending.take()
     }
@@ -119,6 +145,9 @@ impl State {
     }
     pub(super) fn record(&mut self, action: Action, evidence: Evidence) {
         self.evidence[action.index()] = evidence;
+        if matches!(evidence, Evidence::Queued | Evidence::Placed(_)) {
+            self.invitation.dismissed = true;
+        }
     }
     pub(super) fn reset(&mut self) {
         self.pending = None;
@@ -134,6 +163,8 @@ struct Glyph(Action);
 struct Marker(Action);
 #[derive(Component)]
 struct ErrorMarker;
+#[derive(Component)]
+struct Invitation;
 #[derive(Resource)]
 struct Icons(BTreeMap<&'static str, Handle<Image>>);
 
@@ -160,7 +191,15 @@ pub(crate) fn dock_size(viewport: Vec2) -> Vec2 {
         Vec2::new(WIDTH, HEIGHT)
     }
 }
-const EMBEDDED: [(&str, &[u8]); 11] = [
+const EMBEDDED: [(&str, &[u8]); 13] = [
+    (
+        "select",
+        include_bytes!("../../../../assets/ui/status_hud/selection.png"),
+    ),
+    (
+        "toward",
+        include_bytes!("../../../../assets/ui/kinship/handpath.png"),
+    ),
     (
         "food",
         include_bytes!("../../../../assets/ui/care_dock/food.png"),
@@ -278,6 +317,47 @@ pub(super) fn spawn(world: &mut World) {
                 ChildOf(root),
             ))
             .id();
+        if action == Action::Pet {
+            let hint = world
+                .spawn((
+                    Invitation,
+                    Name::new("First touch invitation"),
+                    accessible(
+                        Role::Image,
+                        "Try selecting an individual, then touching it.",
+                    ),
+                    Visibility::Hidden,
+                    FocusPolicy::Pass,
+                    bevy::picking::Pickable::IGNORE,
+                    Node {
+                        position_type: PositionType::Absolute,
+                        bottom: Val::Percent(112.),
+                        left: Val::Px(-14.),
+                        padding: UiRect::axes(Val::Px(7.), Val::Px(3.)),
+                        column_gap: Val::Px(2.),
+                        align_items: AlignItems::Center,
+                        border_radius: BorderRadius::all(Val::Px(12.)),
+                        ..default()
+                    },
+                    BackgroundColor(ink::GLASS),
+                    ChildOf(button),
+                ))
+                .id();
+            for name in ["select", "toward", "touch"] {
+                world.spawn((
+                    ImageNode::new(icons[name].clone()),
+                    decoration_accessibility(),
+                    FocusPolicy::Pass,
+                    bevy::picking::Pickable::IGNORE,
+                    Node {
+                        width: Val::Px(16.),
+                        height: Val::Px(16.),
+                        ..default()
+                    },
+                    ChildOf(hint),
+                ));
+            }
+        }
         world.spawn((
             Glyph(action),
             decoration_accessibility(),
@@ -857,6 +937,57 @@ pub(super) fn sync(world: &mut World) {
             SpeechInputCue::Unavailable => Evidence::Unavailable,
             SpeechInputCue::None => evidence[Action::Speech.index()],
         };
+    }
+    let eligible = availability[Action::Pet.index()]
+        && !debug
+        && !error
+        && !world
+            .get_resource::<menu::MenuState>()
+            .is_some_and(menu::captures_input_state);
+    #[cfg(feature = "gpu-runtime")]
+    let (eligible, unknown) = {
+        let eligible = eligible
+            && !world
+                .get_resource::<ProductionConversationLineageUiState>()
+                .is_some_and(|c| c.blocks_world_shortcuts());
+        let row = world
+            .get_resource::<LiveBrainPresentationFrameResource>()
+            .and_then(|frame| {
+                selected
+                    .and_then(|s| s.stable_id)
+                    .and_then(|id| frame.current.organism(id))
+            });
+        (
+            eligible && row.is_some(),
+            row.is_some_and(|r| {
+                matches!(
+                    r.last_player_care,
+                    alife_world::PresentationEvidence::Unknown
+                )
+            }),
+        )
+    };
+    #[cfg(not(feature = "gpu-runtime"))]
+    let unknown = false;
+    let delta = world.get_resource::<Time>().map_or(0., |t| t.delta_secs());
+    let invite = world
+        .resource_mut::<State>()
+        .invitation
+        .visible(eligible, unknown, delta);
+    for (mut visible, mut node) in world
+        .query_filtered::<(&mut Visibility, &mut AccessibilityNode), With<Invitation>>()
+        .iter_mut(world)
+    {
+        *visible = if invite {
+            Visibility::Inherited
+        } else {
+            Visibility::Hidden
+        };
+        if invite {
+            node.clear_hidden();
+        } else {
+            node.set_hidden();
+        }
     }
     apply_feedback(world, availability, evidence, error);
 }

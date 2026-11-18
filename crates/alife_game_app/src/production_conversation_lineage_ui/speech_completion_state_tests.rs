@@ -27,6 +27,8 @@ pub(super) fn state() -> ProductionConversationLineageUiState {
         status: String::new(),
         lineage_root: PathBuf::new(),
         lineage_open: false,
+        family_open: false,
+        family_capture: false,
         lineage_source_filter: LineageSourceFilter::All,
         lineage_data_filter: LineageDataFilter::All,
         lineage_sort: LineageSort::Overall,

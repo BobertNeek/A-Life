@@ -434,6 +434,29 @@ pub(crate) fn export_nodes(world: &mut World) -> Vec<Value> {
     }).collect()
 }
 #[test]
+fn first_gesture_waits_for_a_real_target_retires_and_can_be_recalled() {
+    let mut hint = FirstGesture::default();
+    assert!(!hint.visible(false, true, 40.));
+    assert!(!hint.visible(true, false, 1.));
+    assert!(hint.visible(true, true, 1.));
+    for _ in 0..16 {
+        hint.visible(true, true, 1.);
+    }
+    assert!(!hint.visible(true, true, 0.));
+    hint.recall();
+    assert!(hint.visible(true, false, 0.));
+    let mut dock = State {
+        invitation: hint,
+        ..default()
+    };
+    dock.record(Action::Pet, Evidence::Queued);
+    assert!(
+        !dock.invitation.visible(true, true, 0.),
+        "queueing dismisses the teaching prompt, not a claim the creature felt it"
+    );
+}
+
+#[test]
 fn cpu_layout_fits_four_viewports_and_exports_actual_wordless_feedback_nodes() {
     let mut queued = [Evidence::None; 7];
     queued[Action::Pet.index()] = Evidence::Queued;

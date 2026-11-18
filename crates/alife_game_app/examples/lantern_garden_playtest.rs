@@ -42,6 +42,8 @@ fn main() {
                mut keys: ResMut<ButtonInput<KeyCode>>,
                windows: Query<Entity, With<bevy::window::PrimaryWindow>>,
                mut wheel: MessageWriter<bevy::input::mouse::MouseWheel>,
+               labels: Query<(Entity, &bevy::a11y::AccessibilityNode)>,
+               mut actions: MessageWriter<bevy::a11y::ActionRequest>,
                mut commands: Commands,
                mut step: Local<usize>,
                mut release: Local<Option<KeyCode>>| {
@@ -60,12 +62,29 @@ fn main() {
                 (42., None, "play"),
                 (45., Some(KeyCode::Enter), "conversation"),
                 (50., None, "composer"),
+                (53., Some(KeyCode::Escape), "close-composer"),
+                (56., None, "open-family"),
+                (59., None, "family"),
+                (62., Some(KeyCode::Escape), "close-family"),
+                (66., Some(KeyCode::F1), "garden-return"),
+                (69., None, "touch-recall"),
             ];
             if let Some(&(at, key, name)) = sequence.get(*step) {
                 if time.elapsed_secs() >= at {
                     commands
                         .spawn(Screenshot::primary_window())
                         .observe(save_to_disk(path.join(format!("{name}.png"))));
+                    if name == "open-family" {
+                        let (target, _) = labels
+                            .iter()
+                            .find(|(_, n)| n.label() == Some("Open family album"))
+                            .expect("family control");
+                        actions.write(bevy::a11y::ActionRequest(accesskit::ActionRequest {
+                            action: accesskit::Action::Click,
+                            target: accesskit::NodeId(target.to_bits()),
+                            data: None,
+                        }));
+                    }
                     if name == "approach" {
                         if let Ok(window) = windows.single() {
                             wheel.write(bevy::input::mouse::MouseWheel {
