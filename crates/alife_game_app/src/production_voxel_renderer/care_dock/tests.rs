@@ -725,6 +725,9 @@ impl TestPort {
     }
 }
 impl CarePort for TestPort {
+    fn roll(&mut self, id: WorldEntityId, offset: [f32; 2]) -> Result<(), GameAppShellError> {
+        Ok(self.world.roll_player_toy(id, offset)?)
+    }
     fn world(&self) -> &HeadlessWorld {
         &self.world
     }
@@ -2436,4 +2439,37 @@ mod accessible_input {
             );
         }
     }
+}
+
+#[test]
+fn selected_ball_reuses_the_toy_control_without_reoffering_to_the_followed_resident() {
+    let mut port = TestPort::new();
+    let ball = port
+        .world
+        .spawn_toy("rattle", Vec3f::new(8., 0., 0.), true)
+        .unwrap();
+    let station = port
+        .world
+        .spawn_toy("player-activity-toy", Vec3f::new(8., 0., 3.), false)
+        .unwrap();
+    let selected = Some(reference(StableVoxelRefKind::Resource, Some(ball)));
+    let followed = port.world.entity_id("agent");
+    let target = contextual_target(Action::Toy, selected, None, followed, &port.world);
+    assert_eq!(target, selected);
+    assert_eq!(
+        dispatch_core(&mut port, Action::Toy, target).unwrap(),
+        Evidence::Rolled(ball)
+    );
+    assert!(port.calls.is_empty());
+    for _ in 0..60 {
+        port.world.try_advance_tick().unwrap();
+    }
+    assert_eq!(port.world.last_chime_strike().map(|x| x.1), Some(station));
+    port.world.begin_player_hold(ball).unwrap();
+    assert_eq!(
+        contextual_target(Action::Toy, selected, None, followed, &port.world),
+        selected
+    );
+    assert!(dispatch_core(&mut port, Action::Toy, selected).is_err());
+    assert!(port.calls.is_empty());
 }

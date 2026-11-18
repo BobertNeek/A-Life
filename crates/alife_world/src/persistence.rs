@@ -1063,6 +1063,8 @@ pub struct WorldSaveState {
     pub ingestion_observations: BTreeMap<u64, crate::IngestionObservation>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub player_hold: Option<crate::headless::player_hand::PlayerHold>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub toy_rolls: BTreeMap<u64, [f32; 2]>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub organism_records: Option<Vec<WorldOrganismRecord>>,
     /// Exact saves distinguish external actors from lives whose biology must
@@ -1268,6 +1270,8 @@ impl<'de> Deserialize<'de> for WorldSaveState {
             ingestion_observations: BTreeMap<u64, crate::IngestionObservation>,
             #[serde(default)]
             player_hold: Option<crate::headless::player_hand::PlayerHold>,
+            #[serde(default)]
+            toy_rolls: BTreeMap<u64, [f32; 2]>,
             #[serde(default, deserialize_with = "deserialize_present_organism_records")]
             organism_records: Option<Vec<WorldOrganismRecord>>,
             #[serde(default)]
@@ -1361,6 +1365,7 @@ impl<'de> Deserialize<'de> for WorldSaveState {
             last_familiarity: wire.last_familiarity,
             ingestion_observations: wire.ingestion_observations,
             player_hold: wire.player_hold,
+            toy_rolls: wire.toy_rolls,
             organism_records: wire.organism_records,
             external_actor_ids: wire.external_actor_ids,
             ecology: wire.ecology,
@@ -2203,6 +2208,7 @@ impl WorldSaveState {
             });
         }
         crate::WorldTerrain::restore(self.terrain, self.terrain_state.as_ref())?;
+        self.validate_toy_rolls()?;
         let mut ids = BTreeSet::new();
         let mut labels = BTreeSet::new();
         let mut max_id = 0_u64;

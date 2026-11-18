@@ -70,7 +70,7 @@ impl Action {
         match self {
             Self::Food => "Place food. Select ground first. E.",
             Self::Pet => "Offer a pet. Select a living creature first. C.",
-            Self::Toy => "Offer a toy. Select a living creature first. J.",
+            Self::Toy => "Offer a toy to a selected creature, or roll a selected ball toward its chime table. J.",
             Self::Praise => "Offer praise. Select a living creature first. K.",
             Self::Scold => "Offer a scold. Select a living creature first. V.",
             Self::Slap => "Offer a slap. Select a living creature first. B.",
@@ -93,6 +93,7 @@ pub(super) enum Evidence {
     Queued,
     /// The world API returned a physical food/ball identity, not a biological effect.
     Placed(WorldEntityId),
+    Rolled(WorldEntityId),
     Rejected,
     Unavailable,
 }
@@ -187,11 +188,14 @@ impl State {
         }
     }
     pub(super) fn record(&mut self, action: Action, evidence: Evidence) {
-        if let Evidence::Placed(id) = evidence {
+        if let Evidence::Placed(id) | Evidence::Rolled(id) = evidence {
             self.last_gift = Some(id);
         }
         self.evidence[action.index()] = evidence;
-        if matches!(evidence, Evidence::Queued | Evidence::Placed(_)) {
+        if matches!(
+            evidence,
+            Evidence::Queued | Evidence::Placed(_) | Evidence::Rolled(_)
+        ) {
             self.invitation.dismissed = true;
         }
     }
@@ -760,6 +764,18 @@ pub(super) fn contextual_target(
                 .then_some(point);
         }
     }
+    if action == Action::Toy {
+        if let Some(ball) = selected.filter(|s| {
+            s.stable_id.is_some_and(|id| {
+                world
+                    .entity(id)
+                    .is_some_and(|o| o.kind == WorldObjectKind::Ball)
+            })
+        }) {
+            // Even a held ball stays the target: never turn a rejected shove into a new offer.
+            return Some(ball);
+        }
+    }
     let id = selected
         .filter(|s| s.kind == StableVoxelRefKind::Creature)
         .or_else(|| pointed.filter(|s| s.kind == StableVoxelRefKind::Creature))
@@ -836,6 +852,7 @@ trait CarePort {
     fn world(&self) -> &alife_world::HeadlessWorld;
     fn food(&mut self, position: Vec3f) -> Result<WorldEntityId, GameAppShellError>;
     fn toy(&mut self, organism: OrganismId) -> Result<WorldEntityId, GameAppShellError>;
+    fn roll(&mut self, id: WorldEntityId, offset: [f32; 2]) -> Result<(), GameAppShellError>;
     fn care(
         &mut self,
         organism: OrganismId,
@@ -853,6 +870,9 @@ impl CarePort for crate::GpuLiveBrainRuntime {
     }
     fn toy(&mut self, organism: OrganismId) -> Result<WorldEntityId, GameAppShellError> {
         self.offer_player_play(organism)
+    }
+    fn roll(&mut self, id: WorldEntityId, offset: [f32; 2]) -> Result<(), GameAppShellError> {
+        self.roll_player_toy(id, offset)
     }
     fn care(
         &mut self,
@@ -885,6 +905,15 @@ fn dispatch_core(
             Vec3f::new(tile.x as f32 + 0.5, tile.z as f32 + 0.5, 0.0)
         };
         return port.food(position).map(Evidence::Placed);
+    }
+    if let Some(ball) = selected
+        .and_then(|s| s.stable_id)
+        .and_then(|id| port.world().entity(id))
+        .filter(|o| action == Action::Toy && o.kind == WorldObjectKind::Ball)
+    {
+        let id = ball.id;
+        let aim = toy_play::default_aim(port.world(), ball);
+        return port.roll(id, aim.to_array()).map(|()| Evidence::Rolled(id));
     }
     let (organism, source) = care_target(port.world(), selected).ok_or_else(|| {
         GameAppShellError::InvalidProductionFrontend {
@@ -942,6 +971,9 @@ pub(super) fn dispatch(
                 ux.last_error = None;
                 ux.last_action = match (action, evidence) {
                     (Action::Food, _) => "Food placed".into(),
+                    (Action::Toy, Evidence::Rolled(_)) => {
+                        "Ball nudged; no creature action inferred".into()
+                    }
                     (Action::Toy, _) => {
                         "Plaything offered; physical ball placed, creature response unconfirmed"
                             .into()
@@ -1197,7 +1229,7 @@ fn apply_feedback(
             Evidence::Unavailable => Some("unavailable"),
             _ if !availability[marker.0.index()] => Some("unavailable"),
             Evidence::Queued => Some("pending"),
-            Evidence::Placed(_) => Some("placement"),
+            Evidence::Placed(_) | Evidence::Rolled(_) => Some("placement"),
             Evidence::None => None,
         };
         if let Some(cue) = cue {
