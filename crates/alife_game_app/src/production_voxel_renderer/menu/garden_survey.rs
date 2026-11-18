@@ -320,6 +320,49 @@ mod tests {
     use alife_world::{orchard::OrchardReceipt, HeadlessWorld};
 
     #[test]
+    fn repeating_enter_cannot_select_another_bed_or_leave_the_map() {
+        for (row, &(action, _)) in GARDEN.iter().enumerate() {
+            let mut state = MenuState {
+                screen: Screen::Garden,
+                selected: row,
+                ..default()
+            };
+            let mut keys = ButtonInput::default();
+            keys.press(KeyCode::Enter);
+            state.input(
+                &keys,
+                false,
+                false,
+                false,
+                None,
+                false,
+                &[],
+                true,
+                false,
+                LoadAvailability::Ready,
+            );
+            assert_eq!(state.screen, Screen::Garden);
+            assert!(state.garden_action.is_none());
+            state.input(
+                &keys,
+                false,
+                false,
+                true,
+                None,
+                false,
+                &[],
+                true,
+                false,
+                LoadAvailability::Ready,
+            );
+            if action == Action::Back {
+                assert_eq!(state.screen, Screen::Main);
+            } else {
+                assert_eq!(state.garden_action, Some(action));
+            }
+        }
+    }
+    #[test]
     fn a_saved_empty_household_can_revisit_every_real_bed_without_changing_it() {
         let mut garden = HeadlessWorld::new(43);
         let east = VoxelTileCoord::new(14, -4);

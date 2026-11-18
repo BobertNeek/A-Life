@@ -977,6 +977,7 @@ fn focus_reset_enter_repeats_cannot_activate_ordinary_menu_rows() {
                     Action::Load => assert_eq!(state.screen, Screen::ConfirmLoad),
                     Action::Speed => assert_eq!(state.screen, Screen::Speed),
                     Action::Settings => assert_eq!(state.screen, Screen::Settings),
+                    Action::Garden => assert_eq!(state.screen, Screen::Garden),
                     Action::Photos => assert_eq!(state.screen, Screen::Photos),
                     Action::Older | Action::Newer | Action::Expose => {
                         assert_eq!(state.plate_action, Some(action))
