@@ -1,4 +1,5 @@
 //! Island chunk and prop rendering for the playable world.
+mod nursery;
 use super::*;
 use bevy::{
     gltf::{Gltf, GltfMesh},
@@ -193,15 +194,6 @@ pub(super) fn start(world: &mut World) {
             .entry(p.kind.clone())
             .or_insert_with(|| server.load(format!("landscape/island/{}.glb", p.kind)));
     }
-    let [silverbell, waystone] = ["care/silverbell.glb", "care/ceramic-waystone.glb"].map(|path| {
-        server.load(
-            bevy::gltf::GltfAssetLabel::Primitive {
-                mesh: 0,
-                primitive: 0,
-            }
-            .from_asset(path),
-        )
-    });
     let terrain = server.load("landscape/island/terrain-chunks.glb");
     let size = Vec2::splat(10000.0);
     let center = Vec3::new(
@@ -237,7 +229,7 @@ pub(super) fn start(world: &mut World) {
         bootstrap_ground: Some(bootstrap_ground),
         next_update: 0.0,
     });
-    plant_nursery(world, &surface, silverbell, waystone);
+    nursery::plant(world, &surface);
     let (mesh, mut material, images) = terrain_water::island_water(&surface, size, center);
     let [shore, ripple] = images.map(|image| world.resource_mut::<Assets<Image>>().add(image));
     material.base_color_texture = Some(shore);
@@ -300,67 +292,6 @@ fn bootstrap_surface(surface: &alife_world::TerrainSurface) -> Mesh {
     mesh.insert_indices(Indices::U32(indices));
     mesh.compute_smooth_normals();
     mesh
-}
-
-/// A fixed clearing at the island's nursery, never decoration that follows a creature.
-/// Keep the middle open for the Hand. Low groundcover has no interaction or collision.
-fn plant_nursery(
-    world: &mut World,
-    surface: &alife_world::TerrainSurface,
-    flowers: Handle<Mesh>,
-    stones: Handle<Mesh>,
-) {
-    let material = world
-        .resource_mut::<Assets<StandardMaterial>>()
-        .add(StandardMaterial {
-            perceptual_roughness: 0.86,
-            ..default()
-        });
-    let mut plant = |mesh: &Handle<Mesh>, x: f32, z: f32, yaw: f32, size: f32| {
-        let Some(y) = surface.height(x, z) else {
-            return;
-        };
-        world.spawn((
-            Name::new("Nursery groundcover"),
-            Mesh3d(mesh.clone()),
-            MeshMaterial3d(material.clone()),
-            Transform::from_xyz(x, y, z)
-                .with_rotation(Quat::from_rotation_y(yaw))
-                .with_scale(Vec3::splat(size)),
-            bevy::picking::Pickable::IGNORE,
-            Fvr04ProductionRuntimeSceneRoot,
-        ));
-    };
-    // Three irregular drifts, not a fence: each opens onto the original island.
-    for (cx, cz, length, turn) in [
-        (-2.8, -1.8, 5, 0.22),
-        (3.4, 1.8, 6, 2.31),
-        (-0.9, 4.3, 4, 4.45),
-    ] {
-        for j in 0..length {
-            let t = j as f32;
-            let a = turn + t * 2.39996;
-            let reach = 0.51 * t.sqrt();
-            plant(
-                &flowers,
-                83.0 + cx + reach * a.cos(),
-                250.0 + cz + reach * a.sin(),
-                a,
-                0.75 + 0.20 * (t + turn).cos(),
-            );
-        }
-    }
-    for (x, z, angle, size) in [
-        (-3.3, 0.2, 0.3, 0.94),
-        (-2.8, 0.8, 1.9, 0.66),
-        (-2.4, 1.5, 2.3, 0.9),
-        (-1.9, 2.3, 0.5, 1.07),
-        (-1.1, 3.1, 2.0, 0.83),
-        (1.6, -2.3, 1.7, 1.08),
-        (2.4, -2.9, 0.1, 0.83),
-    ] {
-        plant(&stones, 83.0 + x, 250.0 + z, angle, size);
-    }
 }
 
 pub(super) fn view_height(projection: &Projection) -> f32 {
