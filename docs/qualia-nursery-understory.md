@@ -6,7 +6,7 @@ The [fieldglass playthrough](qualia-field-signs.md) made one art problem plain: 
 
 ## In play
 
-These are unretouched 960 × 540 captures from a normal RTX 3050 new game. Once all 120 island chunks had loaded, the camera followed the resident and its 36 tracked impressions at tick 167. At tick 179 the Hand's fieldglass was clicked for the newly placed food, ID 8. At tick 204 the same object was still loose and centered at (480, 295). Compare with the [older close-up](media/field-signs/real-gift.png). No meal was observed for this gift in this run; a separate playthrough of the previous slice [did independently identify one](qualia-field-signs.md).
+These are unretouched 960 × 540 captures from a normal RTX 3050 new game. Once all 120 island chunks had loaded, the camera followed the resident and its 36 tracked impressions at tick 167. At tick 179 the Hand's fieldglass was clicked for the newly placed food, ID 8. At tick 204 the same object was still loose and centered at (480, 295). Compare with the [older close-up](media/field-signs/real-gift.png). No meal was observed for this gift in this run. A separate playthrough after the nursery renderer was reorganized did identify one: a sealed physical EAT receipt named individual 1 and that run's new food ID 8 at tick 142. At tick 182 the fieldglass framed its consumed site at (480, 297). Neither result concerns an orchard pear.
 
 ![The same loose gift and optical ring stay readable against the new ground treatment.](media/nursery-understory/ground-detail.png)
 
