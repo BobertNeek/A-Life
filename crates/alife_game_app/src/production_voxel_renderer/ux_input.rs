@@ -265,6 +265,16 @@ pub(super) fn handle_fvr05_production_ux_input(
     }
     #[cfg(feature = "gpu-runtime")]
     if !ux.debug_mode {
+        if dock.fieldglass_pending || keyboard.just_pressed(KeyCode::BracketRight) {
+            if let Some(runtime) = gpu_runtime.as_ref() {
+                field_signs::glass::look(
+                    runtime.runtime.world(),
+                    selection.selected,
+                    &mut dock,
+                    &mut follow,
+                );
+            }
+        }
         orchard::drive(
             &keyboard,
             &mut selection,

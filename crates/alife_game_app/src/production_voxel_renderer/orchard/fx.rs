@@ -172,15 +172,14 @@ pub(in crate::production_voxel_renderer) fn drift(
     }
 }
 
-/// A deliberate sow or watch pans into the patch, then relinquishes the camera.
+/// A deliberate Hand inspection frames a real bed or keepsake, then relinquishes the camera.
 /// Ordinary pan, scroll, follow, a new selection, or a modal cancels the move.
 #[allow(
     clippy::too_many_arguments,
     reason = "Camera, modal and player input are separate scene resources."
 )]
-pub(in crate::production_voxel_renderer) fn frame_patch(
+pub(in crate::production_voxel_renderer) fn frame_hand_focus(
     mut dock: ResMut<care_dock::State>,
-    mut transition: Local<Option<(VoxelTileCoord, f32)>>,
     selection: Res<Fvr03ProductionVoxelSelectionResource>,
     follow: Res<Fvr04ProductionCreatureFollowResource>,
     keys: Res<ButtonInput<KeyCode>>,
@@ -191,17 +190,18 @@ pub(in crate::production_voxel_renderer) fn frame_patch(
     conversation: Option<Res<ProductionConversationLineageUiState>>,
     surface: Res<creature_grounding::RenderedTerrainSurface>,
     scene: Res<Fvr03ProductionVoxelSceneResource>,
+    runtime: Option<NonSend<ProductionGpuBrainRuntimeResource>>,
     mut camera: Query<(&Fvr03ProductionVoxelCamera, &mut Transform, &mut Projection)>,
 ) {
-    let new_target = dock.garden_focus.take();
+    let new_target = dock.hand_focus.take();
     let wheel = scroll.read().count() > 0;
     if let Some(tile) = new_target {
-        *transition = Some((tile, 0.));
+        dock.framing = Some((tile, 0.));
     }
-    let Some((tile, age)) = *transition else {
+    let Some((focus, age)) = dock.framing else {
         return;
     };
-    if soil_tile(selection.selected) != Some(tile)
+    if selection.selected != focus.guard
         || follow.enabled
         || wheel
         || mouse.pressed(MouseButton::Middle)
@@ -217,13 +217,26 @@ pub(in crate::production_voxel_renderer) fn frame_patch(
             .as_deref()
             .is_some_and(|s| s.blocks_world_shortcuts())
     {
-        *transition = None;
+        dock.framing = None;
         return;
     }
     let dt = time.delta_secs().min(0.1);
     let settle = age + dt >= 0.85;
     let blend = if settle { 1. } else { 1. - (-7.5 * dt).exp() };
-    let position = ground(tile, &surface) - Vec3::Y * 0.3;
+    let point = if let Some(id) = focus.gift {
+        let Some(point) = runtime
+            .as_ref()
+            .and_then(|r| field_signs::glass::current_point(r.runtime.world(), id))
+        else {
+            dock.framing = None;
+            return;
+        };
+        point
+    } else {
+        focus.point
+    };
+    let mut position = Vec3::new(point.x, 0., point.y);
+    position.y = surface.height(position).unwrap_or(0.) - 0.265;
     for (mode, mut transform, mut projection) in &mut camera {
         let target = production_follow_camera_transform(
             mode.mode,
@@ -239,5 +252,5 @@ pub(in crate::production_voxel_renderer) fn frame_patch(
             }
         }
     }
-    *transition = (!settle).then_some((tile, age + dt));
+    dock.framing = (!settle).then_some((focus, age + dt));
 }
