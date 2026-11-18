@@ -160,6 +160,10 @@ fn ready(
     );
     let graph = graphs.add(graph);
     for entity in children.iter_descendants(event.entity) {
+        // Render layers are per entity, not inherited by a glTF hierarchy.
+        commands
+            .entity(entity)
+            .insert(crate::terrain_lighting::player_guide_layer());
         if let Ok(mut player) = players.get_mut(entity) {
             player.play(clips[0]).repeat();
             commands.entity(entity).insert((

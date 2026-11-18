@@ -939,6 +939,7 @@ fn focus_reset_enter_repeats_cannot_activate_ordinary_menu_rows() {
             (Screen::Main, MAIN.as_slice()),
             (Screen::Speed, SPEED.as_slice()),
             (Screen::Settings, SETTINGS.as_slice()),
+            (Screen::Photos, PHOTOS.as_slice()),
         ] {
             for (selected, &(action, _)) in rows.iter().enumerate() {
                 let mut app = keypad_input_app();
@@ -961,6 +962,10 @@ fn focus_reset_enter_repeats_cannot_activate_ordinary_menu_rows() {
                     assert_eq!(state.screen, screen, "repeat activated {action:?}");
                     assert_eq!(state.selected, selected);
                     assert_eq!(state.pending, None, "repeat queued {action:?}");
+                    assert_eq!(
+                        state.plate_action, None,
+                        "repeat exposed or moved a photograph"
+                    );
                     assert!(state.captured);
                 }
                 // Release and a new physical press must still activate that exact row.
@@ -972,6 +977,10 @@ fn focus_reset_enter_repeats_cannot_activate_ordinary_menu_rows() {
                     Action::Load => assert_eq!(state.screen, Screen::ConfirmLoad),
                     Action::Speed => assert_eq!(state.screen, Screen::Speed),
                     Action::Settings => assert_eq!(state.screen, Screen::Settings),
+                    Action::Photos => assert_eq!(state.screen, Screen::Photos),
+                    Action::Older | Action::Newer | Action::Expose => {
+                        assert_eq!(state.plate_action, Some(action))
+                    }
                     Action::Back => assert_eq!(state.screen, Screen::Main),
                     _ => assert_eq!(state.pending, Some(action)),
                 }
