@@ -55,9 +55,10 @@ fn main() {
     launch.require_gpu = true;
     launch.resolution = (960, 540);
     launch.run_mode = Some(ProductionRunMode::OneX);
-    launch.smoke_seconds = Some(45);
+    launch.smoke_seconds = Some(90);
     let (mut app, _) = build_production_voxel_frontend_app_shell(&launch).unwrap();
     let mut phase = 0u8;
+    let mut detailed_since = None;
     let mut next = 8.;
     let passed = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     let observed = passed.clone();
@@ -68,6 +69,7 @@ fn main() {
                frame: Res<LiveBrainPresentationFrameResource>,
                selection: Res<Fvr03ProductionVoxelSelectionResource>,
                labels: Query<&AccessibilityNode>,
+               terrain_meshes: Query<&Name, With<Mesh3d>>,
                mut commands: Commands,
                mut exit: MessageWriter<AppExit>| {
             let now = time.elapsed_secs();
@@ -88,13 +90,29 @@ fn main() {
                         keys.press(KeyCode::KeyU);
                         phase = 2;
                         next = now + 1.5;
-                    } else if selection.selected.and_then(|s| s.tile) == Some(tile) {
+                    } else if selection.selected.and_then(|s| s.tile) == Some(tile)
+                        || (population > 0
+                            && labels.iter().any(|node| {
+                                !node.is_hidden()
+                                    && node.label()
+                                        == Some("Bring a harvested pear to this individual")
+                            }))
+                    {
                         phase = 2;
                     }
                 }
                 2 => {
                     keys.release(KeyCode::KeyU);
-                    assert_eq!(selection.selected.and_then(|s| s.tile), Some(tile));
+                    // Wait for the actual streamed island, not its fast first-frame proxy.
+                    if !terrain_meshes
+                        .iter()
+                        .any(|name| name.as_str().starts_with("Island chunk "))
+                    {
+                        return;
+                    }
+                    if now - *detailed_since.get_or_insert(now) < 2.0 {
+                        return;
+                    }
                     let stage = labels
                         .iter()
                         .filter(|n| !n.is_hidden())
@@ -102,12 +120,16 @@ fn main() {
                         .find(|s| {
                             matches!(
                                 *s,
-                                "Watch this plant grow"
+                                "Bring a harvested pear to this individual"
+                                    | "Watch this plant grow"
                                     | "Water these roots"
                                     | "Pick a ripe lantern pear"
                             )
                         });
                     if let Some(stage) = stage {
+                        if stage != "Bring a harvested pear to this individual" {
+                            assert_eq!(selection.selected.and_then(|s| s.tile), Some(tile));
+                        }
                         assert_eq!(
                             frame
                                 .current

@@ -4,13 +4,7 @@ use super::*;
 pub(super) mod fx;
 #[cfg(feature = "gpu-runtime")]
 use alife_world::orchard::OrchardGesture;
-use bevy::{
-    a11y::AccessibilityNode,
-    asset::RenderAssetUsages,
-    image::{CompressedImageFormats, ImageSampler, ImageType},
-    prelude::*,
-    ui::FocusPolicy,
-};
+use bevy::{a11y::AccessibilityNode, prelude::*, ui::FocusPolicy};
 
 #[derive(Component)]
 pub(super) struct GardenTool;
@@ -109,28 +103,26 @@ fn gesture_art(g: OrchardGesture) -> (usize, &'static str) {
         OrchardGesture::Pick => (3, "Pick a ripe lantern pear"),
     }
 }
+macro_rules! glyphs {
+    ($($name:literal),+ $(,)?) => { [$((
+        concat!("assets/ui/orchard/", $name, ".png"),
+        include_bytes!(concat!("../../../../assets/ui/orchard/", $name, ".png")).as_slice()
+    )),+] };
+}
+const ART: [(&str, &[u8]); 6] = glyphs!("sow", "water", "watch", "pick", "offer", "return");
+
+#[cfg(test)]
+pub(super) fn image_path(world: &World, image: &Handle<Image>) -> Option<String> {
+    let i = world
+        .get_resource::<Signs>()?
+        .0
+        .iter()
+        .position(|h| h == image)?;
+    Some(ART[i].0.to_owned())
+}
+
 pub(super) fn spawn_tool(world: &mut World, parent: Entity) {
-    const ART: [&[u8]; 6] = [
-        include_bytes!("../../../../assets/ui/orchard/sow.png"),
-        include_bytes!("../../../../assets/ui/orchard/water.png"),
-        include_bytes!("../../../../assets/ui/orchard/watch.png"),
-        include_bytes!("../../../../assets/ui/orchard/pick.png"),
-        include_bytes!("../../../../assets/ui/orchard/offer.png"),
-        include_bytes!("../../../../assets/ui/orchard/return.png"),
-    ];
-    let handles = ART.map(|b| {
-        world.resource_mut::<Assets<Image>>().add(
-            Image::from_buffer(
-                b,
-                ImageType::Extension("png"),
-                CompressedImageFormats::NONE,
-                true,
-                ImageSampler::linear(),
-                RenderAssetUsages::default(),
-            )
-            .expect("orchard glyph"),
-        )
-    });
+    let handles = ART.map(|(_, bytes)| care_dock::decode_png(world, bytes));
     let mut accessible = accesskit::Node::new(accesskit::Role::Button);
     accessible.set_label("Tend the selected soil");
     accessible.add_action(accesskit::Action::Click);

@@ -17,10 +17,9 @@ use alife_core::{OrganismId, Tick, Vec3f, WorldEntityId};
 use alife_world::CreatureAppearanceGenome;
 use alife_world::{
     persistence::{CreatureSaveState, GpuRuntimeSaveState, PortableSaveFile},
-    CreatureWorldAnchor, PersistentVoxelWorldBackend, PersistentVoxelWorldSnapshot,
-    PresentationOutcomeSnapshot, ProceduralTerrainMaterial, ProceduralTileCoord,
-    ProceduralWorldConfig, StableVoxelObjectRef, StableVoxelRefKind, VoxelChunkCoord,
-    VoxelTileCoord, WorldObjectKind, WorldOrganismPresentationRow,
+    PersistentVoxelWorldSnapshot, PresentationOutcomeSnapshot, ProceduralTerrainMaterial,
+    ProceduralTileCoord, ProceduralWorldConfig, StableVoxelObjectRef, StableVoxelRefKind,
+    VoxelChunkCoord, VoxelTileCoord, WorldObjectKind, WorldOrganismPresentationRow,
     FVR02_PERSISTENT_VOXEL_WORLD_SCHEMA,
 };
 use bevy::{
@@ -2230,19 +2229,7 @@ fn load_fvr04_runtime_state_from_save(
 ) -> Result<Fvr04RuntimeSceneState, GameAppShellError> {
     let production_save =
         production_voxel_save_with_population(save, asset_root, profile_id, population)?;
-    let backend_state = production_save.require_voxel_backend()?.clone();
-    let backend = PersistentVoxelWorldBackend::from_save_state(backend_state.clone())?;
-    let anchors = backend_state
-        .creature_anchors
-        .iter()
-        .map(|anchor| {
-            CreatureWorldAnchor::new(
-                anchor.stable_id,
-                Vec3f::new(anchor.tile.x as f32, 0.0, anchor.tile.z as f32),
-            )
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    let snapshot = backend.snapshot_for_anchors(&anchors)?;
+    let snapshot = crate::saved_terrain_view(&production_save)?;
     if snapshot.schema != FVR02_PERSISTENT_VOXEL_WORLD_SCHEMA {
         return Err(GameAppShellError::InvalidProductionFrontend {
             message: format!(

@@ -409,7 +409,8 @@ pub(crate) fn export_nodes(world: &mut World) -> Vec<Value> {
             json!({"top":rgba(b.top),"right":rgba(b.right),"bottom":rgba(b.bottom),"left":rgba(b.left)})});
         let image=world.get::<ImageNode>(e).map(|image|{
             let name=image_name(world,e);
-            let source_path = name.map(|n| format!("assets/ui/care_dock/{n}.png"));
+            let source_path = name.map(|n| format!("assets/ui/care_dock/{n}.png"))
+                .or_else(|| super::orchard::image_path(world, &image.image));
             #[cfg(feature = "gpu-runtime")]
             let source_path = source_path.or_else(|| crate::production_conversation_lineage_ui::composer::image_path(world, &image.image));
             let source_path = source_path.expect("embedded UI icon");

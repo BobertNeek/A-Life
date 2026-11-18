@@ -4837,6 +4837,16 @@ impl GpuLiveBrainRuntime {
         launch: &AppShellLaunchConfig,
     ) -> Result<Self, GameAppShellError> {
         let config = RuntimeConfig::from_json_file(&launch.config_path)?;
+        Self::from_validated_launch_config(backend, launch, &config)
+    }
+
+    /// A resumed world supplies its own configuration, not the scenario template's
+    /// seed. The same durable manifest, asset, policy and seed checks apply.
+    pub(crate) fn from_validated_launch_config(
+        backend: GpuClosedLoopBackend,
+        launch: &AppShellLaunchConfig,
+        config: &RuntimeConfig,
+    ) -> Result<Self, GameAppShellError> {
         config.validate()?;
         let manifest = AssetManifest::from_json_file(&launch.asset_manifest_path)?;
         manifest.validate_with_root(&launch.asset_root)?;

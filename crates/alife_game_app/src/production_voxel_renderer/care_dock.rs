@@ -264,21 +264,25 @@ const EMBEDDED: [(&str, &[u8]); 13] = [
     ),
 ];
 use crate::production_voxel_renderer::sanctuary_ink::{self as ink, bevel};
+pub(super) fn decode_png(world: &mut World, bytes: &[u8]) -> Handle<Image> {
+    let image = Image::from_buffer(
+        bytes,
+        ImageType::Extension("png"),
+        CompressedImageFormats::NONE,
+        true,
+        ImageSampler::linear(),
+        RenderAssetUsages::default(),
+    )
+    .expect("embedded Hand glyph");
+    world.resource_mut::<Assets<Image>>().add(image)
+}
+
 pub(super) fn spawn(world: &mut World) {
     world.init_resource::<State>();
     world.init_resource::<Assets<Image>>();
     let mut icons = BTreeMap::new();
     for (name, bytes) in EMBEDDED {
-        let image = Image::from_buffer(
-            bytes,
-            ImageType::Extension("png"),
-            CompressedImageFormats::NONE,
-            true,
-            ImageSampler::linear(),
-            RenderAssetUsages::default(),
-        )
-        .expect("embedded care dock PNG");
-        icons.insert(name, world.resource_mut::<Assets<Image>>().add(image));
+        icons.insert(name, decode_png(world, bytes));
     }
     let root = world
         .spawn((
