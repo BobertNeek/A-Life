@@ -1,4 +1,5 @@
 //! A small modal player menu. Debug rails remain separate; world truth stays in runtime.
+mod field_camera;
 use super::*;
 use accesskit::{Action as AccessibleAction, Role};
 use bevy::a11y::{AccessibilityNode, ActionRequest};
@@ -16,6 +17,7 @@ enum Screen {
     Main,
     Speed,
     Settings,
+    Photos,
     ConfirmLoad,
 }
 
@@ -30,19 +32,30 @@ pub(super) enum Action {
     Speed,
     Settings,
     Quit,
+    Photos,
+    Expose,
+    Older,
+    Newer,
     OneX,
     Max,
     Focus,
     Back,
 }
 
-const MAIN: [(Action, &str); 6] = [
+const MAIN: [(Action, &str); 7] = [
     (Action::Play, "Play"),
     (Action::Save, "Save"),
     (Action::Load, "Load"),
     (Action::Speed, "Speed"),
     (Action::Settings, "Settings"),
+    (Action::Photos, "Photos"),
     (Action::Quit, "Quit"),
+];
+const PHOTOS: [(Action, &str); 4] = [
+    (Action::Expose, "Take a field photograph"),
+    (Action::Older, "Previous photograph"),
+    (Action::Newer, "Next photograph"),
+    (Action::Back, "Back"),
 ];
 const SPEED: [(Action, &str); 3] = [
     (Action::OneX, "1x"),
@@ -108,6 +121,7 @@ pub(crate) struct MenuState {
     accessible_reader: MessageCursor<ActionRequest>,
     accessible_action: Option<Action>,
     pub(super) pending: Option<Action>,
+    plate_action: Option<Action>,
     #[cfg(feature = "gpu-runtime")]
     quit: Option<QuitCheckpoint>,
 }
@@ -163,6 +177,7 @@ impl MenuState {
     fn rows(&self) -> &'static [(Action, &'static str)] {
         match self.screen {
             Screen::Main => &MAIN,
+            Screen::Photos => &PHOTOS,
             Screen::Speed => &SPEED,
             Screen::Settings => &SETTINGS,
             Screen::ConfirmLoad => &CONFIRM_LOAD,
@@ -272,6 +287,7 @@ impl MenuState {
         let mut outcome = InputOutcome::default();
         // A request belongs to this snapshot only. Gated/busy requests cannot
         // become consent after the modal or publication state changes.
+        self.plate_action = None;
         let accessible_action = self.accessible_action.take();
         let gated = self.release_gate;
         if gated && !left_down && keyboard.get_pressed().next().is_none() {
@@ -333,7 +349,9 @@ impl MenuState {
                 action = Some(Action::Back);
             }
         } else if self.screen == Screen::Closed {
-            if keyboard.just_pressed(KeyCode::KeyL) {
+            if keyboard.just_pressed(KeyCode::F5) {
+                action = Some(Action::Expose);
+            } else if keyboard.just_pressed(KeyCode::KeyL) {
                 action = Some(Action::Load);
             }
         } else {
@@ -383,6 +401,15 @@ impl MenuState {
             }
             Some(Action::CancelLoad) => outcome.resume = self.cancel_load(),
             Some(Action::Play) => outcome.resume = Some(self.close(true)),
+            Some(Action::Photos) => {
+                self.screen = Screen::Photos;
+                self.selected = 0;
+                self.plate_action = Some(Action::Photos);
+            }
+            Some(a @ (Action::Expose | Action::Older | Action::Newer)) => {
+                self.plate_action = Some(a);
+                self.captured = true;
+            }
             Some(Action::Speed) => {
                 self.screen = Screen::Speed;
                 self.selected = 0;
@@ -444,6 +471,7 @@ pub(super) fn install(app: &mut App, summary: &ProductionVoxelLaunchSummary) {
     }
     app.insert_resource(state);
     spawn_ui(app.world_mut());
+    field_camera::install(app);
     app.add_systems(
         Update,
         handle_input.in_set(ProductionVoxelPresentationSet::Input),
@@ -510,6 +538,9 @@ struct MenuGlyphs {
     warning: Handle<Image>,
     pending: Handle<Image>,
     saved: Handle<Image>,
+    shutter: Handle<Image>,
+    earlier: Handle<Image>,
+    later: Handle<Image>,
 }
 
 impl MenuGlyphs {
@@ -530,6 +561,11 @@ impl MenuGlyphs {
             )
         };
         Self {
+            shutter: load(include_bytes!(
+                "../../../../assets/ui/field_camera/shutter.png"
+            )),
+            earlier: load(include_bytes!("../../../../assets/ui/kinship/previous.png")),
+            later: load(include_bytes!("../../../../assets/ui/kinship/next.png")),
             play: load(include_bytes!(
                 "../../../../assets/ui/status_hud/playing.png"
             )),
@@ -557,6 +593,9 @@ impl MenuGlyphs {
 
     fn action(&self, action: Action) -> &Handle<Image> {
         match action {
+            Action::Expose => &self.shutter,
+            Action::Older => &self.earlier,
+            Action::Newer => &self.later,
             Action::OneX => &self.play,
             Action::Max => &self.fast,
             Action::Focus => &self.pause,
@@ -572,6 +611,7 @@ fn spawn_ui(world: &mut World) {
         (Screen::Main, MAIN.as_slice()),
         (Screen::Speed, SPEED.as_slice()),
         (Screen::Settings, SETTINGS.as_slice()),
+        (Screen::Photos, PHOTOS.as_slice()),
         (Screen::ConfirmLoad, CONFIRM_LOAD.as_slice()),
     ] {
         world
@@ -598,6 +638,7 @@ fn spawn_ui(world: &mut World) {
                             Screen::Main => "Menu",
                             Screen::Speed => "Speed",
                             Screen::Settings => "Settings",
+                            Screen::Photos => "Your field photographs",
                             Screen::ConfirmLoad => LOAD_WARNING,
                             Screen::Closed => unreachable!(),
                         },
@@ -607,6 +648,9 @@ fn spawn_ui(world: &mut World) {
                     bevel(true),
                 ))
                 .with_children(|panel| {
+                    if screen == Screen::Photos {
+                        field_camera::paper(panel, &glyphs.shutter);
+                    }
                     if screen == Screen::ConfirmLoad {
                         panel.spawn((
                             Name::new(
@@ -748,6 +792,7 @@ fn spawn_ui(world: &mut World) {
                 ));
             }
         });
+    field_camera::shutter_button(world, &glyphs.shutter);
     world.insert_resource(glyphs);
 }
 
@@ -1122,6 +1167,7 @@ fn sync_ui(
     mut roots: Query<(&MenuRoot, &mut Node)>,
     mut buttons: Query<(&MenuButton, &Interaction, &mut BackgroundColor)>,
     glyphs: Res<MenuGlyphs>,
+    shelf: Option<Res<field_camera::Shelf>>,
     mut statuses: Query<(&mut ImageNode, &mut Visibility), (With<Status>, Without<SelectionLamp>)>,
     mut lamps: Query<(&SelectionLamp, &mut Visibility)>,
     mut accessibility: Query<
@@ -1133,6 +1179,7 @@ fn sync_ui(
         Or<(With<MenuPanel>, With<MenuButton>)>,
     >,
 ) {
+    let available = |action| shelf.as_ref().is_none_or(|s| s.available(action));
     for (panel, button, mut node) in &mut accessibility {
         let screen = button
             .map(|button| button.screen)
@@ -1143,7 +1190,11 @@ fn sync_ui(
             node.set_hidden();
         }
         if let Some(button) = button {
-            if state.busy() || state.conversation_capture || state.release_gate {
+            if state.busy()
+                || state.conversation_capture
+                || state.release_gate
+                || !available(button.action)
+            {
                 node.set_disabled();
             } else {
                 node.clear_disabled();
@@ -1184,7 +1235,11 @@ fn sync_ui(
             || matches!(button.action, Action::Max)
                 && ux.settings.playback_mode() == crate::ProductionRunMode::MaxSpeed
             || matches!(button.action, Action::Focus) && ux.settings.pause_on_focus_loss;
-        let color = button_color(*interaction, selected, active);
+        let color = if available(button.action) {
+            button_color(*interaction, selected, active)
+        } else {
+            ink::WELL
+        };
         if background.0 != color {
             background.0 = color;
         }
@@ -1257,6 +1312,18 @@ fn apply_layout(world: &mut World, size: Vec2) {
                 node.padding.bottom = Val::Px(bottom);
             }
         } else if let Some(panel) = panel {
+            if panel.0 == Screen::Photos {
+                node.width = Val::Px(
+                    (size.x - 24.)
+                        .min((size.y - 154.).max(70.) * 16. / 9. + 36.)
+                        .clamp(236., 640.),
+                );
+                node.flex_direction = FlexDirection::Row;
+                node.flex_wrap = FlexWrap::Wrap;
+                node.justify_content = JustifyContent::Center;
+                node.column_gap = Val::Px(6.);
+                continue;
+            }
             let wide = compact && panel.0 == Screen::Main;
             let width = (if wide { 480.0 } else { 256.0_f32 }).min((size.x - 24.0).max(256.0));
             let direction = if wide {
@@ -1284,6 +1351,14 @@ fn apply_layout(world: &mut World, size: Vec2) {
         } else if let Some(button) = button {
             if button.screen == Screen::Closed {
                 continue;
+            }
+            if button.screen == Screen::Photos {
+                node.width = Val::Px(42.);
+                node.height = Val::Px(36.);
+                continue;
+            }
+            if button.screen == Screen::Main {
+                node.height = Val::Px(if size.y < 300. { 32. } else { 46. });
             }
             let wide = compact && button.screen == Screen::Main;
             let width = if wide {
@@ -1547,6 +1622,7 @@ mod tests {
                 Screen::Speed,
                 Screen::Settings,
                 Screen::ConfirmLoad,
+                Screen::Photos,
             ] {
                 let mut app = App::new();
                 app.add_plugins(HierarchyPropagatePlugin::<ComputedUiTargetCamera>::new(
@@ -1613,7 +1689,8 @@ mod tests {
                     .filter(|(button,_,_)|button.screen==screen).map(|(button,node,transform)| {
                         let center=transform.affine().translation; let half=node.size()*0.5;
                         let min=center-half;let max=center+half;
-                        assert!(node.size().x>=110.0 && node.size().y==46.0,"{:?} invalid target {:?}",screen,node.size());
+                        let (min_w,target_h) = if screen==Screen::Photos {(42.,36.)} else if screen==Screen::Main && size.y<300. {(110.,32.)} else {(110.,46.)};
+                        assert!(node.size().x>=min_w && node.size().y==target_h,"{:?} invalid target {:?}",screen,node.size());
                         assert!(min.x>=0.0 && min.y>=0.0 && max.x<=size.x && max.y<=size.y,"{:?} {:?} outside {:?}: {:?} {:?}",screen,button.action,size,min,max);
                         assert!(node.contains_point(*transform,center));
                         assert!(!node.contains_point(*transform,max+Vec2::splat(1.0)));
@@ -1637,7 +1714,8 @@ mod tests {
                 assert_eq!(
                     rows.len(),
                     match screen {
-                        Screen::Main => 6,
+                        Screen::Main => MAIN.len(),
+                        Screen::Photos => PHOTOS.len(),
                         Screen::Speed => 3,
                         Screen::Settings | Screen::ConfirmLoad => 2,
                         Screen::Closed => 0,
@@ -1646,7 +1724,7 @@ mod tests {
                 receipts.push(serde_json::json!({"viewport":[size.x,size.y],"screen":format!("{:?}",screen),"buttons":rows}));
             }
         }
-        for screens in receipts.as_chunks::<4>().0 {
+        for screens in receipts.as_chunks::<5>().0 {
             let load = |screen: usize, action: &str| {
                 screens[screen]["buttons"]
                     .as_array()
@@ -1727,7 +1805,7 @@ mod tests {
                     "border":px(node.border.top),"radius":px(node.border_radius.top_left),"gap":px(node.row_gap),
                     "background":color(background.0),"top":color(border.top),"bottom":color(border.bottom),"rows":rows})
             }).collect::<Vec<_>>();
-                assert_eq!(panels.len(), 4);
+                assert_eq!(panels.len(), 5);
                 fixtures.extend(panels);
             }
         }

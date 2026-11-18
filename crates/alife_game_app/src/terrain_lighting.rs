@@ -2,7 +2,7 @@
 
 use alife_world::VoxelTileCoord;
 use bevy::{
-    camera::ScalingMode,
+    camera::{visibility::RenderLayers, ScalingMode},
     core_pipeline::tonemapping::Tonemapping,
     prelude::{
         default, AmbientLight, App, Camera, Camera3d, ClearColorConfig, Color, Component,
@@ -15,6 +15,15 @@ use crate::{
     Fvr03ProductionVoxelCamera, Fvr03ProductionVoxelCameraMode,
     Fvr03ProductionVoxelRendererSettings, ProductionFrontendProfileId,
 };
+
+/// Layer zero is the habitat; layer one is the Hand and its optical guidance.
+/// The player's camera and sun include both. A physical field plate sees only zero.
+pub(crate) fn player_view_layers() -> RenderLayers {
+    RenderLayers::from_layers(&[0, 1])
+}
+pub(crate) fn player_guide_layer() -> RenderLayers {
+    RenderLayers::layer(1)
+}
 
 pub(crate) const PRODUCTION_CAMERA_MAX_ZOOM: f32 = 3.5;
 pub(crate) const PRODUCTION_SHADOW_MINIMUM_DISTANCE: f32 = 0.1;
@@ -79,6 +88,7 @@ pub(crate) fn spawn_production_terrain_camera(
     app.world_mut().spawn((
         Name::new("A-Life FVR11 creature-stage terrain camera"),
         Camera3d::default(),
+        player_view_layers(),
         Camera {
             order: 0,
             clear_color: ClearColorConfig::Custom(Color::srgb(0.52, 0.72, 0.82)),

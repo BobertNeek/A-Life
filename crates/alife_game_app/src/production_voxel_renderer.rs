@@ -2709,6 +2709,7 @@ fn spawn_fvr04_prepared_lighting(world: &mut World, lighting: Fvr04PreparedLight
                 lighting.shadow_cascades
             )),
             light,
+            crate::terrain_lighting::player_view_layers(),
             bevy::light::CascadeShadowConfigBuilder {
                 num_cascades: lighting.shadow_cascades,
                 minimum_distance: PRODUCTION_SHADOW_MINIMUM_DISTANCE,
@@ -2725,6 +2726,7 @@ fn spawn_fvr04_prepared_lighting(world: &mut World, lighting: Fvr04PreparedLight
     world.spawn((
         Name::new("A-Life FVR11 minimum-profile warm directional sun"),
         light,
+        crate::terrain_lighting::player_view_layers(),
         transform,
         Fvr04ProductionRuntimeSceneRoot,
     ));
@@ -4539,6 +4541,7 @@ fn spawn_fvr03_selection_marker(
         Transform::from_xyz(tile.x as f32 + 0.5, 1.45, tile.z as f32 + 0.5),
         Visibility::Visible,
         Fvr03ProductionVoxelSelectionMarker,
+        crate::terrain_lighting::player_guide_layer(),
         Fvr04ProductionRuntimeSceneRoot,
     ));
 }
@@ -4569,6 +4572,7 @@ fn spawn_creature_focus_lantern(app: &mut App) {
         Visibility::Hidden,
         bevy::light::NotShadowCaster,
         Fvr04ProductionCreatureWorldLabel,
+        crate::terrain_lighting::player_guide_layer(),
     ));
 }
 
