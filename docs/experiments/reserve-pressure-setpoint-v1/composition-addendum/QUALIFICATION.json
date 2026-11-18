@@ -1,0 +1,42 @@
+{
+  "executed_addendum_source": "ba409c0336c7d20a78757bdaafcf7fdacb21f9ef",
+  "prior_final_source": "98fe445493192bc80bb9cbf0b2e16fc16c7df2bf",
+  "prior_physiology_execution": "f3602c25929b099c1a04c10aa2fb7ea4a87eef79",
+  "structural_tests_passed": 4,
+  "construction_paths": 11,
+  "physiology_advances": 0,
+  "world_intervals": 0,
+  "neural_activity": 0,
+  "checks": {
+    "compile_only": "passed",
+    "strict_targeted_clippy": "passed",
+    "format": "passed",
+    "prior_file_bytes": "identical to98fe445",
+    "prior_grid_rerun": false
+  },
+  "files": {
+    "FROZEN_PLAN.md": "41da958d3155c757a442c3706eebec53cdb1e70dabcf0363ff6aa826911e122a",
+    "RESULTS.md": "e91becb0d139d8287f4192211c947358859353a233cfa438d76aa7fa9af7a88c",
+    "RUN_ONCE.txt": "7b95cd9dac11e827558fb346d36ed3cc3147bc47ea831ac665bbbb13fc03b97c",
+    "run.log": "827d24d59a2d7382d6da31844f2f4a780f08180bf075a7b415ec2f09a3205cbb",
+    "compile.log": "759be2f6d945043b24b21efaf57894a1d30e557c9157e3647443d4ed15514867",
+    "clippy.log": "8493213239c75e0dd40c0126a33fd1fd8960469fe46ae60b4a11478df79c159d",
+    "fmt.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "structural_test_sha256": "6e33373d080ac8c0835a77f9ed1bc1f4b7328321bc30f225aa20ae66064dd2cd",
+  "preserved_files": {
+    "crates/alife_core/src/biochemical_graph.rs": "99d03b331ce25b2c89aeaa9ccc2dc59c85cc8c16640a60b70007e0e65d70842b",
+    "crates/alife_core/src/evolutionary_genetics.rs": "6e6be1509a04a68d1277b101264b0e35a427017c16fef86736e5eae9e0041a53",
+    "crates/alife_core/tests/reserve_pressure_setpoint.rs": "03eb1add6d06b33735c8a3eb9b2ba8331066f2b711c38f5c5be6c647d07b3649",
+    "docs/experiments/reserve-pressure-setpoint-v1/fmt.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "docs/experiments/reserve-pressure-setpoint-v1/RUN_ONCE.txt": "0fab8e4d905d0a95429a265a200c68fe7555b5882f2afa2fe04bd143549d40ba",
+    "docs/experiments/reserve-pressure-setpoint-v1/clippy.log": "cdcc704320ef1ae2f87d2ddcf2aa585fa9f9067c9c1aafe4236c078eb5bae4e8",
+    "docs/experiments/reserve-pressure-setpoint-v1/QUALIFICATION.json": "7d30cbeb1994cbeaa64b267f638c26dcaac0ce449200e68ace7c1bf99911f2e8",
+    "docs/experiments/reserve-pressure-setpoint-v1/FROZEN_PLAN.md": "d602948fe43fadaee2bc474dcab5665b4cf48aa4e99bef90ae2d38798cc17993",
+    "docs/experiments/reserve-pressure-setpoint-v1/validation.log": "7b37adf3f971c9c9af0f6b98baeeab0b33cd8a1a006a12c0daff1929dc6baa43",
+    "docs/experiments/reserve-pressure-setpoint-v1/run.log": "b0f3a23e4d4ccff423a3c334cf75db60ba0c5bf627d51191b145d2b5feee2ccf",
+    "docs/experiments/reserve-pressure-setpoint-v1/RESULTS.md": "59b5f948d3d944cf50d5245f469e966723fa298a161daf10be2a7717b7a83c36",
+    "docs/experiments/reserve-pressure-setpoint-v1/outcomes.jsonl": "c887c0ef4341852b0e9fe4bf56130922900a4358f7744d928af25535e6dc8832",
+    "docs/experiments/reserve-pressure-setpoint-v1/CANDIDATE.json": "7cfa3e55adb37cb4ba473ab4dda56327f78c1be1af53b66b5255599512a1c7c3"
+  }
+}

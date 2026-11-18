@@ -1,0 +1,24 @@
+{
+  "base": "550f79ad1f765132c634e7a272da56b521b57ec0",
+  "executed_source": "bc0bd4a0cebfd8301fee0b9827fb8add729b14c1",
+  "advance_calls": 870,
+  "world_intervals": 0,
+  "neural_emissions": 0,
+  "checks": {
+    "fixed_ignored_test": "1 passed, one invocation",
+    "format": "passed",
+    "strict_targeted_clippy": "passed after identity-conversion removal",
+    "final_no_run_build": "passed",
+    "full_core_world_gpu_suites": "not run"
+  },
+  "files": {
+    "FROZEN_PLAN.md": "27a4f30a53728466c6ec99abd5cbce253ecc59a00b38b17c5ae38ffa9d6094d1",
+    "run.log": "69a505543bb1e50887f0d7179ae801e83bf087c971c1b2a6497a5b2cd66403b5",
+    "outcomes.jsonl": "ddeedf8da8a12c94c07838c6b1d598a46760a8412f55fa4be93f183328bb99f3",
+    "RUN_ONCE.txt": "47e89d5f1a0fbc72db452f6b0406651b84da04b83ca205ca7e84d5cba1f7e388",
+    "compile-frozen.log": "f60698c9ce81b2eca77da8aad19aab1675447ab58e2e90207721859999496a93",
+    "compile-final.log": "b4dfbe00be67a7b9ebb11deb6a2d00f58509a4e57a9936f19618e8104a21dda5",
+    "clippy-final.log": "573487ab71aa99bfef1d3458003bc414b5fd40248a7733701a3afe218230b7a1",
+    "fmt-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+}

@@ -1,0 +1,2 @@
+One structural test invocation. Source ba409c0336c7d20a78757bdaafcf7fdacb21f9ef. Four tests, maximum11 recipe construction paths, zero physiology advances.
+Exit status: 0

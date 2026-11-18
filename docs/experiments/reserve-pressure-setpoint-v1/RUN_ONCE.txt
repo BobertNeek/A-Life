@@ -1,0 +1,2 @@
+One fixed candidate grid invocation reserved. Source f3602c25929b099c1a04c10aa2fb7ea4a87eef79. Maximum3626 core advances; zero world/neural. No automatic replay.
+Exit status: 0

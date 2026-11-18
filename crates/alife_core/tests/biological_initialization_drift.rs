@@ -1,0 +1,427 @@
+//! Fixed public-genome core physiology, never world life or neural experience.
+use alife_core::*;
+use serde_json::json;
+
+fn close(actual: f32, expected: f32) {
+    assert!((actual - expected).abs() < 2.0e-6, "{actual} != {expected}");
+}
+
+fn delta(after: [f32; 11], before: [f32; 11]) -> [f32; 11] {
+    std::array::from_fn(|i| after[i] - before[i])
+}
+
+fn record(label: &str, step: u64, state: &BiochemistryState) {
+    println!(
+        "audit {}",
+        json!({
+            "label": label, "step": step, "tick": state.tick.raw(),
+            "age": state.development.age_ticks.raw(), "reserve": state.body.energy,
+            "maturation": state.development.maturation,
+            "expression": state.development.biochemical_expression,
+            "puberty": state.development.puberty_reached,
+            "drives": state.homeostasis.drives.to_array(),
+        })
+    );
+}
+
+#[test]
+#[ignore = "bounded 870-call core physiology audit; see its frozen plan"]
+fn fixed_core_initialization_drift() {
+    let phenotype = CreatureGenome::early_mammal_founder(
+        921412,
+        FoundationGeneticIdentity::new(10, 1, 7, BrainCapacityClass::N512_ID).unwrap(),
+    )
+    .unwrap()
+    .express()
+    .unwrap();
+    let chemistry = &phenotype.chemistry.biochemical;
+    let initial = BiochemistryState::new_with_age(&phenotype, Tick(600), Tick(600)).unwrap();
+    let original = initial.homeostasis.drives.to_array();
+    assert_eq!(initial.development.biochemical_expression, 1.0);
+    assert!(!initial.development.puberty_reached);
+    let channels = [
+        BiochemicalDriveChannel::Hunger,
+        BiochemicalDriveChannel::Fatigue,
+        BiochemicalDriveChannel::Fear,
+        BiochemicalDriveChannel::Pain,
+        BiochemicalDriveChannel::Loneliness,
+        BiochemicalDriveChannel::Curiosity,
+        BiochemicalDriveChannel::BrainAtp,
+        BiochemicalDriveChannel::TemperatureStress,
+        BiochemicalDriveChannel::Reproductive,
+        BiochemicalDriveChannel::Extension0,
+        BiochemicalDriveChannel::Extension1,
+    ];
+    for (index, channel) in channels.into_iter().enumerate() {
+        let receptors: Vec<_> = chemistry
+            .receptors()
+            .iter()
+            .filter(|r| r.target == BiochemicalTargetLocus::Drive(channel))
+            .collect();
+        if index < 9 {
+            assert_eq!(receptors.len(), 1);
+            let receptor = receptors[0];
+            assert_eq!(
+                (
+                    receptor.threshold,
+                    receptor.gain,
+                    receptor.nominal,
+                    receptor.digital
+                ),
+                (0.0, 1.0, 0.0, false)
+            );
+            let species = chemistry
+                .species()
+                .iter()
+                .find(|s| s.id == receptor.source)
+                .unwrap();
+            close(original[index], species.baseline);
+            println!(
+                "audit {}",
+                json!({"map": channel, "index": index,
+                "species": species, "receptor": receptor,
+                "emitters": chemistry.emitters().iter().filter(|e| e.target == species.id).collect::<Vec<_>>() })
+            );
+        } else {
+            assert!(receptors.is_empty());
+            assert_eq!(original[index], 0.0);
+            println!(
+                "audit {}",
+                json!({"map": channel, "index": index, "unassigned": true})
+            );
+        }
+    }
+    println!(
+        "audit {}",
+        json!({"parameters": {
+            "cadence": initial.cadence, "body": phenotype.body,
+            "development": phenotype.development, "value_profile": chemistry.value_profile(),
+            "species": chemistry.species().len(), "emitters": chemistry.emitters().len(),
+            "reactions": chemistry.reactions().len(), "receptors": chemistry.receptors().len(),
+        }})
+    );
+    let mut calls = 0_u64;
+    let mut total_work = 0_u64;
+    let mut account = |work: BiochemicalWorkReceipt| {
+        calls += 1;
+        total_work += work.total();
+        assert_eq!(
+            (
+                work.species_updates,
+                work.reaction_evaluations,
+                work.emitter_evaluations,
+                work.receptor_evaluations,
+                work.neural_emitter_evaluations
+            ),
+            (19, 1, 22, 26, 0)
+        );
+    };
+    record("fresh_age600", 0, &initial);
+    let mut passive = initial;
+    let mut first = None;
+    for step in 1..=128 {
+        passive = passive
+            .advance(Tick(600 + step), BodyEventDelta::zero(), &phenotype)
+            .unwrap();
+        account(passive.biochemical_work());
+        if step == 1 {
+            first = Some(passive);
+        }
+        if [1, 2, 4, 6, 12, 24, 32, 64, 128].contains(&step) {
+            record("passive_core", step, &passive);
+        }
+    }
+    let first = first.unwrap();
+    let raw = delta(first.homeostasis.drives.to_array(), original);
+    for (index, gain) in [(0, 0.18), (1, 0.12), (6, -0.12)] {
+        close(raw[index], (1.0 - first.body.energy) * gain);
+    }
+    for index in [2, 3, 4, 5, 7, 8, 9, 10] {
+        assert_eq!(raw[index], 0.0);
+    }
+    println!(
+        "audit {}",
+        json!({"label":"passive_first_raw", "delta":raw})
+    );
+
+    let moved = initial
+        .advance(
+            Tick(601),
+            BodyEventDelta {
+                energy: -0.04,
+                ..BodyEventDelta::zero()
+            },
+            &phenotype,
+        )
+        .unwrap();
+    account(moved.biochemical_work());
+    let contrast = delta(
+        moved.homeostasis.drives.to_array(),
+        first.homeostasis.drives.to_array(),
+    );
+    let reserve_contrast = moved.body.energy - first.body.energy;
+    // The six organ energy-event shares sum to 1.1; the public reserve is their mean.
+    close(
+        reserve_contrast,
+        -0.04 * phenotype.body.metabolic_turnover * 1.1 / 6.0,
+    );
+    for (index, gain) in [(0, 0.18), (1, 0.12), (6, -0.12)] {
+        close(contrast[index], -reserve_contrast * gain);
+    }
+    println!(
+        "audit {}",
+        json!({"label":"movement_dose_core_only", "event_energy":-0.04,
+        "raw":delta(moved.homeostasis.drives.to_array(), original),
+        "contrast_to_passive":contrast, "reserve_contrast":reserve_contrast})
+    );
+
+    let mut frozen = *initial.graph_state();
+    let mut frozen_six = None;
+    for step in 1..=128 {
+        let (next, work) = frozen
+            .advance(
+                Tick(600 + step),
+                initial.body,
+                BodyEventDelta::zero(),
+                None,
+                chemistry,
+                1.0,
+            )
+            .unwrap();
+        account(work);
+        frozen = next;
+        let drives = frozen
+            .derive_homeostasis(chemistry)
+            .unwrap()
+            .drives
+            .to_array();
+        if step == 6 {
+            frozen_six = Some(drives);
+        }
+        if [1, 6, 32, 128].contains(&step) {
+            println!(
+                "audit {}",
+                json!({"label":"fixed_body_graph", "step":step,
+                "reserve":initial.body.energy, "drives":drives})
+            );
+        }
+        // Independent closed form of the inherited forced recurrence, with bounds.
+        for (index, gain) in [(0, 0.18), (1, 0.12), (6, -0.12)] {
+            let receptor = chemistry
+                .receptors()
+                .iter()
+                .find(|r| r.target == BiochemicalTargetLocus::Drive(channels[index]))
+                .unwrap();
+            let species = chemistry
+                .species()
+                .iter()
+                .find(|s| s.id == receptor.source)
+                .unwrap();
+            let retention = f64::from(species.decay_retention);
+            let expected = f64::from(species.baseline)
+                + gain * f64::from(1.0 - initial.body.energy) * (1.0 - retention.powi(step as i32))
+                    / (1.0 - retention);
+            close(
+                drives[index],
+                (expected as f32).clamp(species.minimum, species.maximum),
+            );
+        }
+    }
+    let mut full_body = initial.body;
+    full_body.set_energy(1.0).unwrap();
+    let (full, work) = initial
+        .graph_state()
+        .advance(
+            Tick(601),
+            full_body,
+            BodyEventDelta::zero(),
+            None,
+            chemistry,
+            1.0,
+        )
+        .unwrap();
+    account(work);
+    assert_eq!(
+        full.derive_homeostasis(chemistry)
+            .unwrap()
+            .drives
+            .to_array(),
+        original
+    );
+
+    let events = [
+        (
+            "damage",
+            BodyEventDelta {
+                damage: 0.1,
+                ..BodyEventDelta::zero()
+            },
+        ),
+        (
+            "temperature",
+            BodyEventDelta {
+                temperature_stress: 0.1,
+                ..BodyEventDelta::zero()
+            },
+        ),
+        (
+            "nutrition",
+            BodyEventDelta {
+                nutrition: 0.1,
+                ..BodyEventDelta::zero()
+            },
+        ),
+        (
+            "social",
+            BodyEventDelta {
+                social_contact: 0.0125,
+                ..BodyEventDelta::zero()
+            },
+        ),
+        (
+            "sleep",
+            BodyEventDelta {
+                sleep_recovery: 0.1,
+                ..BodyEventDelta::zero()
+            },
+        ),
+        (
+            "mating",
+            BodyEventDelta {
+                mating_opportunity: 0.1,
+                ..BodyEventDelta::zero()
+            },
+        ),
+        (
+            "play",
+            BodyEventDelta {
+                play_stimulation: 0.1,
+                ..BodyEventDelta::zero()
+            },
+        ),
+        (
+            "novelty",
+            BodyEventDelta {
+                perceived_novelty: 0.1,
+                ..BodyEventDelta::zero()
+            },
+        ),
+        (
+            "investigation",
+            BodyEventDelta {
+                investigation: 0.1,
+                ..BodyEventDelta::zero()
+            },
+        ),
+        (
+            "player_reward",
+            BodyEventDelta {
+                player_reward: 0.1,
+                ..BodyEventDelta::zero()
+            },
+        ),
+    ];
+    for (label, event) in events {
+        let after = initial.advance(Tick(601), event, &phenotype).unwrap();
+        account(after.biochemical_work());
+        let drives = after.homeostasis.drives.to_array();
+        let contrast = delta(drives, first.homeostasis.drives.to_array());
+        println!(
+            "audit {}",
+            json!({"label":label, "event":event,
+            "raw":delta(drives,original), "contrast_to_passive":contrast,
+            "hormone_contrast":delta(after.homeostasis.hormones.to_array(), first.homeostasis.hormones.to_array())})
+        );
+        assert_eq!((drives[9], drives[10]), (0.0, 0.0));
+        match label {
+            "damage" => {
+                close(contrast[2], 0.035);
+                close(contrast[3], 0.08);
+            }
+            "temperature" => close(contrast[7], after.body.temperature_stress * 0.3),
+            "nutrition" => {
+                assert!(contrast[0] < -0.03);
+                assert!(contrast[6] > 0.0);
+            }
+            "social" => close(contrast[4], -0.0125 * 0.6),
+            "sleep" => {
+                close(contrast[1], -0.07);
+                close(contrast[6], 0.03);
+            }
+            "mating" => {
+                close(contrast[8], 0.085);
+                assert!(!after.reproduction.ready);
+            }
+            "play" | "novelty" | "investigation" | "player_reward" => {
+                assert_eq!(contrast, [0.0; 11])
+            }
+            _ => unreachable!(),
+        }
+    }
+    let (batch, work) = initial
+        .graph_state()
+        .advance(
+            Tick(606),
+            initial.body,
+            BodyEventDelta::zero(),
+            None,
+            chemistry,
+            1.0,
+        )
+        .unwrap();
+    account(work);
+    let (social_batch, work) = initial
+        .graph_state()
+        .advance(
+            Tick(606),
+            initial.body,
+            BodyEventDelta {
+                social_contact: 0.0125,
+                ..BodyEventDelta::zero()
+            },
+            None,
+            chemistry,
+            1.0,
+        )
+        .unwrap();
+    account(work);
+    let batch_drives = batch
+        .derive_homeostasis(chemistry)
+        .unwrap()
+        .drives
+        .to_array();
+    let social_drives = social_batch
+        .derive_homeostasis(chemistry)
+        .unwrap()
+        .drives
+        .to_array();
+    close(social_drives[4] - batch_drives[4], -0.0125 * 0.6);
+    println!(
+        "audit {}",
+        json!({"label":"six_tick_batch_not_six_sequential",
+        "batch":batch_drives, "sequential":frozen_six.unwrap(),
+        "social_event_contrast":delta(social_drives,batch_drives)})
+    );
+
+    let mut newborn = BiochemistryState::new_with_age(&phenotype, Tick(0), Tick(0)).unwrap();
+    record("continuous_core_development", 0, &newborn);
+    for step in 1..=600 {
+        newborn = newborn
+            .advance(Tick(step), BodyEventDelta::zero(), &phenotype)
+            .unwrap();
+        account(newborn.biochemical_work());
+        if [1, 60, 120, 300, 600].contains(&step) {
+            record("continuous_core_development", step, &newborn);
+        }
+    }
+    assert_eq!(newborn.development, initial.development);
+    assert_ne!(newborn.homeostasis, initial.homeostasis);
+    assert_eq!(calls, 870);
+    assert_eq!(total_work, 870 * (19 + 1 + 22 + 26));
+    println!(
+        "audit {}",
+        json!({"completed_advance_calls":calls,
+        "biochemical_work_total":total_work, "world_intervals":0, "neural_emissions":0,
+        "continuous_minus_fresh_age600":delta(newborn.homeostasis.drives.to_array(), original)})
+    );
+}

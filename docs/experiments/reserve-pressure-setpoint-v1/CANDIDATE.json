@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "kind": "opt_in_genetic_recipe",
+  "name": "reserve-pressure-setpoint-v1",
+  "source_seed": 921412,
+  "source_foundation_identity": [10, 1, 7, "N512"],
+  "proposed_reserve_target": 0.8,
+  "target_is_learned_or_optimal": false,
+  "alleles": ["maternal", "paternal"],
+  "source_locus": "EnergyDeficit",
+  "response": "Analogue",
+  "inverted": false,
+  "target_species_ids": [1, 2, 7],
+  "old_threshold": 0.0,
+  "new_threshold_f32": 0.19999998807907104,
+  "new_threshold_expression": "1.0_f32 - 0.8_f32",
+  "unchanged_gains": [0.18, 0.12, -0.12],
+  "default_enabled": false,
+  "acquired_state_migration": false,
+  "implementation": "BiochemicalGraphChromosome::with_emitter_threshold(side, index, threshold)",
+  "recipe_source": "crates/alife_core/tests/reserve_pressure_setpoint.rs::candidate"
+}

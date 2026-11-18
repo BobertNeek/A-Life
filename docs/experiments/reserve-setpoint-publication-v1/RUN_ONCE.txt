@@ -1,0 +1,2 @@
+One accepted-main compatibility invocation; source b05f34620c31b733d126b754a6517820ea56241c. Forty-eight normal tests only; no --ignored flag and no initialization-audit binary.
+Exit status: 0

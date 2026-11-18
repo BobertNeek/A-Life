@@ -672,6 +672,24 @@ impl BiochemicalGraphChromosome {
         Ok(self)
     }
 
+    /// Changes one inherited source threshold, never live concentrations.
+    /// For a non-inverted analogue EnergyDeficit emitter, threshold `1 - r`
+    /// expresses pressure below reserve `r`, without changing the source locus.
+    pub fn with_emitter_threshold(
+        mut self,
+        side: AlleleSide,
+        emitter_index: usize,
+        threshold: f32,
+    ) -> Result<Self, ScaffoldContractError> {
+        let homolog = match side {
+            AlleleSide::Maternal => &mut self.maternal,
+            AlleleSide::Paternal => &mut self.paternal,
+        };
+        *homolog = homolog.with_emitter_threshold(emitter_index, threshold)?;
+        self.validate_contract()?;
+        Ok(self)
+    }
+
     /// Changes inherited sensitivity, never live chemical concentrations.
     pub fn with_emitter_gain(
         mut self,

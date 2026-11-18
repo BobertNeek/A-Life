@@ -1,0 +1,107 @@
+   Compiling alife_core v0.1.0 (/workspace/scratch/ee5e08a3ca9b/reserve-setpoint-publication-v1/crates/alife_core)
+    Finished `test` profile [unoptimized] target(s) in 1m 27s
+     Running tests/abi_validation_errors.rs (/workspace/shared/grip-integration-qualification-20261108/grip-candidate-qualification/target/debug/deps/abi_validation_errors-f54ef3f983713cde)
+
+running 4 tests
+test action_and_experience_abis_use_current_versions ... ok
+test action_commands_reject_bad_abi_versions ... ok
+test experience_headers_reject_old_versions ... ok
+test incompatible_abi_returns_typed_error_and_diagnostic ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/biochemical_graph_v2.rs (/workspace/shared/grip-integration-qualification-20261108/grip-candidate-qualification/target/debug/deps/biochemical_graph_v2-f502d01f330dd41b)
+
+running 11 tests
+test biochemistry_validation_requires_graph_and_owner_ticks_to_match ... ok
+test drive_frame_is_a_tick_bound_derivation_of_the_graph ... ok
+test emitter_catch_up_replays_persistent_sources_but_not_instantaneous_events ... ok
+test founder_chemistry_is_a_bounded_sparse_active_graph ... ok
+test founder_graph_produces_reward_social_learning_and_growth_signals ... ok
+test grouped_receptors_use_inherited_baselines_and_responses_after_reload ... ok
+test neural_emission_changes_authoritative_chemistry_and_targeted_receptors ... ok
+test neural_emitter_work_counts_configured_emitters_not_input_emissions ... ok
+test non_unit_species_ranges_survive_advance_and_restore_validation ... ok
+test player_praise_graph_keeps_the_dopamine_emitter ... ok
+test same_tick_without_event_does_not_advance_reactions ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/biochemical_valuation.rs (/workspace/shared/grip-integration-qualification-20261108/grip-candidate-qualification/target/debug/deps/biochemical_valuation-9ed68632fc5a92f1)
+
+running 4 tests
+test hormonal_tone_modulates_consequences_without_inventing_reward ... ok
+test ordinary_biological_events_have_proportionate_values ... ok
+test valuation_genes_scale_deltas_without_punishing_praise_clearance ... ok
+test valuation_genes_survive_birth_and_persistence_and_cannot_drift ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/chemistry_homeostasis.rs (/workspace/shared/grip-integration-qualification-20261108/grip-candidate-qualification/target/debug/deps/chemistry_homeostasis-876041abe330b5c3)
+
+running 9 tests
+test baseline_drift_decay_and_pain_frustration_spikes_are_deterministic ... ok
+test deltas_are_distinct_signed_changes_and_update_clamps_results ... ok
+test deterministic_finite_inputs_never_produce_nan_or_out_of_range_outputs ... ok
+test homeostatic_snapshots_are_versioned_through_the_central_schema_registry ... ok
+test modulation_helpers_bound_learning_salience_and_motor_confidence ... ok
+test recovery_helpers_reject_invalid_learning_state ... ok
+test recovery_triggers_cover_hyperactivity_catatonia_sleep_pain_and_safe_idle ... ok
+test sleep_recovery_delta_reduces_fatigue_and_sleep_pressure_while_restoring_atp ... ok
+test snapshots_reject_nan_and_out_of_range_learning_values ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/n512_foundation_abi.rs (/workspace/shared/grip-integration-qualification-20261108/grip-candidate-qualification/target/debug/deps/n512_foundation_abi-a44f51d762f8526e)
+
+running 5 tests
+test checked_n512_assets_are_present_and_canonically_decodable ... ok
+test n2048_builtin_payloads_retain_legacy_digests_and_canonical_bytes ... ok
+test n512_builtins_bind_exact_profiles_and_compile_validated_matches_asset_path ... ok
+test n512_foundations_reject_class_profile_and_forged_cross_wires ... ok
+test n512_genetic_birth_asset_is_bootstrap_and_canonical ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+     Running tests/reserve_pressure_composition.rs (/workspace/shared/grip-integration-qualification-20261108/grip-candidate-qualification/target/debug/deps/reserve_pressure_composition-fcb773ce63fda626)
+
+running 4 tests
+test reserve_and_play_order_preserves_boredom_curiosity_and_valuation ... ok
+test reserve_and_waking_order_preserves_removed_couplings_and_atp_gain ... ok
+test reserve_position_preserves_each_fixed_waking_play_recipe_order ... ok
+test reserve_preserves_explicitly_retuned_existing_emitter_gains ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/reserve_pressure_setpoint.rs (/workspace/shared/grip-integration-qualification-20261108/grip-candidate-qualification/target/debug/deps/reserve_pressure_setpoint-5016626d647d0f85)
+
+running 2 tests
+test fixed_reserve_setpoint_grid ... ignored, fixed 3626-call core-only grid; see frozen plan
+test inherited_threshold_is_validated_diploid_and_default_preserving ... ok
+
+test result: ok. 1 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/sensory_abi_contexts.rs (/workspace/shared/grip-integration-qualification-20261108/grip-candidate-qualification/target/debug/deps/sensory_abi_contexts-c0c5118e0a998eca)
+
+running 6 tests
+test context_streams_validate_bounds_and_fixed_slots ... ok
+test optional_gaussian_and_semantic_contexts_are_metadata_refs ... ok
+test sensory_channels_flatten_to_the_runtime_width ... ok
+test sensory_channels_reject_nan_out_of_bounds_and_bad_versions ... ok
+test sensory_snapshot_constructs_without_optional_semantic_or_gaussian_context ... ok
+test social_and_language_context_use_stable_ids_and_perception_markers ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/signed_decoder_foundations.rs (/workspace/shared/grip-integration-qualification-20261108/grip-candidate-qualification/target/debug/deps/signed_decoder_foundations-6ce5d7b77fc6cce9)
+
+running 4 tests
+test exact_n2048_foundation_preserves_negative_decoder_weights_and_rejects_negative_excitation ... ok
+test legacy_nano_candidate_keeps_signed_readouts_and_every_frozen_weight ... ok
+test private_n2048_foundation_replacement_does_not_apply_builtin_birth_signs ... ok
+test retained_nano_founder_asset_remains_canonically_admissible_without_rewriting ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.02s
+
+
+COMMAND_EXIT_STATUS=0

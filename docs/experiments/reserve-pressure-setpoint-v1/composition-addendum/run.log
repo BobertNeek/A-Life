@@ -1,0 +1,15 @@
+    Finished `test` profile [unoptimized] target(s) in 0.08s
+     Running tests/reserve_pressure_composition.rs (/workspace/shared/grip-integration-qualification-20261108/grip-candidate-qualification/target/debug/deps/reserve_pressure_composition-fcb773ce63fda626)
+
+running 4 tests
+test reserve_and_play_order_preserves_boredom_curiosity_and_valuation ... composition play: two orders equal; boredom/curiosity/valuation preserved; zero advances
+ok
+test reserve_and_waking_order_preserves_removed_couplings_and_atp_gain ... composition waking: two orders equal; fatigue deficit and sleep ATP absent; ATP gain -0.02; zero advances
+ok
+test reserve_position_preserves_each_fixed_waking_play_recipe_order ... composition waking+play: three reserve positions equal within each of two fixed recipe orders; zero advances
+ok
+test reserve_preserves_explicitly_retuned_existing_emitter_gains ... composition custom gains: 0.11/-0.013 preserved; zero advances
+ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
