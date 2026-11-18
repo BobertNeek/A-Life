@@ -73,6 +73,7 @@ mod hearthling;
 #[cfg(test)]
 mod hearthling_asset_retirement_tests;
 mod island;
+mod landmarks;
 mod landscape;
 mod live_care_feedback;
 mod live_creature_projection;
@@ -2041,6 +2042,7 @@ pub fn spawn_fvr03_production_voxel_scene(
         )
             .in_set(ProductionVoxelPresentationSet::AuthoritativeProjection),
     );
+    landmarks::install(app);
     app.add_systems(
         Update,
         (

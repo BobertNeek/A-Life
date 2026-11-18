@@ -51,6 +51,15 @@ pub(super) fn care_object_center(
     terrain_bound: bool,
     surface: &creature_grounding::RenderedTerrainSurface,
 ) -> Vec3 {
+    grounded_object_origin(position, terrain_bound, surface) + Vec3::Y * 0.30
+}
+
+/// Ground contact shared by handheld care items and fixed physical scenery.
+pub(super) fn grounded_object_origin(
+    position: Vec3f,
+    terrain_bound: bool,
+    surface: &creature_grounding::RenderedTerrainSurface,
+) -> Vec3 {
     let rendered = world_position_for_render(position, terrain_bound);
     let ground = Vec3::new(rendered.x, 0.0, rendered.z);
     let height = if terrain_bound {
@@ -58,7 +67,7 @@ pub(super) fn care_object_center(
     } else {
         surface.height(ground).unwrap_or(0.44) + rendered.y
     };
-    ground + Vec3::Y * (height + 0.30)
+    ground + Vec3::Y * height
 }
 
 #[allow(
