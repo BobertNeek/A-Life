@@ -12,7 +12,7 @@ Selecting a Hearthling begins a short observation trail. The five-toed sole take
 
 The small fieldglass opposite the seed pouch appears only after a real food or toy object is available. Its picture distinguishes food on the ground, a plaything, a gift held by a verified resident and a food object in the world's consumed state. The last state does **not** identify who ate. An unknown, missing or player-held object is not reported as a resident's possession. Reloading a garden can recover a real harvest from its saved ID; a disappearing explicit target does not silently redirect to another gift.
 
-Press the fieldglass or `]` to look. The camera eases toward the physical object, or toward its current carrier, without moving either. A split optical ring briefly marks the spot. For consumed food only, an empty husk appears in the lens, not as a new physical object. Ordinary camera input, a different selection, a modal or a world load interrupts the move. It shares the orchard's camera and accessible Hand-control paths. There is no new HUD text, reward, achievement or compulsory task.
+Press the fieldglass or `Z` to look. The camera eases toward the physical object, or toward its current carrier, without moving either. A split optical ring briefly marks the spot. For consumed food only, an empty husk appears in the lens, not as a new physical object. Ordinary camera input, a different selection, a modal or a world load interrupts the move. It shares the orchard's camera and accessible Hand-control paths. There is no new HUD text, reward, achievement or compulsory task.
 
 ![The fieldglass frames the same loose food the Hand placed. The creature is free to leave.](media/field-signs/real-gift.png)
 

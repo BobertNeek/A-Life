@@ -10,8 +10,9 @@ mod playtest {
         bevy_shell::{
             build_production_voxel_frontend_app_shell, LiveBrainPresentationFrameResource,
         },
-        default_environment_manifest_path, Fvr03ProductionVoxelCamera, ProductionRunMode,
-        ProductionVoxelLaunchConfig, ProductionWorldSource,
+        default_environment_manifest_path, Fvr03ProductionVoxelCamera,
+        Fvr05ProductionUxStateResource, ProductionRunMode, ProductionVoxelLaunchConfig,
+        ProductionWorldSource,
     };
     use alife_world::WorldObjectKind;
     use bevy::{
@@ -66,6 +67,7 @@ mod playtest {
         time: Res<Time<Real>>,
         mut walk: ResMut<Walk>,
         frame: Res<LiveBrainPresentationFrameResource>,
+        ux: Res<Fvr05ProductionUxStateResource>,
         names: Query<&Name, With<Mesh3d>>,
         optics: Query<(&Name, &Visibility), Without<Mesh3d>>,
         controls: Query<(Entity, &AccessibilityNode)>,
@@ -235,6 +237,11 @@ mod playtest {
                             && *v != Visibility::Hidden),
                     "the optical mark must identify even a consumed gift's otherwise empty site"
                 );
+                assert_eq!(
+                    ux.settings.playback_mode(),
+                    ProductionRunMode::OneX,
+                    "inspecting a gift must not accelerate the world"
+                );
                 let revisit = walk.phase == 7;
                 walk.photo(
                     &mut commands,
@@ -257,8 +264,8 @@ mod playtest {
                 walk.phase = 6;
             }
             6 if now >= 150.0 => {
-                if let Some((entity, label)) = lens {
-                    click(*entity);
+                if let Some((_, label)) = lens {
+                    walk.press(&mut keys, KeyCode::KeyZ);
                     let id = walk.gift.unwrap().raw();
                     let living = frame
                         .current
