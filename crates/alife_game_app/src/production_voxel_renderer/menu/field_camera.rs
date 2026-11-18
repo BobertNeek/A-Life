@@ -16,7 +16,7 @@ use std::{
 };
 mod album;
 mod plates;
-pub(super) use album::{paper, shutter_button};
+pub(super) use album::{paper, shutter_button, PlateControl};
 
 #[derive(Resource, Default)]
 pub(super) struct Shelf {

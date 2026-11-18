@@ -9,6 +9,8 @@ struct PrintLabel;
 struct EmptyPlate;
 #[derive(Component)]
 struct ShutterLamp;
+#[derive(Component)]
+pub(in super::super) struct PlateControl(pub(in super::super) Action);
 
 pub(in super::super) fn shutter_button(world: &mut World, icon: &Handle<Image>) {
     let id = world
@@ -184,6 +186,21 @@ pub(super) fn display_album(world: &mut World, s: &mut Shelf) {
     }
 }
 pub(super) fn show_lamps(world: &mut World, s: &Shelf) {
+    if s.album_open {
+        for (action, mut icon) in world
+            .query::<(&PlateControl, &mut ImageNode)>()
+            .iter_mut(world)
+        {
+            let tint = if s.available(action.0) {
+                Color::WHITE
+            } else {
+                Color::srgba(0.60, 0.70, 0.70, 0.46)
+            };
+            if icon.color != tint {
+                icon.color = tint;
+            }
+        }
+    }
     let (visible, color, width, height, radius) = if s.failed {
         (true, Color::srgb(0.92, 0.44, 0.29), 10., 10., 1.)
     } else if !s.available(Action::Expose) {

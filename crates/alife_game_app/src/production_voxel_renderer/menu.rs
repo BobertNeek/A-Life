@@ -720,7 +720,7 @@ fn spawn_ui(world: &mut World) {
                                         TextColor(ink::PORCELAIN),
                                     ));
                                 } else {
-                                    button.spawn((
+                                    let mut icon = button.spawn((
                                         ImageNode::new(glyphs.action(action).clone()),
                                         Node {
                                             width: Val::Px(24.0),
@@ -728,6 +728,9 @@ fn spawn_ui(world: &mut World) {
                                             ..default()
                                         },
                                     ));
+                                    if screen == Screen::Photos {
+                                        icon.insert(field_camera::PlateControl(action));
+                                    }
                                 }
                             });
                     }

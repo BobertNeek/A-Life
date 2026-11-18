@@ -69,7 +69,7 @@ On an RTX 3050 with the detailed island loaded, the first player shutter fired
 at tick 152. The print arrived while the world continued to tick 163. After
 panning, the second composition was exposed while the menu held tick 169.
 Browsing older and newer prints left that tick unchanged; playing again reached
-tick 184. A fresh process loaded the existing world and reopened both local
+tick 183 on the final replay (184 on the preceding one). A fresh process loaded the existing world and reopened both local
 photographs without making a third. Both PNGs contain scene detail and differ
 after the pan. Human first-play evaluation remains open.
 
