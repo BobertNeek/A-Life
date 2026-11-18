@@ -30,6 +30,31 @@ main-menu buttons. Keep screen-reader labels, keep touched code clean, and leave
 brains, training, learning, weights and biochemistry alone. A ripe bed is not
 evidence that its fruit was eaten.
 
+## In the nursery
+
+![The brackets mark the older ripe bed. The second, younger bed is southeast of it.](media/garden-survey/ripe-plot.png)
+
+The RTX 3050 route planted at (84, 251), waited for real fruit, then planted a
+second bed at (85, 252). The two beds appeared at tick 467 as ripe and seed.
+Both arrow navigation and pressing the fruit mark with the pointer changed
+which bed the lens showed; neither changed the paused tick or moved the Hand.
+Visiting the older bed resumed play. A separate harvest gesture produced one
+physical food object, ID **8**. The next trip returned to the younger bed at
+tick 504. This records a harvest, not a meal or an identified eater.
+
+![Back in the world after harvesting the older bed: two rain bowls and the loose food it produced.](media/garden-survey/first-harvest.png)
+
+A second run confirmed the save path too. The first, flawed check exited when
+the pre-existing seed file was present, before the manual checkpoint finished
+publishing. The route now waits for the checkpoint receipt and verifies the
+canonical file contains both beds and the picked fruit. A fresh process opened
+that published tick **516**, found both beds, visited (85, 252), and resumed to
+tick **542**. It did not plant either bed again.
+
+Both images are unretouched game frames, not the Blender specimen assets.
+This test uses the actual player input paths; a human first-play comprehension
+study is still open.
+
 ## Reproduction
 
 - `blender --background --python scripts/render_garden_specimens.py` makes the four original specimen plates directly from the game's garden GLBs.

@@ -43,17 +43,26 @@ fn main() {
             .unwrap()
             .as_secs()
     });
+    std::fs::create_dir_all(&base).unwrap();
+    let base = std::fs::canonicalize(base).unwrap();
     let out = base.join(stamp.to_string());
     if restore.is_none() {
         std::fs::create_dir_all(&out).unwrap();
     }
     let out = std::fs::canonicalize(out).unwrap();
+    assert!(
+        out.starts_with(&base),
+        "only isolated playtest saves may be loaded"
+    );
     let mut launch =
         ProductionVoxelLaunchConfig::default_from_manifest(default_environment_manifest_path())
             .unwrap();
     if restore.is_some() {
         launch.world_source = ProductionWorldSource::LoadExisting;
-        launch.app_launch.save_path = out.join("phase3-new-game-1643.json");
+        let saved = std::fs::canonicalize(out.join("phase3-new-game-1643.json")).unwrap();
+        assert!(saved.starts_with(&out));
+        launch.app_launch.save_path = saved;
+        launch.population = None;
     } else {
         launch.world_source = ProductionWorldSource::NewGame { seed: 1643 };
         launch.population = Some(1);
@@ -74,6 +83,7 @@ fn main() {
     let mut first = None::<VoxelTileCoord>;
     let mut second = None;
     let mut paused_tick = 0;
+    let mut save_tick = 0;
     let mut foods = BTreeSet::new();
     let passed = Arc::new(AtomicBool::new(false));
     let observed = passed.clone();
@@ -291,11 +301,27 @@ fn main() {
                 }
                 14 if current == second => {
                     shot("returned");
+                    save_tick = tick;
                     key(KeyCode::KeyS);
                     phase = 15;
                     next = now + 5.;
                 }
-                15 if out.join("phase3-new-game-1643.json").is_file() => {
+                15 if ux.gpu_runtime_state.last_safe_checkpoint.world_tick.raw() >= save_tick => {
+                    // A seed save already exists. The async publication, not the mere
+                    // presence of that file or a staged generation, completes a save.
+                    let save = alife_world::PortableSaveFile::from_json_file(
+                        out.join("phase3-new-game-1643.json"),
+                    )
+                    .unwrap();
+                    assert!(save.world.tick.raw() >= save_tick);
+                    assert_eq!(save.world.ecology.orchard_beds.len(), 2);
+                    assert!(save
+                        .world
+                        .ecology
+                        .orchard_beds
+                        .iter()
+                        .any(|b| Some(b.tile) == first && b.last_fruit.is_some()));
+                    writeln!(log, "published save at {}", save.world.tick.raw()).unwrap();
                     observed.store(true, Ordering::Relaxed);
                     exit.write(AppExit::Success);
                     phase = 99;
