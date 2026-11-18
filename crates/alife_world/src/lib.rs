@@ -10,6 +10,7 @@ pub mod grounded_sensing;
 pub mod habitat;
 pub mod headless;
 pub mod new_game;
+pub mod orchard;
 pub mod organism;
 pub mod persistence;
 pub mod persistent_voxel;

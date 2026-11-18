@@ -78,6 +78,7 @@ mod live_creature_projection;
 mod live_food_projection;
 mod live_sleep_feedback;
 pub(crate) mod menu;
+mod orchard;
 #[cfg(feature = "gpu-runtime")]
 mod performance_receipt;
 #[cfg(feature = "gpu-runtime")]
@@ -2011,6 +2012,24 @@ pub fn spawn_fvr03_production_voxel_scene(
             .before(bevy::transform::TransformSystems::Propagate),
     );
     graphics_capture::install(app);
+    #[cfg(feature = "gpu-runtime")]
+    app.add_systems(
+        Update,
+        orchard::fx::frame_patch
+            .after(sync_fvr04_camera_follow)
+            .before(island::constrain_camera)
+            .in_set(ProductionVoxelPresentationSet::RootReaders),
+    );
+    #[cfg(feature = "gpu-runtime")]
+    app.add_systems(
+        Update,
+        (
+            orchard::sync_plants,
+            orchard::fx::project,
+            orchard::fx::drift,
+        )
+            .in_set(ProductionVoxelPresentationSet::AuthoritativeProjection),
+    );
     app.add_systems(
         Update,
         (
@@ -2029,6 +2048,7 @@ pub fn spawn_fvr03_production_voxel_scene(
                 .run_if(menu::world_input_allowed)
                 .run_if(care_dock::world_input_allowed),
             god_hand::input
+                .run_if(orchard::ordinary_hand)
                 .before(handle_fvr05_production_ux_input)
                 .after(menu::handle_input)
                 .run_if(menu::world_input_allowed)
@@ -2041,6 +2061,7 @@ pub fn spawn_fvr03_production_voxel_scene(
                 .run_if(menu::world_input_allowed)
                 .run_if(care_dock::world_input_allowed),
             camera_navigation::pan_camera
+                .run_if(orchard::ordinary_hand)
                 .after(handle_fvr03_camera_mode_input)
                 .after(handle_fvr04_camera_follow_input)
                 .before(handle_fvr05_production_ux_input)

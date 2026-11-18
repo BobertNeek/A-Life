@@ -121,6 +121,17 @@ impl FirstGesture {
 #[derive(Resource, Default)]
 pub(crate) struct State {
     pending: Option<Action>,
+    garden_pending: bool,
+    pub(super) garden_armed: bool,
+    pub(super) garden_pointer: bool,
+    garden_last_cursor: Option<Vec2>,
+    #[cfg(feature = "gpu-runtime")]
+    pub(super) garden_cursor: Option<VoxelTileCoord>,
+    pub(super) garden_ground_click: bool,
+    #[cfg(feature = "gpu-runtime")]
+    pub(super) garden_focus: Option<VoxelTileCoord>,
+    #[cfg(feature = "gpu-runtime")]
+    pub(super) garden_effect: Option<(VoxelTileCoord, alife_world::orchard::OrchardReceipt)>,
     invitation: FirstGesture,
     captured: bool,
     release_gate: bool,
@@ -133,6 +144,10 @@ pub(crate) struct State {
 impl State {
     pub(super) fn recall_invitation(&mut self) {
         self.invitation.recall();
+    }
+    #[cfg(feature = "gpu-runtime")]
+    pub(super) fn take_garden(&mut self) -> bool {
+        std::mem::take(&mut self.garden_pending)
     }
     pub(super) fn take_pending(&mut self) -> Option<Action> {
         self.pending.take()
@@ -151,6 +166,9 @@ impl State {
     }
     pub(super) fn reset(&mut self) {
         self.pending = None;
+        self.garden_pending = false;
+        self.garden_armed = false;
+        self.garden_ground_click = false;
         self.evidence = [Evidence::None; 7];
         self.selected = None;
     }
@@ -406,6 +424,7 @@ pub(super) fn spawn(world: &mut World) {
         FocusPolicy::Pass,
         ChildOf(root),
     ));
+    super::orchard::spawn_tool(world, root);
     super::live_care_feedback::prepare_art(world, &icons);
     world.insert_resource(Icons(icons));
 }
@@ -436,10 +455,26 @@ pub(crate) fn collect_input(world: &mut World) {
     for (action, interaction) in world.query::<(&Action, &Interaction)>().iter(world) {
         pressed[action.index()] = *interaction == Interaction::Pressed;
     }
+    let garden = world
+        .query_filtered::<(Entity, &Interaction, &Visibility), With<super::orchard::GardenTool>>()
+        .iter(world)
+        .find(|(_, _, v)| **v != Visibility::Hidden)
+        .map(|(e, i, _)| (e, *i));
+    let pointer = pointer || garden.is_some_and(|(_, i)| i != Interaction::None);
+    let garden_press = garden.is_some_and(|(_, i)| i == Interaction::Pressed)
+        && world
+            .resource::<ButtonInput<MouseButton>>()
+            .just_pressed(MouseButton::Left);
     let state = world.resource::<State>();
+    let garden_press = garden_press && !state.release_gate;
     let click = ACTIONS.into_iter().find(|a| {
         left_down && !state.release_gate && pressed[a.index()] && !state.pressed[a.index()]
     });
+    let cursor = world
+        .query_filtered::<&Window, With<PrimaryWindow>>()
+        .iter(world)
+        .next()
+        .and_then(Window::cursor_position);
     let focused = world
         .query_filtered::<&Window, With<PrimaryWindow>>()
         .iter(world)
@@ -453,43 +488,69 @@ pub(crate) fn collect_input(world: &mut World) {
         .iter(world)
         .map(|(entity, action)| (entity.to_bits(), *action))
         .collect::<Vec<_>>();
-    let accessible_click = world.resource_scope(|world, mut state: Mut<State>| {
-        let mut action = None;
-        if let Some(messages) = world.get_resource::<bevy::ecs::message::Messages<ActionRequest>>()
-        {
-            for request in state.accessible_reader.read(messages) {
-                if !blocked && request.0.action == AccessibleAction::Click {
-                    action = controls
-                        .iter()
-                        .find_map(|(entity, action)| {
-                            (*entity == request.0.target.0).then_some(*action)
-                        })
-                        .or(action);
+    let (accessible_click, accessible_garden) =
+        world.resource_scope(|world, mut state: Mut<State>| {
+            let mut action = None;
+            let mut garden_click = false;
+            if let Some(messages) =
+                world.get_resource::<bevy::ecs::message::Messages<ActionRequest>>()
+            {
+                for request in state.accessible_reader.read(messages) {
+                    if !blocked && request.0.action == AccessibleAction::Click {
+                        garden_click |=
+                            garden.is_some_and(|(e, _)| e.to_bits() == request.0.target.0);
+                        action = controls
+                            .iter()
+                            .find_map(|(entity, action)| {
+                                (*entity == request.0.target.0).then_some(*action)
+                            })
+                            .or(action);
+                    }
                 }
             }
-        }
-        action
-    });
+            (action, garden_click)
+        });
     let click = click.or(accessible_click);
+    let ground_click = world
+        .resource::<ButtonInput<MouseButton>>()
+        .just_pressed(MouseButton::Left)
+        && !pointer;
+    let gardening = !blocked && (garden_press || accessible_garden) && click.is_none();
     {
         let mut state = world.resource_mut::<State>();
         state.speech_opened = false;
+        state.garden_pending = gardening;
+        if state.garden_armed
+            && cursor
+                .zip(state.garden_last_cursor)
+                .is_some_and(|(a, b)| a != b)
+        {
+            state.garden_pointer = true;
+        }
+        state.garden_last_cursor = cursor;
+        if blocked || click.is_some() {
+            state.garden_armed = false;
+        }
+        state.garden_ground_click = !blocked && state.garden_armed && ground_click;
+
         state.pressed = pressed;
         if !left_down {
             state.release_gate = false;
         }
-        if !blocked && click.is_some() && left_down {
+        if !blocked && (click.is_some() || gardening) && left_down {
             state.release_gate = true;
         }
-        state.captured =
-            (!blocked && (pointer || accessible_click.is_some())) || state.release_gate;
+        state.captured = (!blocked && (pointer || accessible_click.is_some() || gardening))
+            || state.release_gate;
         if !blocked {
             state.pending = click.filter(|a| *a != Action::Speech);
         } else {
             state.pending = None;
         }
     }
-    if !blocked && (pointer || click.is_some() || world.resource::<State>().release_gate) {
+    if !blocked
+        && (pointer || click.is_some() || gardening || world.resource::<State>().release_gate)
+    {
         god_hand::cancel_for_menu(world);
     }
     if !blocked && click == Some(Action::Speech) {
@@ -990,6 +1051,7 @@ pub(super) fn sync(world: &mut World) {
         }
     }
     apply_feedback(world, availability, evidence, error);
+    super::orchard::sync_tool(world, selected, debug);
 }
 fn apply_feedback(
     world: &mut World,

@@ -814,6 +814,94 @@
       "size_bytes": 71876,
       "source": "generated:care-keepsakes",
       "usage_category": "environment-dressing"
+    },
+    {
+      "asset_id": "lantern-pear-seed",
+      "author": "Qualia art",
+      "digest": "fnv1a64:473831a3477ffa69",
+      "external": false,
+      "final_art": false,
+      "generated": true,
+      "generator": {
+        "config_path": "scripts/build_lantern_orchard.py",
+        "date": "2026-11-18",
+        "seed": "seed",
+        "tool": "Blender-5.2.1 LTS"
+      },
+      "license": "A-Life-Generated-Source",
+      "license_ref": "README.md",
+      "local_path": "crates/alife_game_app/assets/care/orchard/seed.glb",
+      "placeholder": false,
+      "replacement_policy": "edit-blender-source-and-refresh-manifest",
+      "size_bytes": 27620,
+      "source": "generated:lantern-orchard",
+      "usage_category": "environment-dressing"
+    },
+    {
+      "asset_id": "lantern-pear-bud",
+      "author": "Qualia art",
+      "digest": "fnv1a64:8a3e8cdace6e6617",
+      "external": false,
+      "final_art": false,
+      "generated": true,
+      "generator": {
+        "config_path": "scripts/build_lantern_orchard.py",
+        "date": "2026-11-18",
+        "seed": "bud",
+        "tool": "Blender-5.2.1 LTS"
+      },
+      "license": "A-Life-Generated-Source",
+      "license_ref": "README.md",
+      "local_path": "crates/alife_game_app/assets/care/orchard/bud.glb",
+      "placeholder": false,
+      "replacement_policy": "edit-blender-source-and-refresh-manifest",
+      "size_bytes": 29064,
+      "source": "generated:lantern-orchard",
+      "usage_category": "environment-dressing"
+    },
+    {
+      "asset_id": "lantern-pear-bloom",
+      "author": "Qualia art",
+      "digest": "fnv1a64:b9312d6a6fd32bfc",
+      "external": false,
+      "final_art": false,
+      "generated": true,
+      "generator": {
+        "config_path": "scripts/build_lantern_orchard.py",
+        "date": "2026-11-18",
+        "seed": "bloom",
+        "tool": "Blender-5.2.1 LTS"
+      },
+      "license": "A-Life-Generated-Source",
+      "license_ref": "README.md",
+      "local_path": "crates/alife_game_app/assets/care/orchard/bloom.glb",
+      "placeholder": false,
+      "replacement_policy": "edit-blender-source-and-refresh-manifest",
+      "size_bytes": 67268,
+      "source": "generated:lantern-orchard",
+      "usage_category": "environment-dressing"
+    },
+    {
+      "asset_id": "lantern-pear-ripe",
+      "author": "Qualia art",
+      "digest": "fnv1a64:59003c08ce0ed7f2",
+      "external": false,
+      "final_art": false,
+      "generated": true,
+      "generator": {
+        "config_path": "scripts/build_lantern_orchard.py",
+        "date": "2026-11-18",
+        "seed": "ripe",
+        "tool": "Blender-5.2.1 LTS"
+      },
+      "license": "A-Life-Generated-Source",
+      "license_ref": "README.md",
+      "local_path": "crates/alife_game_app/assets/care/orchard/ripe.glb",
+      "placeholder": false,
+      "replacement_policy": "edit-blender-source-and-refresh-manifest",
+      "size_bytes": 69572,
+      "source": "generated:lantern-orchard",
+      "usage_category": "environment-dressing"
     }
   ],
   "pack_id": "production-voxel-v1",

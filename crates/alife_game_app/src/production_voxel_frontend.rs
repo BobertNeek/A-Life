@@ -842,7 +842,8 @@ fn fvr06_gpu_runtime_save_state(
             hot_slots: budget.hot_brain_slots,
             warm_slots: budget.warm_brain_slots,
             cold_slots: budget.cold_brain_slots,
-            max_creatures: launch.effective_population(),
+            // This describes allocation capacity, not the number of living residents.
+            max_creatures: launch.effective_population().max(1),
         }],
         active_profile_caps: GpuRuntimeActiveProfileCaps {
             target_fps: budget.target_fps,
@@ -939,8 +940,9 @@ pub fn run_production_voxel_frontend_preflight(
         });
     }
     let budget = launch.profile_id.budget();
-    let population = launch.effective_population();
-    if population == 0 {
+    let save = PortableSaveFile::from_json_file(&launch.app_launch.save_path)?;
+    let population = launch_population(launch, &save)?;
+    if population == 0 && matches!(launch.world_source, ProductionWorldSource::NewGame { .. }) {
         return Err(GameAppShellError::InvalidProductionFrontend {
             message: "production population must be nonzero".to_string(),
         });
@@ -986,7 +988,6 @@ pub fn run_production_voxel_frontend_preflight(
     let production_assets = validate_production_assets(&production_asset_manifest_path)?;
     trace.transition(ProductionAppState::LoadAssets)?;
 
-    let save = PortableSaveFile::from_json_file(&launch.app_launch.save_path)?;
     let (config, production_save, gpu_runtime_state) = match launch.world_source {
         ProductionWorldSource::LoadExisting => {
             let production_save = production_voxel_save_with_population(
@@ -1183,14 +1184,9 @@ pub(crate) fn production_voxel_save_with_population(
     profile_id: ProductionFrontendProfileId,
     target_population: u16,
 ) -> Result<PortableSaveFile, GameAppShellError> {
-    if target_population == 0 {
-        return Err(GameAppShellError::InvalidProductionFrontend {
-            message: "production population must be nonzero".to_string(),
-        });
-    }
     save.validate_with_asset_root(asset_root)?;
     let mut production_save = save.clone();
-    apply_production_population_target(&mut production_save, usize::from(target_population))?;
+    validate_production_population_target(&production_save, usize::from(target_population))?;
     if production_save.world.organism_records.is_none() {
         return Err(GameAppShellError::InvalidProductionFrontend {
             message: "production save is missing canonical organism records; frontend synthesis is prohibited"
@@ -1204,22 +1200,38 @@ pub(crate) fn production_voxel_save_with_population(
     Ok(production_save)
 }
 
-fn apply_production_population_target(
-    save: &mut PortableSaveFile,
-    target_population: usize,
-) -> Result<(), GameAppShellError> {
-    let agent_count = save
-        .world
+/// Unqualified Load opens the roster that actually exists. An explicit target is
+/// still checked against the save; neither path creates or removes a resident.
+fn launch_population(
+    launch: &ProductionVoxelLaunchConfig,
+    save: &PortableSaveFile,
+) -> Result<u16, GameAppShellError> {
+    if matches!(launch.world_source, ProductionWorldSource::LoadExisting)
+        && launch.population.is_none()
+    {
+        u16::try_from(saved_residents(save)).map_err(|_| {
+            GameAppShellError::InvalidProductionFrontend {
+                message: "saved population exceeds all production profiles".into(),
+            }
+        })
+    } else {
+        Ok(launch.effective_population())
+    }
+}
+
+fn saved_residents(save: &PortableSaveFile) -> usize {
+    save.world
         .objects
         .iter()
         .filter(|object| object.kind == WorldObjectKind::Agent)
-        .count();
-    if agent_count == 0 {
-        return Err(GameAppShellError::InvalidProductionFrontend {
-            message: "production save must contain at least one real creature agent".to_string(),
-        });
-    }
+        .count()
+}
 
+fn validate_production_population_target(
+    save: &PortableSaveFile,
+    target_population: usize,
+) -> Result<(), GameAppShellError> {
+    let agent_count = saved_residents(save);
     if target_population != agent_count {
         return Err(GameAppShellError::InvalidProductionFrontend {
             message: format!(
@@ -1990,6 +2002,30 @@ mod tests {
                 record.phenotype().brain_genome.brain_class_id
             );
         }
+    }
+
+    #[test]
+    fn a_saved_sanctuary_can_be_empty_without_synthesizing_or_deleting_residents() {
+        let root = production_fixture_root();
+        let empty = crate::tests::fixtures::current_scene_save(&root, 0);
+        let occupied = crate::tests::fixtures::current_scene_save(&root, 1);
+        let profile = ProductionFrontendProfileId::MinimumSettings30x30;
+        let restored = production_voxel_save_with_population(&empty, &root, profile, 0).unwrap();
+        assert_eq!(restored.world.objects, empty.world.objects);
+        assert!(restored.creatures.is_empty());
+        assert!(restored
+            .require_voxel_backend()
+            .unwrap()
+            .creature_anchors
+            .is_empty());
+        assert!(production_voxel_save_with_population(&occupied, &root, profile, 0).is_err());
+        assert!(production_voxel_save_with_population(&empty, &root, profile, 1).is_err());
+        let (_fixture, mut launch) = fvr05_test_launch();
+        launch.population = None;
+        assert_eq!(launch_population(&launch, &empty).unwrap(), 0);
+        assert_eq!(launch_population(&launch, &occupied).unwrap(), 1);
+        launch.world_source = ProductionWorldSource::NewGame { seed: 1 };
+        assert_ne!(launch_population(&launch, &empty).unwrap(), 0);
     }
 
     #[test]

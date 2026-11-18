@@ -8,6 +8,7 @@ mod autonomous_critters;
 mod awake_translation;
 mod contact_withdrawal;
 mod grounded_path;
+mod orchard;
 mod translation_endpoint;
 pub use awake_translation::{
     AwakeTranslationIntervalReceipt, TranslationTimeMetric, VoluntaryTimeProvenance,
@@ -3385,6 +3386,13 @@ impl HeadlessWorld {
         ecology: EcologyState,
     ) -> Result<(), ScaffoldContractError> {
         ecology.validate()?;
+        if ecology
+            .orchard_beds
+            .iter()
+            .any(|bed| bed.cycle_started.raw() > self.tick.raw())
+        {
+            return Err(ScaffoldContractError::InvalidId);
+        }
         for resource in &ecology.resources {
             let Some(object) = self.objects.get(&resource.object_id.raw()) else {
                 return Err(ScaffoldContractError::InvalidId);
@@ -4548,6 +4556,14 @@ impl HeadlessWorld {
             }
         }
         state.ecology.validate()?;
+        if state
+            .ecology
+            .orchard_beds
+            .iter()
+            .any(|b| b.cycle_started.raw() > state.tick.raw())
+        {
+            return Err(ScaffoldContractError::InvalidId);
+        }
         for c in &state.ecology.autonomous_critters {
             let o = objects
                 .get(&c.object_id.raw())

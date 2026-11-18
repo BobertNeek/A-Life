@@ -33,7 +33,8 @@ pub(super) fn handle_fvr05_production_ux_input(
     #[cfg(feature = "gpu-runtime")] conversation: Option<
         Res<crate::ProductionConversationLineageUiState>,
     >,
-    selection: Res<Fvr03ProductionVoxelSelectionResource>,
+    #[cfg(feature = "gpu-runtime")] mut selection: ResMut<Fvr03ProductionVoxelSelectionResource>,
+    #[cfg(not(feature = "gpu-runtime"))] selection: Res<Fvr03ProductionVoxelSelectionResource>,
     mut follow: ResMut<Fvr04ProductionCreatureFollowResource>,
     #[cfg(feature = "gpu-runtime")] mut frame: ResMut<LiveBrainPresentationFrameResource>,
     mut ux: ResMut<Fvr05ProductionUxStateResource>,
@@ -261,6 +262,18 @@ pub(super) fn handle_fvr05_production_ux_input(
                 false,
             );
         }
+    }
+    #[cfg(feature = "gpu-runtime")]
+    if !ux.debug_mode {
+        orchard::drive(
+            &keyboard,
+            &mut selection,
+            &mut follow,
+            &mut dock,
+            gpu_runtime.as_deref_mut().map(|r| &mut r.runtime),
+            &mut frame,
+            &mut ux,
+        );
     }
     dock.observe_selection(selection.selected);
     let pointer_action = dock.take_pending();
