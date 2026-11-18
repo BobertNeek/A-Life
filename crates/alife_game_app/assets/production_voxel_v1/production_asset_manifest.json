@@ -704,6 +704,116 @@
       "size_bytes": 409064,
       "source": "generated:approved-blender-model",
       "usage_category": "environment-dressing"
+    },
+    {
+      "asset_id": "care-chime-table",
+      "author": "Qualia art",
+      "digest": "fnv1a64:e87b1fcbda26aa62",
+      "external": false,
+      "final_art": false,
+      "generated": true,
+      "generator": {
+        "config_path": "scripts/build_care_keepsakes.py",
+        "date": "2026-11-18",
+        "seed": "chime-table",
+        "tool": "Blender-5.2.1 LTS"
+      },
+      "license": "A-Life-Generated-Source",
+      "license_ref": "README.md",
+      "local_path": "crates/alife_game_app/assets/care/chime-table.glb",
+      "placeholder": false,
+      "replacement_policy": "edit-blender-source-and-refresh-manifest",
+      "size_bytes": 179736,
+      "source": "generated:care-keepsakes",
+      "usage_category": "environment-dressing"
+    },
+    {
+      "asset_id": "care-orbital-rattle",
+      "author": "Qualia art",
+      "digest": "fnv1a64:d0d6eeac05c332c7",
+      "external": false,
+      "final_art": false,
+      "generated": true,
+      "generator": {
+        "config_path": "scripts/build_care_keepsakes.py",
+        "date": "2026-11-18",
+        "seed": "orbital-rattle",
+        "tool": "Blender-5.2.1 LTS"
+      },
+      "license": "A-Life-Generated-Source",
+      "license_ref": "README.md",
+      "local_path": "crates/alife_game_app/assets/care/orbital-rattle.glb",
+      "placeholder": false,
+      "replacement_policy": "edit-blender-source-and-refresh-manifest",
+      "size_bytes": 135068,
+      "source": "generated:care-keepsakes",
+      "usage_category": "environment-dressing"
+    },
+    {
+      "asset_id": "care-orchard-fruit",
+      "author": "Qualia art",
+      "digest": "fnv1a64:9bdb5547536fd073",
+      "external": false,
+      "final_art": false,
+      "generated": true,
+      "generator": {
+        "config_path": "scripts/build_care_keepsakes.py",
+        "date": "2026-11-18",
+        "seed": "orchard-fruit",
+        "tool": "Blender-5.2.1 LTS"
+      },
+      "license": "A-Life-Generated-Source",
+      "license_ref": "README.md",
+      "local_path": "crates/alife_game_app/assets/care/orchard-fruit.glb",
+      "placeholder": false,
+      "replacement_policy": "edit-blender-source-and-refresh-manifest",
+      "size_bytes": 119644,
+      "source": "generated:care-keepsakes",
+      "usage_category": "environment-dressing"
+    },
+    {
+      "asset_id": "care-ceramic-waystone",
+      "author": "Qualia art",
+      "digest": "fnv1a64:61376a0d05de3e47",
+      "external": false,
+      "final_art": false,
+      "generated": true,
+      "generator": {
+        "config_path": "scripts/build_care_keepsakes.py",
+        "date": "2026-11-18",
+        "seed": "ceramic-waystone",
+        "tool": "Blender-5.2.1 LTS"
+      },
+      "license": "A-Life-Generated-Source",
+      "license_ref": "README.md",
+      "local_path": "crates/alife_game_app/assets/care/ceramic-waystone.glb",
+      "placeholder": false,
+      "replacement_policy": "edit-blender-source-and-refresh-manifest",
+      "size_bytes": 34964,
+      "source": "generated:care-keepsakes",
+      "usage_category": "environment-dressing"
+    },
+    {
+      "asset_id": "care-silverbell",
+      "author": "Qualia art",
+      "digest": "fnv1a64:f9d644fbbfdaaff8",
+      "external": false,
+      "final_art": false,
+      "generated": true,
+      "generator": {
+        "config_path": "scripts/build_care_keepsakes.py",
+        "date": "2026-11-18",
+        "seed": "silverbell",
+        "tool": "Blender-5.2.1 LTS"
+      },
+      "license": "A-Life-Generated-Source",
+      "license_ref": "README.md",
+      "local_path": "crates/alife_game_app/assets/care/silverbell.glb",
+      "placeholder": false,
+      "replacement_policy": "edit-blender-source-and-refresh-manifest",
+      "size_bytes": 71876,
+      "source": "generated:care-keepsakes",
+      "usage_category": "environment-dressing"
     }
   ],
   "pack_id": "production-voxel-v1",

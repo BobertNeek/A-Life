@@ -8,8 +8,8 @@ use alife_core::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    HabitatId, HabitatMode, HeadlessWorld, OrganismLifecycle, PlayerCareReceipt, WorldObject,
-    WorldObjectKind,
+    HabitatId, HabitatMode, HeadlessWorld, OrganismLifecycle, PlayerCareReceipt, PlayerFamiliarity,
+    WorldObject, WorldObjectKind,
 };
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -80,6 +80,13 @@ pub struct WorldOrganismPresentationRow {
     /// Last player-care dose this organism actually felt, if any. Unknown
     /// when no queued touch or praise has been applied to it yet.
     pub last_player_care: PresentationEvidence<PlayerCareReceipt>,
+    /// The creature's disposition toward the player, if it has any
+    /// interaction history. Unknown when no applied care has been
+    /// recorded for it yet — a fresh creature reads as unknown, never
+    /// as hostile or trusting. The observed value is decayed to the
+    /// snapshot tick; the tick is the last interaction, not the
+    /// observation time.
+    pub familiarity: PresentationEvidence<PlayerFamiliarity>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -131,6 +138,13 @@ impl HeadlessWorld {
                         |receipt| PresentationEvidence::Observed {
                             value: receipt,
                             tick: receipt.applied_tick,
+                        },
+                    ),
+                    familiarity: self.last_player_familiarity(record.organism_id()).map_or(
+                        PresentationEvidence::Unknown,
+                        |familiarity| PresentationEvidence::Observed {
+                            value: familiarity.at_tick(self.tick()),
+                            tick: familiarity.last_interaction_tick,
                         },
                     ),
                 })

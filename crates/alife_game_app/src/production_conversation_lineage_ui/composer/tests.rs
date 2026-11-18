@@ -190,6 +190,28 @@ fn wordless_controls_stay_fixed_above_long_drafts_at_four_viewports_and_error_gu
 }
 
 #[test]
+fn pictograms_compose_real_tokens_and_respect_the_draft_limit() {
+    let mut draft = state();
+    draft.prepare_typed_speech_fixture("");
+    let keys = ButtonInput::default();
+    for word in [Word::Look, Word::Eat] {
+        assert!(!apply_controls(
+            &mut draft,
+            &keys,
+            Some(Control::Word(word))
+        ));
+    }
+    assert_eq!(draft.input, "look eat");
+    draft.input = "x".repeat(MAX_TYPED_CHARS - 4);
+    apply_controls(&mut draft, &keys, Some(Control::Word(Word::Eat)));
+    assert!(draft.input.ends_with(" eat"));
+    assert_eq!(draft.input.len(), MAX_TYPED_CHARS);
+    let before = draft.input.clone();
+    apply_controls(&mut draft, &keys, Some(Control::Word(Word::Rest)));
+    assert_eq!(draft.input, before);
+}
+
+#[test]
 fn keyboard_and_pointer_controls_preserve_addressing_and_cancel_wins() {
     let mut state = state();
     state.prepare_typed_speech_fixture("Ada, come here é猫");

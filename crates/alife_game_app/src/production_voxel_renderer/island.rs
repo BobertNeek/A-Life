@@ -22,6 +22,7 @@ pub(super) struct IslandAssets {
     props: BTreeMap<String, Handle<Gltf>>,
     surface: std::sync::Arc<alife_world::TerrainSurface>,
     spawned: bool,
+    bootstrap_ground: Option<Entity>,
     next_update: f64,
 }
 #[derive(Component)]
@@ -192,6 +193,15 @@ pub(super) fn start(world: &mut World) {
             .entry(p.kind.clone())
             .or_insert_with(|| server.load(format!("landscape/island/{}.glb", p.kind)));
     }
+    let [silverbell, waystone] = ["care/silverbell.glb", "care/ceramic-waystone.glb"].map(|path| {
+        server.load(
+            bevy::gltf::GltfAssetLabel::Primitive {
+                mesh: 0,
+                primitive: 0,
+            }
+            .from_asset(path),
+        )
+    });
     let terrain = server.load("landscape/island/terrain-chunks.glb");
     let size = Vec2::splat(10000.0);
     let center = Vec3::new(
@@ -199,13 +209,35 @@ pub(super) fn start(world: &mut World) {
         0.0,
         surface.origin_z + (surface.depth - 1) as f32 * surface.spacing * 0.5,
     );
+    let bootstrap_mesh = world
+        .resource_mut::<Assets<Mesh>>()
+        .add(bootstrap_surface(&surface));
+    let bootstrap_material =
+        world
+            .resource_mut::<Assets<StandardMaterial>>()
+            .add(StandardMaterial {
+                perceptual_roughness: 1.0,
+                ..default()
+            });
+    let bootstrap_ground = world
+        .spawn((
+            Name::new("Island while detailed terrain streams"),
+            Mesh3d(bootstrap_mesh),
+            MeshMaterial3d(bootstrap_material),
+            NotShadowCaster,
+            bevy::picking::Pickable::IGNORE,
+            Fvr04ProductionRuntimeSceneRoot,
+        ))
+        .id();
     world.insert_resource(IslandAssets {
         terrain,
         props: handles,
         surface: surface.clone(),
         spawned: false,
+        bootstrap_ground: Some(bootstrap_ground),
         next_update: 0.0,
     });
+    plant_nursery(world, &surface, silverbell, waystone);
     let (mesh, mut material, images) = terrain_water::island_water(&surface, size, center);
     let [shore, ripple] = images.map(|image| world.resource_mut::<Assets<Image>>().add(image));
     material.base_color_texture = Some(shore);
@@ -223,6 +255,114 @@ pub(super) fn start(world: &mut World) {
         Fvr04ProductionRuntimeSceneRoot,
     ));
 }
+/// The real island is immediately visible, even while the authored glTF is
+/// streaming. The coarse mesh samples the same immutable heightfield and never
+/// participates in picking, collision, or the simulation.
+fn bootstrap_surface(surface: &alife_world::TerrainSurface) -> Mesh {
+    let samples = |count| {
+        (0..count - 1)
+            .step_by(4)
+            .chain(std::iter::once(count - 1))
+            .collect::<Vec<usize>>()
+    };
+    let xs = samples(surface.width);
+    let zs = samples(surface.depth);
+    let mut positions = Vec::with_capacity(xs.len() * zs.len());
+    let mut colors = Vec::with_capacity(positions.capacity());
+    let mut indices = Vec::with_capacity((xs.len() - 1) * (zs.len() - 1) * 6);
+    for (j, &z) in zs.iter().enumerate() {
+        for (i, &x) in xs.iter().enumerate() {
+            let wx = surface.origin_x + x as f32 * surface.spacing;
+            let wz = surface.origin_z + z as f32 * surface.spacing;
+            let h = surface.height(wx, wz).unwrap_or(0.0);
+            positions.push([wx, h, wz]);
+            let grass = ((h - 1.0) / 2.5).clamp(0., 1.);
+            let grain = (wx * 0.23 + wz * 0.41).sin() * 0.014;
+            colors.push([
+                0.46 - 0.23 * grass + grain,
+                0.40 - 0.085 * grass + grain,
+                0.26 - 0.12 * grass + grain,
+                1.0,
+            ]);
+            if i + 1 < xs.len() && j + 1 < zs.len() {
+                let a = positions.len() as u32 - 1;
+                let b = a + xs.len() as u32;
+                indices.extend_from_slice(&[a, b, a + 1, a + 1, b, b + 1]);
+            }
+        }
+    }
+    let mut mesh = Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::default(),
+    );
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors);
+    mesh.insert_indices(Indices::U32(indices));
+    mesh.compute_smooth_normals();
+    mesh
+}
+
+/// A fixed clearing at the island's nursery, never decoration that follows a creature.
+/// Keep the middle open for the Hand. Low groundcover has no interaction or collision.
+fn plant_nursery(
+    world: &mut World,
+    surface: &alife_world::TerrainSurface,
+    flowers: Handle<Mesh>,
+    stones: Handle<Mesh>,
+) {
+    let material = world
+        .resource_mut::<Assets<StandardMaterial>>()
+        .add(StandardMaterial {
+            perceptual_roughness: 0.86,
+            ..default()
+        });
+    let mut plant = |mesh: &Handle<Mesh>, x: f32, z: f32, yaw: f32, size: f32| {
+        let Some(y) = surface.height(x, z) else {
+            return;
+        };
+        world.spawn((
+            Name::new("Nursery groundcover"),
+            Mesh3d(mesh.clone()),
+            MeshMaterial3d(material.clone()),
+            Transform::from_xyz(x, y, z)
+                .with_rotation(Quat::from_rotation_y(yaw))
+                .with_scale(Vec3::splat(size)),
+            bevy::picking::Pickable::IGNORE,
+            Fvr04ProductionRuntimeSceneRoot,
+        ));
+    };
+    // Three irregular drifts, not a fence: each opens onto the original island.
+    for (cx, cz, length, turn) in [
+        (-2.8, -1.8, 5, 0.22),
+        (3.4, 1.8, 6, 2.31),
+        (-0.9, 4.3, 4, 4.45),
+    ] {
+        for j in 0..length {
+            let t = j as f32;
+            let a = turn + t * 2.39996;
+            let reach = 0.51 * t.sqrt();
+            plant(
+                &flowers,
+                83.0 + cx + reach * a.cos(),
+                250.0 + cz + reach * a.sin(),
+                a,
+                0.75 + 0.20 * (t + turn).cos(),
+            );
+        }
+    }
+    for (x, z, angle, size) in [
+        (-3.3, 0.2, 0.3, 0.94),
+        (-2.8, 0.8, 1.9, 0.66),
+        (-2.4, 1.5, 2.3, 0.9),
+        (-1.9, 2.3, 0.5, 1.07),
+        (-1.1, 3.1, 2.0, 0.83),
+        (1.6, -2.3, 1.7, 1.08),
+        (2.4, -2.9, 0.1, 0.83),
+    ] {
+        plant(&stones, 83.0 + x, 250.0 + z, angle, size);
+    }
+}
+
 pub(super) fn view_height(projection: &Projection) -> f32 {
     match projection {
         Projection::Orthographic(p) => match p.scaling_mode {
@@ -368,6 +508,9 @@ pub(super) fn update(
             }
         }
         info!("Island loaded: {nx}x{nz} terrain chunks, shared prop meshes, 3 LODs");
+        if let Some(ground) = assets.bootstrap_ground.take() {
+            commands.entity(ground).despawn();
+        }
         assets.spawned = true;
     }
     if time.elapsed_secs_f64() < assets.next_update {
@@ -489,6 +632,29 @@ fn constrain_to_surface(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn bootstrap_ground_spans_the_real_island_and_uses_its_elevation() {
+        let terrain = alife_world::island_terrain();
+        let surface = terrain.surface();
+        let mesh = bootstrap_surface(surface);
+        let bevy::mesh::VertexAttributeValues::Float32x3(points) =
+            mesh.attribute(Mesh::ATTRIBUTE_POSITION).unwrap()
+        else {
+            panic!("positions");
+        };
+        assert!(points.len() < surface.width * surface.depth / 8);
+        assert!(mesh.attribute(Mesh::ATTRIBUTE_NORMAL).is_some());
+        assert_eq!(points[0][0], surface.origin_x);
+        assert_eq!(
+            points.last().unwrap()[2],
+            surface.origin_z + (surface.depth - 1) as f32 * surface.spacing
+        );
+        assert!(points
+            .iter()
+            .all(|&[x, y, z]| (surface.height(x, z).unwrap() - y).abs() < 1e-5));
+        assert_eq!(mesh.indices().unwrap().len() % 3, 0);
+    }
 
     #[test]
     fn corrected_boulder_placements_load_without_regrounding() {

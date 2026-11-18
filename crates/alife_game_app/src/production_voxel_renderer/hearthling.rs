@@ -24,6 +24,12 @@ const CARE_FEEDBACK_SECONDS: f32 = 0.60;
 const CARE_NOD_HEAD: f32 = 0.15;
 const CARE_FLINCH_HEAD: f32 = -0.10;
 const CARE_FLINCH_EAR: f32 = -0.15;
+// A creature that knows the player carries it in its resting pose: head
+// forward and ears up when trusting, head back and ears flat when wary.
+// About half the care pulse, so it reads as carriage rather than a
+// reaction; the pulse still fires on top of it when a dose is felt.
+const FAMILIARITY_HEAD_MAX: f32 = 0.08;
+const FAMILIARITY_EAR_MAX: f32 = 0.08;
 const HUNGRY_EAR_ANGLE: f32 = 0.15;
 const HUNGRY_EAR_BLEND_SECONDS: f32 = 0.25;
 
@@ -233,6 +239,11 @@ pub(super) struct HearthlingVisual {
     walk_seconds: f32,
     moved: bool,
     feedback: OutcomeFeedback,
+    /// Decayed familiarity value from the last frame sync, in [-1, 1].
+    /// `None` means the row carries no record — unknown, so the creature
+    /// stands in its default pose. A standing value, not an event: it is
+    /// re-read every changed frame and never pulses or latches.
+    familiarity: Option<f32>,
     hungry_ears: HungryEars,
     hungry_ears_eligible: bool,
 }
@@ -244,6 +255,7 @@ impl HearthlingVisual {
             "last_emitted_utterance_id": self.feedback.last_utterance_id,
             "last_care_tick": self.feedback.last_care_tick,
             "last_care_kind": self.feedback.last_care_kind.map(|kind| format!("{kind:?}")),
+            "familiarity": self.familiarity,
             "ingestion_remaining_seconds": self.feedback.ingestion_remaining,
             "speech_remaining_seconds": self.feedback.speech_remaining,
             "care_remaining_seconds": self.feedback.care_remaining,
@@ -280,6 +292,7 @@ pub(super) fn spawn(world: &mut World, root: Entity, appearance: CreatureAppeara
             walk_seconds: 0.0,
             moved: false,
             feedback: OutcomeFeedback::default(),
+            familiarity: None,
             hungry_ears: HungryEars::default(),
             hungry_ears_eligible: false,
         },
@@ -372,6 +385,7 @@ fn outcome_rotation(
     sampled: Quat,
     part: ExpressionBone,
     feedback: &OutcomeFeedback,
+    familiarity: Option<f32>,
     animation: CreatureAnimationState,
 ) -> Quat {
     if animation == CreatureAnimationState::Sleeping {
@@ -389,7 +403,19 @@ fn outcome_rotation(
     let ate = pulse(feedback.ingestion_remaining, INGESTION_FEEDBACK_SECONDS);
     let spoke = pulse(feedback.speech_remaining, SPEECH_FEEDBACK_SECONDS);
     let care = pulse(feedback.care_remaining, CARE_FEEDBACK_SECONDS);
-    if ate == 0.0 && spoke == 0.0 && care == 0.0 {
+    // A creature that knows the player carries it in its resting pose:
+    // head forward and ears up when trusting, head back and ears flat
+    // when wary. Unknown means no history, so no offset — a stranger
+    // stands as it stands. The pose is continuous and quiet, about half
+    // the care pulse, so it reads as carriage rather than a reaction. It
+    // composes with the pulse below: a fresh nod on a trusting creature
+    // reads larger, a flinch on a wary one reads deeper, and both are
+    // real signals, so their sum is honest.
+    let (rest_head, rest_ear) = match familiarity {
+        Some(value) => (value * FAMILIARITY_HEAD_MAX, value * FAMILIARITY_EAR_MAX),
+        None => (0.0, 0.0),
+    };
+    if ate == 0.0 && spoke == 0.0 && care == 0.0 && rest_head == 0.0 && rest_ear == 0.0 {
         return sampled;
     }
     // The care pulse's direction is the receipt kind's valence: a nod for
@@ -402,9 +428,12 @@ fn outcome_rotation(
     };
     match part {
         ExpressionBone::Head => {
-            sampled * Quat::from_rotation_x(0.20 * ate - 0.08 * spoke + care_head * care)
+            sampled
+                * Quat::from_rotation_x(0.20 * ate - 0.08 * spoke + care_head * care + rest_head)
         }
-        ExpressionBone::Ear(_) => sampled * Quat::from_rotation_x(0.10 * spoke + care_ear * care),
+        ExpressionBone::Ear(_) => {
+            sampled * Quat::from_rotation_x(0.10 * spoke + care_ear * care + rest_ear)
+        }
         ExpressionBone::Lid(_) => sampled,
     }
 }
@@ -443,8 +472,13 @@ pub(super) fn apply_head_direction(
                 visual
                     .hungry_ears
                     .rotation(expression, bone.part, visual.hungry_ears_eligible);
-            transform.rotation =
-                outcome_rotation(expression, bone.part, &visual.feedback, marker.animation);
+            transform.rotation = outcome_rotation(
+                expression,
+                bone.part,
+                &visual.feedback,
+                visual.familiarity,
+                marker.animation,
+            );
         }
     }
 }
@@ -682,11 +716,21 @@ pub(super) fn animate(
                     }
                 });
                 visual.feedback.observe(ingestion, utterance, care);
+                visual.familiarity = frame.current.organism(marker.stable_id).and_then(|row| {
+                    match &row.familiarity {
+                        alife_world::PresentationEvidence::Observed { value, .. } => {
+                            Some(value.value)
+                        }
+                        alife_world::PresentationEvidence::Unknown => None,
+                    }
+                });
             } else {
                 visual.feedback.cancel_active_care();
+                visual.familiarity = None;
             }
         } else if frame.is_none() {
             visual.feedback.cancel_active_care();
+            visual.familiarity = None;
         }
         // World ticks supply targets; render frames supply the visible stride.
         // Only the display transform is smoothed, never the organism position.
@@ -935,6 +979,7 @@ mod tests {
             sampled,
             ExpressionBone::Head,
             &feedback,
+            None,
             CreatureAnimationState::Idle
         )
         .abs_diff_eq(sampled, 1e-6));
@@ -953,6 +998,7 @@ mod tests {
             sampled,
             ExpressionBone::Head,
             &feedback,
+            None,
             CreatureAnimationState::Idle
         )
         .abs_diff_eq(sampled, 1e-6));
@@ -961,6 +1007,7 @@ mod tests {
                 sampled,
                 ExpressionBone::Head,
                 &feedback,
+                None,
                 CreatureAnimationState::Sleeping
             ),
             sampled
@@ -970,6 +1017,7 @@ mod tests {
             sampled,
             ExpressionBone::Head,
             &feedback,
+            None,
             CreatureAnimationState::Idle
         )
         .abs_diff_eq(sampled, 1e-6));
@@ -996,6 +1044,7 @@ mod tests {
             sampled,
             ExpressionBone::Head,
             &feedback,
+            None,
             CreatureAnimationState::Idle
         )
         .abs_diff_eq(sampled, 1e-6));
@@ -1009,6 +1058,7 @@ mod tests {
             sampled,
             ExpressionBone::Head,
             &feedback,
+            None,
             CreatureAnimationState::Idle,
         );
         assert!(pitch(head) - pitch(sampled) > 0.0);
@@ -1016,6 +1066,7 @@ mod tests {
             sampled,
             ExpressionBone::Ear(1.0),
             &feedback,
+            None,
             CreatureAnimationState::Idle,
         );
         assert!((pitch(ear) - pitch(sampled)).abs() < 1e-6);
@@ -1033,6 +1084,7 @@ mod tests {
             sampled,
             ExpressionBone::Head,
             &feedback,
+            None,
             CreatureAnimationState::Idle,
         );
         assert!(pitch(head) - pitch(sampled) < 0.0);
@@ -1040,6 +1092,7 @@ mod tests {
             sampled,
             ExpressionBone::Ear(1.0),
             &feedback,
+            None,
             CreatureAnimationState::Idle,
         );
         assert!(pitch(ear) - pitch(sampled) < 0.0);
@@ -1049,6 +1102,7 @@ mod tests {
             sampled,
             ExpressionBone::Head,
             &feedback,
+            None,
             CreatureAnimationState::Idle,
         );
         assert!(pitch(head) - pitch(sampled) < 0.0);
@@ -1063,6 +1117,7 @@ mod tests {
             sampled,
             ExpressionBone::Head,
             &feedback,
+            None,
             CreatureAnimationState::Idle
         )
         .abs_diff_eq(sampled, 1e-6));
@@ -1098,6 +1153,100 @@ mod tests {
         let mut recreated = OutcomeFeedback::default();
         recreated.observe(None, None, Some((1, PlayerCareKind::Pet)));
         assert!(recreated.care_remaining > 0.0);
+    }
+
+    #[test]
+    fn familiarity_pose_is_a_quiet_resting_carriage_not_a_pulse() {
+        use alife_world::PlayerCareKind;
+        let sampled = Quat::from_rotation_y(0.3);
+        // The sampled rotation is a pure yaw, so the added pitch reads off
+        // the quaternion's x/w pair exactly (both scale by cos(yaw / 2)).
+        let pitch = |rotation: Quat| 2.0 * rotation.x.atan2(rotation.w);
+        let feedback = OutcomeFeedback::default();
+        // Unknown means no history: the creature stands in its default
+        // pose, never wary or trusting.
+        assert!(outcome_rotation(
+            sampled,
+            ExpressionBone::Head,
+            &feedback,
+            None,
+            CreatureAnimationState::Idle
+        )
+        .abs_diff_eq(sampled, 1e-6));
+        assert!(outcome_rotation(
+            sampled,
+            ExpressionBone::Ear(1.0),
+            &feedback,
+            None,
+            CreatureAnimationState::Idle
+        )
+        .abs_diff_eq(sampled, 1e-6));
+        // A trusting creature carries its head forward and its ears up;
+        // a wary one carries its head back and its ears flat. The pose
+        // is continuous — no event, no pulse, no latch — and about half
+        // the care flinch, so it reads as carriage, not a reaction.
+        let head = outcome_rotation(
+            sampled,
+            ExpressionBone::Head,
+            &feedback,
+            Some(1.0),
+            CreatureAnimationState::Idle,
+        );
+        assert!((pitch(head) - pitch(sampled) - FAMILIARITY_HEAD_MAX).abs() < 1e-6);
+        let ear = outcome_rotation(
+            sampled,
+            ExpressionBone::Ear(1.0),
+            &feedback,
+            Some(1.0),
+            CreatureAnimationState::Idle,
+        );
+        assert!((pitch(ear) - pitch(sampled) - FAMILIARITY_EAR_MAX).abs() < 1e-6);
+        let head = outcome_rotation(
+            sampled,
+            ExpressionBone::Head,
+            &feedback,
+            Some(-1.0),
+            CreatureAnimationState::Idle,
+        );
+        assert!((pitch(head) - pitch(sampled) + FAMILIARITY_HEAD_MAX).abs() < 1e-6);
+        let ear = outcome_rotation(
+            sampled,
+            ExpressionBone::Ear(1.0),
+            &feedback,
+            Some(-1.0),
+            CreatureAnimationState::Idle,
+        );
+        assert!((pitch(ear) - pitch(sampled) + FAMILIARITY_EAR_MAX).abs() < 1e-6);
+        // Sleeping suspends the pose, like the pulse: a sleeping creature
+        // is not greeting anyone.
+        assert!(outcome_rotation(
+            sampled,
+            ExpressionBone::Head,
+            &feedback,
+            Some(1.0),
+            CreatureAnimationState::Sleeping
+        )
+        .abs_diff_eq(sampled, 1e-6));
+        // The pose composes with the care pulse: a fresh nod on a
+        // trusting creature reads larger than the nod alone.
+        let mut feedback = OutcomeFeedback::default();
+        feedback.observe(None, None, Some((3, PlayerCareKind::Pet)));
+        feedback.advance(0.15, false);
+        let nod_only = outcome_rotation(
+            sampled,
+            ExpressionBone::Head,
+            &feedback,
+            None,
+            CreatureAnimationState::Idle,
+        );
+        let nod_and_trust = outcome_rotation(
+            sampled,
+            ExpressionBone::Head,
+            &feedback,
+            Some(1.0),
+            CreatureAnimationState::Idle,
+        );
+        assert!(pitch(nod_and_trust) > pitch(nod_only));
     }
 
     #[test]

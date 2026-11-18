@@ -1,9 +1,47 @@
 //! Care objects follow canonical physical appearance, placement and carrying.
 use super::*;
-use bevy::prelude::{Cuboid, Meshable, Query, Sphere};
+use bevy::{
+    gltf::GltfAssetLabel,
+    prelude::{AssetServer, Query},
+};
 
 #[derive(Component)]
 pub(super) struct LiveCareObject(pub(super) WorldEntityId);
+
+/// One canonical body, tinted by its own physical color. The shared art only
+/// changes the silhouette; it cannot move the item or decide what it does.
+pub(super) struct Keepsakes([Handle<Mesh>; 3]);
+
+impl Keepsakes {
+    fn load(assets: &AssetServer) -> Self {
+        Self(
+            [
+                "care/orchard-fruit.glb",
+                "care/orbital-rattle.glb",
+                "care/chime-table.glb",
+            ]
+            .map(|path| {
+                assets.load(
+                    GltfAssetLabel::Primitive {
+                        mesh: 0,
+                        primitive: 0,
+                    }
+                    .from_asset(path),
+                )
+            }),
+        )
+    }
+
+    fn mesh(&self, kind: WorldObjectKind) -> Option<Handle<Mesh>> {
+        let i = match kind {
+            WorldObjectKind::Food => 0,
+            WorldObjectKind::Ball => 1,
+            WorldObjectKind::ActivityToy => 2,
+            _ => return None,
+        };
+        Some(self.0[i].clone())
+    }
+}
 
 /// Care-object geometry, picking and hand contact share this presentation center.
 /// Terrain-bound world positions already include elevation; unbound positions
@@ -32,9 +70,9 @@ pub(super) fn sync_care_objects(
     highlands: Option<Res<creature_grounding::SelectedTerrain>>,
     frame: Option<Res<LiveBrainPresentationFrameResource>>,
     surface: Res<creature_grounding::RenderedTerrainSurface>,
-    mut meshes: ResMut<Assets<Mesh>>,
+    server: Option<Res<AssetServer>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    mut assets: Local<Option<(Handle<Mesh>, Handle<Mesh>)>>,
+    mut assets: Local<Option<Keepsakes>>,
     mut object_entities: Query<(Entity, &LiveCareObject, &mut Transform)>,
 ) {
     let Some(frame) = frame else {
@@ -66,19 +104,11 @@ pub(super) fn sync_care_objects(
     if objects.is_empty() {
         return;
     }
-    let (sphere, station) = assets.get_or_insert_with(|| {
-        (
-            meshes.add(Sphere::new(1.0).mesh().uv(16, 12)),
-            meshes.add(Cuboid::new(2.0, 2.0, 2.0)),
-        )
-    });
+    let art = server
+        .as_ref()
+        .map(|server| assets.get_or_insert_with(|| Keepsakes::load(server)));
     for (id, object) in objects {
         let physical = object.grounded_physical;
-        let material = materials.add(StandardMaterial {
-            base_color: Color::srgb(physical.color[0], physical.color[1], physical.color[2]),
-            perceptual_roughness: physical.material[0].clamp(0.05, 1.0),
-            ..default()
-        });
         let shape = Vec3::new(physical.shape[0], physical.shape[1], physical.shape[2]) * 0.3
             + Vec3::splat(0.1);
         commands
@@ -90,12 +120,20 @@ pub(super) fn sync_care_objects(
                 Visibility::default(),
             ))
             .with_children(|parent| {
+                let Some(mesh) = art.as_deref().and_then(|art| art.mesh(object.kind)) else {
+                    return; // A headless projection has transforms, not drawable assets.
+                };
+                let material = materials.add(StandardMaterial {
+                    base_color: Color::srgb(
+                        physical.color[0],
+                        physical.color[1],
+                        physical.color[2],
+                    ),
+                    perceptual_roughness: physical.material[0].clamp(0.05, 1.0),
+                    ..default()
+                });
                 parent.spawn((
-                    Mesh3d(if object.kind == WorldObjectKind::ActivityToy {
-                        station.clone()
-                    } else {
-                        sphere.clone()
-                    }),
+                    Mesh3d(mesh),
                     MeshMaterial3d(material),
                     Transform::from_scale(shape),
                 ));

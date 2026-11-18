@@ -365,7 +365,10 @@ fn assert_layout(world: &mut World, size: Vec2) {
         0,
         "care dock must be wordless"
     );
-    assert_eq!(world.query::<&Text2d>().iter(world).count(), 0);
+    assert_eq!(
+        world.query::<&bevy::prelude::Text2d>().iter(world).count(),
+        0
+    );
 }
 fn rgba(color: Color) -> [f32; 4] {
     let c = color.to_srgba();
@@ -553,6 +556,47 @@ fn food_tile_preserves_valid_object_reference_with_tile_and_rejects_invalid_refs
     assert!(chunk.is_stable());
     assert_eq!(food_tile(Some(chunk)), None);
 }
+#[test]
+fn offerings_follow_live_gaze_but_explicit_ground_never_moves() {
+    let mut world = authoritative_world();
+    let id = world.entity_id("agent").unwrap();
+    let selected = reference(StableVoxelRefKind::Creature, Some(id));
+    let ahead = contextual_target(Action::Food, Some(selected), None, None, &world)
+        .unwrap()
+        .tile
+        .unwrap();
+    assert_eq!(ahead, VoxelTileCoord::new(1, 0));
+    world
+        .editor_spawn_object(alife_world::WorldEditorSpawnSpec {
+            label: "closed-stone".into(),
+            kind: WorldObjectKind::Obstacle,
+            organism_id: None,
+            position: Vec3f::new(1.5, 0.5, 0.0),
+            radius: 0.35,
+            nutrition: 0.0,
+            hazard_pain: 0.0,
+            token_id: None,
+        })
+        .unwrap();
+    let alternate = contextual_target(Action::Food, Some(selected), None, None, &world).unwrap();
+    assert_ne!(alternate.tile, Some(ahead));
+    let ground = StableVoxelObjectRef {
+        kind: StableVoxelRefKind::Tile,
+        stable_id: None,
+        tile: Some(ahead),
+        ..selected
+    };
+    assert!(contextual_target(Action::Food, Some(selected), Some(ground), None, &world).is_none());
+    assert_eq!(
+        contextual_target(Action::Pet, None, None, Some(id), &world)
+            .unwrap()
+            .stable_id,
+        Some(id)
+    );
+    let stale = reference(StableVoxelRefKind::Creature, Some(WorldEntityId(12345)));
+    assert!(contextual_target(Action::Scold, Some(stale), None, Some(id), &world).is_none());
+}
+
 #[test]
 fn care_target_uses_current_living_canonical_world_object_position() {
     let mut world = authoritative_world();
@@ -1827,6 +1871,7 @@ mod help_feedback {
                 let mut ux = app
                     .world_mut()
                     .resource_mut::<Fvr05ProductionUxStateResource>();
+                ux.debug_mode = true;
                 ux.show_help = true;
                 ux.settings.paused = paused;
                 // Use the status emitted by the real successful care dispatcher.
@@ -1878,6 +1923,7 @@ mod help_feedback {
                 let mut ux = app
                     .world_mut()
                     .resource_mut::<Fvr05ProductionUxStateResource>();
+                ux.debug_mode = true;
                 ux.show_help = true;
                 ux.settings.paused = paused;
                 ux.update_selection_snapshot(original, false);
@@ -1958,6 +2004,7 @@ mod help_feedback {
                     let mut ux = app
                         .world_mut()
                         .resource_mut::<Fvr05ProductionUxStateResource>();
+                    ux.debug_mode = true;
                     ux.show_help = true;
                     ux.settings.paused = paused;
                     // Preserve the error and status conversion used by dispatch.
@@ -2022,6 +2069,7 @@ mod help_feedback {
                 let mut ux = app
                     .world_mut()
                     .resource_mut::<Fvr05ProductionUxStateResource>();
+                ux.debug_mode = true;
                 ux.show_help = true;
                 ux.settings.paused = true;
                 ux.last_error = Some(error.to_string());
@@ -2044,6 +2092,7 @@ mod help_feedback {
             let mut ux = app
                 .world_mut()
                 .resource_mut::<Fvr05ProductionUxStateResource>();
+            ux.debug_mode = true;
             ux.show_help = true;
             ux.settings.paused = true;
             ux.last_action = Action::Praise.queued_status();
@@ -2059,6 +2108,7 @@ mod help_feedback {
                 .resource_mut::<Fvr05ProductionUxStateResource>();
             ux.last_error = None;
             ux.show_help = false;
+            ux.debug_mode = false;
         }
         app.update();
         assert_eq!(

@@ -22,11 +22,14 @@ fn scroll_lines(event: &MouseWheel, scale_factor: f32) -> Option<f32> {
     lines.is_finite().then_some(lines)
 }
 
+pub(super) const ENCOUNTER_HEIGHT: f32 = 4.8;
+pub(super) const FIELD_HEIGHT: f32 = 9.8;
+
 fn zoom_scale(scale: f32, wheel: f32, terrain_viewport_height: Option<f32>) -> f32 {
     let maximum = terrain_viewport_height.map_or(PRODUCTION_CAMERA_MAX_ZOOM, |h| 1600.0 / h);
     // Profiles use different base extents. Clamp the actual terrain view in metres
     // so a low-end profile cannot zoom through the character-sized close view.
-    let minimum = terrain_viewport_height.map_or(0.35, |h| 9.8 / h);
+    let minimum = terrain_viewport_height.map_or(0.35, |h| ENCOUNTER_HEIGHT / h);
     (scale * (-wheel * 0.10).exp()).clamp(minimum, maximum)
 }
 
@@ -475,7 +478,9 @@ mod tests {
         assert!((zoom_scale(wide, 30.0, Some(30.0)) - close).abs() < 0.0001);
         assert_eq!(zoom_scale(close, -10000.0, Some(30.0)) * 30.0, 1600.0);
         for height in [9.8, 17.2, 30.0, 34.0, 40.0] {
-            assert!((zoom_scale(close, 10000.0, Some(height)) * height - 9.8).abs() < 1e-5);
+            assert!(
+                (zoom_scale(close, 10000.0, Some(height)) * height - ENCOUNTER_HEIGHT).abs() < 1e-5
+            );
             assert!((zoom_scale(close, -10000.0, Some(height)) * height - 1600.0).abs() < 1e-3);
         }
         assert_eq!(

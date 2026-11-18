@@ -49,9 +49,8 @@ use crate::{
     gpu_live_runtime::{
         CuratedFounderGpuResidencyState, CuratedFounderResetDispatchResult, LiveAgentResetIntent,
     },
-    Fvr03ProductionVoxelSceneResource, Fvr03ProductionVoxelSelectionResource,
-    Fvr04ProductionCreatureSceneResource, Fvr05ProductionUxStateResource, GameAppShellError,
-    ProductionVoxelLaunchSummary,
+    Fvr03ProductionVoxelSelectionResource, Fvr04ProductionCreatureSceneResource,
+    Fvr05ProductionUxStateResource, GameAppShellError, ProductionVoxelLaunchSummary,
 };
 
 pub(crate) mod composer;
@@ -2023,7 +2022,7 @@ pub(crate) fn handle_production_conversation_lineage_input(
             state.open_player_speech_input();
             // Only raw text after this frame's opening Enter belongs to the composer.
             append_player_speech_key_text(&mut state.input, key_messages.read(), true);
-        } else if keyboard.just_pressed(KeyCode::KeyY) {
+        } else if state.developer_overlay && keyboard.just_pressed(KeyCode::KeyY) {
             state.ensure_lineage_loaded();
             state.lineage_open = true;
             state.input_open = false;
@@ -2946,7 +2945,14 @@ pub(crate) fn adapt_speech_composer(world: &mut bevy::prelude::World) {
 #[allow(clippy::type_complexity)]
 fn sync_production_conversation_lineage_ui(
     state: Res<ProductionConversationLineageUiState>,
-    scene: Res<Fvr03ProductionVoxelSceneResource>,
+    map: Option<Res<crate::BevyEntityMap>>,
+    roots: bevy::prelude::Query<
+        (
+            &crate::production_voxel_renderer::ProductionCreatureAssemblyRoot,
+            &Transform,
+        ),
+        bevy::prelude::Without<ProductionCreatureSpeechBubble>,
+    >,
     creatures: Res<Fvr04ProductionCreatureSceneResource>,
     mut panels: ParamSet<(
         bevy::prelude::Query<(&mut Text, &mut Visibility), With<ProductionSpeechEntryPanel>>,
@@ -2958,9 +2964,7 @@ fn sync_production_conversation_lineage_ui(
         >,
     )>,
 ) {
-    if !state.is_changed()
-        && !(state.creature_utterance_active && (scene.is_changed() || creatures.is_changed()))
-    {
+    if !state.is_changed() && !state.creature_utterance_active {
         return;
     }
     for (mut text, mut visibility) in &mut panels.p0() {
@@ -3062,6 +3066,10 @@ fn sync_production_conversation_lineage_ui(
                 .find(|sample| sample.organism_id == speaker)
                 .map(|sample| sample.stable_id)
         });
+        let position = stable_id.and_then(|id| {
+            let (root, pose) = roots.get(map.as_ref()?.bevy_entity(id)?).ok()?;
+            (root.stable_id == id).then_some(pose.translation)
+        });
         let show_for_frequency =
             state
                 .last_creature_utterance_id
@@ -3076,7 +3084,7 @@ fn sync_production_conversation_lineage_ui(
             state.creature_utterance_active,
             show_for_frequency,
             receipt.is_some(),
-            stable_id.is_some(),
+            position.is_some(),
         ) {
             if *visibility != Visibility::Hidden {
                 *visibility = Visibility::Hidden;
@@ -3104,8 +3112,8 @@ fn sync_production_conversation_lineage_ui(
         if text.0 != next_text {
             text.0 = next_text;
         }
-        if let Some(position) = scene.selection_position(stable_id.expect("checked above")) {
-            let next_translation = position + bevy::prelude::Vec3::Y * 1.55;
+        if let Some(position) = position {
+            let next_translation = position + bevy::prelude::Vec3::Y * 1.95;
             if transform.translation != next_translation {
                 transform.translation = next_translation;
             }

@@ -31,7 +31,7 @@ impl Action {
     fn index(self) -> usize {
         self as usize
     }
-    fn icon(self) -> &'static str {
+    pub(super) fn icon(self) -> &'static str {
         match self {
             Self::Food => "food",
             // The pet glyph asset keeps its legacy filename.
@@ -206,16 +206,7 @@ const EMBEDDED: [(&str, &[u8]); 11] = [
         include_bytes!("../../../../assets/ui/care_dock/placement.png"),
     ),
 ];
-fn bevel(raised: bool) -> BorderColor {
-    let light = Color::srgb(0.43, 0.53, 0.55);
-    let dark = Color::srgb(0.025, 0.040, 0.050);
-    BorderColor {
-        top: if raised { light } else { dark },
-        left: if raised { light } else { dark },
-        bottom: if raised { dark } else { light },
-        right: if raised { dark } else { light },
-    }
-}
+use crate::production_voxel_renderer::sanctuary_ink::{self as ink, bevel};
 pub(super) fn spawn(world: &mut World) {
     world.init_resource::<State>();
     world.init_resource::<Assets<Image>>();
@@ -254,7 +245,7 @@ pub(super) fn spawn(world: &mut World) {
                 align_items: AlignItems::Center,
                 ..default()
             },
-            BackgroundColor(Color::srgb(0.075, 0.115, 0.135)),
+            BackgroundColor(ink::GLASS),
             bevel(true),
             GlobalZIndex(60),
             FocusPolicy::Block,
@@ -282,7 +273,7 @@ pub(super) fn spawn(world: &mut World) {
                     justify_content: JustifyContent::Center,
                     ..default()
                 },
-                BackgroundColor(Color::srgb(0.050, 0.075, 0.090)),
+                BackgroundColor(ink::WELL),
                 bevel(true),
                 ChildOf(root),
             ))
@@ -335,6 +326,7 @@ pub(super) fn spawn(world: &mut World) {
         FocusPolicy::Pass,
         ChildOf(root),
     ));
+    super::live_care_feedback::prepare_art(world, &icons);
     world.insert_resource(Icons(icons));
 }
 
@@ -471,11 +463,104 @@ fn care_target(
     let object = selected?
         .stable_id
         .and_then(|id| world.entity(id))
-        .filter(|o| o.kind == WorldObjectKind::Agent)?;
+        .filter(|o| !o.consumed && o.kind == WorldObjectKind::Agent)?;
     let organism = object.organism_id?;
     let record = world.organism_registry().get(organism)?;
     (record.lifecycle().is_alive() && record.world_entity_id() == object.id)
         .then_some((organism, object.position))
+}
+
+/// A dock press operates on the selected creature, or the one being followed.
+/// Keyboard food placement instead honors the ground under the Hand. Never
+/// retarget a rejected correction to some other creature.
+#[cfg(any(feature = "gpu-runtime", test))]
+pub(super) fn contextual_target(
+    action: Action,
+    selected: Option<StableVoxelObjectRef>,
+    pointed: Option<StableVoxelObjectRef>,
+    followed: Option<WorldEntityId>,
+    world: &alife_world::HeadlessWorld,
+) -> Option<StableVoxelObjectRef> {
+    let ground = |s: &StableVoxelObjectRef| {
+        matches!(
+            s.kind,
+            StableVoxelRefKind::Tile | StableVoxelRefKind::Chunk | StableVoxelRefKind::Resource
+        ) && food_tile(Some(*s)).is_some()
+    };
+    if action == Action::Food {
+        if let Some(point) = pointed.filter(ground).or_else(|| selected.filter(ground)) {
+            return tile_accepts_offering(world, point.tile?, &world.object_snapshots())
+                .then_some(point);
+        }
+    }
+    let id = selected
+        .filter(|s| s.kind == StableVoxelRefKind::Creature)
+        .or_else(|| pointed.filter(|s| s.kind == StableVoxelRefKind::Creature))
+        .and_then(|s| s.stable_id)
+        .or(followed)?;
+    let object = world.entity(id)?;
+    let organism = object.organism_id?;
+    let record = world.organism_registry().get(organism)?;
+    if object.consumed
+        || object.kind != WorldObjectKind::Agent
+        || record.world_entity_id() != id
+        || !record.lifecycle().is_alive()
+    {
+        return None;
+    }
+    let z = if world.terrain_binding().is_some() {
+        object.position.z
+    } else {
+        object.position.y
+    };
+    let yaw = object.body_yaw + object.head_yaw;
+    let tile_at = |x: f32, z: f32| VoxelTileCoord::new(x.floor() as i32, z.floor() as i32);
+    let tile = if action == Action::Food {
+        let objects = world.object_snapshots();
+        [0.0, 0.8, -0.8, 1.6, -1.6]
+            .into_iter()
+            .map(|offset| {
+                let angle = yaw + offset;
+                tile_at(object.position.x + angle.cos() * 1.1, z + angle.sin() * 1.1)
+            })
+            .find(|&tile| tile_accepts_offering(world, tile, &objects))?
+    } else {
+        tile_at(object.position.x, z)
+    };
+    Some(StableVoxelObjectRef {
+        kind: StableVoxelRefKind::Creature,
+        stable_id: Some(id),
+        chunk: VoxelChunkCoord::for_tile(16, tile),
+        tile: Some(tile),
+    })
+}
+/// The Hand cannot offer fruit under an obstacle or over impassable water.
+#[cfg(any(feature = "gpu-runtime", test))]
+fn tile_accepts_offering(
+    world: &alife_world::HeadlessWorld,
+    tile: VoxelTileCoord,
+    objects: &[alife_world::WorldObject],
+) -> bool {
+    let (x, z) = (tile.x as f32 + 0.5, tile.z as f32 + 0.5);
+    if world
+        .terrain()
+        .is_some_and(|terrain| !terrain.walkable(x, z))
+    {
+        return false;
+    }
+    objects
+        .iter()
+        .filter(|o| {
+            !o.consumed && matches!(o.kind, WorldObjectKind::Obstacle | WorldObjectKind::Hazard)
+        })
+        .all(|o| {
+            let depth = if world.terrain().is_some() {
+                o.position.z
+            } else {
+                o.position.y
+            };
+            (o.position.x - x).hypot(depth - z) > o.radius + 0.20
+        })
 }
 
 /// Runtime operations shared by keyboard, pointer, and CPU UI tests.
@@ -739,18 +824,23 @@ pub(super) fn sync(world: &mut World) {
     let availability = world
         .get_non_send_resource::<ProductionGpuBrainRuntimeResource>()
         .map(|r| {
+            let live = r.runtime.world();
+            let followed = world
+                .get_resource::<Fvr04ProductionCreatureFollowResource>()
+                .filter(|f| f.enabled)
+                .and_then(|f| f.target_stable_id);
+            let creature = contextual_target(Action::Pet, selected, None, followed, live).is_some();
+            let free_toy = live
+                .entity_id("player-plaything")
+                .and_then(|id| live.entity(id))
+                .is_none_or(|o| o.carried_by.is_none());
             [
-                food_tile(selected).is_some(),
-                care_target(r.runtime.world(), selected).is_some(),
-                care_target(r.runtime.world(), selected).is_some()
-                    && r.runtime
-                        .world()
-                        .entity_id("player-plaything")
-                        .and_then(|id| r.runtime.world().entity(id))
-                        .is_none_or(|o| o.carried_by.is_none()),
-                care_target(r.runtime.world(), selected).is_some(),
-                care_target(r.runtime.world(), selected).is_some(),
-                care_target(r.runtime.world(), selected).is_some(),
+                creature || food_tile(selected).is_some(),
+                creature,
+                creature && free_toy,
+                creature,
+                creature,
+                creature,
                 world.contains_resource::<ProductionConversationLineageUiState>(),
             ]
         })

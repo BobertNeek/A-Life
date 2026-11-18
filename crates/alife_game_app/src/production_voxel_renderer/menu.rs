@@ -5,7 +5,9 @@ use bevy::a11y::{AccessibilityNode, ActionRequest};
 use bevy::ecs::message::MessageCursor;
 use bevy::input::{keyboard::KeyboardInput, ButtonState};
 use bevy::prelude::*;
-use bevy::ui::{BorderColor, BorderRadius, FocusPolicy, UiRect};
+#[cfg(test)]
+use bevy::ui::BorderColor;
+use bevy::ui::{BorderRadius, FocusPolicy, UiRect};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 enum Screen {
@@ -422,8 +424,6 @@ struct MenuRoot(Screen);
 #[derive(Component)]
 struct MenuPanel(Screen);
 #[derive(Component)]
-struct StateLabel;
-#[derive(Component)]
 struct SelectionLamp(Action);
 #[derive(Component)]
 struct MenuButton {
@@ -486,16 +486,7 @@ fn button_node() -> Node {
         ..default()
     }
 }
-fn bevel(raised: bool) -> BorderColor {
-    let light = Color::srgb(0.44, 0.49, 0.48);
-    let dark = Color::srgb(0.055, 0.080, 0.092);
-    BorderColor {
-        top: if raised { light } else { dark },
-        left: if raised { light } else { dark },
-        right: if raised { dark } else { light },
-        bottom: if raised { dark } else { light },
-    }
-}
+use crate::production_voxel_renderer::sanctuary_ink::{self as ink, bevel};
 fn accessible(role: Role, label: &str) -> AccessibilityNode {
     let mut node = accesskit::Node::new(role);
     node.set_label(label);
@@ -509,7 +500,74 @@ fn accessible(role: Role, label: &str) -> AccessibilityNode {
     AccessibilityNode(node)
 }
 
+#[derive(Resource)]
+struct MenuGlyphs {
+    play: Handle<Image>,
+    fast: Handle<Image>,
+    pause: Handle<Image>,
+    back: Handle<Image>,
+    accept: Handle<Image>,
+    warning: Handle<Image>,
+    pending: Handle<Image>,
+    saved: Handle<Image>,
+}
+
+impl MenuGlyphs {
+    fn load(world: &mut World) -> Self {
+        use bevy::image::{CompressedImageFormats, ImageSampler, ImageType};
+        world.init_resource::<Assets<Image>>();
+        let mut load = |png: &[u8]| {
+            world.resource_mut::<Assets<Image>>().add(
+                Image::from_buffer(
+                    png,
+                    ImageType::Extension("png"),
+                    CompressedImageFormats::NONE,
+                    true,
+                    ImageSampler::linear(),
+                    RenderAssetUsages::default(),
+                )
+                .expect("embedded menu glyph"),
+            )
+        };
+        Self {
+            play: load(include_bytes!(
+                "../../../../assets/ui/status_hud/playing.png"
+            )),
+            fast: load(include_bytes!("../../../../assets/ui/status_hud/fast.png")),
+            pause: load(include_bytes!(
+                "../../../../assets/ui/status_hud/paused.png"
+            )),
+            back: load(include_bytes!(
+                "../../../../assets/ui/speech_composer/cancel.png"
+            )),
+            accept: load(include_bytes!(
+                "../../../../assets/ui/speech_composer/send.png"
+            )),
+            warning: load(include_bytes!(
+                "../../../../assets/ui/status_hud/warning.png"
+            )),
+            pending: load(include_bytes!(
+                "../../../../assets/ui/care_dock/pending.png"
+            )),
+            saved: load(include_bytes!(
+                "../../../../assets/ui/care_dock/placement.png"
+            )),
+        }
+    }
+
+    fn action(&self, action: Action) -> &Handle<Image> {
+        match action {
+            Action::OneX => &self.play,
+            Action::Max => &self.fast,
+            Action::Focus => &self.pause,
+            Action::ConfirmLoad => &self.accept,
+            _ => &self.back,
+        }
+    }
+}
+
 fn spawn_ui(world: &mut World) {
+    let glyphs = MenuGlyphs::load(world);
     for (screen, rows) in [
         (Screen::Main, MAIN.as_slice()),
         (Screen::Speed, SPEED.as_slice()),
@@ -528,7 +586,7 @@ fn spawn_ui(world: &mut World) {
                     justify_content: JustifyContent::Center,
                     ..default()
                 },
-                BackgroundColor(Color::srgba(0.027, 0.041, 0.051, 0.94)),
+                BackgroundColor(Color::srgba(0.07, 0.105, 0.17, 0.52)),
                 GlobalZIndex(100),
             ))
             .with_children(|root| {
@@ -545,7 +603,7 @@ fn spawn_ui(world: &mut World) {
                         },
                     ),
                     panel_node(),
-                    BackgroundColor(Color::srgb(0.13, 0.18, 0.20)),
+                    BackgroundColor(ink::GLASS),
                     bevel(true),
                 ))
                 .with_children(|panel| {
@@ -555,14 +613,12 @@ fn spawn_ui(world: &mut World) {
                                 "Load warning: current world replacement and unsaved changes",
                             ),
                             LoadWarning,
-                            Text::new(LOAD_WARNING),
-                            TextFont {
-                                font_size: 14.0,
-                                ..default()
-                            },
-                            TextColor(Color::srgb(0.96, 0.76, 0.48)),
+                            ImageNode::new(glyphs.warning.clone()),
+                            accessible(Role::Image, LOAD_WARNING),
                             Node {
-                                height: Val::Px(48.0),
+                                height: Val::Px(36.0),
+                                width: Val::Px(36.0),
+                                align_self: AlignSelf::Center,
                                 flex_shrink: 0.0,
                                 ..default()
                             },
@@ -592,28 +648,11 @@ fn spawn_ui(world: &mut World) {
                                     index,
                                 },
                                 button_node(),
-                                BackgroundColor(Color::srgb(0.047, 0.072, 0.083)),
+                                BackgroundColor(ink::WELL),
                                 bevel(false),
                             ))
                             .with_children(|button| {
-                                if action == Action::Focus {
-                                    button.spawn((
-                                        StateLabel,
-                                        Text::new("On"),
-                                        TextFont {
-                                            font_size: 14.0,
-                                            ..default()
-                                        },
-                                        TextColor(Color::srgb(0.55, 0.85, 0.78)),
-                                        Node {
-                                            position_type: PositionType::Absolute,
-                                            right: Val::Px(12.0),
-                                            bottom: Val::Px(4.0),
-                                            ..default()
-                                        },
-                                    ));
-                                }
-                                if matches!(action, Action::OneX | Action::Max) {
+                                if matches!(action, Action::OneX | Action::Max | Action::Focus) {
                                     button.spawn((
                                         SelectionLamp(action),
                                         Node {
@@ -624,32 +663,37 @@ fn spawn_ui(world: &mut World) {
                                             border_radius: BorderRadius::all(Val::Percent(50.0)),
                                             ..default()
                                         },
-                                        BackgroundColor(Color::srgb(0.55, 0.85, 0.78)),
+                                        BackgroundColor(ink::JADE),
                                     ));
                                 }
-                                button.spawn((
-                                    Text::new(label),
-                                    TextFont {
-                                        font_size: if action == Action::Focus {
-                                            18.0
-                                        } else {
-                                            20.0
+                                if screen == Screen::Main {
+                                    button.spawn((
+                                        Text::new(label),
+                                        TextFont {
+                                            font_size: 20.0,
+                                            ..default()
                                         },
-                                        ..default()
-                                    },
-                                    TextColor(Color::srgb(0.88, 0.86, 0.72)),
-                                ));
+                                        TextColor(ink::PORCELAIN),
+                                    ));
+                                } else {
+                                    button.spawn((
+                                        ImageNode::new(glyphs.action(action).clone()),
+                                        Node {
+                                            width: Val::Px(24.0),
+                                            height: Val::Px(24.0),
+                                            ..default()
+                                        },
+                                    ));
+                                }
                             });
                     }
                     panel.spawn((
                         Status,
-                        Text::new(""),
-                        TextFont {
-                            font_size: 16.0,
-                            ..default()
-                        },
-                        TextColor(Color::srgb(0.88, 0.86, 0.72)),
+                        ImageNode::new(glyphs.pending.clone()),
+                        Visibility::Hidden,
                         Node {
+                            width: Val::Px(22.0),
+                            height: Val::Px(22.0),
                             position_type: PositionType::Absolute,
                             bottom: Val::Px(-30.0),
                             align_self: AlignSelf::Center,
@@ -688,7 +732,7 @@ fn spawn_ui(world: &mut World) {
                 align_items: AlignItems::Center,
                 ..default()
             },
-            BackgroundColor(Color::srgb(0.13, 0.18, 0.20)),
+            BackgroundColor(ink::GLASS),
             bevel(true),
             GlobalZIndex(90),
         ))
@@ -704,6 +748,7 @@ fn spawn_ui(world: &mut World) {
                 ));
             }
         });
+    world.insert_resource(glyphs);
 }
 
 fn load_availability(world: &World) -> LoadAvailability {
@@ -1062,7 +1107,7 @@ fn button_color(interaction: Interaction, selected: bool, active: bool) -> Color
     } else if active {
         Color::srgb(0.08, 0.16, 0.18)
     } else {
-        Color::srgb(0.047, 0.072, 0.083)
+        ink::WELL
     }
 }
 
@@ -1076,8 +1121,8 @@ fn sync_ui(
     ux: Res<Fvr05ProductionUxStateResource>,
     mut roots: Query<(&MenuRoot, &mut Node)>,
     mut buttons: Query<(&MenuButton, &Interaction, &mut BackgroundColor)>,
-    mut statuses: Query<&mut Text, (With<Status>, Without<StateLabel>)>,
-    mut state_labels: Query<&mut Text, (With<StateLabel>, Without<Status>)>,
+    glyphs: Res<MenuGlyphs>,
+    mut statuses: Query<(&mut ImageNode, &mut Visibility), (With<Status>, Without<SelectionLamp>)>,
     mut lamps: Query<(&SelectionLamp, &mut Visibility)>,
     mut accessibility: Query<
         (
@@ -1144,21 +1189,12 @@ fn sync_ui(
             background.0 = color;
         }
     }
-    for mut text in &mut state_labels {
-        let value = if ux.settings.pause_on_focus_loss {
-            "On"
-        } else {
-            "Off"
-        };
-        if text.0 != value {
-            text.0 = value.into();
-        }
-    }
     for (lamp, mut visibility) in &mut lamps {
         let active = (lamp.0 == Action::OneX
             && ux.settings.playback_mode() == crate::ProductionRunMode::OneX)
             || (lamp.0 == Action::Max
-                && ux.settings.playback_mode() == crate::ProductionRunMode::MaxSpeed);
+                && ux.settings.playback_mode() == crate::ProductionRunMode::MaxSpeed)
+            || (lamp.0 == Action::Focus && ux.settings.pause_on_focus_loss);
         let desired = if active {
             Visibility::Visible
         } else {
@@ -1185,10 +1221,18 @@ fn sync_ui(
     } else {
         ""
     };
-    for mut text in &mut statuses {
-        if text.0 != status {
-            text.0 = status.into();
+    for (mut glyph, mut visibility) in &mut statuses {
+        *visibility = if status.is_empty() {
+            Visibility::Hidden
+        } else {
+            Visibility::Inherited
+        };
+        glyph.image = match status {
+            "Failed" => &glyphs.warning,
+            "Saved" | "Loaded" => &glyphs.saved,
+            _ => &glyphs.pending,
         }
+        .clone();
     }
 }
 
@@ -1582,7 +1626,7 @@ mod tests {
                         .unwrap();
                     let center = transform.affine().translation;
                     let half = node.size() * 0.5;
-                    assert_eq!(node.size().y, 48.0);
+                    assert_eq!(node.size(), Vec2::splat(36.0));
                     assert!(
                         center.x - half.x >= 0.0
                             && center.y - half.y >= 0.0
@@ -1664,25 +1708,20 @@ mod tests {
         ] {
             apply_layout(&mut world, size);
             for status_value in ["", "Failed"] {
-                for mut text in world
-                    .query_filtered::<&mut Text, With<Status>>()
-                    .iter_mut(&mut world)
-                {
-                    text.0 = status_value.into();
-                }
                 let panels = world.query::<(&MenuRoot, &Children)>().iter(&world)
             .filter(|(root, _)| root.0 != Screen::Closed).map(|(root, children)| {
                 let panel = children[0]; let node = world.get::<Node>(panel).unwrap();
                 let background = world.get::<BackgroundColor>(panel).unwrap(); let border = world.get::<BorderColor>(panel).unwrap();
                 let rows = world.get::<Children>(panel).unwrap().iter().filter_map(|entity| {
                     let button = world.get::<MenuButton>(entity)?; let node = world.get::<Node>(entity)?;
-                    let child = world.get::<Children>(entity)?.iter().find(|child| world.get::<Text>(*child).is_some() && world.get::<StateLabel>(*child).is_none())?;
-                    Some(serde_json::json!({"index":button.index,"focused":button.index==0,"label":world.get::<Text>(child).unwrap().0,
+                    let child = world.get::<Children>(entity)?.iter().find(|&child| world.get::<Text>(child).is_some());
+                    let text = child.and_then(|id| world.get::<Text>(id));
+                    Some(serde_json::json!({"index":button.index,"focused":button.index==0,"label":text.map(|t|t.0.as_str()).unwrap_or(""),"action":format!("{:?}",button.action),
                         "width":px(node.width),"height":px(node.height),"radius":px(node.border_radius.top_left),
                         "border":px(node.border.top),"background":color(world.get::<BackgroundColor>(entity).unwrap().0),
                         "top":color(world.get::<BorderColor>(entity).unwrap().top),"bottom":color(world.get::<BorderColor>(entity).unwrap().bottom),
                         "state":if button.action == Action::Focus {Some("On")} else {None},"active":button.action == Action::OneX,
-                        "font_size":world.get::<TextFont>(child).unwrap().font_size,"text_color":color(world.get::<TextColor>(child).unwrap().0)}))
+                        "font_size":child.and_then(|id|world.get::<TextFont>(id)).map(|v|v.font_size).unwrap_or(0.0),"text_color":color(child.and_then(|id|world.get::<TextColor>(id)).map(|v|v.0).unwrap_or(Color::WHITE))}))
                 }).collect::<Vec<_>>();
                 serde_json::json!({"screen":format!("{:?}",root.0),"status":status_value,"status_font_size":16.0,"viewport":[size.x,size.y],"modal_background":color(world.get::<BackgroundColor>(world.get::<ChildOf>(panel).unwrap().parent()).unwrap().0),"root_bottom_padding":px(world.get::<Node>(world.get::<ChildOf>(panel).unwrap().parent()).unwrap().padding.bottom),"columns":if node.flex_direction == FlexDirection::Row {2} else {1},"width":px(node.width),"padding":px(node.padding.top),
                     "border":px(node.border.top),"radius":px(node.border_radius.top_left),"gap":px(node.row_gap),

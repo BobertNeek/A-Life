@@ -1053,6 +1053,11 @@ pub struct WorldSaveState {
     /// obligation: older saves predate it and load with an empty map.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub last_player_care: BTreeMap<u64, crate::PlayerCareReceipt>,
+    /// Last familiarity record per organism. History, not a pending
+    /// obligation: older saves predate it and load with an empty map,
+    /// which reads as unknown, never as hostile or trusting.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub last_familiarity: BTreeMap<u64, crate::PlayerFamiliarity>,
     /// Older saves predate post-ingestion sensory continuity and have no sample.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub ingestion_observations: BTreeMap<u64, crate::IngestionObservation>,
@@ -1258,6 +1263,8 @@ impl<'de> Deserialize<'de> for WorldSaveState {
             #[serde(default)]
             last_player_care: BTreeMap<u64, crate::PlayerCareReceipt>,
             #[serde(default)]
+            last_familiarity: BTreeMap<u64, crate::PlayerFamiliarity>,
+            #[serde(default)]
             ingestion_observations: BTreeMap<u64, crate::IngestionObservation>,
             #[serde(default)]
             player_hold: Option<crate::headless::player_hand::PlayerHold>,
@@ -1351,6 +1358,7 @@ impl<'de> Deserialize<'de> for WorldSaveState {
             last_creature_utterance_ticks: wire.last_creature_utterance_ticks,
             pending_player_care: wire.pending_player_care,
             last_player_care: wire.last_player_care,
+            last_familiarity: wire.last_familiarity,
             ingestion_observations: wire.ingestion_observations,
             player_hold: wire.player_hold,
             organism_records: wire.organism_records,
