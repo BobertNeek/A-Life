@@ -42,10 +42,25 @@ pub(super) struct HandInteraction {
     pressed: Option<(StableVoxelObjectRef, f64, Vec2)>,
     pub held: Option<WorldEntityId>,
     release_until: f64,
+    stroke: Option<(WorldEntityId, f64)>,
     pub position: Option<Vec3>,
     last_tile_click: Option<(VoxelTileCoord, f64)>,
     resume_follow_after_drop: bool,
 }
+const STROKE_SECONDS: f64 = 0.42;
+
+/// A stroke starts and settles at the same point on the fur. A press causes
+/// exactly one touch; holding the mouse cannot farm repeated care receipts.
+fn stroke_offset(start: f64, now: f64, camera: Quat, extent: f32) -> Vec3 {
+    let phase = (now - start) / STROKE_SECONDS;
+    if !(0.0..1.0).contains(&phase) {
+        return Vec3::ZERO;
+    }
+    let arc = (std::f32::consts::PI * phase as f32).sin();
+    let sweep = (std::f32::consts::TAU * phase as f32).sin();
+    pointer_scale(extent, false) * arc * (camera * Vec3::X * sweep * 0.22 - Vec3::Y * 0.045)
+}
+
 #[derive(Component)]
 pub(super) struct GodHand;
 #[derive(Component)]
@@ -335,6 +350,39 @@ pub(super) fn input(
     }
     #[cfg(feature = "gpu-runtime")]
     if let Some(runtime) = runtime.as_deref_mut() {
+        if hand
+            .stroke
+            .is_some_and(|(_, start)| now - start >= STROKE_SECONDS)
+            || !window.focused
+            || keyboard.just_pressed(KeyCode::Escape)
+            || hand.pressed.is_some()
+        {
+            hand.stroke = None;
+        }
+        let pet_press = window.focused
+            && !keyboard.just_pressed(KeyCode::Escape)
+            && !mouse.pressed(MouseButton::Left)
+            && mouse.just_pressed(MouseButton::Right)
+            && runtime.runtime.world().player_held_object().is_none();
+        let target = selection
+            .hovered
+            .filter(|s| pet_press && s.kind == StableVoxelRefKind::Creature)
+            .and_then(|s| s.stable_id.map(|id| (s, id)));
+        if let (Some((target, id)), Some(ux), Some(frame)) =
+            (target, ux.as_deref_mut(), frame.as_deref_mut())
+        {
+            let outcome = care_dock::dispatch(
+                care_dock::Action::Pet,
+                Some(target),
+                ux,
+                Some(&mut runtime.runtime),
+                frame,
+            );
+            if outcome == care_dock::Evidence::Queued {
+                selection.selected = Some(target);
+                hand.stroke = Some((id, now));
+            }
+        }
         if hand.held.is_some() && runtime.runtime.world().player_held_object() != hand.held {
             hand.held = None;
             hand.resume_follow_after_drop = false;
@@ -433,7 +481,7 @@ pub(super) fn input(
             }
         }
         // Pending Grab and Carry contact the same canonical creature/object.
-        if let Some(id) = contact_id(&hand) {
+        if let Some(id) = contact_id(&hand).or_else(|| hand.stroke.map(|(id, _)| id)) {
             hand.position = runtime.runtime.world().entity(id).map(|object| {
                 let scale = creatures
                     .iter()
@@ -519,7 +567,10 @@ pub(super) fn animate(
             Visibility::Hidden
         };
         if let Some(contact) = hand.position {
-            *transform = pose_transform(camera.rotation, contact, extent, state);
+            let stroke = hand.stroke.map_or(Vec3::ZERO, |(_, start)| {
+                stroke_offset(start, time.elapsed_secs_f64(), camera.rotation, extent)
+            });
+            *transform = pose_transform(camera.rotation, contact + stroke, extent, state);
         }
     }
     if let Ok((_, mut cursor)) = windows.single_mut() {
@@ -647,6 +698,19 @@ pub(super) fn cancel_for_menu(world: &mut World) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn stroke_makes_one_camera_relative_arc_and_settles_on_the_fur() {
+        let camera = Quat::from_rotation_y(1.0);
+        let start = 2.0;
+        assert_eq!(stroke_offset(start, start - 0.1, camera, 1.0), Vec3::ZERO);
+        assert!(stroke_offset(start, start, camera, 1.0).length() < 1e-6);
+        assert!(stroke_offset(start, start + STROKE_SECONDS * 0.5, camera, 1.0).length() > 0.001);
+        assert_eq!(
+            stroke_offset(start, start + STROKE_SECONDS + 0.01, camera, 1.0),
+            Vec3::ZERO
+        );
+    }
 
     #[test]
     fn all_poses_keep_right_dorsal_orientation_and_contact_through_camera_and_zoom_changes() {

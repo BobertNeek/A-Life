@@ -1,12 +1,12 @@
 //! CPU/ECS coverage of live care truth, identity, display following and cleanup.
 //!
-//! The word and the nod both fire from the world-owned receipt and only
+//! The glyph and the nod both fire from the world-owned receipt and only
 //! from the receipt. A creature with no receipt shows nothing — unknown is
 //! never rendered as a "nothing felt" bubble.
 use super::*;
 use alife_core::{
     BrainCapacityClass, CreatureGenome, FoundationGeneticIdentity, FoundationWeightAsset,
-    SensorProfile, BASIC_VOCABULARY_V1,
+    SensorProfile,
 };
 use alife_world::{
     create_canonical_new_game, CanonicalNewGameConfig, HeadlessScenarioBuilder, HeadlessWorld,
@@ -162,11 +162,10 @@ fn cue_entities(app: &mut App) -> Vec<Entity> {
         .collect()
 }
 
-fn cue_word(app: &App, cue: Entity) -> (String, Color) {
+fn cue_icon(app: &App, cue: Entity) -> &'static str {
     let child = app.world().get::<Children>(cue).unwrap()[0];
-    let text = app.world().get::<Text2d>(child).unwrap().0.clone();
-    let color = app.world().get::<TextColor>(child).unwrap().0;
-    (text, color)
+    assert!(app.world().get::<bevy::prelude::Text2d>(child).is_none());
+    app.world().get::<CareGlyph>(child).unwrap().icon()
 }
 
 fn reseed(app: &mut App, world: &HeadlessWorld) {
@@ -232,41 +231,11 @@ fn ux() -> Fvr05ProductionUxStateResource {
 }
 
 #[test]
-fn care_words_come_from_the_codebook_and_carry_valence_in_colour() {
-    use alife_world::PlayerCareKind;
-    for kind in [
-        PlayerCareKind::Pet,
-        PlayerCareKind::Praise,
-        PlayerCareKind::Scold,
-        PlayerCareKind::Slap,
-    ] {
-        let word = care_word(kind);
-        assert!(
-            BASIC_VOCABULARY_V1.iter().any(|(vocab, _)| *vocab == word),
-            "{word:?} for {kind:?} must be a codebook word"
-        );
-    }
-    assert_eq!(care_word(PlayerCareKind::Pet), "play");
-    assert_eq!(care_word(PlayerCareKind::Praise), "get");
-    assert_eq!(care_word(PlayerCareKind::Scold), "look");
-    assert_eq!(care_word(PlayerCareKind::Slap), "retreat");
-    // A pet-and-praise set still says "play" through the display kind;
-    // the set itself is pinned in the world tests.
+fn gesture_images_match_the_dock_without_fabricating_speech() {
+    use alife_world::PlayerCareKind::*;
     assert_eq!(
-        alife_world::PlayerCareKindSet::single(PlayerCareKind::Pet).display_kind(),
-        Some(PlayerCareKind::Pet)
-    );
-    assert_eq!(
-        care_color(PlayerCareKind::Pet),
-        care_color(PlayerCareKind::Praise)
-    );
-    assert_eq!(
-        care_color(PlayerCareKind::Scold),
-        care_color(PlayerCareKind::Slap)
-    );
-    assert_ne!(
-        care_color(PlayerCareKind::Pet),
-        care_color(PlayerCareKind::Scold)
+        [Pet, Praise, Scold, Slap].map(|k| CareGlyph(k).icon()),
+        ["touch", "praise", "scold", "slap"]
     );
 }
 
@@ -307,7 +276,7 @@ fn cared_row_fails_closed_on_every_identity_or_lifecycle_mismatch_and_on_unknown
         death_tick: Tick::ZERO,
     };
     bad_rows.push(changed);
-    // Unknown is not a receipt: the same creature, same tick, no word.
+    // Unknown is not a receipt: the same creature, same tick, no glyph.
     let mut changed = row.clone();
     changed.last_player_care = alife_world::PresentationEvidence::Unknown;
     bad_rows.push(changed);
@@ -359,7 +328,7 @@ fn cared_row_fails_closed_on_every_identity_or_lifecycle_mismatch_and_on_unknown
 }
 
 #[test]
-fn word_appears_for_a_fresh_receipt_clears_after_its_moment_and_never_reappears() {
+fn glyph_appears_for_a_fresh_receipt_clears_after_its_moment_and_never_reappears() {
     let mut world = cared_game();
     let (organism, entity) = world.organism_entity_ids()[0];
     let position = world.entity(entity).unwrap().position;
@@ -373,28 +342,25 @@ fn word_appears_for_a_fresh_receipt_clears_after_its_moment_and_never_reappears(
     let cues = cue_entities(&mut app);
     assert_eq!(cues.len(), 1);
     assert_eq!(app.world().get::<ChildOf>(cues[0]).unwrap().parent(), root);
-    let (word, color) = cue_word(&app, cues[0]);
-    assert_eq!(word, "play");
-    assert_eq!(color, care_color(alife_world::PlayerCareKind::Pet));
-    // The moment passes: the word clears and never comes back for the
+    assert_eq!(cue_icon(&app, cues[0]), "touch");
+    // The moment passes: the glyph clears and never comes back for the
     // same receipt, however long the creature sits there.
     advance(&mut app, 4_000);
     assert!(cue_entities(&mut app).is_empty());
     advance(&mut app, 5_000);
     assert!(cue_entities(&mut app).is_empty());
-    // A newer receipt is a new moment: the word returns, with the new kind.
+    // A newer receipt is a new moment: the glyph returns, with the new kind.
     world.queue_player_care(organism, position, true).unwrap();
     world.try_advance_tick().unwrap();
     reseed(&mut app, &world);
     advance(&mut app, 0);
     let cues = cue_entities(&mut app);
     assert_eq!(cues.len(), 1);
-    let (word, _) = cue_word(&app, cues[0]);
-    assert_eq!(word, "get");
+    assert_eq!(cue_icon(&app, cues[0]), "praise");
 }
 
 #[test]
-fn no_receipt_means_no_word_never_a_nothing_felt_bubble() {
+fn no_receipt_means_no_glyph_never_a_nothing_felt_bubble() {
     let world = quiet_world();
     let row = world.presentation_snapshot().organisms.remove(0);
     assert!(matches!(
@@ -410,7 +376,7 @@ fn no_receipt_means_no_word_never_a_nothing_felt_bubble() {
 }
 
 #[test]
-fn pet_and_praise_together_show_the_social_word() {
+fn pet_and_praise_together_show_the_social_glyph() {
     let mut world = cared_game();
     let (organism, entity) = world.organism_entity_ids()[0];
     let position = world.entity(entity).unwrap().position;
@@ -430,12 +396,11 @@ fn pet_and_praise_together_show_the_social_word() {
     advance(&mut app, 0);
     let cues = cue_entities(&mut app);
     assert_eq!(cues.len(), 1);
-    let (word, _) = cue_word(&app, cues[0]);
-    assert_eq!(word, "play");
+    assert_eq!(cue_icon(&app, cues[0]), "touch");
 }
 
 #[test]
-fn scold_and_slap_together_show_the_strongest_negative_word() {
+fn scold_and_slap_together_show_the_strongest_negative_glyph() {
     let mut world = cared_game();
     let (organism, entity) = world.organism_entity_ids()[0];
     let position = world.entity(entity).unwrap().position;
@@ -459,12 +424,11 @@ fn scold_and_slap_together_show_the_strongest_negative_word() {
     advance(&mut app, 0);
     let cues = cue_entities(&mut app);
     assert_eq!(cues.len(), 1);
-    let (word, _) = cue_word(&app, cues[0]);
-    assert_eq!(word, "retreat");
+    assert_eq!(cue_icon(&app, cues[0]), "slap");
 }
 
 #[test]
-fn word_tracks_displayed_pose_and_camera_and_freezes_on_pause() {
+fn glyph_tracks_displayed_pose_and_camera_and_freezes_on_pause() {
     let mut world = cared_game();
     let (organism, entity) = world.organism_entity_ids()[0];
     let position = world.entity(entity).unwrap().position;
@@ -507,12 +471,12 @@ fn word_tracks_displayed_pose_and_camera_and_freezes_on_pause() {
     let root_affine = app.world().get::<Transform>(root).unwrap().compute_affine();
     let cue_pose = app.world().get::<Transform>(cue).unwrap().compute_affine();
     let child = app.world().get::<Children>(cue).unwrap()[0];
-    let word_pose = app
+    let glyph_pose = app
         .world()
         .get::<Transform>(child)
         .unwrap()
         .compute_affine();
-    let affine = root_affine * cue_pose * word_pose;
+    let affine = root_affine * cue_pose * glyph_pose;
     let composed_position = affine.transform_point3(Vec3::ZERO);
     assert!(
         composed_position.y > displayed.translation.y + 1.5,
@@ -527,7 +491,7 @@ fn word_tracks_displayed_pose_and_camera_and_freezes_on_pause() {
     for (first, second) in [(0, 1), (0, 2), (1, 2)] {
         assert!(axes[first].dot(axes[second]).abs() < 1e-6);
     }
-    // Text lies in local XY facing +Z: its axes match the camera's.
+    // The pictogram lies in local XY facing +Z: its axes match the camera's.
     for (actual, expected) in axes.into_iter().zip([
         camera_rotation * Vec3::X,
         camera_rotation * Vec3::Y,
@@ -535,7 +499,7 @@ fn word_tracks_displayed_pose_and_camera_and_freezes_on_pause() {
     ]) {
         assert!((actual - expected).length() < 1e-6);
     }
-    // Pause freezes the word's lifetime; unpausing lets it clear.
+    // Pause freezes the glyph's lifetime; unpausing lets it clear.
     app.world_mut()
         .resource_mut::<Fvr05ProductionUxStateResource>()
         .settings
@@ -551,7 +515,7 @@ fn word_tracks_displayed_pose_and_camera_and_freezes_on_pause() {
 }
 
 #[test]
-fn expired_low_id_receipts_do_not_starve_a_later_creatures_fresh_word() {
+fn expired_low_id_receipts_do_not_starve_a_later_creatures_fresh_glyph() {
     let mut world = cared_population((MAX_CUES + 1) as u16);
     let ids = world.organism_entity_ids();
     for &(organism, entity) in ids.iter().take(MAX_CUES) {
@@ -579,7 +543,7 @@ fn expired_low_id_receipts_do_not_starve_a_later_creatures_fresh_word() {
         app.world().get::<CareCue>(cues[0]).unwrap().organism_id,
         organism
     );
-    assert_eq!(cue_word(&app, cues[0]).0, "get");
+    assert_eq!(cue_icon(&app, cues[0]), "praise");
 }
 
 #[test]
@@ -599,7 +563,7 @@ fn replacing_frame_with_an_older_receipt_does_not_replay_it() {
     reseed(&mut app, &world);
     advance(&mut app, 0);
     let cues = cue_entities(&mut app);
-    assert_eq!(cue_word(&app, cues[0]).0, "get");
+    assert_eq!(cue_icon(&app, cues[0]), "praise");
     reseed(&mut app, &older_world);
     advance(&mut app, 0);
     assert!(cue_entities(&mut app).is_empty());

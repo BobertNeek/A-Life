@@ -1611,6 +1611,30 @@ impl PlayerCareKindSet {
         self.bits == 0
     }
 
+    /// The kinds in a consumed player-only dose. Each of the four dose
+    /// fields maps to exactly one kind (see `PlayerInteractionV1::apply`),
+    /// so a mixed dose yields the set it carried. Never call this on a
+    /// merged body event: a collision's damage is not a slap, and a
+    /// peer's touch is not a pet. A zero dose yields the empty set, and
+    /// the dose is validated finite upstream, so NaN cannot reach the
+    /// comparisons below.
+    pub fn from_dose(applied: BodyEventDelta) -> Self {
+        let mut kinds = Self::empty();
+        if applied.player_reward > 0.0 {
+            kinds.insert(PlayerCareKind::Praise);
+        }
+        if applied.social_contact > 0.0 {
+            kinds.insert(PlayerCareKind::Pet);
+        }
+        if applied.social_disapproval_v1 > 0.0 {
+            kinds.insert(PlayerCareKind::Scold);
+        }
+        if applied.damage > 0.0 {
+            kinds.insert(PlayerCareKind::Slap);
+        }
+        kinds
+    }
+
     /// The kinds in the set, in fixed order (pet, praise, scold, slap),
     /// for deterministic rendering and tests.
     pub fn iter(self) -> impl Iterator<Item = PlayerCareKind> {
@@ -1745,6 +1769,98 @@ impl PlayerCareReceipt {
         self.kinds.display_kind()
     }
 }
+
+/// How much a creature trusts the player, from real interaction history.
+/// The value runs from -1.0 (wary) through 0.0 (stranger) to +1.0
+/// (trusting), and is the value at `last_interaction_tick`: it fades
+/// toward 0 while the game runs without interaction (see `at_tick`),
+/// never by a per-tick write. This is the player's standing with one
+/// creature — not the memory bank's `object_familiarity`, which is a
+/// creature's familiarity with a tracked object. The record is
+/// world-side history; it never writes learning weights and never tells
+/// the brain what to do. If a learning input is ever needed, that is a
+/// Codex question, not a field here.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct PlayerFamiliarity {
+    /// Disposition at `last_interaction_tick`, in [-1, 1].
+    pub value: f32,
+    /// The tick the last applied player-care dose was felt.
+    pub last_interaction_tick: Tick,
+    /// Applied doses felt so far (one per consumption event, not per kind).
+    pub interactions: u32,
+}
+
+impl PlayerFamiliarity {
+    /// Ticks for familiarity to halve without interaction: one game-hour
+    /// at 20 world ticks per second. Ticks only advance while the game
+    /// runs, so a creature does not forget the player while the game is
+    /// off; it fades across a session spent ignoring it.
+    pub const HALF_LIFE_TICKS: u64 = 72_000;
+
+    /// The disposition as of `now`, decayed from the last interaction.
+    /// The returned record keeps the original last-interaction tick and
+    /// interaction count: only the value is current.
+    pub fn at_tick(self, now: Tick) -> Self {
+        let elapsed = now.raw().saturating_sub(self.last_interaction_tick.raw());
+        let retention = 0.5f32.powf(elapsed as f32 / Self::HALF_LIFE_TICKS as f32);
+        Self {
+            value: (self.value * retention).clamp(-1.0, 1.0),
+            ..self
+        }
+    }
+
+    /// The interpretive band for the current value. Thresholds are
+    /// presentation vocabulary, not measurements: the debug readout
+    /// carries the exact value. A record decayed to ~0 reads Stranger
+    /// (history netted neutral), which is distinct from no record at
+    /// all (Unknown).
+    pub fn band(self) -> PlayerFamiliarityBand {
+        if self.value >= 0.5 {
+            PlayerFamiliarityBand::Trusting
+        } else if self.value >= 0.15 {
+            PlayerFamiliarityBand::Familiar
+        } else if self.value > -0.15 {
+            PlayerFamiliarityBand::Stranger
+        } else if self.value > -0.5 {
+            PlayerFamiliarityBand::Uneasy
+        } else {
+            PlayerFamiliarityBand::Wary
+        }
+    }
+}
+
+/// The interpretive band of a familiarity value, for debug text only.
+/// Bands are presentation vocabulary, never a brain input.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PlayerFamiliarityBand {
+    Trusting,
+    Familiar,
+    Stranger,
+    Uneasy,
+    Wary,
+}
+
+impl PlayerFamiliarityBand {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Trusting => "trusting",
+            Self::Familiar => "familiar",
+            Self::Stranger => "stranger",
+            Self::Uneasy => "uneasy",
+            Self::Wary => "wary",
+        }
+    }
+}
+
+/// Familiarity earned or lost per applied kind. Tuning, debug-visible
+/// only: the player never sees these numbers. Positive kinds build
+/// slowly; negative kinds cost roughly twice as much — one slap costs
+/// more trust than one tickle builds, and a creature that has only ever
+/// been scolded reads wary, not neutral.
+const FAMILIARITY_PET_DELTA: f32 = 0.06;
+const FAMILIARITY_PRAISE_DELTA: f32 = 0.04;
+const FAMILIARITY_SCOLD_DELTA: f32 = -0.10;
+const FAMILIARITY_SLAP_DELTA: f32 = -0.15;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct HeadlessMotorChannelReceipt {
@@ -1906,6 +2022,10 @@ pub struct HeadlessWorld {
     /// Last applied player-care receipt per organism. Last-only history, not
     /// a pending obligation: a rejected queue never erases it.
     last_player_care: BTreeMap<u64, PlayerCareReceipt>,
+    /// Last familiarity record per organism. History, not a pending
+    /// obligation: a rejected queue never erases it, and a creature
+    /// never yet cared for has no entry (unknown, not hostile).
+    last_familiarity: BTreeMap<u64, PlayerFamiliarity>,
     player_hold: Option<player_hand::PlayerHold>,
     tracked_objects: TrackedObjectRegistry,
     habitats: HabitatAuthority,
@@ -2156,6 +2276,7 @@ impl HeadlessWorld {
             last_creature_utterance_ticks: BTreeMap::new(),
             pending_player_care: BTreeMap::new(),
             last_player_care: BTreeMap::new(),
+            last_familiarity: BTreeMap::new(),
             player_hold: None,
             tracked_objects: TrackedObjectRegistry::new(
                 seed,
@@ -2285,6 +2406,15 @@ impl HeadlessWorld {
         self.last_player_care.get(&organism.raw()).copied()
     }
 
+    /// The last familiarity record for this organism, if any. `None`
+    /// means the world holds no record for it — unknown, not a confirmed
+    /// absence. The stored value is the value at the last interaction;
+    /// use `PlayerFamiliarity::at_tick` or the presentation snapshot
+    /// for the decayed current value.
+    pub fn last_player_familiarity(&self, organism: OrganismId) -> Option<PlayerFamiliarity> {
+        self.last_familiarity.get(&organism.raw()).copied()
+    }
+
     /// Record that a queued player-care dose was applied to this organism's
     /// biology on `tick`. Call immediately after the biology advance that
     /// consumed the dose; `before`/`after` are the biochemistry states around
@@ -2302,25 +2432,12 @@ impl HeadlessWorld {
         // that was actually consumed, never from which button was pressed
         // and never from the merged body event: a collision's damage is
         // not a slap, and a peer's touch is not a pet. Each field maps to
-        // exactly one kind (see `PlayerInteractionV1::apply`), so a mixed
-        // dose records the set of kinds it carried — no dose is
+        // exactly one kind (see `PlayerCareKindSet::from_dose`), so a
+        // mixed dose records the set of kinds it carried — no dose is
         // unattributable, and the old both-negative/mixed-sign ambiguity
         // is gone. A zero dose records nothing: the dose never arrived,
-        // so there is no response to report. (The dose is validated
-        // finite upstream, so NaN cannot reach the comparisons below.)
-        let mut kinds = PlayerCareKindSet::empty();
-        if applied.player_reward > 0.0 {
-            kinds.insert(PlayerCareKind::Praise);
-        }
-        if applied.social_contact > 0.0 {
-            kinds.insert(PlayerCareKind::Pet);
-        }
-        if applied.social_disapproval_v1 > 0.0 {
-            kinds.insert(PlayerCareKind::Scold);
-        }
-        if applied.damage > 0.0 {
-            kinds.insert(PlayerCareKind::Slap);
-        }
+        // so there is no response to report.
+        let kinds = PlayerCareKindSet::from_dose(applied);
         if kinds.is_empty() {
             return;
         }
@@ -2335,6 +2452,27 @@ impl HeadlessWorld {
                 loneliness_after: after.homeostasis.drives.loneliness,
             },
         );
+        let delta = kinds
+            .iter()
+            .map(|kind| match kind {
+                PlayerCareKind::Pet => FAMILIARITY_PET_DELTA,
+                PlayerCareKind::Praise => FAMILIARITY_PRAISE_DELTA,
+                PlayerCareKind::Scold => FAMILIARITY_SCOLD_DELTA,
+                PlayerCareKind::Slap => FAMILIARITY_SLAP_DELTA,
+            })
+            .sum::<f32>();
+        let record = self
+            .last_familiarity
+            .entry(organism.raw())
+            .or_insert(PlayerFamiliarity {
+                value: 0.0,
+                last_interaction_tick: tick,
+                interactions: 0,
+            });
+        let current = record.at_tick(tick).value;
+        record.value = (current + delta).clamp(-1.0, 1.0);
+        record.last_interaction_tick = tick;
+        record.interactions = record.interactions.saturating_add(1);
     }
 
     pub fn habitat_authority(&self) -> &HabitatAuthority {
@@ -2675,6 +2813,7 @@ impl HeadlessWorld {
                         &care_biology_before,
                         &care_biology_after,
                     );
+
                     #[cfg(test)]
                     {
                         advanced_organism = true;
@@ -3474,6 +3613,13 @@ impl HeadlessWorld {
             digest.write_bytes(b"player-care-receipt-v1");
             digest.write_bytes(
                 &serde_json::to_vec(&self.last_player_care)
+                    .map_err(|_| ScaffoldContractError::InvalidId)?,
+            );
+        }
+        if !self.last_familiarity.is_empty() {
+            digest.write_bytes(b"player-familiarity-v1");
+            digest.write_bytes(
+                &serde_json::to_vec(&self.last_familiarity)
                     .map_err(|_| ScaffoldContractError::InvalidId)?,
             );
         }
@@ -4285,6 +4431,7 @@ impl HeadlessWorld {
             audible_utterances: self.speech.snapshot(),
             pending_player_care: self.pending_player_care.clone(),
             last_player_care: self.last_player_care.clone(),
+            last_familiarity: self.last_familiarity.clone(),
             ingestion_observations: self.ingestion_observations.clone(),
             player_hold: self.player_hold.clone(),
             last_creature_utterance_ticks: self
@@ -4463,6 +4610,7 @@ impl HeadlessWorld {
             speech: SpatialSpeechBus::restore(state.audible_utterances.clone(), state.tick)?,
             pending_player_care: state.pending_player_care.clone(),
             last_player_care: state.last_player_care.clone(),
+            last_familiarity: state.last_familiarity.clone(),
             player_hold: state.player_hold.clone(),
             last_creature_utterance_ticks: state
                 .last_creature_utterance_ticks
@@ -6283,6 +6431,7 @@ impl HeadlessWorld {
             &care_biology_before,
             &biology_after,
         );
+
         #[cfg(test)]
         if self.injected_post_action_failure {
             return Err(ScaffoldContractError::InvalidDecisionEvidence);

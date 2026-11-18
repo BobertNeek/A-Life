@@ -1,8 +1,9 @@
 //! Wordless selected-creature identity, physiology, possession and playback readout.
-//! Icon meters show measured quantities, not six interchangeable needs or health scores.
+//! Icon meters show measured quantities, not seven interchangeable needs or health scores.
 use super::*;
 use alife_world::{
-    HeadlessWorld, PlayerCareKind, PlayerCareReceipt, PresentationEvidence, WorldObject,
+    HeadlessWorld, PlayerCareKind, PlayerCareReceipt, PlayerFamiliarity, PresentationEvidence,
+    WorldObject,
 };
 use bevy::a11y::AccessibilityNode;
 use bevy::image::{CompressedImageFormats, ImageSampler, ImageType};
@@ -17,14 +18,16 @@ enum Quantity {
     Calm,
     SleepPressure,
     PraiseSignal,
+    Familiarity,
 }
-const QUANTITIES: [Quantity; 6] = [
+const QUANTITIES: [Quantity; 7] = [
     Quantity::Hunger,
     Quantity::Energy,
     Quantity::Fatigue,
     Quantity::Calm,
     Quantity::SleepPressure,
     Quantity::PraiseSignal,
+    Quantity::Familiarity,
 ];
 impl Quantity {
     fn name(self) -> &'static str {
@@ -35,6 +38,7 @@ impl Quantity {
             Self::Calm => "calm",
             Self::SleepPressure => "sleep",
             Self::PraiseSignal => "praise",
+            Self::Familiarity => "familiarity",
         }
     }
     fn accessible_name(self) -> &'static str {
@@ -45,9 +49,14 @@ impl Quantity {
             Self::Calm => "Calm",
             Self::SleepPressure => "Sleep pressure",
             Self::PraiseSignal => "Praise signal",
+            Self::Familiarity => "Familiarity",
         }
     }
     fn value(self, row: &WorldOrganismPresentationRow) -> Option<f32> {
+        // Familiarity is history, not physiology: the row carries the
+        // decayed record, or nothing when the creature has no history.
+        // The meter maps [-1, 1] to [0, 1] (wary empty, stranger half,
+        // trusting full); unknown stays unknown, never a midpoint.
         let h = &row.biochemistry.homeostasis;
         let raw = match self {
             Self::Hunger => h.drives.hunger,
@@ -56,6 +65,14 @@ impl Quantity {
             Self::Calm => h.drives.fear,
             Self::SleepPressure => h.hormones.sleep_pressure,
             Self::PraiseSignal => h.hormones.extension[0],
+            Self::Familiarity => {
+                return match row.familiarity {
+                    PresentationEvidence::Observed { value, .. } => {
+                        normalized((value.value + 1.0) * 0.5)
+                    }
+                    PresentationEvidence::Unknown => None,
+                }
+            }
         };
         // Validate before transformation: malformed fear must not become apparent calm.
         normalized(raw).map(|value| {
@@ -70,7 +87,7 @@ impl Quantity {
         match self {
             Self::Hunger | Self::Fatigue | Self::SleepPressure => value >= 0.65,
             Self::Energy | Self::Calm => value <= 0.35,
-            Self::PraiseSignal => false,
+            Self::PraiseSignal | Self::Familiarity => false,
         }
     }
     fn meter_color(self, value: f32) -> Color {
@@ -91,7 +108,7 @@ fn normalized(value: f32) -> Option<f32> {
 struct Readout {
     stable_id: u64,
     name: Option<String>,
-    values: [Option<f32>; 6],
+    values: [Option<f32>; 7],
     holding_food: bool,
 }
 impl Readout {
@@ -126,8 +143,7 @@ impl Readout {
 /// is where the exact set lives. No receipt is UNKNOWN, never a definite
 /// absence — a save from before receipts existed reads exactly the same
 /// way, so the line says "unknown" and never "none yet" or "felt nothing".
-#[allow(dead_code)]
-fn debug_care_line(care: &PresentationEvidence<PlayerCareReceipt>) -> String {
+pub(super) fn debug_care_line(care: &PresentationEvidence<PlayerCareReceipt>) -> String {
     match care {
         PresentationEvidence::Unknown => "care: unknown (no receipt recorded)".to_string(),
         PresentationEvidence::Observed { value, .. } => {
@@ -168,6 +184,30 @@ fn debug_care_line(care: &PresentationEvidence<PlayerCareReceipt>) -> String {
         }
     }
 }
+/// DEBUG-ONLY inspector line for the selected creature's familiarity.
+/// Never wired into the user-facing HUD: the game shows the disposition
+/// (the creature's resting head and ears, and its meter), not the band
+/// and decimals. No record is UNKNOWN, never a definite absence — a save
+/// from before familiarity existed reads exactly the same way, so the
+/// line says "unknown" and never "stranger".
+pub(super) fn debug_familiarity_line(
+    familiarity: &PresentationEvidence<PlayerFamiliarity>,
+) -> String {
+    match familiarity {
+        PresentationEvidence::Unknown => {
+            "familiarity: unknown (no interaction history)".to_string()
+        }
+        PresentationEvidence::Observed { value, .. } => {
+            format!(
+                "familiarity: {} ({:.2}, {} interactions, last at tick {})",
+                value.band().label(),
+                value.value,
+                value.interactions,
+                value.last_interaction_tick.raw()
+            )
+        }
+    }
+}
 fn valid_row(
     stable_id: WorldEntityId,
     organism_id: OrganismId,
@@ -191,6 +231,8 @@ struct HudRoot;
 struct Identity;
 #[derive(Component)]
 struct IdentityHeader;
+#[derive(Component)]
+struct CrestBar(u32);
 #[derive(Component)]
 struct CreatureName;
 /// Pointer and accessibility entry point for the shared naming composer.
@@ -218,12 +260,17 @@ struct StatusRoot;
 struct Playback;
 #[derive(Resource)]
 struct Icons(BTreeMap<&'static str, Handle<Image>>);
-const PANEL: Color = Color::srgb(0.075, 0.115, 0.135);
-const CARD: Color = Color::srgb(0.050, 0.075, 0.090);
-const INK: Color = Color::srgb(0.98, 0.96, 0.84);
+const PANEL: Color = ink::GLASS;
+const CARD: Color = ink::WELL;
+const INK: Color = ink::PORCELAIN;
 const URGENT_INK: Color = Color::srgb(0.96, 0.72, 0.32);
 const HEADER_HEIGHT: f32 = 36.0;
-const EMBEDDED: [(&str, &[u8]); 13] = [
+// The panel is exactly wide enough for seven meter cards in one row:
+// seven 52px cards plus six 8px gaps is 412px, plus 12px padding and
+// 6px border. Widening it (rather than wrapping to two rows) keeps the
+// selection panel fitting above the care dock at 640x360.
+const PANEL_WIDTH: f32 = 430.0;
+const EMBEDDED: [(&str, &[u8]); 14] = [
     (
         "holding_food",
         include_bytes!("../../../../assets/ui/status_hud/holding_food.png"),
@@ -253,6 +300,10 @@ const EMBEDDED: [(&str, &[u8]); 13] = [
         include_bytes!("../../../../assets/ui/status_hud/praise.png"),
     ),
     (
+        "familiarity",
+        include_bytes!("../../../../assets/ui/status_hud/familiarity.png"),
+    ),
+    (
         "selection",
         include_bytes!("../../../../assets/ui/status_hud/selection.png"),
     ),
@@ -277,16 +328,7 @@ const EMBEDDED: [(&str, &[u8]); 13] = [
         include_bytes!("../../../../assets/ui/status_hud/warning.png"),
     ),
 ];
-fn bevel(raised: bool) -> BorderColor {
-    let light = Color::srgb(0.43, 0.53, 0.55);
-    let dark = Color::srgb(0.025, 0.040, 0.050);
-    BorderColor {
-        top: if raised { light } else { dark },
-        left: if raised { light } else { dark },
-        bottom: if raised { dark } else { light },
-        right: if raised { dark } else { light },
-    }
-}
+use crate::production_voxel_renderer::sanctuary_ink::{self as ink, bevel};
 fn accessible(role: accesskit::Role, label: &str) -> AccessibilityNode {
     let mut node = accesskit::Node::new(role);
     node.set_label(label);
@@ -358,24 +400,8 @@ pub(super) fn spawn(world: &mut World) {
             GlobalZIndex(30),
         ))
         .id();
-    icon(world, status, image("population"), 26.0);
-    world.spawn((
-        Text::new("0"),
-        TextFont {
-            font_size: 18.0,
-            ..default()
-        },
-        TextColor(INK),
-        Node {
-            min_width: Val::Px(26.0),
-            height: Val::Px(22.0),
-            ..default()
-        },
-        Count,
-        decorative(),
-        V0PlayerStatusChip,
-        ChildOf(status),
-    ));
+    let herd = icon(world, status, image("population"), 26.0);
+    world.entity_mut(herd).insert((Count, V0PlayerStatusChip));
     let playback = icon(world, status, image("playing"), 22.0);
     world.entity_mut(playback).insert(Playback);
     let root = world
@@ -385,7 +411,7 @@ pub(super) fn spawn(world: &mut World) {
                 position_type: PositionType::Absolute,
                 left: Val::Px(16.0),
                 top: Val::Px(76.0),
-                width: Val::Px(370.0),
+                width: Val::Px(PANEL_WIDTH),
                 padding: UiRect::all(Val::Px(6.0)),
                 border: UiRect::all(Val::Px(3.0)),
                 border_radius: BorderRadius::all(Val::Px(18.0)),
@@ -419,57 +445,46 @@ pub(super) fn spawn(world: &mut World) {
         ))
         .id();
     icon(world, identity, image("selection"), 16.0);
-    let identity_text = world
+    let crest = world
         .spawn((
-            accessible(accesskit::Role::GenericContainer, ""),
+            CreatureName,
+            accessible(accesskit::Role::Image, "Individual crest"),
             Node {
-                min_width: Val::Px(0.0),
-                height: Val::Px(32.0),
+                height: Val::Px(24.0),
                 flex_grow: 1.0,
-                flex_direction: FlexDirection::Column,
+                align_items: AlignItems::Center,
+                column_gap: Val::Px(4.0),
                 ..default()
             },
             ChildOf(identity),
         ))
         .id();
     world.spawn((
-        Text::new(""),
-        TextFont {
-            font_size: 13.0,
-            ..default()
-        },
-        TextColor(INK),
-        TextLayout::new_with_linebreak(bevy::text::LineBreak::NoWrap),
-        Node {
-            width: Val::Percent(100.0),
-            min_width: Val::Px(0.0),
-            height: Val::Px(18.0),
-            overflow: Overflow::clip(),
-            flex_shrink: 0.0,
-            ..default()
-        },
-        CreatureName,
-        AccessibilityNode(accesskit::Node::new(accesskit::Role::Label)),
-        ChildOf(identity_text),
-    ));
-    world.spawn((
-        Text::new(""),
-        TextFont {
-            font_size: 10.0,
-            ..default()
-        },
-        TextColor(INK),
-        TextLayout::new_with_linebreak(bevy::text::LineBreak::NoWrap),
-        Node {
-            width: Val::Percent(100.0),
-            height: Val::Px(14.0),
-            flex_shrink: 0.0,
-            ..default()
-        },
         Identity,
-        accessible(accesskit::Role::Label, ""),
-        ChildOf(identity_text),
+        accessible(accesskit::Role::Image, "Individual"),
+        Node {
+            width: Val::Px(15.0),
+            height: Val::Px(15.0),
+            border_radius: BorderRadius::all(Val::Percent(50.0)),
+            ..default()
+        },
+        BackgroundColor(INK),
+        ChildOf(crest),
     ));
+    // The asymmetric profile is readable even without hue discrimination.
+    for slot in 0..5 {
+        world.spawn((
+            CrestBar(slot),
+            decorative(),
+            BackgroundColor(INK),
+            Node {
+                width: Val::Px(4.0),
+                border_radius: BorderRadius::all(Val::Px(2.0)),
+                ..default()
+            },
+            ChildOf(crest),
+        ));
+    }
     let held_food = icon(world, identity, image("holding_food"), 22.0);
     world.entity_mut(held_food).insert((
         Name::new("Selected creature holds unconsumed food"),
@@ -598,19 +613,16 @@ pub(super) fn spawn(world: &mut World) {
             ChildOf(track),
         ));
         world.spawn((
-            Text::new("?"),
-            TextFont {
-                font_size: 14.0,
-                ..default()
-            },
-            TextColor(Color::srgb(0.65, 0.75, 0.80)),
             Node {
                 position_type: PositionType::Absolute,
-                bottom: Val::Px(0.0),
-                width: Val::Px(14.0),
-                height: Val::Px(14.0),
+                bottom: Val::Px(4.0),
+                width: Val::Px(7.0),
+                height: Val::Px(7.0),
+                border: UiRect::all(Val::Px(1.5)),
+                border_radius: BorderRadius::all(Val::Percent(50.0)),
                 ..default()
             },
+            BorderColor::all(Color::srgb(0.65, 0.75, 0.80)),
             Unknown(quantity),
             decorative(),
             ChildOf(card),
@@ -667,27 +679,28 @@ fn set_readout(world: &mut World, readout: Option<&Readout>, debug: bool) {
             *visible = next;
         }
     }
-    for (mut text, mut accessible) in world
-        .query_filtered::<(&mut Text, &mut AccessibilityNode), With<Identity>>()
+    let id = readout.map(|r| r.stable_id);
+    // Fold all 64 bits: late generations should not share the same five bars.
+    let signature = id
+        .unwrap_or(0)
+        .wrapping_mul(0x9e37_79b9_7f4a_7c15)
+        .rotate_right(19);
+    for (mut pigment, mut accessible) in world
+        .query_filtered::<(&mut BackgroundColor, &mut AccessibilityNode), With<Identity>>()
         .iter_mut(world)
     {
-        let next = readout.map_or_else(String::new, |r| format!("#{}", r.stable_id));
-        accessible.set_value(next.as_str());
-        if text.0 != next {
-            text.0 = next;
-        }
+        pigment.0 = Color::hsl((signature % 360) as f32, 0.52, 0.72);
+        accessible.set_value(id.map_or_else(String::new, |id| format!("#{id}")));
+    }
+    for (bar, mut node) in world.query::<(&CrestBar, &mut Node)>().iter_mut(world) {
+        node.height = Val::Px(4.0 + 2.0 * ((signature >> (3 * bar.0)) & 7) as f32);
     }
     let name = readout.and_then(|r| r.name.as_deref());
-    for (mut text, mut accessible) in world
-        .query_filtered::<(&mut Text, &mut AccessibilityNode), With<CreatureName>>()
+    for mut accessible in world
+        .query_filtered::<&mut AccessibilityNode, With<CreatureName>>()
         .iter_mut(world)
     {
-        let next = name.unwrap_or("");
-        if text.0 != next {
-            text.0 = next.to_owned();
-        }
-        // The complete canonical name remains available when the line clips.
-        accessible.set_label(next);
+        accessible.set_label(name.unwrap_or(""));
     }
     for (mut visible, mut pickable, mut focus, mut interaction, mut border, mut accessible) in world
         .query_filtered::<(
@@ -728,7 +741,7 @@ fn set_readout(world: &mut World, readout: Option<&Readout>, debug: bool) {
             accessible.clear_description();
         }
     }
-    let values = readout.map_or([None; 6], |r| r.values);
+    let values = readout.map_or([None; 7], |r| r.values);
     for mut visibility in world
         .query_filtered::<&mut Visibility, With<HeldFood>>()
         .iter_mut(world)
@@ -803,7 +816,7 @@ fn set_readout(world: &mut World, readout: Option<&Readout>, debug: bool) {
     }
 }
 fn apply_layout(world: &mut World, size: Vec2) {
-    let width = (size.x - 32.0).clamp(0.0, 370.0);
+    let width = (size.x - 32.0).clamp(0.0, PANEL_WIDTH);
     for mut node in world
         .query_filtered::<&mut Node, With<HudRoot>>()
         .iter_mut(world)
@@ -847,7 +860,7 @@ fn selected_readout(world: &World, stable_id: WorldEntityId) -> Readout {
         Readout {
             stable_id: stable_id.raw(),
             name: None,
-            values: [None; 6],
+            values: [None; 7],
             holding_food: false,
         },
         |organism_id| {
@@ -940,27 +953,24 @@ fn set_status(world: &mut World, count: usize, paused: bool, fast: bool) {
             image.image = handle.clone();
         }
     }
-    for (mut text, mut color) in world
-        .query_filtered::<(&mut Text, &mut TextColor), With<Count>>()
+    for mut herd in world
+        .query_filtered::<&mut ImageNode, With<Count>>()
         .iter_mut(world)
     {
-        let next = count.to_string();
-        if text.0 != next {
-            text.0 = next;
-        }
-        if color.0 != INK {
-            color.0 = INK;
-        }
+        herd.color = if count == 0 {
+            Color::srgb(0.37, 0.43, 0.42)
+        } else {
+            INK
+        };
     }
 }
 fn set_urgent_status(world: &mut World, urgent_count: usize) {
-    let target_color = if urgent_count > 0 { URGENT_INK } else { INK };
-    for mut color in world
-        .query_filtered::<&mut TextColor, With<Count>>()
-        .iter_mut(world)
-    {
-        if color.0 != target_color {
-            color.0 = target_color;
+    if urgent_count > 0 {
+        for mut herd in world
+            .query_filtered::<&mut ImageNode, With<Count>>()
+            .iter_mut(world)
+        {
+            herd.color = URGENT_INK;
         }
     }
     for mut accessible in world
@@ -975,7 +985,7 @@ fn set_urgent_status(world: &mut World, urgent_count: usize) {
     }
 }
 fn panel_bottom(size: Vec2) -> f32 {
-    let width = (size.x - 32.0).clamp(0.0, 370.0);
+    let width = (size.x - 32.0).clamp(0.0, PANEL_WIDTH);
     let columns = ((width - 18.0 + 8.0) / 60.0).floor().max(1.0) as usize;
     let rows = QUANTITIES.len().div_ceil(columns);
     76.0 + 18.0

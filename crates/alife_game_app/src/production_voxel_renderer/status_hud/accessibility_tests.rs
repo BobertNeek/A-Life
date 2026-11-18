@@ -51,6 +51,7 @@ fn assert_quantity(world: &mut World, quantity: Quantity, value: Option<f32>) {
         Quantity::Calm => "Calm",
         Quantity::SleepPressure => "Sleep pressure",
         Quantity::PraiseSignal => "Praise signal",
+        Quantity::Familiarity => "Familiarity",
     };
     assert_eq!(accessible.label(), Some(label));
     assert_eq!(accessible.min_numeric_value(), Some(0.0));
@@ -128,9 +129,9 @@ fn selection_missing_and_invalid_rows_clear_old_values_instead_of_announcing_zer
     let mut selected = Readout::from_row(row.world_entity_id, row.organism_id, Some(&row), []);
     selected.holding_food = true;
     for (id, name, values, holding) in [
-        (1, "First", [Some(1.0); 6], true),
-        (2, "Second", [Some(0.0); 6], false),
-        (2, "Second", [None; 6], false),
+        (1, "First", [Some(1.0); 7], true),
+        (2, "Second", [Some(0.0); 7], false),
+        (2, "Second", [None; 7], false),
     ] {
         selected.stable_id = id;
         selected.name = Some(name.into());

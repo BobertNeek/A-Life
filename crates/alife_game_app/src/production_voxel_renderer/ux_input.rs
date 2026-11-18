@@ -181,10 +181,10 @@ pub(super) fn handle_fvr05_production_ux_input(
         ux.last_error = None;
         ux.last_action = "Food move cancelled".to_string();
     }
-    if keyboard.just_pressed(KeyCode::F1) {
+    if ux.debug_mode && keyboard.just_pressed(KeyCode::F1) {
         ux.show_help = !ux.show_help;
     }
-    if keyboard.just_pressed(KeyCode::F3) {
+    if frontend.summary.developer_overlay && keyboard.just_pressed(KeyCode::F3) {
         ux.debug_mode = !ux.debug_mode;
         ux.settings.show_menu = ux.debug_mode;
     }
@@ -265,9 +265,25 @@ pub(super) fn handle_fvr05_production_ux_input(
         .filter(|a| *a != care_dock::Action::Speech)
     {
         if care_dock::requested(action, pointer_action, &keyboard, ux.debug_mode) {
+            #[cfg(feature = "gpu-runtime")]
+            let target = gpu_runtime.as_ref().and_then(|r| {
+                care_dock::contextual_target(
+                    action,
+                    selection.selected,
+                    if pointer_action.is_some() {
+                        None
+                    } else {
+                        selection.hovered
+                    },
+                    follow.enabled.then_some(follow.target_stable_id).flatten(),
+                    r.runtime.world(),
+                )
+            });
+            #[cfg(not(feature = "gpu-runtime"))]
+            let target = selection.selected;
             let evidence = care_dock::dispatch(
                 action,
-                selection.selected,
+                target,
                 &mut ux,
                 #[cfg(feature = "gpu-runtime")]
                 gpu_runtime.as_deref_mut().map(|r| &mut r.runtime),

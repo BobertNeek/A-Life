@@ -32,11 +32,12 @@ use bevy::{
     mesh::Indices,
     prelude::{
         default, AlphaMode, App, Assets, BackgroundColor, ButtonInput, Camera, ChildOf, Children,
-        Color, Commands, Component, Cuboid, DetectChanges, DirectionalLight, Entity, EulerRot,
-        GlobalTransform, Handle, Image, KeyCode, Local, Mesh, Mesh3d, MeshMaterial3d,
-        MessageReader, MessageWriter, MouseButton, Name, Node, ParamSet, PositionType, Projection,
-        Quat, Res, ResMut, Resource, StandardMaterial, Text, Text2d, TextColor, TextFont, Time,
-        Torus, Transform, Update, Val, Vec3, Visibility, Window, With, Without, World,
+        Color, Commands, Component, Cuboid, DetectChanges, DetectChangesMut, DirectionalLight,
+        Entity, EulerRot, GlobalTransform, Handle, Image, KeyCode, Local, Mesh, Mesh3d,
+        MeshMaterial3d, MessageReader, MessageWriter, MouseButton, Name, Node, ParamSet,
+        PositionType, Projection, Quat, Res, ResMut, Resource, StandardMaterial, Text, TextColor,
+        TextFont, Time, Torus, Transform, Update, Val, Vec3, Visibility, Window, With, Without,
+        World,
     },
     render::{
         render_resource::PrimitiveTopology,
@@ -83,6 +84,7 @@ mod performance_receipt;
 mod phase31_performance_health;
 #[cfg(feature = "gpu-runtime")]
 mod phase31_slow_frame_ranking;
+pub(crate) mod sanctuary_ink;
 pub(crate) mod status_hud;
 mod terrain_water;
 mod ux_input;
@@ -1679,12 +1681,11 @@ fn despawn_fvr04_runtime_scene(world: &mut World) {
         }
         despawn_production_entity_hierarchy(world, root);
     }
-    let mut labels = world
-        .query_filtered::<(&mut Text2d, &mut Visibility), With<Fvr04ProductionCreatureWorldLabel>>(
-        );
-    for (mut text, mut visibility) in labels.iter_mut(world) {
-        text.0 = "creature".to_string();
-        *visibility = Visibility::Hidden;
+    for mut visible in world
+        .query_filtered::<&mut Visibility, With<Fvr04ProductionCreatureWorldLabel>>()
+        .iter_mut(world)
+    {
+        *visible = Visibility::Hidden;
     }
 }
 
@@ -2184,7 +2185,7 @@ pub fn spawn_fvr03_production_voxel_scene(
     menu::install(app, summary);
     spawn_fvr05_production_ux_ui(app);
     spawn_v0_player_experience_ui(app);
-    spawn_fvr04_creature_world_label(app, selected);
+    spawn_creature_focus_lantern(app);
     Ok(())
 }
 
@@ -4513,22 +4514,31 @@ fn spawn_fvr03_selection_marker(
     ));
 }
 
-fn spawn_fvr04_creature_world_label(app: &mut App, selected: Option<StableVoxelObjectRef>) {
-    let visible = selected.is_some_and(|selection| selection.kind == StableVoxelRefKind::Creature);
-    app.world_mut().spawn((
-        Name::new("A-Life FVR04 selected creature world label"),
-        Text2d::new("creature"),
-        TextFont {
-            font_size: 18.0,
+fn spawn_creature_focus_lantern(app: &mut App) {
+    use bevy::prelude::Meshable;
+    let world = app.world_mut();
+    // A small pendant, not a nameplate: it stays clear of the eyes and ears.
+    let mesh = world.resource_mut::<Assets<Mesh>>().add(
+        bevy::math::primitives::Sphere::new(1.0)
+            .mesh()
+            .ico(0)
+            .expect("valid icosahedron"),
+    );
+    let material = world
+        .resource_mut::<Assets<StandardMaterial>>()
+        .add(StandardMaterial {
+            base_color: Color::srgb(0.93, 0.78, 0.44),
+            emissive: bevy::color::LinearRgba::rgb(0.35, 0.19, 0.04),
+            perceptual_roughness: 0.4,
             ..default()
-        },
-        TextColor(Color::srgb(0.96, 0.93, 0.72)),
-        Transform::from_xyz(0.0, 2.35, 0.0),
-        if visible {
-            Visibility::Visible
-        } else {
-            Visibility::Hidden
-        },
+        });
+    world.spawn((
+        Name::new("Creature focus lantern"),
+        Mesh3d(mesh),
+        MeshMaterial3d(material),
+        Transform::from_scale(Vec3::new(0.085, 0.125, 0.085)),
+        Visibility::Hidden,
+        bevy::light::NotShadowCaster,
         Fvr04ProductionCreatureWorldLabel,
     ));
 }
@@ -4684,7 +4694,7 @@ fn sync_v0_player_control_strip(
     if !ux.is_changed() && !authority_changed {
         return;
     }
-    if !ux.show_help && !ux.debug_mode {
+    if !ux.debug_mode {
         for (_, mut visibility, _) in &mut strips {
             if *visibility != Visibility::Hidden {
                 *visibility = Visibility::Hidden;
@@ -5456,21 +5466,37 @@ fn sync_fvr05_right_inspector_panel(
             .then_some((tick, position))
     });
     let body = match ux.settings.active_inspector_tab {
-        Fvr05ProductionInspectorTab::Creature => format!(
-            "{}\n\nPRESENTATION DETAIL\n{}",
-            fvr04_live_creature_inspector_text(
-                selection.selected,
-                &creatures,
-                live_state,
-                frame.as_deref(),
-            ),
-            selection
-                .selected
-                .and_then(|r| r.stable_id)
-                .and_then(|id| creatures.sample_for_stable_id(id))
-                .map(v0_selected_creature_text)
-                .unwrap_or_else(|| "unavailable".to_string()),
-        ),
+        Fvr05ProductionInspectorTab::Creature => {
+            let row = live_state.and_then(|_| {
+                frame
+                    .as_ref()?
+                    .current
+                    .organism(selection.selected?.stable_id?)
+            });
+            let care = row
+                .map(|r| &r.last_player_care)
+                .unwrap_or(&alife_world::PresentationEvidence::Unknown);
+            let history = row
+                .map(|r| &r.familiarity)
+                .unwrap_or(&alife_world::PresentationEvidence::Unknown);
+            format!(
+                "{}\n\nPRESENTATION DETAIL\n{}\n{}\n{}",
+                fvr04_live_creature_inspector_text(
+                    selection.selected,
+                    &creatures,
+                    live_state,
+                    frame.as_deref(),
+                ),
+                selection
+                    .selected
+                    .and_then(|r| r.stable_id)
+                    .and_then(|id| creatures.sample_for_stable_id(id))
+                    .map(v0_selected_creature_text)
+                    .unwrap_or_else(|| "unavailable".to_string()),
+                status_hud::debug_care_line(care),
+                status_hud::debug_familiarity_line(history)
+            )
+        }
         Fvr05ProductionInspectorTab::Tile => {
             scene.tile_panel_text(selection.selected.or(selection.hovered))
         }
@@ -5806,7 +5832,6 @@ fn sync_fvr04_camera_follow(
 
 fn sync_fvr04_creature_label(
     selection: Res<Fvr03ProductionVoxelSelectionResource>,
-    creatures: Res<Fvr04ProductionCreatureSceneResource>,
     frame: Option<Res<LiveBrainPresentationFrameResource>>,
     entity_map: Res<BevyEntityMap>,
     roots: bevy::prelude::Query<
@@ -5817,86 +5842,36 @@ fn sync_fvr04_creature_label(
         ),
         Without<Fvr04ProductionCreatureWorldLabel>,
     >,
-    mut labels: bevy::prelude::Query<
-        (&mut Text2d, &mut Transform, &mut Visibility),
+    mut lanterns: bevy::prelude::Query<
+        (&mut Transform, &mut Visibility),
         With<Fvr04ProductionCreatureWorldLabel>,
     >,
 ) {
-    let refresh_text = selection.is_changed() || creatures.is_changed();
-    let target = selection
+    let live_position = |target: StableVoxelObjectRef| {
+        let id = target
+            .stable_id
+            .filter(|_| target.kind == StableVoxelRefKind::Creature)?;
+        let object = frame.as_ref()?.current.object(id)?;
+        let (root, visual, pose) = roots.get(entity_map.bevy_entity(id)?).ok()?;
+        (object.kind == WorldObjectKind::Agent
+            && !object.consumed
+            && object.organism_id == Some(visual.organism_id)
+            && root.stable_id == id
+            && visual.stable_id == id)
+            .then_some(pose.translation + Vec3::Y * 1.55)
+    };
+    let position = selection
         .hovered
-        .filter(|hovered| hovered.kind == StableVoxelRefKind::Creature)
-        .or_else(|| {
-            selection
-                .selected
-                .filter(|selected| selected.kind == StableVoxelRefKind::Creature)
-        });
-    let Some(target) = target else {
-        for (_, _, mut visibility) in &mut labels {
-            if *visibility != Visibility::Hidden {
-                *visibility = Visibility::Hidden;
+        .and_then(live_position)
+        .or_else(|| selection.selected.and_then(live_position));
+    for (mut transform, mut visibility) in &mut lanterns {
+        if let Some(position) = position {
+            if transform.translation != position {
+                transform.translation = position;
             }
-        }
-        return;
-    };
-    let Some(stable_id) = target.stable_id else {
-        for (_, _, mut visibility) in &mut labels {
-            if *visibility != Visibility::Hidden {
-                *visibility = Visibility::Hidden;
-            }
-        }
-        return;
-    };
-    let Some(sample) = creatures.sample_for_stable_id(stable_id) else {
-        for (_, _, mut visibility) in &mut labels {
-            if *visibility != Visibility::Hidden {
-                *visibility = Visibility::Hidden;
-            }
-        }
-        return;
-    };
-    let Some((_, _, position)) = entity_map
-        .bevy_entity(stable_id)
-        .and_then(|entity| roots.get(entity).ok())
-        .filter(|(root, visual, _)| {
-            let Some(frame) = frame.as_deref() else {
-                return false;
-            };
-            let Some(object) = frame.current.object(stable_id) else {
-                return false;
-            };
-            object.kind == WorldObjectKind::Agent
-                && object.organism_id == Some(visual.organism_id)
-                && root.stable_id == stable_id
-                && visual.stable_id == stable_id
-                && root.stable_id == visual.stable_id
-        })
-    else {
-        for (_, _, mut visibility) in &mut labels {
-            if *visibility != Visibility::Hidden {
-                *visibility = Visibility::Hidden;
-            }
-        }
-        return;
-    };
-    let label_text = refresh_text.then(|| {
-        format!(
-            "{}\n{}  |  {}",
-            v0_player_creature_name(&sample.display_label, sample.stable_id.raw()),
-            sample.animation.label(),
-            sample.expression.label()
-        )
-    });
-    for (mut text, mut transform, mut visibility) in &mut labels {
-        if let Some(label_text) = &label_text {
-            text.0.clone_from(label_text);
-        }
-        let next_translation = position.translation + Vec3::Y * 1.55;
-        if transform.translation != next_translation {
-            transform.translation = next_translation;
-        }
-        if *visibility != Visibility::Visible {
-            *visibility = Visibility::Visible;
+            visibility.set_if_neq(Visibility::Visible);
+        } else {
+            visibility.set_if_neq(Visibility::Hidden);
         }
     }
 }

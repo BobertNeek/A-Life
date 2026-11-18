@@ -1,5 +1,7 @@
 # Vision
 
+See [the Lantern Garden player direction](qualia-lantern-garden.md) for the ordinary game’s visual-language rules, relationship loop and limits.
+
 ## The destination
 
 A-Life aims to become a persistent artificial-life game in which organisms live, learn, reproduce, communicate, and die inside one authoritative voxel world.

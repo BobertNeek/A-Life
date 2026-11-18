@@ -130,7 +130,7 @@ fn image_name(world: &World, entity: Entity) -> Option<&'static str> {
 }
 
 fn assert_readout_components(world: &mut World, readout: Option<&Readout>) {
-    let values = readout.map_or([None; 6], |readout| readout.values);
+    let values = readout.map_or([None; 7], |readout| readout.values);
     let badge = world
         .query_filtered::<&Visibility, With<HeldFood>>()
         .single(world)
@@ -144,10 +144,10 @@ fn assert_readout_components(world: &mut World, readout: Option<&Readout>) {
         }
     );
     let value = |quantity| values[QUANTITIES.iter().position(|q| *q == quantity).unwrap()];
-    assert_eq!(world.query::<&MeterFill>().iter(world).count(), 6);
-    assert_eq!(world.query::<&MeterTrack>().iter(world).count(), 6);
-    assert_eq!(world.query::<&Unknown>().iter(world).count(), 6);
-    assert_eq!(world.query::<&Warning>().iter(world).count(), 6);
+    assert_eq!(world.query::<&MeterFill>().iter(world).count(), 7);
+    assert_eq!(world.query::<&MeterTrack>().iter(world).count(), 7);
+    assert_eq!(world.query::<&Unknown>().iter(world).count(), 7);
+    assert_eq!(world.query::<&Warning>().iter(world).count(), 7);
     for (fill, node, color) in world
         .query::<(&MeterFill, &Node, &BackgroundColor)>()
         .iter(world)
@@ -169,8 +169,7 @@ fn assert_readout_components(world: &mut World, readout: Option<&Readout>) {
             }
         );
     }
-    for (unknown, visibility, text) in world.query::<(&Unknown, &Visibility, &Text)>().iter(world) {
-        assert_eq!(text.0, "?");
+    for (unknown, visibility) in world.query::<(&Unknown, &Visibility)>().iter(world) {
         assert_eq!(
             *visibility,
             if value(unknown.0).is_none() {
@@ -462,9 +461,9 @@ fn export_nodes(world: &mut World) -> Vec<Value> {
             else if world.get::<MeterFill>(entity).is_some() { "meter_fill" }
             else if world.get::<Unknown>(entity).is_some() { "unknown_marker" }
             else if world.get::<Warning>(entity).is_some() { "warning_badge" }
-            else if world.get::<Identity>(entity).is_some() { "stable_identity_text" }
+            else if world.get::<Identity>(entity).is_some() { "individual_crest" }
             else if world.get::<HeldFood>(entity).is_some() { "held_food_badge" }
-            else if world.get::<Count>(entity).is_some() { "rendered_count_text" }
+            else if world.get::<Count>(entity).is_some() { "population_glyph" }
             else if world.get::<Playback>(entity).is_some() { "playback_icon" }
             else if world.get::<ImageNode>(entity).is_some() { "icon" }
             else { "container" };
@@ -520,6 +519,7 @@ fn cpu_layout_fits_supported_viewports_and_exports_source_derived_fixtures() {
         Some(0.78),
         Some(0.30),
         Some(0.12),
+        Some(0.65),
     ];
     let cases = [
         (
@@ -545,6 +545,7 @@ fn cpu_layout_fits_supported_viewports_and_exports_source_derived_fixtures() {
                     Some(0.12),
                     Some(0.90),
                     Some(0.05),
+                    Some(0.10),
                 ],
             }),
             false,
@@ -555,7 +556,7 @@ fn cpu_layout_fits_supported_viewports_and_exports_source_derived_fixtures() {
                 name: None,
                 holding_food: false,
                 stable_id: 42,
-                values: [None; 6],
+                values: [None; 7],
             }),
             false,
         ),
@@ -565,7 +566,7 @@ fn cpu_layout_fits_supported_viewports_and_exports_source_derived_fixtures() {
                 name: None,
                 holding_food: false,
                 stable_id: 42,
-                values: [Some(0.0); 6],
+                values: [Some(0.0); 7],
             }),
             false,
         ),
@@ -582,6 +583,7 @@ fn cpu_layout_fits_supported_viewports_and_exports_source_derived_fixtures() {
                     Some(0.60),
                     Some(1.0),
                     Some(1.0),
+                    Some(1.0),
                 ],
             }),
             false,
@@ -592,7 +594,15 @@ fn cpu_layout_fits_supported_viewports_and_exports_source_derived_fixtures() {
                 name: None,
                 holding_food: false,
                 stable_id: 42,
-                values: [Some(0.25), Some(0.82), None, Some(0.78), None, Some(0.12)],
+                values: [
+                    Some(0.25),
+                    Some(0.82),
+                    None,
+                    Some(0.78),
+                    None,
+                    Some(0.12),
+                    None,
+                ],
             }),
             false,
         ),
@@ -662,11 +672,11 @@ fn cpu_layout_fits_supported_viewports_and_exports_source_derived_fixtures() {
             assert_eq!(visible_in_hierarchy(app.world(), status), !debug);
             let identity = app
                 .world_mut()
-                .query_filtered::<&Text, With<Identity>>()
+                .query_filtered::<&AccessibilityNode, With<Identity>>()
                 .single(app.world())
                 .unwrap();
             assert_eq!(
-                identity.0,
+                identity.value().unwrap_or_default(),
                 readout
                     .as_ref()
                     .map_or_else(String::new, |r| format!("#{}", r.stable_id))
@@ -696,7 +706,7 @@ fn cpu_layout_fits_supported_viewports_and_exports_source_derived_fixtures() {
 fn unknown_is_not_valid_zero_and_clear_or_debug_hides_selection() {
     let mut world = World::new();
     spawn(&mut world);
-    for values in [[None; 6], [Some(0.0); 6], [Some(1.0); 6], [None; 6]] {
+    for values in [[None; 7], [Some(0.0); 7], [Some(1.0); 7], [None; 7]] {
         let readout = Readout {
             name: None,
             holding_food: false,
@@ -710,7 +720,7 @@ fn unknown_is_not_valid_zero_and_clear_or_debug_hides_selection() {
         name: None,
         holding_food: false,
         stable_id: u64::MAX,
-        values: [Some(0.5); 6],
+        values: [Some(0.5); 7],
     };
     for (selected, debug, shown) in [
         (true, true, false),
@@ -732,11 +742,11 @@ fn unknown_is_not_valid_zero_and_clear_or_debug_hides_selection() {
             .unwrap();
         assert_eq!(visible_in_hierarchy(&world, playback), !debug);
         let identity = world
-            .query_filtered::<&Text, With<Identity>>()
+            .query_filtered::<&AccessibilityNode, With<Identity>>()
             .single(&world)
             .unwrap();
         assert_eq!(
-            identity.0,
+            identity.value().unwrap_or_default(),
             if selected {
                 format!("#{}", u64::MAX)
             } else {
@@ -758,11 +768,15 @@ fn status_count_and_playback_follow_source_state_with_pause_precedence() {
         (65535, false, false, "playing"),
     ] {
         set_status(&mut world, count, paused, fast);
-        let text = world
-            .query_filtered::<&Text, With<Count>>()
+        let group = world
+            .query_filtered::<&AccessibilityNode, With<StatusRoot>>()
             .single(&world)
             .unwrap();
-        assert_eq!(text.0, count.to_string());
+        assert_eq!(
+            group.label(),
+            Some(format!("Rendered creatures: {count}. Playback: {expected}").as_str())
+        );
+        assert_eq!(world.query::<&Text>().iter(&world).count(), 0);
         let icon = world
             .query_filtered::<Entity, With<Playback>>()
             .single(&world)
@@ -797,7 +811,7 @@ fn real_dock_retains_priority_and_status_restores_when_it_fits() {
         name: None,
         holding_food: false,
         stable_id: 42,
-        values: [Some(0.5); 6],
+        values: [Some(0.5); 7],
     };
     let panel = world
         .query_filtered::<Entity, With<HudRoot>>()
@@ -839,7 +853,7 @@ fn explicit_help_uses_space_above_dock_and_temporarily_hides_selected_status() {
         name: None,
         holding_food: false,
         stable_id: 42,
-        values: [Some(0.5); 6],
+        values: [Some(0.5); 7],
     };
     set_readout(&mut world, Some(&readout), false);
     adapt_bottom_controls_visibility(&mut world, Vec2::new(320.0, 240.0), true);
@@ -863,7 +877,7 @@ fn food_badge_clears_and_restores_without_resizing_the_header_or_intercepting_in
     let readout = Readout {
         name: None,
         stable_id: u64::MAX,
-        values: [Some(0.5); 6],
+        values: [Some(0.5); 7],
         holding_food: true,
     };
     let mut original_box = None;
@@ -913,34 +927,17 @@ fn long_canonical_names_keep_full_accessible_text_and_a_separate_complete_numeri
                 .query_filtered::<Entity, With<CreatureName>>()
                 .single(world)
                 .unwrap();
-            assert_eq!(world.get::<Text>(name_entity).unwrap().0, name);
+            assert!(world.get::<Text>(name_entity).is_none());
             assert_eq!(
                 world.get::<AccessibilityNode>(name_entity).unwrap().label(),
                 Some(name.as_str())
             );
-            assert_eq!(
-                world.get::<Node>(name_entity).unwrap().overflow,
-                Overflow::clip()
-            );
-            assert_eq!(
-                world.get::<TextLayout>(name_entity).unwrap().linebreak,
-                bevy::text::LineBreak::NoWrap
-            );
             let identity = world
-                .query_filtered::<Entity, With<Identity>>()
+                .query_filtered::<&AccessibilityNode, With<Identity>>()
                 .single(world)
                 .unwrap();
-            assert_eq!(
-                world.get::<Text>(identity).unwrap().0,
-                format!("#{}", u64::MAX)
-            );
-            let name_bounds = Box2::of(world, name_entity);
-            let id_bounds = Box2::of(world, identity);
-            assert!(!name_bounds.overlaps(id_bounds));
-            assert!(
-                id_bounds.size().x >= 150.0,
-                "ID line lost its reserved space at {size:?}"
-            );
+            assert_eq!(identity.value(), Some(format!("#{}", u64::MAX).as_str()));
+            assert_eq!(world.query::<&CrestBar>().iter(world).count(), 5);
             let header = world
                 .query_filtered::<Entity, With<IdentityHeader>>()
                 .single(world)

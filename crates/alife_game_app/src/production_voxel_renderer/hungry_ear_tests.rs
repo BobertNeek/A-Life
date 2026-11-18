@@ -139,6 +139,7 @@ fn hungry_ears_ecs_fresh_samples_leave_gaze_markers_and_feedback_intact() {
         walk_seconds: 0.7,
         moved: false,
         feedback: OutcomeFeedback::default(),
+        familiarity: None,
         hungry_ears: HungryEars { blend: 1.0 },
         hungry_ears_eligible: true,
     };
@@ -194,7 +195,13 @@ fn hungry_ears_ecs_fresh_samples_leave_gaze_markers_and_feedback_intact() {
             } else {
                 base
             };
-            let expected = outcome_rotation(offset, part, &visual.feedback, marker.animation);
+            let expected = outcome_rotation(
+                offset,
+                part,
+                &visual.feedback,
+                visual.familiarity,
+                marker.animation,
+            );
             assert!(app
                 .world()
                 .get::<Transform>(bone)
@@ -326,6 +333,7 @@ fn hungry_ears_pause_retained_walk_clip_is_suppressed_until_idle_resumes() {
                 walk_seconds: 0.0,
                 moved: false,
                 feedback: OutcomeFeedback::default(),
+                familiarity: None,
                 hungry_ears: HungryEars { blend: 1.0 },
                 hungry_ears_eligible: true,
             },

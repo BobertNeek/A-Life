@@ -19,7 +19,31 @@ pub(crate) enum Control {
     Send,
     Cancel,
     Help,
+    Word(Word),
 }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Word {
+    Eat,
+    Look,
+    Play,
+    Rest,
+}
+impl Word {
+    const ALL: [Self; 4] = [Self::Eat, Self::Look, Self::Play, Self::Rest];
+    fn token(self) -> &'static str {
+        match self {
+            Self::Eat => "eat",
+            Self::Look => "look",
+            Self::Play => "play",
+            Self::Rest => "rest",
+        }
+    }
+}
+#[derive(Component)]
+struct PhraseBead(usize);
+#[derive(Component)]
+struct PhrasePalette;
+
 const CONTROLS: [Control; 4] = [
     Control::Address,
     Control::Send,
@@ -34,6 +58,8 @@ struct Status;
 pub(crate) struct DraftViewport;
 #[derive(Component)]
 struct Help;
+#[derive(Component)]
+struct GestureGuide;
 #[derive(Resource)]
 struct Icons(BTreeMap<&'static str, Handle<Image>>);
 #[derive(Resource)]
@@ -49,7 +75,23 @@ pub(crate) struct InputState {
 const HELP: &str = "Enter send  Esc cancel\nTab address  F1 help";
 const WIDTH: f32 = 640.0;
 const INSET: f32 = 16.0;
-const EMBEDDED: [(&str, &[u8]); 8] = [
+const EMBEDDED: [(&str, &[u8]); 12] = [
+    (
+        "eat",
+        include_bytes!("../../../../assets/ui/care_dock/food.png"),
+    ),
+    (
+        "look",
+        include_bytes!("../../../../assets/ui/status_hud/selection.png"),
+    ),
+    (
+        "play",
+        include_bytes!("../../../../assets/ui/care_dock/toy.png"),
+    ),
+    (
+        "rest",
+        include_bytes!("../../../../assets/ui/status_hud/sleep.png"),
+    ),
     (
         "broadcast",
         include_bytes!("../../../../assets/ui/speech_composer/broadcast.png"),
@@ -88,16 +130,7 @@ fn accessible(role: Role, label: &str) -> AccessibilityNode {
     node.set_label(label);
     AccessibilityNode(node)
 }
-fn bevel(raised: bool) -> BorderColor {
-    let light = Color::srgb(0.43, 0.53, 0.55);
-    let dark = Color::srgb(0.025, 0.040, 0.050);
-    BorderColor {
-        top: if raised { light } else { dark },
-        left: if raised { light } else { dark },
-        bottom: if raised { dark } else { light },
-        right: if raised { dark } else { light },
-    }
-}
+use crate::production_voxel_renderer::sanctuary_ink::{self as ink, bevel};
 fn decorative_accessibility() -> AccessibilityNode {
     let mut node = accessible(Role::Image, "");
     node.set_hidden();
@@ -155,7 +188,7 @@ pub(crate) fn spawn(world: &mut World) {
             Interaction::None,
             FocusPolicy::Block,
             bevel(true),
-            BackgroundColor(Color::srgb(0.075, 0.115, 0.135)),
+            BackgroundColor(ink::GLASS),
             GlobalZIndex(80),
             Visibility::Hidden,
             accessible(Role::Group, "Speech from the Hand"),
@@ -176,6 +209,7 @@ pub(crate) fn spawn(world: &mut World) {
         .id();
     for control in CONTROLS {
         let (icon, label) = match control {
+            Control::Word(word) => (word.token(), word.token()),
             Control::Address => ("broadcast", "Address: nearby listeners or a name in your draft. Tab toggles selected creature; a name takes precedence."),
             Control::Send => ("send", "Send speech. Enter."),
             Control::Cancel => ("cancel", "Cancel and discard draft. Escape."),
@@ -201,7 +235,7 @@ pub(crate) fn spawn(world: &mut World) {
                     justify_content: JustifyContent::Center,
                     ..default()
                 },
-                BackgroundColor(Color::srgb(0.050, 0.075, 0.090)),
+                BackgroundColor(ink::WELL),
                 bevel(true),
                 a11y,
                 ChildOf(toolbar),
@@ -268,6 +302,77 @@ pub(crate) fn spawn(world: &mut World) {
             ChildOf(root),
         ))
         .id();
+    let palette = world
+        .spawn((
+            PhrasePalette,
+            Node {
+                height: Val::Px(34.0),
+                column_gap: Val::Px(6.0),
+                align_items: AlignItems::Center,
+                ..default()
+            },
+            ChildOf(viewport),
+        ))
+        .id();
+    for word in Word::ALL {
+        let mut a11y = accessible(Role::Button, word.token());
+        a11y.add_action(AccessibleAction::Click);
+        let button = world
+            .spawn((
+                Control::Word(word),
+                Interaction::None,
+                FocusPolicy::Block,
+                BackgroundColor(Color::srgb(0.16, 0.26, 0.25)),
+                bevel(true),
+                a11y,
+                Node {
+                    width: Val::Px(34.0),
+                    height: Val::Px(34.0),
+                    border_radius: BorderRadius::all(Val::Px(10.0)),
+                    align_items: AlignItems::Center,
+                    justify_content: JustifyContent::Center,
+                    ..default()
+                },
+                ChildOf(palette),
+            ))
+            .id();
+        world.spawn((
+            ImageNode::new(icons[word.token()].clone()),
+            decorative_accessibility(),
+            decoration(),
+            Node {
+                width: Val::Px(21.0),
+                height: Val::Px(21.0),
+                ..default()
+            },
+            ChildOf(button),
+        ));
+    }
+    let beads = world
+        .spawn((
+            Node {
+                height: Val::Px(17.0),
+                column_gap: Val::Px(4.0),
+                align_items: AlignItems::Center,
+                ..default()
+            },
+            ChildOf(viewport),
+        ))
+        .id();
+    for index in 0..8 {
+        world.spawn((
+            PhraseBead(index),
+            ImageNode::new(icons["broadcast"].clone()),
+            decoration(),
+            decorative_accessibility(),
+            Node {
+                width: Val::Px(15.0),
+                height: Val::Px(15.0),
+                ..default()
+            },
+            ChildOf(beads),
+        ));
+    }
     let mut a11y = accessible(Role::TextInput, "Speech draft. Enter sends, Tab changes address, Escape cancels. A name in the draft overrides selected addressing.");
     a11y.add_action(AccessibleAction::Focus);
     a11y.add_action(AccessibleAction::SetValue);
@@ -280,7 +385,7 @@ pub(crate) fn spawn(world: &mut World) {
             font_size: 18.0,
             ..default()
         },
-        TextColor(Color::srgb(0.98, 0.96, 0.84)),
+        TextColor(ink::PORCELAIN),
         Node {
             width: Val::Percent(100.0),
             flex_shrink: 0.0,
@@ -290,6 +395,32 @@ pub(crate) fn spawn(world: &mut World) {
         decoration(),
         ChildOf(viewport),
     ));
+    let guide = world
+        .spawn((
+            GestureGuide,
+            decoration(),
+            decorative_accessibility(),
+            Node {
+                display: Display::None,
+                column_gap: Val::Px(12.0),
+                ..default()
+            },
+            ChildOf(viewport),
+        ))
+        .id();
+    for icon in ["selected", "eat", "send"] {
+        world.spawn((
+            ImageNode::new(icons[icon].clone()),
+            Node {
+                width: Val::Px(22.0),
+                height: Val::Px(22.0),
+                ..default()
+            },
+            decoration(),
+            decorative_accessibility(),
+            ChildOf(guide),
+        ));
+    }
     world.spawn((
         Help,
         Name::new("Speech keyboard help"),
@@ -298,7 +429,7 @@ pub(crate) fn spawn(world: &mut World) {
             font_size: 12.0,
             ..default()
         },
-        TextColor(Color::srgb(0.98, 0.96, 0.84)),
+        TextColor(ink::PORCELAIN),
         Node {
             width: Val::Percent(100.0),
             display: Display::None,
@@ -455,6 +586,18 @@ pub(super) fn apply_controls(
         state.status = "Player speech cancelled".to_string();
         return true;
     }
+    if let Some(Control::Word(word)) = pointer.filter(|_| state.naming.is_none()) {
+        let token = word.token();
+        if state.input.chars().count() + token.len() + 1 <= MAX_TYPED_CHARS {
+            if !state.input.is_empty() && !state.input.ends_with(char::is_whitespace) {
+                state.input.push(' ');
+            }
+            state.input.push_str(token);
+            state.input_cue = SpeechInputCue::None;
+            state.input_error = None;
+            state.input_help_open = false;
+        }
+    }
     if keyboard.just_pressed(KeyCode::Tab) || pointer == Some(Control::Address) {
         state.address_selected = !state.address_selected;
     }
@@ -545,6 +688,7 @@ pub(crate) fn adapt(world: &mut World) {
     let help = state.input_help_open;
     let selected = state.address_selected;
     let naming = state.naming.is_some();
+    let technical = state.developer_overlay;
     let text = entry_text(state);
     let draft = state.input.clone();
     let height = height(state, size, bottom);
@@ -558,12 +702,19 @@ pub(crate) fn adapt(world: &mut World) {
         cue = SpeechInputCue::Pending;
     }
     let icons = world.resource::<Icons>().0.clone();
-    for (mut node,mut visible,mut a11y) in world.query_filtered::<(&mut Node,&mut Visibility,&mut AccessibilityNode),With<ProductionSpeechComposerBounds>>().iter_mut(world) {
-        node.width=Val::Px(width(size));node.right=Val::Auto;node.left=Val::Px((size.x-width(size))*0.5);
-        node.height=Val::Px(height);node.bottom=Val::Px(bottom);
-        *visible=if open {Visibility::Inherited}else{Visibility::Hidden};
-        a11y.set_label(if naming {"Name the selected individual"}else{"Speech from the Hand"});
-        if open {a11y.clear_hidden();} else {a11y.set_hidden();}
+    let panel_width = width(size);
+    for (mut node, mut visible, mut a11y) in world
+        .query_filtered::<(&mut Node, &mut Visibility, &mut AccessibilityNode), With<ProductionSpeechComposerBounds>>()
+        .iter_mut(world)
+    {
+        node.width = Val::Px(panel_width);
+        node.right = Val::Auto;
+        node.left = Val::Px((size.x-panel_width)*0.5);
+        node.height = Val::Px(height);
+        node.bottom = Val::Px(bottom);
+        *visible = Visibility::Inherited;
+        a11y.set_label(if naming {"Name the selected individual"} else {"Speech from the Hand"});
+        a11y.clear_hidden();
     }
     for mut scroll in world
         .query_filtered::<&mut ScrollPosition, With<DraftViewport>>()
@@ -571,11 +722,25 @@ pub(crate) fn adapt(world: &mut World) {
     {
         scroll.0.y = if open && !help { 1_000_000.0 } else { 0.0 };
     }
-    for (mut shown,mut node,mut a11y) in world.query_filtered::<(&mut Text,&mut Node,&mut AccessibilityNode),With<ProductionSpeechEntryPanel>>().iter_mut(world) {
-        // Preserve Text change detection so idle frames do not request shaping.
-        if shown.0 != text { shown.0.clone_from(&text); }node.display=if help {Display::None}else{Display::Flex};a11y.set_value(draft.clone());
-        a11y.set_label(if naming {"Individual name. Up to 32 characters. Enter confirms; Escape cancels."}else{"Speech draft. Enter sends, Tab changes address, Escape cancels. A name in the draft overrides selected addressing."});
-        if open && !help {a11y.clear_hidden();}else{a11y.set_hidden();}
+    for (mut shown, mut node, mut a11y) in world
+        .query_filtered::<(&mut Text, &mut Node, &mut AccessibilityNode), With<ProductionSpeechEntryPanel>>()
+        .iter_mut(world)
+    {
+        if shown.0 != text { shown.0.clone_from(&text); }
+        node.display = if help || !technical { Display::None } else { Display::Flex };
+        a11y.set_value(draft.clone());
+        a11y.set_label(if naming {"Individual name. Up to 32 characters. Enter confirms; Escape cancels."} else {"Speech draft. Enter sends, Tab changes address, Escape cancels. A name in the draft overrides selected addressing."});
+        if help { a11y.set_hidden(); } else { a11y.clear_hidden(); }
+    }
+    for mut node in world
+        .query_filtered::<&mut Node, With<GestureGuide>>()
+        .iter_mut(world)
+    {
+        node.display = if help && !technical && !naming {
+            Display::Flex
+        } else {
+            Display::None
+        };
     }
     for (mut node, mut a11y, mut text) in world
         .query_filtered::<(&mut Node, &mut AccessibilityNode, &mut Text), With<Help>>()
@@ -590,11 +755,44 @@ pub(crate) fn adapt(world: &mut World) {
             text.0 = next.into();
         }
         a11y.set_label(next);
-        node.display = if help { Display::Flex } else { Display::None };
+        node.display = if help && technical {
+            Display::Flex
+        } else {
+            Display::None
+        };
         if open && help {
             a11y.clear_hidden();
         } else {
             a11y.set_hidden();
+        }
+    }
+    for mut node in world
+        .query_filtered::<&mut Node, With<PhrasePalette>>()
+        .iter_mut(world)
+    {
+        node.display = if naming || technical {
+            Display::None
+        } else {
+            Display::Flex
+        };
+    }
+    let words: Vec<_> = draft.split_whitespace().rev().take(8).collect();
+    for (bead, mut node, mut image) in world
+        .query::<(&PhraseBead, &mut Node, &mut ImageNode)>()
+        .iter_mut(world)
+    {
+        let token = words.iter().rev().nth(bead.0);
+        node.display = if token.is_some() && !technical {
+            Display::Flex
+        } else {
+            Display::None
+        };
+        if let Some(token) = token {
+            let name = Word::ALL
+                .into_iter()
+                .find(|word| token.eq_ignore_ascii_case(word.token()))
+                .map_or("broadcast", Word::token);
+            image.image = icons[name].clone();
         }
     }
     for (control, interaction, mut border, mut a11y, mut node) in world
@@ -607,7 +805,7 @@ pub(crate) fn adapt(world: &mut World) {
         )>()
         .iter_mut(world)
     {
-        node.display = if naming && *control == Control::Address {
+        node.display = if naming && matches!(control, Control::Address | Control::Word(_)) {
             Display::None
         } else {
             Display::Flex
@@ -640,7 +838,7 @@ pub(crate) fn adapt(world: &mut World) {
                 "Send speech. Enter."
             });
         }
-        if open && !(naming && *control == Control::Address) {
+        if open && !(naming && matches!(control, Control::Address | Control::Word(_))) {
             a11y.clear_hidden();
         } else {
             a11y.set_hidden();
