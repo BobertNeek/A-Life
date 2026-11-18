@@ -561,7 +561,7 @@ fn mark_production_gpu_authority_unavailable(
 fn prepare_production_gpu_runtime_launch(
     launch: &ProductionVoxelLaunchConfig,
     summary: &ProductionVoxelLaunchSummary,
-) -> Result<AppShellLaunchConfig, GameAppShellError> {
+) -> Result<(AppShellLaunchConfig, alife_world::RuntimeConfig), GameAppShellError> {
     let runtime_save_path = PathBuf::from(&summary.ui_settings.runtime_save_path);
     let source = PortableSaveFile::from_json_file(&summary.save_path)?;
     if let Some((existing, migrate_legacy)) =
@@ -590,7 +590,28 @@ fn prepare_production_gpu_runtime_launch(
     }
     let mut runtime_launch = launch.app_launch.clone();
     runtime_launch.save_path = runtime_save_path;
-    Ok(runtime_launch)
+    Ok((runtime_launch, source.config))
+}
+
+#[cfg(feature = "gpu-runtime")]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum ResumeAge {
+    Foreign,
+    Older,
+    Current,
+}
+
+#[cfg(feature = "gpu-runtime")]
+fn resume_age(source: &PortableSaveFile, cached: &PortableSaveFile) -> ResumeAge {
+    if cached.save_id != source.save_id
+        || cached.config.deterministic_seed != source.config.deterministic_seed
+    {
+        ResumeAge::Foreign
+    } else if cached.world.tick.raw() < source.world.tick.raw() {
+        ResumeAge::Older
+    } else {
+        ResumeAge::Current
+    }
 }
 
 #[cfg(feature = "gpu-runtime")]
@@ -600,10 +621,6 @@ fn load_production_resume_checkpoint(
     source: &PortableSaveFile,
 ) -> Result<Option<(PortableSaveFile, bool)>, GameAppShellError> {
     let runtime_save_path = PathBuf::from(&summary.ui_settings.runtime_save_path);
-    let same_world = |saved: &PortableSaveFile| {
-        saved.save_id == source.save_id
-            && saved.config.deterministic_seed == source.config.deterministic_seed
-    };
     let legacy_save_path = runtime_save_path
         .parent()
         .unwrap_or_else(|| std::path::Path::new("."))
@@ -616,17 +633,23 @@ fn load_production_resume_checkpoint(
         // Copy a matching legacy autosave to its world-specific location. An
         // unrelated world's old autosave is retained and never chosen here.
         let saved = PortableSaveFile::from_json_file(&legacy_save_path)?;
-        same_world(&saved).then_some((saved, true))
+        (resume_age(source, &saved) == ResumeAge::Current).then_some((saved, true))
     } else {
         None
     };
     if let Some((existing, _)) = &resumed {
-        if !same_world(existing) {
+        let age = resume_age(source, existing);
+        if age == ResumeAge::Foreign {
             return Err(GameAppShellError::InvalidProductionFrontend {
                 message: "runtime checkpoint belongs to a different saved world".to_string(),
             });
         }
         existing.validate_with_asset_root(&summary.asset_root)?;
+        if age == ResumeAge::Older {
+            // An older autosave must never resurrect a resident or undo a harvest
+            // in the newer file the player actually opened.
+            return Ok(None);
+        }
         let existing_population = existing
             .world
             .objects
@@ -912,14 +935,18 @@ fn prepare_production_runtime(
     }
 
     let summary = crate::run_production_voxel_frontend_preflight(launch)?;
-    let runtime_launch = prepare_production_gpu_runtime_launch(launch, &summary)?;
+    let (runtime_launch, world_config) = prepare_production_gpu_runtime_launch(launch, &summary)?;
     let backend = alife_gpu_backend::GpuClosedLoopBackend::new_required(
         alife_gpu_backend::GpuRuntimeProfile::production_v1(),
     )
     .map_err(|error| GameAppShellError::NeuralBackendUnavailable {
         message: error.to_string(),
     })?;
-    let mut runtime = crate::GpuLiveBrainRuntime::from_p34_launch(backend, &runtime_launch)?;
+    let mut runtime = crate::GpuLiveBrainRuntime::from_validated_launch_config(
+        backend,
+        &runtime_launch,
+        &world_config,
+    )?;
     runtime.attach_lineage_archive(
         alife_archive::LineageLibraryConfig::profile_default(
             crate::production_conversation_lineage_ui::default_lineage_root(),
@@ -1375,6 +1402,26 @@ mod production_app_exit_tests {
 mod production_schedule_regression_tests {
     use super::ProductionGpuBrainTickScheduleResource;
     use crate::RuntimePlaybackState;
+
+    #[test]
+    fn an_older_same_world_autosave_cannot_roll_back_a_selected_save() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../alife_world/tests/fixtures/production_voxel");
+        let mut source = crate::tests::fixtures::current_scene_save(&root, 0);
+        source.world.tick = alife_core::Tick::new(1807);
+        let mut cached = source.clone();
+        assert_eq!(
+            super::resume_age(&source, &cached),
+            super::ResumeAge::Current
+        );
+        cached.world.tick = alife_core::Tick::new(942);
+        assert_eq!(super::resume_age(&source, &cached), super::ResumeAge::Older);
+        cached.save_id.push_str("-different");
+        assert_eq!(
+            super::resume_age(&source, &cached),
+            super::ResumeAge::Foreign
+        );
+    }
 
     #[test]
     fn menu_pause_cancels_an_unconsumed_step_without_changing_mode() {

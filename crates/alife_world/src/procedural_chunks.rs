@@ -417,6 +417,20 @@ impl ProceduralChunkSummary {
     }
 }
 
+/// Terrain cells within the visible radius, independent of who is looking.
+pub(crate) fn chunks_in_view(
+    config: ProceduralWorldConfig,
+    tile: ProceduralTileCoord,
+) -> Result<impl Iterator<Item = ProceduralChunkCoord>, ScaffoldContractError> {
+    let center = chunk_coord_for_tile(config, tile)?;
+    let r = config.activation_radius_chunks;
+    Ok((-r..=r)
+        .flat_map(move |dz| {
+            (-r..=r).map(move |dx| ProceduralChunkCoord::new(center.x + dx, center.z + dz))
+        })
+        .filter(move |coord| chunk_in_virtual_extent(config, *coord)))
+}
+
 pub fn activate_procedural_chunks_around_creatures(
     config: ProceduralWorldConfig,
     anchors: &[CreatureWorldAnchor],
@@ -433,23 +447,19 @@ pub fn activate_procedural_chunks_around_creatures(
     let mut skipped_due_to_cap = 0_usize;
     for anchor in &valid_anchors {
         let anchor_tile = anchor.tile_coord();
-        let center_chunk = chunk_coord_for_tile(config, anchor_tile)?;
-        for dz in -config.activation_radius_chunks..=config.activation_radius_chunks {
-            for dx in -config.activation_radius_chunks..=config.activation_radius_chunks {
-                let coord = ProceduralChunkCoord::new(center_chunk.x + dx, center_chunk.z + dz);
-                if !chunk_in_virtual_extent(config, coord) || !seen.insert(coord) {
-                    continue;
-                }
-                if active_chunks.len() >= config.max_active_chunks {
-                    skipped_due_to_cap = skipped_due_to_cap.saturating_add(1);
-                    continue;
-                }
-                active_chunks.push(ProceduralActiveChunk {
-                    coord,
-                    anchor_stable_id: anchor.stable_id,
-                    anchor_tile,
-                });
+        for coord in chunks_in_view(config, anchor_tile)? {
+            if !seen.insert(coord) {
+                continue;
             }
+            if active_chunks.len() >= config.max_active_chunks {
+                skipped_due_to_cap = skipped_due_to_cap.saturating_add(1);
+                continue;
+            }
+            active_chunks.push(ProceduralActiveChunk {
+                coord,
+                anchor_stable_id: anchor.stable_id,
+                anchor_tile,
+            });
         }
     }
     active_chunks.sort_by_key(|chunk| (chunk.coord.x, chunk.coord.z, chunk.anchor_stable_id.raw()));

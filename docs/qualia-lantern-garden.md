@@ -44,6 +44,8 @@ On an RTX 3050, the disposable GPU-authoritative game reached the nursery, accep
 
 ![A parent and three child crests, with the next-page control. This is the separately rendered, known-pedigree UI fixture, not evidence the smoke world bred these individuals.](media/lantern-garden/related-individuals.png)
 
+The [lantern pear orchard](qualia-lantern-orchard.md) carries the Hand into a persistent sowing, harvesting and offering loop. Its crops are world objects, not creature training.
+
 ## Checks and remaining work
 
 ```text

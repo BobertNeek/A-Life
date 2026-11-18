@@ -3868,7 +3868,6 @@ pub struct GpuLiveBrainRuntime {
 }
 
 pub const PLAYER_RESOURCE_PLACEMENT_SCHEMA_VERSION: u16 = 1;
-const PLAYER_FOOD_RADIUS: f32 = 0.5;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PlayerResourcePlacementRequest {
@@ -4838,6 +4837,16 @@ impl GpuLiveBrainRuntime {
         launch: &AppShellLaunchConfig,
     ) -> Result<Self, GameAppShellError> {
         let config = RuntimeConfig::from_json_file(&launch.config_path)?;
+        Self::from_validated_launch_config(backend, launch, &config)
+    }
+
+    /// A resumed world supplies its own configuration, not the scenario template's
+    /// seed. The same durable manifest, asset, policy and seed checks apply.
+    pub(crate) fn from_validated_launch_config(
+        backend: GpuClosedLoopBackend,
+        launch: &AppShellLaunchConfig,
+        config: &RuntimeConfig,
+    ) -> Result<Self, GameAppShellError> {
         config.validate()?;
         let manifest = AssetManifest::from_json_file(&launch.asset_manifest_path)?;
         manifest.validate_with_root(&launch.asset_root)?;
@@ -8161,6 +8170,22 @@ impl GpuLiveBrainRuntime {
         place_food_in_world(&mut self.world, position)
     }
 
+    /// The Hand acts on a world-owned garden bed; no organism is instructed to eat.
+    pub fn tend_player_orchard(
+        &mut self,
+        tile: alife_world::VoxelTileCoord,
+    ) -> Result<alife_world::orchard::OrchardReceipt, GameAppShellError> {
+        Ok(self.world.tend_orchard(tile)?)
+    }
+
+    pub fn offer_orchard_fruit(
+        &mut self,
+        recipient: WorldEntityId,
+        tile: alife_world::VoxelTileCoord,
+    ) -> Result<WorldEntityId, GameAppShellError> {
+        Ok(self.world.offer_orchard_fruit(recipient, tile)?)
+    }
+
     /// Reposition loose food without changing its identity or creature state.
     pub fn move_player_food(
         &mut self,
@@ -10283,32 +10308,16 @@ fn place_food_in_world(
 ) -> Result<PlayerResourcePlacementReceipt, GameAppShellError> {
     validate_player_resource_position(world, position)?;
 
-    // Repeated placement at the same tick and tile must still have a fresh identity.
-    let label = (0..=world.object_count())
-        .map(|suffix| format!("player-food-t{}-{suffix}", world.tick().raw()))
-        .find(|label| world.entity_id(label).is_none())
-        .ok_or(ScaffoldContractError::InvalidId)?;
+    let mut candidate = world.clone();
     let variety =
         alife_world::FoodVariety::from_seed(world.seed().wrapping_add(world.object_count() as u64));
-    let nutrition = variety.nutrition();
-
-    let mut candidate = world.clone();
-    let world_entity_id = candidate.editor_spawn_object(WorldEditorSpawnSpec {
-        label: label.clone(),
-        kind: WorldObjectKind::Food,
-        organism_id: None,
-        position,
-        nutrition,
-        hazard_pain: 0.0,
-        radius: PLAYER_FOOD_RADIUS,
-        token_id: None,
-    })?;
-    candidate.set_food_variety(world_entity_id, variety)?;
-    candidate.validate_organism_bindings()?;
-    let placed_position = candidate
+    let world_entity_id = candidate.spawn_player_food(position, variety)?;
+    let placed = candidate
         .entity(world_entity_id)
-        .ok_or(ScaffoldContractError::InvalidId)?
-        .position;
+        .ok_or(ScaffoldContractError::InvalidId)?;
+    let label = placed.label.clone();
+    let (nutrition, radius, placed_position) = (placed.nutrition, placed.radius, placed.position);
+    candidate.validate_organism_bindings()?;
     let world_signature = candidate.canonical_signature_digest()?;
     *world = candidate;
 
@@ -10318,7 +10327,7 @@ fn place_food_in_world(
         label,
         position: placed_position,
         nutrition,
-        radius: PLAYER_FOOD_RADIUS,
+        radius,
         world_signature,
     })
 }

@@ -264,6 +264,8 @@ impl EcologySensorySummary {
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct EcologyState {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub orchard_beds: Vec<crate::orchard::OrchardBed>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub autonomous_critters: Vec<AutonomousCritterState>,
     pub schema: String,
     pub schema_version: u16,
@@ -280,6 +282,7 @@ impl Default for EcologyState {
             schema: G07_ECOLOGY_SCHEMA.to_string(),
             schema_version: G07_ECOLOGY_SCHEMA_VERSION,
             autonomous_critters: Vec::new(),
+            orchard_beds: Vec::new(),
             config: EcologyConfig::default(),
             zones: Vec::new(),
             resources: Vec::new(),
@@ -295,6 +298,7 @@ impl EcologyState {
             return Err(ScaffoldContractError::ScalarOutOfRange);
         }
         self.config.validate()?;
+        crate::orchard::validate_beds(&self.orchard_beds)?;
         if self.autonomous_critters.len() > self.config.max_resource_records {
             return Err(ScaffoldContractError::ScalarOutOfRange);
         }
