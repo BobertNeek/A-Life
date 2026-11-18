@@ -69,6 +69,7 @@ blake3.workspace = true
 bincode.workspace = true
 bytemuck = { workspace = true, optional = true }
 bevy = { workspace = true, optional = true }
+bevy_anti_alias = { version = "=0.18.1", default-features = false, optional = true }
 bevy_hanabi = { version = "=0.18.0", default-features = false, optional = true }
 image = { version = "0.25.10", default-features = false, features = ["png"] }
 serde.workspace = true
@@ -94,6 +95,7 @@ bevy-app = [
     "bevy/default_app",
     "bevy/default_platform",
     "bevy/bevy_core_pipeline",
+    "dep:bevy_anti_alias",
     "bevy/bevy_render",
     "bevy/bevy_pbr",
     "bevy/bevy_gltf",
