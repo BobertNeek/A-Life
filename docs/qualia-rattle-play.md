@@ -22,3 +22,5 @@ cargo rustc --locked -p alife_game_app --features production-voxel-frontend --ex
 ```
 
 Earlier orchard runs produced harvests, but did not establish that a resident ate a harvested pear. The subsequent fifteen-minute fieldglass run found the identical directly placed food still loose. Neither result promises a biological reaction to this rattle.
+
+On real RTX 3050 hardware the pointer tap reached the instrument at tick 89. A separate, aimed return travelled about three metres across the ground; the accessibility button then sent that identical ball back into the table at tick 165. Both strikes produced their own optical feedback. That verifies Hand play, not a resident's decision to join it.
