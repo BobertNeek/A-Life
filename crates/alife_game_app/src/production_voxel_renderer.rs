@@ -4278,8 +4278,17 @@ fn sync_fvr11_creature_contact_shadows(
             .map_or(position, |root| root.translation);
         transform.translation.x = position.x;
         transform.translation.z = position.z;
-        if let Some(summary) = scene.tile_summaries_by_tile.get(&tile) {
-            transform.translation.y = summary.height_units + 0.018;
+        let ground = highlands
+            .as_deref()
+            .and_then(|land| land.0.surface().height(position.x, position.z))
+            .or_else(|| {
+                scene
+                    .tile_summaries_by_tile
+                    .get(&tile)
+                    .map(|summary| summary.height_units)
+            });
+        if let Some(height) = ground {
+            transform.translation.y = height + 0.018;
         }
     }
 }
@@ -5793,40 +5802,76 @@ fn handle_fvr04_camera_follow_input(
     }
 }
 
+/// Approaching a followed individual moves from the field camera into an eye-level
+/// three-quarter portrait. The heading is latched on entry so a head turn is an
+/// expression, not a camera cut. Normal field framing is unchanged at all profiles.
+fn encounter_camera(field: Transform, body: Vec3, yaw: f32, amount: f32) -> Transform {
+    let t = amount.clamp(0.0, 1.0);
+    if t == 0.0 {
+        return field;
+    }
+    let t = t * t * (3.0 - 2.0 * t);
+    let focus = body + Vec3::Y * 0.70;
+    let angle = yaw + 0.43;
+    let portrait = Transform::from_translation(focus + Vec3::new(angle.cos(), 0.42, angle.sin()))
+        .looking_at(focus, Vec3::Y);
+    let rotation = field.rotation.slerp(portrait.rotation, t);
+    Transform {
+        translation: focus + rotation * Vec3::Z * field.translation.distance(focus),
+        rotation,
+        ..field
+    }
+}
+
 fn sync_fvr04_camera_follow(
     scene: Res<Fvr03ProductionVoxelSceneResource>,
     follow: Res<Fvr04ProductionCreatureFollowResource>,
+    frame: Option<Res<LiveBrainPresentationFrameResource>>,
     entity_map: Res<BevyEntityMap>,
     roots: bevy::prelude::Query<
         (&ProductionCreatureAssemblyRoot, &Transform),
         Without<Fvr03ProductionVoxelCamera>,
     >,
     mut cameras: bevy::prelude::Query<
-        (&mut Transform, &Fvr03ProductionVoxelCamera),
+        (
+            &mut Transform,
+            &Fvr03ProductionVoxelCamera,
+            Option<&Projection>,
+        ),
         Without<ProductionCreatureAssemblyRoot>,
     >,
+    mut portrait: Local<Option<(WorldEntityId, f32)>>,
 ) {
-    if !follow.enabled {
-        return;
-    }
-    let Some(target) = follow.target_stable_id else {
+    let Some(id) = follow.target_stable_id.filter(|_| follow.enabled) else {
+        *portrait = None;
         return;
     };
-    let Some(position) = entity_map
-        .bevy_entity(target)
-        .and_then(|entity| roots.get(entity).ok())
-        .filter(|(root, _)| root.stable_id == target)
-        .map(|(_, transform)| transform.translation)
+    let Some(body) = entity_map
+        .bevy_entity(id)
+        .and_then(|e| roots.get(e).ok())
+        .filter(|(root, _)| root.stable_id == id)
+        .map(|(_, pose)| pose.translation)
     else {
+        *portrait = None;
         return;
     };
-    let target = position;
     let extent = production_camera_extent(scene.profile_id);
-    for (mut transform, camera) in &mut cameras {
-        let next_transform = production_follow_camera_transform(camera.mode, extent, target);
-        if *transform != next_transform {
-            *transform = next_transform;
+    for (mut transform, camera, projection) in &mut cameras {
+        let height = projection.map_or(extent, island::view_height);
+        let amount = (camera_navigation::FIELD_HEIGHT - height)
+            / (camera_navigation::FIELD_HEIGHT - camera_navigation::ENCOUNTER_HEIGHT);
+        let field = production_follow_camera_transform(camera.mode, extent, body);
+        if amount <= 0.0 {
+            *portrait = None;
+        } else if portrait.is_none_or(|(shown, _)| shown != id) {
+            *portrait = frame
+                .as_deref()
+                .and_then(|f| f.current.object(id))
+                .filter(|o| o.kind == WorldObjectKind::Agent && !o.consumed)
+                .map(|o| (id, o.body_yaw));
         }
+        let next = portrait.map_or(field, |(_, yaw)| encounter_camera(field, body, yaw, amount));
+        transform.set_if_neq(next);
     }
 }
 
@@ -6567,6 +6612,28 @@ mod tests {
     use alife_world::{HeadlessScenarioBuilder, WorldObjectKind};
 
     #[cfg(feature = "gpu-runtime")]
+    #[test]
+    fn encounter_zoom_preserves_the_field_pose_and_keeps_the_face_framed() {
+        let body = Vec3::new(83.0, 7.0, 250.0);
+        let field =
+            production_follow_camera_transform(Fvr03ProductionVoxelCameraMode::Orbit, 9.8, body);
+        assert_eq!(encounter_camera(field, body, 1.5, 0.), field);
+        for fraction in [0.1, 0.5, 1.] {
+            let camera = encounter_camera(field, body, 1.5, fraction);
+            let focus = body + Vec3::Y * 0.70;
+            assert!(camera.translation.y > focus.y);
+            assert!(
+                (camera.translation.distance(focus) - field.translation.distance(focus)).abs()
+                    < 1e-4
+            );
+            assert!(
+                camera
+                    .forward()
+                    .dot((focus - camera.translation).normalize())
+                    > 0.999
+            );
+        }
+    }
     #[test]
     fn care_feedback_requires_confirmed_consequences() {
         use alife_core::{

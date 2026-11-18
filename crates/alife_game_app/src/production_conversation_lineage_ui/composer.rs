@@ -588,8 +588,12 @@ pub(super) fn apply_controls(
     }
     if let Some(Control::Word(word)) = pointer.filter(|_| state.naming.is_none()) {
         let token = word.token();
-        if state.input.chars().count() + token.len() + 1 <= MAX_TYPED_CHARS {
-            if !state.input.is_empty() && !state.input.ends_with(char::is_whitespace) {
+        let needs_separator =
+            !state.input.is_empty() && !state.input.ends_with(char::is_whitespace);
+        if state.input.chars().count() + token.len() + usize::from(needs_separator)
+            <= MAX_TYPED_CHARS
+        {
+            if needs_separator {
                 state.input.push(' ');
             }
             state.input.push_str(token);

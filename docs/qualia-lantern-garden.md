@@ -11,7 +11,7 @@ Do not use this branch to adjust biochemistry, cognition, neural weights, traini
 ## What the player can do
 
 * Notice: meet the Hearthling under the amber focus lantern. The selected individual's crest is stable across sessions; the quantity chips distinguish absent evidence from a measured zero.
-* Approach: point the Hand and right-click once to stroke the individual under it. Positive and negative interactions remain separate, deliberate actions. Holding the button never queues repeated pets.
+* Approach: select a live creature and scroll closer. The field camera blends into a three-quarter portrait, keeping its entry angle so real turns remain visible rather than spinning the camera. Point the Hand and right-click once to stroke the individual under it. Positive and negative interactions remain separate, deliberate actions. Holding the button never queues repeated pets.
 * Offer: aim at ground to place the orchard fruit, or select a creature to offer fruit just ahead of its gaze. An explicitly blocked location is not silently changed. A creature-directed offer seeks a nearby, walkable alternative. The real food and toy belong to the world, not the renderer.
 * Play: place the orbital rattle near a creature and leave the outcome up to the creature. A dropped prop, a requested touch and consumed care are different events. Consumed care has an action-shaped glyph and bodily response; it never generates pretend dialogue.
 * Communicate: tap grounded word pictograms, select an addressee or broadcast, and send through the existing speech channel. Only actual utterances anchor to the live creature. Typed input and assistive names remain available.
@@ -21,9 +21,19 @@ Do not use this branch to adjust biochemistry, cognition, neural weights, traini
 
 Branch: `qualia/lantern-garden-20261118`, based on `52badd43`. Compared the actual combined Argon branch `argon/brain-and-game-improvements-20261110` (`eacb100d`), including its merge of Muse `bob/soul@f08b7755`, against current main. Kept main's working carry/camera, load-identity and monotonic-care-receipt fixes; brought over Muse's presentation/save slice, not either branch's research paths. In particular, an old or missing care receipt cannot stand in for an observed reaction.
 
+The island nursery has three sculpted silverbell drifts and brass-inlaid ceramic stepping stones grounded on the actual terrain. They stay there when a creature leaves. An immediately available coarse mesh samples the real island while its detailed meshes stream, so the opening no longer puts a creature over empty blue.
+
 Art source, release meshes and a Blender material study live in [assets/care](../crates/alife_game_app/assets/care). Rebuild the native scene and glTF meshes with `blender --background --python scripts/build_care_keepsakes.py`. A material study is not a screenshot of gameplay. In-game colors derive from the world object's appearance; visual assets never own selection, placement or effects.
 
-## Verification and remaining work
+## Verified in the real game
+
+On an RTX 3050, the disposable GPU-authoritative game reached the nursery, accepted an offer and pet, showed the applied-care glyph, offered the toy and opened the composer. The frame metadata identifies the live individual and records the world responses. The creature can turn away; the camera does not choreograph it. These are unretouched in-engine frames, not Blender stills.
+
+![The original Hearthling approaching the Hand in the island nursery.](media/lantern-garden/portrait.png)
+
+![The real care glyph on the creature; a separate fruit and plaything remain in the garden.](media/lantern-garden/applied-care.png)
+
+## Checks and remaining work
 
 ```text
 cargo fmt --all -- --check

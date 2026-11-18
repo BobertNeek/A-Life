@@ -58,6 +58,7 @@ fn fixture() -> (App, Entity) {
             props: BTreeMap::new(),
             surface: std::sync::Arc::new(flat_surface()),
             spawned: true,
+            bootstrap_ground: None,
             next_update: 0.0,
         })
         .add_systems(Update, (update, record_changes).chain());

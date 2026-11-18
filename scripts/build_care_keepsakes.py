@@ -1,4 +1,4 @@
-"""Build the orchard fruit, orbital rattle, and three-pad chime. Run in Blender."""
+"""Build the sanctuary's keepsakes and nursery groundcover. Run in Blender."""
 from math import cos, pi, sin, tau
 from pathlib import Path
 
@@ -114,9 +114,60 @@ def export_piece(name, parts):
     return obj
 
 
-pieces = [export_piece(name, build()) for name, build in
-          [("orchard-fruit", orchard_fruit), ("orbital-rattle", orbital_rattle), ("chime-table", chime_table)]]
-for piece, x in zip(pieces, (-2.3, 0, 2.3)):
-    piece.location.x = x
+def silverbell():
+    """Silhouetted folded leaves with nodding translucent-looking bell corollas."""
+    parts = []
+    for i in range(9):
+        a = i * 2.39996
+        length = 0.33 + .15 * (1 + sin(i * 1.37))
+        def blade(u, v):
+            d = length * v ** 1.45
+            w = (.002 + .066 * sin(pi*v)) * cos(u)
+            h = .54*sin(v*1.85) + .016*cos(u*2)*sin(pi*v)
+            return d*cos(a)-w*sin(a), d*sin(a)+w*cos(a), h*(.7+.25*cos(i))
+        parts.append(surface("Pleated sage blade",9,8,blade,
+            lambda u,v: (.16+.12*v,.34+.22*v,.24+.15*v)))
+    for i in range(5):
+        a = i*2.4
+        h = .63 + .16*cos(i*2)
+        def stem(u,v):
+            r = .016*(1-.5*v)
+            d = .32*v**1.6
+            return d*cos(a)+r*cos(u),d*sin(a)+r*sin(u), h*sin(v*1.88)
+        parts.append(surface("Curved reed",8,8,stem,lambda u,v:(.27,.44,.34)))
+        def corolla(u,v):
+            r = .012 + (.075+.019*cos(5*u))*v**.75
+            return (.32*cos(a)+r*cos(u),.32*sin(a)+r*sin(u),
+                    h*sin(1.88)-.11*v+.019*cos(5*u)*v**2)
+        parts.append(surface("Nodding five-lobed bell",7,20,corolla,
+            lambda u,v:(.61+.30*v,.49+.32*v,.66+.20*v)))
+    return parts
+
+
+def ceramic_waystone():
+    parts=[]
+    for i in range(4):
+        angle = i*2.4
+        d = .27 if i else 0
+        r = (.32,.23,.17,.11)[i]
+        x,y = d*cos(angle),d*sin(angle)
+        def pebble(u,v):
+            a=pi*(.0001+v*.9998)
+            return x+r*sin(a)*cos(u), y+r*.77*sin(a)*sin(u), .025-r*.22*cos(a)
+        parts.append(surface("River-worn ceramic",9,18,pebble,lambda u,v:(.53+.10*v,.58+.11*v,.55+.10*v)))
+    def seam(u,v):
+        a=.3+1.60*pi*v
+        r=.175+.009*cos(u)
+        return r*cos(a), .77*r*sin(a),.088+.005*sin(u)
+    parts.append(surface("Inset brass arc",24,6,seam,lambda u,v:(.72,.48,.24)))
+    return parts
+
+
+pieces = [export_piece(name, build()) for name, build in [
+    ("orchard-fruit", orchard_fruit), ("orbital-rattle", orbital_rattle),
+    ("chime-table", chime_table), ("silverbell", silverbell), ("ceramic-waystone", ceramic_waystone),
+]]
+for i,piece in enumerate(pieces):
+    piece.location.x = (i-2)*2.3
 bpy.ops.object.select_all(action="DESELECT")
 bpy.ops.wm.save_as_mainfile(filepath=str(OUT / "care-keepsakes.blend"), compress=True)

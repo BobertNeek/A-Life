@@ -40,6 +40,8 @@ fn main() {
         PreUpdate,
         (move |time: Res<Time<Real>>,
                mut keys: ResMut<ButtonInput<KeyCode>>,
+               windows: Query<Entity, With<bevy::window::PrimaryWindow>>,
+               mut wheel: MessageWriter<bevy::input::mouse::MouseWheel>,
                mut commands: Commands,
                mut step: Local<usize>,
                mut release: Local<Option<KeyCode>>| {
@@ -49,20 +51,31 @@ fn main() {
             }
             let sequence = [
                 (8., Some(KeyCode::Escape), "menu"),
-                (24., None, "garden"),
-                (27., Some(KeyCode::KeyE), "offer"),
-                (30., Some(KeyCode::KeyC), "pet"),
-                (33., None, "response"),
-                (36., Some(KeyCode::KeyJ), "toy"),
-                (40., None, "play"),
-                (43., Some(KeyCode::Enter), "conversation"),
-                (48., None, "composer"),
+                (23., Some(KeyCode::Home), "garden"),
+                (26., None, "approach"),
+                (29., Some(KeyCode::KeyE), "offer"),
+                (33., Some(KeyCode::KeyC), "pet"),
+                (35., None, "response"),
+                (38., Some(KeyCode::KeyJ), "toy"),
+                (42., None, "play"),
+                (45., Some(KeyCode::Enter), "conversation"),
+                (50., None, "composer"),
             ];
             if let Some(&(at, key, name)) = sequence.get(*step) {
                 if time.elapsed_secs() >= at {
                     commands
                         .spawn(Screenshot::primary_window())
                         .observe(save_to_disk(path.join(format!("{name}.png"))));
+                    if name == "approach" {
+                        if let Ok(window) = windows.single() {
+                            wheel.write(bevy::input::mouse::MouseWheel {
+                                unit: bevy::input::mouse::MouseScrollUnit::Line,
+                                x: 0.,
+                                y: 8.,
+                                window,
+                            });
+                        }
+                    }
                     if let Some(key) = key {
                         keys.press(key);
                         *release = Some(key);
