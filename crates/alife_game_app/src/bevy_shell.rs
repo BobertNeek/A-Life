@@ -1028,6 +1028,8 @@ fn build_production_voxel_frontend_app_shell_inner(
                     ..default()
                 }),
         );
+        // Only the lightweight edge pass is used; temporal effects require a different render graph.
+        app.add_plugins(bevy_anti_alias::fxaa::FxaaPlugin);
         #[cfg(feature = "vfx-hanabi")]
         app.add_plugins(bevy_hanabi::prelude::HanabiPlugin);
     }

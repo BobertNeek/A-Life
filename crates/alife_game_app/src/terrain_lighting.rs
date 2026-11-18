@@ -105,6 +105,10 @@ pub(crate) fn spawn_production_terrain_camera(
         }),
         Tonemapping::TonyMcMapface,
         Msaa::Off,
+        bevy_anti_alias::fxaa::Fxaa {
+            enabled: !settings.minimum_floor,
+            ..default()
+        },
         AmbientLight {
             color: Color::srgb(0.72, 0.81, 0.92),
             brightness: if settings.minimum_floor { 520.0 } else { 760.0 },
