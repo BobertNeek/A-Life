@@ -143,6 +143,7 @@ mod walk {
                 w.next = now + 1.2;
             }
             1 => {
+                window.set_cursor_position(Some(size * 0.5));
                 w.key(&mut keys, KeyCode::Home);
                 w.next = now + 1.;
             }
@@ -156,6 +157,7 @@ mod walk {
                 if !frame_target(&mut keys, camera, ct, size, (b + t) * 0.5) {
                     return;
                 }
+                writeln!(w.log,"observed world fixtures: obstacle {} radius {} at {:?}; hazard {} radius {} at {:?}",wall.id.raw(),wall.radius,t,vent.id.raw(),vent.radius,h).unwrap();
                 w.photo(&mut cmd, "nursery-route");
             }
             3 => {
