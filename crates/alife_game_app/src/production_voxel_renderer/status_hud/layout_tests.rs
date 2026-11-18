@@ -786,7 +786,7 @@ fn status_count_and_playback_follow_source_state_with_pause_precedence() {
 }
 
 #[test]
-fn only_rename_control_can_capture_input() {
+fn only_explicit_header_actions_own_pointer_interactions() {
     let mut world = World::new();
     spawn(&mut world);
     for entity in world.query_filtered::<Entity, With<Node>>().iter(&world) {
@@ -796,10 +796,65 @@ fn only_rename_control_can_capture_input() {
         assert!(world.get::<Button>(entity).is_none());
         assert_eq!(
             world.get::<Interaction>(entity).is_some(),
-            world.get::<RenameButton>(entity).is_some(),
-            "only the explicit naming control owns pointer interaction"
+            world.get::<SelectionAction>(entity).is_some(),
+            "passive meters and decoration must not own pointer interactions"
         );
     }
+}
+
+#[cfg(feature = "gpu-runtime")]
+#[test]
+fn physical_pointer_hits_the_family_control_in_the_selected_header() {
+    use crate::production_voxel_renderer::care_dock::tests::{cpu_focus_stack_for, focus_cursor};
+    use bevy::{camera::RenderTarget, input::touch::Touches, window::PrimaryWindow};
+    let mut app = layout_app(Vec2::new(960., 540.));
+    app.init_resource::<ButtonInput<MouseButton>>()
+        .init_resource::<Touches>();
+    let w = app.world_mut();
+    w.spawn((
+        Window {
+            resolution: (960, 540).into(),
+            ..default()
+        },
+        PrimaryWindow,
+    ));
+    let camera = w
+        .query_filtered::<Entity, With<Camera>>()
+        .single(w)
+        .unwrap();
+    w.entity_mut(camera).insert(RenderTarget::default());
+    let row = data_tests::row();
+    let named = Readout::from_row(row.world_entity_id, row.organism_id, Some(&row), []);
+    set_readout(w, Some(&named), false);
+    app.update();
+    app.update();
+    let w = app.world_mut();
+    let root = w
+        .query_filtered::<Entity, With<HudRoot>>()
+        .single(w)
+        .unwrap();
+    let family = w
+        .query::<(Entity, &AccessibilityNode)>()
+        .iter(w)
+        .find_map(|(e, node)| (node.label() == Some("Open family album")).then_some(e))
+        .unwrap();
+    cpu_focus_stack_for(w, &[root]);
+    let bounds = Box2::of(w, family);
+    focus_cursor(w, (bounds.min + bounds.max) * 0.5);
+    app.add_systems(Update, bevy::ui::ui_focus_system);
+    app.update();
+    assert_eq!(
+        app.world().get::<Interaction>(family),
+        Some(&Interaction::Hovered)
+    );
+    app.world_mut()
+        .resource_mut::<ButtonInput<MouseButton>>()
+        .press(MouseButton::Left);
+    app.update();
+    assert_eq!(
+        app.world().get::<Interaction>(family),
+        Some(&Interaction::Pressed)
+    );
 }
 
 #[test]
@@ -983,7 +1038,7 @@ fn naming_button_is_the_only_input_target_and_fails_closed_without_a_living_iden
         }
         for entity in world.query_filtered::<Entity, With<Node>>().iter(&world) {
             let pickable = world.get::<bevy::picking::Pickable>(entity).unwrap();
-            let input = entity == button && enabled;
+            let input = world.get::<SelectionAction>(entity).is_some() && enabled;
             assert_eq!(pickable.is_hoverable, input);
             assert_eq!(pickable.should_block_lower, input);
             assert_eq!(

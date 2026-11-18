@@ -129,7 +129,7 @@ pub(super) fn button(
     image(world, id, art, icon, size * 0.60, size * 0.60);
     id
 }
-pub(crate) fn open_button(world: &mut World, parent: Entity) {
+pub(crate) fn open_button(world: &mut World, parent: Entity) -> Entity {
     let art = signs(world);
     button(
         world,
@@ -139,5 +139,5 @@ pub(crate) fn open_button(world: &mut World, parent: Entity) {
         "family",
         "Open family album",
         30.,
-    );
+    )
 }

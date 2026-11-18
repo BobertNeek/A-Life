@@ -238,6 +238,9 @@ struct CreatureName;
 /// Pointer and accessibility entry point for the shared naming composer.
 #[derive(Component)]
 pub(crate) struct RenameButton;
+/// Explicit header actions are the only HUD nodes allowed to intercept a click.
+#[derive(Component)]
+struct SelectionAction;
 #[derive(Component)]
 struct HeldFood;
 #[derive(Component)]
@@ -492,7 +495,16 @@ pub(super) fn spawn(world: &mut World) {
         Visibility::Hidden,
     ));
     #[cfg(feature = "gpu-runtime")]
-    crate::production_conversation_lineage_ui::kinship::open_button(world, identity);
+    {
+        let family =
+            crate::production_conversation_lineage_ui::kinship::open_button(world, identity);
+        world
+            .entity_mut(family)
+            .insert((SelectionAction, Visibility::Hidden, bevel(true)));
+        let mut node = world.get_mut::<AccessibilityNode>(family).unwrap();
+        node.set_disabled();
+        node.set_hidden();
+    }
     let mut rename_accessibility = accesskit::Node::new(accesskit::Role::Button);
     rename_accessibility.set_label("Name selected creature");
     rename_accessibility.add_action(accesskit::Action::Click);
@@ -502,6 +514,7 @@ pub(super) fn spawn(world: &mut World) {
         .spawn((
             Name::new("Name selected creature"),
             RenameButton,
+            SelectionAction,
             Interaction::None,
             Node {
                 width: Val::Px(36.0),
@@ -645,7 +658,7 @@ pub(super) fn spawn(world: &mut World) {
             ChildOf(card),
         ));
     }
-    // Meters remain passive. Only the explicit naming control accepts input.
+    // Begin passive. Only the explicit header actions become interactive for a known selection.
     let mut pending = vec![status, root];
     while let Some(entity) = pending.pop() {
         if let Some(children) = world.get::<Children>(entity) {
@@ -701,22 +714,33 @@ fn set_readout(world: &mut World, readout: Option<&Readout>, debug: bool) {
     {
         accessible.set_label(name.unwrap_or(""));
     }
-    for (mut visible, mut pickable, mut focus, mut interaction, mut border, mut accessible) in world
+    for (
+        rename,
+        mut visible,
+        mut pickable,
+        mut focus,
+        mut interaction,
+        mut border,
+        mut accessible,
+    ) in world
         .query_filtered::<(
+            Has<RenameButton>,
             &mut Visibility,
             &mut bevy::picking::Pickable,
             &mut FocusPolicy,
             &mut Interaction,
             &mut BorderColor,
             &mut AccessibilityNode,
-        ), With<RenameButton>>()
+        ), With<SelectionAction>>()
         .iter_mut(world)
     {
         if let Some(name) = name.filter(|_| !debug) {
             *visible = Visibility::Inherited;
             *pickable = bevy::picking::Pickable::default();
             *focus = FocusPolicy::Block;
-            accessible.set_label(format!("Name {name}"));
+            if rename {
+                accessible.set_label(format!("Name {name}"));
+            }
             accessible.clear_disabled();
             accessible.clear_hidden();
         } else {
@@ -724,7 +748,9 @@ fn set_readout(world: &mut World, readout: Option<&Readout>, debug: bool) {
             *pickable = bevy::picking::Pickable::IGNORE;
             *focus = FocusPolicy::Pass;
             *interaction = Interaction::None;
-            accessible.set_label("Name selected creature");
+            if rename {
+                accessible.set_label("Name selected creature");
+            }
             accessible.set_disabled();
             accessible.set_hidden();
         }

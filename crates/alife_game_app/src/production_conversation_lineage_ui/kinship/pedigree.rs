@@ -1,4 +1,4 @@
-//! Scalar identity snapshot. Never clone an organismâ€™s genome or touch its biology.
+//! Scalar identity snapshot. Never clone an organism’s genome or touch its biology.
 use super::{Control, HeadlessWorld};
 use std::collections::BTreeMap;
 
