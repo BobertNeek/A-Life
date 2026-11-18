@@ -434,6 +434,29 @@ pub(crate) fn export_nodes(world: &mut World) -> Vec<Value> {
     }).collect()
 }
 #[test]
+fn first_gesture_waits_for_a_real_target_retires_and_can_be_recalled() {
+    let mut hint = FirstGesture::default();
+    assert!(!hint.visible(false, true, 40.));
+    assert!(!hint.visible(true, false, 1.));
+    assert!(hint.visible(true, true, 1.));
+    for _ in 0..16 {
+        hint.visible(true, true, 1.);
+    }
+    assert!(!hint.visible(true, true, 0.));
+    hint.recall();
+    assert!(hint.visible(true, false, 0.));
+    let mut dock = State {
+        invitation: hint,
+        ..default()
+    };
+    dock.record(Action::Pet, Evidence::Queued);
+    assert!(
+        !dock.invitation.visible(true, true, 0.),
+        "queueing dismisses the teaching prompt, not a claim the creature felt it"
+    );
+}
+
+#[test]
 fn cpu_layout_fits_four_viewports_and_exports_actual_wordless_feedback_nodes() {
     let mut queued = [Evidence::None; 7];
     queued[Action::Pet.index()] = Evidence::Queued;
@@ -503,12 +526,13 @@ fn embedded_cues_are_distinct_nonempty_images() {
     let mut digests = BTreeSet::new();
     for (name, bytes) in EMBEDDED {
         let icon = image::load_from_memory(bytes).unwrap().to_rgba8();
-        let edge = if ACTIONS.iter().any(|action| action.icon() == name) {
-            64
-        } else {
-            16
+        let edge = match name {
+            "select" => 96, // Shared with the selected-creature HUD.
+            "toward" => 48,
+            action if ACTIONS.iter().any(|a| a.icon() == action) => 64,
+            _ => 16, // Compact evidence markers.
         };
-        assert_eq!(icon.dimensions(), (edge, edge));
+        assert_eq!(icon.dimensions(), (edge, edge), "{name}");
         assert!(icon.pixels().any(|p| p[3] > 0));
         assert!(icon.pixels().any(|p| p[3] == 0));
         assert!(digests.insert(blake3::hash(bytes).to_hex().to_string()));
@@ -1597,6 +1621,24 @@ struct CpuFocusModal;
 // hit-test, cursor conversion, clipping, Interaction updates and input capture
 // themselves use Bevy's production ui_focus_system and collect_input.
 pub(crate) fn cpu_focus_fixture_stack(world: &mut World) {
+    let root = world
+        .query_filtered::<Entity, With<DockRoot>>()
+        .single(world)
+        .unwrap();
+    let mut roots = vec![root];
+    #[cfg(feature = "gpu-runtime")]
+    {
+        let composers = world.query_filtered::<Entity, With<crate::production_conversation_lineage_ui::ProductionSpeechComposerBounds>>().iter(world).collect::<Vec<_>>();
+        roots.extend(composers);
+    }
+    let modals = world
+        .query_filtered::<Entity, With<CpuFocusModal>>()
+        .iter(world)
+        .collect::<Vec<_>>();
+    roots.extend(modals);
+    cpu_focus_stack_for(world, &roots);
+}
+pub(crate) fn cpu_focus_stack_for(world: &mut World, roots: &[Entity]) {
     fn walk(world: &World, entity: Entity, nodes: &mut Vec<Entity>) {
         nodes.push(entity);
         if let Some(children) = world.get::<Children>(entity) {
@@ -1605,25 +1647,9 @@ pub(crate) fn cpu_focus_fixture_stack(world: &mut World) {
             }
         }
     }
-    let root = world
-        .query_filtered::<Entity, With<DockRoot>>()
-        .single(world)
-        .unwrap();
     let mut nodes = Vec::new();
-    walk(world, root, &mut nodes);
-    #[cfg(feature = "gpu-runtime")]
-    {
-        let composers = world.query_filtered::<Entity, With<crate::production_conversation_lineage_ui::ProductionSpeechComposerBounds>>().iter(world).collect::<Vec<_>>();
-        for composer in composers {
-            walk(world, composer, &mut nodes);
-        }
-    }
-    let modals = world
-        .query_filtered::<Entity, With<CpuFocusModal>>()
-        .iter(world)
-        .collect::<Vec<_>>();
-    for modal in modals {
-        walk(world, modal, &mut nodes);
+    for &root in roots {
+        walk(world, root, &mut nodes);
     }
     for &entity in &nodes {
         let inherited = if visible(world, entity) {

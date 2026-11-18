@@ -181,8 +181,12 @@ pub(super) fn handle_fvr05_production_ux_input(
         ux.last_error = None;
         ux.last_action = "Food move cancelled".to_string();
     }
-    if ux.debug_mode && keyboard.just_pressed(KeyCode::F1) {
-        ux.show_help = !ux.show_help;
+    if keyboard.just_pressed(KeyCode::F1) {
+        if ux.debug_mode {
+            ux.show_help = !ux.show_help;
+        } else {
+            dock.recall_invitation();
+        }
     }
     if frontend.summary.developer_overlay && keyboard.just_pressed(KeyCode::F3) {
         ux.debug_mode = !ux.debug_mode;

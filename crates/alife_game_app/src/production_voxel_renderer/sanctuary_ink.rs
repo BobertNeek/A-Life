@@ -17,3 +17,17 @@ pub(crate) fn bevel(raised: bool) -> BorderColor {
         right: bottom,
     }
 }
+
+/// A repeatable identity mark, independent of the creature's name, age or position.
+pub(crate) struct Crest(u64);
+impl Crest {
+    pub(crate) fn new(id: u64) -> Self {
+        Self(id.wrapping_mul(0x9e37_79b9_7f4a_7c15).rotate_right(19))
+    }
+    pub(crate) fn pigment(&self) -> Color {
+        Color::hsl((self.0 % 360) as f32, 0.52, 0.72)
+    }
+    pub(crate) fn bar_height(&self, slot: u32) -> f32 {
+        4.0 + 2.0 * ((self.0 >> (3 * slot)) & 7) as f32
+    }
+}

@@ -54,6 +54,7 @@ use crate::{
 };
 
 pub(crate) mod composer;
+pub(crate) mod kinship;
 mod naming;
 
 const MAX_TYPED_CHARS: usize = 512;
@@ -823,6 +824,8 @@ pub struct ProductionConversationLineageUiState {
     status: String,
     lineage_root: PathBuf,
     lineage_open: bool,
+    family_open: bool,
+    family_capture: bool,
     lineage_source_filter: LineageSourceFilter,
     lineage_data_filter: LineageDataFilter,
     lineage_sort: LineageSort,
@@ -862,6 +865,8 @@ impl ProductionConversationLineageUiState {
             status: "Lineage Library loads when opened".to_string(),
             lineage_root,
             lineage_open: false,
+            family_open: false,
+            family_capture: false,
             lineage_source_filter: LineageSourceFilter::All,
             lineage_data_filter: LineageDataFilter::All,
             lineage_sort: LineageSort::Overall,
@@ -879,7 +884,11 @@ impl ProductionConversationLineageUiState {
     }
 
     pub(crate) const fn captures_menu_input(&self) -> bool {
-        self.input_open || self.lineage_open || self.input_capture_held
+        self.input_open
+            || self.lineage_open
+            || self.input_capture_held
+            || self.family_open
+            || self.family_capture
     }
 
     pub(crate) fn speech_input_cue(&self) -> SpeechInputCue {
@@ -1108,6 +1117,7 @@ pub fn install_production_conversation_lineage_ui(
     let layout = LineageLabLayout::for_resolution(summary.resolution.0, summary.resolution.1);
     app.insert_resource(layout);
     spawn_ui(app, layout);
+    kinship::install(app);
     app.add_systems(
         Update,
         composer::collect_input
@@ -1969,6 +1979,10 @@ pub(crate) fn handle_production_conversation_lineage_input(
     mut state: ResMut<ProductionConversationLineageUiState>,
 ) {
     let pointer = composer_input.pending.take();
+    if state.family_open || state.family_capture {
+        key_messages.clear();
+        return;
+    }
     if crate::production_voxel_renderer::menu::captures_input(menu) {
         key_messages.clear();
         return;
