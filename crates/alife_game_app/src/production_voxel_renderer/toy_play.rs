@@ -182,6 +182,7 @@ mod live {
             for i in 0..5 {
                 commands.spawn((
                     Name::new("Rattle aiming pearl"),
+                    crate::terrain_lighting::player_guide_layer(),
                     Sign::Pearl(i),
                     Mesh3d(bead.clone()),
                     MeshMaterial3d(pearl.clone()),
