@@ -7,6 +7,29 @@ use bevy::{
 };
 use std::time::Instant;
 
+/// Startup may produce a valid all-black PNG before the UI pipeline is ready.
+/// Require both the pale crest ink and the mint diagram color before advancing.
+fn album_visible(path: &std::path::Path) -> bool {
+    let Ok(frame) = ::image::open(path) else {
+        return false;
+    };
+    let mut ink = 0;
+    let mut mint = 0;
+    for pixel in frame.to_rgb8().pixels() {
+        let [r, g, b] = pixel.0;
+        if r > 210 && g > 200 && b > 165 {
+            ink += 1;
+        }
+        if g > 160 && g.saturating_sub(r) > 25 && b > 125 {
+            mint += 1;
+        }
+        if ink >= 12 && mint >= 12 {
+            return true;
+        }
+    }
+    false
+}
+
 #[test]
 #[ignore = "opens a real GPU window; explicitly run to review the family album"]
 fn capture_family_navigation_using_real_accessibility_actions() {
@@ -53,7 +76,7 @@ fn capture_family_navigation_using_real_accessibility_actions() {
     });
     let mut step = 0u8;
     let start = Instant::now();
-    let mut next = start;
+    let mut next = start + std::time::Duration::from_secs(2);
     let final_png = out.join("descendants.png");
     let finished = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     let observed = finished.clone();
@@ -89,9 +112,12 @@ fn capture_family_navigation_using_real_accessibility_actions() {
                     .observe(save_to_disk(out.join("parents.png")));
                 step = 1;
             }
-            1 if out.join("parents.png").is_file() => {
+            1 if album_visible(&out.join("parents.png")) => {
                 select(world, Control::Visit(1));
                 step = 2;
+            }
+            1 if out.join("parents.png").is_file() => {
+                step = 0;
             }
             2 if world
                 .resource::<State>()
@@ -104,9 +130,12 @@ fn capture_family_navigation_using_real_accessibility_actions() {
                     .observe(save_to_disk(out.join("descendants.png")));
                 step = 3;
             }
-            3 if out.join("descendants.png").is_file() => {
+            3 if album_visible(&out.join("descendants.png")) => {
                 select(world, Control::Later);
                 step = 4;
+            }
+            3 if out.join("descendants.png").is_file() => {
+                step = 2;
             }
             4 if world
                 .resource::<State>()
@@ -131,7 +160,7 @@ fn capture_family_navigation_using_real_accessibility_actions() {
     });
     assert!(app.run().is_success());
     assert!(
-        final_png.is_file() && finished.load(std::sync::atomic::Ordering::Relaxed),
+        album_visible(&final_png) && finished.load(std::sync::atomic::Ordering::Relaxed),
         "family navigation did not reach its descendant frame"
     );
 }
