@@ -924,6 +924,50 @@
       "size_bytes": 3233004,
       "source": "generated:nursery-understory",
       "usage_category": "environment-dressing"
+    },
+    {
+      "asset_id": "landmark-waykeeper",
+      "author": "Qualia art",
+      "digest": "fnv1a64:1ec1181f025848f8",
+      "external": false,
+      "final_art": false,
+      "generated": true,
+      "generator": {
+        "config_path": "scripts/build_sanctuary_landmarks.py",
+        "date": "2026-11-18",
+        "seed": "waykeeper",
+        "tool": "Blender-5.2.1 LTS"
+      },
+      "license": "A-Life-Generated-Source",
+      "license_ref": "README.md",
+      "local_path": "crates/alife_game_app/assets/care/landmarks/waykeeper.glb",
+      "placeholder": false,
+      "replacement_policy": "edit-blender-source-and-refresh-manifest",
+      "size_bytes": 65728,
+      "source": "generated:sanctuary-landmarks",
+      "usage_category": "environment-dressing"
+    },
+    {
+      "asset_id": "landmark-emberstone",
+      "author": "Qualia art",
+      "digest": "fnv1a64:2fcc7a3cf5b073e4",
+      "external": false,
+      "final_art": false,
+      "generated": true,
+      "generator": {
+        "config_path": "scripts/build_sanctuary_landmarks.py",
+        "date": "2026-11-18",
+        "seed": "emberstone",
+        "tool": "Blender-5.2.1 LTS"
+      },
+      "license": "A-Life-Generated-Source",
+      "license_ref": "README.md",
+      "local_path": "crates/alife_game_app/assets/care/landmarks/emberstone.glb",
+      "placeholder": false,
+      "replacement_policy": "edit-blender-source-and-refresh-manifest",
+      "size_bytes": 69400,
+      "source": "generated:sanctuary-landmarks",
+      "usage_category": "environment-dressing"
     }
   ],
   "pack_id": "production-voxel-v1",
