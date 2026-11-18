@@ -117,6 +117,7 @@ macro_rules! signs {
         include_bytes!(concat!("../../../../../assets/ui/fieldglass/",$name,".png")).as_slice())),+]};
 }
 const IMAGES: [(&str, &[u8]); 4] = signs!("food", "toy", "carried", "consumed");
+const MARK_IMAGES: [(&str, &[u8]); 2] = signs!("locator", "afterimage");
 pub(in crate::production_voxel_renderer) fn spawn(world: &mut World, parent: Entity) {
     let art = IMAGES.map(|(_, b)| care_dock::decode_png(world, b));
     let (root, icon) = care_dock::spawn_accessory(
@@ -129,7 +130,7 @@ pub(in crate::production_voxel_renderer) fn spawn(world: &mut World, parent: Ent
     world.entity_mut(root).insert(Lens);
     world.entity_mut(icon).insert(Glyph);
     world.insert_resource(Art(art));
-    let marks = signs!("locator", "afterimage").map(|(_, b)| care_dock::decode_png(world, b));
+    let marks = MARK_IMAGES.map(|(_, b)| care_dock::decode_png(world, b));
     world.spawn((
         Name::new("Fieldglass optical mark"),
         OpticalMark,
@@ -239,12 +240,11 @@ pub(in crate::production_voxel_renderer) fn image_path(
     world: &World,
     image: &Handle<Image>,
 ) -> Option<String> {
-    let i = world
-        .get_resource::<Art>()?
-        .0
-        .iter()
-        .position(|h| h == image)?;
-    Some(IMAGES[i].0.into())
+    let icons = world.get_resource::<Art>()?.0.iter().zip(IMAGES);
+    let marks = world.get_resource::<Marks>()?.0.iter().zip(MARK_IMAGES);
+    icons
+        .chain(marks)
+        .find_map(|(handle, (path, _))| (handle == image).then(|| path.to_string()))
 }
 
 #[cfg(test)]
