@@ -118,10 +118,36 @@ impl FirstGesture {
         };
     }
 }
+#[derive(Component, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Accessory {
+    Garden,
+    Fieldglass,
+}
+
+#[cfg(feature = "gpu-runtime")]
+#[derive(Clone, Copy)]
+pub(super) struct HandFocus {
+    pub guard: Option<StableVoxelObjectRef>,
+    pub point: Vec2,
+    pub gift: Option<WorldEntityId>,
+}
+#[cfg(feature = "gpu-runtime")]
+impl HandFocus {
+    pub(super) fn bed(t: VoxelTileCoord) -> Self {
+        Self {
+            guard: Some(super::orchard::selected_soil(t)),
+            gift: None,
+            point: Vec2::new(t.x as f32 + 0.5, t.z as f32 + 0.5),
+        }
+    }
+}
+
 #[derive(Resource, Default)]
 pub(crate) struct State {
     pending: Option<Action>,
     garden_pending: bool,
+    pub(super) fieldglass_pending: bool,
+    pub(super) last_gift: Option<WorldEntityId>,
     pub(super) garden_armed: bool,
     pub(super) garden_pointer: bool,
     garden_last_cursor: Option<Vec2>,
@@ -129,7 +155,9 @@ pub(crate) struct State {
     pub(super) garden_cursor: Option<VoxelTileCoord>,
     pub(super) garden_ground_click: bool,
     #[cfg(feature = "gpu-runtime")]
-    pub(super) garden_focus: Option<VoxelTileCoord>,
+    pub(super) hand_focus: Option<HandFocus>,
+    #[cfg(feature = "gpu-runtime")]
+    pub(super) framing: Option<(HandFocus, f32)>,
     #[cfg(feature = "gpu-runtime")]
     pub(super) garden_effect: Option<(VoxelTileCoord, alife_world::orchard::OrchardReceipt)>,
     invitation: FirstGesture,
@@ -159,6 +187,9 @@ impl State {
         }
     }
     pub(super) fn record(&mut self, action: Action, evidence: Evidence) {
+        if let Evidence::Placed(id) = evidence {
+            self.last_gift = Some(id);
+        }
         self.evidence[action.index()] = evidence;
         if matches!(evidence, Evidence::Queued | Evidence::Placed(_)) {
             self.invitation.dismissed = true;
@@ -167,8 +198,19 @@ impl State {
     pub(super) fn reset(&mut self) {
         self.pending = None;
         self.garden_pending = false;
+        self.fieldglass_pending = false;
+        self.last_gift = None;
         self.garden_armed = false;
         self.garden_ground_click = false;
+        self.garden_pointer = false;
+        self.garden_last_cursor = None;
+        #[cfg(feature = "gpu-runtime")]
+        {
+            self.hand_focus = None;
+            self.framing = None;
+            self.garden_cursor = None;
+            self.garden_effect = None;
+        }
         self.evidence = [Evidence::None; 7];
         self.selected = None;
     }
@@ -264,6 +306,70 @@ const EMBEDDED: [(&str, &[u8]); 13] = [
     ),
 ];
 use crate::production_voxel_renderer::sanctuary_ink::{self as ink, bevel};
+pub(super) fn spawn_accessory(
+    world: &mut World,
+    parent: Entity,
+    accessory: Accessory,
+    image: Handle<Image>,
+    label: &'static str,
+) -> (Entity, Entity) {
+    let mut accessible = accesskit::Node::new(accesskit::Role::Button);
+    accessible.set_label(label);
+    accessible.add_action(accesskit::Action::Click);
+    accessible.set_hidden();
+    let root = world
+        .spawn((
+            accessory,
+            Name::new(label),
+            Node {
+                position_type: PositionType::Absolute,
+                left: if accessory == Accessory::Garden {
+                    Val::Px(2.)
+                } else {
+                    Val::Auto
+                },
+                right: if accessory == Accessory::Fieldglass {
+                    Val::Px(2.)
+                } else {
+                    Val::Auto
+                },
+                bottom: Val::Percent(115.),
+                width: Val::Px(50.),
+                height: Val::Px(42.),
+                border: UiRect::all(Val::Px(2.)),
+                border_radius: BorderRadius::all(Val::Px(15.)),
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::Center,
+                ..default()
+            },
+            Visibility::Hidden,
+            FocusPolicy::Block,
+            Interaction::None,
+            AccessibilityNode(accessible),
+            BackgroundColor(ink::GLASS),
+            ink::bevel(true),
+            ChildOf(parent),
+        ))
+        .id();
+    let mut decoration = accesskit::Node::new(accesskit::Role::Image);
+    decoration.set_hidden();
+    let icon = world
+        .spawn((
+            ImageNode::new(image),
+            Node {
+                width: Val::Px(32.),
+                height: Val::Px(32.),
+                ..default()
+            },
+            AccessibilityNode(decoration),
+            FocusPolicy::Pass,
+            bevy::picking::Pickable::IGNORE,
+            ChildOf(root),
+        ))
+        .id();
+    (root, icon)
+}
+
 pub(super) fn decode_png(world: &mut World, bytes: &[u8]) -> Handle<Image> {
     let image = Image::from_buffer(
         bytes,
@@ -429,6 +535,8 @@ pub(super) fn spawn(world: &mut World) {
         ChildOf(root),
     ));
     super::orchard::spawn_tool(world, root);
+    #[cfg(feature = "gpu-runtime")]
+    super::field_signs::glass::spawn(world, root);
     super::live_care_feedback::prepare_art(world, &icons);
     world.insert_resource(Icons(icons));
 }
@@ -459,18 +567,27 @@ pub(crate) fn collect_input(world: &mut World) {
     for (action, interaction) in world.query::<(&Action, &Interaction)>().iter(world) {
         pressed[action.index()] = *interaction == Interaction::Pressed;
     }
-    let garden = world
-        .query_filtered::<(Entity, &Interaction, &Visibility), With<super::orchard::GardenTool>>()
+    let visible_tools: Vec<_> = world
+        .query::<(Entity, &Accessory, &Interaction, &Visibility)>()
         .iter(world)
-        .find(|(_, _, v)| **v != Visibility::Hidden)
-        .map(|(e, i, _)| (e, *i));
-    let pointer = pointer || garden.is_some_and(|(_, i)| i != Interaction::None);
-    let garden_press = garden.is_some_and(|(_, i)| i == Interaction::Pressed)
-        && world
-            .resource::<ButtonInput<MouseButton>>()
-            .just_pressed(MouseButton::Left);
+        .filter(|(_, _, _, v)| **v != Visibility::Hidden)
+        .map(|(e, a, i, _)| (e.to_bits(), *a, *i))
+        .collect();
+    let pointer = pointer
+        || visible_tools
+            .iter()
+            .any(|(_, _, i)| *i != Interaction::None);
     let state = world.resource::<State>();
-    let garden_press = garden_press && !state.release_gate;
+    let pointer_tool = (world
+        .resource::<ButtonInput<MouseButton>>()
+        .just_pressed(MouseButton::Left)
+        && !state.release_gate)
+        .then(|| {
+            visible_tools
+                .iter()
+                .find_map(|(_, a, i)| (*i == Interaction::Pressed).then_some(*a))
+        })
+        .flatten();
     let click = ACTIONS.into_iter().find(|a| {
         left_down && !state.release_gate && pressed[a.index()] && !state.pressed[a.index()]
     });
@@ -492,17 +609,19 @@ pub(crate) fn collect_input(world: &mut World) {
         .iter(world)
         .map(|(entity, action)| (entity.to_bits(), *action))
         .collect::<Vec<_>>();
-    let (accessible_click, accessible_garden) =
+    let (accessible_click, accessible_tool) =
         world.resource_scope(|world, mut state: Mut<State>| {
             let mut action = None;
-            let mut garden_click = false;
+            let mut tool = None;
             if let Some(messages) =
                 world.get_resource::<bevy::ecs::message::Messages<ActionRequest>>()
             {
                 for request in state.accessible_reader.read(messages) {
                     if !blocked && request.0.action == AccessibleAction::Click {
-                        garden_click |=
-                            garden.is_some_and(|(e, _)| e.to_bits() == request.0.target.0);
+                        tool = visible_tools
+                            .iter()
+                            .find_map(|(e, a, _)| (*e == request.0.target.0).then_some(*a))
+                            .or(tool);
                         action = controls
                             .iter()
                             .find_map(|(entity, action)| {
@@ -512,18 +631,21 @@ pub(crate) fn collect_input(world: &mut World) {
                     }
                 }
             }
-            (action, garden_click)
+            (action, tool)
         });
     let click = click.or(accessible_click);
     let ground_click = world
         .resource::<ButtonInput<MouseButton>>()
         .just_pressed(MouseButton::Left)
         && !pointer;
-    let gardening = !blocked && (garden_press || accessible_garden) && click.is_none();
+    let tool = pointer_tool
+        .or(accessible_tool)
+        .filter(|_| !blocked && click.is_none());
     {
         let mut state = world.resource_mut::<State>();
         state.speech_opened = false;
-        state.garden_pending = gardening;
+        state.garden_pending = tool == Some(Accessory::Garden);
+        state.fieldglass_pending = tool == Some(Accessory::Fieldglass);
         if state.garden_armed
             && cursor
                 .zip(state.garden_last_cursor)
@@ -532,7 +654,7 @@ pub(crate) fn collect_input(world: &mut World) {
             state.garden_pointer = true;
         }
         state.garden_last_cursor = cursor;
-        if blocked || click.is_some() {
+        if blocked || click.is_some() || state.fieldglass_pending {
             state.garden_armed = false;
         }
         state.garden_ground_click = !blocked && state.garden_armed && ground_click;
@@ -541,10 +663,10 @@ pub(crate) fn collect_input(world: &mut World) {
         if !left_down {
             state.release_gate = false;
         }
-        if !blocked && (click.is_some() || gardening) && left_down {
+        if !blocked && (click.is_some() || tool.is_some()) && left_down {
             state.release_gate = true;
         }
-        state.captured = (!blocked && (pointer || accessible_click.is_some() || gardening))
+        state.captured = (!blocked && (pointer || accessible_click.is_some() || tool.is_some()))
             || state.release_gate;
         if !blocked {
             state.pending = click.filter(|a| *a != Action::Speech);
@@ -553,7 +675,7 @@ pub(crate) fn collect_input(world: &mut World) {
         }
     }
     if !blocked
-        && (pointer || click.is_some() || gardening || world.resource::<State>().release_gate)
+        && (pointer || click.is_some() || tool.is_some() || world.resource::<State>().release_gate)
     {
         god_hand::cancel_for_menu(world);
     }
@@ -1056,6 +1178,8 @@ pub(super) fn sync(world: &mut World) {
     }
     apply_feedback(world, availability, evidence, error);
     super::orchard::sync_tool(world, selected, debug);
+    #[cfg(feature = "gpu-runtime")]
+    super::field_signs::glass::sync(world, debug);
 }
 fn apply_feedback(
     world: &mut World,

@@ -280,3 +280,24 @@ fn same_frame_quick_taps_and_mixed_fresh_repeated_keys_toggle_once() {
         assert_eq!(app.world().resource::<Playback>().toggles, 1);
     }
 }
+
+#[cfg(feature = "gpu-runtime")]
+#[test]
+fn inspecting_a_gift_and_changing_speed_are_independent_shortcuts() {
+    let mut keys = ButtonInput::default();
+    keys.press(KeyCode::BracketRight);
+    assert_eq!(
+        requested_speed(&keys),
+        Some(crate::ProductionRunMode::MaxSpeed)
+    );
+    assert!(!requested_fieldglass(&keys, false));
+
+    keys.reset_all();
+    keys.press(KeyCode::KeyZ);
+    assert!(requested_fieldglass(&keys, false));
+    assert_eq!(requested_speed(&keys), None);
+
+    keys.reset_all();
+    assert!(requested_fieldglass(&keys, true));
+    assert_eq!(requested_speed(&keys), None);
+}

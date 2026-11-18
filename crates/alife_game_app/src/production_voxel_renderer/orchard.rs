@@ -4,7 +4,7 @@ use super::*;
 pub(super) mod fx;
 #[cfg(feature = "gpu-runtime")]
 use alife_world::orchard::OrchardGesture;
-use bevy::{a11y::AccessibilityNode, prelude::*, ui::FocusPolicy};
+use bevy::{a11y::AccessibilityNode, prelude::*};
 
 #[derive(Component)]
 pub(super) struct GardenTool;
@@ -123,50 +123,15 @@ pub(super) fn image_path(world: &World, image: &Handle<Image>) -> Option<String>
 
 pub(super) fn spawn_tool(world: &mut World, parent: Entity) {
     let handles = ART.map(|(_, bytes)| care_dock::decode_png(world, bytes));
-    let mut accessible = accesskit::Node::new(accesskit::Role::Button);
-    accessible.set_label("Tend the selected soil");
-    accessible.add_action(accesskit::Action::Click);
-    accessible.set_hidden();
-    let root = world
-        .spawn((
-            GardenTool,
-            Name::new("Orchard tool"),
-            Node {
-                position_type: PositionType::Absolute,
-                left: Val::Px(2.),
-                bottom: Val::Percent(115.),
-                width: Val::Px(50.),
-                height: Val::Px(42.),
-                border: UiRect::all(Val::Px(2.)),
-                border_radius: BorderRadius::all(Val::Px(15.)),
-                align_items: AlignItems::Center,
-                justify_content: JustifyContent::Center,
-                ..default()
-            },
-            Visibility::Hidden,
-            FocusPolicy::Block,
-            Interaction::None,
-            AccessibilityNode(accessible),
-            BackgroundColor(sanctuary_ink::GLASS),
-            sanctuary_ink::bevel(true),
-            ChildOf(parent),
-        ))
-        .id();
-    let mut decoration = accesskit::Node::new(accesskit::Role::Image);
-    decoration.set_hidden();
-    world.spawn((
-        ToolIcon,
-        ImageNode::new(handles[0].clone()),
-        Node {
-            width: Val::Px(32.),
-            height: Val::Px(32.),
-            ..default()
-        },
-        AccessibilityNode(decoration),
-        FocusPolicy::Pass,
-        bevy::picking::Pickable::IGNORE,
-        ChildOf(root),
-    ));
+    let (root, icon) = care_dock::spawn_accessory(
+        world,
+        parent,
+        care_dock::Accessory::Garden,
+        handles[0].clone(),
+        "Tend the selected soil",
+    );
+    world.entity_mut(root).insert(GardenTool);
+    world.entity_mut(icon).insert(ToolIcon);
     world.insert_resource(Signs(handles));
 }
 pub(super) fn sync_tool(world: &mut World, selected: Option<StableVoxelObjectRef>, debug: bool) {
@@ -297,7 +262,8 @@ pub(super) fn drive(
                 return;
             };
             match runtime.offer_orchard_fruit(id, tile) {
-                Ok(_) => {
+                Ok(id) => {
+                    dock.last_gift = Some(id);
                     frame.refresh_world_objects(runtime.world());
                     ux.last_error = None;
                 }
@@ -306,11 +272,14 @@ pub(super) fn drive(
         } else if let (true, false, Plan::Return(tile)) = (tool, dock.garden_armed, plan) {
             selection.selected = Some(selected_soil(tile));
             follow.enabled = false;
-            dock.garden_focus = Some(tile);
+            dock.hand_focus = Some(care_dock::HandFocus::bed(tile));
         } else if let Some(tile) = aim(&mut dock.garden_armed, tool && !commit_marker, ground, soil)
         {
             match runtime.tend_player_orchard(tile) {
                 Ok(receipt) => {
+                    if let alife_world::orchard::OrchardReceipt::Picked(id) = receipt {
+                        dock.last_gift = Some(id);
+                    }
                     dock.garden_effect = Some((tile, receipt));
                     if matches!(
                         receipt,
@@ -318,7 +287,7 @@ pub(super) fn drive(
                             | alife_world::orchard::OrchardReceipt::Watching
                     ) {
                         follow.enabled = false;
-                        dock.garden_focus = Some(tile);
+                        dock.hand_focus = Some(care_dock::HandFocus::bed(tile));
                     }
                     frame.refresh_world_objects(runtime.world());
                     ux.last_error = None;

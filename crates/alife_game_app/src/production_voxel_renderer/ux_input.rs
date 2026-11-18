@@ -21,6 +21,29 @@ fn playback_toggle_requested<'a>(
     requested
 }
 
+fn requested_speed(keyboard: &ButtonInput<KeyCode>) -> Option<crate::ProductionRunMode> {
+    if fvr05_overlay_modifier_pressed(keyboard) {
+        return None;
+    }
+    // Brackets alias the numbered playback modes. Retain the former priority
+    // if multiple keys arrive together, but apply the winning mode only once.
+    [
+        (KeyCode::Digit1, crate::ProductionRunMode::OneX),
+        (KeyCode::Digit2, crate::ProductionRunMode::MaxSpeed),
+        (KeyCode::Digit3, crate::ProductionRunMode::HeadlessMaxSpeed),
+        (KeyCode::BracketLeft, crate::ProductionRunMode::OneX),
+        (KeyCode::BracketRight, crate::ProductionRunMode::MaxSpeed),
+    ]
+    .into_iter()
+    .rev()
+    .find_map(|(key, mode)| keyboard.just_pressed(key).then_some(mode))
+}
+
+#[cfg(feature = "gpu-runtime")]
+fn requested_fieldglass(keyboard: &ButtonInput<KeyCode>, clicked: bool) -> bool {
+    clicked || keyboard.just_pressed(KeyCode::KeyZ)
+}
+
 #[allow(
     clippy::too_many_arguments,
     reason = "Bevy injects independent ECS system parameters."
@@ -244,27 +267,28 @@ pub(super) fn handle_fvr05_production_ux_input(
         ux.settings.show_overlays = !ux.settings.show_overlays;
         ux.last_action = format!("Overlays visible: {}", ux.settings.show_overlays);
     }
-    // These are the only playback modes. Brackets are aliases, not multipliers.
-    for (key, mode) in [
-        (KeyCode::Digit1, crate::ProductionRunMode::OneX),
-        (KeyCode::Digit2, crate::ProductionRunMode::MaxSpeed),
-        (KeyCode::Digit3, crate::ProductionRunMode::HeadlessMaxSpeed),
-        (KeyCode::BracketLeft, crate::ProductionRunMode::OneX),
-        (KeyCode::BracketRight, crate::ProductionRunMode::MaxSpeed),
-    ] {
-        if keyboard.just_pressed(key) && !fvr05_overlay_modifier_pressed(&keyboard) {
-            menu::speed(
-                mode,
-                &mut ux,
-                #[cfg(feature = "gpu-runtime")]
-                schedule.as_deref_mut(),
-                frontend.summary.record_performance,
-                false,
-            );
-        }
+    if let Some(mode) = requested_speed(&keyboard) {
+        menu::speed(
+            mode,
+            &mut ux,
+            #[cfg(feature = "gpu-runtime")]
+            schedule.as_deref_mut(),
+            frontend.summary.record_performance,
+            false,
+        );
     }
     #[cfg(feature = "gpu-runtime")]
     if !ux.debug_mode {
+        if requested_fieldglass(&keyboard, dock.fieldglass_pending) {
+            if let Some(runtime) = gpu_runtime.as_ref() {
+                field_signs::glass::look(
+                    runtime.runtime.world(),
+                    selection.selected,
+                    &mut dock,
+                    &mut follow,
+                );
+            }
+        }
         orchard::drive(
             &keyboard,
             &mut selection,

@@ -412,7 +412,7 @@ pub(crate) fn export_nodes(world: &mut World) -> Vec<Value> {
             let source_path = name.map(|n| format!("assets/ui/care_dock/{n}.png"))
                 .or_else(|| super::orchard::image_path(world, &image.image));
             #[cfg(feature = "gpu-runtime")]
-            let source_path = source_path.or_else(|| crate::production_conversation_lineage_ui::composer::image_path(world, &image.image));
+            let source_path = source_path.or_else(|| super::field_signs::glass::image_path(world, &image.image)).or_else(|| crate::production_conversation_lineage_ui::composer::image_path(world, &image.image));
             let source_path = source_path.expect("embedded UI icon");
             let asset=world.resource::<Assets<Image>>().get(&image.image).unwrap();
             json!({"name":name,"source_path":source_path,
@@ -1104,6 +1104,59 @@ fn collected_pointer_care_resolves_dispatch_selection_and_rejects_retired_snapsh
         }
     }
 }
+#[cfg(feature = "gpu-runtime")]
+#[test]
+fn garden_and_fieldglass_fit_without_covering_care_and_looking_never_dispatches_care() {
+    for size in VIEWPORTS {
+        let mut app = layout_app(size);
+        let world = app.world_mut();
+        let tools: Vec<_> = world
+            .query::<(Entity, &Accessory)>()
+            .iter(world)
+            .map(|(e, a)| (e, *a))
+            .collect();
+        assert_eq!(tools.len(), 2);
+        for (e, _) in &tools {
+            world.entity_mut(*e).insert(Visibility::Inherited);
+        }
+        app.update();
+        let world = app.world_mut();
+        let area = Box2 {
+            min: Vec2::ZERO,
+            max: size,
+        };
+        let a = Box2::of(world, tools[0].0);
+        let b = Box2::of(world, tools[1].0);
+        assert!(area.contains(a) && area.contains(b) && !a.overlaps(b));
+        for (e, _) in world.query::<(Entity, &Action)>().iter(world) {
+            let button = Box2::of(world, e);
+            assert!(!a.overlaps(button) && !b.overlaps(button));
+        }
+    }
+    let mut app = input_app();
+    app.init_resource::<Messages<ActionRequest>>();
+    let world = app.world_mut();
+    let lens = world
+        .query::<(Entity, &Accessory)>()
+        .iter(world)
+        .find(|(_, a)| **a == Accessory::Fieldglass)
+        .unwrap()
+        .0;
+    world.entity_mut(lens).insert(Visibility::Inherited);
+    world
+        .resource_mut::<Messages<ActionRequest>>()
+        .write(ActionRequest(accesskit::ActionRequest {
+            action: accesskit::Action::Click,
+            target: accesskit::NodeId(lens.to_bits()),
+            data: None,
+        }));
+    app.update();
+    let dock = app.world().resource::<State>();
+    assert!(dock.fieldglass_pending && dock.captured);
+    assert!(dock.pending.is_none() && !dock.garden_pending);
+    assert_eq!(app.world().resource::<WorldReaderRuns>().0, 0);
+}
+
 #[test]
 fn actual_collect_input_captures_hover_press_wheel_and_release_without_repeat_dispatch() {
     let mut app = input_app();

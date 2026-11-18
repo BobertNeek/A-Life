@@ -65,6 +65,8 @@ use crate::{creature_root_pose, grounded_root_height, CreatureVisualBounds};
 mod camera_navigation;
 pub(crate) mod care_dock;
 mod creature_grounding;
+#[cfg(feature = "gpu-runtime")]
+mod field_signs;
 mod god_hand;
 mod graphics_capture;
 mod hearthling;
@@ -1867,6 +1869,9 @@ fn apply_production_runtime_load(world: &mut World) {
             menu.note_loaded_pause(candidate_settings.paused);
         }
         world.insert_resource(candidate_frame);
+        if let Some(mut trace) = world.get_resource_mut::<field_signs::Trail>() {
+            trace.clear();
+        }
         if let Some(mut dock) = world.get_resource_mut::<care_dock::State>() {
             dock.reset();
         }
@@ -2012,9 +2017,11 @@ pub fn spawn_fvr03_production_voxel_scene(
     );
     graphics_capture::install(app);
     #[cfg(feature = "gpu-runtime")]
+    app.init_resource::<field_signs::Trail>();
+    #[cfg(feature = "gpu-runtime")]
     app.add_systems(
         Update,
-        orchard::fx::frame_patch
+        orchard::fx::frame_hand_focus
             .after(sync_fvr04_camera_follow)
             .before(island::constrain_camera)
             .in_set(ProductionVoxelPresentationSet::RootReaders),
@@ -2023,6 +2030,7 @@ pub fn spawn_fvr03_production_voxel_scene(
     app.add_systems(
         Update,
         (
+            (field_signs::sample, field_signs::draw).chain(),
             orchard::sync_plants,
             orchard::fx::project,
             orchard::fx::drift,
