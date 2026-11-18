@@ -1,5 +1,6 @@
 //! A small modal player menu. Debug rails remain separate; world truth stays in runtime.
 mod field_camera;
+mod garden_survey;
 use super::*;
 use accesskit::{Action as AccessibleAction, Role};
 use bevy::a11y::{AccessibilityNode, ActionRequest};
@@ -18,6 +19,7 @@ enum Screen {
     Speed,
     Settings,
     Photos,
+    Garden,
     ConfirmLoad,
 }
 
@@ -33,6 +35,11 @@ pub(super) enum Action {
     Settings,
     Quit,
     Photos,
+    Garden,
+    VisitBed,
+    FindSoil,
+    NextBed,
+    PreviousBed,
     Expose,
     Older,
     Newer,
@@ -42,15 +49,28 @@ pub(super) enum Action {
     Back,
 }
 
-const MAIN: [(Action, &str); 7] = [
+const MAIN: [(Action, &str); 8] = [
     (Action::Play, "Play"),
     (Action::Save, "Save"),
     (Action::Load, "Load"),
     (Action::Speed, "Speed"),
     (Action::Settings, "Settings"),
     (Action::Photos, "Photos"),
+    (Action::Garden, "Garden"),
     (Action::Quit, "Quit"),
 ];
+const GARDEN: [(Action, &str); 5] = [
+    (Action::PreviousBed, "Previous planted bed"),
+    (Action::NextBed, "Next planted bed"),
+    (Action::VisitBed, "Visit the marked bed"),
+    (Action::FindSoil, "Find soil for another planting"),
+    (Action::Back, "Back"),
+];
+impl Screen {
+    fn illustrated(self) -> bool {
+        matches!(self, Self::Photos | Self::Garden)
+    }
+}
 const PHOTOS: [(Action, &str); 4] = [
     (Action::Expose, "Take a field photograph"),
     (Action::Older, "Previous photograph"),
@@ -122,6 +142,7 @@ pub(crate) struct MenuState {
     accessible_action: Option<Action>,
     pub(super) pending: Option<Action>,
     plate_action: Option<Action>,
+    garden_action: Option<Action>,
     #[cfg(feature = "gpu-runtime")]
     quit: Option<QuitCheckpoint>,
 }
@@ -178,6 +199,7 @@ impl MenuState {
         match self.screen {
             Screen::Main => &MAIN,
             Screen::Photos => &PHOTOS,
+            Screen::Garden => &GARDEN,
             Screen::Speed => &SPEED,
             Screen::Settings => &SETTINGS,
             Screen::ConfirmLoad => &CONFIRM_LOAD,
@@ -288,6 +310,7 @@ impl MenuState {
         // A request belongs to this snapshot only. Gated/busy requests cannot
         // become consent after the modal or publication state changes.
         self.plate_action = None;
+        self.garden_action = None;
         let accessible_action = self.accessible_action.take();
         let gated = self.release_gate;
         if gated && !left_down && keyboard.get_pressed().next().is_none() {
@@ -349,7 +372,9 @@ impl MenuState {
                 action = Some(Action::Back);
             }
         } else if self.screen == Screen::Closed {
-            if keyboard.just_pressed(KeyCode::F5) {
+            if keyboard.just_pressed(KeyCode::F6) {
+                action = Some(Action::Garden);
+            } else if keyboard.just_pressed(KeyCode::F5) {
                 action = Some(Action::Expose);
             } else if keyboard.just_pressed(KeyCode::KeyL) {
                 action = Some(Action::Load);
@@ -401,6 +426,20 @@ impl MenuState {
             }
             Some(Action::CancelLoad) => outcome.resume = self.cancel_load(),
             Some(Action::Play) => outcome.resume = Some(self.close(true)),
+            Some(Action::Garden) => {
+                if self.screen == Screen::Closed {
+                    self.open(paused);
+                    outcome.opening = true;
+                }
+                self.screen = Screen::Garden;
+                self.selected = 0;
+                self.garden_action = Some(Action::Garden);
+            }
+            Some(
+                a @ (Action::PreviousBed | Action::NextBed | Action::VisitBed | Action::FindSoil),
+            ) => {
+                self.garden_action = Some(a);
+            }
             Some(Action::Photos) => {
                 self.screen = Screen::Photos;
                 self.selected = 0;
@@ -541,6 +580,8 @@ struct MenuGlyphs {
     shutter: Handle<Image>,
     earlier: Handle<Image>,
     later: Handle<Image>,
+    visit: Handle<Image>,
+    sow: Handle<Image>,
 }
 
 impl MenuGlyphs {
@@ -561,6 +602,8 @@ impl MenuGlyphs {
             )
         };
         Self {
+            visit: load(include_bytes!("../../../../assets/ui/orchard/return.png")),
+            sow: load(include_bytes!("../../../../assets/ui/orchard/sow.png")),
             shutter: load(include_bytes!(
                 "../../../../assets/ui/field_camera/shutter.png"
             )),
@@ -594,8 +637,10 @@ impl MenuGlyphs {
     fn action(&self, action: Action) -> &Handle<Image> {
         match action {
             Action::Expose => &self.shutter,
-            Action::Older => &self.earlier,
-            Action::Newer => &self.later,
+            Action::Older | Action::PreviousBed => &self.earlier,
+            Action::Newer | Action::NextBed => &self.later,
+            Action::VisitBed => &self.visit,
+            Action::FindSoil => &self.sow,
             Action::OneX => &self.play,
             Action::Max => &self.fast,
             Action::Focus => &self.pause,
@@ -607,11 +652,15 @@ impl MenuGlyphs {
 
 fn spawn_ui(world: &mut World) {
     let glyphs = MenuGlyphs::load(world);
+    world.init_resource::<garden_survey::Survey>();
+    let specimens = garden_survey::Specimens::load(world);
+    world.insert_resource(specimens);
     for (screen, rows) in [
         (Screen::Main, MAIN.as_slice()),
         (Screen::Speed, SPEED.as_slice()),
         (Screen::Settings, SETTINGS.as_slice()),
         (Screen::Photos, PHOTOS.as_slice()),
+        (Screen::Garden, GARDEN.as_slice()),
         (Screen::ConfirmLoad, CONFIRM_LOAD.as_slice()),
     ] {
         world
@@ -639,6 +688,7 @@ fn spawn_ui(world: &mut World) {
                             Screen::Speed => "Speed",
                             Screen::Settings => "Settings",
                             Screen::Photos => "Your field photographs",
+                            Screen::Garden => "Map of your planted garden",
                             Screen::ConfirmLoad => LOAD_WARNING,
                             Screen::Closed => unreachable!(),
                         },
@@ -648,6 +698,9 @@ fn spawn_ui(world: &mut World) {
                     bevel(true),
                 ))
                 .with_children(|panel| {
+                    if screen == Screen::Garden {
+                        garden_survey::mount(panel, &glyphs.sow);
+                    }
                     if screen == Screen::Photos {
                         field_camera::paper(panel, &glyphs.shutter);
                     }
@@ -911,7 +964,7 @@ fn handle_input_with_availability(world: &mut World, availability: LoadAvailabil
                     && node.contains_point(*transform, cursor)
             })
     });
-    let outcome = world.resource_scope(|world, mut state: Mut<MenuState>| {
+    let mut outcome = world.resource_scope(|world, mut state: Mut<MenuState>| {
         // Drain the whole batch so a second key cannot become later consent.
         let mut fresh_enter = false;
         if let Some(messages) = world.get_resource::<bevy::ecs::message::Messages<KeyboardInput>>()
@@ -936,6 +989,7 @@ fn handle_input_with_availability(world: &mut World, availability: LoadAvailabil
             availability,
         )
     });
+    garden_survey::handle(world, &mut outcome, focused);
     let InputOutcome {
         opening,
         resume,
@@ -1171,22 +1225,32 @@ fn sync_ui(
     mut buttons: Query<(&MenuButton, &Interaction, &mut BackgroundColor)>,
     glyphs: Res<MenuGlyphs>,
     shelf: Option<Res<field_camera::Shelf>>,
+    survey: Option<Res<garden_survey::Survey>>,
     mut statuses: Query<(&mut ImageNode, &mut Visibility), (With<Status>, Without<SelectionLamp>)>,
     mut lamps: Query<(&SelectionLamp, &mut Visibility)>,
     mut accessibility: Query<
         (
             Option<&MenuPanel>,
             Option<&MenuButton>,
+            Option<&garden_survey::Relief>,
             &mut AccessibilityNode,
         ),
-        Or<(With<MenuPanel>, With<MenuButton>)>,
+        Or<(
+            With<MenuPanel>,
+            With<MenuButton>,
+            With<garden_survey::Relief>,
+        )>,
     >,
 ) {
-    let available = |action| shelf.as_ref().is_none_or(|s| s.available(action));
-    for (panel, button, mut node) in &mut accessibility {
+    let available = |action| {
+        shelf.as_ref().is_none_or(|s| s.available(action))
+            && survey.as_ref().is_none_or(|s| s.available(action))
+    };
+    for (panel, button, relief, mut node) in &mut accessibility {
         let screen = button
             .map(|button| button.screen)
-            .or_else(|| panel.map(|panel| panel.0));
+            .or_else(|| panel.map(|panel| panel.0))
+            .or_else(|| relief.map(|_| Screen::Garden));
         if screen == Some(state.screen) {
             node.clear_hidden();
         } else {
@@ -1295,7 +1359,7 @@ fn sync_ui(
 }
 
 fn apply_layout(world: &mut World, size: Vec2) {
-    let compact = size.y < 420.0 && size.x >= 320.0;
+    let compact = size.y < 560.0 && size.x >= 320.0;
     let bottom = if size.y >= 600.0 {
         100.0
     } else if size.y >= 420.0 {
@@ -1315,11 +1379,18 @@ fn apply_layout(world: &mut World, size: Vec2) {
                 node.padding.bottom = Val::Px(bottom);
             }
         } else if let Some(panel) = panel {
-            if panel.0 == Screen::Photos {
+            if panel.0.illustrated() {
                 node.width = Val::Px(
                     (size.x - 24.)
                         .min((size.y - 154.).max(70.) * 16. / 9. + 36.)
-                        .clamp(236., 640.),
+                        .clamp(
+                            if panel.0 == Screen::Garden {
+                                270.
+                            } else {
+                                236.
+                            },
+                            640.,
+                        ),
                 );
                 node.flex_direction = FlexDirection::Row;
                 node.flex_wrap = FlexWrap::Wrap;
@@ -1355,7 +1426,7 @@ fn apply_layout(world: &mut World, size: Vec2) {
             if button.screen == Screen::Closed {
                 continue;
             }
-            if button.screen == Screen::Photos {
+            if button.screen.illustrated() {
                 node.width = Val::Px(42.);
                 node.height = Val::Px(36.);
                 continue;
@@ -1626,6 +1697,7 @@ mod tests {
                 Screen::Settings,
                 Screen::ConfirmLoad,
                 Screen::Photos,
+                Screen::Garden,
             ] {
                 let mut app = App::new();
                 app.add_plugins(HierarchyPropagatePlugin::<ComputedUiTargetCamera>::new(
@@ -1692,7 +1764,7 @@ mod tests {
                     .filter(|(button,_,_)|button.screen==screen).map(|(button,node,transform)| {
                         let center=transform.affine().translation; let half=node.size()*0.5;
                         let min=center-half;let max=center+half;
-                        let (min_w,target_h) = if screen==Screen::Photos {(42.,36.)} else if screen==Screen::Main && size.y<300. {(110.,32.)} else {(110.,46.)};
+                        let (min_w,target_h) = if screen.illustrated() {(42.,36.)} else if screen==Screen::Main && size.y<300. {(110.,32.)} else {(110.,46.)};
                         assert!(node.size().x>=min_w && node.size().y==target_h,"{:?} invalid target {:?}",screen,node.size());
                         assert!(min.x>=0.0 && min.y>=0.0 && max.x<=size.x && max.y<=size.y,"{:?} {:?} outside {:?}: {:?} {:?}",screen,button.action,size,min,max);
                         assert!(node.contains_point(*transform,center));
@@ -1719,6 +1791,7 @@ mod tests {
                     match screen {
                         Screen::Main => MAIN.len(),
                         Screen::Photos => PHOTOS.len(),
+                        Screen::Garden => GARDEN.len(),
                         Screen::Speed => 3,
                         Screen::Settings | Screen::ConfirmLoad => 2,
                         Screen::Closed => 0,
@@ -1727,7 +1800,7 @@ mod tests {
                 receipts.push(serde_json::json!({"viewport":[size.x,size.y],"screen":format!("{:?}",screen),"buttons":rows}));
             }
         }
-        for screens in receipts.as_chunks::<5>().0 {
+        for screens in receipts.as_chunks::<6>().0 {
             let load = |screen: usize, action: &str| {
                 screens[screen]["buttons"]
                     .as_array()

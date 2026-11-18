@@ -23,22 +23,27 @@ pub(super) fn starting_soil(
     world: &alife_world::HeadlessWorld,
     selected: Option<StableVoxelObjectRef>,
 ) -> Option<VoxelTileCoord> {
-    let position = selected
-        .and_then(|s| s.stable_id)
-        .and_then(|id| world.entity(id))
-        .or_else(|| {
-            world
-                .organism_registry()
-                .iter()
-                .find_map(|r| world.entity(r.world_entity_id()))
-        })?
-        .position;
-    let depth = if world.terrain().is_some() {
-        position.z
-    } else {
-        position.y
-    };
-    let center = VoxelTileCoord::new(position.x.floor() as i32, depth.floor() as i32);
+    let center = soil_tile(selected).or_else(|| {
+        let position = selected
+            .and_then(|s| s.stable_id)
+            .and_then(|id| world.entity(id))
+            .or_else(|| {
+                world
+                    .organism_registry()
+                    .iter()
+                    .find_map(|r| world.entity(r.world_entity_id()))
+            })?
+            .position;
+        let depth = if world.terrain().is_some() {
+            position.z
+        } else {
+            position.y
+        };
+        Some(VoxelTileCoord::new(
+            position.x.floor() as i32,
+            depth.floor() as i32,
+        ))
+    })?;
     [
         (1, 1),
         (-1, 1),
