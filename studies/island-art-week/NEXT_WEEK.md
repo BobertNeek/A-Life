@@ -147,3 +147,7 @@ Authoring sources in `native-staging` are snapshots, **not** complete files to
 overwrite newer shared renderer work with during integration. Reconcile the
 small selected material-family or water change against the actual merge base.
 No result in these three sections represents a native test already run.
+
+### Southern inlet
+
+Stand near x90,z451 and look across toward x114.8,z431.4. Verify actual fitted material at water contact, shadow/picking of the view-only cut, and the 6 mm separation at grazing angles; roll a toy against the real bank. Pull out through 100 m vertical span and compare the close layer to stock L1/L2 geometry with its matched 3,504-texel macro change. Exercise a locally raised or recovered willow causeway separately and protect V1 saves. Evaluate before promoting: static authored budget is 33,932 detail triangles over six near tiles. No native game checks during this art-only week.

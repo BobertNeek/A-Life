@@ -1,0 +1,29 @@
+{
+  "studio_source": "cb77dee6f2cce26ea87253f481f6f30e47bbd032",
+  "art_run": 44478068741,
+  "region_xz": [
+    56.25,
+    387.5,
+    137.5,
+    459.375
+  ],
+  "runoff_starts": 13,
+  "approach": "Original triangulated cut bank, dabbed pigment and fitted drainage; no modified collision or water level.",
+  "convex_rim_communities": 12,
+  "rooted_grass_clumps": 59,
+  "embedded_gravel_pockets": 10,
+  "flat_field_stones": 194,
+  "near_tiles": 6,
+  "fitted_terrain_triangles": 304,
+  "root_and_embedded_gravel_triangles": 33932,
+  "omitted_changed_cells": 0,
+  "render_separation_mm": 6,
+  "original_pixel_rect_xz": [
+    1139,
+    1685,
+    1306,
+    1808
+  ],
+  "far_pixels_repainted": 3504,
+  "far_atlas_pixels": 4194304
+}

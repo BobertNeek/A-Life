@@ -36,4 +36,10 @@ the bare slope. Any grass fibres should hang from small discontinuous groups
 on the *actual* change of grade; compare remaining undisturbed sections.
 The first unique painted chart traces thirteen local runoff starts on the
 unmodified V1 triangles, with damp hollows, quiet iron staining and embedded
-river-sized clasts. It has not yet been accepted in the actual landscape.
+river-sized clasts. That first material was held: isolated bright pebbles read like stray spots.
+
+## Selected V1 finish, not a new river
+
+Eight local gravel lenses break the clay into tapering exposures. Twelve upper-bank communities support 59 turf clumps; ten separate pockets contain 194 low clasts, with their upper surfaces no more than 33 mm proud. The old triangle heights, shoreline, water level, prop and save identities are not edited. The stock renderer’s existing terrain gate applies; the generator separately omits any cell with different V2 corners. The six original near tiles contain 304 fitted ground triangles plus 33,932 root, leaf and clast triangles, not a timing or frame-cost claim. The native far texture changes only 3,504 of its 4,194,304 texels.
+
+The actual 1.12 m [eye](inlet-eye.jpg) and elevated [guardian](inlet-bank.jpg) retain the V1 channel, including its straight planform. This material improves the original but does not turn it into a natural meander. [Renderer and material receipt](inlet-selected.json). Blender 4.3.2 CPU art 44478068741 at cb77dee6f2cce26ea87253f481f6f30e47bbd032. For reproduction use the inlet-ground board with rooted_cutbank and distance_paint, the immutable ae225e4a source far atlas and the retained optional ridge fixture. No game, performance, movement or save testing was performed during this workweek.

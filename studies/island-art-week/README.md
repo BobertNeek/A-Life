@@ -241,3 +241,7 @@ was performed for the new assets. The gallery is not native acceptance.
 ### Native coastal hardwood, shown in Blender
 
 [Creature-height cove](coastal-alder-eye.jpg) · [same bank from above](coastal-alder-bank.jpg) · [source, geometry and caveats](ALDER.md). The old horizontal crown plates are replaced by branching summer leaf sprays and compact, sheltered interior masses. All 691 pre-existing broadleaf positions and their stock wood remain in place. Capture native motion and actual RTX costs next week before promoting.
+
+### V1 southern cut
+
+[Creature-height bank](inlet-eye.jpg) · [mouth from above](inlet-bank.jpg) · [artist source and bounds](INLET.md). Two CPU Blender views of real base assets, no gameplay.

@@ -3,6 +3,7 @@ use super::*;
 
 const STRAND: &str = "landscape/island/strandline.glb";
 const COPSE: &str = "landscape/island/copse-floor.glb";
+const INLET: &str = "landscape/island/inlet-bank.glb";
 
 #[derive(Clone, Copy)]
 enum Dressing {
@@ -20,13 +21,17 @@ pub(in crate::production_voxel_renderer) type PatchViews<'w, 's> =
     Query<'w, 's, (&'static GroundDetailPatch, &'static mut Visibility), Without<PropRange>>;
 
 fn center(name: &str, translation: Vec3) -> Option<Vec2> {
-    ((name.starts_with("Strand_") || name.starts_with("Copse_"))
+    ((name.starts_with("Strand_") || name.starts_with("Copse_") || name.starts_with("Inlet_"))
         && (translation.x != 0.0 || translation.z != 0.0))
         .then_some(Vec2::new(translation.x, translation.z))
 }
 
 pub(super) fn spawn(world: &mut World) {
-    for (name, asset) in [("Tidal strandline", STRAND), ("Sheltered copse floor", COPSE)] {
+    for (name, asset) in [
+        ("Tidal strandline", STRAND),
+        ("Sheltered copse floor", COPSE),
+        ("Southern tidal cut bank", INLET),
+    ] {
         let scene = world
             .resource::<AssetServer>()
             .load(bevy::gltf::GltfAssetLabel::Scene(0).from_asset(asset));

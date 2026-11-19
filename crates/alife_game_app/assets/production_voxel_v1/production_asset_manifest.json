@@ -708,23 +708,23 @@
     {
       "asset_id": "approved-island-geology-pigment",
       "author": "A-Life approved Blender art",
-      "digest": "fnv1a64:8a89bdc96f879691",
+      "digest": "fnv1a64:4a4c9ac304449bd6",
       "external": false,
       "final_art": false,
       "generated": true,
       "generator": {
-        "tool": "Qualia exposed bedrock and rooted PBR substrate",
-        "config_path": "scripts/build_island_habitats.py",
+        "tool": "Qualia rooted highlands plus localized southern bank pigment",
+        "config_path": "scripts/island_inlet_distance.py",
         "date": "2026-11-19",
-        "seed": "6125,9924,9271"
+        "seed": "6125,9924,9271, 1907432"
       },
       "license": "A-Life-Generated-Source",
       "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/island/geology/pigment.png",
       "placeholder": false,
       "replacement_policy": "edit-habitat-recipe-and-refresh-manifest",
-      "size_bytes": 2371438,
-      "source": "generated:island-rooted-habitats",
+      "size_bytes": 2373766,
+      "source": "generated:island-rooted-habitats-with-southern-bank",
       "usage_category": "environment-dressing"
     },
     {
@@ -1517,6 +1517,94 @@
       "replacement_policy": "edit-cove-optics-and-refresh-manifest",
       "size_bytes": 72316,
       "source": "generated:island-optical-shelf",
+      "usage_category": "environment-dressing"
+    },
+    {
+      "asset_id": "approved-island-inlet-bank",
+      "author": "Qualia island environment art",
+      "digest": "fnv1a64:c33af08bd1039a88",
+      "external": false,
+      "final_art": false,
+      "generated": true,
+      "generator": {
+        "tool": "Qualia fitted southern bank and broken alluvium lenses",
+        "config_path": "scripts/build_island_inlet.py",
+        "date": "2026-11-19",
+        "seed": "1907432, 673103"
+      },
+      "license": "A-Life-Generated-Source",
+      "license_ref": "README.md",
+      "local_path": "crates/alife_game_app/assets/landscape/island/inlet-bank.glb",
+      "placeholder": false,
+      "replacement_policy": "edit-local-bank-recipe-and-refresh-manifest",
+      "size_bytes": 1105344,
+      "source": "generated:island-fitted-cut-bank",
+      "usage_category": "environment-dressing"
+    },
+    {
+      "asset_id": "approved-island-inlet-bed",
+      "author": "Qualia island environment art",
+      "digest": "fnv1a64:54af47617d8411c1",
+      "external": false,
+      "final_art": false,
+      "generated": true,
+      "generator": {
+        "tool": "Qualia fitted southern bank and broken alluvium lenses",
+        "config_path": "scripts/build_island_inlet.py",
+        "date": "2026-11-19",
+        "seed": "1907432, 673103"
+      },
+      "license": "A-Life-Generated-Source",
+      "license_ref": "README.md",
+      "local_path": "crates/alife_game_app/assets/landscape/island/inlet/inlet-bed.png",
+      "placeholder": false,
+      "replacement_policy": "edit-local-bank-recipe-and-refresh-manifest",
+      "size_bytes": 1262900,
+      "source": "generated:island-fitted-cut-bank",
+      "usage_category": "environment-dressing"
+    },
+    {
+      "asset_id": "approved-island-inlet-normal",
+      "author": "Qualia island environment art",
+      "digest": "fnv1a64:3f1e964fabbdfb97",
+      "external": false,
+      "final_art": false,
+      "generated": true,
+      "generator": {
+        "tool": "Qualia fitted southern bank and broken alluvium lenses",
+        "config_path": "scripts/build_island_inlet.py",
+        "date": "2026-11-19",
+        "seed": "1907432, 673103"
+      },
+      "license": "A-Life-Generated-Source",
+      "license_ref": "README.md",
+      "local_path": "crates/alife_game_app/assets/landscape/island/inlet/inlet-normal.png",
+      "placeholder": false,
+      "replacement_policy": "edit-local-bank-recipe-and-refresh-manifest",
+      "size_bytes": 924327,
+      "source": "generated:island-fitted-cut-bank",
+      "usage_category": "environment-dressing"
+    },
+    {
+      "asset_id": "approved-island-inlet-orm",
+      "author": "Qualia island environment art",
+      "digest": "fnv1a64:7938a692c6740a16",
+      "external": false,
+      "final_art": false,
+      "generated": true,
+      "generator": {
+        "tool": "Qualia fitted southern bank and broken alluvium lenses",
+        "config_path": "scripts/build_island_inlet.py",
+        "date": "2026-11-19",
+        "seed": "1907432, 673103"
+      },
+      "license": "A-Life-Generated-Source",
+      "license_ref": "README.md",
+      "local_path": "crates/alife_game_app/assets/landscape/island/inlet/inlet-orm.png",
+      "placeholder": false,
+      "replacement_policy": "edit-local-bank-recipe-and-refresh-manifest",
+      "size_bytes": 177002,
+      "source": "generated:island-fitted-cut-bank",
       "usage_category": "environment-dressing"
     }
   ],
