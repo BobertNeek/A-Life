@@ -153,10 +153,12 @@ def photos(side):
         bpy.ops.render.render(write_still=True)
 
 
-if mode != "after":
+if mode not in ("after", "setup"):
     photos("before")
 surf.stone(ground, field)
-photos("after")
+if mode != "setup":
+    photos("after")
+out.mkdir(parents=True, exist_ok=True)
 (out / "photography.json").write_text(
     json.dumps(
         dict(
