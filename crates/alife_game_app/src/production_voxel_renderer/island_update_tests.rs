@@ -442,13 +442,23 @@ fn stationary_camera_still_reconciles_new_props_and_suns() {
 fn stationary_camera_still_tracks_creature_occupancy_and_removal() {
     let (mut app, _) = fixture();
     let meshes = levels(&app);
+    app.init_resource::<Assets<StandardMaterial>>();
+    let materials: [Handle<StandardMaterial>; 3] = std::array::from_fn(|_| {
+        app.world()
+            .resource::<Assets<StandardMaterial>>()
+            .reserve_handle()
+    });
+    let near_material = materials[0].clone();
+    let far_material = materials[2].clone();
     let center = Vec3::new(500.0, 0.0, 0.5);
     let chunk = app
         .world_mut()
         .spawn((
             Mesh3d(meshes[0].clone()),
+            MeshMaterial3d(near_material.clone()),
             TerrainLod {
                 meshes,
+                materials,
                 center,
                 current: 0,
             },
@@ -456,6 +466,13 @@ fn stationary_camera_still_tracks_creature_occupancy_and_removal() {
         .id();
     app.update();
     assert_eq!(app.world().get::<TerrainLod>(chunk).unwrap().current, 2);
+    assert_eq!(
+        app.world()
+            .get::<MeshMaterial3d<StandardMaterial>>(chunk)
+            .unwrap()
+            .0,
+        far_material
+    );
     let creature = app
         .world_mut()
         .spawn((
@@ -469,6 +486,13 @@ fn stationary_camera_still_tracks_creature_occupancy_and_removal() {
         .id();
     advance(&mut app, 201);
     assert_eq!(app.world().get::<TerrainLod>(chunk).unwrap().current, 0);
+    assert_eq!(
+        app.world()
+            .get::<MeshMaterial3d<StandardMaterial>>(chunk)
+            .unwrap()
+            .0,
+        near_material
+    );
     app.world_mut()
         .get_mut::<Transform>(creature)
         .unwrap()
