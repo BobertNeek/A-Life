@@ -149,6 +149,15 @@ elif subject == "inlet-underpaint":
         original_bank,
         out / "artist-inlet-underpaint",
     )
+    if board.get("tidecast_pockets"):
+        from build_island_inlet import V2
+        from island_inlet_tidecast import embed
+
+        pockets = embed(skin, SURFACE, V2)
+        receipt = skin.parent / "bank-source.json"
+        receipt.write_text(
+            json.dumps({**json.loads(receipt.read_text()), **pockets}, indent=2) + "\n"
+        )
     # Regenerate the far paint once over the last *unpainted* pre-bank
     # macro. A new V1 coat must not accumulate on the earlier one.
     from build_island_inlet import V2
@@ -238,7 +247,13 @@ elif subject == "wild-meadow":
                 stdout=target,
                 check=True,
             )
-    blender("studio_meadow_flowers.py", meadow, "--author-from", original_meadow)
+    blender(
+        "studio_meadow_flowers.py",
+        meadow,
+        "--author-from",
+        original_meadow,
+        *(["--wax-petals"] if board.get("wax_petals") else []),
+    )
     if board.get("young_saltwood"):
         young = out / "artist-young-saltwood"
         blender(

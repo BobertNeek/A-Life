@@ -23,8 +23,8 @@ def petal_bell(m, center, axis, side, bend, length, radius, petal, level, phase)
             m.triangle(lo[k], lo[k2], hi[k2])
             m.triangle(lo[k], hi[k2], hi[k])
 
-    sides = (25, 15, 10)[level]
-    fade = (0.28, 0.27, 0.12)
+    detailed = level == 0 and phase in (0, 1)
+    sides = (20 if detailed else 15) if level == 0 else (10 if level == 1 else 6)
     green = (0.34, 0.43, 0.24)
     throat = mix((0.87, 0.71, 0.39), petal, 0.25)
 
@@ -51,15 +51,13 @@ def petal_bell(m, center, axis, side, bend, length, radius, petal, level, phase)
 
     lo = ring(0, 0.17, 0)
     outline = (
-        [
-            (0.16, 0.41, 0.14),
-            (0.35, 0.71, 0.32),
-            (0.65, 0.81, 0.59),
-            (0.84, 0.92, 0.78),
-            (0.90, 1, 0.98),
-        ]
-        if level == 0
-        else [(0.26, 0.61, 0.22), (0.64, 0.82, 0.58), (0.90, 1, 0.98)]
+        [(0.20, 0.49, 0.20), (0.42, 0.76, 0.39), (0.68, 0.84, 0.63), (0.90, 1, 0.98)]
+        if detailed
+        else (
+            [(0.30, 0.65, 0.29), (0.66, 0.84, 0.61), (0.90, 1, 0.98)]
+            if level < 2
+            else [(0.39, 0.72, 0.34), (0.9, 1, 0.98)]
+        )
     )
     for t, r, p in outline:
         hi = ring(t, r, p)
@@ -67,11 +65,16 @@ def petal_bell(m, center, axis, side, bend, length, radius, petal, level, phase)
         lo = hi
     # A narrow rolled lip turns into a separately lit inner corolla. The
     # aperture has physical depth rather than a single flat closing polygon.
-    for t, r, p in (
-        ((0.94, 0.94, 0.97), (0.74, 0.74, 0.67), (0.43, 0.53, 0.38))
-        if level == 0
-        else ((0.92, 0.89, 0.95), (0.43, 0.51, 0.38))
-    ):
+    inner = (
+        ((0.94, 0.94, 0.97), (0.72, 0.73, 0.66), (0.43, 0.53, 0.38))
+        if detailed
+        else (
+            ((0.91, 0.89, 0.95), (0.43, 0.51, 0.38))
+            if level == 0
+            else ((0.43, 0.51, 0.38),)
+        )
+    )
+    for t, r, p in inner:
         hi = ring(t, r, p, True)
         stitch(lo, hi)
         lo = hi
@@ -80,7 +83,7 @@ def petal_bell(m, center, axis, side, bend, length, radius, petal, level, phase)
         m.triangle(lo[k], lo[(k + 1) % sides], heel)
     # Four overlapping green sepals spread away from the hidden join, leaving
     # a recognisable green collar rather than the flower stuck to a straight pin.
-    for s in range(5 if level == 0 else 3):
+    for s in range(5 if level == 0 else (3 if level == 1 else 0)):
         q = tau * s / (5 if level == 0 else 3) + 0.18 * phase
         c = [
             m.add(pos(t, r, q + a), tone)
@@ -95,7 +98,7 @@ def petal_bell(m, center, axis, side, bend, length, radius, petal, level, phase)
         m.triangle(c[0], c[2], c[3])
     # The pollen sits inside, barely above the rim of two early flowers; no
     # detached sparkle or bright yellow ball floating in front of a bloom.
-    for s in range(3 if level == 0 else 1):
+    for s in range(3 if level == 0 else (1 if level == 1 else 0)):
         q = tau * s / 3 + 0.45 * phase
         u = 0.19 if level == 0 else 0.13
         pts = [

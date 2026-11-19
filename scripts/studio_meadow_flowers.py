@@ -33,7 +33,11 @@ def srgb(c):
     return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
 
 
-def author(source, dest):
+def author(source, dest, wax=False):
+    if wax:
+        from island_meadow_waxbells import bellflowers as bloom
+    else:
+        bloom = bellflowers
     bpy.ops.wm.read_factory_settings(use_empty=True)
     for original in ("Grass", "Flowers"):
         bpy.ops.import_scene.gltf(
@@ -65,9 +69,7 @@ def author(source, dest):
                 ob = bpy.data.objects[f"{original}_L{level}"].copy()
                 bpy.context.scene.collection.objects.link(ob)
                 ob.name = title
-            component = (
-                bellflowers(level) if name == "Flowers" else sedges(level, habit)
-            )
+            component = bloom(level) if name == "Flowers" else sedges(level, habit)
             limits = bounds(component.points)
             target = targets[original, level]
 
@@ -149,9 +151,14 @@ if __name__ == "__main__":
     cli = argparse.ArgumentParser(description=__doc__)
     cli.add_argument("out", type=Path)
     cli.add_argument("--author-from", type=Path)
+    cli.add_argument(
+        "--wax-petals",
+        action="store_true",
+        help="Draw the optional high-detail editable calyx.",
+    )
     args = cli.parse_args(sys.argv[sys.argv.index("--") + 1 :])
     args.out.mkdir(exist_ok=True, parents=True)
     blend = args.out / "wild-sedge-and-bells.blend"
     if args.author_from:
-        author(args.author_from, blend)
+        author(args.author_from, blend, wax=args.wax_petals)
     export(blend, args.out)
