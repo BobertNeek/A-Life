@@ -1,0 +1,18 @@
+{
+  "prior_art": "3803c71d879254177160ddc1c01bf33311eb462e",
+  "artist_source": "3d906d8580c5c67caaf3f2f4e423b7d04c3b3097",
+  "artist_run": 44558721040,
+  "original_controls_source": "22030b7b0b098e6c7e08c1e9a15b0953ca3061ef",
+  "prior_native_crates": "244f69c41eee41e45a7b5f9fb19f93b212608347",
+  "source": "Full native island staged in Blender 4.3.2 CPU; same camera pose, light, sky, background assets and 48 samples both sides. No game capture or physical change.",
+  "ground": "8d0e9cf6343ffe8ea5e82bcb7ad3e4ef77eef7207042cf0274de5d91f2457c38",
+  "photos": {
+    "before/slack-guardian.png": "6a91fa6a2c0b91f28c90b91848daa5d49468262e40407b95479651325c3626b2",
+    "after/slack-guardian.png": "993720a771d21f255343978798345077560afae4f157c89229b093113a4faff9",
+    "before/slack-eye.png": "c9ebacf594ff54fb11d6527a5466c95c3466fe6b97a95b031acc76c51bc85f6f",
+    "after/slack-eye.png": "4780c989b12a1ae05755552899949abfbdb2ca8c0026ac80145db6677bbb702f"
+  },
+  "editable": "e512188d5003249081dc03ab5e8222fb1cb5c69e6533fea10008cfa0804896b0",
+  "locked_archive": "a52ea0189259810da06711c2135dc7fb010853ea345dbab3290777b1be9f14d5",
+  "folio": "d525080f8d5bfbf1b73f18a97912b738d0078ec8cbbd5c24a35d5155251205d0"
+}

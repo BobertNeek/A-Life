@@ -1,0 +1,139 @@
+{
+  "subject": "The east dry slack, behind the old foredune",
+  "terrain_sha256": "8d0e9cf6343ffe8ea5e82bcb7ad3e4ef77eef7207042cf0274de5d91f2457c38",
+  "bounds": [
+    290.0,
+    372.0,
+    -111.0,
+    18.0
+  ],
+  "stations": {
+    "slack-guardian": [
+      "slack-guardian",
+      [
+        410.0,
+        72.0,
+        36.0
+      ],
+      [
+        334.0,
+        4.4,
+        -49.0
+      ],
+      132.0,
+      39,
+      1
+    ],
+    "slack-eye": [
+      "slack-eye",
+      [
+        329.6,
+        3.179227397918706,
+        -9.8
+      ],
+      [
+        327.2,
+        3.072477409362791,
+        -19.9
+      ],
+      0,
+      27,
+      0
+    ]
+  },
+  "landmarks": {
+    "1284": {
+      "kind": "Scree",
+      "position": [
+        313.9078939895503,
+        3.8408699450326655,
+        7.545656150716297
+      ],
+      "scale": 0.7730165555387479,
+      "yaw": 0.9747304320335388
+    },
+    "1311": {
+      "kind": "Scree",
+      "position": [
+        352.59350183248307,
+        3.4092545211853467,
+        -4.442695154419255
+      ],
+      "scale": 0.9629331258057094,
+      "yaw": 5.54847526550293
+    },
+    "1400": {
+      "kind": "BoulderA",
+      "position": [
+        354.98817174994883,
+        2.3251105378154935,
+        14.732643736675072
+      ],
+      "scale": 0.8907170861980503,
+      "yaw": 0.5643077492713928
+    },
+    "1454": {
+      "kind": "BoulderB",
+      "position": [
+        362.21070959912174,
+        5.532758825254501,
+        -8.314455012280177
+      ],
+      "scale": 1.2734119139216369,
+      "yaw": 4.450090408325195
+    },
+    "1648": {
+      "kind": "BoulderA",
+      "position": [
+        350.4894766219603,
+        3.3093575886867623,
+        -18.897199101296337
+      ],
+      "scale": 1.3114011984799325,
+      "yaw": 4.6502909660339355
+    },
+    "1253": {
+      "kind": "Broadleaf",
+      "position": [
+        288.5301437679169,
+        9.19183020089761,
+        -24.15099053363923
+      ],
+      "scale": 1.0254899067033132,
+      "yaw": 4.472227573394775
+    },
+    "222": {
+      "kind": "Broadleaf",
+      "position": [
+        292.96461045419153,
+        7.478156497694498,
+        -16.392808487568175
+      ],
+      "scale": 1.1336355199393122,
+      "yaw": 0.5036321878433228
+    }
+  },
+  "counts": {
+    "windwillow": 27,
+    "copper-rush": 718,
+    "milkspindle": 497,
+    "silver-mat": 269
+  },
+  "registered_roots": 1511,
+  "fine_roots": 460,
+  "render_geometry": {
+    "eye": {
+      "specimens": 24,
+      "unique_triangles": 14292,
+      "triangles_over_all_instances": 400962
+    },
+    "guardian": {
+      "specimens": 12,
+      "unique_triangles": 426,
+      "triangles_over_all_instances": 55556
+    }
+  },
+  "treatment": "Sunspindles over the lower cup, dry copper rush along the fans, silver mat on drier couloirs, a few wing-leaf stools. No water surface or physical proxy added.",
+  "survey": "66 west/east cross-sections (65 intervals) 2 m apart along -112..18 native z; actual low point from x 305..360 on original triangle terrain, no native valley cut. Floor is above sea, so it stays dry.",
+  "original_boxes": "Xmin Zmin Xmax Zmax Ymin Ymax; four per-species crown clearance margins, sampled native planted roots only. No gameplay path claim."
+}
