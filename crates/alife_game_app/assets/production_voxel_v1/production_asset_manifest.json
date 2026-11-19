@@ -642,23 +642,67 @@
     {
       "asset_id": "approved-island-terrain-chunks",
       "author": "A-Life approved Blender art",
-      "digest": "fnv1a64:5b3923a3525a8025",
+      "digest": "fnv1a64:ebff575d9b6ab3de",
       "external": false,
       "final_art": false,
       "generated": true,
       "generator": {
-        "config_path": "scripts/build_island_terrain.py",
-        "date": "2026-09-30",
+        "config_path": "scripts/build_island_geology.py",
+        "date": "2026-11-19",
         "seed": "approved-island-blueprints",
-        "tool": "Blender-5.2.1-LTS"
+        "tool": "Blender-5.2.1-LTS + offline geology finish"
       },
       "license": "A-Life-Generated-Source",
       "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/island/terrain-chunks.glb",
       "placeholder": false,
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
-      "size_bytes": 7679740,
+      "size_bytes": 9447272,
       "source": "generated:approved-blender-model",
+      "usage_category": "environment-dressing"
+    },
+    {
+      "asset_id": "approved-island-geology-relief",
+      "author": "A-Life approved Blender art",
+      "digest": "fnv1a64:8913a90928c1523d",
+      "external": false,
+      "final_art": false,
+      "generated": true,
+      "generator": {
+        "config_path": "scripts/build_island_geology.py",
+        "date": "2026-11-19",
+        "seed": "approved-island-blueprints",
+        "tool": "Blender-5.2.1-LTS + offline geology finish"
+      },
+      "license": "A-Life-Generated-Source",
+      "license_ref": "README.md",
+      "local_path": "crates/alife_game_app/assets/landscape/island/geology/relief.png",
+      "placeholder": false,
+      "replacement_policy": "edit-blender-source-and-refresh-manifest",
+      "size_bytes": 2809181,
+      "source": "generated:island-geology",
+      "usage_category": "environment-dressing"
+    },
+    {
+      "asset_id": "approved-island-geology-pigment",
+      "author": "A-Life approved Blender art",
+      "digest": "fnv1a64:e8850c66fc90987f",
+      "external": false,
+      "final_art": false,
+      "generated": true,
+      "generator": {
+        "config_path": "scripts/build_island_geology.py",
+        "date": "2026-11-19",
+        "seed": "approved-island-blueprints",
+        "tool": "Blender-5.2.1-LTS + offline geology finish"
+      },
+      "license": "A-Life-Generated-Source",
+      "license_ref": "README.md",
+      "local_path": "crates/alife_game_app/assets/landscape/island/geology/pigment.png",
+      "placeholder": false,
+      "replacement_policy": "edit-blender-source-and-refresh-manifest",
+      "size_bytes": 2582953,
+      "source": "generated:island-geology",
       "usage_category": "environment-dressing"
     },
     {

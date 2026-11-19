@@ -13,8 +13,8 @@
   ],
   "triangles_by_lod": [
     276480,
-    76800,
-    23040
+    104318,
+    43946
   ],
   "skirt_depth_m": 20,
   "props": 3716,
@@ -24,5 +24,6 @@
   "new_game_origin_xz": [
     80,
     250
-  ]
+  ],
+  "geology_finish": "scripts/build_island_geology.py"
 }
