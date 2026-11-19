@@ -9,7 +9,7 @@ from island_fault_scarp import channels
 from island_erratic_blocks import clusters, abraded
 
 
-def carve(source, destination):
+def carve(source, destination, *, crystalline=False):
     source = Path(source)
     dest = Path(destination)
     base, body = parse(source)
@@ -23,6 +23,32 @@ def carve(source, destination):
     original_faces = np.array(values(base, body, p0["indices"])).reshape(-1, 3)
     stones = clusters(pos, original_faces)
     out = {**base, "accessors": [], "bufferViews": [], "meshes": []}
+    if crystalline:
+        from copy import deepcopy
+
+        # Reserve the old mineral material AND charts for the unaltered far.
+        # Native scree and cliffs in this scenery never get this new surface.
+        images = list(out["images"])
+        maps = {i: len(images) + k for k, i in enumerate((0, 1, 2))}
+        images.extend(
+            {"uri": "erratic/" + v + ".png"}
+            for v in ("granite", "granite-normal", "granite-orm")
+        )
+        textures = list(out["textures"])
+        offset = len(textures)
+        textures.extend({**t, "source": maps[t["source"]]} for t in base["textures"])
+        material = deepcopy(out["materials"][0])
+        material["name"] = "Glacial granodiorite: plagioclase, biotite and quartz"
+        for ref in (
+            material["normalTexture"],
+            material["occlusionTexture"],
+            material["pbrMetallicRoughness"]["baseColorTexture"],
+            material["pbrMetallicRoughness"]["metallicRoughnessTexture"],
+        ):
+            ref["index"] += offset
+        out.update(
+            images=images, textures=textures, materials=[*out["materials"], material]
+        )
     buf = bytearray()
 
     def a(stream, ct, kind, idx=False, bound=False, norm=False):
@@ -97,7 +123,9 @@ def carve(source, destination):
             "COLOR_0": a(C, 5121, "VEC4", norm=True),
         }
         prim = dict(
-            attributes=ad, indices=a(indices, 5123, "SCALAR", idx=True), material=0
+            attributes=ad,
+            indices=a(indices, 5123, "SCALAR", idx=True),
+            material=(1 if crystalline and lod < 2 else 0),
         )
         key = f"{name}_L{lod}"
         out["meshes"].append(dict(name=key, primitives=[prim]))

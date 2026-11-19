@@ -113,6 +113,10 @@ elif subject == "erratics":
     subprocess.run(
         ["git", "fetch", "--no-tags", "--depth=1", "origin", frozen], check=True
     )
+    if board.get("mineral_study"):
+        from island_erratic_minerals import granite
+
+        granite(erratic_new / "erratic")
     catalogue = {}
     for kind in ("BoulderA", "BoulderB", "BoulderC"):
         piece = kind + ".glb"
@@ -122,7 +126,11 @@ elif subject == "erratics":
                 stdout=target,
                 check=True,
             )
-        catalogue[kind] = carve(erratic_old / piece, erratic_new / piece)
+        catalogue[kind] = carve(
+            erratic_old / piece,
+            erratic_new / piece,
+            crystalline=board.get("mineral_study", False),
+        )
     (erratic_new / "catalogue.json").write_text(json.dumps(catalogue, indent=2) + "\n")
 elif subject == "fault-scarp":
     from island_fault_scarp import sculpt
