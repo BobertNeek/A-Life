@@ -245,3 +245,7 @@ was performed for the new assets. The gallery is not native acceptance.
 ### V1 southern cut
 
 [Creature-height bank](inlet-eye.jpg) · [mouth from above](inlet-bank.jpg) · [artist source and bounds](INLET.md). Two CPU Blender views of real base assets, no gameplay.
+
+### Optional southern-inlet concept
+
+[Editable landform and matched two-camera comparison](../island-inlet-proposal/README.md). This separate Blender-only study does not replace the V1 bank, optional highland ridge, a user causeway or any game/save terrain.

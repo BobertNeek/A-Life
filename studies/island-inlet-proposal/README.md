@@ -29,3 +29,7 @@ scene's original habitat textures, placed trees, coastal lighting and water.
 
 Reproduce the photographed study with the repository's Blender artwork producer
 and the inlet-concept board. No native process, world fixture or tests needed.
+
+## Matched artwork and editable model
+
+[Finished V1 and alternate mouth, from above](guardian-proposal.jpg) · [same two banks from the existing 1.12 m eye](creature-proposal.jpg) · [matched upstream creature eye](upstream-proposal.jpg) · [editable local Blender model](southern-inlet-proposal.blend). The first unselected attempt merely bent the old walls in two opposing elbows. The retained study opens a lower and broader western point bar, whose newly sheltered surface blends wet silt and shell sand into the existing gravel. The near original and proposal both expose sharp-edged material islands at the foreground cliff toe; retain these as evidence for the next material session. The eastern bank remains higher. Both pictures use the real surrounding V1 placements. Source `e56cf0fbaa4b5434f71ae4a601180047b107cbdb`; CPU Blender artwork 44480901622. No runtime incorporation, map migration or game testing.
