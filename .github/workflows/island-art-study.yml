@@ -8,6 +8,8 @@ on:
       - scripts/island_tidal_film.py
       - scripts/island_coast_plants.py
       - scripts/island_review_light.py
+      - scripts/island_review_water.py
+      - studies/island-art-week/water-inputs/**
       - crates/alife_game_app/assets/landscape/island/coastal-daylight.json
       - scripts/render_island_geology.py
       - scripts/verify_island_strandline.py
@@ -20,39 +22,62 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-      - name: Prepare offline Blender and image dependencies
-        run: sudo apt-get -qq update && sudo apt-get install -y --no-install-recommends blender python3-numpy python3-pil
+      - name: Prepare the geometry bake independently of Blender installation
+        run: |
+          python3 -m venv "$RUNNER_TEMP/shore-py"
+          "$RUNNER_TEMP/shore-py/bin/python" -m pip install --disable-pip-version-check numpy==2.2.6 Pillow==11.3.0
+          echo "$RUNNER_TEMP/shore-py/bin" >> "$GITHUB_PATH"
       - name: Bake and verify the actual near-field shore asset
         run: |
           mkdir -p "$RUNNER_TEMP/shore"
-          /usr/bin/python3 scripts/build_island_strandline.py --out "$RUNNER_TEMP/shore/strandline.glb"
-          /usr/bin/python3 scripts/verify_island_strandline.py "$RUNNER_TEMP/shore/strandline.glb" > "$RUNNER_TEMP/shore/validation.json"
+          python3 scripts/build_island_strandline.py --out "$RUNNER_TEMP/shore/strandline.glb"
+          python3 scripts/verify_island_strandline.py "$RUNNER_TEMP/shore/strandline.glb" > "$RUNNER_TEMP/shore/validation.json"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: verified-geometry
+          path: |
+            ${{ runner.temp }}/shore/strandline.glb
+            ${{ runner.temp }}/shore/validation.json
+          retention-days: 7
+      - name: Install a specific official Blender independently of the Ubuntu package mirror
+        if: hashFiles('studies/island-art-week/water-inputs/water.json') != ''
+        env:
+          RELEASE: https://download.blender.org/release/Blender4.3
+          ARCHIVE: blender-4.3.2-linux-x64.tar.xz
+        run: |
+          cd "$RUNNER_TEMP"
+          curl -fsS --retry 2 --max-time 180 "$RELEASE/$ARCHIVE" -o "$ARCHIVE"
+          echo "4da1c956673c0485e63054e563ee69198cc8f80d8157dd7592dffc8a6a5592e6  $ARCHIVE" | sha256sum -c
+          tar -xJf "$ARCHIVE"
+          echo "$RUNNER_TEMP/blender-4.3.2-linux-x64" >> "$GITHUB_PATH"
       - name: Lock the previous published beach for inspection at the same camera
+        if: hashFiles('studies/island-art-week/water-inputs/water.json') != ''
         run: |
           git fetch --quiet --depth=1 origin 810e4f872680dc569affa6c8d2e3c31f79caa86c
           git show FETCH_HEAD:crates/alife_game_app/assets/landscape/island/strandline.glb > "$RUNNER_TEMP/shore/previous.glb"
           echo "78ba8d2b084ff07ef3bd65ec46f81a328f4b8ef9215784cc5d9b685b050ec0b9  $RUNNER_TEMP/shore/previous.glb" | sha256sum -c
       - name: Two neutral controls and one dressed shore-to-massif composition
+        if: hashFiles('studies/island-art-week/water-inputs/water.json') != ''
         env:
           OPENBLAS_NUM_THREADS: "1"
         run: |
           D=crates/alife_game_app/assets/landscape/island
           S="$RUNNER_TEMP/shore"
           render() { blender -b -t 2 --python-exit-code 1 -P scripts/render_island_geology.py -- "$D/terrain-chunks.glb" "$@"; }
-          compare() { /usr/bin/python3 scripts/compare_island_art.py "$S/before/$1.png" "$S/after/$1.png" "$S/$1.jpg" --title "$2"; }
+          compare() { python3 scripts/compare_island_art.py "$S/before/$1.png" "$S/after/$1.png" "$S/$1.jpg" --title "$2"; }
           render "$S/before" --tidal-review --strandline "$S/previous.glb"
           render "$S/after" --tidal-review --strandline "$S/strandline.glb"
-          render "$S/before" --cove-showcase --strandline "$S/previous.glb"
-          render "$S/after" --cove-showcase --strandline "$S/strandline.glb" --coastal-light "$D/coastal-daylight.json"
+          W=studies/island-art-week/water-inputs
+          render "$S/before" --cove-showcase --strandline "$S/previous.glb" --water-inputs "$W"
+          render "$S/after" --cove-showcase --strandline "$S/strandline.glb" --water-inputs "$W" --coastal-light "$D/coastal-daylight.json"
           compare strand-eye 'Eastern strand at 86 cm | Same neutral light and lens'
           compare strand-reach 'Eastern strand from the bank | Same neutral light and lens'
-          compare cove-showcase 'Cove to massif | Same camera, revised coast and daylight | CPU Blender; water proxy'
+          compare cove-showcase 'Cove to massif | Same lens, actual water inputs and LOD ranges | CPU Blender'
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: hashFiles('studies/island-art-week/water-inputs/water.json') != ''
         with:
           name: island-paired-strand
           path: |
-            ${{ runner.temp }}/shore/strandline.glb
-            ${{ runner.temp }}/shore/validation.json
             ${{ runner.temp }}/shore/cove-showcase.jpg
             ${{ runner.temp }}/shore/after/cove-showcase.png
             ${{ runner.temp }}/shore/strand-eye.jpg

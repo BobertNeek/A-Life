@@ -28,6 +28,9 @@ cli.add_argument(
     action="store_true",
     help="hold the camera at the river head and vary only surface LOD",
 )
+cli.add_argument(
+    "--water-inputs", type=Path, help="Lossless maps from the native CPU water builder"
+)
 cli.add_argument("--surface", type=Path)
 cli.add_argument("--placements", type=Path)
 cli.add_argument("--prop-library", type=Path)
@@ -79,6 +82,10 @@ p = mat.node_tree.nodes["Principled BSDF"]
 p.inputs["Base Color"].default_value = (0.025, 0.13, 0.18, 1)
 p.inputs["Roughness"].default_value = 0.57
 ocean.data.materials.append(mat)
+if args.water_inputs:
+    from island_review_water import bind
+
+    bind(ocean, args.water_inputs)
 cam = bpy.data.cameras.new("Locked lens")
 cam.clip_end = 9000
 obj = bpy.data.objects.new("Locked camera", cam)
@@ -156,18 +163,23 @@ if args.creature_height or args.tidal_review or args.cove_showcase:
         ]
     props = json.loads((args.placements or library / "props.json").read_text())
     models = {}
+    cove_focus = None
+    if args.cove_showcase:
+        eye, aim = native(shots[0][1]), native(shots[0][2])
+        cove_focus = eye + (aim - eye).normalized() * 15.0
     for prop in props:
         px, py, pz = prop["position"]
         kind = prop["kind"]
-        dist = math.hypot(px - x, pz - z)
         tree = kind in ("Broadleaf", "Conifer", "Sapling")
-        if dist > (
-            265 if args.cove_showcase and tree else 120 if args.cove_showcase else 65
-        ):
+        if cove_focus is not None:
+            dist = math.hypot(px - cove_focus.x, pz + cove_focus.y)
+            limit = 45 if kind in ("Grass", "Fern", "Flowers") else 360 if tree else 210
+        else:
+            dist = math.hypot(px - x, pz - z)
+            limit = 65
+        if dist >= limit:
             continue
-        if args.cove_showcase and kind in ("Grass", "Fern", "Flowers") and dist >= 45:
-            continue
-        level = 2 if tree and dist > 240 else int(dist > 100)
+        level = 2 if dist > 240 else int(dist > 100)
         if (kind, level) not in models:
             old = set(bpy.data.objects)
             bpy.ops.import_scene.gltf(filepath=str(library / f"{kind}.glb"))
@@ -226,7 +238,17 @@ for name, pos, aim, ortho, lens, lod in shots:
             cz = math.floor(-o.location.y / 100) * 100 + 50
             o.hide_render = math.hypot(cx - focus.x, cz + focus.y) >= 150
     for ob in chunks:
-        ob.hide_render = not ob.name.endswith(f"_L{lod}")
+        if args.cove_showcase:
+            # The showcase represents the ordinary unoccupied 100 m cells.
+            # Never draw a mountain with near-only geometry just to flatter it.
+            _, ix, iz, _ = ob.name.split("_")
+            center_x = ox + min(32 * int(ix) + 16, width - 1) * spacing
+            center_z = oz + min(32 * int(iz) + 16, depth - 1) * spacing
+            distance = math.hypot(center_x - cove_focus.x, center_z + cove_focus.y)
+            target = 0 if distance < 150 else 1 if distance < 350 else 2
+        else:
+            target = lod
+        ob.hide_render = not ob.name.endswith(f"_L{target}")
     obj.location = native(pos)
     obj.rotation_euler = (
         (native(aim) - obj.location).to_track_quat("-Z", "Y").to_euler()
