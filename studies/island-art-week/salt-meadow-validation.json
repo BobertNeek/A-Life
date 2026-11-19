@@ -15,9 +15,9 @@
     0.0030171318203646713,
     1.4590078945146419,
     1.092609187075869,
-    0.5599476713966727
+    0.4928321972210039
   ],
-  "bytes": 11489300,
-  "sha256": "b77ef3c44b820dbaf679f4b973adad957c11480755ef49fdf805bfad54933cc2",
+  "bytes": 11470888,
+  "sha256": "e8fcdbce90bf17509af93877da303acbaf518c0d6c4d9e7f396ea389dc19bb26",
   "terrain": "Every decoration vertex uses the same underlying V1/V2 height"
 }

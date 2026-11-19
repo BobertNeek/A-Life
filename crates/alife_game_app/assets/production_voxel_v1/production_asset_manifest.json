@@ -664,7 +664,7 @@
     {
       "asset_id": "approved-island-strandline",
       "author": "Qualia island environment art",
-      "digest": "fnv1a64:8d3075db046dc722",
+      "digest": "fnv1a64:1f63f3c3ba0e46bd",
       "external": false,
       "final_art": false,
       "generated": true,
@@ -679,7 +679,7 @@
       "local_path": "crates/alife_game_app/assets/landscape/island/strandline.glb",
       "placeholder": false,
       "replacement_policy": "edit-strandline-recipe-and-refresh-manifest",
-      "size_bytes": 11489300,
+      "size_bytes": 11470888,
       "source": "generated:island-strandline",
       "usage_category": "environment-dressing"
     },
@@ -1187,6 +1187,28 @@
       "replacement_policy": "edit-habitat-recipe-and-refresh-manifest",
       "size_bytes": 5960209,
       "source": "generated:island-rooted-habitats",
+      "usage_category": "environment-dressing"
+    },
+    {
+      "asset_id": "approved-island-marine-day",
+      "author": "Qualia island environment art",
+      "digest": "fnv1a64:cf267b489a6ddb82",
+      "external": false,
+      "final_art": false,
+      "generated": true,
+      "generator": {
+        "config_path": "scripts/build_island_marine_sky.py",
+        "date": "2026-11-19",
+        "seed": "583",
+        "tool": "Qualia directional marine cloud and altitude painter"
+      },
+      "license": "A-Life-Generated-Source",
+      "license_ref": "README.md",
+      "local_path": "crates/alife_game_app/assets/landscape/island/marine-day.glb",
+      "placeholder": false,
+      "replacement_policy": "edit-sky-recipe-and-refresh-manifest",
+      "size_bytes": 183844,
+      "source": "generated:island-marine-sky",
       "usage_category": "environment-dressing"
     }
   ],

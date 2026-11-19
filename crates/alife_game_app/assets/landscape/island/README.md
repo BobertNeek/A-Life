@@ -108,3 +108,10 @@ continuous grass beds; low rooted folded geometry and heath flowers break
 their outline. The original progress-critical asset never waits on the
 optional close habitat pack: a late pack is bound only to near mesh handles.
 Normal terrain selection and all placements, saves and collision are unchanged.
+
+`python scripts/build_island_marine_sky.py` bakes the separate visual-only
+2800 m marine sky. It uses the palette's real solar direction, broad cloud
+banks and high thin streaks in continuous azimuth. The game loads the
+same interior mesh and image shown in the Blender visual study, with an
+unlit non-fogged material and shadow casting/receiving disabled; it does
+not change global sun, ambient intensity, wind or weather.

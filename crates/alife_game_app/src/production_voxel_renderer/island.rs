@@ -1,6 +1,7 @@
 //! Island chunk and prop rendering for the playable world.
 mod atmosphere;
 pub(super) mod capture_pose;
+mod marine_sky;
 mod nursery;
 mod strandline;
 use super::*;
@@ -246,6 +247,7 @@ pub(super) fn start(world: &mut World) {
     });
     nursery::plant(world, &surface);
     strandline::spawn(world);
+    marine_sky::spawn(world);
     let (mesh, mut material, images) = terrain_water::island_water(&surface, size, center);
     let [shore, ripple] = images.map(|image| world.resource_mut::<Assets<Image>>().add(image));
     material.base_color_texture = Some(shore);
@@ -358,7 +360,11 @@ pub(super) fn update(
     mut props: Query<(&mut Mesh3d, &mut Visibility, &mut PropRange), Without<TerrainLod>>,
     mut strand_patches: strandline::PatchViews,
     mut cameras: Query<
-        (&Transform, &Projection, Option<(&mut DistanceFog, &atmosphere::CoastalAir)>),
+        (
+            &Transform,
+            &Projection,
+            Option<(&mut DistanceFog, &atmosphere::CoastalAir)>,
+        ),
         With<Fvr03ProductionVoxelCamera>,
     >,
     creatures: Query<&Transform, With<ProductionCreatureAssemblyRoot>>,
@@ -518,7 +524,11 @@ pub(super) fn update(
     let ready_habitats = (!assets.habitats_attached)
         .then(|| gltfs.get(&assets.habitats))
         .flatten()
-        .filter(|pack| pack.named_meshes.values().all(|h| gltf_meshes.get(h).is_some()));
+        .filter(|pack| {
+            pack.named_meshes
+                .values()
+                .all(|h| gltf_meshes.get(h).is_some())
+        });
     let mut saw_chunk = false;
     for (mut mesh, mut material, mut lod) in &mut chunks {
         saw_chunk = true;

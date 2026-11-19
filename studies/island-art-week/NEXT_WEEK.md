@@ -62,3 +62,11 @@ handoff check hue as well as silhouette: normal + albedo atlas are 2688×2352;
 the less sensitive AO/roughness pack is 672×588. Check cutout foliage shimmer
 and alpha overlap against the original on both min-spec and normal profiles.
 Record driver allocated memory rather than equating PNG bytes with VRAM.
+
+For the optional marine-day artwork in the weekly candidate, compare from both
+the low bank and a high orthographic pan. The inside of the dome, not a camera
+overlay, should fill only empty sky. Check an island-to-non-island load, look
+across the original water horizon, and zoom the camera across the globe; a
+visible rim, sky occluding land or any sun shadow from the sky is a failure.
+The background has one unlit draw; profile occupied habitats and dense cutouts
+with and without the candidate, not an empty sky-only benchmark.

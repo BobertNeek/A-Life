@@ -611,21 +611,42 @@ fn late_habitat_material_replaces_only_near_and_never_blocks_original_population
     // No loaded optional artwork, but the original terrain and props already exist.
     assert!(app.world().resource::<IslandAssets>().spawned);
     assert!(!app.world().resource::<IslandAssets>().habitats_attached);
-    let unique = app.world_mut().resource_mut::<Assets<Mesh>>().reserve_handle();
-    let handle = app.world_mut().resource_mut::<Assets<GltfMesh>>().add(GltfMesh {
-        index: 0,
-        name: "Habitat_0_0".into(),
-        primitives: vec![GltfPrimitive {
-            index: 0, parent_mesh_index: 0, name: "salt turf".into(), mesh: unique.clone(),
-            material: Some(Handle::default()), extras: None, material_extras: None,
-        }],
-        extras: None,
-    });
+    let unique = app
+        .world_mut()
+        .resource_mut::<Assets<Mesh>>()
+        .reserve_handle();
+    let handle = app
+        .world_mut()
+        .resource_mut::<Assets<GltfMesh>>()
+        .add(GltfMesh {
+            index: 0,
+            name: "Habitat_0_0".into(),
+            primitives: vec![GltfPrimitive {
+                index: 0,
+                parent_mesh_index: 0,
+                name: "salt turf".into(),
+                mesh: unique.clone(),
+                material: Some(Handle::default()),
+                extras: None,
+                material_extras: None,
+            }],
+            extras: None,
+        });
     let mut pack = Gltf {
-        scenes: vec![], named_scenes: default(), meshes: vec![], named_meshes: default(),
-        materials: vec![], named_materials: default(), nodes: vec![], named_nodes: default(),
-        skins: vec![], named_skins: default(), default_scene: None,
-        animations: vec![], named_animations: default(), source: None,
+        scenes: vec![],
+        named_scenes: default(),
+        meshes: vec![],
+        named_meshes: default(),
+        materials: vec![],
+        named_materials: default(),
+        nodes: vec![],
+        named_nodes: default(),
+        skins: vec![],
+        named_skins: default(),
+        default_scene: None,
+        animations: vec![],
+        named_animations: default(),
+        source: None,
     };
     pack.named_meshes.insert("Habitat_0_0".into(), handle);
     let pack = app.world_mut().resource_mut::<Assets<Gltf>>().add(pack);
@@ -665,9 +686,14 @@ fn shipping_substrates_are_locked_to_near_chunks_and_real_pbr_maps() {
     let m = &doc["materials"][0];
     assert_eq!(m["normalTexture"]["index"], 1);
     assert_eq!(m["pbrMetallicRoughness"]["baseColorTexture"]["index"], 0);
-    assert_eq!(m["pbrMetallicRoughness"]["metallicRoughnessTexture"]["index"], 2);
+    assert_eq!(
+        m["pbrMetallicRoughness"]["metallicRoughnessTexture"]["index"],
+        2
+    );
     for (entry, uri) in doc["images"].as_array().unwrap().iter().zip([
-        "habitats/substrates.png", "habitats/substrates-normal.png", "habitats/substrates-orm.png"
+        "habitats/substrates.png",
+        "habitats/substrates-normal.png",
+        "habitats/substrates-orm.png",
     ]) {
         assert_eq!(entry["uri"].as_str(), Some(uri));
     }

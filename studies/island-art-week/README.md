@@ -97,3 +97,27 @@ and the uniform sky still makes the ridge feel flat. Work next on those two
 visible weaknesses, not another density increase over the entire island.
 
 [Substrate geometry](habitat-validation.json) · [shore bounds](salt-meadow-validation.json) · [view budgets](habitat-view-budgets.json).
+
+### Marine coast: actual sky and softer grass beds
+
+[Matched coast before/after](marine-cove.jpg). Run **44448257829** used Blender
+4.3.2 on CPU with the same 1.12 m perspective, sun, real prop positions, water
+maps and V2 terrain. The neutral 86 cm and bank controls deliberately **do not**
+get the new sky. The earlier photographed beach is held to predecessor
+`4bf90a3438bc160665580ba711c44c1c96526879` by SHA-256 checks.
+
+One 183,844-byte, inward-facing GLB makes altitude colour, broken low clouds
+and high streaks visible around the ridge. Its 4,128 triangles and 1536×384
+texture form a static layer beyond the playable island, with no per-frame
+weather work. The PBR habitat and cloud artwork are the actual assets consumed
+by the new bindings. Feathering the contours of individual grass pockets
+reduced the maximum new sward height to 0.493 m without widening visibility
+ranges. Some distant pines still repeat a narrow, pointed shape along the
+saddle; the mountain-to-woodland transition and contact of stone with soil
+are the next focus.
+
+The previous 27c3b1c habitat-binding checkpoint passed all 34 hosted native
+island CPU/ECS tests (run **44448104499**), including late-loading replacement
+and allowing original terrain and props to instantiate without the optional
+pack. Neither a CPU test nor an art plate qualifies the native sky or GPU
+frame costs. Those remain next week's disposable-profile checks.

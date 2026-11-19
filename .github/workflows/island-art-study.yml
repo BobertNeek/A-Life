@@ -22,6 +22,10 @@ on:
       - scripts/render_island_geology.py
       - scripts/verify_island_strandline.py
       - scripts/compare_island_art.py
+# Do not spend hosted Blender minutes on superseded drafts.
+concurrency:
+  group: island-art-study-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
