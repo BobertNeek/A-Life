@@ -121,6 +121,9 @@ elif subject == "coastal-alder":
     blender(
         "studio_coastal_alder.py", alder, "--author-from", old_tree / "Broadleaf.glb"
     )
+elif subject == "inlet-survey":
+    # Two working photographs of real terrain; no candidate is invented here.
+    pass
 elif subject == "cove-water":
     from island_cove_optics import world_paint
 
@@ -168,6 +171,8 @@ if board.get("editable_canopy"):
 views = {
     "alder-eye": ["--copse-eye", "--copse-framing", "alder-eye"],
     "alder-bank": ["--guardian-review", "--grove-framing", "alder-bank"],
+    "inlet-eye": ["--cove-showcase", "--cove-framing", "inlet-eye"],
+    "inlet-bank": ["--guardian-review", "--grove-framing", "inlet-bank"],
     "shelf-eye": ["--cove-showcase", "--cove-framing", "shelf-edge"],
     "shelf-guardian": ["--guardian-review", "--grove-framing", "shelf"],
     "copse-eye": ["--copse-eye"],
@@ -183,9 +188,10 @@ subject_label = {
     "cove-water": "Sheltered tidal shelf",
     "forest-fern": "Feather moss and divided fern",
     "coastal-alder": "Branch-grown maritime alders",
+    "inlet-survey": "The actual southern inlet before new bank art",
 }[subject]
 base_water = root / "studies/island-art-week/water-inputs"
-if subject == "coastal-alder":
+if subject in ("coastal-alder", "inlet-survey"):
     base_water = out / "current-shelf"
     base_water.mkdir(exist_ok=True)
     for n in ("shore.png", "ripple.png"):
@@ -203,7 +209,7 @@ for tag in board["angles"]:
         elif subject in ("forest-floor", "forest-fern") and side == "after":
             dressing = floor
         elif (
-            subject in ("cove-water", "forest-fern", "coastal-alder")
+            subject in ("cove-water", "forest-fern", "coastal-alder", "inlet-survey")
             and (d / "copse-floor.glb").is_file()
         ):
             dressing = d / "copse-floor.glb"

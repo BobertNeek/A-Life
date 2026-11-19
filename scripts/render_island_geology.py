@@ -59,7 +59,7 @@ cli.add_argument(
 )
 cli.add_argument(
     "--cove-framing",
-    choices=("open-bank", "grove-edge", "grove-gate", "shelf-edge"),
+    choices=("open-bank", "grove-edge", "grove-gate", "shelf-edge", "inlet-eye"),
     default="open-bank",
 )
 cli.add_argument(
@@ -92,7 +92,7 @@ cli.add_argument(
 )
 cli.add_argument(
     "--grove-framing",
-    choices=("shoulder", "dense", "shelf", "alder-bank"),
+    choices=("shoulder", "dense", "shelf", "alder-bank", "inlet-bank"),
     default="shoulder",
     help="Select one of the two fixed guardian cameras",
 )
@@ -302,6 +302,7 @@ if (
         # right; both remain visible from a human/creature-scale viewpoint.
         x, z, dx, dz, rise, lens = {
             "open-bank": (330.60, 125.65, -12.0, -66, 4.1, 21),
+            "inlet-eye": (90.0, 451.0, 24.8, -19.6, -0.52, 33),
             "shelf-edge": (345.20, 116.70, 13.7, -27.4, -1.36, 29),
             "grove-edge": (319.85, 143.85, 4.0, -66, 3.6, 22),
             "grove-gate": (320.80, 145.90, 9.0, -66, 3.2, 23),
@@ -309,7 +310,9 @@ if (
         eye = ground(x, z) + 1.12
         shots = [
             (
-                "shelf-eye" if args.cove_framing == "shelf-edge" else "cove-showcase",
+                {"shelf-edge": "shelf-eye", "inlet-eye": "inlet-eye"}.get(
+                    args.cove_framing, "cove-showcase"
+                ),
                 (x, eye, z),
                 (x + dx, eye + rise, z + dz),
                 0,
@@ -345,6 +348,9 @@ if (
             shots = [
                 ("alder-bank", (tx + 103, ty + 68, tz + 122), (tx, ty, tz), 146, 35, 1)
             ]
+        if args.grove_framing == "inlet-bank":
+            x, z = 98.0, 419.0
+            shots = [("inlet-bank", (x + 47, 62, z + 96), (x, 2.3, z), 116, 35, 1)]
     if args.rock_eye:
         x, z = 258.40, -170.00
         tx, tz = 254.68, -177.68

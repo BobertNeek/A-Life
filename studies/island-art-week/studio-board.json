@@ -1,12 +1,12 @@
 {
-  "subject": "coastal-alder",
+  "subject": "inlet-survey",
   "angles": [
-    "alder-eye",
-    "alder-bank"
+    "inlet-eye",
+    "inlet-bank"
   ],
   "quick": false,
   "samples": 48,
-  "paired": true,
+  "paired": false,
   "editable_canopy": false,
-  "art_note": "Photograph the living original cove woods after replacing coarse solid crown kernels with organic, leaf-edged gatherings on curved supports; no geometric pyramids or black backs at guardian height. Identical lens, original stock V1 planting and light. Art week only."
+  "art_note": "Photograph the southern V1 inlet before adding a material. The eye stands on dry ground at x90 z451; the second still looks inland. Reference artwork only."
 }
