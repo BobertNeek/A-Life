@@ -68,7 +68,16 @@ def paint(source, data, out):
         # Abrupt exposed facets inside, softened into moss/dust at outer lip.
         # Outcrops are knocked back on one side only; they are never all rings.
         inset = ease(0.13, 0.43, (1 - q) + 0.24 * macro - 0.09 * mid)
-        core = outer * (0.43 + 0.57 * inset)
+        # The first camera board made these four islands look like swipes of
+        # a wide airbrush. Erode each exposure into local interrupted fabrics;
+        # leave old rock through the interior, not only at the perimeter.
+        cu = u + 0.22 * y + 0.53 * mid
+        cv = y - 0.20 * u + 0.36 * macro
+        broad = nz(cu * 0.76, cv * 1.18, 2.27, 761 + j * 4)
+        broken_bed = nz(cu * 0.68, cv * 1.43, 0.88, 762 + j * 4)
+        pebbled = nz(cu, cv, 0.34, 763 + j * 4)
+        gap = ease(0.34, 0.55, 0.53 * broad + 0.35 * broken_bed + 0.12 * pebbled)
+        core = outer * (0.31 + 0.69 * inset) * (0.24 + 0.76 * gap)
         if stone == "pale":
             face = np.array([176.0, 166.0, 144.0])
             shadow = np.array([113.0, 115.0, 108.0])
@@ -85,7 +94,7 @@ def paint(source, data, out):
             0.43 + 0.30 * (1 - pass1) + 0.38 * pass2 + 0.16 * macro + 0.10 * mid, 0, 1
         )
         local = shadow + (face - shadow) * shine[..., None]
-        local += (9.6 * grain + 8.2 * mid)[..., None]
+        local += (9.6 * grain + 8.2 * mid + 10.5 * (broken_bed - 0.5))[..., None]
         # A few connected, non-parallel joint paths meet within each exposure;
         # clipped to one flank. Model is a very shallow removed recess.
         sx = 0.65 * a + 0.30 * c + 0.075 * mid
@@ -148,7 +157,7 @@ def paint(source, data, out):
                 catchments=len(path),
                 simulated_flow=False,
                 vertex_change=0,
-                unreviewed_until_photographed=True,
+                art_status="Evaluate from the matched real cameras; no native registration",
             ),
             indent=2,
         )

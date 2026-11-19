@@ -19,8 +19,16 @@ def mix_socket(nt, socket, replacement, factor, name):
     nt.links.new(f.outputs[0], socket)
 
 
-def bind(ground, surf, base, assets):
-    metadata = json.loads((assets / "outfold.json").read_text())
+def bind(ground, surf, base, assets, panel=None):
+    panel = panel or dict(
+        meta="outfold.json",
+        colour="exposure-colour.png",
+        roughness="face-roughness.png",
+        height="joint-height.png",
+        depth=0.074,
+        name="Four disconnected windows",
+    )
+    metadata = json.loads((assets / panel["meta"]).read_text())
     xmin, xmax, zmin, zmax = metadata["plan"]
     u0, u1, v0, v1 = metadata["side"]
     for m in {
@@ -42,9 +50,9 @@ def bind(ground, surf, base, assets):
             (2, 1 / (v1 - v0), -v0 / (v1 - v0)),
         )
         tex = nt.nodes.new("ShaderNodeTexImage")
-        tex.label = "Four disconnected windows · true height"
+        tex.label = panel["name"] + " · real elevation"
         tex.image = bpy.data.images.load(
-            str((assets / "exposure-colour.png").resolve()), check_existing=True
+            str((assets / panel["colour"]).resolve()), check_existing=True
         )
         tex.image.alpha_mode = "CHANNEL_PACKED"
         tex.extension = "CLIP"
@@ -64,16 +72,16 @@ def bind(ground, surf, base, assets):
         mix_socket(
             nt,
             bs.inputs["Roughness"],
-            surf.image(nt, assets / "face-roughness.png", face, True),
+            surf.image(nt, assets / panel["roughness"], face, True),
             a.outputs[0],
             "Exposed rock / local optical roughness",
         )
         bump = nt.nodes.new("ShaderNodeBump")
         bump.label = "Chipped joints · shading only"
         nt.links.new(a.outputs[0], bump.inputs["Strength"])
-        bump.inputs["Distance"].default_value = 0.074
+        bump.inputs["Distance"].default_value = panel["depth"]
         nt.links.new(
-            surf.image(nt, assets / "joint-height.png", face, True),
+            surf.image(nt, assets / panel["height"], face, True),
             bump.inputs["Height"],
         )
         n = bs.inputs["Normal"]
