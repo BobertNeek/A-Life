@@ -35,6 +35,11 @@ def blender(script, *args):
 # The GLB exporter is the production operation. Do not call its separate
 # test/verification CLI in a studio workweek.
 subject = board["subject"]
+if subject == "weatherlip-seats":
+    sys.path.insert(0, str(root / "studies/weatherlip-cove/seat"))
+    from atelier_seat import photograph
+    photograph(root, d, SURFACE, board, out, blender)
+    raise SystemExit(0)
 if subject == "weatherlip-cove":
     sys.path.insert(0, str(root / "studies/weatherlip-cove"))
     from atelier import photograph

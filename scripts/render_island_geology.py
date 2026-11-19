@@ -211,6 +211,7 @@ cli.add_argument(
 )
 cli.add_argument("--weatherlip-view", choices=("bight-high", "bight-tooth", "bight-beach"))
 cli.add_argument("--weatherlip-field", type=Path, help="Optional artist's Weatherlip west-bight field.")
+cli.add_argument("--cove-seats", type=Path, help="Only Weatherlip's two individually fitted artist solids.")
 args = cli.parse_args(sys.argv[sys.argv.index("--") + 1 :])
 args.out.mkdir(parents=True, exist_ok=True)
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -683,7 +684,8 @@ if (
             and args.stone_library
             and (args.stone_library / f"{kind}Seat{index}.glb").is_file()
         )
-        if seated or local_stone:
+        cove_seat = (args.cove_seats and (index,kind) in ((1785,"BoulderB"),(1619,"BoulderA")))
+        if seated or local_stone or cove_seat:
             model_key = f"{kind}Seat{index}"
         if kind == "Grass" and args.meadow_habits:
             from island_meadow_variation import family
@@ -707,16 +709,18 @@ if (
                 where = args.fern_library
             if kind in ("Grass", "Flowers") and args.meadow_library:
                 where = args.meadow_library
+            if cove_seat:
+                where = args.cove_seats
             bpy.ops.import_scene.gltf(
                 filepath=str(
-                    where / f"{model_key if seated or local_stone else kind}.glb"
+                    where / f"{model_key if seated or local_stone or cove_seat else kind}.glb"
                 )
             )
             items = set(bpy.data.objects) - old
             names = (
                 ["Grass", "GrassSilver", "GrassAmber"]
                 if kind == "Grass" and args.meadow_habits
-                else [model_key if seated or local_stone else kind]
+                else [model_key if seated or local_stone or cove_seat else kind]
             )
             for name in names:
                 for lod_index in (0, 1, 2):

@@ -1,12 +1,10 @@
 {
-  "subject": "weatherlip-cove",
+  "subject": "weatherlip-seats",
+  "retained_controls": "584962219c095f64d20ebacc248c11337a3a4aa4",
   "angles": [
     "bight-high",
     "bight-tooth",
     "bight-beach"
   ],
-  "retained_controls": true,
-  "paired": false,
-  "samples": 48,
-  "art_note": "Finished artist photographs: terrain-derived bedrock/clean-sand/turf masks, quartz weathering only on rock, overwashed beach grains only on bare sand. Preserve actual locked before frames at 04430c24. Existing V1 unchanged. No game, tests, runtime bindings, or performance claims."
+  "art_note": "Three locked artist-side photographs of two compound rock heels and their coastal skin. Use actual Weatherlip 63e3d684 materials and real existing completed controls. Existing V1, shadow-casting sun, other stone identities and soil unchanged. Independent editable source only: no engine, tests, builds, release or PC."
 }
