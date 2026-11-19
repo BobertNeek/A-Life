@@ -44,8 +44,8 @@ def sedges(lod, habit="sweep"):
     wind_x, wind_y = (0.73, -0.28) if idx != 1 else (0.32, 0.14)
     # Drawing in gamma-like reference palette; convert to linear vertex paint
     # when assigning BYTE_COLOR in the Blender asset, not twice.
-    lo = [(0.20, 0.30, 0.16), (0.23, 0.34, 0.24), (0.31, 0.33, 0.17)][idx]
-    hi = [(0.56, 0.65, 0.37), (0.57, 0.68, 0.51), (0.67, 0.65, 0.37)][idx]
+    lo = [(0.37, 0.44, 0.27), (0.37, 0.48, 0.36), (0.45, 0.44, 0.29)][idx]
+    hi = [(0.65, 0.73, 0.45), (0.65, 0.75, 0.56), (0.73, 0.71, 0.45)][idx]
     sun = [(0.68, 0.72, 0.42), (0.70, 0.75, 0.57), (0.77, 0.71, 0.42)][idx]
     nests = [(-0.04, -0.025), (0.035, 0.012), (-0.012, 0.045), (0.096, -0.014)]
     keep = (
@@ -67,7 +67,7 @@ def sedges(lod, habit="sweep"):
         if tall:
             height *= 1.32
             length *= 0.60
-        width = rand.uniform(0.005, 0.0118) * (1.2 if idx == 1 else 1)
+        width = rand.uniform(0.008, 0.0160) * (1.2 if idx == 1 else 1)
         curve = rand.uniform(-0.47, 0.45)
         phase = rand.uniform(-0.5, 0.5)
         warmth = (
@@ -81,7 +81,7 @@ def sedges(lod, habit="sweep"):
         d = (math.cos(az), math.sin(az))
         side = (-d[1], d[0])
         last = None
-        ts = [(0, 0.19, 0.45, 0.70, 1), (0, 0.34, 0.69, 1), (0, 0.46, 1)][lod]
+        ts = [(0, 0.19, 0.42, 0.65, 0.84, 1), (0, 0.34, 0.69, 1), (0, 0.46, 1)][lod]
         for t in ts:
             lumen = math.sin(math.pi * t * 0.83)
             along = (0.17 * t + 1.22 * t * t) * length

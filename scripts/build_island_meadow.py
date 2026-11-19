@@ -18,7 +18,7 @@ from island_inlet_sod import Fibres
 from island_meadow_swales import Meadow, BOUNDS, paint_grass
 
 
-def export(surface, habitats, placements, dest):
+def export(surface, habitats, placements, dest, inked=False):
     m = Meadow(surface, V2, placements)
     glb = Glb(habitats)
     x0, x1, z0, z1 = BOUNDS
@@ -31,7 +31,14 @@ def export(surface, habitats, placements, dest):
     def root(x, z):
         return shoots[key(x, z)]
 
-    note = paint_grass(root, m)
+    if inked:
+        from island_meadow_swales import paint_sprays
+        from island_meadow_ink import draw
+
+        draw(Path(dest) / "meadow/sedge-ink.png")
+        note = paint_sprays(root, m)
+    else:
+        note = paint_grass(root, m)
     source_budget = 0
     for item in glb.doc["meshes"]:
         prim = item["primitives"][0]
@@ -100,6 +107,23 @@ def export(surface, habitats, placements, dest):
             pbrMetallicRoughness=dict(roughnessFactor=0.84, metallicFactor=0),
         )
     )
+    if inked:
+        image = len(d["images"])
+        texture = len(d["textures"])
+        sampler = len(d["samplers"])
+        d["samplers"].append(
+            dict(wrapS=33071, wrapT=33071, magFilter=9729, minFilter=9987)
+        )
+        d["images"].append(
+            dict(
+                uri="meadow/sedge-ink.png", name="Original four folded sedge printings"
+            )
+        )
+        d["textures"].append(dict(sampler=sampler, source=image))
+        d["materials"][botan].update(alphaMode="MASK", alphaCutoff=0.39)
+        d["materials"][botan]["pbrMetallicRoughness"]["baseColorTexture"] = dict(
+            index=texture
+        )
     buf = bytearray()
 
     def att(a, kind, bounds=False, index=False, normalized=False):
@@ -183,7 +207,12 @@ def export(surface, habitats, placements, dest):
         mag = np.linalg.norm(n, axis=1)
         n[mag > 1e-9] /= mag[mag > 1e-9, None]
         n[mag <= 1e-9] = (0, 1, 0)
-        build(cell, "leaves", v, n, None, sprays.c, face, botan)
+        if inked:
+            # Blended sky-facing normals prevent upright surfaces from
+            # casting their entire back half as pitch-black paper.
+            n = n * 0.30 + np.array([0.04, 0.80, -0.075])
+            n /= np.linalg.norm(n, axis=1)[:, None]
+        build(cell, "leaves", v, n, sprays.uv if inked else None, sprays.c, face, botan)
         blades += len(face)
     d["buffers"] = [dict(byteLength=len(buf))]
     dest = Path(dest)

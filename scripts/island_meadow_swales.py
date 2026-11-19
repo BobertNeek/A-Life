@@ -146,3 +146,80 @@ def paint_grass(p, meadow):
         "true_blades": n,
         "existing_grass_or_flower_anchors_in_study": len(meadow.roots),
     }
+
+
+def paint_sprays(p, meadow):
+    """Curved, staggered fans drawn from four distinct packed grass prints.
+
+    Different from a rigid crossed billboard: each spray bends into its own
+    wind-facing arc, has a stepped ridge, and starts sunk into the true slope.
+    Only the printed leaves show. Clusters overlap; the surrounding gaps remain.
+    """
+    r = np.random.default_rng(831091)
+    x0, x1, z0, z1 = BOUNDS
+    xx = r.uniform(x0 + 1, x1 - 1, 50000)
+    zz = r.uniform(z0 + 1, z1 - 1, 50000)
+    f = meadow.field(xx, zz)
+    sweep = (
+        0.70 + 0.30 * np.sin(xx * 1.25 + zz * 0.37 + 1.35 * np.sin(0.53 * zz))
+    ) ** 1.18
+    choose = (r.random(len(xx)) < 0.83 * f**1.23 * sweep) & meadow.safe_mask(xx, zz)
+    xz = np.column_stack((xx[choose], zz[choose]))
+    sheets = 0
+    for x, z in xz:
+        tile = p(x, z)
+        if not hasattr(tile, "uv"):
+            tile.uv = []
+        habit = 0.48 + 0.44 * math.sin(0.07 * x - 0.11 * z) + r.normal(0, 0.19)
+        root = np.array([x, z])
+        main_h = r.uniform(0.15, 0.38)
+        for j in range(r.integers(3, 6)):
+            angle = habit + (-1, 1, 0, -1, 1)[j % 5] * r.uniform(0.25, 1.23)
+            long = np.array([math.cos(angle), math.sin(angle)])
+            across = np.array([-long[1], long[0]])
+            offset = r.normal(0, 0.057, 2)
+            tall = main_h * r.uniform(0.76, 1.15)
+            wide = r.uniform(0.29, 0.62) * (tall / 0.275) ** 0.43
+            run = tall * r.uniform(0.48, 0.93)
+            # Rare mild amber seedlets; most silhouettes are live leaves.
+            slot = r.choice([0, 0, 1, 1, 1, 2, 3, 3])
+            cx = slot % 2
+            cy = slot // 2
+            tint = r.uniform(0.95, 1.06)
+            last = None
+            for t, spread in ((0, 0.74), (0.46, 0.96), (1, 1.0)):
+                row = []
+                for u in (0, 0.5, 1):
+                    v = u - 0.5
+                    origin = root + offset + across * (v * wide * 0.74)
+                    q = (
+                        origin
+                        + long * run * (t**1.42)
+                        + across
+                        * v
+                        * ((spread - 0.74) * wide + 0.035 * math.sin(math.pi * t))
+                    )
+                    ridge = (1 - 2 * abs(v)) * 0.08 * tall * math.sin(math.pi * t)
+                    yy = float(meadow.heights(*origin)) - 0.022 + tall * t + ridge
+                    # White modulation allows the actual ink to set hue;
+                    # a modest wet base never becomes tall black rubber.
+                    val = min(255, round((224 + 27 * t) * tint))
+                    row.append(tile.point((q[0], yy, q[1]), (val, val, val)))
+                    tile.uv.append(
+                        (
+                            (cx + 0.004 + 0.992 * u) / 2,
+                            (cy + 0.004 + 0.992 * (1 - t)) / 2,
+                        )
+                    )
+                if last:
+                    for i in (0, 1):
+                        tile.face(last[i], last[i + 1], row[i + 1])
+                        tile.face(last[i], row[i + 1], row[i])
+                last = row
+            sheets += 1
+    return {
+        "low_crowns": len(xz),
+        "folded_prints": sheets,
+        "ink_profiles_per_print": 56,
+        "existing_grass_or_flower_anchors_in_study": len(meadow.roots),
+    }

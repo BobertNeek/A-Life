@@ -91,6 +91,16 @@ def author(source, dest):
                 k.color = (*(srgb(v) for v in c), 1)
             for p in me.polygons:
                 p.use_smooth = True
+            if original == "Grass":
+                # A softly sky-facing vertex frame approximates transmitted
+                # daylight on a folded leaf instead of a black paper edge.
+                from mathutils import Vector
+
+                soft = [
+                    (v.normal * 0.38 + Vector((0.045, -0.085, 0.79))).normalized()
+                    for v in me.vertices
+                ]
+                me.normals_split_custom_set_from_vertices(soft)
             old = ob.data
             ob.data = me
             if old.users == 0:

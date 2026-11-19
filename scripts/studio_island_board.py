@@ -184,12 +184,17 @@ elif subject == "wild-meadow":
             d / "habitat-ground.glb",
             d / "props.json",
             out / "artist-meadow-floor",
+            inked=board.get("inked_swards", False),
         )
         # Temporarily place the generated GLB by the original shared habitat
         # maps so Blender can follow its portable URIs. The art archive only
         # contains the new GLB, not a second copy of the original textures.
         filed = d / ".weekly-meadow-sward.glb"
         filed.write_bytes(native_field.read_bytes())
+        if board.get("inked_swards"):
+            ink = d / "meadow/sedge-ink.png"
+            ink.parent.mkdir(exist_ok=True)
+            ink.write_bytes((native_field.parent / "meadow/sedge-ink.png").read_bytes())
 elif subject == "inlet-concept":
     # This subject has no native export, no generated world and no save version.
     study = root / "studies/island-inlet-proposal"
