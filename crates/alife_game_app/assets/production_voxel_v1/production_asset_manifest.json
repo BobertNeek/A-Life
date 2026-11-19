@@ -1210,6 +1210,50 @@
       "size_bytes": 183844,
       "source": "generated:island-marine-sky",
       "usage_category": "environment-dressing"
+    },
+    {
+      "asset_id": "approved-island-grove-geometry",
+      "author": "Qualia island environment art",
+      "digest": "fnv1a64:bab74f2a0b3e9200",
+      "external": false,
+      "final_art": false,
+      "generated": true,
+      "generator": {
+        "config_path": "scripts/build_island_grove_forms.py",
+        "date": "2026-11-19",
+        "seed": "590,741",
+        "tool": "Qualia rooted wind-grown conifer study"
+      },
+      "license": "A-Life-Generated-Source",
+      "license_ref": "README.md",
+      "local_path": "crates/alife_game_app/assets/landscape/island/grove-crowns.glb",
+      "placeholder": false,
+      "replacement_policy": "edit-grove-recipe-and-refresh-manifest",
+      "size_bytes": 712584,
+      "source": "generated:island-rooted-groves",
+      "usage_category": "environment-dressing"
+    },
+    {
+      "asset_id": "approved-island-grove-layout",
+      "author": "Qualia island environment art",
+      "digest": "fnv1a64:8a7fb7f00c7c3698",
+      "external": false,
+      "final_art": false,
+      "generated": true,
+      "generator": {
+        "config_path": "scripts/build_island_grove_forms.py",
+        "date": "2026-11-19",
+        "seed": "590,741",
+        "tool": "Qualia rooted wind-grown conifer study"
+      },
+      "license": "A-Life-Generated-Source",
+      "license_ref": "README.md",
+      "local_path": "crates/alife_game_app/assets/landscape/island/grove-crowns.json",
+      "placeholder": false,
+      "replacement_policy": "edit-grove-recipe-and-refresh-manifest",
+      "size_bytes": 17871,
+      "source": "generated:island-rooted-groves",
+      "usage_category": "environment-dressing"
     }
   ],
   "pack_id": "production-voxel-v1",

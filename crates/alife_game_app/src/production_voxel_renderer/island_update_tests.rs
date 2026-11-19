@@ -57,6 +57,8 @@ fn fixture() -> (App, Entity) {
             terrain: Handle::default(),
             habitats: Handle::default(),
             habitats_attached: false,
+            groves: Handle::default(),
+            groves_attached: false,
             props: BTreeMap::new(),
             surface: std::sync::Arc::new(flat_surface()),
             spawned: true,
@@ -101,6 +103,7 @@ fn spawn_prop(app: &mut App, position: Vec3, tree: bool, distance: f32) -> Entit
             Mesh3d(meshes[0].clone()),
             Visibility::Hidden,
             PropRange {
+                grove_form: None,
                 position,
                 distance,
                 meshes,
@@ -516,24 +519,26 @@ fn stationary_camera_still_tracks_creature_occupancy_and_removal() {
     assert_quiet(&app);
 }
 
+fn primitive_fixture(app: &mut App,mesh: Handle<Mesh>) -> Handle<GltfMesh> {
+    app.world_mut().resource_mut::<Assets<GltfMesh>>().add(GltfMesh {
+        index:0,name:"fixture".into(),primitives:vec![GltfPrimitive {
+            index:0,parent_mesh_index:0,name:"fixture".into(),mesh,
+            material:Some(Handle::default()),extras:None,material_extras:None,
+        }],extras:None,
+    })
+}
+
+fn pack_fixture() -> Gltf {
+    Gltf {
+        scenes:vec![],named_scenes:default(),meshes:vec![],named_meshes:default(),
+        materials:vec![],named_materials:default(),nodes:vec![],named_nodes:default(),
+        skins:vec![],named_skins:default(),default_scene:None,animations:vec![],
+        named_animations:default(),source:None,
+    }
+}
+
 fn install_spawn_assets(app: &mut App) {
-    let mesh = app
-        .world_mut()
-        .resource_mut::<Assets<GltfMesh>>()
-        .add(GltfMesh {
-            index: 0,
-            name: "fixture".into(),
-            primitives: vec![GltfPrimitive {
-                index: 0,
-                parent_mesh_index: 0,
-                name: "fixture".into(),
-                mesh: Handle::default(),
-                material: Some(Handle::default()),
-                extras: None,
-                material_extras: None,
-            }],
-            extras: None,
-        });
+    let mesh = primitive_fixture(app, Handle::default());
     let mut named_meshes = bevy::platform::collections::HashMap::default();
     for level in 0..3 {
         named_meshes.insert(
@@ -547,22 +552,7 @@ fn install_spawn_assets(app: &mut App) {
             );
         }
     }
-    let gltf = app.world_mut().resource_mut::<Assets<Gltf>>().add(Gltf {
-        scenes: vec![],
-        named_scenes: default(),
-        meshes: vec![],
-        named_meshes,
-        materials: vec![],
-        named_materials: default(),
-        nodes: vec![],
-        named_nodes: default(),
-        skins: vec![],
-        named_skins: default(),
-        default_scene: None,
-        animations: vec![],
-        named_animations: default(),
-        source: None,
-    });
+    let gltf = app.world_mut().resource_mut::<Assets<Gltf>>().add(Gltf { named_meshes, ..pack_fixture() });
     let mut assets = app.world_mut().resource_mut::<IslandAssets>();
     assets.terrain = gltf.clone();
     assets.props = placements()
@@ -615,39 +605,8 @@ fn late_habitat_material_replaces_only_near_and_never_blocks_original_population
         .world_mut()
         .resource_mut::<Assets<Mesh>>()
         .reserve_handle();
-    let handle = app
-        .world_mut()
-        .resource_mut::<Assets<GltfMesh>>()
-        .add(GltfMesh {
-            index: 0,
-            name: "Habitat_0_0".into(),
-            primitives: vec![GltfPrimitive {
-                index: 0,
-                parent_mesh_index: 0,
-                name: "salt turf".into(),
-                mesh: unique.clone(),
-                material: Some(Handle::default()),
-                extras: None,
-                material_extras: None,
-            }],
-            extras: None,
-        });
-    let mut pack = Gltf {
-        scenes: vec![],
-        named_scenes: default(),
-        meshes: vec![],
-        named_meshes: default(),
-        materials: vec![],
-        named_materials: default(),
-        nodes: vec![],
-        named_nodes: default(),
-        skins: vec![],
-        named_skins: default(),
-        default_scene: None,
-        animations: vec![],
-        named_animations: default(),
-        source: None,
-    };
+    let handle = primitive_fixture(&mut app,unique.clone());
+    let mut pack = pack_fixture();
     pack.named_meshes.insert("Habitat_0_0".into(), handle);
     let pack = app.world_mut().resource_mut::<Assets<Gltf>>().add(pack);
     app.world_mut().resource_mut::<IslandAssets>().habitats = pack;
@@ -697,4 +656,37 @@ fn shipping_substrates_are_locked_to_near_chunks_and_real_pbr_maps() {
     ]) {
         assert_eq!(entry["uri"].as_str(), Some(uri));
     }
+}
+
+#[test]
+fn arriving_crown_pack_replaces_only_mapped_visuals_once_without_moving_a_trunk() {
+    let (mut app, _) = fixture();
+    install_spawn_assets(&mut app);
+    app.update();
+    let unique = app.world().resource::<Assets<Mesh>>().reserve_handle();
+    let prim = primitive_fixture(&mut app,unique.clone());
+    let mut pack = pack_fixture();
+    for form in 1..=8 {
+        for level in 0..3 {
+            pack.named_meshes.insert(format!("PineForm{form}_L{level}").into_boxed_str(),prim.clone());
+        }
+    }
+    let world = app.world_mut();
+    let before: std::collections::HashMap<_,_> = world.query::<(Entity,&PropRange,&Transform)>()
+        .iter(world).map(|(id,_,t)|(id,*t)).collect();
+    let pack = world.resource_mut::<Assets<Gltf>>().add(pack);
+    world.resource_mut::<IslandAssets>().groves=pack;
+    advance(&mut app,201);
+    let world=app.world_mut();
+    assert!(world.resource::<IslandAssets>().groves_attached);
+    let mut changed=0;
+    for (id,prop,t,mesh) in world.query::<(Entity,&PropRange,&Transform,&Mesh3d)>().iter(world) {
+        assert_eq!(*t,before[&id]);
+        if prop.grove_form.is_some() {
+            assert_eq!(mesh.0,unique);changed+=1;
+        } else { assert_ne!(mesh.0,unique); }
+    }
+    assert_eq!(changed,286);
+    advance(&mut app,201);
+    assert_quiet(&app);
 }

@@ -1,0 +1,52 @@
+{
+  "total_existing_pines": 421,
+  "original_leaders": 135,
+  "varied_existing_crowns": 286,
+  "identical_root_zone_vertices_across_variants": 7400,
+  "pooled_triangles_for_24_variants": 34368,
+  "added_draws_or_triangles_per_tree": 0,
+  "protected_original_proxy_height_m": 3.0,
+  "unchanged_through_m": 3.2,
+  "height_by_form_lods_m": {
+    "PineForm1": [
+      7.711,
+      7.7,
+      7.711
+    ],
+    "PineForm2": [
+      7.712,
+      7.699,
+      7.712
+    ],
+    "PineForm3": [
+      7.712,
+      7.715,
+      7.712
+    ],
+    "PineForm4": [
+      7.712,
+      7.716,
+      7.712
+    ],
+    "PineForm5": [
+      9.943,
+      9.921,
+      9.943
+    ],
+    "PineForm6": [
+      9.942,
+      9.914,
+      9.942
+    ],
+    "PineForm7": [
+      9.943,
+      9.913,
+      9.943
+    ],
+    "PineForm8": [
+      9.943,
+      9.92,
+      9.943
+    ]
+  }
+}

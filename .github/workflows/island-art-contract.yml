@@ -11,6 +11,8 @@ on:
       - crates/alife_game_app/assets/landscape/island/strandline.glb
       - crates/alife_game_app/src/production_voxel_renderer/island/strandline.rs
       - crates/alife_game_app/src/production_voxel_renderer/island/marine_sky.rs
+      - crates/alife_game_app/src/production_voxel_renderer/island/groves.rs
+      - crates/alife_game_app/assets/landscape/island/grove-crowns.*
       - crates/alife_game_app/assets/landscape/island/marine-day.glb
       - crates/alife_game_app/src/production_voxel_renderer/island/atmosphere.rs
       - crates/alife_game_app/src/production_voxel_renderer/island/capture_pose.rs
@@ -34,7 +36,7 @@ jobs:
       - name: Export standard formatting for the focused island integration
         run: |
           mkdir -p "$RUNNER_TEMP/island-rustfmt"
-          for file in island.rs island_update_tests.rs island/marine_sky.rs; do
+          for file in island.rs island_update_tests.rs island/marine_sky.rs island/groves.rs; do
             mkdir -p "$(dirname "$RUNNER_TEMP/island-rustfmt/$file")"
             rustfmt --config skip_children=true --edition 2021 --emit stdout "crates/alife_game_app/src/production_voxel_renderer/$file" > "$RUNNER_TEMP/island-rustfmt/$file"
           done

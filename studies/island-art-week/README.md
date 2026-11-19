@@ -121,3 +121,16 @@ island CPU/ECS tests (run **44448104499**), including late-loading replacement
 and allowing original terrain and props to instantiate without the optional
 pack. Neither a CPU test nor an art plate qualifies the native sky or GPU
 frame costs. Those remain next week's disposable-profile checks.
+
+### Exposed windbreaks and sheltered pine leaders
+
+[Guardian A/B](pines-guardian.jpg) · [creature A/B](pines-cove.jpg) ·
+[geometry/proxy checks](grove-validation.json). Run **44450003730**, CPU
+Blender 4.3.2. The original trunk and foliage mesh remains unchanged below
+3.2 m in all 24 LOD/form combinations. The same fixed anchors and collision
+proxies support 135 original leaders and 286 variants selected by canopy
+exposure. No extra visible draw calls, triangles per tree, or extra trees.
+The optional pack is 696 KiB; originals stay visible while loading. The
+changes read on the guardian shoulder. At the low camera, some thin trunks
+still line up and the stones seem set on top of smooth turf. Shape-specific
+mineral scree and rooted terrain are the next art pass, not a different sky.

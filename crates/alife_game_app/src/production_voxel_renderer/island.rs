@@ -1,6 +1,7 @@
 //! Island chunk and prop rendering for the playable world.
 mod atmosphere;
 pub(super) mod capture_pose;
+mod groves;
 mod marine_sky;
 mod nursery;
 mod strandline;
@@ -26,6 +27,8 @@ pub(super) struct IslandAssets {
     terrain: Handle<Gltf>,
     habitats: Handle<Gltf>,
     habitats_attached: bool,
+    groves: Handle<Gltf>,
+    groves_attached: bool,
     props: BTreeMap<String, Handle<Gltf>>,
     surface: std::sync::Arc<alife_world::TerrainSurface>,
     spawned: bool,
@@ -42,6 +45,7 @@ pub(super) struct TerrainLod {
 }
 #[derive(Component)]
 pub(super) struct PropRange {
+    grove_form: Option<groves::GroveForm>,
     position: Vec3,
     distance: f32,
     meshes: [Handle<Mesh>; 3],
@@ -209,6 +213,7 @@ pub(super) fn start(world: &mut World) {
     }
     let terrain = server.load("landscape/island/terrain-chunks.glb");
     let habitats = server.load("landscape/island/habitat-ground.glb");
+    let groves = server.load(groves::PACK);
     let size = Vec2::splat(10000.0);
     let center = Vec3::new(
         surface.origin_x + (surface.width - 1) as f32 * surface.spacing * 0.5,
@@ -239,6 +244,8 @@ pub(super) fn start(world: &mut World) {
         terrain,
         habitats,
         habitats_attached: false,
+        groves,
+        groves_attached: false,
         props: handles,
         surface: surface.clone(),
         spawned: false,
@@ -432,7 +439,7 @@ pub(super) fn update(
             }
         }
         let mut shared_prop_material = None;
-        for p in placements() {
+        for (index,p) in placements().into_iter().enumerate() {
             let gltf = gltfs.get(&assets.props[&p.kind]).unwrap();
             let position = grounded_prop_position(&p.kind, p.position, surface);
             let tree = matches!(p.kind.as_str(), "Broadleaf" | "Conifer" | "Sapling");
@@ -467,6 +474,7 @@ pub(super) fn update(
                     .with_scale(Vec3::splat(p.scale))
                     .with_rotation(Quat::from_rotation_y(p.yaw)),
                 PropRange {
+                    grove_form: groves::at(index,&p),
                     position,
                     distance,
                     meshes: levels,
@@ -565,14 +573,28 @@ pub(super) fn update(
     if saw_chunk && ready_habitats.is_some() {
         assets.habitats_attached = true;
     }
+    let grove_models = (!assets.groves_attached)
+        .then(|| gltfs.get(&assets.groves))
+        .flatten()
+        .and_then(|pack| groves::models(pack, &gltf_meshes));
+    let mut saw_prop = false;
     for (mut mesh, mut visibility, mut prop) in &mut props {
+        saw_prop = true;
+        let mut crown_replaced = false;
+        if let (Some(models),Some(form)) = (grove_models.as_ref(),prop.grove_form) {
+            prop.meshes = groves::levels(&form,models).clone();
+            crown_replaced = true;
+        }
         let distance = Vec2::new(prop.position.x - focus.x, prop.position.z - focus.z).length();
         let (next_visibility, target) = prop_view_state(prop.tree, prop.distance, distance, height);
         visibility.set_if_neq(next_visibility);
-        if target != prop.current {
+        if target != prop.current || crown_replaced {
             mesh.0 = prop.meshes[target].clone();
             prop.current = target;
         }
+    }
+    if saw_prop && grove_models.is_some() {
+        assets.groves_attached = true;
     }
 }
 

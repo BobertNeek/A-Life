@@ -13,7 +13,7 @@ paths = [ROOT / 'crates/alife_game_app/assets/creatures/hearthling/hearthling.gl
 paths += sorted((ROOT / 'crates/alife_game_app/assets/landscape').glob('*.glb'))
 paths += [ROOT / 'crates/alife_game_app/assets/landscape/ground-detail.png']
 paths += sorted((ROOT / 'crates/alife_game_app/assets/landscape/island').glob('*.glb'))
-paths += [ROOT / 'crates/alife_game_app/assets/landscape/island/props.json']
+paths += [ROOT / 'crates/alife_game_app/assets/landscape/island' / name for name in ('props.json', 'grove-crowns.json')]
 paths += [ROOT / 'crates/alife_game_app/assets/landscape/island/geology' / name
           for name in ('pigment.png', 'relief.png', 'close-pigment.png', 'close-normal.png', 'close-roughness.png')]
 paths += [ROOT / 'crates/alife_game_app/assets/landscape/island/habitats' / name
