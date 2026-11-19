@@ -335,7 +335,12 @@ def make(beach):
     lay(beach, patch, driftfield, tint)
     from island_coast_plants import thickets
 
-    counts["thickets"], counts["clumps"] = thickets(beach, patch, driftfield, tint)
+    (
+        counts["thickets"],
+        counts["clumps"],
+        counts["matrix_tussocks"],
+        counts["heath_sprays"],
+    ) = thickets(beach, patch, driftfield, tint)
     return {k: p for k, p in patches.items() if len(p.tris)}, counts, anchors
 
 

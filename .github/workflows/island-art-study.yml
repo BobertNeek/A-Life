@@ -11,6 +11,7 @@ on:
       - scripts/island_habitat_tiles.py
       - scripts/island_tidal_film.py
       - scripts/island_coast_plants.py
+      - scripts/island_dune_communities.py
       - scripts/island_review_light.py
       - scripts/island_review_water.py
       - studies/island-art-week/water-inputs/**
@@ -78,7 +79,7 @@ jobs:
           render() { blender -b -t 2 --python-exit-code 1 -P scripts/render_island_geology.py -- "$D/terrain-chunks.glb" "$@"; }
           compare() { python3 scripts/compare_island_art.py "$S/before/$1.png" "$S/after/$1.png" "$S/$1.jpg" --title "$2"; }
           render "$S/before" --tidal-review --strandline "$D/strandline.glb"
-          render "$S/after" --tidal-review --strandline "$D/strandline.glb" --habitats "$RUNNER_TEMP/substrates/habitat-ground.glb"
+          render "$S/after" --tidal-review --strandline "$S/strandline.glb" --habitats "$RUNNER_TEMP/substrates/habitat-ground.glb"
           W=studies/island-art-week/water-inputs
           R="$RUNNER_TEMP/versioned-massif"
           python3 scripts/prototype_island_ridge.py "$R"
@@ -89,10 +90,10 @@ jobs:
           python3 scripts/build_island_habitats.py --surface "$R/island-ridge-v2.bin" --terrain "$R/terrain-chunks.glb" --placements "$R/props-ridge-v2.json" --out "$R/substrates"
           python3 scripts/verify_island_habitats.py "$R/terrain-chunks.glb" "$R/substrates/habitat-ground.glb"
           showcase "$S/before" --strandline "$D/strandline.glb" --coastal-light "$D/coastal-daylight.json"
-          showcase "$S/after" --strandline "$D/strandline.glb" --coastal-light "$D/coastal-daylight.json" --habitats "$R/substrates/habitat-ground.glb"
+          showcase "$S/after" --strandline "$S/strandline.glb" --coastal-light "$D/coastal-daylight.json" --habitats "$R/substrates/habitat-ground.glb"
           compare strand-eye 'Eastern strand at 86 cm | Same neutral light and lens'
           compare strand-reach 'Eastern strand from the bank | Same neutral light and lens'
-          compare cove-showcase 'Windrail cove | Same camera, sunlight and opt-in massif; revised substrates | CPU Blender'
+          compare cove-showcase 'Windrail cove | Same camera, sunlight and opt-in massif; salt meadow, mineral and tidal substrates | CPU Blender'
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: hashFiles('studies/island-art-week/water-inputs/water.json') != ''
         with:

@@ -168,6 +168,9 @@ def thickets(beach, patch, field, tint):
     tiles = {}
     count = 0
     tufts = 0
+    matrix = bracts = 0
+    from island_dune_communities import colony
+
     # Sample a bounded number of candidate stands in metres, not by tessellation.
     for sample in range(8000):
         x = candidate.uniform(-432, 432)
@@ -217,4 +220,9 @@ def thickets(beach, patch, field, tint):
                     wind + r.uniform(-0.30, 0.30),
                     tint,
                 )
-    return count, tufts
+        blades, flowers = colony(
+            beach, patch, x, z, ox, oz, wind, sample * 197 + 9027, tint
+        )
+        matrix += blades
+        bracts += flowers
+    return count, tufts, matrix, bracts

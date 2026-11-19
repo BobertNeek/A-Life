@@ -53,8 +53,10 @@ bpy.ops.wm.read_factory_settings(use_empty=True)
 scene = bpy.context.scene
 scene.render.engine = "CYCLES"
 scene.cycles.device = "CPU"
-scene.cycles.samples = 32 if args.cove_showcase else 12
-scene.cycles.use_denoising = args.cove_showcase
+scene.cycles.samples = 48 if args.cove_showcase else 20
+scene.cycles.use_denoising = (
+    False  # OIDN erased metre-scale grass and swash ripples in the near field.
+)
 scene.cycles.seed = 27
 scene.render.threads_mode = "FIXED"
 scene.render.threads = 2

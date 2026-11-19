@@ -76,6 +76,10 @@ def substrate(kind, variation):
     field = noise(5, k, x, y)
     brush = noise(13, k + 1, x, y)
     grain = noise(45, k + 2, x, y)
+    # A 2–5 cm granular base persists between individual leaf/root strokes.
+    fleck = 0.65 * noise(104, k + 5, x, y) + 0.35 * r.normal(0, 0.66, x.shape).astype(
+        "f"
+    )
     h = np.zeros_like(x)
     occ = np.ones_like(x)
     if kind in (TURF, GROVE):
@@ -85,10 +89,14 @@ def substrate(kind, variation):
         pillow = ease(-0.15, 0.50, 0.72 * field + 0.46 * brush + 0.14 * grain)
         dark = np.array((182, 181, 158) if forest else (179, 181, 154))
         light = np.array((214, 209, 179) if forest else (224, 233, 192))
-        rgb = dark + (light - dark) * pillow[..., None] + (grain * 3)[..., None]
-        h += pillow * 0.004 + brush * 0.001
+        rgb = (
+            dark
+            + (light - dark) * pillow[..., None]
+            + (grain * 6 + fleck * 12)[..., None]
+        )
+        h += pillow * 0.004 + brush * 0.001 + fleck * 0.0017
         rough = 0.89 - 0.055 * pillow
-        for _ in range(95 if forest else 160):
+        for _ in range(260 if forest else 940):
             cx, cy = r.uniform(0, N, 2)
             a = r.uniform(0, math.tau)
             tuft = r.uniform(0.72, 1.33)
@@ -96,9 +104,9 @@ def substrate(kind, variation):
                 ang = (
                     a + side * 2.40 if forest else a * 0.23 + 0.41 + side * 0.48
                 ) + r.normal(0, 0.35)
-                length = tuft * r.uniform(3.1, 9.2)
+                length = tuft * (r.uniform(2.4, 6.5) if forest else r.uniform(1.6, 4.4))
                 width = (
-                    length * r.uniform(0.21, 0.40) if forest else r.uniform(0.66, 1.6)
+                    length * r.uniform(0.21, 0.40) if forest else r.uniform(0.44, 0.95)
                 )
                 tint = r.choice(
                     [(190, 157, 110), (207, 181, 132), (158, 158, 119), (224, 196, 145)]
@@ -124,26 +132,31 @@ def substrate(kind, variation):
                     width,
                     r.uniform(-0.65, 0.65),
                     tint,
-                    r.uniform(0.0022, 0.0075),
+                    r.uniform(0.0022, 0.0055),
                 )
     elif kind == SAND:
         # The forked section drifts rather than lining every beach in parallel.
         tau = math.tau
         phase = (
-            tau * (12 * x + 19 * y)
+            tau * (15 * x + 29 * y)
             + field * 3.4
             + 1.8 * np.sin(tau * (2 * x - y))
             + 0.45 * brush
         )
         crest = (0.5 + 0.5 * np.cos(phase)) ** 3.7
         reach = ease(-0.75, 0.66, 0.80 * field + 0.25 * brush)
-        h += 0.0027 * crest * (0.2 + 0.8 * reach) + grain * 0.0006
+        h += 0.0061 * crest * (0.24 + 0.76 * reach) + grain * 0.0013 + fleck * 0.0011
         rgb = (
             np.array((233, 221, 196))
-            + (3.8 * field + 2.0 * grain + 5.0 * (crest - 0.23) * reach)[..., None]
+            + (
+                4.6 * field
+                + 4.0 * grain
+                + 6.2 * fleck
+                + 14 * (crest - 0.23) * (0.3 + 0.7 * reach)
+            )[..., None]
         )
         rough = 0.80 + 0.085 * reach - 0.035 * crest
-        for _ in range(78):
+        for _ in range(210):
             length = r.uniform(0.55, 1.9)
             leaf_stamp(
                 rgb,
@@ -231,5 +244,10 @@ def bake(keys, dest):
             canvas.paste(Image.fromarray(a), ((i % cols) * size, (i // cols) * size))
     names = ("substrates.png", "substrates-normal.png", "substrates-orm.png")
     for canvas, name in zip(maps, names):
+        if name.endswith("-orm.png"):
+            # Each 336 px slot and its eight-pixel gutter remain exactly aligned.
+            canvas = canvas.resize(
+                (canvas.width // 4, canvas.height // 4), Image.Resampling.BOX
+            )
         canvas.save(dest / name, optimize=True)
     return cols, rows
