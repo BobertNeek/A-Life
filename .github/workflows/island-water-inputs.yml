@@ -1,0 +1,56 @@
+name: Export actual Bevy coastal water samples without gameplay
+on:
+  push:
+    branches: ["qualia/island-graphics-week-20261119"]
+    paths:
+      - .github/workflows/island-water-inputs.yml
+      - crates/alife_game_app/src/production_voxel_renderer/terrain_water.rs
+permissions:
+  contents: read
+jobs:
+  material-inputs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      CARGO_BUILD_JOBS: '2'
+      CARGO_INCREMENTAL: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8
+        with:
+          toolchain: stable
+          components: rustfmt
+      - run: sudo apt-get update && sudo apt-get install -y libudev-dev python3-pil
+      - name: Call the same CPU material builder used by the renderer
+        env:
+          QUALIA_REVIEW_WATER_DIR: ${{ runner.temp }}/coast
+        run: |
+          cargo test --locked -p alife_game_app --features production-voxel-frontend --lib terrain_water::tests::export_review_water -- --ignored
+          python3 - <<'PY'
+          from pathlib import Path
+          from PIL import Image
+          import os
+          for source in Path(os.environ["QUALIA_REVIEW_WATER_DIR"]).glob("*.ppm"):
+              image = Image.open(source)
+              dest = source.with_suffix(".png")
+              image.save(dest, optimize=True)
+              assert Image.open(dest).tobytes() == image.tobytes()
+          PY
+      - name: Prepare formatted changed Rust modules, without touching shipping files
+        run: |
+          D=crates/alife_game_app/src/production_voxel_renderer
+          mkdir -p "$RUNNER_TEMP/coast/formatted"
+          for f in "$D/island/atmosphere.rs" "$D/island/capture_pose.rs" "$D/terrain_water.rs"; do
+            cp "$f" "$RUNNER_TEMP/coast/formatted/$(basename "$f")"
+            rustfmt --edition 2021 --config skip_children=true "$RUNNER_TEMP/coast/formatted/$(basename "$f")"
+          done
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: actual-island-water-inputs
+          path: |
+            ${{ runner.temp }}/coast/*.png
+            ${{ runner.temp }}/coast/water.json
+            ${{ runner.temp }}/coast/formatted/*.rs
+          retention-days: 7

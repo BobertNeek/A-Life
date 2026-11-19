@@ -296,6 +296,40 @@ mod tests {
         assert!(deep[2] > deep[1] && shallow[1] > deep[1] && foam[0] > shallow[0]);
     }
 
+    /// Exact level-zero inputs to the production water material. Only a dedicated
+    /// offline review invokes this; no image export code is in the game binary.
+    #[test]
+    #[ignore = "requires an explicit empty offline-study destination"]
+    fn export_review_water() {
+        use std::{env, fs, io::Write};
+        let path = std::path::PathBuf::from(env::var_os("QUALIA_REVIEW_WATER_DIR").unwrap());
+        fs::create_dir(&path).expect("review output must be a fresh directory");
+        let terrain = alife_world::island_terrain();
+        let surface = terrain.surface();
+        let (_, material, images) = island_water(surface, bevy::prelude::Vec2::splat(10000.0), Vec3::ZERO);
+        for (name, image) in ["shore", "ripple"].into_iter().zip(images) {
+            let (w, h) = (image.width() as usize, image.height() as usize);
+            // PPM is lossless and explicit about top-to-bottom row order; level
+            // zero is first in the Bevy texture. Do not reinterpret its bytes.
+            let mut file = fs::File::create_new(path.join(format!("{name}.ppm"))).unwrap();
+            write!(file, "P6\n{w} {h}\n255\n").unwrap();
+            let pixels = image.data.unwrap();
+            let rgb = pixels[..w * h * 4].chunks_exact(4)
+                .flat_map(|rgba| rgba[..3].iter().copied()).collect::<Vec<_>>();
+            file.write_all(&rgb).unwrap();
+        }
+        let meta = serde_json::json!({
+            "terrain_binding": terrain.binding(),
+            "origin_xz": [surface.origin_x - SHORE_PADDING, surface.origin_z - SHORE_PADDING],
+            "span_xz": [
+                (surface.width - 1) as f32 * surface.spacing + 2.0 * SHORE_PADDING,
+                (surface.depth - 1) as f32 * surface.spacing + 2.0 * SHORE_PADDING],
+            "ripple_metres": RIPPLE_METRES, "roughness": material.perceptual_roughness,
+            "reflectance": material.reflectance, "colour_space": "sRGB", "normal_space": "linear",
+        });
+        fs::write(path.join("water.json"), serde_json::to_vec_pretty(&meta).unwrap()).unwrap();
+    }
+
     #[test]
     fn shore_tint_does_not_expose_a_submerged_channel_far_from_land() {
         let open_water = water_color(0.0, 0.0, None, f32::INFINITY);
