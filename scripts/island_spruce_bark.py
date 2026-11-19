@@ -127,13 +127,24 @@ def unwrap(old, moved, norm, tri, profile, quarter):
         ):
             # Tip/end cap; planar miniature section avoids a collapsed tangent.
             uv = np.array(((0.715, 0.21), (0.732, 0.225), (0.738, 0.209)))
+        # The source baked its closing bottom face into the trunk's side
+        # shading (-0.61..-0.65 Y on the feet). Keep its geometry but split
+        # off that cap; a living vertical side should not look down at dirt.
+        cap = bool(np.all(old[face, 1] < 0.035))
         fresh = []
         for src, coords in zip(face, uv, strict=True):
-            key = (int(src), *np.rint(coords * 10**6).astype(int))
+            key = (int(src), cap, *np.rint(coords * 10**6).astype(int))
             if key not in lookup:
                 lookup[key] = len(pos)
                 pos.append(moved[src])
-                nn.append(norm[src])
+                side = norm[src]
+                if old[src, 1] < 0.035:
+                    if cap:
+                        side = np.array([0, -1, 0])
+                    else:
+                        side = np.array([side[0], 0.034, side[2]])
+                        side /= np.linalg.norm(side)
+                nn.append(side)
                 tex.append(coords)
                 gain = 0.97 + 0.024 * math.sin(quarter * 8.31 + profile * 4.1)
                 colors.append(

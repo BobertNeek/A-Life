@@ -101,9 +101,47 @@ def plate(seed):
     return rgb, norm, orm
 
 
+def sponge_skin():
+    # One narrow opaque micro-panel, shared by every moss cushion. Its colour
+    # is multiplied by the cushion's vertex complexion. Small tufts break the
+    # light on the actual mesh rather than adding another screen-space decal.
+    rng = np.random.default_rng(78983)
+    h, w = 56, 452
+    field = gaussian_filter(rng.normal(size=(h, w)), 2.3)
+    field /= field.std()
+    grit = rng.uniform(-1, 1, (h, w))
+    live = smooth((field + 0.55 * grit + 0.57) / 1.55)
+    val = 9 * field + 4 * grit
+    rgb = np.array((177, 184, 166)) + val[..., None] + live[..., None] * (52, 53, 38)
+    pile = 0.34 * live + 0.052 * grit
+    col = Image.fromarray(np.clip(rgb, 0, 255).astype("u1"))
+    relief = Image.fromarray(np.clip((pile + 0.3) * 200, 0, 255).astype("u1"))
+    C, H = ImageDraw.Draw(col), ImageDraw.Draw(relief)
+    for _ in range(1350):
+        x, y = rng.uniform(0, w), rng.uniform(0, h)
+        t = rng.uniform(0, math.tau)
+        d = np.array([2.4 * math.cos(t), 0.83 * math.sin(t)]) * rng.uniform(0.45, 1.35)
+        o = np.array([x, y])
+        tip = tuple(o + d)
+        base = tuple(o - d * 0.4)
+        tone = rng.uniform(190, 237)
+        C.line(
+            (base, tip), fill=(round(tone), round(tone + 4), round(tone - 13)), width=1
+        )
+        H.line((base, tip), fill=round(rng.uniform(105, 157)), width=1)
+    return maps(
+        np.asarray(col),
+        np.asarray(relief) / 145,
+        222 + 10 * live,
+        232 + 15 * live,
+        0.77,
+    )
+
+
 def atlas(dest):
     dest.mkdir(parents=True, exist_ok=True)
     bark = paint()
+    sponge = sponge_skin()
     variants = [plate(s) for s in (43192, 954731)]
     for k, name in enumerate(
         ("duff-bark.png", "duff-bark-normal.png", "duff-bark-orm.png")
@@ -112,6 +150,7 @@ def atlas(dest):
         fill = ((255, 255, 255, 255), (128, 128, 255), (252, 212, 0))[k]
         out = Image.new(mode, (1024, 512), fill)
         out.paste(bark[k].convert(mode), (512, 0))
+        out.paste(sponge[k].convert(mode), (60, 456))
         for row, items in enumerate(variants):
             out.paste(items[k].convert(mode), (0, 228 * row))
         if k == 2:

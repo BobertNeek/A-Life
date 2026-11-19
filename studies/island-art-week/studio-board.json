@@ -1,7 +1,7 @@
 {
   "subject": "forest-floor",
   "angles": [
-    "fern-hollow",
+    "sunlit-margin",
     "copse-eye"
   ],
   "quick": false,
@@ -9,5 +9,5 @@
   "paired": true,
   "sculpted_bark": true,
   "editable_canopy": true,
-  "art_note": "At 1.04 m on V1: the wet fern-filled space between original pines 2 and 934, then the locked pine 803 slope. Finer, worn spruce scales; mixed olive moss and scuffed litter, not a decorative bark slab or continuous orange carpet. Art studio only."
+  "art_note": "Correct the original downward cap normal on pine sides. A low exposed root becomes ground-level beyond the true trunk; keep the sun on this actual west-facing fern pocket, no extra lights. The second camera remains exactly locked to the original slope."
 }

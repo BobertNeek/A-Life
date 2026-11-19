@@ -7,6 +7,13 @@ from build_island_strandline import tint
 TAU = math.tau
 
 
+def wood_clearance(scale, radius):
+    # Tall wood belongs to the existing bole, not a new invisible obstacle.
+    # Outside its visual foot, a low, partly buried root is ground dressing.
+    outside = max(0.0, radius / scale - 0.205)
+    return 0.023 + 0.54 * scale * math.exp(-outside / 0.052)
+
+
 def collar(p, x, z, s, yaw, delta, headings):
     """Taper into the unmodified bole; only the flutes grow out onto the surface."""
     from island_spruce_bark import rolled_u, wood_v
@@ -34,6 +41,7 @@ def collar(p, x, z, s, yaw, delta, headings):
             px, pz = x + radius * c, z + radius * k
             floor = p.beach.surface(px, pz)[0]
             y = root_y * (1 - grade) + floor * grade + above * s
+            y = min(y, floor + wood_clearance(s, radius))
             rows.append(
                 p.paint(
                     px,
@@ -43,6 +51,11 @@ def collar(p, x, z, s, yaw, delta, headings):
                     (rolled_u(i / n), wood_v((y - root_y) / s)),
                 )
             )
+            # Match the stock (now cap-split) bole side as the flute leaves it.
+            # The wider foot gradually takes on its actual rooted surface normal.
+            if radius < 0.34 * s:
+                weight = min(1, max(0, (0.34 - radius / s) / 0.103))
+                p.bole_normals[rows[-1]] = ((c, 0.036, k), weight)
         sides.append(rows)
     for lo, hi in zip(sides[:-1], sides[1:], strict=True):
         for j in range(3):
@@ -74,7 +87,11 @@ def root(p, r, x, z, s, a, delta, yaw):
             (0.97, -0.018),
         ):
             ox, oz = cx - k * q * w, cz + c * q * w
-            fy = p.beach.surface(ox, oz)[0] + lift + delta * (1 - t) ** 4.1
+            floor = p.beach.surface(ox, oz)[0]
+            fy = floor + min(
+                lift + delta * (1 - t) ** 4.1,
+                wood_clearance(s, math.hypot(ox - x, oz - z)),
+            )
             angle = math.atan2(oz - z, ox - x) + yaw
             # Carry one continuous narrow strip onto the tangentially running
             # root, with bark flow along the wood rather than across the soil.
@@ -106,6 +123,14 @@ def moss(p, r, x, z, length, width, a):
         (106, 117, 65),
     )
     col = palette[r.integers(len(palette))]
+
+    def sponge(px, pz, lift, colour):
+        u = (c * (px - x) + s * (pz - z)) / (2.5 * length) + 0.5
+        v = (-s * (px - x) + c * (pz - z)) / (2.5 * width) + 0.5
+        return p.surface(
+            px, pz, lift, colour, ((66 + 435 * u) / 1024, (459 + 50 * v) / 512)
+        )
+
     inner = []
     rim = []
     for i in range(n):
@@ -113,17 +138,17 @@ def moss(p, r, x, z, length, width, a):
         u = length * rad[i] * math.cos(t)
         v = width * rad[i] * math.sin(t)
         ox, oz = c * u - s * v, s * u + c * v
-        rim.append(p.put(x + ox, z + oz, -0.005, tint(col, 0.77)))
+        rim.append(sponge(x + ox, z + oz, -0.005, tint(col, 0.77)))
         k = r.uniform(0.52, 0.81)
         inner.append(
-            p.put(
+            sponge(
                 x + k * ox,
                 z + k * oz,
                 h * r.uniform(0.34, 0.95),
                 tint(col, r.uniform(0.84, 1.11)),
             )
         )
-    peak = p.put(x + 0.06 * length * c, z + 0.06 * length * s, h, tint(col, 1.03))
+    peak = sponge(x + 0.06 * length * c, z + 0.06 * length * s, h, tint(col, 1.03))
     for i in range(n):
         j = (i + 1) % n
         p.fan(rim[i], rim[j], inner[j])

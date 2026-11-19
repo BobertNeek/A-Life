@@ -53,6 +53,12 @@ elif subject == "forest-floor":
 
         fresh = out / "artist-crowns"
         build(d / "Conifer.glb", d / "props.json", fresh, sculpted_bark=True)
+elif subject == "cove-water":
+    from island_cove_optics import world_paint
+
+    chart = out / "artist-water"
+    original_water = root / "studies/island-art-week/water-inputs"
+    world_paint(SURFACE, original_water, chart)
 else:
     raise ValueError(f"Unknown studio subject: {subject}")
 if paired and subject == "canopy":
@@ -78,15 +84,30 @@ if board.get("editable_canopy"):
         out / "grove-boughs.blend",
     )
 views = {
+    "shelf-eye": ["--cove-showcase", "--cove-framing", "shelf-edge"],
+    "shelf-guardian": ["--guardian-review", "--grove-framing", "shelf"],
     "copse-eye": ["--copse-eye"],
     "fern-hollow": ["--copse-eye", "--copse-framing", "fern-hollow"],
+    "sunlit-margin": ["--copse-eye", "--copse-framing", "sunlit-margin"],
     "stone-eye": ["--rock-eye"],
     "pine-eye": ["--pine-eye"],
     "guardian-woods": ["--guardian-review", "--grove-framing", "dense"],
 }
+subject_label = {
+    "canopy": "Maritime spruce",
+    "forest-floor": "Rooted woodland floor",
+    "cove-water": "Sheltered tidal shelf",
+}[subject]
+base_water = root / "studies/island-art-week/water-inputs"
 for tag in board["angles"]:
     for side in ("before", "after") if paired else ("after",):
         pack = fresh if side == "after" else old
+        water = chart if subject == "cove-water" and side == "after" else base_water
+        dressing = None
+        if subject == "forest-floor" and side == "after":
+            dressing = floor
+        elif subject == "cove-water" and (d / "copse-floor.glb").is_file():
+            dressing = d / "copse-floor.glb"
         blender(
             "render_island_geology.py",
             d / "terrain-chunks.glb",
@@ -109,22 +130,18 @@ for tag in board["angles"]:
             "--placements",
             d / "props.json",
             "--water-inputs",
-            root / "studies/island-art-week/water-inputs",
+            water,
             "--habitats",
             d / "habitat-ground.glb",
             "--grove-forms",
             pack / "grove-crowns.glb",
-            *(
-                ["--copse-floor", floor]
-                if subject == "forest-floor" and side == "after"
-                else []
-            ),
+            *(["--copse-floor", dressing] if dressing is not None else []),
         )
     if paired:
         make(
             out / "before" / f"{tag}.png",
             out / "after" / f"{tag}.png",
-            f"{'Maritime spruce' if subject=='canopy' else 'Rooted woodland floor'} | {tag} | Identical tree anchors, V1 terrain and light | CPU Blender",
+            f"{subject_label} | {tag} | Identical V1 geometry, lens and daylight | CPU Blender",
             out / f"{tag}.jpg",
         )
 (out / "studio-note.json").write_text(

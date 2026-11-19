@@ -22,6 +22,10 @@ ALTERNATE = (
 
 
 class WoodlandPatch(Patch):
+    def __init__(self, land):
+        super().__init__(land)
+        self.bole_normals = {}
+
     def surface(self, x, z, lift, color, uv):
         return self.paint(x, z, self.beach.surface(x, z)[0] + lift, color, uv)
 
@@ -34,7 +38,7 @@ class WoodlandPatch(Patch):
         # The unpainted sprouts and spore stems sample an opaque, neutral
         # padded patch. Vary coordinates so their tangent frames are defined.
         uv = (
-            0.23 + 0.075 * math.sin(x * 2.1 + z),
+            0.015 + 0.010 * math.sin(x * 2.1 + z),
             0.947 + 0.032 * math.sin(z * 1.7 - x + 4.1 * y),
         )
         return self.paint(x, z, y, color, uv)
@@ -53,7 +57,12 @@ def bake(surface, alternate, placements):
     for (i, q), (x, z), n in zip(stems, xy, counts, strict=True):
         h, dx, dz = land.surface(x, z)
         offset = q["position"][1] - h
-        if h < 2.9 or abs(offset) > 0.105 or math.hypot(dx, dz) > 0.63 or n < 5:
+        if (
+            h < 2.9
+            or abs(offset) > 0.105
+            or math.hypot(dx, dz) > 0.63
+            or (n < 5 and q["kind"] != "Conifer")
+        ):
             continue
         # A six-metre halo includes all tips in the clump. Omit sites where
         # the alternate physical terrain diverges anywhere in that footprint.
@@ -71,14 +80,21 @@ def bake(surface, alternate, placements):
             + 0.12 * max(0, -dz)
         )
         rooted = pine and r.random() < 0.83
-        green = r.random() < max(0.11, 0.86 * (damp - 0.29))
-        if not (rooted or green):
+        green = r.random() < max(0.11, 0.86 * (damp - 0.29)) and n >= 5
+        if not (pine or green):
             continue
         key = math.floor(x / TILE), math.floor(z / TILE)
         if key not in tiles:
             tiles[key] = WoodlandPatch(land)
         p = tiles[key]
         wind = math.atan2(-dz, -dx) + r.uniform(-1.5, 1.5)
+        if pine and not rooted:
+            local = np.random.default_rng(272891 + i * 4891)
+            headings = [
+                wind + arm * math.pi + local.uniform(-0.2, 0.2) for arm in range(2)
+            ]
+            collar(p, x, z, q["scale"], q["yaw"], offset, headings)
+            receipt["quiet_pine_collars"] += 1
         if rooted:
             # Broadleaves already have flares; only expose extra wood around
             # the original pine cylinder, starting *inside* it at the soil.
@@ -109,8 +125,8 @@ def bake(surface, alternate, placements):
             receipt["triangle_seated_duff_beds"] += 1
             # Irregular low triplets emerge through only the cooler moist
             # margins, leaving grazing lanes and the drier trees open.
-            if damp > 0.55 and litter.random() < 0.58:
-                for k in range(int(litter.integers(2, 5))):
+            if damp > 0.55 and litter.random() < 0.49:
+                for k in range(int(litter.integers(2, 4))):
                     up = litter.uniform(-0.52, 0.79) * reach
                     side = litter.choice((-1, 1)) * litter.uniform(0.37, 0.91) * spread
                     ox = x + math.cos(drift) * up - math.sin(drift) * side
@@ -265,9 +281,20 @@ def write(tiles, path):
             np.add.at(nn, tri[:, k], n)
         nn[np.linalg.norm(nn, axis=1) < 1e-8] = [0, 1, 0]
         nn /= np.linalg.norm(nn, axis=1)[:, None]
+        for idx, (hint, weight) in p.bole_normals.items():
+            vec = nn[idx] * (1 - weight) + np.array(hint) * weight
+            nn[idx] = vec / np.linalg.norm(vec)
         attr = dict(
+            # glTF's normalized uint16 UVs retain many samples per source
+            # atlas texel; no extension or custom material decode is needed.
             TEXCOORD_0=attribute(
-                np.frombuffer(p.uv, "f4").reshape(-1, 2), "<f4", 5126, "VEC2"
+                np.rint(65535 * np.frombuffer(p.uv, "f4").reshape(-1, 2)).clip(
+                    0, 65535
+                ),
+                "<u2",
+                5123,
+                "VEC2",
+                normalized=True,
             ),
             POSITION=attribute(
                 v, "<f4", 5126, "VEC3", min=v.min(0).tolist(), max=v.max(0).tolist()

@@ -53,7 +53,7 @@ cli.add_argument(
 )
 cli.add_argument(
     "--cove-framing",
-    choices=("open-bank", "grove-edge", "grove-gate"),
+    choices=("open-bank", "grove-edge", "grove-gate", "shelf-edge"),
     default="open-bank",
 )
 cli.add_argument(
@@ -86,7 +86,7 @@ cli.add_argument(
 )
 cli.add_argument(
     "--grove-framing",
-    choices=("shoulder", "dense"),
+    choices=("shoulder", "dense", "shelf"),
     default="shoulder",
     help="Select one of the two fixed guardian cameras",
 )
@@ -104,7 +104,11 @@ cli.add_argument(
     action="store_true",
     help="Near actual pine 803 and its sheltered forest floor",
 )
-cli.add_argument("--copse-framing", choices=("slope", "fern-hollow"), default="slope")
+cli.add_argument(
+    "--copse-framing",
+    choices=("slope", "fern-hollow", "sunlit-margin"),
+    default="slope",
+)
 cli.add_argument(
     "--copse-floor", type=Path, help="Optional close-only rooted woodland community art"
 )
@@ -292,12 +296,20 @@ if (
         # right; both remain visible from a human/creature-scale viewpoint.
         x, z, dx, dz, rise, lens = {
             "open-bank": (330.60, 125.65, -12.0, -66, 4.1, 21),
+            "shelf-edge": (345.20, 116.70, 13.7, -27.4, -1.36, 29),
             "grove-edge": (319.85, 143.85, 4.0, -66, 3.6, 22),
             "grove-gate": (320.80, 145.90, 9.0, -66, 3.2, 23),
         }[args.cove_framing]
         eye = ground(x, z) + 1.12
         shots = [
-            ("cove-showcase", (x, eye, z), (x + dx, eye + rise, z + dz), 0, lens, 0)
+            (
+                "shelf-eye" if args.cove_framing == "shelf-edge" else "cove-showcase",
+                (x, eye, z),
+                (x + dx, eye + rise, z + dz),
+                0,
+                lens,
+                0,
+            )
         ]
     if args.guardian_review:
         dense = args.grove_framing == "dense"
@@ -314,6 +326,13 @@ if (
                 1,
             )
         ]
+        if args.grove_framing == "shelf":
+            x, z = 350.6, 105.1
+            # The sea plane is unmodified. Frame the immersed bank as well
+            # as open water rather than manufacturing a new rocky headland.
+            shots = [
+                ("shelf-guardian", (x - 132, 108, z + 177), (x, 0.64, z), 173, 35, 1)
+            ]
     if args.rock_eye:
         x, z = 258.40, -170.00
         tx, tz = 254.68, -177.68
@@ -350,6 +369,11 @@ if (
             # models were moved or duplicated to compose the shared understory.
             x, z, tx, tz = 195.1, -246.15, 192.37, -245.96
             shot = "fern-hollow"
+        elif args.copse_framing == "sunlit-margin":
+            # Actual west-facing, sunlit grove edge, looking toward a
+            # natural cluster of ferns around original planted tree 952.
+            x, z, tx, tz = -149.85, 6.18, -146.4, 4.88
+            shot = "sunlit-margin"
         shots = [
             (
                 shot,
@@ -442,11 +466,20 @@ if args.coastal_light:
 for name, pos, aim, ortho, lens, lod in shots:
     if mood:
         focus_m = (
-            15.0 if name == "cove-showcase" else (native(aim) - native(pos)).length
+            15.0
+            if name in ("cove-showcase", "shelf-eye")
+            else (native(aim) - native(pos)).length
         )
         span = (
             review_span
-            if name in ("cove-showcase", "guardian-grove", "guardian-woods")
+            if name
+            in (
+                "cove-showcase",
+                "guardian-grove",
+                "guardian-woods",
+                "shelf-eye",
+                "shelf-guardian",
+            )
             else (45.0 if name == "strand-reach" else 8.0)
         )
         scene.world.mist_settings.start = focus_m + mood["air_start_beyond_focus_m"]
@@ -455,7 +488,11 @@ for name, pos, aim, ortho, lens, lod in shots:
         # Same 100 m terrain gate as the Bevy binding. The eye-level study
         # uses a 15 m focal subject; diagnostics use their original target.
         a, b = native(pos), native(aim)
-        focus = a + (b - a).normalized() * 15.0 if name == "cove-showcase" else b
+        focus = (
+            a + (b - a).normalized() * 15.0
+            if name in ("cove-showcase", "shelf-eye")
+            else b
+        )
         for o in decor:
             cx = math.floor(o.location.x / 100) * 100 + 50
             cz = math.floor(-o.location.y / 100) * 100 + 50
