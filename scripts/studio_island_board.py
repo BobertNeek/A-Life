@@ -96,6 +96,31 @@ elif subject == "forest-fern":
             fern / "Fern.glb",
             out / "fern-atelier.png",
         )
+elif subject == "coastal-alder":
+    from island_alder_ink import paint
+
+    alder = out / "artist-alder"
+    alder.mkdir(exist_ok=True)
+    old_tree = out / "stock-alder"
+    old_tree.mkdir(exist_ok=True)
+    base = "9450218b29944a3409079d6ca948ddbf238dd6cc"
+    subprocess.run(
+        ["git", "fetch", "--no-tags", "--depth=1", "origin", base], check=True
+    )
+    with (old_tree / "Broadleaf.glb").open("wb") as output:
+        subprocess.run(
+            [
+                "git",
+                "show",
+                f"{base}:{(d/'Broadleaf.glb').relative_to(root).as_posix()}",
+            ],
+            stdout=output,
+            check=True,
+        )
+    paint(alder / "alder-ink.png")
+    blender(
+        "studio_coastal_alder.py", alder, "--author-from", old_tree / "Broadleaf.glb"
+    )
 elif subject == "cove-water":
     from island_cove_optics import world_paint
 
@@ -141,6 +166,8 @@ if board.get("editable_canopy"):
         out / "grove-boughs.blend",
     )
 views = {
+    "alder-eye": ["--copse-eye", "--copse-framing", "alder-eye"],
+    "alder-bank": ["--guardian-review", "--grove-framing", "alder-bank"],
     "shelf-eye": ["--cove-showcase", "--cove-framing", "shelf-edge"],
     "shelf-guardian": ["--guardian-review", "--grove-framing", "shelf"],
     "copse-eye": ["--copse-eye"],
@@ -155,8 +182,17 @@ subject_label = {
     "forest-floor": "Rooted woodland floor",
     "cove-water": "Sheltered tidal shelf",
     "forest-fern": "Feather moss and divided fern",
+    "coastal-alder": "Branch-grown maritime alders",
 }[subject]
 base_water = root / "studies/island-art-week/water-inputs"
+if subject == "coastal-alder":
+    base_water = out / "current-shelf"
+    base_water.mkdir(exist_ok=True)
+    for n in ("shore.png", "ripple.png"):
+        (base_water / n).symlink_to((d / "cove-water" / n).resolve())
+    (base_water / "water.json").write_text(
+        (root / "studies/island-art-week/water-selected.json").read_text()
+    )
 for tag in board["angles"]:
     for side in ("before", "after") if paired else ("after",):
         pack = fresh if side == "after" else old
@@ -167,7 +203,7 @@ for tag in board["angles"]:
         elif subject in ("forest-floor", "forest-fern") and side == "after":
             dressing = floor
         elif (
-            subject in ("cove-water", "forest-fern")
+            subject in ("cove-water", "forest-fern", "coastal-alder")
             and (d / "copse-floor.glb").is_file()
         ):
             dressing = d / "copse-floor.glb"
@@ -196,6 +232,11 @@ for tag in board["angles"]:
             water,
             "--habitats",
             d / "habitat-ground.glb",
+            *(
+                ["--broadleaf-library", alder if side == "after" else old_tree]
+                if subject == "coastal-alder"
+                else []
+            ),
             "--grove-forms",
             pack / "grove-crowns.glb",
             *(["--copse-floor", dressing] if dressing is not None else []),

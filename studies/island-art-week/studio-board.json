@@ -1,13 +1,12 @@
 {
-  "subject": "forest-fern",
+  "subject": "coastal-alder",
   "angles": [
-    "copse-eye",
-    "sunlit-margin"
+    "alder-eye",
+    "alder-bank"
   ],
   "quick": false,
   "samples": 48,
   "paired": true,
   "editable_canopy": false,
-  "botanical_portrait": true,
-  "art_note": "Ground the dipped lace fronds with solid scaly petioles from one rhizome. Preserve the exact original plant, terrain and camera on the left, in the same daylight. Include one separately labeled asset workbench portrait. Artwork only."
+  "art_note": "The existing 691 broadleaf trees, grown along their real woody branches; 1.04 m cove encounter and guardian stand. Leaf density, fork connections and silhouette, with the original terrain and approved water locked. Blender art studio only."
 }

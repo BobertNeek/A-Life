@@ -37,6 +37,9 @@ cli.add_argument("--surface", type=Path)
 cli.add_argument("--placements", type=Path)
 cli.add_argument("--prop-library", type=Path)
 cli.add_argument(
+    "--broadleaf-library", type=Path, help="Only the native Broadleaf model"
+)
+cli.add_argument(
     "--fern-library", type=Path, help="Only the separably authored ordinary Fern model"
 )
 cli.add_argument(
@@ -89,7 +92,7 @@ cli.add_argument(
 )
 cli.add_argument(
     "--grove-framing",
-    choices=("shoulder", "dense", "shelf"),
+    choices=("shoulder", "dense", "shelf", "alder-bank"),
     default="shoulder",
     help="Select one of the two fixed guardian cameras",
 )
@@ -109,7 +112,7 @@ cli.add_argument(
 )
 cli.add_argument(
     "--copse-framing",
-    choices=("slope", "fern-hollow", "sunlit-margin"),
+    choices=("slope", "fern-hollow", "sunlit-margin", "alder-eye"),
     default="slope",
 )
 cli.add_argument(
@@ -336,6 +339,12 @@ if (
             shots = [
                 ("shelf-guardian", (x - 132, 108, z + 177), (x, 0.64, z), 173, 35, 1)
             ]
+        if args.grove_framing == "alder-bank":
+            tx, tz = 294.8, 148.0
+            ty = ground(tx, tz) + 3.4
+            shots = [
+                ("alder-bank", (tx + 103, ty + 68, tz + 122), (tx, ty, tz), 146, 35, 1)
+            ]
     if args.rock_eye:
         x, z = 258.40, -170.00
         tx, tz = 254.68, -177.68
@@ -377,11 +386,14 @@ if (
             # natural cluster of ferns around original planted tree 952.
             x, z, tx, tz = -149.85, 6.18, -146.4, 4.88
             shot = "sunlit-margin"
+        elif args.copse_framing == "alder-eye":
+            x, z, tx, tz = 321.6, 148.5, 316.1, 140.1
+            shot = "alder-eye"
         shots = [
             (
                 shot,
                 (x, ground(x, z) + 1.04, z),
-                (tx, ground(tx, tz) + 0.38, tz),
+                (tx, ground(tx, tz) + (3.75 if shot == "alder-eye" else 0.38), tz),
                 0,
                 31,
                 0,
@@ -421,6 +433,8 @@ if (
             old = set(bpy.data.objects)
             stone = kind in ("Cliff", "Scree", "BoulderA", "BoulderB", "BoulderC")
             where = args.stone_library if stone and args.stone_library else library
+            if kind == "Broadleaf" and args.broadleaf_library:
+                where = args.broadleaf_library
             if kind == "Fern" and args.fern_library:
                 where = args.fern_library
             bpy.ops.import_scene.gltf(filepath=str(where / f"{kind}.glb"))

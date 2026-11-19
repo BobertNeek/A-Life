@@ -1,0 +1,20 @@
+{
+  "colour_space": "sRGB",
+  "normal_space": "linear",
+  "origin_xz": [
+    -580.0,
+    -680.0
+  ],
+  "reflectance": 0.36,
+  "ripple_metres": 58.0,
+  "roughness": 0.36,
+  "span_xz": [
+    1160.0,
+    1360.0
+  ],
+  "terrain_binding": {
+    "digest": 9751419906031474721,
+    "version": 2
+  },
+  "art_inputs": "Blender artwork: V1 triangle bathymetry, painted optical lookup and a world-aligned wind/capillary normal. Native binding and cost not run this week."
+}
