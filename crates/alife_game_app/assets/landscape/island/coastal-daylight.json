@@ -1,35 +1,35 @@
 {
   "sun_ray_direction": [
-    0.81,
-    -0.59,
-    -0.34
+    0.72,
+    -0.49,
+    0.49
   ],
   "sun_srgb": [
     1.0,
-    0.89,
-    0.74
+    0.875,
+    0.69
   ],
   "sky_fill_srgb": [
     0.66,
-    0.8,
-    0.94
+    0.81,
+    0.96
   ],
   "clear_srgb": [
-    0.64,
-    0.77,
-    0.8
+    0.53,
+    0.71,
+    0.82
   ],
   "air_srgb": [
-    0.58,
-    0.72,
-    0.76
+    0.52,
+    0.68,
+    0.77
   ],
   "sun_air_srgb": [
     0.99,
     0.83,
     0.64
   ],
-  "air_strength": 0.34,
-  "air_start_beyond_focus_m": 12.0,
-  "air_span_min_m": 105.0
+  "air_strength": 0.135,
+  "air_start_beyond_focus_m": 28.0,
+  "air_span_min_m": 215.0
 }

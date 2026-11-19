@@ -156,10 +156,10 @@ if args.creature_height or args.tidal_review or args.cove_showcase:
     if args.cove_showcase:
         # From the rooted windbreak inland of the strand: mountain left, bay
         # right; both remain visible from a human/creature-scale viewpoint.
-        x, z = 332.2, 129.8
-        eye = ground(x, z) + 1.68
+        x, z = 330.60, 125.65
+        eye = ground(x, z) + 1.12
         shots = [
-            ("cove-showcase", (x, eye, z), (x - 3.6, eye + 1.05, z - 66), 0, 22, 0)
+            ("cove-showcase", (x, eye, z), (x - 12.0, eye + 4.1, z - 66), 0, 21, 0)
         ]
     props = json.loads((args.placements or library / "props.json").read_text())
     models = {}

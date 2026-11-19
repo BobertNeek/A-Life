@@ -22,10 +22,13 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
       - name: Prepare the geometry bake independently of Blender installation
         run: |
           python3 -m venv "$RUNNER_TEMP/shore-py"
-          "$RUNNER_TEMP/shore-py/bin/python" -m pip install --disable-pip-version-check numpy==2.2.6 Pillow==11.3.0
+          "$RUNNER_TEMP/shore-py/bin/python" -m pip install --only-binary=:all: --disable-pip-version-check numpy==2.2.6 scipy==1.15.3 Pillow==11.3.0
           echo "$RUNNER_TEMP/shore-py/bin" >> "$GITHUB_PATH"
       - name: Bake and verify the actual near-field shore asset
         run: |
@@ -68,11 +71,17 @@ jobs:
           render "$S/before" --tidal-review --strandline "$S/previous.glb"
           render "$S/after" --tidal-review --strandline "$S/strandline.glb"
           W=studies/island-art-week/water-inputs
-          render "$S/before" --cove-showcase --strandline "$S/previous.glb" --water-inputs "$W"
-          render "$S/after" --cove-showcase --strandline "$S/strandline.glb" --water-inputs "$W" --coastal-light "$D/coastal-daylight.json"
+          R="$RUNNER_TEMP/versioned-massif"
+          python3 scripts/prototype_island_ridge.py "$R"
+          cmp "$R/island-ridge-v2.bin" studies/island-ridge-v2/island-ridge-v2.bin
+          showcase() {
+            blender -b -t 2 --python-exit-code 1 -P scripts/render_island_geology.py -- "$R/terrain-chunks.glb" "$@" --cove-showcase --water-inputs "$W" --surface "$R/island-ridge-v2.bin" --placements "$R/props-ridge-v2.json"
+          }
+          showcase "$S/before" --strandline "$S/previous.glb"
+          showcase "$S/after" --strandline "$S/strandline.glb" --coastal-light "$D/coastal-daylight.json"
           compare strand-eye 'Eastern strand at 86 cm | Same neutral light and lens'
           compare strand-reach 'Eastern strand from the bank | Same neutral light and lens'
-          compare cove-showcase 'Cove to massif | Same lens, actual water inputs and LOD ranges | CPU Blender'
+          compare cove-showcase 'Windrail cove | Same lens and opt-in massif, actual water inputs | CPU Blender'
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: hashFiles('studies/island-art-week/water-inputs/water.json') != ''
         with:

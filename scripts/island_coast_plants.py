@@ -60,9 +60,31 @@ def cane(p, x, z, points, width, angle, tint):
 
 
 def bush(p, r, x, z, size, wind, tint):
-    base = r.choice([(75, 103, 87), (86, 111, 78), (91, 105, 71)])
-    tip = r.choice([(150, 164, 120), (165, 163, 111), (135, 157, 118)])
-    for j in range(r.integers(3, 5)):
+    base = r.choice([(64, 103, 93), (72, 111, 79), (87, 106, 66)])
+    tip = r.choice([(168, 187, 128), (182, 174, 108), (140, 179, 143)])
+    # A dense basal fan holds the spherical silhouette; above it sit bent
+    # branching shoots. The old sprays alone read as a few dark twigs.
+    fan_phase = r.uniform(0, math.tau)
+    for j in range(7):
+        angle = fan_phase + j * 2.39996 + r.uniform(-0.19, 0.19)
+        away = 0.55 + 0.45 * math.cos(angle - wind)
+        length = size * (0.45 + 0.29 * away) * r.uniform(0.84, 1.12)
+        sail(
+            p,
+            r,
+            x,
+            z,
+            0,
+            0,
+            0.014,
+            length,
+            length * r.uniform(0.13, 0.23),
+            size * r.uniform(0.13, 0.34),
+            angle,
+            (base, tip),
+            tint,
+        )
+    for j in range(r.integers(2, 4)):
         heading = wind + r.uniform(-1.22, 1.22)
         c, s = math.cos(heading), math.sin(heading)
         reach = size * r.uniform(0.55, 0.96)
@@ -77,7 +99,7 @@ def bush(p, r, x, z, size, wind, tint):
         for k, (u, v, h) in enumerate(points[2::2]):
             for side in (-1, 1):
                 turn = heading + side * r.uniform(0.50, 1.14)
-                length = size * r.uniform(0.20, 0.35) * (1.1 - k * 0.09)
+                length = size * r.uniform(0.33, 0.51) * (1.1 - k * 0.09)
                 sail(
                     p,
                     r,
@@ -87,7 +109,7 @@ def bush(p, r, x, z, size, wind, tint):
                     v,
                     h,
                     length,
-                    length * r.uniform(0.18, 0.31),
+                    length * r.uniform(0.19, 0.30),
                     length * r.uniform(0.11, 0.43),
                     turn,
                     (base, tip),
@@ -181,7 +203,7 @@ def thickets(beach, patch, field, tint):
             ground, gx, gz = beach.surface(u, v)
             if ground < 3.4 or math.hypot(gx, gz) > 0.58:
                 continue
-            size = r.uniform(0.36, 1.02) * max(0.65, 1 - 0.13 * abs(along))
+            size = r.uniform(0.63, 1.08) * max(0.76, 1 - 0.06 * abs(along))
             p = patch(u, v, 4)
             bush(p, r, u, v, size, wind + phase, tint)
             tufts += 1
