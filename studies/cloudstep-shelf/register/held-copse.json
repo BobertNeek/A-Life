@@ -1,0 +1,21 @@
+{
+  "copse_render_blob": "7dc9cf345efbec44ec5cd1f0c24dadb7ed32a706",
+  "source_chunk_names": [
+    "Copse_1_-9",
+    "Copse_1_-8",
+    "Copse_2_-8"
+  ],
+  "box_xz": [
+    48.0,
+    127.0,
+    -447.0,
+    -369.0
+  ],
+  "mesh_triangles_in_window": 9456,
+  "actual_low_floor_triangles": 9456,
+  "existing_vertex_distance_from_summit_eye_xz_m": 4.805,
+  "source_vertices_within_8m_xy": 359,
+  "conservative_cover_percentage": 3.226,
+  "placement_keepout_pad_m": 0.2,
+  "not_navigation_or_alpha_scene": true
+}
