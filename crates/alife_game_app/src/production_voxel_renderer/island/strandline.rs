@@ -1,32 +1,46 @@
-//! View-only wrack, shingle and salt reeds on the approved coastal terrain.
+//! View-only tidal strand and sheltered woodland floor on the approved terrain.
 use super::*;
 
-const PATCH_ASSET: &str = "landscape/island/strandline.glb";
+const STRAND: &str = "landscape/island/strandline.glb";
+const COPSE: &str = "landscape/island/copse-floor.glb";
+
+#[derive(Clone, Copy)]
+enum Dressing {
+    Tidal,
+    Woodland,
+}
 
 #[derive(Component)]
-pub(in crate::production_voxel_renderer) struct StrandPatch(Vec2);
+pub(in crate::production_voxel_renderer) struct GroundDetailPatch {
+    center: Vec2,
+    dressing: Dressing,
+}
 
 pub(in crate::production_voxel_renderer) type PatchViews<'w, 's> =
-    Query<'w, 's, (&'static StrandPatch, &'static mut Visibility), Without<PropRange>>;
+    Query<'w, 's, (&'static GroundDetailPatch, &'static mut Visibility), Without<PropRange>>;
 
 fn center(name: &str, translation: Vec3) -> Option<Vec2> {
-    (name.starts_with("Strand_") && (translation.x != 0.0 || translation.z != 0.0))
+    ((name.starts_with("Strand_") || name.starts_with("Copse_"))
+        && (translation.x != 0.0 || translation.z != 0.0))
         .then_some(Vec2::new(translation.x, translation.z))
 }
 
 pub(super) fn spawn(world: &mut World) {
-    let scene = world
-        .resource::<AssetServer>()
-        .load(bevy::gltf::GltfAssetLabel::Scene(0).from_asset(PATCH_ASSET));
-    world
-        .spawn((
-            Name::new("Tidal strandline"),
-            SceneRoot(scene),
-            Transform::default(),
-            Fvr04ProductionRuntimeSceneRoot,
-            bevy::picking::Pickable::IGNORE,
-        ))
-        .observe(bind);
+    for (name, asset) in [("Tidal strandline", STRAND), ("Sheltered copse floor", COPSE)] {
+        let scene = world
+            .resource::<AssetServer>()
+            .load(bevy::gltf::GltfAssetLabel::Scene(0).from_asset(asset));
+        world
+            .spawn((
+                Name::new(name),
+                SceneRoot(scene),
+                Transform::default(),
+                Visibility::Hidden,
+                Fvr04ProductionRuntimeSceneRoot,
+                bevy::picking::Pickable::IGNORE,
+            ))
+            .observe(bind);
+    }
 }
 
 fn bind(
@@ -42,9 +56,17 @@ fn bind(
             // The GLB places every actual patch node at its tile centre. Its
             // primitive children have local identity and inherit visibility.
             if let Some(xz) = center(name.as_str(), transform.translation) {
-                entity_commands.insert((StrandPatch(xz), Visibility::Hidden));
-                // Only substantial rooted thickets cast. Tiny stones, transparent
-                // wash and contact films must not spawn a halo or shadow acne.
+                let dressing = if name.as_str().starts_with("Copse_") {
+                    Dressing::Woodland
+                } else {
+                    Dressing::Tidal
+                };
+                entity_commands.insert((
+                    GroundDetailPatch { center: xz, dressing },
+                    Visibility::Hidden,
+                ));
+                // Only substantial rooted coastal thickets cast. Tiny stones,
+                // lace, leaves and fitted ground films should not self-shadow.
                 if !name.as_str().ends_with("_headland") {
                     entity_commands.insert(NotShadowCaster);
                     for mesh in children.iter_descendants(entity) {
@@ -54,6 +76,9 @@ fn bind(
             }
         }
     }
+    // Reveal the group only after all its tile gates start hidden. A large
+    // overview must not flash every patch for one scene-load frame.
+    commands.entity(ready.entity).insert(Visibility::Inherited);
 }
 
 fn visible(patch: Vec2, focus: Vec2, span: f32) -> bool {
@@ -67,7 +92,13 @@ fn visible(patch: Vec2, focus: Vec2, span: f32) -> bool {
 pub(super) fn update(patches: &mut PatchViews, focus: Vec3, span: f32) {
     let xz = Vec2::new(focus.x, focus.z);
     for (patch, mut visibility) in patches.iter_mut() {
-        visibility.set_if_neq(if visible(patch.0, xz, span) {
+        let shown = match patch.dressing {
+            Dressing::Tidal => visible(patch.center, xz, span),
+            // A 50 m tile centre is at most 36 m from its 100 m parent
+            // terrain centre. Both gates consequently retain exact near ground.
+            Dressing::Woodland => span < 60.0 && patch.center.distance_squared(xz) < 65.0 * 65.0,
+        };
+        visibility.set_if_neq(if shown {
             Visibility::Inherited
         } else {
             Visibility::Hidden

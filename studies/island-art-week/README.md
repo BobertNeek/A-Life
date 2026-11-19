@@ -225,3 +225,7 @@ Studio source: `042d628780eee2c8b22d63247c2b3ca1f4bc2ee0`; paired
 1000×600 Blender 4.3.2 CPU stills at 80 samples and the actual editable file
 came from art run **44461673484**. No game, PC, compatibility suite or FPS run
 was performed for the new assets. The gallery is not native acceptance.
+
+### Rooted woodland at creature scale
+
+[The locked slope](sheltered-slope.jpg) and [the sunlit fern hollow](sunlit-margin.jpg) were made by Blender 4.3.2 CPU art run **44466525999** at artist source `a4ffdc232aa0b5d3b0ea3c1fa32641b8752b15da`. The left image is the installed feathered-spruce checkpoint, the right changes the visible bark, root flares and woodland floor, not the tree positions or walkable island. [How it was drawn and what remains to check next week](WOODLAND.md). No game/PC/performance test in this studio-only week.

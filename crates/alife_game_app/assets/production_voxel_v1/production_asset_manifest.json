@@ -1214,22 +1214,22 @@
     {
       "asset_id": "approved-island-grove-geometry",
       "author": "Qualia island environment art",
-      "digest": "fnv1a64:9d3a1a38fddfe666",
+      "digest": "fnv1a64:9ef38e234afdcdce",
       "external": false,
       "final_art": false,
       "generated": true,
       "generator": {
-        "tool": "Qualia forked spruce and feathered needle banks",
+        "tool": "Qualia forked spruce, rolled scales and feathered needles",
         "config_path": "scripts/build_island_boughs.py",
         "date": "2026-11-19",
-        "seed": "7263, 971935, 680115"
+        "seed": "7263, 971935, 680115, 8561951"
       },
       "license": "A-Life-Generated-Source",
       "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/island/grove-crowns.glb",
       "placeholder": false,
       "replacement_policy": "edit-pine-bough-and-needle-recipe-and-refresh-manifest",
-      "size_bytes": 1998496,
+      "size_bytes": 2015344,
       "source": "generated:island-rooted-groves",
       "usage_category": "environment-dressing"
     },
@@ -1324,67 +1324,155 @@
     {
       "asset_id": "approved-island-canopy-needles",
       "author": "Qualia island environment art",
-      "digest": "fnv1a64:0ab0f4e5f7324a3f",
+      "digest": "fnv1a64:f7aa3e4dddf10681",
       "external": false,
       "final_art": false,
       "generated": true,
       "generator": {
-        "tool": "Qualia forked spruce and feathered needle banks",
+        "tool": "Qualia forked spruce, rolled scales and feathered needles",
         "config_path": "scripts/build_island_boughs.py",
         "date": "2026-11-19",
-        "seed": "7263, 971935, 680115"
+        "seed": "7263, 971935, 680115, 8561951"
       },
       "license": "A-Life-Generated-Source",
       "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/island/canopy/needles.png",
       "placeholder": false,
       "replacement_policy": "edit-pine-bough-and-needle-recipe-and-refresh-manifest",
-      "size_bytes": 556779,
+      "size_bytes": 821394,
       "source": "generated:island-rooted-groves",
       "usage_category": "environment-dressing"
     },
     {
       "asset_id": "approved-island-canopy-needles-normal",
       "author": "Qualia island environment art",
-      "digest": "fnv1a64:6c408ba0ff556fee",
+      "digest": "fnv1a64:4455c161b8c48f51",
       "external": false,
       "final_art": false,
       "generated": true,
       "generator": {
-        "tool": "Qualia forked spruce and feathered needle banks",
+        "tool": "Qualia forked spruce, rolled scales and feathered needles",
         "config_path": "scripts/build_island_boughs.py",
         "date": "2026-11-19",
-        "seed": "7263, 971935, 680115"
+        "seed": "7263, 971935, 680115, 8561951"
       },
       "license": "A-Life-Generated-Source",
       "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/island/canopy/needles-normal.png",
       "placeholder": false,
       "replacement_policy": "edit-pine-bough-and-needle-recipe-and-refresh-manifest",
-      "size_bytes": 336434,
+      "size_bytes": 538356,
       "source": "generated:island-rooted-groves",
       "usage_category": "environment-dressing"
     },
     {
       "asset_id": "approved-island-canopy-needles-orm",
       "author": "Qualia island environment art",
-      "digest": "fnv1a64:3beeb3b77da83059",
+      "digest": "fnv1a64:e71d4bd322ede7dc",
       "external": false,
       "final_art": false,
       "generated": true,
       "generator": {
-        "tool": "Qualia forked spruce and feathered needle banks",
+        "tool": "Qualia forked spruce, rolled scales and feathered needles",
         "config_path": "scripts/build_island_boughs.py",
         "date": "2026-11-19",
-        "seed": "7263, 971935, 680115"
+        "seed": "7263, 971935, 680115, 8561951"
       },
       "license": "A-Life-Generated-Source",
       "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/island/canopy/needles-orm.png",
       "placeholder": false,
       "replacement_policy": "edit-pine-bough-and-needle-recipe-and-refresh-manifest",
-      "size_bytes": 68768,
+      "size_bytes": 109401,
       "source": "generated:island-rooted-groves",
+      "usage_category": "environment-dressing"
+    },
+    {
+      "asset_id": "approved-island-copse-floor",
+      "author": "Qualia island environment art",
+      "digest": "fnv1a64:97190846b9f0e1b6",
+      "external": false,
+      "final_art": false,
+      "generated": true,
+      "generator": {
+        "config_path": "scripts/build_island_copse_floor.py",
+        "date": "2026-11-19",
+        "seed": "247112, 234682, 43192, 954731, 8561951",
+        "tool": "Qualia seated root flares, fallen duff, fern and moss painter"
+      },
+      "license": "A-Life-Generated-Source",
+      "license_ref": "README.md",
+      "local_path": "crates/alife_game_app/assets/landscape/island/copse-floor.glb",
+      "placeholder": false,
+      "replacement_policy": "edit-copse-and-trunk-recipe-and-refresh-manifest",
+      "size_bytes": 9832156,
+      "source": "generated:island-sheltered-forest-floor",
+      "usage_category": "environment-dressing"
+    },
+    {
+      "asset_id": "approved-island-copse-duff-bark",
+      "author": "Qualia island environment art",
+      "digest": "fnv1a64:8ed7d42af3172c49",
+      "external": false,
+      "final_art": false,
+      "generated": true,
+      "generator": {
+        "config_path": "scripts/build_island_copse_floor.py",
+        "date": "2026-11-19",
+        "seed": "247112, 234682, 43192, 954731, 8561951",
+        "tool": "Qualia seated root flares, fallen duff, fern and moss painter"
+      },
+      "license": "A-Life-Generated-Source",
+      "license_ref": "README.md",
+      "local_path": "crates/alife_game_app/assets/landscape/island/copse/duff-bark.png",
+      "placeholder": false,
+      "replacement_policy": "edit-copse-and-trunk-recipe-and-refresh-manifest",
+      "size_bytes": 810783,
+      "source": "generated:island-sheltered-forest-floor",
+      "usage_category": "environment-dressing"
+    },
+    {
+      "asset_id": "approved-island-copse-duff-bark-normal",
+      "author": "Qualia island environment art",
+      "digest": "fnv1a64:23f80c50414397cc",
+      "external": false,
+      "final_art": false,
+      "generated": true,
+      "generator": {
+        "config_path": "scripts/build_island_copse_floor.py",
+        "date": "2026-11-19",
+        "seed": "247112, 234682, 43192, 954731, 8561951",
+        "tool": "Qualia seated root flares, fallen duff, fern and moss painter"
+      },
+      "license": "A-Life-Generated-Source",
+      "license_ref": "README.md",
+      "local_path": "crates/alife_game_app/assets/landscape/island/copse/duff-bark-normal.png",
+      "placeholder": false,
+      "replacement_policy": "edit-copse-and-trunk-recipe-and-refresh-manifest",
+      "size_bytes": 555861,
+      "source": "generated:island-sheltered-forest-floor",
+      "usage_category": "environment-dressing"
+    },
+    {
+      "asset_id": "approved-island-copse-duff-bark-orm",
+      "author": "Qualia island environment art",
+      "digest": "fnv1a64:d6a3ae51cd80642d",
+      "external": false,
+      "final_art": false,
+      "generated": true,
+      "generator": {
+        "config_path": "scripts/build_island_copse_floor.py",
+        "date": "2026-11-19",
+        "seed": "247112, 234682, 43192, 954731, 8561951",
+        "tool": "Qualia seated root flares, fallen duff, fern and moss painter"
+      },
+      "license": "A-Life-Generated-Source",
+      "license_ref": "README.md",
+      "local_path": "crates/alife_game_app/assets/landscape/island/copse/duff-bark-orm.png",
+      "placeholder": false,
+      "replacement_policy": "edit-copse-and-trunk-recipe-and-refresh-manifest",
+      "size_bytes": 106721,
+      "source": "generated:island-sheltered-forest-floor",
       "usage_category": "environment-dressing"
     }
   ],
