@@ -4,9 +4,9 @@ use super::*;
 const PATCH_ASSET: &str = "landscape/island/strandline.glb";
 
 #[derive(Component)]
-pub(super) struct StrandPatch(Vec2);
+pub(in crate::production_voxel_renderer) struct StrandPatch(Vec2);
 
-pub(super) type PatchViews<'w, 's> =
+pub(in crate::production_voxel_renderer) type PatchViews<'w, 's> =
     Query<'w, 's, (&'static StrandPatch, &'static mut Visibility), Without<PropRange>>;
 
 fn center(name: &str, translation: Vec3) -> Option<Vec2> {
