@@ -519,26 +519,58 @@ fn stationary_camera_still_tracks_creature_occupancy_and_removal() {
     assert_quiet(&app);
 }
 
-fn primitive_fixture(app: &mut App,mesh: Handle<Mesh>) -> Handle<GltfMesh> {
-    app.world_mut().resource_mut::<Assets<GltfMesh>>().add(GltfMesh {
-        index:0,name:"fixture".into(),primitives:vec![GltfPrimitive {
-            index:0,parent_mesh_index:0,name:"fixture".into(),mesh,
-            material:Some(Handle::default()),extras:None,material_extras:None,
-        }],extras:None,
-    })
+fn primitive_fixture(app: &mut App, mesh: Handle<Mesh>) -> Handle<GltfMesh> {
+    app.world_mut()
+        .resource_mut::<Assets<GltfMesh>>()
+        .add(GltfMesh {
+            index: 0,
+            name: "fixture".into(),
+            primitives: vec![GltfPrimitive {
+                index: 0,
+                parent_mesh_index: 0,
+                name: "fixture".into(),
+                mesh,
+                material: Some(Handle::default()),
+                extras: None,
+                material_extras: None,
+            }],
+            extras: None,
+        })
 }
 
 fn pack_fixture() -> Gltf {
     Gltf {
-        scenes:vec![],named_scenes:default(),meshes:vec![],named_meshes:default(),
-        materials:vec![],named_materials:default(),nodes:vec![],named_nodes:default(),
-        skins:vec![],named_skins:default(),default_scene:None,animations:vec![],
-        named_animations:default(),source:None,
+        scenes: vec![],
+        named_scenes: default(),
+        meshes: vec![],
+        named_meshes: default(),
+        materials: vec![],
+        named_materials: default(),
+        nodes: vec![],
+        named_nodes: default(),
+        skins: vec![],
+        named_skins: default(),
+        default_scene: None,
+        animations: vec![],
+        named_animations: default(),
+        source: None,
     }
 }
 
-fn install_spawn_assets(app: &mut App) {
+fn install_spawn_assets(app: &mut App) -> Handle<StandardMaterial> {
     let mesh = primitive_fixture(app, Handle::default());
+    let rock = primitive_fixture(app, Handle::default());
+    app.init_resource::<Assets<StandardMaterial>>();
+    let mineral = app
+        .world()
+        .resource::<Assets<StandardMaterial>>()
+        .reserve_handle();
+    app.world_mut()
+        .resource_mut::<Assets<GltfMesh>>()
+        .get_mut(&rock)
+        .unwrap()
+        .primitives[0]
+        .material = Some(mineral.clone());
     let mut named_meshes = bevy::platform::collections::HashMap::default();
     for level in 0..3 {
         named_meshes.insert(
@@ -546,13 +578,21 @@ fn install_spawn_assets(app: &mut App) {
             mesh.clone(),
         );
         for prop in placements() {
+            let source = if has_mineral_surface(&prop.kind) {
+                &rock
+            } else {
+                &mesh
+            };
             named_meshes.insert(
                 format!("{}_L{level}", prop.kind).into_boxed_str(),
-                mesh.clone(),
+                source.clone(),
             );
         }
     }
-    let gltf = app.world_mut().resource_mut::<Assets<Gltf>>().add(Gltf { named_meshes, ..pack_fixture() });
+    let gltf = app.world_mut().resource_mut::<Assets<Gltf>>().add(Gltf {
+        named_meshes,
+        ..pack_fixture()
+    });
     let mut assets = app.world_mut().resource_mut::<IslandAssets>();
     assets.terrain = gltf.clone();
     assets.props = placements()
@@ -560,6 +600,34 @@ fn install_spawn_assets(app: &mut App) {
         .map(|p| (p.kind, gltf.clone()))
         .collect();
     assets.spawned = false;
+    mineral
+}
+
+#[test]
+fn all_rock_kinds_share_the_mineral_material_but_plants_keep_their_own() {
+    let (mut app, _) = fixture();
+    let mineral = install_spawn_assets(&mut app);
+    app.update();
+    let world = app.world_mut();
+    let mut stones = 0;
+    let mut plants = 0;
+    for (name, material) in world
+        .query_filtered::<(&Name, &MeshMaterial3d<StandardMaterial>), With<PropRange>>()
+        .iter(world)
+    {
+        let kind = name.as_str().strip_prefix("Island ").unwrap();
+        if matches!(
+            kind,
+            "Cliff" | "Scree" | "BoulderA" | "BoulderB" | "BoulderC"
+        ) {
+            assert_eq!(material.0, mineral);
+            stones += 1;
+        } else {
+            assert_ne!(material.0, mineral);
+            plants += 1;
+        }
+    }
+    assert_eq!((stones, plants), (574, 3142));
 }
 
 #[test]
@@ -605,7 +673,7 @@ fn late_habitat_material_replaces_only_near_and_never_blocks_original_population
         .world_mut()
         .resource_mut::<Assets<Mesh>>()
         .reserve_handle();
-    let handle = primitive_fixture(&mut app,unique.clone());
+    let handle = primitive_fixture(&mut app, unique.clone());
     let mut pack = pack_fixture();
     pack.named_meshes.insert("Habitat_0_0".into(), handle);
     let pack = app.world_mut().resource_mut::<Assets<Gltf>>().add(pack);
@@ -664,29 +732,41 @@ fn arriving_crown_pack_replaces_only_mapped_visuals_once_without_moving_a_trunk(
     install_spawn_assets(&mut app);
     app.update();
     let unique = app.world().resource::<Assets<Mesh>>().reserve_handle();
-    let prim = primitive_fixture(&mut app,unique.clone());
+    let prim = primitive_fixture(&mut app, unique.clone());
     let mut pack = pack_fixture();
     for form in 1..=8 {
         for level in 0..3 {
-            pack.named_meshes.insert(format!("PineForm{form}_L{level}").into_boxed_str(),prim.clone());
+            pack.named_meshes.insert(
+                format!("PineForm{form}_L{level}").into_boxed_str(),
+                prim.clone(),
+            );
         }
     }
     let world = app.world_mut();
-    let before: std::collections::HashMap<_,_> = world.query::<(Entity,&PropRange,&Transform)>()
-        .iter(world).map(|(id,_,t)|(id,*t)).collect();
+    let before: std::collections::HashMap<_, _> = world
+        .query::<(Entity, &PropRange, &Transform)>()
+        .iter(world)
+        .map(|(id, _, t)| (id, *t))
+        .collect();
     let pack = world.resource_mut::<Assets<Gltf>>().add(pack);
-    world.resource_mut::<IslandAssets>().groves=pack;
-    advance(&mut app,201);
-    let world=app.world_mut();
+    world.resource_mut::<IslandAssets>().groves = pack;
+    advance(&mut app, 201);
+    let world = app.world_mut();
     assert!(world.resource::<IslandAssets>().groves_attached);
-    let mut changed=0;
-    for (id,prop,t,mesh) in world.query::<(Entity,&PropRange,&Transform,&Mesh3d)>().iter(world) {
-        assert_eq!(*t,before[&id]);
+    let mut changed = 0;
+    for (id, prop, t, mesh) in world
+        .query::<(Entity, &PropRange, &Transform, &Mesh3d)>()
+        .iter(world)
+    {
+        assert_eq!(*t, before[&id]);
         if prop.grove_form.is_some() {
-            assert_eq!(mesh.0,unique);changed+=1;
-        } else { assert_ne!(mesh.0,unique); }
+            assert_eq!(mesh.0, unique);
+            changed += 1;
+        } else {
+            assert_ne!(mesh.0, unique);
+        }
     }
-    assert_eq!(changed,286);
-    advance(&mut app,201);
+    assert_eq!(changed, 286);
+    advance(&mut app, 201);
     assert_quiet(&app);
 }

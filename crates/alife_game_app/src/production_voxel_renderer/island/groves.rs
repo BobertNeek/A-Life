@@ -1,6 +1,6 @@
 //! Optional canopy geometry on existing conifers, never a second tree population.
 use super::*;
-use std::{num::NonZeroU8,sync::OnceLock};
+use std::{num::NonZeroU8, sync::OnceLock};
 
 pub(super) const PACK: &str = "landscape/island/grove-crowns.glb";
 
@@ -16,8 +16,10 @@ pub(in crate::production_voxel_renderer) struct GroveForm(NonZeroU8);
 fn layout() -> &'static BTreeMap<usize, Layout> {
     static INDEX: OnceLock<BTreeMap<usize, Layout>> = OnceLock::new();
     INDEX.get_or_init(|| {
-        serde_json::from_str(include_str!("../../../assets/landscape/island/grove-crowns.json"))
-            .expect("approved visual canopy layout")
+        serde_json::from_str(include_str!(
+            "../../../assets/landscape/island/grove-crowns.json"
+        ))
+        .expect("approved visual canopy layout")
     })
 }
 
@@ -36,20 +38,24 @@ pub(super) fn at(index: usize, original: &Prop) -> Option<GroveForm> {
     }
 }
 
-pub(super) fn models(
-    pack: &Gltf,
-    assets: &Assets<GltfMesh>,
-) -> Option<Vec<[Handle<Mesh>; 3]>> {
+pub(super) fn models(pack: &Gltf, assets: &Assets<GltfMesh>) -> Option<Vec<[Handle<Mesh>; 3]>> {
     let mesh = |form, lod| {
-        let handle = pack.named_meshes.get(format!("PineForm{form}_L{lod}").as_str())?;
+        let handle = pack
+            .named_meshes
+            .get(format!("PineForm{form}_L{lod}").as_str())?;
         Some(assets.get(handle)?.primitives.first()?.mesh.clone())
     };
     // Build this table only when a just-loaded optional pack can replace the
     // source meshes. Static trees otherwise retain their usual visibility loop.
-    (1..=8).map(|f| Some([mesh(f,0)?,mesh(f,1)?,mesh(f,2)?])).collect()
+    (1..=8)
+        .map(|f| Some([mesh(f, 0)?, mesh(f, 1)?, mesh(f, 2)?]))
+        .collect()
 }
 
-pub(super) fn levels<'a>(form: &GroveForm, models: &'a [[Handle<Mesh>; 3]]) -> &'a [Handle<Mesh>; 3] {
+pub(super) fn levels<'a>(
+    form: &GroveForm,
+    models: &'a [[Handle<Mesh>; 3]],
+) -> &'a [Handle<Mesh>; 3] {
     &models[form.0.get() as usize - 1]
 }
 
@@ -63,29 +69,38 @@ mod tests {
         let mut original = 0;
         let mut replaced = 0;
         for (idx, p) in props.iter().enumerate() {
-            let found = at(idx,p);
+            let found = at(idx, p);
             if p.kind == "Conifer" {
-                if found.is_some() { replaced += 1; } else { original += 1; }
-            } else { assert!(found.is_none()); }
+                if found.is_some() {
+                    replaced += 1;
+                } else {
+                    original += 1;
+                }
+            } else {
+                assert!(found.is_none());
+            }
         }
-        assert_eq!((original,replaced),(135,286));
+        assert_eq!((original, replaced), (135, 286));
         let &idx = layout().keys().next().unwrap();
         props[idx].position[0] += 0.05;
-        assert!(at(idx,&props[idx]).is_none());
+        assert!(at(idx, &props[idx]).is_none());
     }
 
     #[test]
     fn shipping_pack_has_every_form_at_every_lod_and_one_draw_each() {
-        let data=include_bytes!("../../../assets/landscape/island/grove-crowns.glb");
-        let len=u32::from_le_bytes(data[12..16].try_into().unwrap()) as usize;
-        let doc:serde_json::Value=serde_json::from_slice(&data[20..20+len]).unwrap();
-        let meshes=doc["meshes"].as_array().unwrap();
-        assert_eq!(meshes.len(),24);
+        let data = include_bytes!("../../../assets/landscape/island/grove-crowns.glb");
+        let len = u32::from_le_bytes(data[12..16].try_into().unwrap()) as usize;
+        let doc: serde_json::Value = serde_json::from_slice(&data[20..20 + len]).unwrap();
+        let meshes = doc["meshes"].as_array().unwrap();
+        assert_eq!(meshes.len(), 24);
         for f in 1..=8 {
             for l in 0..3 {
-                let label=format!("PineForm{f}_L{l}");
-                let m=meshes.iter().find(|m|m["name"].as_str()==Some(label.as_str())).unwrap();
-                assert_eq!(m["primitives"].as_array().unwrap().len(),1);
+                let label = format!("PineForm{f}_L{l}");
+                let m = meshes
+                    .iter()
+                    .find(|m| m["name"].as_str() == Some(label.as_str()))
+                    .unwrap();
+                assert_eq!(m["primitives"].as_array().unwrap().len(), 1);
             }
         }
     }

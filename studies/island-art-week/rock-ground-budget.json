@@ -1,0 +1,23 @@
+{
+  "chunks": 76,
+  "triangles": 175104,
+  "new_vertices": 189392,
+  "old_vertices": 92492,
+  "chart_count": 55,
+  "atlas_px": [
+    2688,
+    2352
+  ],
+  "file_bytes": 7940992,
+  "deposits": {
+    "sources": {
+      "cliff": 16,
+      "boulder": 183,
+      "scree": 27
+    },
+    "lattice_metres": 1.5625,
+    "strong_m2": 24822,
+    "affected_m2": 42539,
+    "max_mix": 0.8889
+  }
+}

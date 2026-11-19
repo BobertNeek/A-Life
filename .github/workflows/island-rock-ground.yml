@@ -105,3 +105,8 @@ jobs:
             ${{ runner.temp }}/rock-proof/*.txt
             ${{ runner.temp }}/rock-proof/*.json
           retention-days: 7
+      - name: Byte-verify the fully bound V1 release, separately from the V2 art comparison
+        run: |
+          D=crates/alife_game_app/assets/landscape/island
+          for a in habitat-ground.glb habitats/substrates.png habitats/substrates-normal.png habitats/substrates-orm.png geology/pigment.png geology/relief.png; do cmp "$D/$a" "$RUNNER_TEMP/v1/$a"; done
+          for a in Cliff.glb BoulderA.glb BoulderB.glb BoulderC.glb Scree.glb minerals/fracture.png minerals/fracture-normal.png minerals/fracture-orm.png; do cmp "$D/$a" "$RUNNER_TEMP/stone-surfaces/$a"; done

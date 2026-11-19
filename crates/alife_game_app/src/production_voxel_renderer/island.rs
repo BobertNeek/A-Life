@@ -120,6 +120,13 @@ struct Prop {
     yaw: f32,
 }
 
+fn has_mineral_surface(kind: &str) -> bool {
+    matches!(
+        kind,
+        "BoulderA" | "BoulderB" | "BoulderC" | "Scree" | "Cliff"
+    )
+}
+
 fn grounded_prop_position(
     kind: &str,
     authored: [f32; 3],
@@ -438,8 +445,11 @@ pub(super) fn update(
                 ));
             }
         }
-        let mut shared_prop_material = None;
-        for (index,p) in placements().into_iter().enumerate() {
+        // Reuse exactly two source materials rather than the material of the
+        // first prop for the entire island. The five stone meshes share one PBR
+        // atlas; its normals must never be sent to foliage without those UVs.
+        let mut shared_prop_materials = [None, None];
+        for (index, p) in placements().into_iter().enumerate() {
             let gltf = gltfs.get(&assets.props[&p.kind]).unwrap();
             let position = grounded_prop_position(&p.kind, p.position, surface);
             let tree = matches!(p.kind.as_str(), "Broadleaf" | "Conifer" | "Sapling");
@@ -463,7 +473,8 @@ pub(super) fn update(
                     .mesh
                     .clone()
             });
-            let material = shared_prop_material
+            let family = usize::from(has_mineral_surface(&p.kind));
+            let material = shared_prop_materials[family]
                 .get_or_insert_with(|| primitive.material.clone().unwrap())
                 .clone();
             let mut entity = commands.spawn((
@@ -474,7 +485,7 @@ pub(super) fn update(
                     .with_scale(Vec3::splat(p.scale))
                     .with_rotation(Quat::from_rotation_y(p.yaw)),
                 PropRange {
-                    grove_form: groves::at(index,&p),
+                    grove_form: groves::at(index, &p),
                     position,
                     distance,
                     meshes: levels,
@@ -581,8 +592,8 @@ pub(super) fn update(
     for (mut mesh, mut visibility, mut prop) in &mut props {
         saw_prop = true;
         let mut crown_replaced = false;
-        if let (Some(models),Some(form)) = (grove_models.as_ref(),prop.grove_form) {
-            prop.meshes = groves::levels(&form,models).clone();
+        if let (Some(models), Some(form)) = (grove_models.as_ref(), prop.grove_form) {
+            prop.meshes = groves::levels(&form, models).clone();
             crown_replaced = true;
         }
         let distance = Vec2::new(prop.position.x - focus.x, prop.position.z - focus.z).length();

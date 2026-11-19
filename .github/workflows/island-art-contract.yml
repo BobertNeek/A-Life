@@ -8,6 +8,11 @@ on:
       - crates/alife_game_app/src/production_voxel_renderer/island_update_tests.rs
       - crates/alife_game_app/assets/landscape/island/habitat-ground.glb
       - crates/alife_game_app/assets/landscape/island/habitats/**
+      - crates/alife_game_app/assets/landscape/island/minerals/**
+      - crates/alife_game_app/assets/landscape/island/geology/**
+      - crates/alife_game_app/assets/landscape/island/Boulder*.glb
+      - crates/alife_game_app/assets/landscape/island/Cliff.glb
+      - crates/alife_game_app/assets/landscape/island/Scree.glb
       - crates/alife_game_app/assets/landscape/island/strandline.glb
       - crates/alife_game_app/src/production_voxel_renderer/island/strandline.rs
       - crates/alife_game_app/src/production_voxel_renderer/island/marine_sky.rs

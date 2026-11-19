@@ -1,0 +1,147 @@
+{
+  "Cliff": [
+    {
+      "lod": "Cliff_L0",
+      "triangles": 728,
+      "original_vertices": 1400,
+      "new_vertices": 1433,
+      "source_shells": 7,
+      "unfolded_vertices": 486,
+      "max_inner_adjustment_m": 0.18435
+    },
+    {
+      "lod": "Cliff_L1",
+      "triangles": 326,
+      "original_vertices": 816,
+      "new_vertices": 841,
+      "source_shells": 7,
+      "unfolded_vertices": 3,
+      "max_inner_adjustment_m": 0.0188
+    },
+    {
+      "lod": "Cliff_L2",
+      "triangles": 144,
+      "original_vertices": 386,
+      "new_vertices": 403,
+      "source_shells": 7,
+      "unfolded_vertices": 0,
+      "max_inner_adjustment_m": 0.0
+    }
+  ],
+  "BoulderA": [
+    {
+      "lod": "BoulderA_L0",
+      "triangles": 312,
+      "original_vertices": 596,
+      "new_vertices": 606,
+      "source_shells": 3,
+      "unfolded_vertices": 209,
+      "max_inner_adjustment_m": 0.1232
+    },
+    {
+      "lod": "BoulderA_L1",
+      "triangles": 140,
+      "original_vertices": 318,
+      "new_vertices": 323,
+      "source_shells": 3,
+      "unfolded_vertices": 5,
+      "max_inner_adjustment_m": 0.06666
+    },
+    {
+      "lod": "BoulderA_L2",
+      "triangles": 62,
+      "original_vertices": 156,
+      "new_vertices": 156,
+      "source_shells": 3,
+      "unfolded_vertices": 0,
+      "max_inner_adjustment_m": 0.0
+    }
+  ],
+  "BoulderB": [
+    {
+      "lod": "BoulderB_L0",
+      "triangles": 312,
+      "original_vertices": 594,
+      "new_vertices": 602,
+      "source_shells": 3,
+      "unfolded_vertices": 200,
+      "max_inner_adjustment_m": 0.10598
+    },
+    {
+      "lod": "BoulderB_L1",
+      "triangles": 140,
+      "original_vertices": 334,
+      "new_vertices": 340,
+      "source_shells": 3,
+      "unfolded_vertices": 13,
+      "max_inner_adjustment_m": 0.07699
+    },
+    {
+      "lod": "BoulderB_L2",
+      "triangles": 62,
+      "original_vertices": 154,
+      "new_vertices": 154,
+      "source_shells": 3,
+      "unfolded_vertices": 0,
+      "max_inner_adjustment_m": 0.0
+    }
+  ],
+  "BoulderC": [
+    {
+      "lod": "BoulderC_L0",
+      "triangles": 312,
+      "original_vertices": 598,
+      "new_vertices": 612,
+      "source_shells": 3,
+      "unfolded_vertices": 170,
+      "max_inner_adjustment_m": 0.06884
+    },
+    {
+      "lod": "BoulderC_L1",
+      "triangles": 140,
+      "original_vertices": 322,
+      "new_vertices": 332,
+      "source_shells": 3,
+      "unfolded_vertices": 0,
+      "max_inner_adjustment_m": 0.0
+    },
+    {
+      "lod": "BoulderC_L2",
+      "triangles": 62,
+      "original_vertices": 160,
+      "new_vertices": 160,
+      "source_shells": 3,
+      "unfolded_vertices": 0,
+      "max_inner_adjustment_m": 0.0
+    }
+  ],
+  "Scree": [
+    {
+      "lod": "Scree_L0",
+      "triangles": 2288,
+      "original_vertices": 4356,
+      "new_vertices": 4429,
+      "source_shells": 22,
+      "unfolded_vertices": 0,
+      "max_inner_adjustment_m": 0.0
+    },
+    {
+      "lod": "Scree_L1",
+      "triangles": 1028,
+      "original_vertices": 2372,
+      "new_vertices": 2413,
+      "source_shells": 22,
+      "unfolded_vertices": 0,
+      "max_inner_adjustment_m": 0.0
+    },
+    {
+      "lod": "Scree_L2",
+      "triangles": 456,
+      "original_vertices": 1154,
+      "new_vertices": 1170,
+      "source_shells": 22,
+      "unfolded_vertices": 0,
+      "max_inner_adjustment_m": 0.0
+    }
+  ]
+}

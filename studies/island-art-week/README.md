@@ -134,3 +134,35 @@ The optional pack is 696 KiB; originals stay visible while loading. The
 changes read on the guardian shoulder. At the low camera, some thin trunks
 still line up and the stones seem set on top of smooth turf. Shape-specific
 mineral scree and rooted terrain are the next art pass, not a different sky.
+
+### Grounded mineral shoulder
+
+CPU Blender 4.3.2 study **44453469724** holds both cameras, daylight, terrain,
+water, crowns and their source positions fixed on the alternate massif. A
+clay/albedo/normal decomposition traced the conspicuous repeated cuts on the
+eastern lower shoulder to the old height-dependent material coordinates, not
+physical relief. Two independent ground-plane axes and broken weathered joints
+remove the false contours. From 1.03 m the old full polygon outlines on the
+apron give way to angular shale in soil; the distant cove is a control, not
+the main evidence of this pass.
+
+Sixteen existing cliffs and 210 boulder/scree sources seed bounded fall-line
+fans. In V1, 24,822 m² (4.46% of its above-water area) have strong exposed
+mineral weight. Only 55 close habitat charts are needed, with the same atlas
+dimensions, 76 near meshes and 175,104 ordered original triangles. A common
+PBR skin serves all five rock shapes. The solid models' 6,512 triangles over
+fifteen LODs receive no new faces; inner pinched rings are smoothed inside
+every original block's convex hull. All hull vertices, entire feet, vertical
+positions, proxy extremes at all 574 original rock rotations and all triangle
+windings were checked. Scree keeps its earlier geometry. The original flat
+boulder B at (254.68, -177.67) touches the uphill slope. Its original downhill
+lip overhangs by up to 45 cm; this material does not change the heightfield or
+move its collider to disguise that. The rock may still look too block-like
+and several existing pine crowns read as spinning plates at eye height.
+
+[Mesh/contact checks](rock-geometry-validation.json) · [terrain checks](rock-ground-validation.json)
+· [terrain cost](rock-ground-budget.json). No frame-time or gameplay claim.
+The material binding uses two reusable surface handles (plants and stones)
+instead of accidentally texturing every prop with the first plant's material.
+A separate render/byte check reproduces the final opaque RGBA packing and
+rock tangent-normal convention before selecting the final review plates.

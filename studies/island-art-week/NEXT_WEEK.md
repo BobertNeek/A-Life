@@ -70,3 +70,14 @@ across the original water horizon, and zoom the camera across the globe; a
 visible rim, sky occluding land or any sun shadow from the sky is a failure.
 The background has one unlit draw; profile occupied habitats and dense cutouts
 with and without the candidate, not an empty sky-only benchmark.
+
+For grove and mineral integration also compare against weekly `c6a3e18`.
+Use the actual stone at x=254.68 z=-177.68, the 1.03 m eye at x=258.40
+z=-170.00, and the 144 m vertical-span guardian lock at x=247 z=-184.
+A small physical overhang is expected on the downhill side: the original
+flat-foot boulder contacts the slope uphill and this art never moves its
+solid proxy. Fail if the whole rock is airborne, UVs flash on a handoff,
+a hidden stone disables plants, or the mineral normal maps bind to foliage.
+Pan from close shale into the guardian shoulder; the lowland should not
+acquire a repeating stripe or an outlined polygon grid. Keep the
+horizon/cove as a control rather than claiming a different sky.

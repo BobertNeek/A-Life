@@ -180,12 +180,15 @@ def rebuild(kind, srcpath, target):
         mask = caps.astype(bool)
         uv[mask] = p[idx[mask]][:, [0, 2]] / METRES + 0.11 * comp[idx[mask], None]
         col = pigment(p, n, kind, c)
-        cc = np.rint(255 * col[idx]).astype("u1")
+        # Portable vertex fetch: every tightly packed normalized colour starts
+        # at four-byte alignment. Alpha is opaque on all original rock faces.
+        cc = np.full((len(idx), 4), 255, "u1")
+        cc[:, :3] = np.rint(255 * col[idx]).astype("u1")
         outattr = dict(
             POSITION=attr(p[idx], "<f4", 5126, "VEC3", bounds=True),
             NORMAL=attr(n[idx], "<f4", 5126, "VEC3"),
             TEXCOORD_0=attr(uv, "<f4", 5126, "VEC2"),
-            COLOR_0=attr(cc, "u1", 5121, "VEC3", norm=True),
+            COLOR_0=attr(cc, "u1", 5121, "VEC4", norm=True),
         )
         indices = attr(inv.ravel(), "<u2", 5123, "SCALAR")
         doc["meshes"].append(
@@ -221,6 +224,18 @@ def verify(kind, source, result, poses):
             for d, p, q in ((orig, b0, pa), (art, b1, pb))
         )
         assert len(i) == len(j) and len(b["primitives"]) == 1
+        color = art["accessors"][pb["attributes"]["COLOR_0"]]
+        assert (
+            color["type"] == "VEC4"
+            and color["normalized"]
+            and color["componentType"] == 5121
+        )
+        assert np.all(
+            np.array(values(art, b1, pb["attributes"]["COLOR_0"], normalize=False))[
+                :, 3
+            ]
+            == 255
+        )
         old = np.array(values(orig, b0, pa["attributes"]["POSITION"]))
         new = np.array(values(art, b1, pb["attributes"]["POSITION"]))[j]
         n = np.array(values(art, b1, pb["attributes"]["NORMAL"]))

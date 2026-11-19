@@ -378,67 +378,67 @@
     {
       "asset_id": "approved-island-bouldera",
       "author": "A-Life approved Blender art",
-      "digest": "fnv1a64:b4b9eab96e853f5c",
+      "digest": "fnv1a64:e5ed1601b03f32cc",
       "external": false,
       "final_art": false,
       "generated": true,
       "generator": {
-        "config_path": "scripts/build_finished_island_assets.py",
-        "date": "2026-10-09",
-        "seed": "saved-finished-island-refinements/BoulderA",
-        "tool": "Blender-4.3.2"
+        "tool": "Qualia angle-preserving mineral art over approved Blender sources",
+        "config_path": "scripts/build_island_minerals.py",
+        "date": "2026-11-19",
+        "seed": "source c6a3e18; stone 8301 / 75329"
       },
       "license": "A-Life-Generated-Source",
       "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/island/BoulderA.glb",
       "placeholder": false,
-      "replacement_policy": "edit-blender-source-and-refresh-manifest",
-      "size_bytes": 35576,
-      "source": "generated:approved-blender-model",
+      "replacement_policy": "apply-mineral-finish-to-original-source-and-refresh-manifest",
+      "size_bytes": 45796,
+      "source": "generated:approved-island-blender-rocks-with-mineral-finish",
       "usage_category": "environment-dressing"
     },
     {
       "asset_id": "approved-island-boulderb",
       "author": "A-Life approved Blender art",
-      "digest": "fnv1a64:897b6fa1f012b408",
+      "digest": "fnv1a64:0a43867816309259",
       "external": false,
       "final_art": false,
       "generated": true,
       "generator": {
-        "config_path": "scripts/build_finished_island_assets.py",
-        "date": "2026-10-09",
-        "seed": "saved-finished-island-refinements/BoulderB",
-        "tool": "Blender-4.3.2"
+        "tool": "Qualia angle-preserving mineral art over approved Blender sources",
+        "config_path": "scripts/build_island_minerals.py",
+        "date": "2026-11-19",
+        "seed": "source c6a3e18; stone 8301 / 75329"
       },
       "license": "A-Life-Generated-Source",
       "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/island/BoulderB.glb",
       "placeholder": false,
-      "replacement_policy": "edit-blender-source-and-refresh-manifest",
-      "size_bytes": 35920,
-      "source": "generated:approved-blender-model",
+      "replacement_policy": "apply-mineral-finish-to-original-source-and-refresh-manifest",
+      "size_bytes": 46196,
+      "source": "generated:approved-island-blender-rocks-with-mineral-finish",
       "usage_category": "environment-dressing"
     },
     {
       "asset_id": "approved-island-boulderc",
       "author": "A-Life approved Blender art",
-      "digest": "fnv1a64:255a85bfd74b2d40",
+      "digest": "fnv1a64:770f98a0ab403d40",
       "external": false,
       "final_art": false,
       "generated": true,
       "generator": {
-        "config_path": "scripts/build_finished_island_assets.py",
-        "date": "2026-10-09",
-        "seed": "saved-finished-island-refinements/BoulderC",
-        "tool": "Blender-4.3.2"
+        "tool": "Qualia angle-preserving mineral art over approved Blender sources",
+        "config_path": "scripts/build_island_minerals.py",
+        "date": "2026-11-19",
+        "seed": "source c6a3e18; stone 8301 / 75329"
       },
       "license": "A-Life-Generated-Source",
       "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/island/BoulderC.glb",
       "placeholder": false,
-      "replacement_policy": "edit-blender-source-and-refresh-manifest",
-      "size_bytes": 35800,
-      "source": "generated:approved-blender-model",
+      "replacement_policy": "apply-mineral-finish-to-original-source-and-refresh-manifest",
+      "size_bytes": 46424,
+      "source": "generated:approved-island-blender-rocks-with-mineral-finish",
       "usage_category": "environment-dressing"
     },
     {
@@ -466,23 +466,23 @@
     {
       "asset_id": "approved-island-cliff",
       "author": "A-Life approved Blender art",
-      "digest": "fnv1a64:9d9a3db0160cd462",
+      "digest": "fnv1a64:5dfc3e90429ead19",
       "external": false,
       "final_art": false,
       "generated": true,
       "generator": {
-        "config_path": "scripts/build_finished_island_assets.py",
-        "date": "2026-10-09",
-        "seed": "saved-finished-island-refinements/Cliff",
-        "tool": "Blender-4.3.2"
+        "tool": "Qualia angle-preserving mineral art over approved Blender sources",
+        "config_path": "scripts/build_island_minerals.py",
+        "date": "2026-11-19",
+        "seed": "source c6a3e18; stone 8301 / 75329"
       },
       "license": "A-Life-Generated-Source",
       "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/island/Cliff.glb",
       "placeholder": false,
-      "replacement_policy": "edit-blender-source-and-refresh-manifest",
-      "size_bytes": 82484,
-      "source": "generated:approved-blender-model",
+      "replacement_policy": "apply-mineral-finish-to-original-source-and-refresh-manifest",
+      "size_bytes": 107140,
+      "source": "generated:approved-island-blender-rocks-with-mineral-finish",
       "usage_category": "environment-dressing"
     },
     {
@@ -620,23 +620,23 @@
     {
       "asset_id": "approved-island-scree",
       "author": "A-Life approved Blender art",
-      "digest": "fnv1a64:c33a0e83f6cdc610",
+      "digest": "fnv1a64:188ad711731b1423",
       "external": false,
       "final_art": false,
       "generated": true,
       "generator": {
-        "config_path": "scripts/build_island_assets.py",
-        "date": "2026-09-30",
-        "seed": "approved-island-blueprints",
-        "tool": "Blender-5.2.1-LTS"
+        "tool": "Qualia angle-preserving mineral art over approved Blender sources",
+        "config_path": "scripts/build_island_minerals.py",
+        "date": "2026-11-19",
+        "seed": "source c6a3e18; stone 8301 / 75329"
       },
       "license": "A-Life-Generated-Source",
       "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/island/Scree.glb",
       "placeholder": false,
-      "replacement_policy": "edit-blender-source-and-refresh-manifest",
-      "size_bytes": 246092,
-      "source": "generated:approved-blender-model",
+      "replacement_policy": "apply-mineral-finish-to-original-source-and-refresh-manifest",
+      "size_bytes": 314700,
+      "source": "generated:approved-island-blender-rocks-with-mineral-finish",
       "usage_category": "environment-dressing"
     },
     {
@@ -686,45 +686,45 @@
     {
       "asset_id": "approved-island-geology-relief",
       "author": "A-Life approved Blender art",
-      "digest": "fnv1a64:6cbdebcbfef0576b",
+      "digest": "fnv1a64:92fedb572ede6bec",
       "external": false,
       "final_art": false,
       "generated": true,
       "generator": {
-        "config_path": "scripts/build_island_geology.py",
+        "tool": "Qualia exposed bedrock and rooted PBR substrate",
+        "config_path": "scripts/build_island_habitats.py",
         "date": "2026-11-19",
-        "seed": "approved-island-blueprints",
-        "tool": "Blender-5.2.1-LTS + offline geology finish"
+        "seed": "6125,9924,9271"
       },
       "license": "A-Life-Generated-Source",
       "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/island/geology/relief.png",
       "placeholder": false,
-      "replacement_policy": "edit-blender-source-and-refresh-manifest",
-      "size_bytes": 2784627,
-      "source": "generated:island-geology",
+      "replacement_policy": "edit-habitat-recipe-and-refresh-manifest",
+      "size_bytes": 2304815,
+      "source": "generated:island-rooted-habitats",
       "usage_category": "environment-dressing"
     },
     {
       "asset_id": "approved-island-geology-pigment",
       "author": "A-Life approved Blender art",
-      "digest": "fnv1a64:2a5b5a90dde42750",
+      "digest": "fnv1a64:8a89bdc96f879691",
       "external": false,
       "final_art": false,
       "generated": true,
       "generator": {
+        "tool": "Qualia exposed bedrock and rooted PBR substrate",
         "config_path": "scripts/build_island_habitats.py",
         "date": "2026-11-19",
-        "seed": "approved-island-blueprints",
-        "tool": "Qualia geological pigment with a rooted grove grade"
+        "seed": "6125,9924,9271"
       },
       "license": "A-Life-Generated-Source",
       "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/island/geology/pigment.png",
       "placeholder": false,
-      "replacement_policy": "edit-blender-source-and-refresh-manifest",
-      "size_bytes": 2577525,
-      "source": "generated:island-geology",
+      "replacement_policy": "edit-habitat-recipe-and-refresh-manifest",
+      "size_bytes": 2371438,
+      "source": "generated:island-rooted-habitats",
       "usage_category": "environment-dressing"
     },
     {
@@ -1104,15 +1104,15 @@
     {
       "asset_id": "approved-island-habitat-ground",
       "author": "Qualia island environment art",
-      "digest": "fnv1a64:0d065b8f0c627eba",
+      "digest": "fnv1a64:a33609d17db24a06",
       "external": false,
       "final_art": false,
       "generated": true,
       "generator": {
+        "tool": "Qualia exposed bedrock and rooted PBR substrate",
         "config_path": "scripts/build_island_habitats.py",
         "date": "2026-11-19",
-        "seed": "9271",
-        "tool": "Qualia tile-blended PBR substrate and habitat field"
+        "seed": "6125,9924,9271"
       },
       "license": "A-Life-Generated-Source",
       "license_ref": "README.md",
@@ -1126,66 +1126,66 @@
     {
       "asset_id": "approved-island-habitat-pigment",
       "author": "Qualia island environment art",
-      "digest": "fnv1a64:dc1ae0f1e1b2a11d",
+      "digest": "fnv1a64:a6775321021eb085",
       "external": false,
       "final_art": false,
       "generated": true,
       "generator": {
+        "tool": "Qualia exposed bedrock and rooted PBR substrate",
         "config_path": "scripts/build_island_habitats.py",
         "date": "2026-11-19",
-        "seed": "9271",
-        "tool": "Qualia tile-blended PBR substrate and habitat field"
+        "seed": "6125,9924,9271"
       },
       "license": "A-Life-Generated-Source",
       "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/island/habitats/substrates.png",
       "placeholder": false,
       "replacement_policy": "edit-habitat-recipe-and-refresh-manifest",
-      "size_bytes": 6969429,
+      "size_bytes": 7276708,
       "source": "generated:island-rooted-habitats",
       "usage_category": "environment-dressing"
     },
     {
       "asset_id": "approved-island-habitat-orm",
       "author": "Qualia island environment art",
-      "digest": "fnv1a64:689da3d28874ae8b",
+      "digest": "fnv1a64:6d570ec4d14ee544",
       "external": false,
       "final_art": false,
       "generated": true,
       "generator": {
+        "tool": "Qualia exposed bedrock and rooted PBR substrate",
         "config_path": "scripts/build_island_habitats.py",
         "date": "2026-11-19",
-        "seed": "9271",
-        "tool": "Qualia tile-blended PBR substrate and habitat field"
+        "seed": "6125,9924,9271"
       },
       "license": "A-Life-Generated-Source",
       "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/island/habitats/substrates-orm.png",
       "placeholder": false,
       "replacement_policy": "edit-habitat-recipe-and-refresh-manifest",
-      "size_bytes": 299934,
+      "size_bytes": 297115,
       "source": "generated:island-rooted-habitats",
       "usage_category": "environment-dressing"
     },
     {
       "asset_id": "approved-island-habitat-normal",
       "author": "Qualia island environment art",
-      "digest": "fnv1a64:b7e3a51e6558bc1a",
+      "digest": "fnv1a64:ec98de34c6ecbd62",
       "external": false,
       "final_art": false,
       "generated": true,
       "generator": {
+        "tool": "Qualia exposed bedrock and rooted PBR substrate",
         "config_path": "scripts/build_island_habitats.py",
         "date": "2026-11-19",
-        "seed": "9271",
-        "tool": "Qualia tile-blended PBR substrate and habitat field"
+        "seed": "6125,9924,9271"
       },
       "license": "A-Life-Generated-Source",
       "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/island/habitats/substrates-normal.png",
       "placeholder": false,
       "replacement_policy": "edit-habitat-recipe-and-refresh-manifest",
-      "size_bytes": 5960209,
+      "size_bytes": 6048415,
       "source": "generated:island-rooted-habitats",
       "usage_category": "environment-dressing"
     },
@@ -1253,6 +1253,72 @@
       "replacement_policy": "edit-grove-recipe-and-refresh-manifest",
       "size_bytes": 17871,
       "source": "generated:island-rooted-groves",
+      "usage_category": "environment-dressing"
+    },
+    {
+      "asset_id": "approved-island-mineral-fracture",
+      "author": "Qualia island environment art",
+      "digest": "fnv1a64:ce0821b65b9f9df1",
+      "external": false,
+      "final_art": false,
+      "generated": true,
+      "generator": {
+        "tool": "Qualia angle-preserving mineral art over approved Blender sources",
+        "config_path": "scripts/build_island_minerals.py",
+        "date": "2026-11-19",
+        "seed": "source c6a3e18; stone 8301 / 75329"
+      },
+      "license": "A-Life-Generated-Source",
+      "license_ref": "README.md",
+      "local_path": "crates/alife_game_app/assets/landscape/island/minerals/fracture.png",
+      "placeholder": false,
+      "replacement_policy": "apply-mineral-finish-to-original-source-and-refresh-manifest",
+      "size_bytes": 206769,
+      "source": "generated:approved-island-blender-rocks-with-mineral-finish",
+      "usage_category": "environment-dressing"
+    },
+    {
+      "asset_id": "approved-island-mineral-fracture-normal",
+      "author": "Qualia island environment art",
+      "digest": "fnv1a64:dcbf343e57ff2ad4",
+      "external": false,
+      "final_art": false,
+      "generated": true,
+      "generator": {
+        "tool": "Qualia angle-preserving mineral art over approved Blender sources",
+        "config_path": "scripts/build_island_minerals.py",
+        "date": "2026-11-19",
+        "seed": "source c6a3e18; stone 8301 / 75329"
+      },
+      "license": "A-Life-Generated-Source",
+      "license_ref": "README.md",
+      "local_path": "crates/alife_game_app/assets/landscape/island/minerals/fracture-normal.png",
+      "placeholder": false,
+      "replacement_policy": "apply-mineral-finish-to-original-source-and-refresh-manifest",
+      "size_bytes": 301126,
+      "source": "generated:approved-island-blender-rocks-with-mineral-finish",
+      "usage_category": "environment-dressing"
+    },
+    {
+      "asset_id": "approved-island-mineral-fracture-orm",
+      "author": "Qualia island environment art",
+      "digest": "fnv1a64:01024f793fdf96e4",
+      "external": false,
+      "final_art": false,
+      "generated": true,
+      "generator": {
+        "tool": "Qualia angle-preserving mineral art over approved Blender sources",
+        "config_path": "scripts/build_island_minerals.py",
+        "date": "2026-11-19",
+        "seed": "source c6a3e18; stone 8301 / 75329"
+      },
+      "license": "A-Life-Generated-Source",
+      "license_ref": "README.md",
+      "local_path": "crates/alife_game_app/assets/landscape/island/minerals/fracture-orm.png",
+      "placeholder": false,
+      "replacement_policy": "apply-mineral-finish-to-original-source-and-refresh-manifest",
+      "size_bytes": 49646,
+      "source": "generated:approved-island-blender-rocks-with-mineral-finish",
       "usage_category": "environment-dressing"
     }
   ],

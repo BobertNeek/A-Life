@@ -57,10 +57,11 @@ def skins(out):
         + oxide[..., None] * np.array((13.0, -1.5, -17.0))
         + quartz[..., None] * np.array((21.0, 21.0, 14.0))
     )
-    # glTF +Y is the green tangent, v grows down in the texture file.
+    # Here both the glTF v coordinate and image row grow together. A slope
+    # rising along either tangent perturbs the normal in its negative direction.
     sx = (np.roll(h, -1, 1) - np.roll(h, 1, 1)) * (N / (2 * METRES))
     sy = (np.roll(h, -1, 0) - np.roll(h, 1, 0)) * (N / (2 * METRES))
-    normal = np.stack((-sx, sy, np.ones_like(h)), axis=-1)
+    normal = np.stack((-sx, -sy, np.ones_like(h)), axis=-1)
     normal /= np.linalg.norm(normal, axis=-1)[..., None]
     color = lambda v: np.clip(np.rint(v), 0, 255).astype("u1")
     Image.fromarray(color(rgb)).save(out / "fracture.png", compress_level=6)

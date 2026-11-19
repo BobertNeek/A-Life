@@ -88,7 +88,7 @@ new water level. See the matched [island art studies](../../../../../studies/isl
 ### Rooted habitat substrate and salt meadow (weekly art branch)
 
 Rebuild in this order: `python scripts/build_island_geology.py`,
-`python scripts/build_island_habitats.py --out crates/alife_game_app/assets/landscape/island`,
+`python scripts/build_island_habitats.py --rock-ground --out crates/alife_game_app/assets/landscape/island`,
 `python scripts/build_island_strandline.py`, then
 `python scripts/register_approved_art.py`. The habitat recipe starts its
 shared macro colour from the original generated surface, so running it twice
@@ -115,3 +115,15 @@ banks and high thin streaks in continuous azimuth. The game loads the
 same interior mesh and image shown in the Blender visual study, with an
 unlit non-fogged material and shadow casting/receiving disabled; it does
 not change global sun, ambient intensity, wind or weather.
+
+The weekly stone finish consumes the five original approved `BoulderA/B/C`,
+`Scree` and `Cliff` GLBs from checkpoint `c6a3e18b36a8460307f525a0a69993da5c4a1cc9`.
+Materialize these source files in a separate directory and invoke
+`python scripts/build_island_minerals.py --source <original-directory> --out <fresh-directory>`.
+The source bodies and their individual shell feet are not new colliders.
+The verifier checks every rock's placed, rotated extents and each original
+convex support point. Copy its five GLBs and `minerals/` alongside the island;
+do not feed those finished GLBs into the generator as if they were sources.
+The terrain recipe uses two independent directions across exposed rock, then
+the same local deposit mask from actual slopes and rocks at all three LODs.
+Both middle/far `geology/pigment.png` and `geology/relief.png` must be present.
