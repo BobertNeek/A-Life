@@ -81,6 +81,7 @@ class Patch:
         self.vertices = array("f")
         self.colors = array("B")
         self.tris = array("I")
+        self.uv = array("f")
 
     def put(self, x, z, lift, color):
         return self.put_at(x, z, self.beach.surface(x, z)[0] + lift, color)
@@ -371,6 +372,7 @@ def write(patches, out):
                 ("Damp tidal sand film", 0.24),
                 ("Spent edge wash", 0.27),
                 ("Windrail thicket", 0.84),
+                ("Wind-bent salt sward", 0.9),
             ]
         ],
     }
@@ -409,6 +411,24 @@ def write(patches, out):
     doc["textures"] = [dict(source=0, sampler=0)]
     doc["materials"][3]["pbrMetallicRoughness"]["baseColorTexture"] = {"index": 0}
 
+    from island_salt_sward import brush
+
+    binary = brush()
+    buf.extend(b"\0" * (-len(buf) % 4))
+    view = len(doc["bufferViews"])
+    doc["bufferViews"].append(
+        dict(buffer=0, byteOffset=len(buf), byteLength=len(binary))
+    )
+    buf.extend(binary)
+    doc["images"].append(
+        dict(bufferView=view, mimeType="image/png", name="Salt meadow sheaves")
+    )
+    doc["samplers"].append(
+        dict(magFilter=9729, minFilter=9987, wrapS=33071, wrapT=33071)
+    )
+    doc["textures"].append(dict(source=1, sampler=1))
+    doc["materials"][5]["pbrMetallicRoughness"]["baseColorTexture"] = {"index": 1}
+    doc["materials"][5].update(alphaMode="MASK", alphaCutoff=0.46)
     for (cx, cz, mat), p in sorted(patches.items()):
         pos = np.frombuffer(p.vertices, "f").reshape(-1, 3).copy()
         colors = np.frombuffer(p.colors, np.uint8).reshape(-1, 4)
@@ -439,8 +459,15 @@ def write(patches, out):
                 (u / 2.3 + 0.09 * np.sin(v * 0.31), v / 1.9 + 0.08 * np.sin(u * 0.34))
             ).astype("<f4")
             attrib["TEXCOORD_0"] = attribute(uv, 5126, "VEC2", 34962)
+        if mat == 5:
+            assert len(p.uv) == 2 * len(pos)
+            attrib["TEXCOORD_0"] = attribute(
+                np.frombuffer(p.uv, "f").reshape(-1, 2), 5126, "VEC2", 34962
+            )
         ix = attribute(idx.ravel().astype("<u2"), 5123, "SCALAR", 34963)
-        name = f'Strand_{cx}_{cz}_{("wet","reed","film","wash","headland")[mat]}'
+        name = (
+            f'Strand_{cx}_{cz}_{("wet","reed","film","wash","headland","sward")[mat]}'
+        )
         i = len(doc["meshes"])
         doc["meshes"].append(
             {

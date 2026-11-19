@@ -90,7 +90,19 @@ def colony(beach, patch, x, z, ox, oz, wind, seed, tint):
         heading = math.atan2(ox, -oz) + r.uniform(-0.40, 0.40)
         c, s = math.cos(heading), math.sin(heading)
         extent = r.uniform(1.8, 3.8) if not k else r.uniform(0.7, 1.8)
-        for t in range(10 if not k else 6):
+        from island_salt_sward import hummock
+
+        hummock(
+            beach,
+            patch,
+            np.random.default_rng(seed + k * 1013),
+            px,
+            pz,
+            heading,
+            extent,
+            k,
+        )
+        for t in range(3 if not k else 2):
             u = np.clip(r.normal(0, 0.65), -1, 1) * extent
             v = r.normal(0, 0.45) + 0.19 * u * u / extent
             tx, tz = px + c * u - s * v, pz + s * u + c * v

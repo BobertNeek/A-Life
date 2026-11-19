@@ -38,7 +38,7 @@ class Cover:
             grove[..., None] * np.array([-0.29, -0.34, -0.36])
             + opening[..., None] * np.array([0.24, 0.093, -0.19])
         )
-        self.data = self.data.astype("f")
+        self.data = np.clip(self.data, 0.64, 1.24).astype("f")
 
     def multiplier(self, x, z):
         u, v = np.broadcast_arrays((x - self.x0) / self.step, (z - self.z0) / self.step)

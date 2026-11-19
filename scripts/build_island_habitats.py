@@ -36,7 +36,13 @@ def build(terrain, surface, placements, out):
     raw, _ = Island(surface).atlas()
     pigment = np.array(Image.open(io.BytesIO(raw)).convert("RGB"))
     atlas_height, atlas_width = pigment.shape[:2]
-    xx = x0 + (np.arange(atlas_width)[None, :] + 0.5) * step * (h.shape[1] - 1) / atlas_width
+    xx = (
+        x0
+        + (np.arange(atlas_width)[None, :] + 0.5)
+        * step
+        * (h.shape[1] - 1)
+        / atlas_width
+    )
     for j in range(0, atlas_height, 48):
         rr = np.arange(j, min(j + 48, atlas_height))
         zz = z0 + (rr[:, None] + 0.5) * step * (h.shape[0] - 1) / atlas_height

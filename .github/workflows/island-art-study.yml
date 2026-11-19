@@ -13,6 +13,7 @@ on:
       - scripts/island_tidal_film.py
       - scripts/island_coast_plants.py
       - scripts/island_dune_communities.py
+      - scripts/island_salt_sward.py
       - scripts/island_review_light.py
       - scripts/island_review_water.py
       - studies/island-art-week/water-inputs/**
@@ -92,6 +93,9 @@ jobs:
           python3 scripts/verify_island_habitats.py "$R/terrain-chunks.glb" "$R/substrates/habitat-ground.glb" --surface "$R/island-ridge-v2.bin" --placements "$R/props-ridge-v2.json"
           showcase "$S/before" --strandline "$D/strandline.glb" --coastal-light "$D/coastal-daylight.json"
           showcase "$S/after" --strandline "$S/strandline.glb" --coastal-light "$D/coastal-daylight.json" --habitats "$R/substrates/habitat-ground.glb"
+          for pose in grove-edge grove-gate; do
+            showcase "$S/scout/$pose" --quick-proof --cove-framing "$pose" --strandline "$S/strandline.glb" --coastal-light "$D/coastal-daylight.json" --habitats "$R/substrates/habitat-ground.glb"
+          done
           compare strand-eye 'Eastern strand at 86 cm | Same neutral light and lens'
           compare strand-reach 'Eastern strand from the bank | Same neutral light and lens'
           compare cove-showcase 'Windrail cove | Same camera, sunlight and opt-in massif; salt meadow, mineral and tidal substrates | CPU Blender'
@@ -102,6 +106,7 @@ jobs:
           path: |
             ${{ runner.temp }}/shore/cove-showcase.jpg
             ${{ runner.temp }}/shore/after/cove-showcase.png
+            ${{ runner.temp }}/shore/scout/
             ${{ runner.temp }}/shore/strand-eye.jpg
             ${{ runner.temp }}/shore/strand-reach.jpg
           retention-days: 7

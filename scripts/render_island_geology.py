@@ -47,6 +47,16 @@ cli.add_argument(
     type=Path,
     help="Actual production palette and camera-relative air",
 )
+cli.add_argument(
+    "--cove-framing",
+    choices=("open-bank", "grove-edge", "grove-gate"),
+    default="open-bank",
+)
+cli.add_argument(
+    "--quick-proof",
+    action="store_true",
+    help="Private reduced framing scout, not an acceptance plate",
+)
 args = cli.parse_args(sys.argv[sys.argv.index("--") + 1 :])
 args.out.mkdir(parents=True, exist_ok=True)
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -61,7 +71,9 @@ scene.cycles.seed = 27
 scene.render.threads_mode = "FIXED"
 scene.render.threads = 2
 scene.render.resolution_x, scene.render.resolution_y = 1000, 600
-scene.render.resolution_percentage = 100
+scene.render.resolution_percentage = 52 if args.quick_proof else 100
+if args.quick_proof:
+    scene.cycles.samples = 12
 scene.view_settings.view_transform = "AgX"
 scene.world = bpy.data.worlds.new("Overcast blue skylight")
 scene.world.use_nodes = True
@@ -79,9 +91,21 @@ if args.habitats:
         i
         for i in bpy.data.images
         if Path(bpy.path.abspath(i.filepath)).name == "pigment.png"
+        or i.name in ("Island salt and stone", "pigment.png")
     )
-    old.filepath = str((args.habitats.parent / "geology" / "pigment.png").resolve())
-    old.reload()
+    replacement = bpy.data.images.load(
+        str((args.habitats.parent / "geology/pigment.png").resolve())
+    )
+    matches = 0
+    for material in bpy.data.materials:
+        if material.use_nodes:
+            for node in material.node_tree.nodes:
+                if getattr(node, "image", None) == old:
+                    node.image = replacement
+                    matches += 1
+    assert (
+        matches > 0
+    ), "Real far terrain material must consume the actual replacement pigment"
     previous = set(bpy.data.objects)
     bpy.ops.import_scene.gltf(filepath=str(args.habitats.resolve()))
     for mesh in set(bpy.data.objects) - previous:
@@ -178,10 +202,14 @@ if args.creature_height or args.tidal_review or args.cove_showcase:
     if args.cove_showcase:
         # From the rooted windbreak inland of the strand: mountain left, bay
         # right; both remain visible from a human/creature-scale viewpoint.
-        x, z = 330.60, 125.65
+        x, z, dx, dz, rise, lens = {
+            "open-bank": (330.60, 125.65, -12.0, -66, 4.1, 21),
+            "grove-edge": (319.85, 143.85, 4.0, -66, 3.6, 22),
+            "grove-gate": (320.80, 145.90, 9.0, -66, 3.2, 23),
+        }[args.cove_framing]
         eye = ground(x, z) + 1.12
         shots = [
-            ("cove-showcase", (x, eye, z), (x - 12.0, eye + 4.1, z - 66), 0, 21, 0)
+            ("cove-showcase", (x, eye, z), (x + dx, eye + rise, z + dz), 0, lens, 0)
         ]
     props = json.loads((args.placements or library / "props.json").read_text())
     models = {}
