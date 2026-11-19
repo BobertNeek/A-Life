@@ -1,15 +1,12 @@
 {
-  "subject": "inlet-underpaint",
+  "subject": "fault-scarp",
   "angles": [
-    "inlet-bar",
-    "inlet-landing",
-    "inlet-bank"
+    "scarp-eye",
+    "scarp-spur"
   ],
   "paired": true,
   "quick": false,
-  "samples": 48,
+  "samples": 80,
   "editable_canopy": false,
-  "art_note": "The isolated dot scatter was held, not installed. Selective sorted drifts: fractured shale with flat chipped tops and fine local grit around actual gathered shell and wrack. Include an additional 1.12 m view onto the actual landing, not a camera-only prop. Native bank finish and ocean held fixed.",
-  "opaque_bank": true,
-  "tidecast_pockets": true
+  "art_note": "Real native rock #1549 from creature height and a separate native foothill #1731. Photograph the old pencils and the sculpted faulted rock in identical native materials and surroundings. Nothing in the real original terrain, obstacle data, legacy saves or brain jobs is rewritten."
 }

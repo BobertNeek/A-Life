@@ -47,6 +47,11 @@ cli.add_argument(
 )
 cli.add_argument("--prop-library", type=Path)
 cli.add_argument(
+    "--cliff-library",
+    type=Path,
+    help="Only the actual solid Cliff model at its planted positions",
+)
+cli.add_argument(
     "--young-library",
     type=Path,
     help="Only the original juvenile tree, never new placements.",
@@ -131,7 +136,15 @@ cli.add_argument(
 )
 cli.add_argument(
     "--grove-framing",
-    choices=("shoulder", "dense", "shelf", "alder-bank", "inlet-bank", "meadow-reach"),
+    choices=(
+        "shoulder",
+        "dense",
+        "shelf",
+        "alder-bank",
+        "inlet-bank",
+        "meadow-reach",
+        "scarp-spur",
+    ),
     default="shoulder",
     help="Select one of the two fixed guardian cameras",
 )
@@ -159,6 +172,7 @@ cli.add_argument(
         "meadow-eye",
         "meadow-bells",
         "sapling-eye",
+        "scarp-eye",
     ),
     default="slope",
 )
@@ -406,6 +420,19 @@ if (
         if args.grove_framing == "inlet-bank":
             x, z = 98.0, 419.0
             shots = [("inlet-bank", (x + 47, 62, z + 96), (x, 2.3, z), 116, 35, 1)]
+        if args.grove_framing == "scarp-spur":
+            # Different native cliff: foothill 1731, including the real trees.
+            x, z = 260.3, -282.2
+            shots = [
+                (
+                    "scarp-spur",
+                    (x + 64, ground(x, z) + 56, z + 70),
+                    (x, ground(x, z) + 4.4, z),
+                    72,
+                    36,
+                    0,
+                )
+            ]
         if args.grove_framing == "meadow-reach":
             x, z = 72.5, 299.0
             shots = [
@@ -470,6 +497,11 @@ if (
             # Original #1116, one of three stock balloon-shaped juvenile trees.
             x, z, tx, tz = 50.1, 244.3, 45.447, 237.543
             shot = "sapling-eye"
+        elif args.copse_framing == "scarp-eye":
+            # Native highland cliff 1549. A 1.04m eye on the actual V1
+            # northwest bench, with a clear 28m approach to the front.
+            x, z, tx, tz = 91.69, -187.58, 112.9, -205.87
+            shot = "scarp-eye"
         elif args.copse_framing == "meadow-eye":
             # Twenty existing grass anchors surround 3406. Share the real
             # turf with nine flower clumps in the established lower meadow.
@@ -482,9 +514,12 @@ if (
                 (
                     tx,
                     ground(tx, tz)
-                    + {"alder-eye": 3.75, "sapling-eye": 2.7, "meadow-bells": 0.28}.get(
-                        shot, 0.38
-                    ),
+                    + {
+                        "alder-eye": 3.75,
+                        "sapling-eye": 2.7,
+                        "meadow-bells": 0.28,
+                        "scarp-eye": 4.46,
+                    }.get(shot, 0.38),
                     tz,
                 ),
                 0,
@@ -530,6 +565,8 @@ if (
             old = set(bpy.data.objects)
             stone = kind in ("Cliff", "Scree", "BoulderA", "BoulderB", "BoulderC")
             where = args.stone_library if stone and args.stone_library else library
+            if kind == "Cliff" and args.cliff_library:
+                where = args.cliff_library
             if kind == "Sapling" and args.young_library:
                 where = args.young_library
             if kind == "Broadleaf" and args.broadleaf_library:

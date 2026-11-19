@@ -1,0 +1,7 @@
+# The mountain's planted scarps, separate from the terrain contours
+
+The 321×385 physical mountain and this **planted rock model** are separate. Original `Cliff.glb` (blob `ff545d9cbf4f71bbd428e87fa69482bbaa4b5f5d`) is a twelve-metre narrow wall of repeatedly pointed columns in a 8 × 4 m footprint; there are 16 such placed landmarks. The earlier V2 physical heightfield study did not replace this display mesh.
+
+The studio sculpts one inclined cap, a lower hanging shoulder, discontinuous weathered bedding and a joined, grounded foot. It works inward from the original support, preserves the projected polygon at every yaw, the real summit and the actual original touching foot. Native geometry/obstacle fields, ecology anchors, saved identity and all 16 transforms are simply left in place. It reuses the selected iron-rind, mica and quartz material and world-scale detail rather than painting a bright white rock or inventing new outcrops. The far form shares the same real summit/shoulder; it may be simplified further.
+
+Artist cameras: 1.04 m above V1 at (91.69,-187.58) facing actual cliff 1549, plus a guardian view of a *different*, actual foothill landmark 1731. These are artwork, not game or physical QA. Do not install any unreviewed sculpt by just following this document. The first editor's clay cast was rejected: it looked like a flat-bottomed monolith resting on toes. Next week re-check the actual original obstacle, eye-line and picking, near/far native handoff and the frame cost, all on a disposable profile.

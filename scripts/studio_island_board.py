@@ -96,6 +96,40 @@ elif subject == "forest-fern":
             fern / "Fern.glb",
             out / "fern-atelier.png",
         )
+elif subject == "fault-scarp":
+    from island_fault_scarp import sculpt
+
+    # Keep the old pencil-shaped true native mesh even if a later artist
+    # stores the new production candidate; matched pictures must not drift.
+    original = "01d86f19569e67d41fcd2c6c8b5b689143e05175"
+    scarp_base = out / "original-scarp"
+    scarp = out / "artist-scarp"
+    scarp_base.mkdir(exist_ok=True)
+    scarp.mkdir(exist_ok=True)
+    subprocess.run(
+        ["git", "fetch", "--no-tags", "--depth=1", "origin", original], check=True
+    )
+    with (scarp_base / "Cliff.glb").open("wb") as target:
+        subprocess.run(
+            [
+                "git",
+                "show",
+                f"{original}:{(d/'Cliff.glb').relative_to(root).as_posix()}",
+            ],
+            stdout=target,
+            check=True,
+        )
+    for folder in (scarp, scarp_base):
+        (folder / "minerals").symlink_to(
+            (d / "minerals").resolve(), target_is_directory=True
+        )
+    note = sculpt(scarp_base / "Cliff.glb", scarp / "Cliff.glb")
+    (scarp / "scarp-source.json").write_text(json.dumps(note, indent=2) + "\n")
+    blender(
+        "studio_fault_scarp_editable.py",
+        scarp / "Cliff.glb",
+        scarp / "fault-scarp.blend",
+    )
 elif subject == "coastal-alder":
     from island_alder_ink import paint
 
@@ -359,6 +393,8 @@ if board.get("editable_canopy"):
     )
 views = {
     "sapling-eye": ["--copse-eye", "--copse-framing", "sapling-eye"],
+    "scarp-eye": ["--copse-eye", "--copse-framing", "scarp-eye"],
+    "scarp-spur": ["--guardian-review", "--grove-framing", "scarp-spur"],
     "meadow-bells": ["--copse-eye", "--copse-framing", "meadow-bells"],
     "meadow-eye": ["--copse-eye", "--copse-framing", "meadow-eye"],
     "meadow-reach": ["--guardian-review", "--grove-framing", "meadow-reach"],
@@ -384,6 +420,7 @@ subject_label = {
     "cove-water": "Sheltered tidal shelf",
     "forest-fern": "Feather moss and divided fern",
     "coastal-alder": "Branch-grown maritime alders",
+    "fault-scarp": "Planted fractured scarp: original posts versus joined stone",
     "meadow-survey": "Actual starting-valley meadow at grass 3406",
     "wild-meadow": "Current meadow and coastal sedge / bellflower study",
     "inlet-survey": "The actual southern inlet before new bank art",
@@ -397,6 +434,7 @@ if subject == "inlet-underpaint" and board.get("tidecast_pockets"):
 base_water = root / "studies/island-art-week/water-inputs"
 if subject in (
     "coastal-alder",
+    "fault-scarp",
     "inlet-survey",
     "estuary-optics",
     "inlet-ground",
@@ -468,6 +506,7 @@ for tag in board["angles"]:
                 "cove-water",
                 "forest-fern",
                 "coastal-alder",
+                "fault-scarp",
                 "inlet-survey",
                 "estuary-optics",
                 "inlet-ground",
@@ -484,6 +523,11 @@ for tag in board["angles"]:
             d / "terrain-chunks.glb",
             out / side,
             *views[tag],
+            *(
+                ["--cliff-library", scarp if side == "after" else scarp_base]
+                if subject == "fault-scarp"
+                else []
+            ),
             *(
                 ["--studio-samples", str(board["samples"])]
                 if "samples" in board
