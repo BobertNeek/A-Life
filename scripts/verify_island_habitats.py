@@ -8,8 +8,8 @@ from build_island_geology import Glb, SURFACE, TERRAIN
 from island_habitat_field import habitat
 
 
-def verify(source, pack, surface, placements):
-    _, _, _, cover = habitat(surface, placements)
+def verify(source, pack, surface, placements, rock_ground=False):
+    _, _, _, cover = habitat(surface, placements, rock_ground)
     base = Glb(source)
     study = Glb(pack)
     original = {m["name"]: m for m in base.doc["meshes"]}
@@ -35,9 +35,19 @@ def verify(source, pack, surface, placements):
         factor = cover.multiplier(xyz[:, 0], xyz[:, 2])
         assert 0.63 - 1e-5 <= factor.min() and factor.max() <= 1.241
         assert np.array_equal(old_rgb[:, 3], new_rgb[:, 3])
-        assert np.array_equal(
-            np.clip(np.rint(old_rgb[:, :3] * factor), 0, 255), new_rgb[:, :3]
-        )
+        expected = old_rgb[:, :3] * factor
+        if cover.deposit is not None:
+            from island_habitat_massing import linear
+
+            w, warm = cover.deposit.at(xyz[:, 0], xyz[:, 2])
+            # Independent reconstruction, double checks source-limited effects:
+            # exact prior colour anywhere outside a source apron.
+            assert np.all((0 <= warm) & (warm <= w + 1e-6)) and w.max() <= 0.90
+            mineral = w[:, None] * np.array([0.217, 0.258, 0.274]) + warm[
+                :, None
+            ] * np.array([0.148, 0.020, -0.077])
+            expected = expected * (1 - w[:, None]) + 255 * mineral / linear(220 / 255)
+        assert np.array_equal(np.clip(np.rint(expected), 0, 255), new_rgb[:, :3])
         uv = study.attr(new["attributes"]["TEXCOORD_0"])
         assert np.isfinite(uv).all() and 0 < uv.min() < uv.max() < 1
         total += len(b) // 3
@@ -62,9 +72,13 @@ if __name__ == "__main__":
     cli.add_argument("pack", type=Path)
     cli.add_argument("--surface", type=Path, default=SURFACE)
     cli.add_argument("--placements", type=Path, default=TERRAIN.parent / "props.json")
+    cli.add_argument("--rock-ground", action="store_true")
     args = cli.parse_args()
     print(
         json.dumps(
-            verify(args.source, args.pack, args.surface, args.placements), indent=2
+            verify(
+                args.source, args.pack, args.surface, args.placements, args.rock_ground
+            ),
+            indent=2,
         )
     )

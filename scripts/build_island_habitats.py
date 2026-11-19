@@ -25,8 +25,8 @@ from PIL import Image
 import io
 
 
-def build(terrain, surface, placements, out):
-    h, labels, (x0, z0, step), cover = habitat(surface, placements)
+def build(terrain, surface, placements, out, rock_ground=False):
+    h, labels, (x0, z0, step), cover = habitat(surface, placements, rock_ground)
     inventory = signatures(labels)
     variants = {key: canonical(key) for key in inventory}
     keys = sorted({v[0] for v in variants.values()})
@@ -46,7 +46,10 @@ def build(terrain, surface, placements, out):
     for j in range(0, atlas_height, 48):
         rr = np.arange(j, min(j + 48, atlas_height))
         zz = z0 + (rr[:, None] + 0.5) * step * (h.shape[0] - 1) / atlas_height
-        corrected = srgb(linear(pigment[rr] / 255.0) * cover.multiplier(xx, zz))
+        graded = linear(pigment[rr] / 255.0) * cover.multiplier(xx, zz)
+        if cover.deposit is not None:
+            graded = cover.deposit.mix(graded, xx, zz)
+        corrected = srgb(graded)
         pigment[rr] = np.clip(np.rint(corrected * 255), 0, 255).astype("u1")
     (out / "geology").mkdir(exist_ok=True)
     Image.fromarray(pigment).save(out / "geology/pigment.png", compress_level=8)
@@ -148,7 +151,15 @@ def build(terrain, surface, placements, out):
             )
         color = src.attr(ref["COLOR_0"])[original].astype("u1").copy()
         factor = cover.multiplier(p[original, 0], p[original, 2])
-        color[:, :3] = np.clip(np.rint(color[:, :3] * factor), 0, 255).astype("u1")
+        graded = color[:, :3] * factor
+        if cover.deposit is not None:
+            graded = 255 * cover.deposit.mix(
+                graded / 255,
+                p[original, 0],
+                p[original, 2],
+                reference=linear(220 / 255),
+            )
+        color[:, :3] = np.clip(np.rint(graded), 0, 255).astype("u1")
         attrs = {
             "POSITION": attr(p[original].astype("<f4"), 5126, "VEC3", bounds=True),
             "NORMAL": attr(
@@ -199,6 +210,8 @@ def build(terrain, surface, placements, out):
         atlas_px=[cols * size, rows * size],
         file_bytes=target.stat().st_size,
     )
+    if cover.deposit is not None:
+        receipt["deposits"] = cover.deposit.receipt()
     (out / "habitat-receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
     print(receipt, flush=True)
 
@@ -209,5 +222,6 @@ if __name__ == "__main__":
     cli.add_argument("--surface", type=Path, default=SURFACE)
     cli.add_argument("--placements", type=Path, default=TERRAIN.parent / "props.json")
     cli.add_argument("--out", type=Path, required=True)
+    cli.add_argument("--rock-ground", action="store_true")
     args = cli.parse_args()
-    build(args.terrain, args.surface, args.placements, args.out)
+    build(args.terrain, args.surface, args.placements, args.out, args.rock_ground)

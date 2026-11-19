@@ -1,0 +1,90 @@
+name: Island contact geology, matched ground and guardian heights
+on:
+  push:
+    branches: ["qualia/island-graphics-week-20261119"]
+    paths:
+      - scripts/island_colluvium.py
+      - scripts/build_island_habitats.py
+      - scripts/verify_island_habitats.py
+      - scripts/island_habitat_field.py
+      - scripts/render_island_geology.py
+      - .github/workflows/island-rock-ground.yml
+permissions:
+  contents: read
+concurrency:
+  group: island-rock-ground-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  two-scales:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      OPENBLAS_NUM_THREADS: "1"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Install the same locked offline art dependencies
+        run: |
+          python3 -m venv "$RUNNER_TEMP/art"
+          "$RUNNER_TEMP/art/bin/pip" install --only-binary=:all: --disable-pip-version-check numpy==2.2.6 scipy==1.15.3 Pillow==11.3.0
+          echo "$RUNNER_TEMP/art/bin" >> "$GITHUB_PATH"
+      - name: Restore the unaltered physical massif and previous material
+        id: massif
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: ${{ runner.temp }}/grove-massif
+          key: qualia-grove-massif-v1-e74964e203d40c1ad1dc6423e6f3f1fe96482b83e29f6968a9e96c2cfe4bd3ce
+      - name: Ensure a byte-locked physical surface and ungraded comparison
+        run: |
+          D=crates/alife_game_app/assets/landscape/island
+          R="$RUNNER_TEMP/grove-massif"
+          if test ! -e "$R/substrates/habitat-ground.glb"; then
+            python scripts/prototype_island_ridge.py "$R"
+            python scripts/build_island_habitats.py --surface "$R/island-ridge-v2.bin" --terrain "$R/terrain-chunks.glb" --placements "$R/props-ridge-v2.json" --out "$R/substrates"
+          fi
+          echo "8eeaceae4cdd43a082539c80a056a47c2b9c8454c713883dfd1c9bcec145982c  $R/substrates/habitat-ground.glb" | sha256sum --check
+          cmp "$R/island-ridge-v2.bin" studies/island-ridge-v2/island-ridge-v2.bin
+          python scripts/build_island_habitats.py --rock-ground --out "$RUNNER_TEMP/v1"
+          python scripts/verify_island_habitats.py --rock-ground "$D/terrain-chunks.glb" "$RUNNER_TEMP/v1/habitat-ground.glb" > "$RUNNER_TEMP/v1/validation.json"
+          python scripts/build_island_habitats.py --rock-ground --surface "$R/island-ridge-v2.bin" --terrain "$R/terrain-chunks.glb" --placements "$R/props-ridge-v2.json" --out "$RUNNER_TEMP/v2"
+          python scripts/verify_island_habitats.py --rock-ground "$R/terrain-chunks.glb" "$RUNNER_TEMP/v2/habitat-ground.glb" --surface "$R/island-ridge-v2.bin" --placements "$R/props-ridge-v2.json" > "$RUNNER_TEMP/v2/validation.json"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: verified-rock-v1-assets
+          path: ${{ runner.temp }}/v1
+          retention-days: 7
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: ${{ runner.temp }}/blender-4.3.2-linux-x64.tar.xz
+          key: qualia-art-blender-4.3.2-linux-x64-4da1c956673c0485
+      - run: bash scripts/install_island_review_blender.sh
+      - name: Matched composition and two real root-height viewpoints
+        run: |
+          D=crates/alife_game_app/assets/landscape/island
+          R="$RUNNER_TEMP/grove-massif"
+          P="$RUNNER_TEMP/rock-proof"
+          mkdir -p "$P"
+          blender --version | head -1 > "$P/renderer.txt"
+          for side in before after; do
+            S="$R/substrates"
+            if [ "$side" = after ]; then S="$RUNNER_TEMP/v2"; fi
+            for pose in guardian-review cove-showcase rock-eye; do
+              blender -b -t 2 --python-exit-code 1 -P scripts/render_island_geology.py -- "$R/terrain-chunks.glb" "$P/$side" "--$pose" --coastal-light "$D/coastal-daylight.json" --marine-sky "$D/marine-day.glb" --strandline "$D/strandline.glb" --surface "$R/island-ridge-v2.bin" --placements "$R/props-ridge-v2.json" --water-inputs studies/island-art-week/water-inputs --habitats "$S/habitat-ground.glb" --grove-forms "$D/grove-crowns.glb"
+            done
+          done
+          for pose in guardian-grove cove-showcase stone-eye; do
+            python scripts/compare_island_art.py "$P/before/$pose.png" "$P/after/$pose.png" "$P/$pose.jpg" --title "Grounded stone | $pose | Identical physical terrain, props and light | CPU Blender"
+          done
+          cp "$RUNNER_TEMP/v2/validation.json" "$P/v2-validation.json"
+          cp "$RUNNER_TEMP/v2/habitat-receipt.json" "$P/v2-material.json"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: paired-rock-heights
+          path: |
+            ${{ runner.temp }}/rock-proof/*.jpg
+            ${{ runner.temp }}/rock-proof/after/*.png
+            ${{ runner.temp }}/rock-proof/*.txt
+            ${{ runner.temp }}/rock-proof/*.json
+          retention-days: 7

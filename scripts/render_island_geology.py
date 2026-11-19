@@ -73,6 +73,9 @@ cli.add_argument(
     help="Fixed orthographic grove and ridge shoulder",
 )
 cli.add_argument(
+    "--rock-eye", action="store_true", help="1.03 m diagnostic at a real boulder foot"
+)
+cli.add_argument(
     "--grove-forms", type=Path, help="Variants of existing upper crowns only"
 )
 args = cli.parse_args(sys.argv[sys.argv.index("--") + 1 :])
@@ -81,7 +84,9 @@ bpy.ops.wm.read_factory_settings(use_empty=True)
 scene = bpy.context.scene
 scene.render.engine = "CYCLES"
 scene.cycles.device = "CPU"
-scene.cycles.samples = 48 if args.cove_showcase or args.guardian_review else 20
+scene.cycles.samples = (
+    48 if args.cove_showcase or args.guardian_review or args.rock_eye else 20
+)
 scene.cycles.use_denoising = (
     False  # OIDN erased metre-scale grass and swash ripples in the near field.
 )
@@ -189,6 +194,7 @@ if (
     or args.tidal_review
     or args.cove_showcase
     or args.guardian_review
+    or args.rock_eye
 ):
     root = Path(__file__).resolve().parents[1]
     library = (
@@ -257,6 +263,19 @@ if (
         shots = [
             ("guardian-grove", (x + 230, eye + 176, z + 280), (x, eye, z), 240, 35, 1)
         ]
+    if args.rock_eye:
+        x, z = 258.40, -170.00
+        tx, tz = 254.68, -177.68
+        shots = [
+            (
+                "stone-eye",
+                (x, ground(x, z) + 1.03, z),
+                (tx, ground(tx, tz) + 0.31, tz),
+                0,
+                26,
+                0,
+            )
+        ]
     props = json.loads((args.placements or library / "props.json").read_text())
     models = {}
     from island_grove_review import sources, form
@@ -267,7 +286,7 @@ if (
     if args.cove_showcase:
         eye, aim = native(shots[0][1]), native(shots[0][2])
         cove_focus = eye + (aim - eye).normalized() * 15.0
-    if args.guardian_review:
+    if args.guardian_review or args.rock_eye:
         cove_focus = native(shots[0][2])
     for index, prop in enumerate(props):
         px, py, pz = prop["position"]
@@ -355,7 +374,7 @@ for name, pos, aim, ortho, lens, lod in shots:
     for ob in chunks:
         _, ix, iz, level = ob.name.split("_")
         key = int(ix), int(iz)
-        if args.cove_showcase or args.guardian_review:
+        if args.cove_showcase or args.guardian_review or args.rock_eye:
             # The showcase represents the ordinary unoccupied 100 m cells.
             # Never draw a mountain with near-only geometry just to flatter it.
             center_x = ox + min(32 * int(ix) + 16, width - 1) * spacing

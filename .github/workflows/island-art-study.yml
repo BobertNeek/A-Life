@@ -5,9 +5,6 @@ on:
     paths:
       - .github/workflows/island-art-study.yml
       - scripts/build_island_strandline.py
-      - scripts/build_island_habitats.py
-      - scripts/verify_island_habitats.py
-      - scripts/island_habitat_field.py
       - scripts/island_habitat_tiles.py
       - scripts/island_habitat_massing.py
       - scripts/island_tidal_film.py
@@ -19,7 +16,6 @@ on:
       - scripts/island_review_water.py
       - studies/island-art-week/water-inputs/**
       - crates/alife_game_app/assets/landscape/island/coastal-daylight.json
-      - scripts/render_island_geology.py
       - scripts/verify_island_strandline.py
       - scripts/compare_island_art.py
 # Do not spend hosted Blender minutes on superseded drafts.

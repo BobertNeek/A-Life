@@ -12,7 +12,7 @@ TURF, SAND, STONE, GROVE = range(4)
 PATCH_CELLS = 2
 
 
-def habitat(surface, placements):
+def habitat(surface, placements, rock_ground=False):
     raw = Path(surface).read_bytes()
     w, d, x0, z0, step, _ = struct.unpack_from("<IIfffI", raw, 8)
     h = np.frombuffer(raw, "<f4", w * d, 32).reshape(d, w)
@@ -22,7 +22,8 @@ def habitat(surface, placements):
     zz = z0 + np.arange(d)[:, None] * step
     # A real grove is a sustained group of stems, not proximity to one flower.
     stems = np.zeros_like(h)
-    for prop in json.loads(Path(placements).read_text()):
+    props = json.loads(Path(placements).read_text())
+    for prop in props:
         if prop["kind"] not in ("Broadleaf", "Conifer", "Sapling"):
             continue
         px, _, pz = prop["position"]
@@ -32,6 +33,11 @@ def habitat(surface, placements):
     from island_habitat_massing import Cover
 
     cover = Cover(h, x0, z0, step, stems)
+    cover.deposit = None
+    if rock_ground:
+        from island_colluvium import Deposit
+
+        cover.deposit = Deposit(h, x0, z0, step, props)
     canopy = gaussian_filter(stems, 4.4) * 98
     broken = np.sin(xx / 31 + 0.68 * np.cos(zz / 27)) + 0.6 * np.sin(zz / 18 - xx / 41)
     label = np.full(h.shape, TURF, np.uint8)
@@ -41,6 +47,9 @@ def habitat(surface, placements):
     label[
         (grade > 0.68 + 0.07 * broken) | ((h > 50) & (grade > 0.48 + 0.06 * broken))
     ] = STONE
+    if cover.deposit is not None:
+        strength = cover.deposit.strength[::2, ::2]
+        label[(strength > 0.30 + 0.028 * broken) & (h > 0.85)] = STONE
     label[h < 0] = SAND
     return h, label[::PATCH_CELLS, ::PATCH_CELLS], (x0, z0, step), cover
 
