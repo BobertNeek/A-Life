@@ -1522,22 +1522,22 @@
     {
       "asset_id": "approved-island-inlet-bank",
       "author": "Qualia island environment art",
-      "digest": "fnv1a64:8a1f43210f08571a",
+      "digest": "fnv1a64:8c5f9522f974b6ca",
       "external": false,
       "final_art": false,
       "generated": true,
       "generator": {
-        "tool": "Qualia original native-UV underpaint and aligned bank normals",
-        "config_path": "scripts/island_inlet_underpaint.py",
+        "tool": "Qualia selected native bank with embedded low tidal shale and shell pockets",
+        "config_path": "scripts/island_inlet_tidecast.py",
         "date": "2026-11-19",
-        "seed": "1907432, 673103"
+        "seed": "1907432, 673103, 59184"
       },
       "license": "A-Life-Generated-Source",
       "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/island/inlet-bank.glb",
       "placeholder": false,
       "replacement_policy": "edit-local-bank-recipe-and-refresh-manifest",
-      "size_bytes": 1105308,
+      "size_bytes": 1484220,
       "source": "generated:island-fitted-cut-bank",
       "usage_category": "environment-dressing"
     },

@@ -9,3 +9,7 @@ Compare three actual Blender art states from the locked upstream camera: bare na
 ## Selected native-art candidate
 
 [Same upstream eye, old to revised](inlet-bar-feathered.jpg) · [bare habitat vs current older sharp-cut film](inlet-bare-versus-original.jpg) · [downstream](inlet-eye-feathered.jpg) · [guardian](inlet-wide-feathered.jpg) · [bake properties and source](inlet-underpaint-selected.json). The old 0.43 coverage is retained only for the far-pigment composite. Near, the exact existing selected triangles sample one continuous, opaque PBR material: their colour, roughness and surface normals join those of the underlying habitat across the old cut edge. The terrain positions, native physical surface and dressing topology are unchanged. Do not confuse the separate upstream inlet concept with a native physics or new-save change. No gameplay validation requested this week.
+
+### Lower shore after the material join
+
+[Upstream: same coats, small tidecast pockets](inlet-tidecast-eye.jpg) · [creature-scale landing](inlet-tidecast-landing.jpg) · [guardian](inlet-tidecast-guardian.jpg) · [artist counts](inlet-tidecast-selected.json). Only the existing near-bank GLB changed from the material-only selection. Existing water, terrain triangles, far colour, material maps and save bindings are untouched. Reach-scale geometry is an artist finish; it does not add obstacles or picking. Revisit optional dressing when a gameplay edit actually moves these triangles next week.
