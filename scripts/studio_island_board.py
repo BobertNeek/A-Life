@@ -57,8 +57,38 @@ elif subject == "forest-fern":
     from build_island_copse_floor import export
 
     fern = out / "artist-fern"
+    fern_base = d
+    if paired:
+        # The native installation replaces both old inputs. Pin them so later
+        # artists never get two pictures of the new plant mislabeled as A/B.
+        fern_base = out / "pre-lace"
+        base = "fc5d22dcdf61c789d9f25c9b833be588d366c14d"
+        subprocess.run(
+            ["git", "fetch", "--no-tags", "--depth=1", "origin", base], check=True
+        )
+        for name in [
+            "Fern.glb",
+            "copse-floor.glb",
+            *(
+                "copse/" + n
+                for n in ("duff-bark.png", "duff-bark-normal.png", "duff-bark-orm.png")
+            ),
+        ]:
+            dest = fern_base / name
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            with dest.open("wb") as output:
+                subprocess.run(
+                    ["git", "show", f"{base}:{(d/name).relative_to(root).as_posix()}"],
+                    stdout=output,
+                    check=True,
+                )
+
+    from island_fern_ink import paint
+
     floor = export(out / "artist-floor", creeping=True)
-    blender("studio_forest_fern.py", fern, "--author-from", d / "Fern.glb")
+    fern.mkdir(exist_ok=True)
+    paint(fern / "lady-fronds.png")
+    blender("studio_forest_fern.py", fern, "--author-from", fern_base / "Fern.glb")
 elif subject == "cove-water":
     from island_cove_optics import world_paint
 
@@ -125,7 +155,9 @@ for tag in board["angles"]:
         pack = fresh if side == "after" else old
         water = chart if subject == "cove-water" and side == "after" else base_water
         dressing = None
-        if subject in ("forest-floor", "forest-fern") and side == "after":
+        if subject == "forest-fern" and side == "before":
+            dressing = fern_base / "copse-floor.glb"
+        elif subject in ("forest-floor", "forest-fern") and side == "after":
             dressing = floor
         elif (
             subject in ("cove-water", "forest-fern")
@@ -161,8 +193,8 @@ for tag in board["angles"]:
             pack / "grove-crowns.glb",
             *(["--copse-floor", dressing] if dressing is not None else []),
             *(
-                ["--fern-library", fern]
-                if subject == "forest-fern" and side == "after"
+                ["--fern-library", fern if side == "after" else fern_base]
+                if subject == "forest-fern"
                 else []
             ),
         )

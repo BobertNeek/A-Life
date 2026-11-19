@@ -6,8 +6,7 @@ import sys
 import bpy
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from island_fern_fans import levels
-from compact_glb_colors import compact_colors
+from island_fern_blades import leaves
 
 
 def bounds(points):
@@ -17,14 +16,29 @@ def bounds(points):
 def author(source, blend):
     bpy.ops.wm.read_factory_settings(use_empty=True)
     bpy.ops.import_scene.gltf(filepath=str(source))
+    atlas = bpy.data.images.load(str(blend.parent / "lady-fronds.png"))
+    atlas.pack()
+    mat = bpy.data.materials.new("Lace of the island • woodland lady fern")
+    mat.use_nodes = True
+    tree = mat.node_tree
+    bsdf = tree.nodes.get("Principled BSDF")
+    bsdf.inputs["Roughness"].default_value = 0.77
+    tex = tree.nodes.new("ShaderNodeTexImage")
+    tex.image = atlas
+    clip = tree.nodes.new("ShaderNodeMath")
+    clip.operation = "GREATER_THAN"
+    clip.inputs[1].default_value = 0.45
+    tree.links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
+    tree.links.new(tex.outputs["Alpha"], clip.inputs[0])
+    tree.links.new(clip.outputs[0], bsdf.inputs["Alpha"])
+    mat.use_backface_culling = False
     for level in range(3):
         name = f"Fern_L{level}"
         ob = bpy.data.objects[name]
         target = bounds([v.co for v in ob.data.vertices])
         earlier = ob.data
-        mat = earlier.materials[0]
-        brush = levels(level)
-        outer = bounds(brush.v)
+        positions, uvs, faces = leaves(level)
+        outer = bounds(positions)
 
         def fit(p):
             return [
@@ -37,21 +51,20 @@ def author(source, blend):
             ]
 
         mesh = bpy.data.meshes.new(name + " new")
-        mesh.from_pydata([fit(q) for q in brush.v], [], brush.faces)
+        mesh.from_pydata([fit(q) for q in positions], [], faces)
         mesh.update()
         mesh.materials.append(mat)
-        paint = mesh.color_attributes.new(
-            name="ArtColor", type="BYTE_COLOR", domain="POINT"
-        )
-        for element, color in zip(paint.data, brush.rgb, strict=True):
-            element.color = (*color, 1)
-        mesh.color_attributes.active_color = paint
+        uv = mesh.uv_layers.new(name="Leaf colour and cut edge")
+        for loop in mesh.loops:
+            uv.data[loop.index].uv = uvs[loop.vertex_index]
+        for polygon in mesh.polygons:
+            polygon.use_smooth = True
         ob.data = mesh
         bpy.data.meshes.remove(earlier)
         mesh.name = name
         ob["art_owner"] = "fern-sori.blend"
         ob["art_pass"] = (
-            "Divided tapered native woodland leaf, not an umbrella-green hood"
+            "Nine arching and twisting fronds; four painted pinna and sori charts"
         )
         ob["anchor"] = "Original ground-centered stock prop and per-LOD extents"
         ob.hide_set(level != 0)
@@ -78,7 +91,6 @@ def export(blend, out):
         export_lights=False,
         export_vertex_color="ACTIVE",
     )
-    compact_colors(out)
 
 
 if __name__ == "__main__":
