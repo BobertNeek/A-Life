@@ -548,7 +548,7 @@ if args.wild_sward:
     bpy.ops.import_scene.gltf(filepath=str(args.wild_sward.resolve()))
     sward = [o for o in set(bpy.data.objects) - old if o.type == "MESH"]
     for o in sward:
-        o.visible_shadow = o.name.endswith("_leaves")
+        o.visible_shadow = False  # Ground-hugging seedbank; hero plants still cast.
 copse = []
 if args.copse_floor:
     old = set(bpy.data.objects)

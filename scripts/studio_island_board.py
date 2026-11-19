@@ -185,6 +185,7 @@ elif subject == "wild-meadow":
             d / "props.json",
             out / "artist-meadow-floor",
             inked=board.get("inked_swards", False),
+            felted=board.get("felted_swards", False),
         )
         # Temporarily place the generated GLB by the original shared habitat
         # maps so Blender can follow its portable URIs. The art archive only

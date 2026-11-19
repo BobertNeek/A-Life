@@ -47,6 +47,8 @@ def sedges(lod, habit="sweep"):
     lo = [(0.37, 0.44, 0.27), (0.37, 0.48, 0.36), (0.45, 0.44, 0.29)][idx]
     hi = [(0.65, 0.73, 0.45), (0.65, 0.75, 0.56), (0.73, 0.71, 0.45)][idx]
     sun = [(0.68, 0.72, 0.42), (0.70, 0.75, 0.57), (0.77, 0.71, 0.42)][idx]
+    # Winding below points the broad front of each blade toward the sky.
+    # Slot colours are straight sRGB, not pre-darkened by ambient occlusion.
     nests = [(-0.04, -0.025), (0.035, 0.012), (-0.012, 0.045), (0.096, -0.014)]
     keep = (
         range(22),
@@ -101,10 +103,10 @@ def sedges(lod, habit="sweep"):
             if t == 1:
                 tip = spr.add((px, py, zz), light(mix(c, sun, 0.35), 1.05))
                 if len(last) == 3:
-                    spr.triangle(last[0], last[1], tip)
-                    spr.triangle(last[1], last[2], tip)
+                    spr.triangle(last[1], last[0], tip)
+                    spr.triangle(last[2], last[1], tip)
                 else:
-                    spr.triangle(last[0], last[1], tip)
+                    spr.triangle(last[1], last[0], tip)
                 break
             wd = width * (0.72 + 0.34 * lumen) * (1 - t) ** 0.56
             strip = [-1, 0, 1] if lod == 0 else [-1, 1]
@@ -119,8 +121,8 @@ def sedges(lod, habit="sweep"):
                 )
             if last is not None:
                 for k in range(len(row) - 1):
-                    spr.triangle(last[k], last[k + 1], row[k + 1])
-                    spr.triangle(last[k], row[k + 1], row[k])
+                    spr.triangle(last[k + 1], last[k], row[k + 1])
+                    spr.triangle(last[k], row[k], row[k + 1])
             last = row
     if idx == 2:
         # Only this form carries the few mature fox-tail fruits. Not one

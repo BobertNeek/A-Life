@@ -9,6 +9,7 @@
   "samples": 48,
   "editable_canopy": false,
   "meadow_sward": true,
-  "art_note": "First proposed grass read as dark, evenly spaced brushes. Replace those with coherent low, overlapping folded sedge sprays around actual historic anchors, deep/high glaucous colour and a few tan awns; keep selected gaps and a brighter, more readable native folded hero plant. Fixed creature and guardian Blender stills.",
-  "inked_swards": true
+  "art_note": "The two prior new ground treatments stayed too dark. Replace dense cutout cards with genuinely opaque, ground-hugging wind-combed leaves and a finely feathered, fitted olive-to-sunlit turf; correct the actual geometric winding of the upright native blades. Original V1 daylight and both cameras unchanged.",
+  "inked_swards": false,
+  "felted_swards": true
 }

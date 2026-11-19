@@ -18,7 +18,7 @@ from island_inlet_sod import Fibres
 from island_meadow_swales import Meadow, BOUNDS, paint_grass
 
 
-def export(surface, habitats, placements, dest, inked=False):
+def export(surface, habitats, placements, dest, inked=False, felted=False):
     m = Meadow(surface, V2, placements)
     glb = Glb(habitats)
     x0, x1, z0, z1 = BOUNDS
@@ -31,7 +31,11 @@ def export(surface, habitats, placements, dest, inked=False):
     def root(x, z):
         return shoots[key(x, z)]
 
-    if inked:
+    if felted:
+        from island_meadow_felts import felt
+
+        note = felt(root, m)
+    elif inked:
         from island_meadow_swales import paint_sprays
         from island_meadow_ink import draw
 
@@ -75,14 +79,18 @@ def export(surface, habitats, placements, dest, inked=False):
             # which are the same in V1 and the opt-in highland study.
             vertices[:, 1] += 0.004
             col = orig[arr].copy()
-            col[:, :3] = np.uint8(
-                np.rint(col[:, :3] * m.multiplier(vertices[:, 0], vertices[:, 2])).clip(
-                    0, 255
+            f = mapped.reshape(-1, 3)
+            if felted:
+                from island_meadow_felts import turf
+
+                patches[cell].append(turf(vertices, norm[arr], uv[arr], col, f, m))
+            else:
+                col[:, :3] = np.uint8(
+                    np.rint(
+                        col[:, :3] * m.multiplier(vertices[:, 0], vertices[:, 2])
+                    ).clip(0, 255)
                 )
-            )
-            patches[cell].append(
-                (vertices, norm[arr], uv[arr], col, mapped.reshape(-1, 3))
-            )
+                patches[cell].append((vertices, norm[arr], uv[arr], col, f))
             source_budget += len(use)
     d = {
         k: deepcopy(glb.doc[k])
@@ -207,7 +215,7 @@ def export(surface, habitats, placements, dest, inked=False):
         mag = np.linalg.norm(n, axis=1)
         n[mag > 1e-9] /= mag[mag > 1e-9, None]
         n[mag <= 1e-9] = (0, 1, 0)
-        if inked:
+        if inked or felted:
             # Blended sky-facing normals prevent upright surfaces from
             # casting their entire back half as pitch-black paper.
             n = n * 0.30 + np.array([0.04, 0.80, -0.075])
@@ -221,6 +229,7 @@ def export(surface, habitats, placements, dest, inked=False):
     save(d, buf, asset)
     note.update(
         existing_surface_triangles=source_budget,
+        pigment_skin_triangles=source_budget * (64 if felted else 1),
         low_sward_triangles=blades,
         soil_tiles=len(patches),
         leaf_tiles=len(shoots),
