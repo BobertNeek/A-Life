@@ -2,7 +2,8 @@
   "subject": "erratics",
   "angles": [
     "talus-eye",
-    "boulder-heel"
+    "woodland-gap",
+    "woodland-edge"
   ],
   "paired": true,
   "quick": false,
@@ -16,8 +17,9 @@
   "hero_soil": false,
   "shared_microfield": false,
   "talus_study": true,
-  "art_note": "Ordinary V1 original solid obstacle #1362 and real 1383. Both sides already have the earlier planted scree and local woodland. Only after: mount the three actual large stone bodies on their real positive-ground socket within their old projection and opaque floor. No shifting or fake backing below box. One creature eye repeats the previous talus photo exactly; second looks across the heel, not down from a high guardian. Offline Blender only.",
+  "art_note": "Two isolated comparisons in one artist folio. For the 1.04m same talus-eye, both sides have the preceding woodland plus identical planted scree; ONLY the solid #1383 changes from its old rounded sole to a grounded split heel with softened transition inside original baked obstacle. For woodland-gap and woodland-edge, both sides already have the same final grounded boulder, seated scree, original trees and identical duff/stone chart. Left actual cb7dc207 brush GLB, right 4 overlapping plant communities. Same original transform, terrain, lighting and all gameplay. Offline CPU Blender art only.",
   "talus_contact": true,
   "woodland_edge": true,
-  "boulder_mount": true
+  "boulder_mount": true,
+  "edge_succession": true
 }

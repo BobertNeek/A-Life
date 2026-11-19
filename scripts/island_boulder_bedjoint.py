@@ -102,7 +102,37 @@ def fit(points, norms, colors, ground, level, key):
         boundary - 0.005, np.maximum(ground(seam) + height * 0.13, base + height * 0.18)
     )
     shelf = np.c_[seam[:, 0], seam_y, seam[:, 1]]
-    new = np.unique(np.round(np.vstack([retained, foot3, keep_sole, shelf]), 6), axis=0)
+    # Keep the weather lips between socket and shoulders. A single convex
+    # plane over this whole height read like an oversized mitre. Carry each
+    # old intermediate flank toward its nearest real supported bed edge;
+    # it bends into the socket instead of sharpening into a second shelf.
+    midpoints = q[(q[:, 1] < boundary) & (q[:, 1] > lo[1] + height * 0.08)].copy()
+    if len(midpoints):
+        a = outline
+        c = np.roll(outline, -1, axis=0)
+        ab = c - a
+        p2 = midpoints[:, [0, 2]]
+        tau = np.clip(
+            ((p2[:, None, :] - a) * ab).sum(-1) / np.maximum(1e-9, (ab * ab).sum(1)),
+            0,
+            1,
+        )
+        candidates = a + tau[:, :, None] * ab
+        nearest = candidates[
+            np.arange(len(midpoints)),
+            np.linalg.norm(candidates - p2[:, None, :], axis=-1).argmin(1),
+        ]
+        inside = (
+            p2 @ keyfoot.equations[:, :2].T + keyfoot.equations[:, 2] <= 0.002
+        ).all(1)
+        nearest[inside] = p2[inside]
+        weight = (0.72 * (1 - ease(0.08, 0.55, (midpoints[:, 1] - lo[1]) / height)))[
+            :, None
+        ]
+        midpoints[:, [0, 2]] = p2 + weight * (nearest - p2)
+    new = np.unique(
+        np.round(np.vstack([retained, midpoints, foot3, keep_sole, shelf]), 6), axis=0
+    )
     h = ConvexHull(new)
     v = new[h.vertices]
     index = np.full(len(new), -1)

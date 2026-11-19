@@ -233,10 +233,6 @@ elif subject == "erratics":
             index,
             erratic_new / f"BoulderASeat{index}.glb",
         )
-        if board.get("edge_succession"):
-            (pre_talus / f"BoulderASeat{index}.glb").symlink_to(
-                (erratic_new / f"BoulderASeat{index}.glb").resolve()
-            )
     if board.get("edge_succession") and not board.get("boulder_mount"):
         raise ValueError(
             "Both species portraits must retain the same selected bedjoint."
@@ -745,6 +741,8 @@ if subject == "inlet-concept":
     concept_water = out / "studied-water"
     paint_concept_water(SURFACE, base_water, concept_water)
 for tag in board["angles"]:
+    rock_portrait = tag in ("boulder-heel", "talus-eye") and board.get("boulder_mount")
+    vegetation_portrait = board.get("edge_succession") and not rock_portrait
     sides = ("before", "after") if paired else ("after",)
     if (
         subject == "inlet-underpaint"
@@ -793,7 +791,8 @@ for tag in board["angles"]:
                     "--woodland-edge",
                     (
                         prev_edge
-                        if board.get("edge_succession") and side == "before"
+                        if board.get("edge_succession")
+                        and (side == "before" or rock_portrait)
                         else edge_folder
                     ),
                 ]
@@ -833,7 +832,9 @@ for tag in board["angles"]:
                     "--stone-library",
                     (
                         pre_talus
-                        if board.get("talus_study") and side == "before"
+                        if board.get("talus_study")
+                        and side == "before"
+                        and not vegetation_portrait
                         else (
                             erratic_new
                             if side == "after"
@@ -983,7 +984,11 @@ for tag in board["angles"]:
         caption = (
             "Young saltwood at real original 1116"
             if tag == "sapling-eye"
-            else subject_label
+            else (
+                "Same solid boulder, original rounded sole versus keyed heel"
+                if rock_portrait
+                else subject_label
+            )
         )
         make(
             out / "before" / f"{tag}.png",
