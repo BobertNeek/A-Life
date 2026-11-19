@@ -18,6 +18,8 @@ def assets(surface,props,out):
         chart[i:i+len(zz)]=colour(b,x,z)
     Image.fromarray(chart).save(out/'weatherlip-ground.png',compress_level=7)
     report['chart_metres_per_texel']=[(x1-x0)/w,(z1-z0)/h]
+    from stone_fabric import fabric
+    fabric(out)
     report.update(build(b,surface,out))
     (out/'site.json').write_text(json.dumps(report,indent=2)+'\n')
 
@@ -29,7 +31,7 @@ def photograph(root,d,surface,board,out,blender):
         (water/n).symlink_to((d/'cove-water'/n).resolve())
     (water/'water.json').write_bytes((root/'studies/island-art-week/water-selected.json').read_bytes())
     for tag in TAGS:
-        for side in ('before','after'):
+        for side in (('after',) if board.get('retained_controls') else ('before','after')):
             blender('render_island_geology.py',d/'terrain-chunks.glb',out/side,
                     '--guardian-review' if tag=='bight-high' else '--copse-eye',
                     '--weatherlip-view',tag,

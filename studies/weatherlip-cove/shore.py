@@ -101,11 +101,11 @@ def colour(b,x,z):
     dip=np.where(z<61,-.21,.27)
     u=d-(z*.17+2.4*np.sin(z/17))*dip+1.7*broad+.27*fine
     v=z+.74*d+3.2*broad+.7*mid
-    dur=noise(u*.52,v*3.1,2.05,7)
+    dur=noise(u*.87,v*1.61,3.25,7)
     key=noise(u*2.0,v*.43,3.67,5)
     iron=ease(.54,.83,dur+.20*key)*(.28+.72*noise(x,z,12.2,16))
     grey=shade((119,128,119), broad*19+mid*13+fine*9+s*7+mottle*6)
-    grey=mix(grey,shade((170,149,114),mid*15+fine*8),iron*.83)
+    grey=mix(grey,shade((170,149,114),mid*15+fine*8),iron*.43)
     # Broken, tapering mineral cleavage rather than a tiling black grid.
     a=.177*u+.16*np.sin(u*.66)+.24*np.sin(v*.13+u*.16)+.52*noise(u,v,7.7,8)+.20*noise(u,v,1.63,36)
     joint=np.abs(a-np.rint(a))*4.4
@@ -119,4 +119,4 @@ def colour(b,x,z):
     shore=rock*(1-.56*turf)
     soil=mix(soil,shade((131,124,95),9*broad),ease(.02,.6,shore)*(1-ease(.68,.92,shore))*.55)
     c=mix(soil,grey,shore)
-    return np.uint8(np.clip(np.concatenate((c,(alpha*.97*255)[...,None]),axis=2),0,255))
+    return np.uint8(np.clip(np.concatenate((c,(alpha*.84*255)[...,None]),axis=2),0,255))

@@ -129,7 +129,7 @@ def build(b,source,folder):
             hue=R.random(); c=(133,140,132) if hue<.52 else (153,145,122) if hue<.88 else (172,161,135)
             if hh2<.72: c=np.asarray(c)*[.79,.86,.83]
             ceiling=.075 if math.hypot(gx,gz)>.85 else .038
-            plate(*p,sz,sz*R.uniform(.28,.59),angle+R.normal(0,.09),min(ceiling,sz*.061),c)
+            plate(*p,sz*.42,sz*.42*R.uniform(.28,.59),angle+R.normal(0,.09),min(ceiling,sz*.031),c)
             count['grounded_plate_fragments']+=1
     # Actual shelter-dependent colonies, first seeded over the entire cove.
     # Group-level spacing and intra-group holes prevent dotted contour lines.
@@ -175,11 +175,11 @@ def build(b,source,folder):
                 cane=np.column_stack((coords[:,0],heights,coords[:,1]))
                 g.draw(cane,np.array([(90,87,68),(103,100,76),(126,120,90),(129,130,98),(142,145,111)]),((0,1,2),(1,3,2),(2,3,4)))
                 for k in range(7):
-                    t=.29+.100*k; p0=start+t*reach*aim
+                    t=.26+.106*k+.025*math.sin(k+arm); p0=start+t*reach*aim
                     height=np.interp(t,[0,.48,1],yy)
                     for side in [-1,1]:
-                        length=size*R.uniform(.13,.26)*(1-.27*t)
-                        w0=length*R.uniform(.20,.31); axis=(aim*.54+side*lat*.84)
+                        length=size*R.uniform(.11,.19)*(1-.27*t)
+                        w0=length*R.uniform(.12,.22); axis=(aim*(.57+.15*math.sin(k*4.1+arm))+side*lat*(.77+.19*math.sin(k*2.9+arm)))
                         n=np.array([-axis[1],axis[0]])
                         xy=np.array([p0,p0+axis*length*.56-n*w0,p0+axis*length*.56+n*w0,p0+axis*length*.64,p0+axis*length])
                         heights=height+np.array([0,.043,.048,.071,.088])*size
@@ -196,6 +196,8 @@ def build(b,source,folder):
             h=b.floor(px,pz)[0]
             if not .07<h<.98:continue
             cushion(mineral[f"Stranded ribbons / {int((pz+140)//27):02d}"],np.array([px,pz]),R.uniform(.29,.81),'wrack');count['wrack']+=1
+    from stone_fabric import pavement
+    pavement(b,mineral,count)
     return dict(stone_and_wrack=export(mineral,folder/'broken-beds.glb'),
                 ground_colonies=export(plants,folder/'living-margins.glb'),
                 counts=dict(count),max_relief_m_walkable=.038,max_relief_m_steep=.075)

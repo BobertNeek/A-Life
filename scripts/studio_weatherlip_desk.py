@@ -5,7 +5,7 @@ from mathutils import Vector
 surface,field,dest=map(Path,sys.argv[sys.argv.index('--')+1:])
 here=Path(__file__).resolve().parents[1]/'studies/weatherlip-cove'
 sys.path.insert(0,str(here))
-from material import shader
+from material import shader,mineral_skin
 site=json.loads((field/'site.json').read_text())
 raw=surface.read_bytes();w,d,ox,oz,cell,_=struct.unpack_from('<IIfffI',raw,8)
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -36,6 +36,7 @@ def collection(label):
     coll=bpy.data.collections.new(label);scene.collection.children.link(coll);return coll
 for fname,label in [('living-margins.glb','02 / Salt meadow and glaucous rosettes'),('broken-beds.glb','03 / Contact-fitted cuffs, talus and wrack')]:
     before=set(bpy.data.objects); bpy.ops.import_scene.gltf(filepath=str((field/fname).resolve()))
+    if fname=='broken-beds.glb':mineral_skin(set(bpy.data.objects)-before,field)
     coll=collection(label)
     for ob in set(bpy.data.objects)-before:
         for other in list(ob.users_collection):other.objects.unlink(ob)
