@@ -25,13 +25,8 @@ surf = s["surf"]
 base_cam = s["cams"]["wave-eye"]
 eye = s["poses"]["wave-eye"][0]
 target = [408.50, s["floor"](408.50, -99.72) + 0.055, -99.72]
-cam = bpy.data.cameras.new("Foothold")
-cam.lens = 33
-cam.clip_end = 3200
-o = bpy.data.objects.new("Foothold", cam)
-sc.collection.objects.link(o)
-o.location = cv(eye)
-o.rotation_euler = (cv(target) - o.location).to_track_quat("-Z", "Y").to_euler()
+contact = s["module"]("tidal_ground_material", here / "contact_material.py")
+o = contact.close_camera(sc, cv, eye, target)
 
 
 def shot(name, cam, side):
@@ -42,48 +37,7 @@ def shot(name, cam, side):
 
 
 shot("foothold", o, "before")
-data = json.loads((cups / "patina.json").read_text())
-u0, u1, v0, v1 = data["side_bounds"]
-for mat in {
-    q.material
-    for g in s["ground"]
-    for q in g.material_slots
-    if q.material and q.material.use_nodes
-}:
-    nt = mat.node_tree
-    bs = surf.bsdf(mat)
-    uv = surf.coords(
-        nt, (1, -1 / (u1 - u0), -u0 / (u1 - u0)), (2, 1 / (v1 - v0), -v0 / (v1 - v0))
-    )
-    tx = nt.nodes.new("ShaderNodeTexImage")
-    tx.image = bpy.data.images.load(str(cups / "tide-patina.png"), check_existing=True)
-    tx.image.alpha_mode = "CHANNEL_PACKED"
-    tx.extension = "CLIP"
-    nt.links.new(uv, tx.inputs["Vector"])
-    p = nt.nodes.new("ShaderNodeNewGeometry")
-    sep = nt.nodes.new("ShaderNodeSeparateXYZ")
-    nt.links.new(p.outputs["Position"], sep.inputs[0])
-    lo, hi = data["x_support"]
-    ms = []
-    for op, lim in [("GREATER_THAN", lo), ("LESS_THAN", hi)]:
-        m = nt.nodes.new("ShaderNodeMath")
-        m.operation = op
-        m.inputs[1].default_value = lim
-        nt.links.new(sep.outputs[0], m.inputs[0])
-        ms.append(m.outputs[0])
-    fac = tx.outputs["Alpha"]
-    for gate in ms:
-        mul = nt.nodes.new("ShaderNodeMath")
-        mul.operation = "MULTIPLY"
-        nt.links.new(fac, mul.inputs[0])
-        nt.links.new(gate, mul.inputs[1])
-        fac = mul.outputs[0]
-    mix = nt.nodes.new("ShaderNodeMixRGB")
-    col = bs.inputs["Base Color"]
-    nt.links.new(col.links[0].from_socket, mix.inputs[1])
-    nt.links.new(tx.outputs["Color"], mix.inputs[2])
-    nt.links.new(fac, mix.inputs[0])
-    nt.links.new(mix.outputs[0], col)
+contact.bind(s["ground"], surf, cups)
 s["grab"](cups / "cups-near.glb")
 shot("wave-eye", base_cam, "after")
 shot("foothold", o, "after")
