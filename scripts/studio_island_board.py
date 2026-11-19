@@ -136,6 +136,14 @@ elif subject == "erratics":
             rolled_toe=board.get("rolled_toe", False),
         )
     (erratic_new / "catalogue.json").write_text(json.dumps(catalogue, indent=2) + "\n")
+    if board.get("glacial_train"):
+        from island_erratic_train import bake
+
+        moraine = erratic_new / "deposit-till.glb"
+        counts = bake(SURFACE, erratic_old, d / "props.json", moraine)
+        (erratic_new / "till-source.json").write_text(
+            json.dumps(counts, indent=2) + "\n"
+        )
 elif subject == "fault-scarp":
     from island_fault_scarp import sculpt
 
@@ -516,6 +524,10 @@ subject_label = {
     "inlet-underpaint": "Original bank pigment and native-material feathering",
     "inlet-concept": "Shape study: actual V1 and proposed asymmetric inlet",
 }[subject]
+if subject == "erratics" and board.get("glacial_train"):
+    subject_label = (
+        "Same glacial rock: exposed till lenses and woodrush on the true slope"
+    )
 if subject == "fault-scarp" and board.get("wall_beds"):
     subject_label = "Same seated scarp, with its exposed bed on the true hillside"
 if subject == "inlet-underpaint" and board.get("tidecast_pockets"):
@@ -615,7 +627,21 @@ for tag in board["angles"]:
             out / side,
             *views[tag],
             *(
-                ["--stone-library", erratic_new if side == "after" else erratic_old]
+                ["--wild-sward", moraine]
+                if subject == "erratics"
+                and board.get("glacial_train")
+                and side == "after"
+                else []
+            ),
+            *(
+                [
+                    "--stone-library",
+                    (
+                        erratic_new
+                        if side == "after" or board.get("glacial_train")
+                        else erratic_old
+                    ),
+                ]
                 if subject == "erratics"
                 else []
             ),
