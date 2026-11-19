@@ -23,24 +23,36 @@ def plate(seed):
         1 - ((u - 0.45) / 0.48) ** 2 - ((v - 0.50 - 0.12 * np.sin(u * 7.3)) / 0.37) ** 2
     )
     secondary = 0.79 - ((u - 0.74) / 0.22) ** 2 - ((v - 0.51) / 0.31) ** 2
-    edge = np.maximum(primary, secondary) + 0.17 * coarse + 0.094 * medium
+    edge = np.maximum(primary, secondary) + 0.33 * coarse + 0.17 * medium
     # Keep padded atlas borders transparent.
     guard = np.minimum.reduce((u, 1 - u, v, 1 - v)) * 16
     edge = np.minimum(edge, guard - 0.18)
-    alpha = 255 * smooth((edge + 0.13 * grain - 0.035) * 4.7)
+    # Weathered gaps run into the bed, not merely around a hard decal edge.
+    # Both the underlying moss and loose needles show through this broken fall.
+    edge -= 0.20 + 0.14 * np.sin(9.1 * u - 10.3 * v) + 0.12 * medium
+    alpha = Image.fromarray(
+        (255 * smooth((edge + 0.25 * medium + 0.15 * grain - 0.18) * 2.70)).astype("u1")
+    )
+    opening = ImageDraw.Draw(alpha)
     # Dark humus, beech-scale russet exuviae and bent pine needles; neutral
     # high-frequency counter-colour only. Lighting remains directional in 3D.
     value = 5.8 * coarse + 4.7 * medium + 4.5 * grain
-    base = np.clip(np.array([107, 92, 66]) + value[..., None], 0, 255).astype("u1")
+    base = np.clip(
+        np.array([100, 96, 75])
+        + value[..., None]
+        + smooth((0.6 * coarse + 0.4 * medium + 1) / 2)[..., None] * (-9, 4, -1),
+        0,
+        255,
+    ).astype("u1")
     col = Image.fromarray(base)
     hmap = Image.fromarray((88 + 7 * medium + 7 * grain).clip(0, 255).astype("u1"))
     draw, relief = ImageDraw.Draw(col), ImageDraw.Draw(hmap)
-    for k in range(2500):
+    for k in range(3600):
         px, py = rng.uniform(-5, w + 5), rng.uniform(-4, h + 4)
-        length = rng.uniform(1.7, 7.0)
+        length = rng.uniform(1.25, 4.2)
         a = rng.normal(0.32 * math.sin(5 * px / w + 1.9 * py / h) - 0.37, 0.72)
         d = np.array([math.cos(a) * length, math.sin(a) * length])
-        perp = np.array([-d[1], d[0]]) * rng.uniform(0.05, 0.18)
+        perp = np.array([-d[1], d[0]]) * rng.uniform(0.04, 0.12)
         center = np.array([px, py])
         tint = (
             (134, 111, 72),
@@ -56,12 +68,15 @@ def plate(seed):
             tuple(center + 0.12 * d - perp * 0.52),
         ]
         draw.polygon(pts, fill=tint)
-        relief.polygon(pts, fill=int(rng.integers(108, 156)))
+        relief.polygon(pts, fill=int(rng.integers(94, 124)))
+        iy, ix = int(np.clip(py, 0, h - 1)), int(np.clip(px, 0, w - 1))
+        if -0.1 < edge[iy, ix] < 0.5 and guard[iy, ix] > 0.6 and k % 3 != 0:
+            opening.polygon(pts, fill=245)
     for k in range(125):
         px, py = rng.uniform(5, w - 5), rng.uniform(5, h - 5)
         a = rng.normal(0.12, 1.2)
         v0 = np.array([px, py])
-        t = np.array([math.cos(a), math.sin(a)]) * rng.uniform(3.1, 8.4)
+        t = np.array([math.cos(a), math.sin(a)]) * rng.uniform(2.35, 5.6)
         n = np.array([-t[1], t[0]]) * rng.uniform(0.24, 0.48)
         verts = [
             v0 - t,
@@ -72,7 +87,7 @@ def plate(seed):
         ]
         tint = ((135, 110, 69), (158, 130, 82), (130, 110, 81))[k % 3]
         draw.polygon([tuple(a) for a in verts], fill=tint)
-        relief.polygon([tuple(a) for a in verts], fill=143)
+        relief.polygon([tuple(a) for a in verts], fill=114)
         draw.line(
             [tuple(v0 - 0.7 * t), tuple(v0 + 0.6 * t)],
             fill=tuple(c - 14 for c in tint),
@@ -80,9 +95,9 @@ def plate(seed):
         )
     surface = np.asarray(hmap, dtype=float) / 115
     rgb, norm, orm = maps(
-        np.asarray(col), surface, 211 + 7 * medium, 235 + 6 * grain, 1.25
+        np.asarray(col), surface, 211 + 7 * medium, 240 + 5 * grain, 0.65
     )
-    rgb.putalpha(Image.fromarray(alpha.clip(0, 255).astype("u1")))
+    rgb.putalpha(alpha)
     return rgb, norm, orm
 
 

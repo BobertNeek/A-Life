@@ -107,6 +107,32 @@ def bake(surface, alternate, placements):
                 int(litter.integers(2)),
             )
             receipt["triangle_seated_duff_beds"] += 1
+            # Irregular low triplets emerge through only the cooler moist
+            # margins, leaving grazing lanes and the drier trees open.
+            if damp > 0.55 and litter.random() < 0.58:
+                for k in range(int(litter.integers(2, 5))):
+                    up = litter.uniform(-0.52, 0.79) * reach
+                    side = litter.choice((-1, 1)) * litter.uniform(0.37, 0.91) * spread
+                    ox = x + math.cos(drift) * up - math.sin(drift) * side
+                    oz = z + math.sin(drift) * up + math.cos(drift) * side
+                    moss(
+                        p,
+                        litter,
+                        ox,
+                        oz,
+                        litter.uniform(0.14, 0.29),
+                        litter.uniform(0.09, 0.15),
+                        drift,
+                    )
+                    sorrel(
+                        p,
+                        litter,
+                        ox,
+                        oz,
+                        litter.uniform(0.105, 0.165),
+                        litter.uniform(0, math.tau),
+                    )
+                    receipt["wood_sorrel_margin_clumps"] += 1
         if not green:
             continue
         receipt["irregular_green_pockets"] += 1

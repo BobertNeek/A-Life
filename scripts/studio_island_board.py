@@ -79,6 +79,7 @@ if board.get("editable_canopy"):
     )
 views = {
     "copse-eye": ["--copse-eye"],
+    "fern-hollow": ["--copse-eye", "--copse-framing", "fern-hollow"],
     "stone-eye": ["--rock-eye"],
     "pine-eye": ["--pine-eye"],
     "guardian-woods": ["--guardian-review", "--grove-framing", "dense"],

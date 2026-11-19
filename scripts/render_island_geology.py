@@ -104,6 +104,7 @@ cli.add_argument(
     action="store_true",
     help="Near actual pine 803 and its sheltered forest floor",
 )
+cli.add_argument("--copse-framing", choices=("slope", "fern-hollow"), default="slope")
 cli.add_argument(
     "--copse-floor", type=Path, help="Optional close-only rooted woodland community art"
 )
@@ -343,9 +344,15 @@ if (
     if args.copse_eye:
         x, z = 253.40, -207.05
         tx, tz = 250.40, -210.00
+        shot = "copse-eye"
+        if args.copse_framing == "fern-hollow":
+            # East of the two original planted pines (2, 934). No foreground
+            # models were moved or duplicated to compose the shared understory.
+            x, z, tx, tz = 195.1, -246.15, 192.37, -245.96
+            shot = "fern-hollow"
         shots = [
             (
-                "copse-eye",
+                shot,
                 (x, ground(x, z) + 1.04, z),
                 (tx, ground(tx, tz) + 0.38, tz),
                 0,

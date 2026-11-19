@@ -1,6 +1,7 @@
 {
   "subject": "forest-floor",
   "angles": [
+    "fern-hollow",
     "copse-eye"
   ],
   "quick": false,
@@ -8,5 +9,5 @@
   "paired": true,
   "sculpted_bark": true,
   "editable_canopy": true,
-  "art_note": "A creature on V1, in the same slope study as 9e91fe4d. Inspect the original bole silhouette, bark scales and contiguous root/duff/moss transition. Only Blender studio artwork this week."
+  "art_note": "At 1.04 m on V1: the wet fern-filled space between original pines 2 and 934, then the locked pine 803 slope. Finer, worn spruce scales; mixed olive moss and scuffed litter, not a decorative bark slab or continuous orange carpet. Art studio only."
 }

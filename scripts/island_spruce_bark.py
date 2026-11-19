@@ -43,7 +43,7 @@ def paint():
     wu = u + 0.012 * noise(7, 7, 46) + 0.007 * np.sin(24 * v + broad)
     wv = v + 0.011 * noise(7, 14, 239)
     # Elongated, broken scales, not a vertical sine-wave stripe.
-    cols, rows = 17, 12
+    cols, rows = 31, 29
     a, b = wu * cols, wv * rows
     gx, gy = np.floor(a).astype(int), np.floor(b).astype(int)
     tables = rng.uniform(0.14, 0.88, (rows, cols, 3))
@@ -61,21 +61,22 @@ def paint():
             second = np.where(better, near, np.minimum(second, dist))
             near = np.minimum(near, dist)
     grain = noise(87, 95, 2377)
-    gap = second - near + 0.028 * grain
-    ridge = smooth(gap / 0.22)
-    lip = (1 - smooth(np.abs(gap - 0.13) / 0.11)) * (0.45 + 0.34 * age)
-    lace = smooth((noise(11, 16, 812) + 0.28 * noise(47, 67, 412) - 0.54) / 0.39)
-    mix = 16 * (age - 0.5) + 9 * broad + 4 * grain + 3 * noise(64, 34, 121)
-    rgb = np.array((117, 98, 81)) + mix[..., None]
-    rgb += (ridge[..., None] - 0.56) * np.array([35, 32, 27])
-    rgb += lip[..., None] * (12, 12, 12)
-    rgb += lace[..., None] * (13, 17, 14)
+    gap = second - near + 0.067 * grain
+    worn = 0.27 + 0.64 * smooth((noise(12, 19, 1682) + 0.4) / 1.02)
+    ridge = 1 - (1 - smooth(gap / 0.19)) * worn
+    lip = (1 - smooth(np.abs(gap - 0.14) / 0.11)) * (0.24 + 0.23 * age) * worn
+    lace = smooth((noise(11, 16, 812) + 0.38 * noise(52, 73, 412) - 0.38) / 0.40)
+    mix = 11 * (age - 0.5) + 9 * broad + 3.8 * grain + 3 * noise(64, 34, 121)
+    rgb = np.array((126, 112, 96)) + mix[..., None]
+    rgb += (ridge[..., None] - 0.68) * np.array([26, 24, 22])
+    rgb += lip[..., None] * (10, 10, 9)
+    rgb += lace[..., None] * (11, 15, 12)
     return maps(
         rgb,
-        1.05 * ridge + 0.48 * lip + 0.14 * grain + 0.08 * age,
-        202 + 16 * ridge + 13 * lace,
-        213 + 39 * ridge,
-        1.70,
+        0.42 * ridge + 0.15 * lip + 0.055 * grain + 0.075 * age,
+        209 + 11 * ridge + 11 * lace,
+        234 + 17 * ridge,
+        0.89,
     )
 
 
