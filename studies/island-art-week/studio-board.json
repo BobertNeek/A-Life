@@ -1,13 +1,12 @@
 {
-  "subject": "inlet-concept",
+  "subject": "meadow-survey",
   "angles": [
-    "inlet-eye",
-    "inlet-bank",
-    "inlet-bar"
+    "meadow-eye",
+    "meadow-reach"
   ],
   "quick": false,
   "samples": 48,
-  "paired": true,
+  "paired": false,
   "editable_canopy": false,
-  "art_note": "Refine the sheltered point bar into a depositional crescent, where damp silt grades into existing gravel rather than a masked beige stamp. Retain both original cameras and one more fixed shore eye looking upstream at the actual proposed feature. Sculpt and all water remapping remain isolated from the game."
+  "art_note": "Photograph the established wild lower-valley grass at (74.75,301.40) before changing a plant; camera and original native shrubs, grasses and flowering anchors are fixed. Not the separately cultivated village meadow. This is a Blender art board only."
 }
