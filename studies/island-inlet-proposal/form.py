@@ -36,11 +36,11 @@ class Reach:
         self.parts.append(
             ((7.6 * peak - 3.4 * upstream) * outer * boundary, np.zeros_like(x))
         )
-        apron = 1 - ease(5.3, 22.5, np.abs(z - 425))
+        apron = np.exp(-0.86 * ((z - 424.8) / 17.2) ** 2)
         # Extend the inside (west) waterline, but open out the upper bank
         # behind it: a low, asymmetric bar, not simply a sideways canal.
         toe = np.exp(-(((q + 8.5) / 8.3) ** 2))
-        bench = 1 - ease(6.0, 16.5, np.abs(q + 16.6))
+        bench = np.exp(-(((q + 16.4 - 0.13 * (z - 425)) / 10.0) ** 4))
         bar_x = (4.8 * toe + 0.50 * bench) * apron * boundary
         dry = np.maximum(0, self.h)
         bar_y = (

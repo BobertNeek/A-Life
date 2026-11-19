@@ -176,7 +176,7 @@ elif subject == "inlet-concept":
         bar_ink,
         out / "southern-inlet-proposal.blend",
     )
-elif subject == "inlet-survey":
+elif subject in ("inlet-survey", "meadow-survey"):
     # Two working photographs of real terrain; no candidate is invented here.
     pass
 elif subject == "cove-water":
@@ -224,9 +224,12 @@ if board.get("editable_canopy"):
         out / "grove-boughs.blend",
     )
 views = {
+    "meadow-eye": ["--copse-eye", "--copse-framing", "meadow-eye"],
+    "meadow-reach": ["--guardian-review", "--grove-framing", "meadow-reach"],
     "alder-eye": ["--copse-eye", "--copse-framing", "alder-eye"],
     "alder-bank": ["--guardian-review", "--grove-framing", "alder-bank"],
     "inlet-eye": ["--cove-showcase", "--cove-framing", "inlet-eye"],
+    "inlet-bar": ["--cove-showcase", "--cove-framing", "inlet-bar"],
     "inlet-bank": ["--guardian-review", "--grove-framing", "inlet-bank"],
     "shelf-eye": ["--cove-showcase", "--cove-framing", "shelf-edge"],
     "shelf-guardian": ["--guardian-review", "--grove-framing", "shelf"],
@@ -243,12 +246,19 @@ subject_label = {
     "cove-water": "Sheltered tidal shelf",
     "forest-fern": "Feather moss and divided fern",
     "coastal-alder": "Branch-grown maritime alders",
+    "meadow-survey": "Actual starting-valley meadow at grass 3406",
     "inlet-survey": "The actual southern inlet before new bank art",
     "inlet-ground": "The native southern tidal cut",
     "inlet-concept": "Shape study: actual V1 and proposed asymmetric inlet",
 }[subject]
 base_water = root / "studies/island-art-week/water-inputs"
-if subject in ("coastal-alder", "inlet-survey", "inlet-ground", "inlet-concept"):
+if subject in (
+    "coastal-alder",
+    "inlet-survey",
+    "inlet-ground",
+    "inlet-concept",
+    "meadow-survey",
+):
     base_water = out / "current-shelf"
     base_water.mkdir(exist_ok=True)
     for n in ("shore.png", "ripple.png"):
@@ -279,6 +289,7 @@ for tag in board["angles"]:
                 "inlet-survey",
                 "inlet-ground",
                 "inlet-concept",
+                "meadow-survey",
             )
             and (d / "copse-floor.glb").is_file()
         ):

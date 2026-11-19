@@ -69,7 +69,14 @@ cli.add_argument(
 )
 cli.add_argument(
     "--cove-framing",
-    choices=("open-bank", "grove-edge", "grove-gate", "shelf-edge", "inlet-eye"),
+    choices=(
+        "open-bank",
+        "grove-edge",
+        "grove-gate",
+        "shelf-edge",
+        "inlet-eye",
+        "inlet-bar",
+    ),
     default="open-bank",
 )
 cli.add_argument(
@@ -102,7 +109,7 @@ cli.add_argument(
 )
 cli.add_argument(
     "--grove-framing",
-    choices=("shoulder", "dense", "shelf", "alder-bank", "inlet-bank"),
+    choices=("shoulder", "dense", "shelf", "alder-bank", "inlet-bank", "meadow-reach"),
     default="shoulder",
     help="Select one of the two fixed guardian cameras",
 )
@@ -122,7 +129,7 @@ cli.add_argument(
 )
 cli.add_argument(
     "--copse-framing",
-    choices=("slope", "fern-hollow", "sunlit-margin", "alder-eye"),
+    choices=("slope", "fern-hollow", "sunlit-margin", "alder-eye", "meadow-eye"),
     default="slope",
 )
 cli.add_argument(
@@ -314,6 +321,7 @@ if (
         x, z, dx, dz, rise, lens = {
             "open-bank": (330.60, 125.65, -12.0, -66, 4.1, 21),
             "inlet-eye": (90.0, 451.0, 24.8, -19.6, -0.52, 33),
+            "inlet-bar": (94.15, 453.9, 2.45, -29.2, -1.20, 29),
             "shelf-edge": (345.20, 116.70, 13.7, -27.4, -1.36, 29),
             "grove-edge": (319.85, 143.85, 4.0, -66, 3.6, 22),
             "grove-gate": (320.80, 145.90, 9.0, -66, 3.2, 23),
@@ -321,9 +329,11 @@ if (
         eye = ground(x, z) + 1.12
         shots = [
             (
-                {"shelf-edge": "shelf-eye", "inlet-eye": "inlet-eye"}.get(
-                    args.cove_framing, "cove-showcase"
-                ),
+                {
+                    "shelf-edge": "shelf-eye",
+                    "inlet-eye": "inlet-eye",
+                    "inlet-bar": "inlet-bar",
+                }.get(args.cove_framing, "cove-showcase"),
                 (x, eye, z),
                 (x + dx, eye + rise, z + dz),
                 0,
@@ -362,6 +372,18 @@ if (
         if args.grove_framing == "inlet-bank":
             x, z = 98.0, 419.0
             shots = [("inlet-bank", (x + 47, 62, z + 96), (x, 2.3, z), 116, 35, 1)]
+        if args.grove_framing == "meadow-reach":
+            x, z = 72.5, 299.0
+            shots = [
+                (
+                    "meadow-reach",
+                    (x + 24, ground(x, z) + 19, z + 32),
+                    (x, ground(x, z) + 0.30, z),
+                    39,
+                    38,
+                    0,
+                )
+            ]
     if args.rock_eye:
         x, z = 258.40, -170.00
         tx, tz = 254.68, -177.68
@@ -406,6 +428,11 @@ if (
         elif args.copse_framing == "alder-eye":
             x, z, tx, tz = 321.6, 148.5, 316.1, 140.1
             shot = "alder-eye"
+        elif args.copse_framing == "meadow-eye":
+            # Twenty existing grass anchors surround 3406. Share the real
+            # turf with nine flower clumps in the established lower meadow.
+            x, z, tx, tz = 76.4, 303.65, 70.1, 295.25
+            shot = "meadow-eye"
         shots = [
             (
                 shot,
@@ -526,7 +553,7 @@ for name, pos, aim, ortho, lens, lod in shots:
     if mood:
         focus_m = (
             15.0
-            if name in ("cove-showcase", "shelf-eye", "inlet-eye")
+            if name in ("cove-showcase", "shelf-eye", "inlet-eye", "inlet-bar")
             else (native(aim) - native(pos)).length
         )
         span = (
@@ -549,7 +576,7 @@ for name, pos, aim, ortho, lens, lod in shots:
         a, b = native(pos), native(aim)
         focus = (
             a + (b - a).normalized() * 15.0
-            if name in ("cove-showcase", "shelf-eye", "inlet-eye")
+            if name in ("cove-showcase", "shelf-eye", "inlet-eye", "inlet-bar")
             else b
         )
         for o in decor:

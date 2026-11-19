@@ -37,18 +37,18 @@ def paint(surface, dest):
     tiny = field(1.8)
     grain = rng.standard_normal(x.shape)
     # Tide-laid shell grit and damp silt on the newly opened inside run.
-    bed = ease(0.03, 0.17, after) * (
-        1 - ease(1.62 + 0.17 * broad, 3.05 + 0.22 * broad, after)
+    bed = ease(-1.0, -0.22, after) * (
+        1 - ease(0.72 + 0.17 * broad, 3.95 + 0.40 * broad, after)
     )
     corridor = (1 - ease(5, 20.5, np.abs(z - 425))) * (
-        1 - ease(6.6, 13.7, np.abs(q + 15))
+        1 - ease(6.6, 13.7, np.abs(q + 15 - 0.14 * (z - 425)))
     )
     shelter = 1 - ease(0.35, 0.95, np.hypot(gx, gz))
-    cover = bed * corridor * (0.38 + 0.62 * shelter)
-    amount = ease(0.09, 0.33, cover + 0.045 * tiny * ease(0.03, 0.32, cover))
+    cover = bed * corridor * (0.45 + 0.55 * shelter)
+    amount = np.clip(cover * (0.69 + 0.07 * broad + 0.06 * tiny), 0, 0.84)
     dry = ease(0.06, 1.25, after)
-    silt = np.array([142.0, 143.0, 125.0])
-    shell = np.array([178.0, 163.0, 133.0])
+    silt = np.array([126.0, 135.0, 121.0])
+    shell = np.array([167.0, 154.0, 127.0])
     wash = silt + dry[..., None] * (shell - silt)
     cut = 0.45 * np.sin(2.0 * (q + 0.006 * (z - 425) ** 2) + 0.50 * broad)
     pigment = wash + (3.1 * broad + 2.0 * tiny + 1.1 * grain + 2.2 * cut)[..., None]
@@ -96,11 +96,10 @@ def attach(r, texture):
     sh = graph.nodes.get("Principled BSDF")
     sh.inputs["Roughness"].default_value = 0.76
     graph.links.new(paint.outputs["Color"], sh.inputs["Base Color"])
-    alpha = graph.nodes.new("ShaderNodeMath")
-    alpha.operation = "GREATER_THAN"
-    alpha.inputs[1].default_value = 0.42
-    graph.links.new(paint.outputs["Alpha"], alpha.inputs[0])
-    graph.links.new(alpha.outputs[0], sh.inputs["Alpha"])
+    # Studio-only graded deposit. A binary cut edge turned the low shelf
+    # into a polygonal beige sticker; blend the newly sheltered silt back
+    # into the old gravel and moor instead.
+    graph.links.new(paint.outputs["Alpha"], sh.inputs["Alpha"])
     mesh.materials.append(mat)
     ob.visible_shadow = False
     return ob

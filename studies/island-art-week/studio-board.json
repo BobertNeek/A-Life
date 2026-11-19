@@ -2,11 +2,12 @@
   "subject": "inlet-concept",
   "angles": [
     "inlet-eye",
-    "inlet-bank"
+    "inlet-bank",
+    "inlet-bar"
   ],
   "quick": false,
   "samples": 48,
   "paired": true,
   "editable_canopy": false,
-  "art_note": "Second artist's shape: soften the crest and open a true low, tapered inner point bar, rather than two opposite bends with mirrored cliff walls. Recessed warm shell sand and silt at the newly sheltered bay only. V1 left / editable artistic proposal right, never bound to game."
+  "art_note": "Refine the sheltered point bar into a depositional crescent, where damp silt grades into existing gravel rather than a masked beige stamp. Retain both original cameras and one more fixed shore eye looking upstream at the actual proposed feature. Sculpt and all water remapping remain isolated from the game."
 }
