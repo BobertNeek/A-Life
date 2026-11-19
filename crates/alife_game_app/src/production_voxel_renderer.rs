@@ -1982,9 +1982,10 @@ pub fn spawn_fvr03_production_voxel_scene(
         fvr04_runtime_scene_selection(&candidate.runtime_state, &candidate.visible_tiles);
     let prepared =
         prepare_fvr04_runtime_scene(app.world_mut(), candidate, &mut creature_spawn_context)?;
+    // A selected island binds the actual view on its first scene, not just on reload.
+    spawn_production_terrain_camera(app, &settings);
     let (mut scene, creature_scene) =
         spawn_fvr04_runtime_scene_candidate(app.world_mut(), prepared, &scene_assets);
-    spawn_production_terrain_camera(app, &settings);
 
     if summary.record_performance {
         scene.performance_artifact_path = Some(write_fvr03_performance_artifact(&scene, None)?);
@@ -2884,6 +2885,8 @@ fn spawn_fvr04_runtime_scene_candidate(
     } else {
         world.remove_resource::<creature_grounding::SelectedTerrain>();
     }
+    // Tag the sun that belongs to this scene, including its profile's cascade budget.
+    spawn_fvr04_prepared_lighting(world, lighting);
     if island::has_baked_art(runtime_state.terrain.as_ref()) {
         island::start(world);
     } else {
@@ -2929,7 +2932,6 @@ fn spawn_fvr04_runtime_scene_candidate(
             selection,
         );
     }
-    spawn_fvr04_prepared_lighting(world, lighting);
     let scene = Fvr03ProductionVoxelSceneResource {
         schema: FVR03_PRODUCTION_VOXEL_RENDERER_SCHEMA,
         schema_version: FVR03_PRODUCTION_VOXEL_RENDERER_SCHEMA_VERSION,

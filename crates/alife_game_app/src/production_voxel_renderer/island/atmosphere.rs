@@ -152,6 +152,31 @@ mod tests {
     }
 
     #[test]
+    fn island_rebuild_rebinds_the_new_scene_sun_and_keeps_the_camera() {
+        let mut world = World::new();
+        world.insert_resource(creature_grounding::SelectedTerrain(alife_world::island_terrain()));
+        let camera = world.spawn((
+            Fvr03ProductionVoxelCamera { mode: Fvr03ProductionVoxelCameraMode::OrthographicIsometric },
+            Camera::default(), AmbientLight::default(), DistanceFog::default(),
+        )).id();
+        let lighting = || Fvr04PreparedLighting {
+            directional_shadows: true, shadow_cascades: 2, shadow_maximum_distance: 180.0,
+            contact_shadow_mesh: None, contact_shadow_material: None, contact_shadows: vec![],
+        };
+        for _ in 0..2 {
+            spawn_fvr04_prepared_lighting(&mut world, lighting());
+            super::super::start(&mut world);
+            assert!(world.get::<CoastalAir>(camera).is_some());
+            let mut suns = world.query_filtered::<(Entity, &DirectionalLight), With<TerrainSun>>();
+            let (id, light) = suns.single(&world).unwrap();
+            assert_eq!(light.color, rgba(palette().sun_srgb, 1.0));
+            world.despawn(id);
+        }
+        super::super::stop(&mut world);
+        assert!(world.get::<CoastalAir>(camera).is_none());
+    }
+
+    #[test]
     fn focus_never_sits_inside_the_far_veil_when_an_orthographic_camera_backs_off() {
         for (distance, span) in [(18.0, 12.0), (270.0, 88.0), (1100.0, 760.0)] {
             let (start, end) = range(distance, span);

@@ -168,6 +168,9 @@ pub(super) fn start(world: &mut World) {
         return;
     }
     let surface = selected.0.surface().clone();
+    // A runtime scene can be rebuilt without leaving the island. Release the
+    // prior light snapshot before capturing this scene's replacement sun.
+    atmosphere::leave(world);
     world.insert_resource(IslandActive);
     let mut lights = world.query_filtered::<(
         Entity,
