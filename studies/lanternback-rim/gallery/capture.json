@@ -1,0 +1,15 @@
+{
+  "held_commit": "41fb18b5045b0fbcee58e3192d3554539c91c7d2",
+  "method": "Local CPU Blender 4.3.2, one thread; 840 x 500, sample count 24, denoise off, same fixed directional light and camera for each pair.",
+  "geometry": "Original native L0 cells across planted slope, L1/L2 outside the detailed zone. Earlier Sunspindle field present on both sides, fixed guardian mesh variant. Decorative cove or Shellback detail not substituted into the upper slope. This observational scene is not a game launch.",
+  "physically_changed": false,
+  "photos": {
+    "before/upper-rim.png": "0eb405f5aff0c569705dd77523d27ff501cbcd1548e4b9c7041cd16317d38d9b",
+    "before/stone-eye.png": "acaff279babd101cc2b0ea8466e1b5d0b0780547b8c804d9faf0b5c25e95b1a6",
+    "after/upper-rim.png": "de976f281b79082239fe9f931b65c1eecd8ccdd81e627cfcabf833d8f7fb6d9d",
+    "after/stone-eye.png": "445eaadad162b28172db7a44c50efc33f65059e9634eefc833c33de7daabe449"
+  },
+  "editable": "6101d254aae768cb4caa0a409ce98b57a67af4a1c7cf19ee9ecff0158ca4d9af",
+  "folio": "e52ef24cd7bbf9407cb3a95fb642aa5e9d16e24c19392ffe6dde788fec6ddba8",
+  "archive": "a605c06a8b45498cd4f4b24593aa6cba321d2467ced0efc8332188880018020c"
+}
