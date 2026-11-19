@@ -1,0 +1,10 @@
+{
+  "distinct_pockets": 7,
+  "root_count": 35,
+  "close_8m": 16,
+  "minimum_native_y": 0.08845142478461185,
+  "maximum_native_y": 1.1532703168156042,
+  "not_game_entities": true,
+  "collision_changed": false,
+  "existing_tide_cast_contacts_avoided": true
+}

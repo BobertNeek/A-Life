@@ -1,0 +1,17 @@
+{
+  "eye": [
+    409.6,
+    1.2467735375165931,
+    -97.0
+  ],
+  "aim": [
+    409.069,
+    0.6212306065511265,
+    -98.45
+  ],
+  "camera_lens_mm": 31,
+  "tide_casts_held": true,
+  "prior_wave_eye": "toe/gallery/photos/after/wave-eye.png",
+  "new_camera_before": "before/shelf-garden.png",
+  "native_gameplay": false
+}

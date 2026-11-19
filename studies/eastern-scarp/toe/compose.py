@@ -12,6 +12,7 @@ H = Path(__file__).resolve().parent
 native, scene, shelf, hollow, base, cups, upper, toe, wash, out = map(
     Path, sys.argv[sys.argv.index("--") + 1 :][:10]
 )
+prepare_only = "setup-only" in sys.argv[sys.argv.index("--") + 11 :]
 oldargs = sys.argv
 sys.argv = [
     "blender",
@@ -39,7 +40,7 @@ if water is None:
     raise ValueError("Original water must remain in the composition")
 use(H.parent / "wash/material.py")(water, surf, wash)
 (out / "after").mkdir(parents=True, exist_ok=True)
-for name, cam in s["cams"].items():
+for name, cam in () if prepare_only else s["cams"].items():
     s["sc"].camera = cam
     s["sc"].render.filepath = str(out / "after" / (name + ".png"))
     bpy.ops.render.render(write_still=True)

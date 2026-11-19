@@ -1,0 +1,23 @@
+{
+  "side": [
+    -155.0,
+    -74.0,
+    -0.55,
+    1.75
+  ],
+  "standing_near": [
+    5,
+    17407
+  ],
+  "standing_middle": [
+    11,
+    11752
+  ],
+  "guardian_modeled_triangles": 0,
+  "other_anchors_remain_in_full_edit": true,
+  "static_only": true,
+  "model_lod_switch_m": [
+    2.65,
+    14.0
+  ]
+}

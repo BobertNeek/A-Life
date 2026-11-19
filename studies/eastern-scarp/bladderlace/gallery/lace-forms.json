@@ -1,0 +1,30 @@
+{
+  "near": {
+    "1": {
+      "root_count": 10,
+      "triangles": 3563
+    },
+    "2": {
+      "root_count": 9,
+      "triangles": 2771
+    },
+    "3": {
+      "root_count": 16,
+      "triangles": 3755
+    }
+  },
+  "middle": {
+    "1": {
+      "root_count": 10,
+      "triangles": 1112
+    },
+    "2": {
+      "root_count": 9,
+      "triangles": 920
+    },
+    "3": {
+      "root_count": 16,
+      "triangles": 1208
+    }
+  }
+}
