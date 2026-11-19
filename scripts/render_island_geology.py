@@ -99,6 +99,14 @@ cli.add_argument(
     choices=(12, 48, 80, 96),
     help="Explicit art sample count for both sides of a paired still",
 )
+cli.add_argument(
+    "--copse-eye",
+    action="store_true",
+    help="Near actual pine 803 and its sheltered forest floor",
+)
+cli.add_argument(
+    "--copse-floor", type=Path, help="Optional close-only rooted woodland community art"
+)
 args = cli.parse_args(sys.argv[sys.argv.index("--") + 1 :])
 args.out.mkdir(parents=True, exist_ok=True)
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -107,7 +115,11 @@ scene.render.engine = "CYCLES"
 scene.cycles.device = "CPU"
 scene.cycles.samples = (
     48
-    if args.cove_showcase or args.guardian_review or args.rock_eye or args.pine_eye
+    if args.cove_showcase
+    or args.guardian_review
+    or args.rock_eye
+    or args.pine_eye
+    or args.copse_eye
     else 20
 )
 scene.cycles.use_denoising = (
@@ -240,6 +252,7 @@ if (
     or args.guardian_review
     or args.rock_eye
     or args.pine_eye
+    or args.copse_eye
 ):
     root = Path(__file__).resolve().parents[1]
     library = (
@@ -327,6 +340,19 @@ if (
                 0,
             )
         ]
+    if args.copse_eye:
+        x, z = 253.40, -207.05
+        tx, tz = 250.40, -210.00
+        shots = [
+            (
+                "copse-eye",
+                (x, ground(x, z) + 1.04, z),
+                (tx, ground(tx, tz) + 0.38, tz),
+                0,
+                31,
+                0,
+            )
+        ]
     props = json.loads((args.placements or library / "props.json").read_text())
     models = {}
     from island_grove_review import sources, form
@@ -337,7 +363,7 @@ if (
     if args.cove_showcase:
         eye, aim = native(shots[0][1]), native(shots[0][2])
         cove_focus = eye + (aim - eye).normalized() * 15.0
-    if args.guardian_review or args.rock_eye or args.pine_eye:
+    if args.guardian_review or args.rock_eye or args.pine_eye or args.copse_eye:
         cove_focus = native(shots[0][2])
     for index, prop in enumerate(props):
         px, py, pz = prop["position"]
@@ -387,6 +413,13 @@ if args.strandline:
     decor = [o for o in set(bpy.data.objects) - old if o.type == "MESH"]
     for o in decor:
         o.visible_shadow = o.name.endswith("_headland")
+copse = []
+if args.copse_floor:
+    old = set(bpy.data.objects)
+    bpy.ops.import_scene.gltf(filepath=str(args.copse_floor.resolve()))
+    copse = [o for o in set(bpy.data.objects) - old if o.type == "MESH"]
+    for ob in copse:
+        ob.visible_shadow = False
 if args.wide_only:
     shots = shots[:1]
 if args.handoff:
@@ -422,12 +455,24 @@ for name, pos, aim, ortho, lens, lod in shots:
             o.hide_render = (args.guardian_review and review_span >= 100) or math.hypot(
                 cx - focus.x, cz + focus.y
             ) >= 150
+    if copse:
+        b = native(aim)
+        for ob in copse:
+            ob.hide_render = (args.guardian_review and review_span >= 60) or math.hypot(
+                ob.location.x - b.x, ob.location.y - b.y
+            ) >= 65
     for mesh in habitats.values():
         mesh.hide_render = True
     for ob in chunks:
         _, ix, iz, level = ob.name.split("_")
         key = int(ix), int(iz)
-        if args.cove_showcase or args.guardian_review or args.rock_eye or args.pine_eye:
+        if (
+            args.cove_showcase
+            or args.guardian_review
+            or args.rock_eye
+            or args.pine_eye
+            or args.copse_eye
+        ):
             target = grid.level(key, (cove_focus.x, -cove_focus.y), review_span)
         else:
             target = lod

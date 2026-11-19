@@ -34,14 +34,24 @@ def blender(script, *args):
 
 # The GLB exporter is the production operation. Do not call its separate
 # test/verification CLI in a studio workweek.
-from build_island_boughs import build
-
-fresh = out / "artist-crowns"
-build(d / "Conifer.glb", d / "props.json", fresh)
+subject = board["subject"]
 approx = board.get("quick", False)
 paired = board.get("paired", False)
-old = out / "old-source"
-if paired:
+fresh = d
+old = d
+if subject == "canopy":
+    from build_island_boughs import build
+
+    fresh = out / "artist-crowns"
+    build(d / "Conifer.glb", d / "props.json", fresh)
+elif subject == "forest-floor":
+    from build_island_copse_floor import export
+
+    floor = export(out / "artist-floor")
+else:
+    raise ValueError(f"Unknown studio subject: {subject}")
+if paired and subject == "canopy":
+    old = out / "old-source"
     base = "c6a3e18b36a8460307f525a0a69993da5c4a1cc9"
     subprocess.run(
         ["git", "fetch", "--no-tags", "--depth=1", "origin", base], check=True
@@ -63,6 +73,7 @@ if board.get("editable_canopy"):
         out / "grove-boughs.blend",
     )
 views = {
+    "copse-eye": ["--copse-eye"],
     "stone-eye": ["--rock-eye"],
     "pine-eye": ["--pine-eye"],
     "guardian-woods": ["--guardian-review", "--grove-framing", "dense"],
@@ -97,12 +108,17 @@ for tag in board["angles"]:
             d / "habitat-ground.glb",
             "--grove-forms",
             pack / "grove-crowns.glb",
+            *(
+                ["--copse-floor", floor]
+                if subject == "forest-floor" and side == "after"
+                else []
+            ),
         )
     if paired:
         make(
             out / "before" / f"{tag}.png",
             out / "after" / f"{tag}.png",
-            f"Maritime spruce | {tag} | Identical tree anchors, V1 terrain and light | CPU Blender",
+            f"{'Maritime spruce' if subject=='canopy' else 'Rooted woodland floor'} | {tag} | Identical tree anchors, V1 terrain and light | CPU Blender",
             out / f"{tag}.jpg",
         )
 (out / "studio-note.json").write_text(
