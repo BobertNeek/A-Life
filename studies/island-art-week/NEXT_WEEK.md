@@ -100,3 +100,11 @@ previously completed artifacts. A separate Blender-only studio render can
 produce art; this does not imply a new validation pass. At the next agreed
 test window, dispatch the narrow asset/runtime checks deliberately and record
 the exact checked-out release before proceeding with interactive acceptance.
+
+For the later cutout-spruce pass, read the fixed under-canopy / guardian art board
+as an art reference, not game screenshots. In the next agreed play slot inspect
+needle coverage from 3 to 8 metres, middling stands around 100 m, the 240 m
+handoff and an actual far guardian span above 350 m. Check clipped shadows,
+grazing sunlight and moving-camera shimmer on the real GPU. Record fragment and
+shadow work as well as triangle count. The new crowns in
+the workbench do not change tree transforms or their inherited solid trunks.

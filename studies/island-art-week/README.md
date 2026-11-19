@@ -201,3 +201,27 @@ requires an exact physical triangle match at all 3,716 placements and checks eve
 at three locked spans. The eye among pine 434 now uses the same local chunk gate as the
 native unoccupied terrain, rather than drawing the entire island at maximum detail. Keep
 the earlier plates as historical art comparisons, not native vegetation-contact evidence.
+
+### Art studio: forked, feathered island spruce
+
+The [1.02 m view from inside the boughs](spruce-under-canopy.jpg) and
+[guardian view of the same woods](spruce-guardian.jpg) show the actual V1 island.
+Tree transforms, underlying terrain, water, light and camera are identical on
+the two sides. The old discs and the later giant opaque paddle leaves are
+replaced by real woody armatures with forked, folded banks of needles. Each
+close bank has small transparent spaces between needlelets, not a green post
+behind all the branches. Dense fill follows the individual limbs only at the
+middle distance; it is omitted at creature height.
+
+The [editable, packed Blender source](../../crates/alife_game_app/assets/landscape/island/grove-boughs.blend)
+includes all 12 forms and 3 LODs. By default the 3 collections of close forms
+are visible in the workbench. The game still reads the GLB and the established
+tree index, never the artist's arrangement. [Export counts](spruce-art-budget.json)
+are authored geometry, not frame-time measurements. One clipped material is no
+guarantee of unchanged fragment or shadow cost.
+
+Original comparison source: `c6a3e18b36a8460307f525a0a69993da5c4a1cc9`.
+Studio source: `042d628780eee2c8b22d63247c2b3ca1f4bc2ee0`; paired
+1000×600 Blender 4.3.2 CPU stills at 80 samples and the actual editable file
+came from art run **44461673484**. No game, PC, compatibility suite or FPS run
+was performed for the new assets. The gallery is not native acceptance.

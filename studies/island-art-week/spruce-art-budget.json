@@ -1,0 +1,218 @@
+{
+  "PineForm1_L0": {
+    "source_triangles": 3456,
+    "triangles": 3108,
+    "unchanged_root_faces": 76,
+    "height_m": 7.96
+  },
+  "PineForm1_L1": {
+    "source_triangles": 668,
+    "triangles": 614,
+    "unchanged_root_faces": 10,
+    "height_m": 7.96
+  },
+  "PineForm1_L2": {
+    "source_triangles": 172,
+    "triangles": 118,
+    "unchanged_root_faces": 18,
+    "height_m": 7.96
+  },
+  "PineForm2_L0": {
+    "source_triangles": 3456,
+    "triangles": 3068,
+    "unchanged_root_faces": 76,
+    "height_m": 7.96
+  },
+  "PineForm2_L1": {
+    "source_triangles": 668,
+    "triangles": 614,
+    "unchanged_root_faces": 10,
+    "height_m": 7.96
+  },
+  "PineForm2_L2": {
+    "source_triangles": 172,
+    "triangles": 118,
+    "unchanged_root_faces": 18,
+    "height_m": 7.96
+  },
+  "PineForm3_L0": {
+    "source_triangles": 3456,
+    "triangles": 3048,
+    "unchanged_root_faces": 76,
+    "height_m": 7.96
+  },
+  "PineForm3_L1": {
+    "source_triangles": 668,
+    "triangles": 614,
+    "unchanged_root_faces": 10,
+    "height_m": 7.96
+  },
+  "PineForm3_L2": {
+    "source_triangles": 172,
+    "triangles": 118,
+    "unchanged_root_faces": 18,
+    "height_m": 7.96
+  },
+  "PineForm4_L0": {
+    "source_triangles": 3456,
+    "triangles": 3048,
+    "unchanged_root_faces": 76,
+    "height_m": 7.96
+  },
+  "PineForm4_L1": {
+    "source_triangles": 668,
+    "triangles": 614,
+    "unchanged_root_faces": 10,
+    "height_m": 7.96
+  },
+  "PineForm4_L2": {
+    "source_triangles": 172,
+    "triangles": 118,
+    "unchanged_root_faces": 18,
+    "height_m": 7.96
+  },
+  "PineForm5_L0": {
+    "source_triangles": 3456,
+    "triangles": 3352,
+    "unchanged_root_faces": 76,
+    "height_m": 9.84
+  },
+  "PineForm5_L1": {
+    "source_triangles": 668,
+    "triangles": 666,
+    "unchanged_root_faces": 10,
+    "height_m": 9.84
+  },
+  "PineForm5_L2": {
+    "source_triangles": 172,
+    "triangles": 118,
+    "unchanged_root_faces": 18,
+    "height_m": 9.84
+  },
+  "PineForm6_L0": {
+    "source_triangles": 3456,
+    "triangles": 3292,
+    "unchanged_root_faces": 76,
+    "height_m": 9.84
+  },
+  "PineForm6_L1": {
+    "source_triangles": 668,
+    "triangles": 666,
+    "unchanged_root_faces": 10,
+    "height_m": 9.84
+  },
+  "PineForm6_L2": {
+    "source_triangles": 172,
+    "triangles": 118,
+    "unchanged_root_faces": 18,
+    "height_m": 9.84
+  },
+  "PineForm7_L0": {
+    "source_triangles": 3456,
+    "triangles": 3252,
+    "unchanged_root_faces": 76,
+    "height_m": 9.84
+  },
+  "PineForm7_L1": {
+    "source_triangles": 668,
+    "triangles": 666,
+    "unchanged_root_faces": 10,
+    "height_m": 9.84
+  },
+  "PineForm7_L2": {
+    "source_triangles": 172,
+    "triangles": 118,
+    "unchanged_root_faces": 18,
+    "height_m": 9.84
+  },
+  "PineForm8_L0": {
+    "source_triangles": 3456,
+    "triangles": 3352,
+    "unchanged_root_faces": 76,
+    "height_m": 9.84
+  },
+  "PineForm8_L1": {
+    "source_triangles": 668,
+    "triangles": 666,
+    "unchanged_root_faces": 10,
+    "height_m": 9.84
+  },
+  "PineForm8_L2": {
+    "source_triangles": 172,
+    "triangles": 118,
+    "unchanged_root_faces": 18,
+    "height_m": 9.84
+  },
+  "PineForm9_L0": {
+    "source_triangles": 3456,
+    "triangles": 3312,
+    "unchanged_root_faces": 76,
+    "height_m": 12.0
+  },
+  "PineForm9_L1": {
+    "source_triangles": 668,
+    "triangles": 666,
+    "unchanged_root_faces": 10,
+    "height_m": 12.0
+  },
+  "PineForm9_L2": {
+    "source_triangles": 172,
+    "triangles": 118,
+    "unchanged_root_faces": 18,
+    "height_m": 12.0
+  },
+  "PineForm10_L0": {
+    "source_triangles": 3456,
+    "triangles": 3272,
+    "unchanged_root_faces": 76,
+    "height_m": 12.0
+  },
+  "PineForm10_L1": {
+    "source_triangles": 668,
+    "triangles": 666,
+    "unchanged_root_faces": 10,
+    "height_m": 12.0
+  },
+  "PineForm10_L2": {
+    "source_triangles": 172,
+    "triangles": 118,
+    "unchanged_root_faces": 18,
+    "height_m": 12.0
+  },
+  "PineForm11_L0": {
+    "source_triangles": 3456,
+    "triangles": 3352,
+    "unchanged_root_faces": 76,
+    "height_m": 12.0
+  },
+  "PineForm11_L1": {
+    "source_triangles": 668,
+    "triangles": 666,
+    "unchanged_root_faces": 10,
+    "height_m": 12.0
+  },
+  "PineForm11_L2": {
+    "source_triangles": 172,
+    "triangles": 118,
+    "unchanged_root_faces": 18,
+    "height_m": 12.0
+  },
+  "PineForm12_L0": {
+    "source_triangles": 3456,
+    "triangles": 3372,
+    "unchanged_root_faces": 76,
+    "height_m": 12.0
+  },
+  "PineForm12_L1": {
+    "source_triangles": 668,
+    "triangles": 666,
+    "unchanged_root_faces": 10,
+    "height_m": 12.0
+  },
+  "PineForm12_L2": {
+    "source_triangles": 172,
+    "triangles": 118,
+    "unchanged_root_faces": 18,
+    "height_m": 12.0
+  }
+}
