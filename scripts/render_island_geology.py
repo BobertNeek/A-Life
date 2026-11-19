@@ -35,6 +35,11 @@ cli.add_argument(
 )
 cli.add_argument("--surface", type=Path)
 cli.add_argument("--placements", type=Path)
+cli.add_argument(
+    "--inlet-cut",
+    type=Path,
+    help="Local fitted surface artwork on the two real southern cut banks",
+)
 cli.add_argument("--prop-library", type=Path)
 cli.add_argument(
     "--broadleaf-library", type=Path, help="Only the native Broadleaf model"
@@ -469,6 +474,13 @@ if args.strandline:
     decor = [o for o in set(bpy.data.objects) - old if o.type == "MESH"]
     for o in decor:
         o.visible_shadow = o.name.endswith("_headland")
+if args.inlet_cut:
+    old = set(bpy.data.objects)
+    bpy.ops.import_scene.gltf(filepath=str(args.inlet_cut.resolve()))
+    skins = [o for o in set(bpy.data.objects) - old if o.type == "MESH"]
+    for o in skins:
+        o.visible_shadow = False
+    decor.extend(skins)
 copse = []
 if args.copse_floor:
     old = set(bpy.data.objects)
@@ -492,7 +504,7 @@ for name, pos, aim, ortho, lens, lod in shots:
     if mood:
         focus_m = (
             15.0
-            if name in ("cove-showcase", "shelf-eye")
+            if name in ("cove-showcase", "shelf-eye", "inlet-eye")
             else (native(aim) - native(pos)).length
         )
         span = (
@@ -515,7 +527,7 @@ for name, pos, aim, ortho, lens, lod in shots:
         a, b = native(pos), native(aim)
         focus = (
             a + (b - a).normalized() * 15.0
-            if name in ("cove-showcase", "shelf-eye")
+            if name in ("cove-showcase", "shelf-eye", "inlet-eye")
             else b
         )
         for o in decor:

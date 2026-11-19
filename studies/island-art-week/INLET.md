@@ -28,3 +28,12 @@ pilot area, omit those cells from any shared overlay. Preserve source masks,
 PBR artwork and absolute cameras. Next week, when testing is allowed, check the
 bank on foot/picking, water contact, deck occlusion and stability while rolling
 a toy. For now only Blender artwork, source and asset authoring.
+
+There is one real BoulderC (placement 1460 around x85.4,z416.9) in the wall
+and two original scree objects in this reach. Trees are up on the safer
+shoulders, not planted in both banks. Do not fake giant exposed tree roots on
+the bare slope. Any grass fibres should hang from small discontinuous groups
+on the *actual* change of grade; compare remaining undisturbed sections.
+The first unique painted chart traces thirteen local runoff starts on the
+unmodified V1 triangles, with damp hollows, quiet iron staining and embedded
+river-sized clasts. It has not yet been accepted in the actual landscape.

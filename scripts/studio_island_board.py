@@ -121,6 +121,10 @@ elif subject == "coastal-alder":
     blender(
         "studio_coastal_alder.py", alder, "--author-from", old_tree / "Broadleaf.glb"
     )
+elif subject == "inlet-ground":
+    from build_island_inlet import export
+
+    skin = export(out / "artist-inlet")
 elif subject == "inlet-survey":
     # Two working photographs of real terrain; no candidate is invented here.
     pass
@@ -189,9 +193,10 @@ subject_label = {
     "forest-fern": "Feather moss and divided fern",
     "coastal-alder": "Branch-grown maritime alders",
     "inlet-survey": "The actual southern inlet before new bank art",
+    "inlet-ground": "The native southern tidal cut",
 }[subject]
 base_water = root / "studies/island-art-week/water-inputs"
-if subject in ("coastal-alder", "inlet-survey"):
+if subject in ("coastal-alder", "inlet-survey", "inlet-ground"):
     base_water = out / "current-shelf"
     base_water.mkdir(exist_ok=True)
     for n in ("shore.png", "ripple.png"):
@@ -209,7 +214,14 @@ for tag in board["angles"]:
         elif subject in ("forest-floor", "forest-fern") and side == "after":
             dressing = floor
         elif (
-            subject in ("cove-water", "forest-fern", "coastal-alder", "inlet-survey")
+            subject
+            in (
+                "cove-water",
+                "forest-fern",
+                "coastal-alder",
+                "inlet-survey",
+                "inlet-ground",
+            )
             and (d / "copse-floor.glb").is_file()
         ):
             dressing = d / "copse-floor.glb"
@@ -224,6 +236,11 @@ for tag in board["angles"]:
                 else []
             ),
             *(["--quick-proof"] if approx else []),
+            *(
+                ["--inlet-cut", skin]
+                if subject == "inlet-ground" and side == "after"
+                else []
+            ),
             "--coastal-light",
             d / "coastal-daylight.json",
             "--marine-sky",

@@ -1,12 +1,12 @@
 {
-  "subject": "inlet-survey",
+  "subject": "inlet-ground",
   "angles": [
     "inlet-eye",
     "inlet-bank"
   ],
   "quick": false,
   "samples": 48,
-  "paired": false,
+  "paired": true,
   "editable_canopy": false,
-  "art_note": "Photograph the southern V1 inlet before adding a material. The eye stands on dry ground at x90 z451; the second still looks inland. Reference artwork only."
+  "art_note": "Original broad nearly blank canal walls against a local fitted material: weathered silt, damp hollows, thirteen runoff starts, embedded pebbles and a grassy lip. Do not mislabel this as a river-shape fix or a non-original collision surface. Same water, daylight and lens; art only."
 }
