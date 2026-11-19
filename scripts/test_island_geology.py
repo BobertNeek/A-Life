@@ -70,10 +70,33 @@ def measure(path, level=2):
 
 
 class ShippingCoast(unittest.TestCase):
-    def test_one_surface_and_standard_material_across_all_lods(self):
+    def test_contact_geometry_and_materials_across_all_lods(self):
         g = Glb(TERRAIN)
         h, ox, oz, spacing = field()
-        self.assertEqual(len(g.doc["materials"]), 1)
+        self.assertEqual(len(g.doc["materials"]), 2)
+        macro, close = g.doc["materials"]
+        self.assertEqual(
+            macro["pbrMetallicRoughness"]["baseColorTexture"], {"index": 1}
+        )
+        self.assertEqual(close["normalTexture"], {"index": 4, "texCoord": 1})
+        self.assertEqual(
+            close["pbrMetallicRoughness"]["baseColorTexture"],
+            {"index": 3, "texCoord": 1},
+        )
+        self.assertEqual(
+            close["pbrMetallicRoughness"]["metallicRoughnessTexture"],
+            {"index": 5, "texCoord": 1},
+        )
+
+        def linear(c):
+            return np.where(c <= 0.04045, c / 12.92, ((c + 0.055) / 1.055) ** 2.4)
+
+        art = TERRAIN.parent / "geology"
+        world_rgb = np.asarray(Image.open(art / "pigment.png")) / 255
+        close_mean = linear(
+            np.asarray(Image.open(art / "close-pigment.png")) / 255
+        ).mean(axis=(0, 1))
+        by_node = {}
         self.assertEqual(len(g.doc["meshes"]), 360)
         counts = Counter()
         edge = {}
@@ -82,7 +105,7 @@ class ShippingCoast(unittest.TestCase):
             lod = int(level[-1])
             self.assertEqual(len(m["primitives"]), 1)
             p = m["primitives"][0]
-            self.assertEqual(p["material"], 0)
+            self.assertEqual(p["material"], int(lod == 0))
             pos = g.attr(p["attributes"]["POSITION"])
             norm = g.attr(p["attributes"]["NORMAL"])
             uv = g.attr(p["attributes"]["TEXCOORD_0"])
@@ -98,6 +121,28 @@ class ShippingCoast(unittest.TestCase):
                 atol=1e-6,
             )
             np.testing.assert_allclose(np.linalg.norm(norm, axis=1), 1, atol=2e-4)
+            if lod == 0:
+                vcol = p["attributes"]["COLOR_0"]
+                self.assertTrue(g.doc["accessors"][vcol]["normalized"])
+                color = g.attr(vcol)
+                # At a fully mip-filtered (distant) contact vertex the new tile
+                # must return to its macro pigment instead of darkening the snow.
+                v, u = np.minimum(
+                    (uv[:, ::-1] * world_rgb.shape[:2]).astype(int),
+                    np.array(world_rgb.shape[:2]) - 1,
+                ).T
+                np.testing.assert_allclose(
+                    color[:, :3] / 255 * close_mean, linear(world_rgb[v, u]), atol=0.002
+                )
+                fine = g.attr(p["attributes"]["TEXCOORD_1"])
+                self.assertTrue((color[:, 3] == 255).all())
+                # Both sides of a chunk boundary must see the same pigment and pore.
+                border = surface & (((x % 32) == 0) | ((z % 32) == 0))
+                for k in np.where(border)[0]:
+                    key = (int(x[k]), int(z[k]))
+                    val = tuple(color[k]) + tuple(fine[k])
+                    self.assertEqual(by_node.setdefault(key, val), val)
+                self.assertTrue(np.isfinite(fine).all())
             indices = g.attr(p["indices"])
             self.assertLess(int(indices.max()), len(pos))
             counts[lod] += indices.size // 3
@@ -117,10 +162,19 @@ class ShippingCoast(unittest.TestCase):
         self.assertLess(counts[1], 128000)
         self.assertLess(counts[2], 46000)
         total_size = TERRAIN.stat().st_size
-        self.assertEqual(len(g.doc["images"]), 3)
+        self.assertEqual(len(g.doc["images"]), 6)
         for i in g.doc["images"]:
             if "uri" in i:
-                self.assertIn(i["uri"], {"geology/relief.png", "geology/pigment.png"})
+                self.assertIn(
+                    i["uri"],
+                    {
+                        "geology/relief.png",
+                        "geology/pigment.png",
+                        "geology/close-normal.png",
+                        "geology/close-pigment.png",
+                        "geology/close-roughness.png",
+                    },
+                )
                 data = (TERRAIN.parent / i["uri"]).read_bytes()
                 total_size += len(data)
             else:
@@ -128,7 +182,7 @@ class ShippingCoast(unittest.TestCase):
             with Image.open(io.BytesIO(data)) as im:
                 im.load()
                 self.assertLessEqual(max(im.size), 2048)
-        self.assertLess(total_size, 16 * 1024 * 1024)
+        self.assertLess(total_size, 17 * 1024 * 1024)
 
     def test_coarse_shore_remains_close_to_the_real_waterline(self):
         middle = measure(TERRAIN, 1)

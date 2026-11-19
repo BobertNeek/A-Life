@@ -28,6 +28,7 @@ pub(super) struct IslandAssets {
 }
 #[derive(Component)]
 pub(super) struct TerrainLod {
+    materials: [Handle<StandardMaterial>; 3],
     meshes: [Handle<Mesh>; 3],
     center: Vec3,
     current: usize,
@@ -322,7 +323,8 @@ pub(super) fn focus_on_surface(camera: &Transform, surface: &alife_world::Terrai
 }
 #[allow(
     clippy::too_many_arguments,
-    reason = "Bevy injects independent ECS system parameters."
+    clippy::type_complexity,
+    reason = "Bevy injects independent ECS system parameters and disjoint component queries."
 )]
 pub(super) fn update(
     mut commands: Commands,
@@ -330,7 +332,14 @@ pub(super) fn update(
     assets: Option<ResMut<IslandAssets>>,
     gltfs: Option<Res<Assets<Gltf>>>,
     gltf_meshes: Option<Res<Assets<GltfMesh>>>,
-    mut chunks: Query<(&mut Mesh3d, &mut TerrainLod), Without<PropRange>>,
+    mut chunks: Query<
+        (
+            &mut Mesh3d,
+            &mut MeshMaterial3d<StandardMaterial>,
+            &mut TerrainLod,
+        ),
+        Without<PropRange>,
+    >,
     mut props: Query<(&mut Mesh3d, &mut Visibility, &mut PropRange), Without<TerrainLod>>,
     cameras: Query<(&Transform, &Projection), With<Fvr03ProductionVoxelCamera>>,
     creatures: Query<&Transform, With<ProductionCreatureAssemblyRoot>>,
@@ -370,6 +379,12 @@ pub(super) fn update(
                 };
                 let levels =
                     std::array::from_fn(|level| mesh_for(level).primitives[0].mesh.clone());
+                let materials = std::array::from_fn(|level| {
+                    mesh_for(level).primitives[0]
+                        .material
+                        .clone()
+                        .expect("approved terrain material")
+                });
                 let cx = surface.origin_x
                     + (x * 32 + 16).min(surface.width - 1) as f32 * surface.spacing;
                 let cz = surface.origin_z
@@ -378,10 +393,11 @@ pub(super) fn update(
                 commands.spawn((
                     Name::new(format!("Island chunk {x}/{z}")),
                     Mesh3d(levels[0].clone()),
-                    MeshMaterial3d(mesh_for(0).primitives[0].material.clone().unwrap()),
+                    MeshMaterial3d(materials[0].clone()),
                     Transform::default(),
                     TerrainLod {
                         meshes: levels,
+                        materials,
                         center,
                         current: 0,
                     },
@@ -472,7 +488,7 @@ pub(super) fn update(
             }
         }
     }
-    for (mut mesh, mut lod) in &mut chunks {
+    for (mut mesh, mut material, mut lod) in &mut chunks {
         let distance = Vec2::new(lod.center.x - focus.x, lod.center.z - focus.z).length();
         let occupied = creatures.iter().any(|c| {
             (c.translation.x - lod.center.x).abs() < assets.surface.spacing * 16.5
@@ -487,6 +503,9 @@ pub(super) fn update(
         };
         if target != lod.current {
             mesh.0 = lod.meshes[target].clone();
+            if material.0 != lod.materials[target] {
+                material.0 = lod.materials[target].clone();
+            }
             lod.current = target;
         }
     }

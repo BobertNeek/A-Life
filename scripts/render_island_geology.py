@@ -1,6 +1,8 @@
 """Lock the review camera and light for terrain GLBs (Blender, CPU; not a gameplay capture)."""
 
 import argparse
+import json
+import struct
 import math
 import sys
 from pathlib import Path
@@ -11,6 +13,8 @@ from mathutils import Vector
 cli = argparse.ArgumentParser(description=__doc__)
 cli.add_argument("glb", type=Path)
 cli.add_argument("out", type=Path)
+cli.add_argument("--wide-only", action="store_true")
+cli.add_argument("--creature-height", action="store_true")
 cli.add_argument(
     "--handoff",
     action="store_true",
@@ -71,6 +75,57 @@ shots = [
     ("estuary", (190, 54, 440), (4, 20, 236), 0, 35, 0),
     ("headland", (-480, 51, -72), (-265, 30, -212), 0, 36, 0),
 ]
+if args.creature_height:
+    root = Path(__file__).resolve().parents[1]
+    library = root / "crates/alife_game_app/assets/landscape/island"
+    raw = (root / "crates/alife_world/assets/island-v1.bin").read_bytes()
+    width, depth, ox, oz, spacing, _ = struct.unpack_from("<IIfffI", raw, 8)
+    heights = struct.unpack_from(f"<{width*depth}f", raw, 32)
+
+    def ground(x, z):
+        u, v = (x - ox) / spacing, (z - oz) / spacing
+        i, j = math.floor(u), math.floor(v)
+        u, v = u - i, v - j
+        a = j * width + i
+        p, q, r, s = (
+            heights[a],
+            heights[a + 1],
+            heights[a + width + 1],
+            heights[a + width],
+        )
+        return (
+            p + (q - p) * u + (r - q) * v if u >= v else p + (r - s) * u + (s - p) * v
+        )
+
+    x, z = 99.9, 256.9
+    focus = (x, ground(x, z) + 0.88, z)
+    aim = (98.3, ground(98.3, 253.1) + 0.045, 253.1)
+    shots = [("creature-height", focus, aim, 0, 30, 0)]
+    props = json.loads((library / "props.json").read_text())
+    models = {}
+    for prop in props:
+        px, py, pz = prop["position"]
+        kind = prop["kind"]
+        if math.hypot(px - x, pz - z) > 65:
+            continue
+        if kind not in models:
+            old = set(bpy.data.objects)
+            bpy.ops.import_scene.gltf(filepath=str(library / f"{kind}.glb"))
+            items = set(bpy.data.objects) - old
+            models[kind] = next(o for o in items if o.name == kind + "_L0")
+            for o in items:
+                o.hide_render = True
+        instance = models[kind].copy()
+        scene.collection.objects.link(instance)
+        instance.hide_render = False
+        if kind in ("Grass", "Fern", "Flowers", "BerryBush", "CoastalShrub"):
+            py = ground(px, pz)
+        instance.location = native((px, py, pz))
+        instance.rotation_mode = "XYZ"
+        instance.rotation_euler = (0, 0, prop["yaw"])
+        instance.scale = (prop["scale"],) * 3
+if args.wide_only:
+    shots = shots[:1]
 if args.handoff:
     shots = [
         (f"handoff-{lod}", (250, 245, 10), (33, 109, -198), 350, 36, lod)

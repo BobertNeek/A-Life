@@ -84,17 +84,40 @@ class Island:
         w, d, self.x, self.z, self.spacing, _ = struct.unpack_from("<IIfffI", data, 8)
         self.h = np.frombuffer(data, "<f4", w * d, 32).reshape(d, w)
         self.size = ((w - 1) * self.spacing, (d - 1) * self.spacing)
-        dz, dx = np.gradient(gaussian_filter(self.h, 0.75), self.spacing)
+        self.appearance, self.deband = self.massif()
+        dz, dx = np.gradient(gaussian_filter(self.appearance, 0.75), self.spacing)
         self.dx, self.dz = dx, dz
         self.grade = np.hypot(dx, dz)
         self.aspect = (0.78 * dx + 0.63 * dz) / (0.18 + self.grade)
-        self.hollow = gaussian_filter(self.h, 4.0) - self.h
+        self.hollow = gaussian_filter(self.appearance, 4.0) - self.appearance
         self.shelter = self.sky_shelter()
         self.drains = self.drainage()
 
+    def massif(self):
+        """Remove the known old cartographic carrier from *shading*, not world height.
+
+        The original island builder superimposed -14*abs(sin(.083*x-.06*z))
+        on the northern mountains. Bake its measured local amplitude out of
+        the normals and soil masks; don't flatten the mountains, coast or path.
+        """
+        j, i = np.indices(self.h.shape)
+        x, z = self.x + i * self.spacing, self.z + j * self.spacing
+        carrier = np.abs(np.sin(0.083 * x - 0.06 * z)) - 2 / np.pi
+        base = gaussian_filter(self.h, 4.0)
+        residual = np.clip(self.h - base, -14.0, 14.0)
+        phase = carrier - gaussian_filter(carrier, 4.0)
+        covariance = gaussian_filter(residual * phase, 7, mode="nearest")
+        var = np.maximum(0.001, gaussian_filter(phase * phase, 7))
+        power = np.maximum(0.01, gaussian_filter(residual * residual, 7))
+        confidence = ramp(0.12, 0.40, -covariance / np.sqrt(var * power))
+        amplitude = np.clip(-covariance / var, 0.0, 17.0) * confidence
+        # Do not carry the correction over cliffs into the sea or down the river.
+        amplitude *= ramp(23, 60, self.h) * ramp(-45, 18, -z)
+        return (self.h + amplitude * carrier).astype(np.float32), amplitude > 0.12
+
     def sky_shelter(self):
         """Static diffuse sky visibility in ravines, no painted directional sun."""
-        cover = np.zeros_like(self.h)
+        cover = np.zeros_like(self.appearance)
         for di, dj in [
             (1, 0),
             (-1, 0),
@@ -105,12 +128,15 @@ class Island:
             (1, -1),
             (-1, -1),
         ]:
-            horizon = np.zeros_like(self.h)
+            horizon = np.zeros_like(self.appearance)
             for step in (2, 5, 12, 28):
-                surface = shift(self.h, (dj * step, di * step), order=0, mode="nearest")
+                surface = shift(
+                    self.appearance, (dj * step, di * step), order=0, mode="nearest"
+                )
                 horizon = np.maximum(
                     horizon,
-                    (surface - self.h) / (step * self.spacing * np.hypot(di, dj)),
+                    (surface - self.appearance)
+                    / (step * self.spacing * np.hypot(di, dj)),
                 )
             cover += horizon / np.sqrt(1 + horizon * horizon)
         return cover / 8
@@ -157,7 +183,7 @@ class Island:
         h, g, face, hollow, shelter, drainage = [
             self.sample(f, x, z)
             for f in (
-                self.h,
+                self.appearance,
                 self.grade,
                 self.aspect,
                 self.hollow,

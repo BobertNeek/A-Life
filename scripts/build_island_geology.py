@@ -5,11 +5,14 @@ Dependencies: NumPy, SciPy and Pillow. Never regenerates the world's heightfield
 """
 
 import argparse
+import io
 import json
 from pathlib import Path
 import struct
 
 import numpy as np
+from PIL import Image
+from island_ground_finish import finish
 
 from island_geology_lod import chunk, leaves
 from island_geology_paint import Island, ground_micro
@@ -83,6 +86,8 @@ def build(source, destination):
                 "count": len(array),
                 "type": shape,
             }
+            if kind == 5121 and shape == "VEC4":
+                a["normalized"] = True
             if bounds:
                 a.update(min=array.min(axis=0).tolist(), max=array.max(axis=0).tolist())
             cache[key] = len(doc["accessors"])
@@ -132,6 +137,36 @@ def build(source, destination):
             },
         }
     ]
+    macro = np.asarray(Image.open(io.BytesIO(albedo)).convert("RGB")) / 255.0
+    detail = finish()
+    for filename, data in detail.items():
+        (art / filename).write_bytes(data)
+        doc["images"].append(
+            {"uri": "geology/" + filename, "mimeType": "image/png", "name": filename}
+        )
+        doc["textures"].append({"source": len(doc["images"]) - 1, "sampler": 1})
+
+    def linear(c):
+        return np.where(c <= 0.04045, c / 12.92, ((c + 0.055) / 1.055) ** 2.4)
+
+    close_mean = linear(
+        np.asarray(Image.open(io.BytesIO(detail["close-pigment.png"])), dtype=float)
+        / 255
+    ).mean(axis=(0, 1))
+    doc["materials"].append(
+        {
+            "name": "Salt meadow at creature scale",
+            "doubleSided": True,
+            "normalTexture": {"index": 4, "texCoord": 1},
+            "occlusionTexture": {"index": 5, "texCoord": 1, "strength": 0.8},
+            "pbrMetallicRoughness": {
+                "baseColorTexture": {"index": 3, "texCoord": 1},
+                "metallicFactor": 0,
+                "roughnessFactor": 1,
+                "metallicRoughnessTexture": {"index": 5, "texCoord": 1},
+            },
+        }
+    )
     geometry = {1: leaves(terrain, 2, 0.12, 0.76), 2: leaves(terrain, 4, 0.33, 2.4)}
     near = {}
     meshes = []
@@ -165,6 +200,16 @@ def build(source, destination):
                 name: src.attr(values[name])[pick] for name in ("POSITION", "NORMAL")
             }
         p = attrs["POSITION"]
+        gx = np.rint((p[:, 0] - terrain.x) / terrain.spacing).astype(int)
+        gz = np.rint((p[:, 2] - terrain.z) / terrain.spacing).astype(int)
+        fix = terrain.deband[gz, gx]
+        if fix.any():
+            # Use the same orientation at a point on every chunk, skirt and LOD.
+            nx, nz = -terrain.dx[gz[fix], gx[fix]], -terrain.dz[gz[fix], gx[fix]]
+            n = np.stack((nx, np.ones_like(nx), nz), axis=1)
+            old = attrs["NORMAL"].copy()
+            old[fix] = n / np.linalg.norm(n, axis=1, keepdims=True)
+            attrs["NORMAL"] = old
         attrs["TEXCOORD_0"] = np.stack(
             (
                 (p[:, 0] - terrain.x) / terrain.size[0],
@@ -172,18 +217,37 @@ def build(source, destination):
             ),
             axis=1,
         )
-        attrs["TEXCOORD_1"] = p[:, (0, 2)] / 3.7
+        attrs["TEXCOORD_1"] = p[:, (0, 2)] / (4.7 if lod == 0 else 3.7)
+        if lod == 0:
+            # Varied phase without discontinuities at adjacent chunk boundaries.
+            u, v = p[:, 0], p[:, 2]
+            attrs["TEXCOORD_1"] += np.column_stack(
+                (
+                    0.30 * np.sin(u * 0.14 + v * 0.12) + 0.16 * np.cos(v * 0.17),
+                    0.25 * np.sin(u * 0.16 - v * 0.13),
+                )
+            )
         attributes = {
             k: attr(v.astype("<f4", copy=False), 5126, bounds=k == "POSITION")
             for k, v in attrs.items()
         }
+        if lod == 0:
+            # Preserve the real pigment under each contact vertex; the additional
+            # pattern is at centimetre scale, never a new hill or collision body.
+            uv = attrs["TEXCOORD_0"]
+            u = np.clip((uv[:, 0] * macro.shape[1]).astype(int), 0, macro.shape[1] - 1)
+            v = np.clip((uv[:, 1] * macro.shape[0]).astype(int), 0, macro.shape[0] - 1)
+            c = np.clip(linear(macro[v, u]) / close_mean, 0, 1)
+            rgba = np.ones((len(c), 4), dtype=np.uint8) * 255
+            rgba[:, :3] = np.rint(c * 255).astype(np.uint8)
+            attributes["COLOR_0"] = attr(rgba, 5121)
         ix = attr(indices.astype("<u2", copy=False), 5123)
         counts[lod] += len(indices) // 3
         meshes.append(
             {
                 "name": mesh["name"],
                 "primitives": [
-                    {"attributes": attributes, "indices": ix, "material": 0}
+                    {"attributes": attributes, "indices": ix, "material": int(lod == 0)}
                 ],
             }
         )
