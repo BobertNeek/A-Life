@@ -8,6 +8,8 @@ on:
       - scripts/island_bough_mesh.py
       - scripts/island_canopy_outline.py
       - scripts/island_needle_surface.py
+      - crates/alife_game_app/assets/landscape/island/grove-crowns.*
+      - crates/alife_game_app/assets/landscape/island/canopy/**
 permissions:
   contents: read
 concurrency:
@@ -71,14 +73,21 @@ jobs:
           for side in before after; do
             C="$RUNNER_TEMP/predecessor"
             if [ "$side" = after ]; then C="$RUNNER_TEMP/bough"; fi
-            for view in stone-eye guardian-woods; do
+            for view in stone-eye pine-eye guardian-woods; do
               args=(--rock-eye)
+              if [ "$view" = pine-eye ]; then args=(--pine-eye); fi
               if [ "$view" = guardian-woods ]; then args=(--guardian-review --grove-framing dense); fi
               blender -b -t 2 --python-exit-code 1 -P scripts/render_island_geology.py -- "$R/terrain-chunks.glb" "$P/$side" "${args[@]}" --coastal-light "$D/coastal-daylight.json" --marine-sky "$D/marine-day.glb" --strandline "$D/strandline.glb" --surface "$R/island-ridge-v2.bin" --placements "$R/props-ridge-v2.json" --water-inputs studies/island-art-week/water-inputs --habitats "$RUNNER_TEMP/bough-minerals/habitat-ground.glb" --grove-forms "$C/grove-crowns.glb"
             done
           done
-          for view in stone-eye guardian-woods; do
+          for view in stone-eye pine-eye guardian-woods; do
             python scripts/compare_island_art.py "$P/before/$view.png" "$P/after/$view.png" "$P/$view.jpg" --title "Interlocking boughs | $view | Identical tree anchors, terrain and light | CPU Blender"
+          done
+      - name: Match all published native files to the exact rendered and verified pack
+        run: |
+          D=crates/alife_game_app/assets/landscape/island
+          for file in grove-crowns.glb grove-crowns.json canopy/needles.png canopy/needles-normal.png canopy/needles-orm.png; do
+            cmp "$RUNNER_TEMP/bough/$file" "$D/$file"
           done
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:

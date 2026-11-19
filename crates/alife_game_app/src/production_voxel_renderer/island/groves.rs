@@ -2,6 +2,7 @@
 use super::*;
 use std::{num::NonZeroU8, sync::OnceLock};
 
+pub(super) const FORMS: u8 = 12;
 pub(super) const PACK: &str = "landscape/island/grove-crowns.glb";
 
 #[derive(serde::Deserialize)]
@@ -31,32 +32,41 @@ pub(super) fn at(index: usize, original: &Prop) -> Option<GroveForm> {
     // Never put a previously baked upper crown on a relocated or different
     // trunk if another island revision changes placement order.
     let xz = Vec2::new(original.position[0], original.position[2]);
-    if (1..=8).contains(&entry.form) && xz.distance_squared(Vec2::from_array(entry.xz)) < 0.000004 {
+    if (1..=FORMS).contains(&entry.form) && xz.distance_squared(Vec2::from_array(entry.xz)) < 0.000004 {
         NonZeroU8::new(entry.form).map(GroveForm)
     } else {
         None
     }
 }
 
-pub(super) fn models(pack: &Gltf, assets: &Assets<GltfMesh>) -> Option<Vec<[Handle<Mesh>; 3]>> {
+pub(super) struct CrownModels {
+    meshes: Vec<[Handle<Mesh>; 3]>,
+    pub(super) material: Handle<StandardMaterial>,
+}
+
+pub(super) fn models(pack: &Gltf, assets: &Assets<GltfMesh>) -> Option<CrownModels> {
+    let [material] = pack.materials.as_slice() else {
+        return None;
+    };
     let mesh = |form, lod| {
         let handle = pack
             .named_meshes
             .get(format!("PineForm{form}_L{lod}").as_str())?;
-        Some(assets.get(handle)?.primitives.first()?.mesh.clone())
+        let [primitive] = assets.get(handle)?.primitives.as_slice() else {
+            return None;
+        };
+        (primitive.material.as_ref()? == material).then(|| primitive.mesh.clone())
     };
-    // Build this table only when a just-loaded optional pack can replace the
-    // source meshes. Static trees otherwise retain their usual visibility loop.
-    (1..=8)
+    // Incomplete streaming or a mismatched material keeps the ordinary pines.
+    // Bind the entire table once, never stampede the asset server for 421 trees.
+    let meshes = (1..=FORMS)
         .map(|f| Some([mesh(f, 0)?, mesh(f, 1)?, mesh(f, 2)?]))
-        .collect()
+        .collect::<Option<_>>()?;
+    Some(CrownModels { meshes, material: material.clone() })
 }
 
-pub(super) fn levels<'a>(
-    form: &GroveForm,
-    models: &'a [[Handle<Mesh>; 3]],
-) -> &'a [Handle<Mesh>; 3] {
-    &models[form.0.get() as usize - 1]
+pub(super) fn levels<'a>(form: &GroveForm, models: &'a CrownModels) -> &'a [Handle<Mesh>; 3] {
+    &models.meshes[form.0.get() as usize - 1]
 }
 
 #[cfg(test)]
@@ -80,7 +90,7 @@ mod tests {
                 assert!(found.is_none());
             }
         }
-        assert_eq!((original, replaced), (135, 286));
+        assert_eq!((original, replaced), (0, 421));
         let &idx = layout().keys().next().unwrap();
         props[idx].position[0] += 0.05;
         assert!(at(idx, &props[idx]).is_none());
@@ -92,8 +102,19 @@ mod tests {
         let len = u32::from_le_bytes(data[12..16].try_into().unwrap()) as usize;
         let doc: serde_json::Value = serde_json::from_slice(&data[20..20 + len]).unwrap();
         let meshes = doc["meshes"].as_array().unwrap();
-        assert_eq!(meshes.len(), 24);
-        for f in 1..=8 {
+        assert_eq!(meshes.len(), usize::from(FORMS) * 3);
+        let materials = doc["materials"].as_array().unwrap();
+        assert_eq!(materials.len(), 1);
+        let m = &materials[0];
+        assert_eq!(m["pbrMetallicRoughness"]["baseColorTexture"]["index"], 0);
+        assert_eq!(m["normalTexture"]["index"], 1);
+        assert_eq!(m["pbrMetallicRoughness"]["metallicRoughnessTexture"]["index"], 2);
+        let images = doc["images"].as_array().unwrap();
+        assert_eq!(images.len(), 3);
+        for (image, uri) in images.iter().zip(["canopy/needles.png", "canopy/needles-normal.png", "canopy/needles-orm.png"]) {
+            assert_eq!(image["uri"].as_str(), Some(uri));
+        }
+        for f in 1..=FORMS {
             for l in 0..3 {
                 let label = format!("PineForm{f}_L{l}");
                 let m = meshes
@@ -101,6 +122,8 @@ mod tests {
                     .find(|m| m["name"].as_str() == Some(label.as_str()))
                     .unwrap();
                 assert_eq!(m["primitives"].as_array().unwrap().len(), 1);
+                assert_eq!(m["primitives"][0]["material"], 0);
+                assert!(m["primitives"][0]["attributes"]["TEXCOORD_0"].is_number());
             }
         }
     }

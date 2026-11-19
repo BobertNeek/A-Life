@@ -1214,44 +1214,44 @@
     {
       "asset_id": "approved-island-grove-geometry",
       "author": "Qualia island environment art",
-      "digest": "fnv1a64:bab74f2a0b3e9200",
+      "digest": "fnv1a64:b6c8b5fc6625375a",
       "external": false,
       "final_art": false,
       "generated": true,
       "generator": {
-        "config_path": "scripts/build_island_grove_forms.py",
+        "tool": "Qualia rooted maritime pine boughs and opaque needle surface",
+        "config_path": "scripts/build_island_boughs.py",
         "date": "2026-11-19",
-        "seed": "590,741",
-        "tool": "Qualia rooted wind-grown conifer study"
+        "seed": "7263, 971935"
       },
       "license": "A-Life-Generated-Source",
       "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/island/grove-crowns.glb",
       "placeholder": false,
-      "replacement_policy": "edit-grove-recipe-and-refresh-manifest",
-      "size_bytes": 712584,
+      "replacement_policy": "edit-pine-bough-and-needle-recipe-and-refresh-manifest",
+      "size_bytes": 1411944,
       "source": "generated:island-rooted-groves",
       "usage_category": "environment-dressing"
     },
     {
       "asset_id": "approved-island-grove-layout",
       "author": "Qualia island environment art",
-      "digest": "fnv1a64:8a7fb7f00c7c3698",
+      "digest": "fnv1a64:4c79239e3d5d94f4",
       "external": false,
       "final_art": false,
       "generated": true,
       "generator": {
-        "config_path": "scripts/build_island_grove_forms.py",
+        "tool": "Qualia rooted maritime pine boughs and opaque needle surface",
+        "config_path": "scripts/build_island_boughs.py",
         "date": "2026-11-19",
-        "seed": "590,741",
-        "tool": "Qualia rooted wind-grown conifer study"
+        "seed": "7263, 971935"
       },
       "license": "A-Life-Generated-Source",
       "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/island/grove-crowns.json",
       "placeholder": false,
-      "replacement_policy": "edit-grove-recipe-and-refresh-manifest",
-      "size_bytes": 17871,
+      "replacement_policy": "edit-pine-bough-and-needle-recipe-and-refresh-manifest",
+      "size_bytes": 26395,
       "source": "generated:island-rooted-groves",
       "usage_category": "environment-dressing"
     },
@@ -1319,6 +1319,72 @@
       "replacement_policy": "apply-mineral-finish-to-original-source-and-refresh-manifest",
       "size_bytes": 49646,
       "source": "generated:approved-island-blender-rocks-with-mineral-finish",
+      "usage_category": "environment-dressing"
+    },
+    {
+      "asset_id": "approved-island-canopy-needles",
+      "author": "Qualia island environment art",
+      "digest": "fnv1a64:eb9093ed9a64fee2",
+      "external": false,
+      "final_art": false,
+      "generated": true,
+      "generator": {
+        "tool": "Qualia rooted maritime pine boughs and opaque needle surface",
+        "config_path": "scripts/build_island_boughs.py",
+        "date": "2026-11-19",
+        "seed": "7263, 971935"
+      },
+      "license": "A-Life-Generated-Source",
+      "license_ref": "README.md",
+      "local_path": "crates/alife_game_app/assets/landscape/island/canopy/needles.png",
+      "placeholder": false,
+      "replacement_policy": "edit-pine-bough-and-needle-recipe-and-refresh-manifest",
+      "size_bytes": 373162,
+      "source": "generated:island-rooted-groves",
+      "usage_category": "environment-dressing"
+    },
+    {
+      "asset_id": "approved-island-canopy-needles-normal",
+      "author": "Qualia island environment art",
+      "digest": "fnv1a64:e163226a186aa482",
+      "external": false,
+      "final_art": false,
+      "generated": true,
+      "generator": {
+        "tool": "Qualia rooted maritime pine boughs and opaque needle surface",
+        "config_path": "scripts/build_island_boughs.py",
+        "date": "2026-11-19",
+        "seed": "7263, 971935"
+      },
+      "license": "A-Life-Generated-Source",
+      "license_ref": "README.md",
+      "local_path": "crates/alife_game_app/assets/landscape/island/canopy/needles-normal.png",
+      "placeholder": false,
+      "replacement_policy": "edit-pine-bough-and-needle-recipe-and-refresh-manifest",
+      "size_bytes": 297650,
+      "source": "generated:island-rooted-groves",
+      "usage_category": "environment-dressing"
+    },
+    {
+      "asset_id": "approved-island-canopy-needles-orm",
+      "author": "Qualia island environment art",
+      "digest": "fnv1a64:7c1c77d43b17e24e",
+      "external": false,
+      "final_art": false,
+      "generated": true,
+      "generator": {
+        "tool": "Qualia rooted maritime pine boughs and opaque needle surface",
+        "config_path": "scripts/build_island_boughs.py",
+        "date": "2026-11-19",
+        "seed": "7263, 971935"
+      },
+      "license": "A-Life-Generated-Source",
+      "license_ref": "README.md",
+      "local_path": "crates/alife_game_app/assets/landscape/island/canopy/needles-orm.png",
+      "placeholder": false,
+      "replacement_policy": "edit-pine-bough-and-needle-recipe-and-refresh-manifest",
+      "size_bytes": 65048,
+      "source": "generated:island-rooted-groves",
       "usage_category": "environment-dressing"
     }
   ],

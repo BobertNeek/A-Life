@@ -81,6 +81,9 @@ cli.add_argument(
     "--rock-eye", action="store_true", help="1.03 m diagnostic at a real boulder foot"
 )
 cli.add_argument(
+    "--pine-eye", action="store_true", help="Creature among the lower sprays of actual pine 434"
+)
+cli.add_argument(
     "--grove-framing",
     choices=("shoulder", "dense"),
     default="shoulder",
@@ -225,6 +228,7 @@ if (
     or args.cove_showcase
     or args.guardian_review
     or args.rock_eye
+    or args.pine_eye
 ):
     root = Path(__file__).resolve().parents[1]
     library = (
@@ -315,6 +319,20 @@ if (
                 0,
             )
         ]
+    if args.pine_eye:
+        # 1.02 m uphill of actual pine 434, looking through its outer
+        # boughs into 21 trees on the opposite edge of the guardian stand.
+        x, z, tx, tz = -149.04, -38.54, -151.27, -32.78
+        shots = [
+            (
+                "pine-eye",
+                (x, ground(x, z) + 1.02, z),
+                (tx, ground(-152.35, -33.405) + 3.2, tz),
+                0,
+                29,
+                0,
+            )
+        ]
     props = json.loads((args.placements or library / "props.json").read_text())
     models = {}
     from island_grove_review import sources, form
@@ -325,7 +343,7 @@ if (
     if args.cove_showcase:
         eye, aim = native(shots[0][1]), native(shots[0][2])
         cove_focus = eye + (aim - eye).normalized() * 15.0
-    if args.guardian_review or args.rock_eye:
+    if args.guardian_review or args.rock_eye or args.pine_eye:
         cove_focus = native(shots[0][2])
     for index, prop in enumerate(props):
         px, py, pz = prop["position"]

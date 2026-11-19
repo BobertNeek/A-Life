@@ -1,0 +1,44 @@
+{
+  "confirmed_original_pine_anchors_and_proxies": 421,
+  "preserved_original_bark_through_m": 3.2,
+  "pooled_forms": 12,
+  "primitives_per_lod": 1,
+  "new_min_max_triangles_by_lod": {
+    "0": [
+      2985,
+      3433
+    ],
+    "1": [
+      555,
+      627
+    ],
+    "2": [
+      158,
+      158
+    ]
+  },
+  "stock_lod_budgets": [
+    3456,
+    668,
+    172
+  ],
+  "axis_extent_ratio_range_l1_l2_to_l0": [
+    0.92,
+    1.0
+  ],
+  "all_new_canopy_faces_nondegenerate": true,
+  "projected_silhouettes_eight_views_each": {
+    "L1": {
+      "min_iou": 0.741,
+      "median_iou": 0.8,
+      "min_area_ratio": 0.82,
+      "max_area_ratio": 1.075
+    },
+    "L2": {
+      "min_iou": 0.709,
+      "median_iou": 0.77,
+      "min_area_ratio": 0.789,
+      "max_area_ratio": 1.138
+    }
+  }
+}

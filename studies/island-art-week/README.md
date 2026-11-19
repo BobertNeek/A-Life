@@ -173,3 +173,23 @@ first exact-byte job caught sub-micro-unit differences between local and hosted
 rock UVs/normals (positions and RGBA were identical). The five checked-in
 GLBs now use the actual hosted producer behind these renders. This is a
 reproducibility correction, not a claim that the first byte gate passed.
+
+### Week checkpoint: real maritime spruce boughs
+
+The old conifers were stacks of separate level plates. The [1.03 m stone-eye comparison](bough-creature.jpg)
+and [dense hillside from above](bough-guardian.jpg) show a different mesh, not a rescale: each spruce
+has 25 to 29 staggered bough attachments, drooping forked branch sprays, broken lower edges and
+an asymmetric central needle mass. Twelve locally sized/wind-oriented forms cover the original
+421 pines; no new tree entity, placement, rotation, size or proxy was introduced. Branches share
+one opaque material (aligned needle pigment, normal and roughness); no cutout overdraw or extra
+per-tree draw. The native loader retains the source pines until all 36 mesh variants and the
+shared surface are available, then changes only the correct pine entities, once.
+
+The [geometry and projected silhouette check](bough-validation.json) compares eight angles per
+form at each of three LODs. Near 2,985–3,433 versus original 3,456 triangles; middle 555–627
+versus 668; far 158 versus 172. Level 1 and 2 retain at least 82.0% / 78.9% of near silhouette area
+at these angles, not a promise of zero in-motion pop. The unbent source bark through 3.2 m
+is bit-identical in local position, normal and color; all 421 physical trunk boxes are unchanged.
+The bound asset and these two plates are the exact output of hosted Blender 4.3.2 CPU study
+44456932447 at recipe 4547e3358d98f6e66c0e1d752339010fb8ab8c7f. These are offline poses on
+the separate V2 study surface. Neither they nor the CPU ECS tests are a live game or FPS result.

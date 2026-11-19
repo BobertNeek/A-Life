@@ -9,6 +9,7 @@ struct ChangedOutputs {
     lights: usize,
     cascades: usize,
     meshes: usize,
+    prop_materials: usize,
     terrain_lods: usize,
     prop_ranges: usize,
 }
@@ -18,6 +19,7 @@ fn record_changes(
     lights: Query<(), (With<TerrainSun>, Changed<DirectionalLight>)>,
     cascades: Query<(), (With<TerrainSun>, Changed<bevy::light::CascadeShadowConfig>)>,
     meshes: Query<(), Changed<Mesh3d>>,
+    prop_materials: Query<(), (With<PropRange>, Changed<MeshMaterial3d<StandardMaterial>>)>,
     terrain_lods: Query<(), Changed<TerrainLod>>,
     prop_ranges: Query<(), Changed<PropRange>>,
     mut changed: ResMut<ChangedOutputs>,
@@ -27,6 +29,7 @@ fn record_changes(
         lights: lights.iter().count(),
         cascades: cascades.iter().count(),
         meshes: meshes.iter().count(),
+        prop_materials: prop_materials.iter().count(),
         terrain_lods: terrain_lods.iter().count(),
         prop_ranges: prop_ranges.iter().count(),
     };
@@ -101,6 +104,7 @@ fn spawn_prop(app: &mut App, position: Vec3, tree: bool, distance: f32) -> Entit
     app.world_mut()
         .spawn((
             Mesh3d(meshes[0].clone()),
+            MeshMaterial3d::<StandardMaterial>(Handle::default()),
             Visibility::Hidden,
             PropRange {
                 grove_form: None,
@@ -733,8 +737,11 @@ fn arriving_crown_pack_replaces_only_mapped_visuals_once_without_moving_a_trunk(
     app.update();
     let unique = app.world().resource::<Assets<Mesh>>().reserve_handle();
     let prim = primitive_fixture(&mut app, unique.clone());
+    let pine = app.world().resource::<Assets<StandardMaterial>>().reserve_handle();
+    app.world_mut().resource_mut::<Assets<GltfMesh>>().get_mut(&prim).unwrap().primitives[0].material = Some(pine.clone());
     let mut pack = pack_fixture();
-    for form in 1..=8 {
+    pack.materials.push(pine.clone());
+    for form in 1..=groves::FORMS {
         for level in 0..3 {
             pack.named_meshes.insert(
                 format!("PineForm{form}_L{level}").into_boxed_str(),
@@ -744,29 +751,43 @@ fn arriving_crown_pack_replaces_only_mapped_visuals_once_without_moving_a_trunk(
     }
     let world = app.world_mut();
     let before: std::collections::HashMap<_, _> = world
-        .query::<(Entity, &PropRange, &Transform)>()
+        .query_filtered::<(Entity, &Transform, &MeshMaterial3d<StandardMaterial>), With<PropRange>>()
         .iter(world)
-        .map(|(id, _, t)| (id, *t))
+        .map(|(id, t, m)| (id, (*t, m.0.clone())))
         .collect();
+    // A top-level glTF can appear before all named subassets. In that case
+    // absolutely nothing in the trunk/material population should be replaced.
+    let last = format!("PineForm{}_L2", groves::FORMS);
+    let last_mesh = pack.named_meshes.remove(last.as_str()).unwrap();
     let pack = world.resource_mut::<Assets<Gltf>>().add(pack);
-    world.resource_mut::<IslandAssets>().groves = pack;
+    world.resource_mut::<IslandAssets>().groves = pack.clone();
+    advance(&mut app, 201);
+    let world = app.world_mut();
+    assert!(!world.resource::<IslandAssets>().groves_attached);
+    for (entity, t, m) in world.query_filtered::<(Entity, &Transform, &MeshMaterial3d<StandardMaterial>), With<PropRange>>().iter(world) {
+        assert_eq!(*t, before[&entity].0);
+        assert_eq!(m.0, before[&entity].1);
+    }
+    world.resource_mut::<Assets<Gltf>>().get_mut(&pack).unwrap().named_meshes.insert(last.into_boxed_str(), last_mesh);
     advance(&mut app, 201);
     let world = app.world_mut();
     assert!(world.resource::<IslandAssets>().groves_attached);
     let mut changed = 0;
-    for (id, prop, t, mesh) in world
-        .query::<(Entity, &PropRange, &Transform, &Mesh3d)>()
+    for (id, prop, t, mesh, mat) in world
+        .query::<(Entity, &PropRange, &Transform, &Mesh3d, &MeshMaterial3d<StandardMaterial>)>()
         .iter(world)
     {
-        assert_eq!(*t, before[&id]);
+        assert_eq!(*t, before[&id].0);
         if prop.grove_form.is_some() {
             assert_eq!(mesh.0, unique);
+            assert_eq!(mat.0, pine);
             changed += 1;
         } else {
             assert_ne!(mesh.0, unique);
+            assert_eq!(mat.0, before[&id].1);
         }
     }
-    assert_eq!(changed, 286);
+    assert_eq!(changed, 421);
     advance(&mut app, 201);
     assert_quiet(&app);
 }

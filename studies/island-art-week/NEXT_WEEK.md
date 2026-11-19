@@ -81,3 +81,14 @@ a hidden stone disables plants, or the mineral normal maps bind to foliage.
 Pan from close shale into the guardian shoulder; the lowland should not
 acquire a repeating stripe or an outlined polygon grid. Keep the
 horizon/cove as a control rather than claiming a different sky.
+
+For the new spruce meshes use the previous geometry from
+`16090b4e4a25458696ef74ff461804f553ad3d62` versus the weekly branch. Save
+the ordinary native orthographic creature-height and guardian receipts looking through the
+stand around **x=-162,z=-38**. A close comparison for pine 434 is from x=-149.04,z=-38.54
+toward x=-151.27,z=-32.78; the low study is perspective, so judge actual scale in the
+normal gameplay lens separately. Verify the ordinary tree remains visible before the pack
+loads, the same trunk still stops the toy, all three LODs show the same needle material,
+and broadleaves/stones keep their own. Pan through the 100 m/240 m prop transitions in a
+dense clump. Profile one shared pine surface and the three mipped needle maps; the source
+and candidate have the same per-visible-tree draw count, not a measured frame-time result.

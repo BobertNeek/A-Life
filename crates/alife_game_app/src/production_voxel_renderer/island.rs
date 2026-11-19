@@ -363,6 +363,7 @@ pub(super) fn update(
     assets: Option<ResMut<IslandAssets>>,
     gltfs: Option<Res<Assets<Gltf>>>,
     gltf_meshes: Option<Res<Assets<GltfMesh>>>,
+    asset_server: Option<Res<AssetServer>>,
     mut chunks: Query<
         (
             &mut Mesh3d,
@@ -371,7 +372,10 @@ pub(super) fn update(
         ),
         Without<PropRange>,
     >,
-    mut props: Query<(&mut Mesh3d, &mut Visibility, &mut PropRange), Without<TerrainLod>>,
+    mut props: Query<
+        (&mut Mesh3d, &mut MeshMaterial3d<StandardMaterial>, &mut Visibility, &mut PropRange),
+        Without<TerrainLod>,
+    >,
     mut strand_patches: strandline::PatchViews,
     mut cameras: Query<
         (
@@ -584,16 +588,18 @@ pub(super) fn update(
     if saw_chunk && ready_habitats.is_some() {
         assets.habitats_attached = true;
     }
-    let grove_models = (!assets.groves_attached)
+    let grove_models = (!assets.groves_attached
+        && asset_server.as_ref().is_none_or(|server| server.is_loaded_with_dependencies(&assets.groves)))
         .then(|| gltfs.get(&assets.groves))
         .flatten()
         .and_then(|pack| groves::models(pack, &gltf_meshes));
     let mut saw_prop = false;
-    for (mut mesh, mut visibility, mut prop) in &mut props {
+    for (mut mesh, mut material, mut visibility, mut prop) in &mut props {
         saw_prop = true;
         let mut crown_replaced = false;
         if let (Some(models), Some(form)) = (grove_models.as_ref(), prop.grove_form) {
             prop.meshes = groves::levels(&form, models).clone();
+            material.0 = models.material.clone();
             crown_replaced = true;
         }
         let distance = Vec2::new(prop.position.x - focus.x, prop.position.z - focus.z).length();

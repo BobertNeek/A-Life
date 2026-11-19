@@ -9,6 +9,7 @@ on:
       - crates/alife_game_app/assets/landscape/island/habitat-ground.glb
       - crates/alife_game_app/assets/landscape/island/habitats/**
       - crates/alife_game_app/assets/landscape/island/minerals/**
+      - crates/alife_game_app/assets/landscape/island/canopy/**
       - crates/alife_game_app/assets/landscape/island/geology/**
       - crates/alife_game_app/assets/landscape/island/Boulder*.glb
       - crates/alife_game_app/assets/landscape/island/Cliff.glb
