@@ -244,7 +244,7 @@ def growth(edge, out):
                 < 2.35
             ):
                 continue
-            scale = r.uniform(0.19, 0.49) * (1 - 0.45 * shade)
+            scale = r.uniform(0.16, 0.37) * (1 - 0.36 * shade)
             tone = np.array(
                 r.choice(
                     [
@@ -260,55 +260,149 @@ def growth(edge, out):
             count = int(r.integers(6, 12))
             plants += 1
             for k in range(count):
-                angle = az + 2.399 * k + r.normal(0, 0.29)
-                root = p + r.normal(0, 0.024, 2)
+                # Some fans comb gently downhill rather than forming a
+                # tall regular cornstalk. Each small arch has a broad foot.
+                angle = az + 2.399 * k + r.normal(0, 0.41)
+                root = p + r.normal(0, 0.035, 2)
                 blade(
                     root,
                     angle,
                     scale * r.uniform(0.58, 1.17),
-                    r.uniform(0.009, 0.021),
-                    tone * r.uniform(0.87, 1.04),
-                    fold=r.uniform(0.48, 0.9),
+                    r.uniform(0.009, 0.017),
+                    tone * r.uniform(0.98, 1.12),
+                    fold=r.uniform(0.24, 0.47),
                 )
                 leaves += 1
-    # Actual low paired leaves on joined evergreen runners. Each runner
-    # terminal leaves a branching daughter connected to it, not a new clump.
-    runners = 0
-    for a, b, c, d in (
-        (4.0, 1.45, -1.2, 0.9),
-        (8.4, 1.38, 1.5, 0.8),
-        (13.7, 1.55, -3.7, 0.7),
-    ):
-        for j in range(20):
-            p = edge.world(r.normal(a, b), r.normal(c, d))
-            if edge.fields(*p)[3] < 0.46:
+
+    # Branched ground-hugging colonies with overlapping broad leaf faces.
+    # The first portrait had long naked internodes and aligned rows of dots.
+    # The living canopy instead spans several nodes and branches back over
+    # the older growth. This is not another forest of upright grass crosses.
+    def spoon(root, angle, length, width, tone, posture, bank):
+        direct = np.array([math.cos(angle), math.sin(angle)])
+        side = np.array([-direct[1], direct[0]])
+        root_y = edge.y(root)
+        bend = r.uniform(-0.18, 0.18)
+        last = None
+        for t, amp, arch in (
+            (0, 0, 0.025),
+            (0.36, 0.84, 0.70),
+            (0.72, 1.0, 1.0),
+            (1.0, 0, 0.70),
+        ):
+            centre = root + length * (direct * t + side * bend * math.sin(math.pi * t))
+            base = root_y + length * (0.045 + posture * arch)
+            if not amp:
+                single = g.point(
+                    (centre[0], max(edge.y(centre) + 0.004, base), centre[1]),
+                    tone * (0.76 + 0.28 * t),
+                )
+                if last is not None:
+                    g.face(last[0], last[1], single)
+                    g.face(last[1], last[2], single)
+                else:
+                    last = [single]
                 continue
-            ang = math.atan2(edge.u[1], edge.u[0]) + r.normal(0.2, 0.9)
-            c0 = np.array(r.choice([(105, 130, 94), (119, 142, 99), (131, 145, 97)]))
-            runners += 1
-            for k in range(int(r.integers(6, 11))):
-                ang += r.normal(0, 0.21)
-                direct = np.array([math.cos(ang), math.sin(ang)])
-                side = np.array([-direct[1], direct[0]])
-                q = p + direct * r.uniform(0.095, 0.16)
-                l = point(p - side * 0.007, 0.009, (118, 98, 58))
-                rr = point(p + side * 0.007, 0.009, (127, 108, 63))
-                ll = point(q - side * 0.005, 0.014, (132, 111, 72))
-                rb = point(q + side * 0.005, 0.014, (141, 117, 75))
-                g.face(l, ll, rb)
-                g.face(l, rb, rr)
-                for sign in (-1, 1):
-                    length = r.uniform(0.065, 0.139)
-                    blade(
-                        q,
-                        ang + sign * r.uniform(0.82, 1.23),
-                        length,
-                        length * r.uniform(0.15, 0.24),
-                        c0,
-                        fold=r.uniform(0.34, 0.52),
-                    )
-                    leaves += 1
-                p = q
+            row = []
+            for k in (-1, 0, 1):
+                q = centre + side * k * amp * width
+                lift = amp * width * (0.23 if not k else 0.11 * k * bank)
+                y = max(edge.y(q) + 0.0045, base + lift)
+                col = tone * (
+                    0.79 + 0.23 * t + (0.045 if k == bank else -0.014 if k else 0.04)
+                )
+                row.append(g.point((q[0], y, q[1]), col))
+            if len(last) == 1:
+                g.face(last[0], row[0], row[1])
+                g.face(last[0], row[1], row[2])
+            else:
+                for n in (0, 1):
+                    g.face(last[n], row[n], row[n + 1])
+                    g.face(last[n], row[n + 1], last[n + 1])
+            last = row
+
+    runners = 0
+
+    def trail(p, ang, length, count, col, depth=0):
+        nonlocal leaves, runners
+        spin = r.uniform(0, math.tau)
+        curve = r.uniform(-0.53, 0.53)
+        runners += 1
+        for k in range(count):
+            ang += curve / count + r.normal(0, 0.30)
+            direct = np.array([math.cos(ang), math.sin(ang)])
+            side = np.array([-direct[1], direct[0]])
+            q = p + direct * r.uniform(0.67, 1.22) * length / count
+            # Exposed few-mm stem emerges from the detritus and sinks under
+            # the next leaf, rather than running as a straight bright wire.
+            l = point(p - side * 0.004, -0.002, (116, 101, 66))
+            rr = point(p + side * 0.004, -0.002, (129, 116, 78))
+            ll = point(q - side * 0.003, 0.005, (130, 110, 74))
+            rb = point(q + side * 0.003, 0.006, (130, 115, 72))
+            g.face(l, ll, rb)
+            g.face(l, rb, rr)
+            size = r.uniform(0.078, 0.155) * (1.0 if not depth else 0.83)
+            for j in range(int(r.integers(3, 6))):
+                spin += 2.399 + r.normal(0, 0.28)
+                spread = size * r.uniform(0.74, 1.33)
+                base = q + r.normal(0, 0.009, 2)
+                spoon(
+                    base,
+                    spin,
+                    spread,
+                    spread * r.uniform(0.20, 0.33),
+                    col * r.uniform(0.92, 1.12),
+                    r.uniform(0.24, 0.50),
+                    1 if (j + k) % 2 else -1,
+                )
+                leaves += 1
+            if not depth and k in (2, 4) and r.random() < 0.72:
+                trail(
+                    q.copy(),
+                    ang + r.choice((-1, 1)) * r.uniform(0.66, 1.70),
+                    length * r.uniform(0.32, 0.61),
+                    int(r.integers(3, 5)),
+                    col * 1.03,
+                    1,
+                )
+            p = q
+
+    for a, b, c, d, clusters in (
+        (3.0, 2.1, -1.15, 1.0, 11),
+        (8.0, 1.6, 1.6, 1.0, 11),
+        (12.9, 1.7, -3.2, 1.0, 12),
+        (16.1, 1.3, -2.9, 0.82, 12),
+        (19.0, 1.1, 0.75, 0.58, 9),
+    ):
+        for j in range(clusters):
+            u, v = r.normal(a, b), r.normal(c, d)
+            p = edge.world(u, v)
+            if edge.fields(*p)[3] < 0.38:
+                continue
+            tone = np.asarray(
+                r.choice(
+                    [
+                        (126, 149, 103),
+                        (140, 158, 111),
+                        (119, 148, 116),
+                        (133, 146, 97),
+                        (111, 138, 94),
+                    ]
+                ),
+                float,
+            )
+            mean = r.uniform(0, math.tau)
+            # Tuck daughter crowns near the original mat. No straight axis
+            # is shared with the neighbouring colony or the contours.
+            for branch in range(int(r.integers(2, 4))):
+                pos = p + r.normal(0, 0.065, 2)
+                trail(
+                    pos,
+                    mean + branch * 2.399 + r.normal(0, 0.43),
+                    r.uniform(0.34, 0.72),
+                    int(r.integers(4, 7)),
+                    tone,
+                )
     doc = dict(
         asset={"version": "2.0", "generator": "Qualia two-spruce woodland edge"},
         scene=0,
