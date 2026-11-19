@@ -47,6 +47,21 @@ cli.add_argument(
 )
 cli.add_argument("--prop-library", type=Path)
 cli.add_argument(
+    "--wild-sward",
+    type=Path,
+    help="Near fitted stool and plant communities of the wild valley",
+)
+cli.add_argument(
+    "--meadow-library",
+    type=Path,
+    help="Only Grass and Flowers on existing world anchors",
+)
+cli.add_argument(
+    "--meadow-habits",
+    action="store_true",
+    help="Read three named sedge families from the pictured native study pack",
+)
+cli.add_argument(
     "--broadleaf-library", type=Path, help="Only the native Broadleaf model"
 )
 cli.add_argument(
@@ -473,6 +488,10 @@ if (
             else int(dist > 100 or (args.guardian_review and review_span > 80))
         )
         model_key = form(forms, index, kind, px, pz)
+        if kind == "Grass" and args.meadow_habits:
+            from island_meadow_variation import family
+
+            model_key = family(index, px, ground(px, pz), pz)
         if (model_key, level) not in models:
             old = set(bpy.data.objects)
             stone = kind in ("Cliff", "Scree", "BoulderA", "BoulderB", "BoulderC")
@@ -481,14 +500,22 @@ if (
                 where = args.broadleaf_library
             if kind == "Fern" and args.fern_library:
                 where = args.fern_library
+            if kind in ("Grass", "Flowers") and args.meadow_library:
+                where = args.meadow_library
             bpy.ops.import_scene.gltf(filepath=str(where / f"{kind}.glb"))
             items = set(bpy.data.objects) - old
-            for lod_index in (0, 1, 2):
-                item = next(
-                    (o for o in items if o.name == kind + f"_L{lod_index}"), None
-                )
-                if item is not None:
-                    models[kind, lod_index] = item
+            names = (
+                ["Grass", "GrassSilver", "GrassAmber"]
+                if kind == "Grass" and args.meadow_habits
+                else [kind]
+            )
+            for name in names:
+                for lod_index in (0, 1, 2):
+                    item = next(
+                        (o for o in items if o.name == name + f"_L{lod_index}"), None
+                    )
+                    if item is not None:
+                        models[name, lod_index] = item
             for o in items:
                 o.hide_render = True
         instance = models[model_key, level].copy()
@@ -515,6 +542,13 @@ if args.inlet_cut:
     for o in skins:
         o.visible_shadow = False
     decor.extend(skins)
+sward = []
+if args.wild_sward:
+    old = set(bpy.data.objects)
+    bpy.ops.import_scene.gltf(filepath=str(args.wild_sward.resolve()))
+    sward = [o for o in set(bpy.data.objects) - old if o.type == "MESH"]
+    for o in sward:
+        o.visible_shadow = o.name.endswith("_leaves")
 copse = []
 if args.copse_floor:
     old = set(bpy.data.objects)
@@ -585,6 +619,12 @@ for name, pos, aim, ortho, lens, lod in shots:
             o.hide_render = (args.guardian_review and review_span >= 100) or math.hypot(
                 cx - focus.x, cz + focus.y
             ) >= 150
+    if sward:
+        b = native(aim)
+        for ob in sward:
+            ob.hide_render = (args.guardian_review and review_span >= 60) or math.hypot(
+                ob.location.x - b.x, ob.location.y - b.y
+            ) >= 55
     if copse:
         b = native(aim)
         for ob in copse:

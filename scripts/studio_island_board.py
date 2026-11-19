@@ -158,6 +158,38 @@ elif subject == "inlet-ground":
             json.dumps({**json.loads(note.read_text()), **statistics}, indent=2) + "\n"
         )
 
+elif subject == "wild-meadow":
+    # Freeze the real pre-meadow source. Later artists must not photograph
+    # the new native plants on the nominally "old" side of their comparison.
+    meadow = out / "artist-meadow"
+    original_meadow = out / "old-meadow"
+    original_meadow.mkdir(exist_ok=True)
+    original = "507a2cbdb8645d12249cf99269725cced1fa9381"
+    subprocess.run(
+        ["git", "fetch", "--no-tags", "--depth=1", "origin", original], check=True
+    )
+    for name in ("Grass.glb", "Flowers.glb"):
+        with (original_meadow / name).open("wb") as target:
+            subprocess.run(
+                ["git", "show", f"{original}:{(d/name).relative_to(root).as_posix()}"],
+                stdout=target,
+                check=True,
+            )
+    blender("studio_meadow_flowers.py", meadow, "--author-from", original_meadow)
+    if board.get("meadow_sward"):
+        from build_island_meadow import export as meadow_floor
+
+        native_field = meadow_floor(
+            SURFACE,
+            d / "habitat-ground.glb",
+            d / "props.json",
+            out / "artist-meadow-floor",
+        )
+        # Temporarily place the generated GLB by the original shared habitat
+        # maps so Blender can follow its portable URIs. The art archive only
+        # contains the new GLB, not a second copy of the original textures.
+        filed = d / ".weekly-meadow-sward.glb"
+        filed.write_bytes(native_field.read_bytes())
 elif subject == "inlet-concept":
     # This subject has no native export, no generated world and no save version.
     study = root / "studies/island-inlet-proposal"
@@ -247,6 +279,7 @@ subject_label = {
     "forest-fern": "Feather moss and divided fern",
     "coastal-alder": "Branch-grown maritime alders",
     "meadow-survey": "Actual starting-valley meadow at grass 3406",
+    "wild-meadow": "Current meadow and coastal sedge / bellflower study",
     "inlet-survey": "The actual southern inlet before new bank art",
     "inlet-ground": "The native southern tidal cut",
     "inlet-concept": "Shape study: actual V1 and proposed asymmetric inlet",
@@ -258,6 +291,7 @@ if subject in (
     "inlet-ground",
     "inlet-concept",
     "meadow-survey",
+    "wild-meadow",
 ):
     base_water = out / "current-shelf"
     base_water.mkdir(exist_ok=True)
@@ -290,6 +324,7 @@ for tag in board["angles"]:
                 "inlet-ground",
                 "inlet-concept",
                 "meadow-survey",
+                "wild-meadow",
             )
             and (d / "copse-floor.glb").is_file()
         ):
@@ -322,6 +357,23 @@ for tag in board["angles"]:
             *(
                 ["--inlet-sculpt-study", bar_ink]
                 if subject == "inlet-concept" and side == "after"
+                else []
+            ),
+            *(
+                ["--meadow-library", meadow if side == "after" else original_meadow]
+                if subject == "wild-meadow"
+                else []
+            ),
+            *(
+                ["--meadow-habits"]
+                if subject == "wild-meadow" and side == "after"
+                else []
+            ),
+            *(
+                ["--wild-sward", filed]
+                if subject == "wild-meadow"
+                and board.get("meadow_sward")
+                and side == "after"
                 else []
             ),
             "--coastal-light",

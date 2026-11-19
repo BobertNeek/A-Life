@@ -48,7 +48,11 @@ def sedges(lod, habit="sweep"):
     hi = [(0.56, 0.65, 0.37), (0.57, 0.68, 0.51), (0.67, 0.65, 0.37)][idx]
     sun = [(0.68, 0.72, 0.42), (0.70, 0.75, 0.57), (0.77, 0.71, 0.42)][idx]
     nests = [(-0.04, -0.025), (0.035, 0.012), (-0.012, 0.045), (0.096, -0.014)]
-    shoots = [22, 14, 8][lod]
+    keep = (
+        range(22),
+        {0, 1, 2, 3, 4, 5, 7, 9, 11, 13, 14, 16, 18, 21},
+        {0, 1, 2, 4, 7, 11, 14, 18},
+    )[lod]
     swaths = [(0.50, 1.03), (0.92, 1.06), (0.59, 0.76), (0.49, 0.86)]
     for i in range(22):
         # Deterministic sub-sampling preserves the original comp's anchors
@@ -72,20 +76,13 @@ def sedges(lod, habit="sweep"):
             else rand.uniform(0, 0.22)
         )
         tint = rand.uniform(0.88, 1.10)
-        if (
-            i
-            not in [
-                range(22),
-                [0, 1, 2, 3, 4, 5, 7, 9, 11, 13, 14, 16, 18, 21],
-                [0, 1, 2, 4, 7, 11, 14, 18],
-            ][lod]
-        ):
+        if i not in keep:
             continue
         d = (math.cos(az), math.sin(az))
         side = (-d[1], d[0])
         last = None
         ts = [(0, 0.19, 0.45, 0.70, 1), (0, 0.34, 0.69, 1), (0, 0.46, 1)][lod]
-        for j, t in enumerate(ts):
+        for t in ts:
             lumen = math.sin(math.pi * t * 0.83)
             along = (0.17 * t + 1.22 * t * t) * length
             div = length * curve * math.sin(math.pi * t) * 0.26

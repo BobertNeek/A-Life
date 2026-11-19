@@ -5,7 +5,7 @@ waypoints, not glowing task markers, beads on sticks, or flat star decals.
 All colours are later encoded as the same opaque native vertex material.
 """
 
-from math import cos, sin, tau, pi, sqrt
+from math import cos, sin, tau, pi
 import random
 from island_meadow_sedges import Tussock, mix, light
 

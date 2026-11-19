@@ -1,12 +1,13 @@
 {
-  "subject": "meadow-survey",
+  "subject": "wild-meadow",
   "angles": [
     "meadow-eye",
     "meadow-reach"
   ],
+  "paired": true,
   "quick": false,
   "samples": 48,
-  "paired": false,
   "editable_canopy": false,
-  "art_note": "Photograph the established wild lower-valley grass at (74.75,301.40) before changing a plant; camera and original native shrubs, grasses and flowering anchors are fixed. Not the separately cultivated village meadow. This is a Blender art board only."
+  "meadow_sward": true,
+  "art_note": "Original lower valley versus three curved sedge forms, nodding cup flowers and irregular low swales around their old anchors, with distinct sunny gaps. Same cameras, water, daylight and actual V1 geometry. Not a cultivated-village garden, not gameplay or a native test."
 }
