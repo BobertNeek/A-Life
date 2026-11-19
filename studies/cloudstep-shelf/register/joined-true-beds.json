@@ -1,0 +1,83 @@
+{
+  "native_plan_xz": [
+    39.7,
+    80.7,
+    -371.8,
+    -337.8
+  ],
+  "neutral": 98,
+  "original_prop": 1695,
+  "lods": {
+    "0": {
+      "triangles": 832,
+      "world_top": 135.0334,
+      "min_seat_to_v1": -0.12,
+      "max_seat_to_v1": -0.12
+    },
+    "1": {
+      "triangles": 224,
+      "world_top": 135.0334,
+      "min_seat_to_v1": -0.12,
+      "max_seat_to_v1": -0.12
+    }
+  },
+  "earthen_geometry_changes": 0,
+  "upper_obstacle_top_m": 135.03335303555886,
+  "true_downhill_cross_section": [
+    {
+      "down_m": 0,
+      "native_xyz": [
+        57.0642,
+        121.2591,
+        -350.4566
+      ],
+      "relative_to_common_plane": -0.322
+    },
+    {
+      "down_m": 3,
+      "native_xyz": [
+        59.1235,
+        115.8798,
+        -352.6984
+      ],
+      "relative_to_common_plane": -2.4284
+    },
+    {
+      "down_m": 7,
+      "native_xyz": [
+        61.7445,
+        107.6008,
+        -355.6874
+      ],
+      "relative_to_common_plane": -6.4493
+    },
+    {
+      "down_m": 11,
+      "native_xyz": [
+        64.4591,
+        100.0825,
+        -358.583
+      ],
+      "relative_to_common_plane": -9.663
+    },
+    {
+      "down_m": 15,
+      "native_xyz": [
+        67.1737,
+        95.4178,
+        -361.572
+      ],
+      "relative_to_common_plane": -10.1367
+    },
+    {
+      "down_m": 19,
+      "native_xyz": [
+        69.8884,
+        94.0675,
+        -364.561
+      ],
+      "relative_to_common_plane": -7.2989
+    }
+  ],
+  "percent_patch_cover_over_point2": 30.305
+}

@@ -118,6 +118,9 @@ def make(native,folder):
     a,b,c,d=BOX;W,H=438,364
     X,Z=np.meshgrid(a+(np.arange(W)+.5)*(b-a)/W,c+(np.arange(H)+.5)*(d-c)/H)
     Y=land.floor(X,Z)[0];g,cover,pale,cut=lithology(land,q,X,Y,Z)
+    # The nearby mountain already has a complete substrate. A restrained transfer
+    # links the three common beds without outlining the prop in bright ochre.
+    g=1+.47*(g-1)
     Image.fromarray(np.uint8(np.clip(np.rint(g*98),0,255))).save(folder/'joined-true-beds.png',optimize=True)
     D,C=axes(land,q,X,Z)
     # Honest points on the native contact, not reconstructed heights on the prop.
