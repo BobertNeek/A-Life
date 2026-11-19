@@ -1,0 +1,16 @@
+{
+  "native_plan_xz": [
+    -39.0,
+    132.0,
+    -436.0,
+    -253.0
+  ],
+  "neutral": 90,
+  "m_per_texel": [
+    0.2630769230769231,
+    0.2633093525179856
+  ],
+  "optical_slope_coverage_percent": 35.29,
+  "geometry_change_m": 0,
+  "original_shelf_woodland_held": true
+}

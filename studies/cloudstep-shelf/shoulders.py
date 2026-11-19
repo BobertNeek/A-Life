@@ -81,23 +81,50 @@ def shoulder(land, q, idx, detail):
     # exact native triangle by 0.12 m. Positive mesh height is visual only.
     low = (y - base) / s - 0.12 / s
     target = 12.0
-    eligible = p > 1e-5
-    amplitude = float(np.min((target - low[eligible]) / p[eligible]))
-    top = low + amplitude * p
-    # Distinct ledge breaks at material contacts on only the inner mass; no
-    # evenly spaced bands, and no metre-scale spikes.
-    seam = np.clip(
-        (x * 0.67 + z * 0.38 + (nz(X, Z, 1.5, 316 + idx) - 0.5) * 0.33 + 0.55), -1, 1
+    # Absolute sloping benches keep the old hard upper bound without
+    # scaling a radial tent on top of a hill (the first concept made teeth).
+    # Each site has its own master block, lower buttress and broken side.
+    mainx, mainz = [(0.10, 0.24), (0.12, -0.05), (-0.34, 0.23)][k]
+    A = angular(
+        x, z, [3.10, 3.26, 2.55][k], [1.30, 1.24, 1.31][k], direction, mainx, mainz
     )
-    cleft = (
-        0.19
-        * (1 - ease(0.04, 0.26, abs(seam)))
-        * edge
-        * (0.3 + 0.7 * ease(0.08, 0.70, p))
+    B = angular(
+        x,
+        z,
+        [2.25, 2.01, 2.72][k],
+        [0.77, 0.92, 0.83][k],
+        direction + 0.15,
+        -1.22,
+        0.67,
     )
-    top -= cleft
-    apex = np.unravel_index(np.argmax(top), top.shape)
-    top[apex] = target
+    D = angular(x, z, [1.84, 1.54, 1.40][k], 0.77, direction - 0.13, 1.69, -0.77)
+    # 'ease' is upward only, so describe falling side profiles explicitly.
+    main = 1 - ease(0.55, 1.17, A)
+    neck = 0.83 * (1 - ease(0.42, 1.10, B))
+    spur = 0.69 * (1 - ease(0.49, 1.15, D))
+    geoline = (
+        x * 0.53
+        + z * 0.44
+        + (nz(X, Z, 1.60, 311 + idx) - 0.5) * 0.48
+        + [0.76, -0.22, 0.19][k]
+    )
+    fault = 1 - ease(0.15, 0.46, abs(geoline))
+    plateau = np.minimum(11.87, 10.45 + 0.20 * x * u + 0.32 * z * v + dry * 3.2)
+    plateau += [0.1, 0.00, 0.17][k] - 1.3 * fault
+    bed = np.maximum.reduce(
+        (
+            low + (plateau - low) * main,
+            low + (6.1 + 0.34 * x + dry * 2.3 - low) * neck,
+            low + (5.3 - 0.37 * x + 0.23 * z + dry * 2.8 - low) * spur,
+        )
+    )
+    top = low + np.maximum(0, bed - low) * edge
+    # Lift the whole genuine high bench to the old protected ceiling, not
+    # just one vertex; bare outer contacts stay 12 cm below native ground.
+    raised = np.maximum(0, top - low)
+    mult = np.min((target - low)[raised > 0.01] / raised[raised > 0.01])
+    top = low + mult * raised
+    seam = geoline
     C = np.stack((x, top, z), axis=-1).reshape(-1, 3).astype("f")
     ii = []
     for j in range(M - 1):
@@ -124,7 +151,19 @@ def shoulder(land, q, idx, detail):
         * edge
     )
     dark = 1 - ease(0.08, 0.29, abs(seam))
-    strata = block * 0.12 + fleck * 0.065
+    # Petrological structure passes diagonally through the thick broken
+    # face. The lower foot darkens locally, not a repeated painterly stripe.
+    beds = top * 0.55 + x * 0.77 - z * 0.19 + block * 0.67
+    seamlight = (1 - ease(0.17, 0.84, abs(beds - [3.25, 3.90, 2.48][k]))) * (
+        0.31 + 0.56 * nz(X, Z, 1.69, 751)
+    )
+    seamw = (1 - ease(0.08, 0.51, abs(beds - [1.44, 6.24, 5.85][k]))) * (
+        0.30 + 0.48 * nz(X, Z, 1.23, 777)
+    )
+    rind = ease(0.09, 0.38, top - low) * (1 - ease(2.4, 5.4, top - low))
+    strata = (
+        block * 0.21 + fleck * 0.12 + 0.13 * seamlight - 0.060 * seamw - 0.055 * rind
+    )
     color = np.stack(
         (
             0.225 + 0.15 * pale + 0.15 * rust + strata,
@@ -268,16 +307,59 @@ def main(native, folder):
                 )
             ],
         )
+        doc["images"] = [dict(uri="jointed-rock-face.png")]
+        doc["textures"] = [dict(source=0, sampler=0)]
+        doc["samplers"] = [
+            dict(magFilter=9729, minFilter=9987, wrapS=10497, wrapT=10497)
+        ]
+        doc["materials"][0]["pbrMetallicRoughness"]["baseColorTexture"] = dict(index=0)
         buf = bytearray()
         emit = streams(doc, buf)
         for index in IDS:
             q = props[index]
             v, n, c, ii, r = shoulder(land, q, index, lod == 0)
             yaw = q["yaw"]
+            # Long standing faces need real vertical material coordinates:
+            # xz-only colour smears the stone into featureless fins. Bake a
+            # discontinuity-aware rock-face atlas onto the actual triangles.
+            fc = np.cross(v[ii[:, 1]] - v[ii[:, 0]], v[ii[:, 2]] - v[ii[:, 0]])
+            fc /= np.maximum(1.0e-8, np.linalg.norm(fc, axis=1, keepdims=True))
+            group = np.argmax(np.abs(fc), axis=1)
+            ids, inv = np.unique(
+                np.column_stack((ii.ravel(), np.repeat(group, 3))),
+                axis=0,
+                return_inverse=True,
+            )
+            old = ids[:, 0]
+            axes = ids[:, 1]
+            vv = v[old]
+            # Repeat on an 8m face with variable bractstone/bright granite.
+            U = np.where(axes == 0, vv[:, 2], vv[:, 0])
+            V = np.where(axes == 1, vv[:, 2], -vv[:, 1])
+            uu = np.column_stack(((U + 0.32 * V) / 8.9, (V - 0.10 * U) / 8.9)).astype(
+                "<f4"
+            )
+            v, n, c = vv, n[old], c[old]
+            from mountainskin import field
+
+            xx, zz = local(v[:, 0], v[:, 2], q)
+            native_granite = field(land, xx, zz)[0]
+            # A standing face belongs to the same gneiss as the region but is
+            # not coated in downhill fan deposit or needlefall. Bake its
+            # mineral family once; keep the other optical layers ground-only.
+            c = np.clip(
+                c
+                * np.array([1.52, 1.46, 1.40], "f")
+                * (1 + 0.48 * (native_granite - 1)),
+                0,
+                1,
+            ).astype("<f4")
+            ii = inv.reshape(-1, 3).astype("<u2")
             att = dict(
                 POSITION=emit(v, 5126, "VEC3", bounds=True),
                 NORMAL=emit(n, 5126, "VEC3"),
                 COLOR_0=emit(c, 5126, "VEC3"),
+                TEXCOORD_0=emit(uu, 5126, "VEC2"),
             )
             j = len(doc["nodes"])
             doc["nodes"].append(
@@ -306,6 +388,55 @@ def main(native, folder):
             notes[str(index)]["levels"][str(lod)] = dict(**r, triangles=len(ii))
         doc["buffers"] = [dict(byteLength=len(buf))]
         save(doc, buf, folder / ("slope-shoulders-L" + str(lod) + ".glb"))
+    from mountainskin import plates
+
+    # Seam-compatible texture: use translated repeats in structural lattice
+    # for the few exposed square metres, with disturbed scale and dark clefts.
+    z, x = np.mgrid[0:256, 0:256]
+    x = (x + 0.5) / 256
+    z = (z + 0.5) / 256
+
+    def art(u, v):
+        U = 4 * u + 0.80 * v
+        V = 6 * v - 1.75 * u
+        q = nz(U, V, 0.83, 643) - 0.5
+        t = nz(U, V, 0.33, 812) - 0.5
+        f = nz(U, V, 0.081, 92) - 0.5
+        joint, cell = plates(U * 0.90 + 0.2 * q, V * 0.87 + 0.1 * t)
+        fiss = (1 - ease(0.042, 0.17, joint)) * (
+            0.35 + 0.65 * ease(0.1, 0.65, q + 0.45 + t * 0.65)
+        )
+        quartz = (1 - ease(0.045, 0.19, abs(0.31 * U + 0.71 * V - 2.5 + 0.29 * q))) * (
+            0.37 + 0.51 * ease(0.1, 0.65, 0.49 + t)
+        )
+        mineral = (
+            0.65
+            + 0.22 * cell
+            + 0.17 * q
+            + 0.081 * t
+            + 0.052 * f
+            - 0.34 * fiss
+            + 0.23 * quartz
+        )
+        return np.stack(
+            (
+                mineral + 0.05 * quartz + 0.039 * q,
+                mineral + 0.007 * quartz,
+                mineral - 0.032 * quartz - 0.025 * q,
+            ),
+            -1,
+        )
+
+    # Edge-to-edge value/slope continuous quilting, not a repeated hard seam.
+    w = ease(0.15, 0.88, x)[..., None]
+    t = ease(0.15, 0.88, z)[..., None]
+    image = (1 - t) * ((1 - w) * art(x, z) + w * art(x - 1, z)) + t * (
+        (1 - w) * art(x, z - 1) + w * art(x - 1, z - 1)
+    )
+    pix = np.uint8(
+        255 * np.clip(1.055 * np.maximum(0.0, image) ** (1 / 2.4) - 0.055, 0, 1)
+    )
+    Image.fromarray(pix).save(folder / "jointed-rock-face.png", optimize=True)
     note = dict(
         placements=notes,
         talus=fans(land, props, folder),

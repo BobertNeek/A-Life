@@ -207,6 +207,14 @@ def traverse(draw, native, copse, folder, with_cones=False, shoulders=False):
         for n in s.doc["nodes"]:
             node(s, n, tag="sky")
         s.close()
+    if not draw.shadow and draw.water is not None:
+        cfg=json.loads((draw.water/"water.json").read_text())
+        water=np.asarray(Image.open(draw.water/"shore.png").convert("RGBA"))
+        points=np.array([[-3000,0,-3000],[3000,0,-3000],[3000,0,3000],[-3000,0,3000]],"f")
+        uv=(points[:,(0,2)]-cfg["origin_xz"])/cfg["span_xz"]
+        draw.subject=("y0 ocean","Original V1 water artwork",[0.,0.,0.])
+        draw.send(points,np.tile([0.,1.,0.],(4,1)),np.ones((4,3),"f"),uv,
+                  np.array([[0,2,1],[0,3,2]]), (water,33071,33071),0,'ocean')
     if with_cones:
         s = Source(folder / "cone-husks-eye.glb")
         for n in s.doc["nodes"]:

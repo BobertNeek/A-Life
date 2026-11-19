@@ -163,6 +163,15 @@ for side in ("before", "after"):
             ],
             "Unbroken steep talus from the three original cliff seats",
         )
+        granite = json.loads((source / "broken-granite.json").read_text())
+        fmod.tint(
+            ground,
+            surf,
+            source / "broken-granite.png",
+            granite["native_plan_xz"],
+            "Broken granite and original mantle",
+            granite["neutral"],
+        )
     for name, cam in cams.items():
         for lod, objs in new_ledge.items():
             for ob in objs:

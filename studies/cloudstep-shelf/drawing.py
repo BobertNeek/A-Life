@@ -115,6 +115,7 @@ class Board:
                         33071,
                     ),
                     box,
+                    128,
                 )
             )
 
@@ -319,20 +320,20 @@ class Board:
                             base * (1 - haze) + self.air * haze
                         )
                     if tag == "ground":
-                        for chart, (a1, b1, c1, d1) in self.fields:
+                        for chart, (a1, b1, c1, d1), neutral in self.fields:
                             u = (world[:, 0] - a1) / (b1 - a1)
                             v0 = (world[:, 2] - c1) / (d1 - c1)
                             mask = (u >= 0) & (u <= 1) & (v0 >= 0) & (v0 <= 1)
                             if mask.any():
                                 base[mask] *= sample(
                                     chart, np.stack((u[mask], v0[mask]), 1)
-                                )[:, :3] * (255 / 128)
+                                )[:, :3] * (255 / neutral)
                     self.images[1, yi, xi] = display(
                         base * (1 - haze) + self.air * haze
                     )
 
 
-def main(native, copse, folder, lens, seated=False):
+def main(native, copse, folder, lens, water, seated=False):
     guard = 4509715661
     reserved = 1024 * 1024
     if shutil.disk_usage(folder).free <= guard + reserved:
@@ -361,6 +362,7 @@ def main(native, copse, folder, lens, seated=False):
             sun_views=lights,
         )
         board.shoulder_lod = 1 if p["span"] else 0
+        board.water=water
         if reseat:
             bounds = json.loads((folder / "shoulders.json").read_text())["talus"][
                 "native_plan_xz"
@@ -375,6 +377,21 @@ def main(native, copse, folder, lens, seated=False):
                         33071,
                     ),
                     bounds,
+                    128,
+                )
+            )
+            skin = json.loads((folder / "broken-granite.json").read_text())
+            board.fields.append(
+                (
+                    (
+                        np.asarray(
+                            Image.open(folder / "broken-granite.png").convert("RGB")
+                        ),
+                        33071,
+                        33071,
+                    ),
+                    skin["native_plan_xz"],
+                    skin["neutral"],
                 )
             )
         if lens == "summit-window":
@@ -418,7 +435,23 @@ def main(native, copse, folder, lens, seated=False):
     out = folder / (lens + "-matched.jpg")
     if shutil.disk_usage(folder).free <= guard + reserved:
         raise SystemExit("Artist floor: hold final picture")
-    Image.fromarray(joined).save(out, quality=94, subsampling=0)
+    if lens == "sheltered-boles":
+        # Smaller delivery budget for this supplementary comparison; both
+        # sides retain their exact locked lens and identical encoding.
+        import io
+
+        for quality in (92, 89, 85, 80, 76, 70):
+            compressed = io.BytesIO()
+            Image.fromarray(joined).save(
+                compressed, format="JPEG", quality=quality, subsampling=1
+            )
+            if compressed.tell() < 145000:
+                out.write_bytes(compressed.getvalue())
+                break
+        else:
+            raise ValueError("Do not overflow the small art-journal budget")
+    else:
+        Image.fromarray(joined).save(out, quality=94, subsampling=0)
     print(
         lens,
         "submitted triangles",
@@ -435,5 +468,6 @@ if __name__ == "__main__":
         Path(sys.argv[2]),
         Path(sys.argv[3]),
         sys.argv[4],
+        Path(sys.argv[5]),
         "--seated" in sys.argv[5:],
     )

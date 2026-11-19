@@ -13,7 +13,7 @@ def coat(ground, surf, folder):
     )
 
 
-def tint(ground, surf, path, box, title):
+def tint(ground, surf, path, box, title, neutral=128):
     a, b, c, d = box
     img = bpy.data.images.load(str(path.resolve()), check_existing=True)
     img.colorspace_settings.name = "Non-Color"
@@ -34,7 +34,7 @@ def tint(ground, surf, path, box, title):
         nt.links.new(uv, t.inputs["Vector"])
         value = nt.nodes.new("ShaderNodeVectorMath")
         value.operation = "SCALE"
-        value.inputs["Scale"].default_value = 255 / 128
+        value.inputs["Scale"].default_value = 255 / neutral
         nt.links.new(t.outputs["Color"], value.inputs[0])
         old = surf.bsdf(mat).inputs["Base Color"]
         blend = nt.nodes.new("ShaderNodeVectorMath")
