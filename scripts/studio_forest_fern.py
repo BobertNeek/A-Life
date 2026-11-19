@@ -64,7 +64,7 @@ def author(source, blend):
         mesh.name = name
         ob["art_owner"] = "fern-sori.blend"
         ob["art_pass"] = (
-            "Nine arching and twisting fronds; four painted pinna and sori charts"
+            "Nine arching and twisting fronds; four individually painted pinna charts"
         )
         ob["anchor"] = "Original ground-centered stock prop and per-LOD extents"
         ob.hide_set(level != 0)

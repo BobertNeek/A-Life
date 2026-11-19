@@ -89,6 +89,13 @@ elif subject == "forest-fern":
     fern.mkdir(exist_ok=True)
     paint(fern / "lady-fronds.png")
     blender("studio_forest_fern.py", fern, "--author-from", fern_base / "Fern.glb")
+    if board.get("botanical_portrait"):
+        blender(
+            "studio_fern_portrait.py",
+            fern_base / "Fern.glb",
+            fern / "Fern.glb",
+            out / "fern-atelier.png",
+        )
 elif subject == "cove-water":
     from island_cove_optics import world_paint
 

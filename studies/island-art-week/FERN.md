@@ -12,8 +12,11 @@ droop around one grounded crown. `scripts/island_fern_ink.py` draws four origina
 woodland prints into one 1024 x 512 image, each with alternating pairs of lobed
 pinnae and converging veins. Transparent soil and air are visible between their
 edges in both the Blender model and its glTF; this is not a camera-facing cross
-billboard. The three LODs use the same cutout, and sides do not cast new
-shadows. The fern's use of its unique material needs the corresponding scoped
+billboard. The three LODs use the same cutout, and the original small prop still casts no
+new shadows. Three-point, tapering stem sections emerge from a small scaly
+crown, so the lower stalks do not disappear edge-on into the soil. Three
+low outer fronds roll back towards the ground instead of forming a straight
+bouquet. The fern's use of its unique material needs the corresponding scoped
 island renderer edit; applying its mesh without this binding produces solid
 green rectangles. The source atlas is packed in the editable native blend.
 

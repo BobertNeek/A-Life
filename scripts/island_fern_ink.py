@@ -112,4 +112,13 @@ def paint(path):
     back = Image.new("RGB", img.size, (105, 146, 80))
     back.paste(img.convert("RGB"), mask=img.getchannel("A"))
     back.putalpha(img.getchannel("A"))
-    back.save(path, optimize=True)
+    # Reserve a padded opaque pigment strip for real petioles and crown.
+    # A stem uses one swatch, never a hairline-cutout texel or a white card.
+    chart = Image.new("RGBA", img.size, (104, 141, 76, 0))
+    chart.paste(back.resize((4 * cell, 492), Image.Resampling.LANCZOS), (0, 0))
+    brush = ImageDraw.Draw(chart)
+    for i, rgb in enumerate(
+        ((88, 102, 59), (111, 137, 73), (140, 153, 79), (94, 95, 54))
+    ):
+        brush.rectangle((i * 256, 495, (i + 1) * 256 - 1, 511), fill=(*rgb, 255))
+    chart.save(path, optimize=True)
