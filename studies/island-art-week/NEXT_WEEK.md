@@ -1,0 +1,53 @@
+# Native acceptance, next week only
+
+The offscreen cameras are *art studies*, not the game's orthographic camera. This
+recipe is for a separately booked RTX 3050 window. It has not been run.
+
+1. Use two clean checkouts with no user profiles or caches: the comparison
+   shoreline checkpoint `810e4f872680dc569affa6c8d2e3c31f79caa86c`, then
+   the weekly candidate. Record both SHAs. Do not use a simulator/training
+   checkout. Confirm adapter and idle session; stop if either is unavailable.
+2. In each checkout's own new PowerShell session, prepare an unmistakably new
+   profile (the parent of `-UiSettings` scopes all writable player saves):
+
+   ```powershell
+   $qa = Join-Path $env:TEMP ("qualia-island-art-" + [guid]::NewGuid())
+   New-Item -ItemType Directory -Path $qa -ErrorAction Stop | Out-Null
+   $env:ALIFE_GRAPHICS_CAPTURE_DIR = Join-Path $qa "captures"
+   $env:ALIFE_GRAPHICS_CAPTURE_MAX_FRAMES = "1"  # use F12 for subsequent views
+   $argsQA = @{
+       NewGame = $true; Seed = 20261119; Population = 1
+       UiSettings = (Join-Path $qa "ui.json")
+       Profile = "MinSpecComfort1080p"; Resolution = "1920x1080"
+       GraphicsBackend = "vulkan"; RequireGpu = $true; BuildProfile = "release"
+   }
+   .\scripts\run_production_voxel_frontend.ps1 @argsQA -PreviewCommand
+   .\scripts\run_production_voxel_frontend.ps1 @argsQA -RecordPerformance
+   ```
+
+3. Allow the authored chunks to finish streaming. Capture the nursery encounter
+   view, the player's normal orthographic bank view near (x=345,z=115), and a
+   wide bank-to-hill view. Press F12 to save both pixels and the renderer's JSON
+   camera transform, focus, terrain binding and view-height receipt. For an A/B
+   use one copied **baseline F12 JSON receipt** at a time: set
+   `$env:ALIFE_ISLAND_CAPTURE_POSE = (Resolve-Path "baseline-view.json").Path`
+   in the candidate session before launch. The optional lock applies only to
+   that terrain binding and native orthographic lens, before normal safety
+   constraints, and only when a capture directory is set. Compare the emitted
+   camera and projection receipts; do not infer a match from the framing.
+   Remove that environment variable and restart for free camera/contact tests. Do not label the 86 cm **perspective Blender** plate an in-game view.
+4. Pan the same shore outward through the 150 m near-chunk cutoff and 350 m
+   middle/far handoff; record visible gaps, jumping edges and ungrounded foliage.
+   Inspect rock and reed contacts at maximum stock encounter zoom. Watch a
+   creature actually walk across and a toy roll through the bank in the scratch
+   profile. A still frame or mesh proof alone cannot pass contact.
+5. For cost, use a separate warmed run per build with the same profile, save,
+   camera receipt and resolution. No screenshots or camera interactions during
+   timing. Keep the renderer's CPU/GPU frame-time distribution, 1% lows and
+   adapter string; mark any unavailable counter unknown. Check minimum settings
+   separately to catch changed shadow or fog budgets rather than conflating
+   quality settings. Keep the original recordings and compare before promoting.
+
+The default and this recipe use V1: its binding must match the original save.
+The northern V2 alternate remains an isolated generated map with a separate
+restore test, not an unqualified playable switch. Do not overwrite V1 to stage V2.

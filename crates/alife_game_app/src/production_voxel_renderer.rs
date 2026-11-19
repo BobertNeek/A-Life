@@ -2020,6 +2020,7 @@ pub fn spawn_fvr03_production_voxel_scene(
             .before(bevy::transform::TransformSystems::Propagate),
     );
     graphics_capture::install(app);
+    island::capture_pose::install(app);
     #[cfg(feature = "gpu-runtime")]
     toy_play::install(app);
     #[cfg(feature = "gpu-runtime")]

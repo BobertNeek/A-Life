@@ -7,6 +7,7 @@ on:
       - crates/alife_game_app/src/production_voxel_renderer/island.rs
       - crates/alife_game_app/src/production_voxel_renderer/island/strandline.rs
       - crates/alife_game_app/src/production_voxel_renderer/island/atmosphere.rs
+      - crates/alife_game_app/src/production_voxel_renderer/island/capture_pose.rs
       - crates/alife_game_app/assets/landscape/island/coastal-daylight.json
 permissions:
   contents: read

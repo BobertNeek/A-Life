@@ -1,5 +1,6 @@
 //! Island chunk and prop rendering for the playable world.
 mod atmosphere;
+pub(super) mod capture_pose;
 mod nursery;
 mod strandline;
 use super::*;
