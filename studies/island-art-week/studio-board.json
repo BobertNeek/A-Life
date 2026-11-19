@@ -2,14 +2,17 @@
   "subject": "wild-meadow",
   "angles": [
     "meadow-eye",
-    "meadow-reach"
+    "meadow-bells",
+    "meadow-reach",
+    "sapling-eye"
   ],
   "paired": true,
   "quick": false,
   "samples": 48,
   "editable_canopy": false,
   "meadow_sward": true,
-  "art_note": "The two prior new ground treatments stayed too dark. Replace dense cutout cards with genuinely opaque, ground-hugging wind-combed leaves and a finely feathered, fitted olive-to-sunlit turf; correct the actual geometric winding of the upright native blades. Original V1 daylight and both cameras unchanged.",
+  "art_note": "Retain the selected grounded wind-combed grass, deepen its green turf, add low true triple-leaved herbs just around the actual old Flowers, preserve the grass and flower positions, and replace smooth balloon-like young tree crowns on the existing woody forks. Actual meadow, flower 3394 and sapling 1116; no game or physics changes.",
   "inked_swards": false,
-  "felted_swards": true
+  "felted_swards": true,
+  "young_saltwood": true
 }

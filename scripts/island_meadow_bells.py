@@ -46,8 +46,8 @@ def bellflowers(level):
             color = mix((0.21, 0.33, 0.16), (0.50, 0.62, 0.34), 0.1 + 0.76 * t)
             if t == 1:
                 tip = m.add(c, color)
-                m.triangle(last[0], last[1], tip)
-                m.triangle(last[1], last[2], tip)
+                m.triangle(last[1], last[0], tip)
+                m.triangle(last[2], last[1], tip)
                 break
             width = w * (0.14 + 0.86 * sin(pi * t) ** 0.63)
             row = [
@@ -59,8 +59,8 @@ def bellflowers(level):
             ]
             if last:
                 for j in (0, 1):
-                    m.triangle(last[j], last[j + 1], row[j + 1])
-                    m.triangle(last[j], row[j + 1], row[j])
+                    m.triangle(last[j + 1], last[j], row[j + 1])
+                    m.triangle(last[j], row[j], row[j + 1])
             last = row
 
     bases = ((-0.073, 0.035), (0.05, -0.04), (0.038, 0.067))

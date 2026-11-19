@@ -124,6 +124,35 @@ def sedges(lod, habit="sweep"):
                     spr.triangle(last[k + 1], last[k], row[k + 1])
                     spr.triangle(last[k], row[k], row[k + 1])
             last = row
+    # A second tier grows along the earth below the taller native crown.
+    # Its youngest leaves curve at the tips. The original isolated straight
+    # ribbon foot no longer reads like a broom wrapped in a paper sleeve.
+    for j in range([13, 8, 4][lod]):
+        angle = j * math.tau * 0.382 + 0.44 * idx
+        ax, ay = math.cos(angle), math.sin(angle)
+        bx, by = -ay, ax
+        rx, ry = nests[j % 4]
+        ln = 0.13 + 0.041 * (j % 3)
+        rise = 0.045 + 0.013 * (j % 4)
+        last = None
+        for t in (0, 0.30, 0.68, 1):
+            x = rx + ax * ln * t
+            y = ry + ay * ln * t
+            z = 0.002 + rise * math.sin(t * math.pi * 0.84)
+            c = mix(lo, hi, 0.27 + 0.54 * t)
+            if t == 1:
+                tip = spr.add((x, y, z), c)
+                spr.triangle(last[1], last[0], tip)
+                break
+            w = (0.007 + 0.003 * (j % 3)) * (0.4 + 0.6 * math.sin(math.pi * t))
+            row = [
+                spr.add((x + a * bx * w, y + a * by * w, z), light(c, 1 + 0.055 * a))
+                for a in (-1, 1)
+            ]
+            if last:
+                spr.triangle(last[1], last[0], row[1])
+                spr.triangle(last[0], row[0], row[1])
+            last = row
     if idx == 2:
         # Only this form carries the few mature fox-tail fruits. Not one
         # floral pompom on every rendered instance of grass.

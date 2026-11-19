@@ -30,10 +30,18 @@ class Meadow:
     def __init__(self, surface, variant, placements):
         self.g = Inlet(surface)
         self.v = Inlet(variant)
+        props = json.loads(Path(placements).read_text())
+        self.herbs = [
+            (p["position"][0], p["position"][2])
+            for p in props
+            if p["kind"] == "Flowers"
+            and 52 < p["position"][0] < 94
+            and 279 < p["position"][2] < 322
+        ]
         self.roots = np.array(
             [
                 [p["position"][0], p["position"][2]]
-                for p in json.loads(Path(placements).read_text())
+                for p in props
                 if p["kind"] in ("Grass", "Flowers")
                 and 43 < p["position"][0] < 103
                 and 273 < p["position"][2] < 331

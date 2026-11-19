@@ -47,6 +47,11 @@ cli.add_argument(
 )
 cli.add_argument("--prop-library", type=Path)
 cli.add_argument(
+    "--young-library",
+    type=Path,
+    help="Only the original juvenile tree, never new placements.",
+)
+cli.add_argument(
     "--wild-sward",
     type=Path,
     help="Near fitted stool and plant communities of the wild valley",
@@ -144,7 +149,15 @@ cli.add_argument(
 )
 cli.add_argument(
     "--copse-framing",
-    choices=("slope", "fern-hollow", "sunlit-margin", "alder-eye", "meadow-eye"),
+    choices=(
+        "slope",
+        "fern-hollow",
+        "sunlit-margin",
+        "alder-eye",
+        "meadow-eye",
+        "meadow-bells",
+        "sapling-eye",
+    ),
     default="slope",
 )
 cli.add_argument(
@@ -443,6 +456,14 @@ if (
         elif args.copse_framing == "alder-eye":
             x, z, tx, tz = 321.6, 148.5, 316.1, 140.1
             shot = "alder-eye"
+        elif args.copse_framing == "meadow-bells":
+            # The existing Flowers anchor 3394; field turns into the open water.
+            x, z, tx, tz = 76.74, 299.2, 75.8, 297.2
+            shot = "meadow-bells"
+        elif args.copse_framing == "sapling-eye":
+            # Original #1116, one of three stock balloon-shaped juvenile trees.
+            x, z, tx, tz = 50.1, 244.3, 45.447, 237.543
+            shot = "sapling-eye"
         elif args.copse_framing == "meadow-eye":
             # Twenty existing grass anchors surround 3406. Share the real
             # turf with nine flower clumps in the established lower meadow.
@@ -452,7 +473,14 @@ if (
             (
                 shot,
                 (x, ground(x, z) + 1.04, z),
-                (tx, ground(tx, tz) + (3.75 if shot == "alder-eye" else 0.38), tz),
+                (
+                    tx,
+                    ground(tx, tz)
+                    + {"alder-eye": 3.75, "sapling-eye": 2.7, "meadow-bells": 0.28}.get(
+                        shot, 0.38
+                    ),
+                    tz,
+                ),
                 0,
                 31,
                 0,
@@ -496,6 +524,8 @@ if (
             old = set(bpy.data.objects)
             stone = kind in ("Cliff", "Scree", "BoulderA", "BoulderB", "BoulderC")
             where = args.stone_library if stone and args.stone_library else library
+            if kind == "Sapling" and args.young_library:
+                where = args.young_library
             if kind == "Broadleaf" and args.broadleaf_library:
                 where = args.broadleaf_library
             if kind == "Fern" and args.fern_library:

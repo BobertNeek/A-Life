@@ -168,7 +168,10 @@ elif subject == "wild-meadow":
     subprocess.run(
         ["git", "fetch", "--no-tags", "--depth=1", "origin", original], check=True
     )
-    for name in ("Grass.glb", "Flowers.glb"):
+    originals = ["Grass.glb", "Flowers.glb"]
+    if board.get("young_saltwood"):
+        originals.append("Sapling.glb")
+    for name in originals:
         with (original_meadow / name).open("wb") as target:
             subprocess.run(
                 ["git", "show", f"{original}:{(d/name).relative_to(root).as_posix()}"],
@@ -176,6 +179,14 @@ elif subject == "wild-meadow":
                 check=True,
             )
     blender("studio_meadow_flowers.py", meadow, "--author-from", original_meadow)
+    if board.get("young_saltwood"):
+        young = out / "artist-young-saltwood"
+        blender(
+            "studio_young_saltwood.py",
+            young,
+            "--author-from",
+            original_meadow / "Sapling.glb",
+        )
     if board.get("meadow_sward"):
         from build_island_meadow import export as meadow_floor
 
@@ -262,6 +273,8 @@ if board.get("editable_canopy"):
         out / "grove-boughs.blend",
     )
 views = {
+    "sapling-eye": ["--copse-eye", "--copse-framing", "sapling-eye"],
+    "meadow-bells": ["--copse-eye", "--copse-framing", "meadow-bells"],
     "meadow-eye": ["--copse-eye", "--copse-framing", "meadow-eye"],
     "meadow-reach": ["--guardian-review", "--grove-framing", "meadow-reach"],
     "alder-eye": ["--copse-eye", "--copse-framing", "alder-eye"],
@@ -366,6 +379,11 @@ for tag in board["angles"]:
                 else []
             ),
             *(
+                ["--young-library", young if side == "after" else original_meadow]
+                if subject == "wild-meadow" and board.get("young_saltwood")
+                else []
+            ),
+            *(
                 ["--meadow-library", meadow if side == "after" else original_meadow]
                 if subject == "wild-meadow"
                 else []
@@ -411,13 +429,18 @@ for tag in board["angles"]:
             ),
         )
     if paired:
+        caption = (
+            "Young saltwood at real original 1116"
+            if tag == "sapling-eye"
+            else subject_label
+        )
         make(
             out / "before" / f"{tag}.png",
             out / "after" / f"{tag}.png",
             (
                 f"Editable inlet proposal | {tag} | V1 versus bank sculpt / same lens, daylight and water level | CPU Blender"
                 if subject == "inlet-concept"
-                else f"{subject_label} | {tag} | Same V1 terrain, lens and daylight | CPU Blender"
+                else f"{caption} | {tag} | Same V1 terrain, lens and daylight | CPU Blender"
             ),
             out / f"{tag}.jpg",
         )

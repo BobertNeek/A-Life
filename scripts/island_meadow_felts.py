@@ -16,7 +16,7 @@ def carpet(x, z, original):
     flow = 0.76 + 0.24 * np.sin(2.3 * x + 1.2 * z + 0.95 * np.sin(z * 0.56))
     fleck = 0.5 + 0.5 * np.sin(4.5 * x - 0.8 * z + 1.7 * np.sin(x * 1.8 + z * 0.8))
     rich = t * (0.74 + 0.18 * flow + 0.08 * fleck)
-    return np.stack((1 - 0.18 * rich, 1 + 0.28 * rich, 1 - 0.39 * rich), axis=-1)
+    return np.stack((1 - 0.28 * rich, 1 + 0.10 * rich, 1 - 0.37 * rich), axis=-1)
 
 
 def turf(v, n, uv, c, faces, meadow):
@@ -60,8 +60,8 @@ def turf(v, n, uv, c, faces, meadow):
 def felt(root, meadow):
     r = np.random.default_rng(831091)
     x0, x1, z0, z1 = BOUNDS
-    xx = r.uniform(x0 + 1, x1 - 1, 29200)
-    zz = r.uniform(z0 + 1, z1 - 1, 29200)
+    xx = r.uniform(x0 + 1, x1 - 1, 22500)
+    zz = r.uniform(z0 + 1, z1 - 1, 22500)
     f = meadow.field(xx, zz)
     gust = 0.84 + 0.16 * np.sin(xx * 1.6 + zz * 0.41 + 0.79 * np.sin(0.69 * zz))
     keep = (r.random(len(xx)) < 0.9 * f**1.17 * gust) & meadow.safe_mask(xx, zz)
@@ -124,7 +124,10 @@ def felt(root, meadow):
                     tile.face(l[1], l[2], row[1])
                 rows.append(row)
             stems += 1
+    from island_meadow_medick import creepers
+
     return dict(
+        **creepers(root, meadow),
         low_crowns=int(keep.sum()),
         true_blades=stems,
         existing_grass_or_flower_anchors_in_study=len(meadow.roots),
