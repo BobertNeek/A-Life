@@ -151,3 +151,7 @@ No result in these three sections represents a native test already run.
 ### Southern inlet
 
 Stand near x90,z451 and look across toward x114.8,z431.4. Verify actual fitted material at water contact, shadow/picking of the view-only cut, and the 6 mm separation at grazing angles; roll a toy against the real bank. Pull out through 100 m vertical span and compare the close layer to stock L1/L2 geometry with its matched 3,504-texel macro change. Exercise a locally raised or recovered willow causeway separately and protect V1 saves. Evaluate before promoting: static authored budget is 33,932 detail triangles over six near tiles. No native game checks during this art-only week.
+
+### Wild meadow and three native grass habits
+
+In a throwaway V1 profile, approach wild grass 3406 (74.75,301.40). Compare at 1.04 m near (76.4,303.65) toward (70.1,295.25) and in the 39 m guardian framing. The nursery and cultivated meadow are separate. Verify Grass/GrassSilver/GrassAmber use their proper three native meshes and at least one seed-bearing form in the stand, not just the ordinary fallback. Check visual roots on the sloping terrain, warm cup interiors, natural gaps, picking through cosmetic leaves, no extra objects in saves, native shadow cost and transitions at the existing 45 m prop range and 55 m/60 m swale gates. Look for any sudden overly pale gap as the meadow layer leaves view. Only promote after checking actual target-hardware cost and movement. No game/build/tests in this art session.

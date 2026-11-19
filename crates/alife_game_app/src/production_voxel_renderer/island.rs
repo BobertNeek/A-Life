@@ -120,6 +120,21 @@ struct Prop {
     yaw: f32,
 }
 
+// Fixed botanical habit at an existing wild grass anchor. Evaluate once
+// when loading scenery, not in plant logic and not by mutating a placement.
+fn grass_habit(index: usize, position: Vec3) -> &'static str {
+    let rank = ((index % 17) * 7 % 17) as f32 / 16.0;
+    let shelter = 0.5 * (0.041 * position.x + 0.028 * position.z).sin()
+        + 0.5 * (0.031 * position.z - 0.011 * position.x).cos();
+    if (position.y < 4.35 && rank < 0.81) || (shelter < -0.34 && rank < 0.56) {
+        "GrassSilver"
+    } else if rank > 0.86 || (shelter > 0.25 && rank > 0.63) {
+        "GrassAmber"
+    } else {
+        "Grass"
+    }
+}
+
 fn has_mineral_surface(kind: &str) -> bool {
     matches!(
         kind,
@@ -469,13 +484,30 @@ pub(super) fn update(
             } else {
                 SOLID_PROP_DRAW_DISTANCE
             };
+            // Older or partial art packs retain all three original LODs
+            // rather than displaying a different silhouette at each switch.
+            let habit = if p.kind == "Grass" {
+                grass_habit(index, position)
+            } else {
+                p.kind.as_str()
+            };
+            let mesh_name = if habit == p.kind.as_str()
+                || (0..3).all(|level| {
+                    gltf.named_meshes
+                        .contains_key(format!("{habit}_L{level}").as_str())
+                })
+            {
+                habit
+            } else {
+                p.kind.as_str()
+            };
             let primitive = &gltf_meshes
-                .get(&gltf.named_meshes[format!("{}_L0", p.kind).as_str()])
+                .get(&gltf.named_meshes[format!("{mesh_name}_L0").as_str()])
                 .unwrap()
                 .primitives[0];
             let levels = std::array::from_fn(|level| {
                 gltf_meshes
-                    .get(&gltf.named_meshes[format!("{}_L{level}", p.kind).as_str()])
+                    .get(&gltf.named_meshes[format!("{mesh_name}_L{level}").as_str()])
                     .unwrap()
                     .primitives[0]
                     .mesh

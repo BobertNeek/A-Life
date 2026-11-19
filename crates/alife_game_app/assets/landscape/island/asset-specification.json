@@ -64,9 +64,24 @@
         0.5,
         0.45
       ],
-      "near_triangles": 288,
-      "far_triangles": 128,
-      "overview_triangles": 57
+      "near_triangles": 461,
+      "far_triangles": 110,
+      "overview_triangles": 44,
+      "editable_override": "wild-sedge-and-bells.blend",
+      "export_recipe": "scripts/studio_meadow_flowers.py",
+      "override_blender": "4.3.2",
+      "optional_habits": {
+        "GrassSilver": [
+          461,
+          110,
+          44
+        ],
+        "GrassAmber": [
+          545,
+          162,
+          68
+        ]
+      }
     },
     "Fern": {
       "width_depth_height_m": [
@@ -87,9 +102,12 @@
         0.6,
         0.6
       ],
-      "near_triangles": 848,
-      "far_triangles": 373,
-      "overview_triangles": 155
+      "near_triangles": 740,
+      "far_triangles": 408,
+      "overview_triangles": 252,
+      "editable_override": "wild-sedge-and-bells.blend",
+      "export_recipe": "scripts/studio_meadow_flowers.py",
+      "override_blender": "4.3.2"
     },
     "BoulderA": {
       "width_depth_height_m": [

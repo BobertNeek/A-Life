@@ -249,3 +249,7 @@ was performed for the new assets. The gallery is not native acceptance.
 ### Optional southern-inlet concept
 
 [Editable landform and matched two-camera comparison](../island-inlet-proposal/README.md). This separate Blender-only study does not replace the V1 bank, optional highland ridge, a user causeway or any game/save terrain.
+
+### The existing wild meadow
+
+[Creature-height](meadow-eye.jpg) · [guardian](meadow-reach.jpg) · [source, envelope and materials](MEADOW.md). The curled sedges and bellflowers are native-asset candidates, shown in Blender, on the original lower valley. No native validation performed this week.

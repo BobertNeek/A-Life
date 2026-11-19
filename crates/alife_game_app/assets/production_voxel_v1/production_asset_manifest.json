@@ -554,44 +554,44 @@
     {
       "asset_id": "approved-island-flowers",
       "author": "A-Life approved Blender art",
-      "digest": "fnv1a64:ff9733c199934560",
+      "digest": "fnv1a64:fb40ac5a69996e22",
       "external": false,
       "final_art": false,
       "generated": true,
       "generator": {
-        "config_path": "scripts/build_finished_island_assets.py",
-        "date": "2026-10-09",
-        "seed": "saved-finished-island-refinements/Flowers",
-        "tool": "Blender-4.3.2"
+        "config_path": "scripts/studio_meadow_flowers.py",
+        "date": "2026-11-19",
+        "seed": "685317,239512",
+        "tool": "Qualia Blender folded sedges and nodding calyx"
       },
       "license": "A-Life-Generated-Source",
       "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/island/Flowers.glb",
       "placeholder": false,
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
-      "size_bytes": 122672,
+      "size_bytes": 46172,
       "source": "generated:approved-blender-model",
       "usage_category": "environment-dressing"
     },
     {
       "asset_id": "approved-island-grass",
       "author": "A-Life approved Blender art",
-      "digest": "fnv1a64:ab6b888f9f115d05",
+      "digest": "fnv1a64:6376ed64ae8ca73a",
       "external": false,
       "final_art": false,
       "generated": true,
       "generator": {
-        "config_path": "scripts/build_finished_island_assets.py",
-        "date": "2026-10-09",
-        "seed": "saved-finished-island-refinements/Grass",
-        "tool": "Blender-4.3.2"
+        "config_path": "scripts/studio_meadow_flowers.py",
+        "date": "2026-11-19",
+        "seed": "685317,239512",
+        "tool": "Qualia Blender folded sedges and nodding calyx"
       },
       "license": "A-Life-Generated-Source",
       "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/island/Grass.glb",
       "placeholder": false,
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
-      "size_bytes": 43032,
+      "size_bytes": 91268,
       "source": "generated:approved-blender-model",
       "usage_category": "environment-dressing"
     },
@@ -1605,6 +1605,28 @@
       "replacement_policy": "edit-local-bank-recipe-and-refresh-manifest",
       "size_bytes": 177002,
       "source": "generated:island-fitted-cut-bank",
+      "usage_category": "environment-dressing"
+    },
+    {
+      "asset_id": "approved-island-meadow-sward",
+      "author": "Qualia island environment art",
+      "digest": "fnv1a64:678c28ce779fbca9",
+      "external": false,
+      "final_art": false,
+      "generated": true,
+      "generator": {
+        "tool": "Qualia fitted wild ground and short wind-combed sedges",
+        "config_path": "scripts/build_island_meadow.py",
+        "date": "2026-11-19",
+        "seed": "831091"
+      },
+      "license": "A-Life-Generated-Source",
+      "license_ref": "README.md",
+      "local_path": "crates/alife_game_app/assets/landscape/island/meadow-sward.glb",
+      "placeholder": false,
+      "replacement_policy": "edit-meadow-studio-and-refresh-manifest",
+      "size_bytes": 3468748,
+      "source": "generated:island-wild-sedge-swales",
       "usage_category": "environment-dressing"
     }
   ],

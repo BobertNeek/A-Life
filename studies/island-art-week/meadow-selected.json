@@ -1,0 +1,59 @@
+{
+  "studio_source": "75f005ea950bf86215763aa3ffdb195a88ee9f54",
+  "art_run": 44488671833,
+  "native_library_meshes": {
+    "Grass.glb": {
+      "digest": "fnv1a64:6376ed64ae8ca73a",
+      "size_bytes": 91268,
+      "meshes": {
+        "Grass_L0": 461,
+        "Grass_L1": 110,
+        "Grass_L2": 44,
+        "GrassSilver_L0": 461,
+        "GrassSilver_L1": 110,
+        "GrassSilver_L2": 44,
+        "GrassAmber_L0": 545,
+        "GrassAmber_L1": 162,
+        "GrassAmber_L2": 68
+      }
+    },
+    "Flowers.glb": {
+      "digest": "fnv1a64:fb40ac5a69996e22",
+      "size_bytes": 46172,
+      "meshes": {
+        "Flowers_L0": 740,
+        "Flowers_L1": 408,
+        "Flowers_L2": 252
+      }
+    },
+    "meadow-sward.glb": {
+      "digest": "fnv1a64:678c28ce779fbca9",
+      "size_bytes": 3468748,
+      "meshes": {
+        "Sward_1_5_soil": 4224,
+        "Sward_1_6_soil": 7808,
+        "Sward_1_5_leaves": 36205,
+        "Sward_1_6_leaves": 43032
+      }
+    }
+  },
+  "creeping_groups": 209,
+  "trifoliate_leaflets": 4329,
+  "cream_seed_buttons": 10,
+  "low_crowns": 876,
+  "true_blades": 9577,
+  "existing_grass_or_flower_anchors_in_study": 72,
+  "area_unit": "metres; opaque vascular seedbank",
+  "native_height_subdivision": "pigment-only, eight segments per unchanged triangle side",
+  "existing_surface_triangles": 188,
+  "pigment_skin_triangles": 12032,
+  "low_sward_triangles": 79237,
+  "soil_tiles": 2,
+  "leaf_tiles": 2,
+  "region_xz": [
+    46.875,
+    100,
+    275,
+    328.125
+  ]
+}

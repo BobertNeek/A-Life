@@ -3,12 +3,14 @@ use super::*;
 
 const STRAND: &str = "landscape/island/strandline.glb";
 const COPSE: &str = "landscape/island/copse-floor.glb";
+const WILD_MEADOW: &str = "landscape/island/meadow-sward.glb";
 const INLET: &str = "landscape/island/inlet-bank.glb";
 
 #[derive(Clone, Copy)]
 enum Dressing {
     Tidal,
     Woodland,
+    WildMeadow,
 }
 
 #[derive(Component)]
@@ -21,7 +23,10 @@ pub(in crate::production_voxel_renderer) type PatchViews<'w, 's> =
     Query<'w, 's, (&'static GroundDetailPatch, &'static mut Visibility), Without<PropRange>>;
 
 fn center(name: &str, translation: Vec3) -> Option<Vec2> {
-    ((name.starts_with("Strand_") || name.starts_with("Copse_") || name.starts_with("Inlet_"))
+    ((name.starts_with("Strand_")
+        || name.starts_with("Copse_")
+        || name.starts_with("Inlet_")
+        || name.starts_with("Sward_"))
         && (translation.x != 0.0 || translation.z != 0.0))
         .then_some(Vec2::new(translation.x, translation.z))
 }
@@ -31,6 +36,7 @@ pub(super) fn spawn(world: &mut World) {
         ("Tidal strandline", STRAND),
         ("Sheltered copse floor", COPSE),
         ("Southern tidal cut bank", INLET),
+        ("Sheltered wild grass meadow", WILD_MEADOW),
     ] {
         let scene = world
             .resource::<AssetServer>()
@@ -63,16 +69,22 @@ fn bind(
             if let Some(xz) = center(name.as_str(), transform.translation) {
                 let dressing = if name.as_str().starts_with("Copse_") {
                     Dressing::Woodland
+                } else if name.as_str().starts_with("Sward_") {
+                    Dressing::WildMeadow
                 } else {
                     Dressing::Tidal
                 };
                 entity_commands.insert((
-                    GroundDetailPatch { center: xz, dressing },
+                    GroundDetailPatch {
+                        center: xz,
+                        dressing,
+                    },
                     Visibility::Hidden,
                 ));
                 // Only substantial rooted coastal thickets cast. Tiny stones,
                 // lace, leaves and fitted ground films should not self-shadow.
-                if !name.as_str().ends_with("_headland") {
+                let casts = name.as_str().ends_with("_headland");
+                if !casts {
                     entity_commands.insert(NotShadowCaster);
                     for mesh in children.iter_descendants(entity) {
                         commands.entity(mesh).insert(NotShadowCaster);
@@ -99,6 +111,7 @@ pub(super) fn update(patches: &mut PatchViews, focus: Vec3, span: f32) {
     for (patch, mut visibility) in patches.iter_mut() {
         let shown = match patch.dressing {
             Dressing::Tidal => visible(patch.center, xz, span),
+            Dressing::WildMeadow => span < 60.0 && patch.center.distance_squared(xz) < 55.0 * 55.0,
             // A 50 m tile centre is at most 36 m from its 100 m parent
             // terrain centre. Both gates consequently retain exact near ground.
             Dressing::Woodland => span < 60.0 && patch.center.distance_squared(xz) < 65.0 * 65.0,
