@@ -45,7 +45,8 @@ def photograph(root, d, surface, board, out, blender, pair):
         (root / "studies/island-art-week/water-selected.json").read_bytes()
     )
     for tag in board["angles"]:
-        for side in ("before", "after") if board.get("paired") else ("after",):
+        paired = board.get("paired") or tag in board.get("paired_angles", [])
+        for side in ("before", "after") if paired else ("after",):
             blender(
                 "render_island_geology.py",
                 d / "terrain-chunks.glb",
@@ -84,7 +85,7 @@ def photograph(root, d, surface, board, out, blender, pair):
                 "--studio-samples",
                 board.get("samples", 48)
             )
-        if board.get("paired"):
+        if paired:
             pair(
                 out / "before" / (tag + ".png"),
                 out / "after" / (tag + ".png"),

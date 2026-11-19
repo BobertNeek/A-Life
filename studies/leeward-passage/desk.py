@@ -157,8 +157,8 @@ obj = bpy.data.objects.new("218.88 m surveyed centre", g)
 guide.objects.link(obj)
 guide.hide_render = True
 guide.hide_viewport = True
-cameras = group("06 · Three matched full-island camera stations")
-for name in ("reach-guardian", "reach-meadow", "reach-strand"):
+cameras = group("06 · Matched full-island camera stations")
+for name in ("reach-guardian", "reach-meadow", "reach-strand", "reach-alder"):
     _, e, t, ortho, mm, _ = frame(name, ground)
     cam = bpy.data.cameras.new(name)
     cam.clip_end = 2000
@@ -198,7 +198,7 @@ if work:
                 area.spaces.active.image = photo
 text = bpy.data.texts.new("Start here · Shellback Reach")
 text.write(
-    "Layout: editable detail organized in eight longitudinal parts, literal cropped V1 triangles, real-position trees and stones, exact camera stations. The cropped editor uses the native macro pigment, not the full island's close material, sea or lighting. The Full-island photographs workspace contains all three matched frames on the actual island. Only the optional pigment, ground tooth and cosmetic leaves/valves/shingle change. No collider, V1 terrain identity, native registration, placement or save was edited. This is artwork, not a playable trail.\n"
+    "Layout: editable detail organized in eight longitudinal parts, literal cropped V1 triangles, real-position trees and stones, exact camera stations. The cropped editor uses the native macro pigment, not the full island's close material, sea or lighting. The Full-island photographs workspace contains the matched frames on the actual island. Only the optional pigment, ground tooth and cosmetic leaves/valves/shingle change. No collider, V1 terrain identity, native registration, placement or save was edited. This is artwork, not a playable trail.\n"
 )
 bpy.ops.file.pack_all()
 bpy.ops.wm.save_as_mainfile(filepath=str(out.resolve()), compress=True)

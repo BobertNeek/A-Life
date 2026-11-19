@@ -107,7 +107,7 @@ def build(reach, placements, folder):
     def point(xz, h, col):
         return g.pt(*[xz[0], h, xz[1]], col)
 
-    bark = np.array([147.0, 139.0, 111.0])
+    bark = np.array([131.0, 125.0, 113.0])
     for idx, (p, m) in enumerate(paths):
         norm = np.gradient(p, axis=0)
         norm /= np.maximum(0.0001, np.linalg.norm(norm, axis=1)[:, None])
@@ -118,7 +118,11 @@ def build(reach, placements, folder):
         for j, (q, dist) in enumerate(zip(p, m)):
             t = dist / m[-1]
             fade = (1 - t) ** 0.70
-            w = trunk * (0.025 + fade)
+            w = (
+                trunk
+                * (0.015 + fade)
+                * (0.85 + 0.15 * np.sin(2.9 * dist + phase) + 0.06 * np.sin(7.3 * dist))
+            )
             # Lower some sections back into overburden. The remaining visible
             # connected root curves are flattened, barked and asymmetric.
             buried = (
@@ -126,6 +130,15 @@ def build(reach, placements, folder):
                 + 0.061 * np.maximum(0, np.sin(dist * 1.8 + phase)) ** 1.6 * t
                 + 0.018 * np.maximum(0, np.sin(dist * 3.1 + phase))
             )
+            # On the washed lower forks, two cut tongues of sand cross the
+            # wooden core. Break the wire-like uninterrupted bow, and expose
+            # irregular flakes at the shoulders rather than round tubing.
+            buried += (
+                0.086
+                * (np.maximum(0, np.sin(2.7 * dist + phase + 0.32)) ** 3)
+                * (0.30 + 0.70 * t)
+            )
+            buried += 0.018 * np.maximum(0, np.sin(7.1 * dist + idx)) ** 5
             lift = min(0.069, w * (0.57 + 0.13 * math.sin(dist * 1.4))) - buried
             curr = []
             for k in range(9):
@@ -133,7 +146,9 @@ def build(reach, placements, folder):
                 xz = q + norm[j] * w * math.sin(aa) * (1 + 0.11 * np.sin(2 * dist + aa))
                 h = (
                     reach.floor(*xz)[0]
-                    + lift * math.cos(aa)
+                    + lift
+                    * np.maximum(0.0, 1.0 - abs(math.sin(aa)) ** 3)
+                    * (0.91 + 0.09 * np.sin(11 * aa + 1.4 * dist))
                     - 0.011 * abs(math.sin(aa)) ** 5
                 )
                 c = (
@@ -142,7 +157,7 @@ def build(reach, placements, folder):
                     * (
                         0.76
                         + 0.15 * math.cos(aa)
-                        + 0.11 * math.sin(aa * 6 + 0.55 * math.sin(dist * 1.9))
+                        + 0.145 * math.sin(aa * 6 + 0.55 * math.sin(dist * 1.9))
                         + 0.06 * np.cos(2.6 * dist)
                     )
                 )

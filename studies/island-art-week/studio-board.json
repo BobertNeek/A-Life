@@ -1,9 +1,13 @@
 {
   "subject": "leeward-passage",
   "angles": [
+    "reach-alder",
     "reach-strand"
   ],
   "paired": false,
+  "paired_angles": [
+    "reach-alder"
+  ],
   "samples": 48,
-  "art_note": "Final close-only art at original bluff alder 559. Genuine native terrain, rooted elbow, silt flecks on weathered flats, ripples at actual wet elevations. Far guardian and meadow are outside the fixed local 50 m envelope; use their true prior 6bda7af2 after/0561c4ef before. Never redraw unrelated pictures."
+  "art_note": "Make the 1.04 metre scale explicit: at the last traversable bend, turn to the actual ~7m alder 559 instead of photographing only beach with the source tree off-screen. Both sides of this newly locked composition and the final shore right. Lower core now interrupted by real sand; end the art pass after this gallery. Original three comparator camera controls and far/woods rights already saved."
 }

@@ -198,7 +198,8 @@ cli.add_argument(
     "--copse-floor", type=Path, help="Optional close-only rooted woodland community art"
 )
 cli.add_argument(
-    "--leeward-view", choices=("reach-meadow", "reach-strand", "reach-guardian")
+    "--leeward-view",
+    choices=("reach-meadow", "reach-strand", "reach-guardian", "reach-alder"),
 )
 cli.add_argument(
     "--leeward-paint", type=Path, help="One isolated 219m Shellback Reach art study"
