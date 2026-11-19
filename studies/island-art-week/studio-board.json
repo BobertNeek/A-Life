@@ -1,8 +1,8 @@
 {
   "subject": "erratics",
   "angles": [
-    "woodland-gap",
-    "woodland-edge"
+    "talus-eye",
+    "boulder-heel"
   ],
   "paired": true,
   "quick": false,
@@ -16,7 +16,8 @@
   "hero_soil": false,
   "shared_microfield": false,
   "talus_study": true,
-  "art_note": "Final brush portrait on the same two locked cameras. Replace the tall striped trial and conspicuous straight exposed runners with low bent rushes, partly buried branching stems and overlapping, softly folded broadleaf fans. Same 24.47 m original woodland edge, settled scree, 704px ground treatment and immutable native terrain. Before stays actual bare woodland. CPU Blender art only, no native or game tests.",
+  "art_note": "Ordinary V1 original solid obstacle #1362 and real 1383. Both sides already have the earlier planted scree and local woodland. Only after: mount the three actual large stone bodies on their real positive-ground socket within their old projection and opaque floor. No shifting or fake backing below box. One creature eye repeats the previous talus photo exactly; second looks across the heel, not down from a high guardian. Offline Blender only.",
   "talus_contact": true,
-  "woodland_edge": true
+  "woodland_edge": true,
+  "boulder_mount": true
 }

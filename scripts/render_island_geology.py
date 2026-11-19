@@ -190,6 +190,7 @@ cli.add_argument(
         "moraine-soil",
         "talus-eye",
         "woodland-gap",
+        "boulder-heel",
     ),
     default="slope",
 )
@@ -562,6 +563,10 @@ if (
             # Original #1116, one of three stock balloon-shaped juvenile trees.
             x, z, tx, tz = 50.1, 244.3, 45.447, 237.543
             shot = "sapling-eye"
+        elif args.copse_framing == "boulder-heel":
+            # Approach-side profile, still an actual 1.04 m eye, no props omitted.
+            shot = "boulder-heel"
+            x, z, tx, tz = 267.98, -193.21, 264.56, -191.15
         elif args.copse_framing == "woodland-gap":
             shot = "woodland-gap"
             x, z, tx, tz = 263.8, -195.8, 254.1, -204.0
@@ -606,6 +611,7 @@ if (
                         "moraine-soil": 0.055,
                         "talus-eye": 0.35,
                         "woodland-gap": 0.84,
+                        "boulder-heel": 0.43,
                     }.get(shot, 0.38),
                     tz,
                 ),
@@ -649,12 +655,12 @@ if (
             and args.cliff_library
             and (args.cliff_library / f"CliffSeat{index}.glb").is_file()
         )
-        loose_seat = (
-            kind == "Scree"
+        local_stone = (
+            kind in ("Scree", "BoulderA")
             and args.stone_library
-            and (args.stone_library / f"ScreeSeat{index}.glb").is_file()
+            and (args.stone_library / f"{kind}Seat{index}.glb").is_file()
         )
-        if seated or loose_seat:
+        if seated or local_stone:
             model_key = f"{kind}Seat{index}"
         if kind == "Grass" and args.meadow_habits:
             from island_meadow_variation import family
@@ -680,14 +686,14 @@ if (
                 where = args.meadow_library
             bpy.ops.import_scene.gltf(
                 filepath=str(
-                    where / f"{model_key if seated or loose_seat else kind}.glb"
+                    where / f"{model_key if seated or local_stone else kind}.glb"
                 )
             )
             items = set(bpy.data.objects) - old
             names = (
                 ["Grass", "GrassSilver", "GrassAmber"]
                 if kind == "Grass" and args.meadow_habits
-                else [model_key if seated or loose_seat else kind]
+                else [model_key if seated or local_stone else kind]
             )
             for name in names:
                 for lod_index in (0, 1, 2):

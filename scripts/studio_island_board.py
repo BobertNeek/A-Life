@@ -199,6 +199,21 @@ elif subject == "erratics":
         )
         edge_folder = out / "artist-woodland-edge"
         woodland_study(SURFACE, d / "props.json", edge_folder)
+    if board.get("boulder_mount"):
+        from island_boulder_bedjoint import mount
+
+        if not board.get("woodland_edge"):
+            raise ValueError(
+                "Retain the same completed woodland and seated loose shingle."
+            )
+        index = 1383
+        catalogue["socketed_rock"] = mount(
+            erratic_new / "BoulderA.glb",
+            SURFACE,
+            json.loads((d / "props.json").read_text())[index],
+            index,
+            erratic_new / f"BoulderASeat{index}.glb",
+        )
     (erratic_new / "catalogue.json").write_text(json.dumps(catalogue, indent=2) + "\n")
     if board.get("glacial_train"):
         from island_erratic_train import bake
@@ -594,6 +609,7 @@ views = {
     "moraine-soil": ["--copse-eye", "--copse-framing", "moraine-soil"],
     "talus-eye": ["--copse-eye", "--copse-framing", "talus-eye"],
     "woodland-gap": ["--copse-eye", "--copse-framing", "woodland-gap"],
+    "boulder-heel": ["--copse-eye", "--copse-framing", "boulder-heel"],
     "woodland-edge": ["--guardian-review", "--grove-framing", "woodland-edge"],
     "erratic-reach": ["--guardian-review", "--grove-framing", "erratic-reach"],
     "pine-eye": ["--pine-eye"],
@@ -641,6 +657,8 @@ if subject == "erratics" and board.get("woodland_edge"):
     subject_label = (
         "Needle bed, wind-combed rush and the open moraine between two real spruce"
     )
+if subject == "erratics" and board.get("boulder_mount"):
+    subject_label = "One solid glacial boulder, fitted inside its genuine rising bed"
 if subject == "fault-scarp" and board.get("wall_beds"):
     subject_label = "Same seated scarp, with its exposed bed on the true hillside"
 if subject == "inlet-underpaint" and board.get("tidecast_pockets"):
@@ -743,7 +761,7 @@ for tag in board["angles"]:
                 ["--woodland-edge", edge_folder]
                 if subject == "erratics"
                 and board.get("woodland_edge")
-                and side == "after"
+                and (side == "after" or board.get("boulder_mount"))
                 else []
             ),
             *(
