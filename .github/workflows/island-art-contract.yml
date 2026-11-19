@@ -6,6 +6,8 @@ on:
       - .github/workflows/island-art-contract.yml
       - crates/alife_game_app/src/production_voxel_renderer/island.rs
       - crates/alife_game_app/src/production_voxel_renderer/island/strandline.rs
+      - crates/alife_game_app/src/production_voxel_renderer/island/atmosphere.rs
+      - crates/alife_game_app/assets/landscape/island/coastal-daylight.json
 permissions:
   contents: read
 jobs:
@@ -24,5 +26,5 @@ jobs:
           toolchain: stable
       - name: Install native controller build dependency
         run: sudo apt-get update && sudo apt-get install -y libudev-dev
-      - name: Test shipping glTF range centres, high/low visibility and component integration
-        run: cargo test --locked -p alife_game_app --features production-voxel-frontend --lib production_voxel_renderer::island::strandline::tests -- --test-threads=1
+      - name: Test shipping island light, range centres, camera and component integration
+        run: cargo test --locked -p alife_game_app --features production-voxel-frontend --lib production_voxel_renderer::island:: -- --test-threads=1

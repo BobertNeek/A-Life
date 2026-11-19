@@ -283,10 +283,22 @@ def make(beach):
                         True,
                     )
             continue
-        spread = r.uniform(0.48, 1.5)
-        for _ in range(r.integers(8, 23)):
-            a, b = r.normal(0, spread), r.normal(0, 0.32)
+        # Swash sorts clasts into pockets. One broad offset per deposit breaks
+        # the constant-elevation chain; satellites nest beside an anchor stone.
+        delta = (driftfield(x * 0.72 + 21, z * 0.72 - 33) - 0.5) * 3.3
+        x, z = x - delta * s, z + delta * c
+        seeds = [
+            (r.normal(0, 0.77), r.normal(0, 0.41)) for _ in range(r.integers(2, 4))
+        ]
+        for k in range(r.integers(8, 23)):
+            anchor = k < len(seeds)
+            a, b = seeds[k % len(seeds)]
+            if not anchor:
+                a += r.normal(0, 0.22)
+                b += r.normal(0, 0.13)
             px, pz = x + a * c - b * s, z + a * s + b * c
+            if beach.surface(px, pz)[0] < 0.04:
+                continue
             p = patch(px, pz, 0)
             if r.random() < 0.12:
                 shell(p, r, px, pz, r.random() * math.tau)
@@ -297,7 +309,11 @@ def make(beach):
                     r,
                     px,
                     pz,
-                    0.024 + r.random() ** 2 * 0.145,
+                    (
+                        r.uniform(0.105, 0.165)
+                        if anchor
+                        else 0.023 + r.random() ** 2 * 0.082
+                    ),
                     angle + r.normal(0, 1.0),
                 )
                 counts["pebbles"] += 1
@@ -317,6 +333,9 @@ def make(beach):
     from island_tidal_film import lay
 
     lay(beach, patch, driftfield, tint)
+    from island_coast_plants import thickets
+
+    counts["thickets"], counts["clumps"] = thickets(beach, patch, driftfield, tint)
     return {k: p for k, p in patches.items() if len(p.tris)}, counts, anchors
 
 
@@ -346,10 +365,11 @@ def write(patches, out):
                 ("Dry salt reed", 0.87),
                 ("Damp tidal sand film", 0.24),
                 ("Spent edge wash", 0.27),
+                ("Windrail thicket", 0.84),
             ]
         ],
     }
-    for material in doc["materials"][2:]:
+    for material in doc["materials"][2:4]:
         material["alphaMode"] = "BLEND"
     buf = bytearray()
 
@@ -415,7 +435,7 @@ def write(patches, out):
             ).astype("<f4")
             attrib["TEXCOORD_0"] = attribute(uv, 5126, "VEC2", 34962)
         ix = attribute(idx.ravel().astype("<u2"), 5123, "SCALAR", 34963)
-        name = f'Strand_{cx}_{cz}_{("wet","reed","film","wash")[mat]}'
+        name = f'Strand_{cx}_{cz}_{("wet","reed","film","wash","headland")[mat]}'
         i = len(doc["meshes"])
         doc["meshes"].append(
             {

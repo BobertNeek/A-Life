@@ -1,4 +1,5 @@
 //! Island chunk and prop rendering for the playable world.
+mod atmosphere;
 mod nursery;
 mod strandline;
 use super::*;
@@ -156,6 +157,7 @@ fn prop_view_state(
 }
 
 pub(super) fn stop(world: &mut World) {
+    atmosphere::leave(world);
     world.remove_resource::<IslandAssets>();
 }
 pub(super) fn start(world: &mut World) {
@@ -187,6 +189,7 @@ pub(super) fn start(world: &mut World) {
     for (entity, sun) in suns {
         world.entity_mut(entity).insert(sun);
     }
+    atmosphere::enter(world);
     let Some(server) = world.get_resource::<AssetServer>() else {
         return;
     };
@@ -344,7 +347,10 @@ pub(super) fn update(
     >,
     mut props: Query<(&mut Mesh3d, &mut Visibility, &mut PropRange), Without<TerrainLod>>,
     mut strand_patches: strandline::PatchViews,
-    cameras: Query<(&Transform, &Projection), With<Fvr03ProductionVoxelCamera>>,
+    mut cameras: Query<
+        (&Transform, &Projection, Option<(&mut DistanceFog, &atmosphere::CoastalAir)>),
+        With<Fvr03ProductionVoxelCamera>,
+    >,
     creatures: Query<&Transform, With<ProductionCreatureAssemblyRoot>>,
     mut suns: Query<(
         &mut DirectionalLight,
@@ -359,7 +365,7 @@ pub(super) fn update(
     let (Some(gltfs), Some(gltf_meshes)) = (gltfs, gltf_meshes) else {
         return;
     };
-    let Some((camera, projection)) = cameras.iter().next() else {
+    let Some((camera, projection, air)) = cameras.iter_mut().next() else {
         return;
     };
     if !assets.spawned {
@@ -470,6 +476,9 @@ pub(super) fn update(
     let focus = focus_on_surface(camera, &assets.surface);
     let height = view_height(projection);
     strandline::update(&mut strand_patches, focus, height);
+    if let Some((mut fog, _)) = air {
+        atmosphere::refocus(&mut fog, camera.translation.distance(focus), height);
+    }
     for (mut light, mut cascades, sun) in &mut suns {
         let shadows_enabled = sun.enabled && height < 240.0;
         if light.shadows_enabled != shadows_enabled {

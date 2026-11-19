@@ -37,12 +37,20 @@ fn bind(
 ) {
     for entity in children.iter_descendants(ready.entity) {
         let mut entity_commands = commands.entity(entity);
-        entity_commands.insert((bevy::picking::Pickable::IGNORE, NotShadowCaster));
+        entity_commands.insert(bevy::picking::Pickable::IGNORE);
         if let Ok((name, transform)) = nodes.get(entity) {
             // The GLB places every actual patch node at its tile centre. Its
             // primitive children have local identity and inherit visibility.
             if let Some(xz) = center(name.as_str(), transform.translation) {
                 entity_commands.insert((StrandPatch(xz), Visibility::Hidden));
+                // Only substantial rooted thickets cast. Tiny stones, transparent
+                // wash and contact films must not spawn a halo or shadow acne.
+                if !name.as_str().ends_with("_headland") {
+                    entity_commands.insert(NotShadowCaster);
+                    for mesh in children.iter_descendants(entity) {
+                        commands.entity(mesh).insert(NotShadowCaster);
+                    }
+                }
             }
         }
     }

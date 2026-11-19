@@ -1,0 +1,35 @@
+{
+  "sun_ray_direction": [
+    0.81,
+    -0.59,
+    -0.34
+  ],
+  "sun_srgb": [
+    1.0,
+    0.89,
+    0.74
+  ],
+  "sky_fill_srgb": [
+    0.66,
+    0.8,
+    0.94
+  ],
+  "clear_srgb": [
+    0.64,
+    0.77,
+    0.8
+  ],
+  "air_srgb": [
+    0.58,
+    0.72,
+    0.76
+  ],
+  "sun_air_srgb": [
+    0.99,
+    0.83,
+    0.64
+  ],
+  "air_strength": 0.34,
+  "air_start_beyond_focus_m": 12.0,
+  "air_span_min_m": 105.0
+}

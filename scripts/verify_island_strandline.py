@@ -32,20 +32,20 @@ def verify(path):
     doc, buffer = parse(path)
     original = data(ROOT / "crates/alife_world/assets/island-v1.bin")
     alternate = data(ROOT / "studies/island-ridge-v2/island-ridge-v2.bin")
-    assert 0 < len(doc["meshes"]) == len(doc["nodes"]) < 290
-    assert len(doc["materials"]) == 4
+    assert 0 < len(doc["meshes"]) == len(doc["nodes"]) < 350
+    assert len(doc["materials"]) == 5
     assert doc["materials"][3]["pbrMetallicRoughness"]["baseColorTexture"] == {
         "index": 0
     }
     total, maximum = 0, 0
-    upper = [0.0, 0.0, 0.0, 0.0]
-    patches = [0, 0, 0, 0]
+    upper = [0.0] * 5
+    patches = [0] * 5
     for node in doc["nodes"]:
         mesh = doc["meshes"][node["mesh"]]
         assert node["name"] == mesh["name"] and len(mesh["primitives"]) == 1
         p = mesh["primitives"][0]
         mat = p["material"]
-        assert mat in (0, 1, 2, 3)
+        assert mat in (0, 1, 2, 3, 4)
         patches[mat] += 1
         a = p["attributes"]
         pos = np.array(values(doc, buffer, a["POSITION"])) + node["translation"]
@@ -55,7 +55,7 @@ def verify(path):
         assert np.isfinite(pos).all() and len(pos) == len(normals) == len(col)
         assert np.allclose(np.linalg.norm(normals, axis=1), 1.0, atol=2e-5)
         assert ix.min() >= 0 and ix.max() < len(pos)
-        if mat < 2:
+        if mat in (0, 1, 4):
             assert (col[:, 3] == 1.0).all()
         else:
             assert (col[:, 3] < 1.0).any()
@@ -65,6 +65,8 @@ def verify(path):
             assert -0.009 < lift.min() and lift.max() < (0.046 if mat == 0 else 0.29)
         elif mat == 2:
             assert np.max(abs(lift - 0.003)) < 0.00004
+        elif mat == 4:
+            assert lift.min() >= -0.001 and lift.max() < 1.35
         else:
             assert np.max(abs(pos[:, 1] - 0.009)) < 0.000001 and lift.min() > 0
             assert np.isfinite(values(doc, buffer, a["TEXCOORD_0"])).all()
@@ -73,9 +75,9 @@ def verify(path):
         nt = len(ix) // 3
         total += nt
         maximum = max(maximum, nt)
-    assert total < 240_000 and maximum < 15_000 and path.stat().st_size < 10_000_000
+    assert total < 255_000 and maximum < 18_000 and path.stat().st_size < 11_800_000
     return dict(
-        patches_stone_reed_film_wash=patches,
+        patches_stone_reed_film_wash_thicket=patches,
         triangles=total,
         largest_patch_triangles=maximum,
         maximum_height_above_ground_m=upper,

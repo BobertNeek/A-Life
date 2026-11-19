@@ -8,6 +8,8 @@ import sys
 from pathlib import Path
 
 import bpy
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from mathutils import Vector
 
 cli = argparse.ArgumentParser(description=__doc__)
@@ -29,6 +31,16 @@ cli.add_argument(
 cli.add_argument("--surface", type=Path)
 cli.add_argument("--placements", type=Path)
 cli.add_argument("--prop-library", type=Path)
+cli.add_argument(
+    "--cove-showcase",
+    action="store_true",
+    help="Locked shore-to-massif habitat composition",
+)
+cli.add_argument(
+    "--coastal-light",
+    type=Path,
+    help="Actual production palette and camera-relative air",
+)
 args = cli.parse_args(sys.argv[sys.argv.index("--") + 1 :])
 args.out.mkdir(parents=True, exist_ok=True)
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -84,7 +96,7 @@ shots = [
     ("estuary", (190, 54, 440), (4, 20, 236), 0, 35, 0),
     ("headland", (-480, 51, -72), (-265, 30, -212), 0, 36, 0),
 ]
-if args.creature_height or args.tidal_review:
+if args.creature_height or args.tidal_review or args.cove_showcase:
     root = Path(__file__).resolve().parents[1]
     library = (
         args.prop_library or root / "crates/alife_game_app/assets/landscape/island"
@@ -134,21 +146,41 @@ if args.creature_height or args.tidal_review:
                 0,
             ),
         ]
+    if args.cove_showcase:
+        # From the rooted windbreak inland of the strand: mountain left, bay
+        # right; both remain visible from a human/creature-scale viewpoint.
+        x, z = 332.2, 129.8
+        eye = ground(x, z) + 1.68
+        shots = [
+            ("cove-showcase", (x, eye, z), (x - 3.6, eye + 1.05, z - 66), 0, 22, 0)
+        ]
     props = json.loads((args.placements or library / "props.json").read_text())
     models = {}
     for prop in props:
         px, py, pz = prop["position"]
         kind = prop["kind"]
-        if math.hypot(px - x, pz - z) > 65:
+        dist = math.hypot(px - x, pz - z)
+        tree = kind in ("Broadleaf", "Conifer", "Sapling")
+        if dist > (
+            265 if args.cove_showcase and tree else 120 if args.cove_showcase else 65
+        ):
             continue
-        if kind not in models:
+        if args.cove_showcase and kind in ("Grass", "Fern", "Flowers") and dist >= 45:
+            continue
+        level = 2 if tree and dist > 240 else int(dist > 100)
+        if (kind, level) not in models:
             old = set(bpy.data.objects)
             bpy.ops.import_scene.gltf(filepath=str(library / f"{kind}.glb"))
             items = set(bpy.data.objects) - old
-            models[kind] = next(o for o in items if o.name == kind + "_L0")
+            for lod_index in (0, 1, 2):
+                item = next(
+                    (o for o in items if o.name == kind + f"_L{lod_index}"), None
+                )
+                if item is not None:
+                    models[kind, lod_index] = item
             for o in items:
                 o.hide_render = True
-        instance = models[kind].copy()
+        instance = models[kind, level].copy()
         scene.collection.objects.link(instance)
         instance.hide_render = False
         if kind in ("Grass", "Fern", "Flowers", "BerryBush", "CoastalShrub"):
@@ -157,8 +189,13 @@ if args.creature_height or args.tidal_review:
         instance.rotation_mode = "XYZ"
         instance.rotation_euler = (0, 0, prop["yaw"])
         instance.scale = (prop["scale"],) * 3
+decor = []
 if args.strandline:
+    old = set(bpy.data.objects)
     bpy.ops.import_scene.gltf(filepath=str(args.strandline.resolve()))
+    decor = [o for o in set(bpy.data.objects) - old if o.type == "MESH"]
+    for o in decor:
+        o.visible_shadow = o.name.endswith("_headland")
 if args.wide_only:
     shots = shots[:1]
 if args.handoff:
@@ -166,7 +203,28 @@ if args.handoff:
         (f"handoff-{lod}", (250, 245, 10), (33, 109, -198), 350, 36, lod)
         for lod in (0, 1, 2)
     ]
+mood = None
+if args.coastal_light:
+    from island_review_light import apply
+
+    mood = apply(scene, sun, light, args.coastal_light)
 for name, pos, aim, ortho, lens, lod in shots:
+    if mood:
+        focus_m = (
+            15.0 if name == "cove-showcase" else (native(aim) - native(pos)).length
+        )
+        span = 45.0 if name in ("cove-showcase", "strand-reach") else 8.0
+        scene.world.mist_settings.start = focus_m + mood["air_start_beyond_focus_m"]
+        scene.world.mist_settings.depth = mood["air_span_min_m"] + 0.62 * span
+    if decor:
+        # Same 100 m terrain gate as the Bevy binding. The eye-level study
+        # uses a 15 m focal subject; diagnostics use their original target.
+        a, b = native(pos), native(aim)
+        focus = a + (b - a).normalized() * 15.0 if name == "cove-showcase" else b
+        for o in decor:
+            cx = math.floor(o.location.x / 100) * 100 + 50
+            cz = math.floor(-o.location.y / 100) * 100 + 50
+            o.hide_render = math.hypot(cx - focus.x, cz + focus.y) >= 150
     for ob in chunks:
         ob.hide_render = not ob.name.endswith(f"_L{lod}")
     obj.location = native(pos)

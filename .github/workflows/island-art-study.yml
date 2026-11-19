@@ -6,6 +6,9 @@ on:
       - .github/workflows/island-art-study.yml
       - scripts/build_island_strandline.py
       - scripts/island_tidal_film.py
+      - scripts/island_coast_plants.py
+      - scripts/island_review_light.py
+      - crates/alife_game_app/assets/landscape/island/coastal-daylight.json
       - scripts/render_island_geology.py
       - scripts/verify_island_strandline.py
       - scripts/compare_island_art.py
@@ -24,22 +27,34 @@ jobs:
           mkdir -p "$RUNNER_TEMP/shore"
           /usr/bin/python3 scripts/build_island_strandline.py --out "$RUNNER_TEMP/shore/strandline.glb"
           /usr/bin/python3 scripts/verify_island_strandline.py "$RUNNER_TEMP/shore/strandline.glb" > "$RUNNER_TEMP/shore/validation.json"
-      - name: Matched CPU Blender study at two fixed elevations
+      - name: Lock the previous published beach for inspection at the same camera
+        run: |
+          git fetch --quiet --depth=1 origin 810e4f872680dc569affa6c8d2e3c31f79caa86c
+          git show FETCH_HEAD:crates/alife_game_app/assets/landscape/island/strandline.glb > "$RUNNER_TEMP/shore/previous.glb"
+          echo "78ba8d2b084ff07ef3bd65ec46f81a328f4b8ef9215784cc5d9b685b050ec0b9  $RUNNER_TEMP/shore/previous.glb" | sha256sum -c
+      - name: Two neutral controls and one dressed shore-to-massif composition
         env:
           OPENBLAS_NUM_THREADS: "1"
         run: |
-          T=crates/alife_game_app/assets/landscape/island/terrain-chunks.glb
+          D=crates/alife_game_app/assets/landscape/island
           S="$RUNNER_TEMP/shore"
-          blender -b -t 2 --python-exit-code 1 -P scripts/render_island_geology.py -- "$T" "$S/before" --tidal-review
-          blender -b -t 2 --python-exit-code 1 -P scripts/render_island_geology.py -- "$T" "$S/after" --tidal-review --strandline "$S/strandline.glb"
-          /usr/bin/python3 scripts/compare_island_art.py "$S/before/strand-eye.png" "$S/after/strand-eye.png" "$S/strand-eye.jpg" --title 'Eastern strand at 86 cm | Matched CPU Blender study; water is a stand-in'
-          /usr/bin/python3 scripts/compare_island_art.py "$S/before/strand-reach.png" "$S/after/strand-reach.png" "$S/strand-reach.jpg" --title 'Eastern strand from the bank | Matched CPU Blender study; water is a stand-in'
+          render() { blender -b -t 2 --python-exit-code 1 -P scripts/render_island_geology.py -- "$D/terrain-chunks.glb" "$@"; }
+          compare() { /usr/bin/python3 scripts/compare_island_art.py "$S/before/$1.png" "$S/after/$1.png" "$S/$1.jpg" --title "$2"; }
+          render "$S/before" --tidal-review --strandline "$S/previous.glb"
+          render "$S/after" --tidal-review --strandline "$S/strandline.glb"
+          render "$S/before" --cove-showcase --strandline "$S/previous.glb"
+          render "$S/after" --cove-showcase --strandline "$S/strandline.glb" --coastal-light "$D/coastal-daylight.json"
+          compare strand-eye 'Eastern strand at 86 cm | Same neutral light and lens'
+          compare strand-reach 'Eastern strand from the bank | Same neutral light and lens'
+          compare cove-showcase 'Cove to massif | Same camera, revised coast and daylight | CPU Blender; water proxy'
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: island-paired-strand
           path: |
             ${{ runner.temp }}/shore/strandline.glb
             ${{ runner.temp }}/shore/validation.json
+            ${{ runner.temp }}/shore/cove-showcase.jpg
+            ${{ runner.temp }}/shore/after/cove-showcase.png
             ${{ runner.temp }}/shore/strand-eye.jpg
             ${{ runner.temp }}/shore/strand-reach.jpg
           retention-days: 7
