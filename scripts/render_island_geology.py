@@ -38,6 +38,11 @@ cli.add_argument(
     type=Path,
     help="Optional real-coordinate close substrate for DCC art only",
 )
+cli.add_argument(
+    "--woodland-edge",
+    type=Path,
+    help="Only the true two-spruce woodland in the offline artwork",
+)
 cli.add_argument("--surface", type=Path)
 cli.add_argument("--placements", type=Path)
 cli.add_argument(
@@ -151,6 +156,7 @@ cli.add_argument(
         "scarp-spur",
         "rift-root",
         "erratic-reach",
+        "woodland-edge",
     ),
     default="shoulder",
     help="Select one of the two fixed guardian cameras",
@@ -183,6 +189,7 @@ cli.add_argument(
         "erratic-foot",
         "moraine-soil",
         "talus-eye",
+        "woodland-gap",
     ),
     default="slope",
 )
@@ -282,6 +289,10 @@ if args.ground_microfield:
     from studio_ground_microfield import bind as apply_microfield
 
     apply_microfield(habitats.values(), args.ground_microfield)
+if args.woodland_edge:
+    from studio_woodland_edge_material import bind as apply_woodland_edge
+
+    apply_woodland_edge(habitats.values(), args.woodland_edge)
 if args.marine_sky:
     old = set(bpy.data.objects)
     bpy.ops.import_scene.gltf(filepath=str(args.marine_sky.resolve()))
@@ -447,6 +458,19 @@ if (
                     0,
                 )
             ]
+        if args.grove_framing == "woodland-edge":
+            # Side on: real joined margin of spruce 111/131 to talus 1303.
+            tx, tz = 257.60, -199.45
+            shots = [
+                (
+                    "woodland-edge",
+                    (291.0, ground(tx, tz) + 19.0, -217.3),
+                    (tx, ground(tx, tz) + 1.15, tz),
+                    35.5,
+                    38,
+                    0,
+                )
+            ]
         if args.grove_framing == "erratic-reach":
             # Use the actual deposit, not a tabletop arrangement: 1570, 1383
             # and 1675, with unaltered scree 1303 and the original treeline.
@@ -538,6 +562,9 @@ if (
             # Original #1116, one of three stock balloon-shaped juvenile trees.
             x, z, tx, tz = 50.1, 244.3, 45.447, 237.543
             shot = "sapling-eye"
+        elif args.copse_framing == "woodland-gap":
+            shot = "woodland-gap"
+            x, z, tx, tz = 263.8, -195.8, 254.1, -204.0
         elif args.copse_framing == "talus-eye":
             # At original 1303 in the same woodland, with 1383 unchanged
             # beyond. Near side is reached from the open downhill flank.
@@ -578,6 +605,7 @@ if (
                         "erratic-foot": 0.74,
                         "moraine-soil": 0.055,
                         "talus-eye": 0.35,
+                        "woodland-gap": 0.84,
                     }.get(shot, 0.38),
                     tz,
                 ),
@@ -701,6 +729,13 @@ if args.wild_sward:
     sward = [o for o in set(bpy.data.objects) - old if o.type == "MESH"]
     for o in sward:
         o.visible_shadow = False  # Ground-hugging seedbank; hero plants still cast.
+if args.woodland_edge:
+    old = set(bpy.data.objects)
+    bpy.ops.import_scene.gltf(
+        filepath=str((args.woodland_edge / "woodland-edge.glb").resolve())
+    )
+    # This is visible plant mass, not a false shadow under the rocks.
+    sward.extend(o for o in set(bpy.data.objects) - old if o.type == "MESH")
 copse = []
 if args.copse_floor:
     old = set(bpy.data.objects)

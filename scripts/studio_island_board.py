@@ -187,6 +187,18 @@ elif subject == "erratics":
             json.loads((d / "props.json").read_text())[index],
             index,
         )
+    if board.get("woodland_edge"):
+        from island_woodland_edge import build as woodland_study
+
+        if not board.get("talus_contact"):
+            raise ValueError("Both forest comparisons require the same seated stones")
+        # The control also exposes the finished near scree. No stone movement
+        # or model change at all between the woodland photographs.
+        (pre_talus / "ScreeSeat1303.glb").symlink_to(
+            (erratic_new / "ScreeSeat1303.glb").resolve()
+        )
+        edge_folder = out / "artist-woodland-edge"
+        woodland_study(SURFACE, d / "props.json", edge_folder)
     (erratic_new / "catalogue.json").write_text(json.dumps(catalogue, indent=2) + "\n")
     if board.get("glacial_train"):
         from island_erratic_train import bake
@@ -581,6 +593,8 @@ views = {
     "erratic-foot": ["--copse-eye", "--copse-framing", "erratic-foot"],
     "moraine-soil": ["--copse-eye", "--copse-framing", "moraine-soil"],
     "talus-eye": ["--copse-eye", "--copse-framing", "talus-eye"],
+    "woodland-gap": ["--copse-eye", "--copse-framing", "woodland-gap"],
+    "woodland-edge": ["--guardian-review", "--grove-framing", "woodland-edge"],
     "erratic-reach": ["--guardian-review", "--grove-framing", "erratic-reach"],
     "pine-eye": ["--pine-eye"],
     "guardian-woods": ["--guardian-review", "--grove-framing", "dense"],
@@ -622,6 +636,10 @@ if subject == "erratics" and board.get("talus_study"):
 if subject == "erratics" and board.get("talus_contact"):
     subject_label = (
         "Actual woodland shingle: the same 22 stones, seated on the individual slopes"
+    )
+if subject == "erratics" and board.get("woodland_edge"):
+    subject_label = (
+        "Needle bed, wind-combed rush and the open moraine between two real spruce"
     )
 if subject == "fault-scarp" and board.get("wall_beds"):
     subject_label = "Same seated scarp, with its exposed bed on the true hillside"
@@ -721,6 +739,13 @@ for tag in board["angles"]:
             d / "terrain-chunks.glb",
             out / side,
             *views[tag],
+            *(
+                ["--woodland-edge", edge_folder]
+                if subject == "erratics"
+                and board.get("woodland_edge")
+                and side == "after"
+                else []
+            ),
             *(
                 ["--ground-microfield", micro]
                 if subject == "erratics"
