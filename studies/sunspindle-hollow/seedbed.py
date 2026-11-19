@@ -64,7 +64,7 @@ def quilt(folder):
                     continue
                 points = [tuple(pt) for pt in q]
                 p.polygon(points, fill=tuple(int(z) for z in colour))
-                h.polygon(points, fill=rel)
+                h.polygon(points, fill=int(rel))
 
     for _ in range(390):
         loc = R.uniform(0, n, 2)
