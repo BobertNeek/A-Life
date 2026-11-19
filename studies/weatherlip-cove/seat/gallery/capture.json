@@ -1,0 +1,35 @@
+{
+  "previous_untouched_study": "63e3d684989c44f005c3362572ff85af8d11569e",
+  "control_photographs_from": "584962219c095f64d20ebacc248c11337a3a4aa4",
+  "control_artist_run": 44544951364,
+  "final_artist_source": "025845ae68c8aebff270f0406ceba124091d7d76",
+  "final_artist_run": 44549508217,
+  "terrain_sha256": "8d0e9cf6343ffe8ea5e82bcb7ad3e4ef77eef7207042cf0274de5d91f2457c38",
+  "original_crates_tree": "244f69c41eee41e45a7b5f9fb19f93b212608347",
+  "held_ordinary_glbs": {
+    "BoulderA.gitblob": "464be6dd28139b5ce68a9b4ed76c630038877f43",
+    "BoulderB.gitblob": "2aec950c9790d3a71ee0c670e9e76f244fc3ffc2"
+  },
+  "actual_photos": {
+    "63e3d684-control/bight-high.png": "46a31d8e0213704cca0e19d77416755f18efd1935a5e08aad609e910189f466d",
+    "63e3d684-control/bight-tooth.png": "b5a5094d648773240f639a8d9ad2e6e9572b30486786fb72af57e1279b7246e6",
+    "63e3d684-control/bight-beach.png": "59dfbf267c45dd042f1358e93434afd91da188daed716b6091087636e134bd27",
+    "025845ae-new/bight-high.png": "0b85ed1e1dcd3ba2f0664c5538d2668298d973da00485266b47842619a589619",
+    "025845ae-new/bight-tooth.png": "0c12b070dca865a02f667798f8000a89bffd25d2133c7c3c67d0ea783b752943",
+    "025845ae-new/bight-beach.png": "212488e3842a64b6f899e9943d8b11449213128e7e942619fee00ea161a78abe"
+  },
+  "source_size": [
+    1000,
+    600
+  ],
+  "method": "Three locked pictures from the previous complete Weatherlip installation in the art studio; CPU Blender 4.3.2, same 48-sample seed, ordinary habitat and water, retained complete original cove materials and active sunlight. Only two instance-specific rock models/surface skins differ.",
+  "terrain_write": false,
+  "added_shadow_caster": false,
+  "changed_existing_visual_caster_geometry": true,
+  "game_or_performance_tests": false,
+  "files": {
+    "matched_jpg": "abff691e16868d8f17310ee0783c263648505cf9723d37a1b0c1649675d1a65c",
+    "complete_editable_blend": "a3ab46bec7643c9392ff2243390b36d0023895ce80509df3e25c6f52b0a332be",
+    "lossless_camera_archive": "00df457952c1c0b33da7f37014ca26f5a6c31a8bb4f82a0c66f783696b750769"
+  }
+}

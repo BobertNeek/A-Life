@@ -1,0 +1,304 @@
+{
+  "1785": {
+    "kind": "BoulderB",
+    "anchor": 1785,
+    "native_parent": {
+      "kind": "BoulderB",
+      "position": [
+        -355.32689625941697,
+        2.6798036205321307,
+        32.19792712007717
+      ],
+      "scale": 1.2561545483476926,
+      "yaw": 1.354065179824829
+    },
+    "unchanged_solid_index": 1664,
+    "native_box_xmin_zmin_xmax_zmax_ymin_ymax": [
+      -356.4900817871094,
+      30.89124298095703,
+      -354.1637268066406,
+      33.504608154296875,
+      2.6798036098480225,
+      4.187189102172852
+    ],
+    "levels": {
+      "L0": {
+        "triangles": 266,
+        "original_triangles": 312,
+        "bodies": [
+          {
+            "old_contact_fraction": 0.3163646821972965,
+            "new_contact_fraction": 0.5010066148979004,
+            "projected_area_m2": 2.253968573206809,
+            "physically_reachable_fraction": 0.5222893298820822,
+            "plan_support_max_delta_m": 0.0,
+            "lowest_local_height_m": 0.0,
+            "before_positive_gap_q50_m": 0.14795946017849426,
+            "after_positive_gap_q50_m": 0.013757558039752493,
+            "uphill_support_samples": 1745,
+            "source_samples": 3477
+          },
+          {
+            "old_contact_fraction": 0.27542226818338506,
+            "new_contact_fraction": 0.4591520165460186,
+            "projected_area_m2": 1.5104258313332795,
+            "physically_reachable_fraction": 0.4815580834195105,
+            "plan_support_max_delta_m": 0.0,
+            "lowest_local_height_m": 0.0,
+            "before_positive_gap_q50_m": 0.14444200990983147,
+            "after_positive_gap_q50_m": 0.054723251860252065,
+            "uphill_support_samples": 1328,
+            "source_samples": 2901
+          },
+          {
+            "old_contact_fraction": 0.5958533653846154,
+            "new_contact_fraction": 0.6676682692307693,
+            "projected_area_m2": 0.9369798220450563,
+            "physically_reachable_fraction": 0.6941105769230769,
+            "plan_support_max_delta_m": 0.0,
+            "lowest_local_height_m": 0.0,
+            "before_positive_gap_q50_m": 0.0,
+            "after_positive_gap_q50_m": 0.0,
+            "uphill_support_samples": 2210,
+            "source_samples": 3328
+          }
+        ]
+      },
+      "L1": {
+        "triangles": 200,
+        "original_triangles": 140,
+        "bodies": [
+          {
+            "old_contact_fraction": 0.30939385234128125,
+            "new_contact_fraction": 0.4955472565354783,
+            "projected_area_m2": 2.1425198705929676,
+            "physically_reachable_fraction": 0.5285837403045102,
+            "plan_support_max_delta_m": 0.0,
+            "lowest_local_height_m": -0.0,
+            "before_positive_gap_q50_m": 0.15016584721890325,
+            "after_positive_gap_q50_m": 0.020399537812615963,
+            "uphill_support_samples": 1767,
+            "source_samples": 3481
+          },
+          {
+            "old_contact_fraction": 0.2731353591160221,
+            "new_contact_fraction": 0.46581491712707185,
+            "projected_area_m2": 1.4190804012193594,
+            "physically_reachable_fraction": 0.4937845303867403,
+            "plan_support_max_delta_m": 0.0,
+            "lowest_local_height_m": 4.647771828886463e-06,
+            "before_positive_gap_q50_m": 0.13203589730905935,
+            "after_positive_gap_q50_m": 0.04555484751911693,
+            "uphill_support_samples": 1373,
+            "source_samples": 2896
+          },
+          {
+            "old_contact_fraction": 0.5815560228296786,
+            "new_contact_fraction": 0.657254430759988,
+            "projected_area_m2": 0.9554701011603122,
+            "physically_reachable_fraction": 0.6812856713727846,
+            "plan_support_max_delta_m": 0.0,
+            "lowest_local_height_m": 0.009494141691866695,
+            "before_positive_gap_q50_m": 0.0,
+            "after_positive_gap_q50_m": 0.0,
+            "uphill_support_samples": 2169,
+            "source_samples": 3329
+          }
+        ]
+      },
+      "L2": {
+        "triangles": 124,
+        "original_triangles": 62,
+        "bodies": [
+          {
+            "old_contact_fraction": 0.29672682777607834,
+            "new_contact_fraction": 0.5377791373508718,
+            "projected_area_m2": 2.102847664332514,
+            "physically_reachable_fraction": 0.5643927806668706,
+            "plan_support_max_delta_m": 0.0,
+            "lowest_local_height_m": -0.0,
+            "before_positive_gap_q50_m": 0.16647622982178703,
+            "after_positive_gap_q50_m": 0.0,
+            "uphill_support_samples": 1782,
+            "source_samples": 3269
+          },
+          {
+            "old_contact_fraction": 0.22955974842767296,
+            "new_contact_fraction": 0.5146750524109015,
+            "projected_area_m2": 1.2962820510061215,
+            "physically_reachable_fraction": 0.5534591194968553,
+            "plan_support_max_delta_m": 0.0,
+            "lowest_local_height_m": -0.0,
+            "before_positive_gap_q50_m": 0.17896211344253027,
+            "after_positive_gap_q50_m": 2.856928275917939e-05,
+            "uphill_support_samples": 1512,
+            "source_samples": 2862
+          },
+          {
+            "old_contact_fraction": 0.5587714116952156,
+            "new_contact_fraction": 0.7350856467808624,
+            "projected_area_m2": 0.8318018818839568,
+            "physically_reachable_fraction": 0.7690490253987006,
+            "plan_support_max_delta_m": 0.0,
+            "lowest_local_height_m": 0.010425957135831014,
+            "before_positive_gap_q50_m": 0.0,
+            "after_positive_gap_q50_m": 0.0,
+            "uphill_support_samples": 2504,
+            "source_samples": 3386
+          }
+        ]
+      }
+    }
+  },
+  "1619": {
+    "kind": "BoulderA",
+    "anchor": 1619,
+    "native_parent": {
+      "kind": "BoulderA",
+      "position": [
+        -333.67346311632417,
+        5.598574071225815,
+        121.65167231262927
+      ],
+      "scale": 1.1561345448811737,
+      "yaw": 5.8940019607543945
+    },
+    "unchanged_solid_index": 1547,
+    "native_box_xmin_zmin_xmax_zmax_ymin_ymax": [
+      -335.395751953125,
+      120.05558013916016,
+      -331.951171875,
+      123.24776458740234,
+      5.598574161529541,
+      7.6796159744262695
+    ],
+    "levels": {
+      "L0": {
+        "triangles": 280,
+        "original_triangles": 312,
+        "bodies": [
+          {
+            "old_contact_fraction": 0.13990461049284578,
+            "new_contact_fraction": 0.40031796502384737,
+            "projected_area_m2": 3.612201545045504,
+            "physically_reachable_fraction": 0.43020667726550077,
+            "plan_support_max_delta_m": 0.0,
+            "lowest_local_height_m": 1.1561345448811737e-07,
+            "before_positive_gap_q50_m": 0.32692065023855665,
+            "after_positive_gap_q50_m": 0.19760504286237235,
+            "uphill_support_samples": 1305,
+            "source_samples": 3145
+          },
+          {
+            "old_contact_fraction": 0.6252689824777129,
+            "new_contact_fraction": 0.7863510605594836,
+            "projected_area_m2": 2.4888416783788427,
+            "physically_reachable_fraction": 0.8143252382416231,
+            "plan_support_max_delta_m": 0.0,
+            "lowest_local_height_m": 1.1561345448811737e-07,
+            "before_positive_gap_q50_m": 0.0,
+            "after_positive_gap_q50_m": 0.0,
+            "uphill_support_samples": 2596,
+            "source_samples": 3253
+          },
+          {
+            "old_contact_fraction": 0.45749827228749135,
+            "new_contact_fraction": 0.6015894955079475,
+            "projected_area_m2": 1.3769207185082497,
+            "physically_reachable_fraction": 0.6288873531444368,
+            "plan_support_max_delta_m": 0.0,
+            "lowest_local_height_m": 1.1561345448811737e-07,
+            "before_positive_gap_q50_m": 0.03414512038250227,
+            "after_positive_gap_q50_m": 0.0,
+            "uphill_support_samples": 1743,
+            "source_samples": 2894
+          }
+        ]
+      },
+      "L1": {
+        "triangles": 206,
+        "original_triangles": 140,
+        "bodies": [
+          {
+            "old_contact_fraction": 0.10457724094087731,
+            "new_contact_fraction": 0.38906547997457086,
+            "projected_area_m2": 3.449731214144159,
+            "physically_reachable_fraction": 0.4230769230769231,
+            "plan_support_max_delta_m": 0.0,
+            "lowest_local_height_m": 1.1561345448811737e-07,
+            "before_positive_gap_q50_m": 0.3421533501732201,
+            "after_positive_gap_q50_m": 0.21395866676831332,
+            "uphill_support_samples": 1280,
+            "source_samples": 3146
+          },
+          {
+            "old_contact_fraction": 0.5761405672009864,
+            "new_contact_fraction": 0.7617139334155364,
+            "projected_area_m2": 2.447142470013636,
+            "physically_reachable_fraction": 0.7974722564734895,
+            "plan_support_max_delta_m": 0.0,
+            "lowest_local_height_m": 0.011523308622285146,
+            "before_positive_gap_q50_m": 0.0,
+            "after_positive_gap_q50_m": 0.0,
+            "uphill_support_samples": 2532,
+            "source_samples": 3244
+          },
+          {
+            "old_contact_fraction": 0.4197573656845754,
+            "new_contact_fraction": 0.6065857885615251,
+            "projected_area_m2": 1.353020762679841,
+            "physically_reachable_fraction": 0.634315424610052,
+            "plan_support_max_delta_m": 0.0,
+            "lowest_local_height_m": 0.012118024232172023,
+            "before_positive_gap_q50_m": 0.05258525790917259,
+            "after_positive_gap_q50_m": 0.0,
+            "uphill_support_samples": 1752,
+            "source_samples": 2885
+          }
+        ]
+      },
+      "L2": {
+        "triangles": 112,
+        "original_triangles": 62,
+        "bodies": [
+          {
+            "old_contact_fraction": 0.07588254701418674,
+            "new_contact_fraction": 0.4025074232926427,
+            "projected_area_m2": 3.354065831369034,
+            "physically_reachable_fraction": 0.44539755856153085,
+            "plan_support_max_delta_m": 0.0,
+            "lowest_local_height_m": 1.1561345448811737e-07,
+            "before_positive_gap_q50_m": 0.3548196174820242,
+            "after_positive_gap_q50_m": 0.1924122543362101,
+            "uphill_support_samples": 1294,
+            "source_samples": 3031
+          },
+          {
+            "old_contact_fraction": 0.4783007334963325,
+            "new_contact_fraction": 0.7683374083129584,
+            "projected_area_m2": 2.509839601091875,
+            "physically_reachable_fraction": 0.8028728606356969,
+            "plan_support_max_delta_m": 0.0,
+            "lowest_local_height_m": 1.1561345448811737e-07,
+            "before_positive_gap_q50_m": 0.0265306344971568,
+            "after_positive_gap_q50_m": 0.0,
+            "uphill_support_samples": 2570,
+            "source_samples": 3272
+          },
+          {
+            "old_contact_fraction": 0.2998442367601246,
+            "new_contact_fraction": 0.594626168224299,
+            "projected_area_m2": 1.247898533352285,
+            "physically_reachable_fraction": 0.6304517133956387,
+            "plan_support_max_delta_m": 0.0,
+            "lowest_local_height_m": 1.1561345448811737e-07,
+            "before_positive_gap_q50_m": 0.11743434973182303,
+            "after_positive_gap_q50_m": 0.0,
+            "uphill_support_samples": 1550,
+            "source_samples": 2568
+          }
+        ]
+      }
+    }
+  }
+}
