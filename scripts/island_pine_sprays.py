@@ -11,13 +11,11 @@ from island_needle_surface import uv
 
 
 def emit(out, b, lod, axis):
-    r = np.random.default_rng(b["seed"] + 9045)
     right = b["side"]
     direction = b["d"]
     up = np.array((0.0, 1.0, 0.0))
     length = b["reach"]
     tint = b["tint"]
-    alt = b["seed"] % 2
 
     def wood_uv(t, q):
         return (0.02 + 0.033 * t, 0.931 + 0.013 * q + 0.010 * t)
@@ -50,7 +48,7 @@ def emit(out, b, lod, axis):
         out.tri(root, ring[1], ring[0])
         out.tri(ring[0], ring[1], end)
 
-    def plume(t0, reach, width, side_angle, hang, roll, seed, wide=False):
+    def plume(t0, reach, width, side_angle, hang, roll, seed):
         rr = np.random.default_rng(seed)
         org = axis(b, t0)
         d = direction * math.cos(side_angle) + right * math.sin(side_angle)
@@ -85,26 +83,56 @@ def emit(out, b, lod, axis):
             s = math.sin(roll + 0.24 * math.sin(t * 4 + seed % 7))
             lateral = side * c + up * s
             ridge = 0.17 * width * math.sin(math.pi * t)
-            rows.append(
-                (
-                    out.vertex(
-                        p - lateral * breadth - up * (0.21 * breadth),
-                        col * (0.92 + 0.11 * t),
-                        uv(t, -1, seed % 2),
-                    ),
-                    out.vertex(
-                        p + up * ridge, col * (1.05 + 0.12 * t), uv(t, 0.025, seed % 2)
-                    ),
-                    out.vertex(
-                        p + lateral * breadth - up * (0.37 * breadth),
-                        col * (0.92 + 0.15 * t),
-                        uv(t, 1, seed % 2),
-                    ),
-                )
+            left = out.vertex(
+                p - lateral * breadth - up * 0.21 * breadth,
+                col * (0.92 + 0.11 * t),
+                uv(t, -1, seed % 2),
             )
+            right_tip = out.vertex(
+                p + lateral * breadth - up * 0.37 * breadth,
+                col * (0.94 + 0.16 * t),
+                uv(t, 1, seed % 2),
+            )
+            row = [left]
+            if lod == 0 or t0 < 0.1:
+                row.append(
+                    out.vertex(
+                        p + up * ridge, col * (1.08 + 0.16 * t), uv(t, 0.025, seed % 2)
+                    )
+                )
+            row.append(right_tip)
+            rows.append(row)
         for a, c in zip(rows[:-1], rows[1:]):
-            out.quad(a[0], c[0], c[1], a[1])
-            out.quad(a[1], c[1], c[2], a[2])
+            for k in range(len(a) - 1):
+                out.quad(a[k], c[k], c[k + 1], a[k + 1])
+
+    # Dense, irregular woody-needle heart *along* each arm, never a sleeve
+    # around the trunk. The outer frayed banks obscure it up close. At
+    # distance it prevents hundreds of subpixel tips from losing the tree.
+    root_at = 0.10 if lod == 0 else 0.035
+    reach_at = 0.66 if lod == 0 else 0.88
+
+    def core(pos, f, uv_t, cross):
+        return out.vertex(pos, tint * f, (0.14 + 0.71 * uv_t, 0.876 + 0.026 * cross))
+
+    r0 = core(axis(b, root_at), 0.64, 0.015, 0)
+    end0 = core(axis(b, reach_at) - up * 0.12 * length, 0.89, 0.986, 0)
+    ctr = axis(b, (root_at + reach_at) * 0.45)
+    kk = b["width"] * (0.70 if lod == 0 else 1.05)
+    row = [
+        core(ctr + right * kk - up * 0.11 * length, 0.79, 0.46, 1),
+        core(ctr + up * (0.10 if lod == 0 else 0.18) * length, 0.93, 0.42, 0.018),
+        core(ctr - right * kk * 0.88 - up * 0.10 * length, 0.80, 0.47, -1),
+        core(
+            ctr - right * kk * 0.12 - up * (0.24 if lod == 0 else 0.36) * length,
+            0.69,
+            0.43,
+            -0.02,
+        ),
+    ]
+    for k in range(4):
+        out.tri(r0, row[(k + 1) % 4], row[k])
+        out.tri(row[k], row[(k + 1) % 4], end0)
 
     # The long central stem supports its own three-dimensional spray, plus
     # unequal lateral and pendulous banks. These are physical twig sheets
@@ -136,7 +164,7 @@ def emit(out, b, lod, axis):
             length * k,
             breadth * (0.73 if lod == 0 else 0.94) * (1 - 0.35 * t),
             sign * a,
-            b["drop"] * down + length * 0.18,
+            b["drop"] * (0.72 + 0.10 * math.sin(b["seed"])) * down + length * 0.115,
             roll,
             b["seed"] + 123 + j,
         )

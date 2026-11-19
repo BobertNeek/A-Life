@@ -75,6 +75,11 @@ for tag in board["angles"]:
             d / "terrain-chunks.glb",
             out / side,
             *views[tag],
+            *(
+                ["--studio-samples", str(board["samples"])]
+                if "samples" in board
+                else []
+            ),
             *(["--quick-proof"] if approx else []),
             "--coastal-light",
             d / "coastal-daylight.json",

@@ -1,8 +1,9 @@
 {
   "subject": "canopy",
   "angles": ["pine-eye", "guardian-woods"],
-  "quick": true,
-  "paired": false,
-  "editable_canopy": false,
-  "art_note": "Near art direction: no green trunk sleeve, no solid succulent leaves. Inspect asymmetrically feathered twig cutouts from 1.02m and guardian height. Tests deferred."
+  "quick": false,
+  "samples": 80,
+  "paired": true,
+  "editable_canopy": true,
+  "art_note": "Final creative comparison of original tiered crown and the fully forked, feather-banked spruce. Include editable packed Blender source. All gameplay, performance and acceptance checks remain deferred."
 }

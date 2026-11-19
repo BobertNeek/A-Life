@@ -93,6 +93,12 @@ cli.add_argument(
 cli.add_argument(
     "--grove-forms", type=Path, help="Variants of existing upper crowns only"
 )
+cli.add_argument(
+    "--studio-samples",
+    type=int,
+    choices=(12, 48, 80, 96),
+    help="Explicit art sample count for both sides of a paired still",
+)
 args = cli.parse_args(sys.argv[sys.argv.index("--") + 1 :])
 args.out.mkdir(parents=True, exist_ok=True)
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -116,6 +122,8 @@ if args.quick_proof:
     scene.cycles.samples = 12
 scene.view_settings.view_transform = "AgX" if bpy.app.version >= (4, 0, 0) else "Filmic"
 scene.world = bpy.data.worlds.new("Overcast blue skylight")
+if args.studio_samples:
+    scene.cycles.samples = args.studio_samples
 scene.world.use_nodes = True
 bg = scene.world.node_tree.nodes["Background"]
 bg.inputs["Color"].default_value = (0.51, 0.66, 0.77, 1)
