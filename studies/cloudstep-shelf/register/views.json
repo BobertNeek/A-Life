@@ -1,0 +1,128 @@
+{
+  "summit-window": {
+    "eye": [
+      82.0,
+      69.93579284667969,
+      -408.0
+    ],
+    "aim": [
+      51.964621218469304,
+      109.30067303850184,
+      -333.8523363722769
+    ],
+    "lens": 22,
+    "span": 0.0,
+    "terrain_only": true,
+    "ray_grid": [
+      51,
+      31
+    ],
+    "native_hits": 1026,
+    "unique_native_cells": 233,
+    "native_hit_height_m_10_50_90": [
+      70.964,
+      76.917,
+      106.708
+    ],
+    "distance_m_10_50_90": [
+      16.269,
+      24.853,
+      76.856
+    ],
+    "rock_grade_over_point75_percent": 77.1,
+    "native_hit_xz_10_90": [
+      [
+        59.97,
+        -396.09
+      ],
+      [
+        85.3,
+        -348.47
+      ]
+    ]
+  },
+  "sheltered-boles": {
+    "eye": [
+      82.0,
+      69.93579284667969,
+      -408.0
+    ],
+    "aim": [
+      77.62,
+      68.1,
+      -414.43
+    ],
+    "lens": 29,
+    "span": 0.0,
+    "terrain_only": true,
+    "ray_grid": [
+      51,
+      31
+    ],
+    "native_hits": 679,
+    "unique_native_cells": 39,
+    "native_hit_height_m_10_50_90": [
+      68.217,
+      68.708,
+      68.862
+    ],
+    "distance_m_10_50_90": [
+      2.157,
+      3.075,
+      6.081
+    ],
+    "rock_grade_over_point75_percent": 0.0,
+    "native_hit_xz_10_90": [
+      [
+        78.23,
+        -412.52
+      ],
+      [
+        81.55,
+        -409.17
+      ]
+    ]
+  },
+  "shelf-section": {
+    "eye": [
+      155.0,
+      176.0,
+      -504.0
+    ],
+    "aim": [
+      63.0,
+      85.0,
+      -378.0
+    ],
+    "lens": 39,
+    "span": 173.0,
+    "terrain_only": true,
+    "ray_grid": [
+      51,
+      31
+    ],
+    "native_hits": 1581,
+    "unique_native_cells": 1289,
+    "native_hit_height_m_10_50_90": [
+      57.734,
+      79.208,
+      108.699
+    ],
+    "distance_m_10_50_90": [
+      161.249,
+      187.301,
+      211.615
+    ],
+    "rock_grade_over_point75_percent": 64.26,
+    "native_hit_xz_10_90": [
+      [
+        -6.54,
+        -421.19
+      ],
+      [
+        115.16,
+        -324.31
+      ]
+    ]
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "bounds": [
+    14.0,
+    115.0,
+    -437.0,
+    -316.0
+  ],
+  "non_repeating_contact_count": 3,
+  "actual_V1_geometry_changes": 0,
+  "paint_is_optical_only": true,
+  "ground_projection_only": {
+    "summit-window": {
+      "registered_ground_hits": 1026,
+      "percent_with_material_delta": 83.92,
+      "percent_with_broken_light_bed": 13.94,
+      "percent_with_narrow_iron_margin": 4.19,
+      "percent_with_contact_cut": 1.75
+    },
+    "sheltered-boles": {
+      "registered_ground_hits": 679,
+      "percent_with_material_delta": 0.0,
+      "percent_with_broken_light_bed": 0.0,
+      "percent_with_narrow_iron_margin": 0.0,
+      "percent_with_contact_cut": 0.0
+    },
+    "shelf-section": {
+      "registered_ground_hits": 1581,
+      "percent_with_material_delta": 39.28,
+      "percent_with_broken_light_bed": 1.52,
+      "percent_with_narrow_iron_margin": 0.51,
+      "percent_with_contact_cut": 0.32
+    }
+  }
+}

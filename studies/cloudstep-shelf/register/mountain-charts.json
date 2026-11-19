@@ -1,0 +1,21 @@
+{
+  "native_plan_xz": [
+    14.0,
+    115.0,
+    -437.0,
+    -316.0
+  ],
+  "metres_per_texel": [
+    0.1753472222222222,
+    0.1753623188405797
+  ],
+  "rgb_gain_linear_neutral": 128,
+  "workbench_channels": [
+    "native roughness target",
+    "optical shallow surface response",
+    "native exposure weight"
+  ],
+  "max_optical_bump_distance_m": 0.028,
+  "geometry_displacement_m": 0,
+  "description": "Three dissimilar broken geological contacts, not repeated elevation bands."
+}
