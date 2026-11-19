@@ -119,4 +119,8 @@ def colour(b,x,z):
     shore=rock*(1-.56*turf)
     soil=mix(soil,shade((131,124,95),9*broad),ease(.02,.6,shore)*(1-ease(.68,.92,shore))*.55)
     c=mix(soil,grey,shore)
-    return np.uint8(np.clip(np.concatenate((c,(alpha*.84*255)[...,None]),axis=2),0,255))
+    # A separate real geology/sand/turf map; the close rock shader must not
+    # put its quartz fractures into dunes or into the vegetation shoulder.
+    mask=np.dstack((shore,(1-shore)*(1-turf),turf*(1-rock)))
+    return (np.uint8(np.clip(np.concatenate((c,(alpha*.84*255)[...,None]),axis=2),0,255)),
+            np.uint8(np.clip(mask*255,0,255)))

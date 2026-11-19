@@ -10,13 +10,14 @@ def assets(surface,props,out):
     out.mkdir(parents=True,exist_ok=True)
     b=Bight(surface); report=b.survey(props,out)
     x0,x1,z0,z1=EXTENT; w,h=787,2266
-    chart=np.zeros((h,w,4),'B')
+    chart=np.zeros((h,w,4),'B'); habitat=np.zeros((h,w,3),'B')
     xs=x0+(np.arange(w)+.5)*(x1-x0)/w
     for i in range(0,h,70):
         zz=z0+(np.arange(i,min(i+70,h))+.5)*(z1-z0)/h
         x,z=np.meshgrid(xs,zz)
-        chart[i:i+len(zz)]=colour(b,x,z)
+        chart[i:i+len(zz)],habitat[i:i+len(zz)]=colour(b,x,z)
     Image.fromarray(chart).save(out/'weatherlip-ground.png',compress_level=7)
+    Image.fromarray(habitat).save(out/'rock-sand-turf.png',compress_level=7)
     report['chart_metres_per_texel']=[(x1-x0)/w,(z1-z0)/h]
     from stone_fabric import fabric
     fabric(out)

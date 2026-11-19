@@ -28,7 +28,17 @@ def shader(meshes,folder):
         nt.links.new(col,bump.inputs['Height']);nt.links.new(scale.outputs[0],bump.inputs['Strength'])
         if orig.is_linked:nt.links.new(orig.links[0].from_socket,bump.inputs['Normal'])
         nt.links.new(bump.outputs[0],orig)
-        grains(mat,folder,a)
+        kind=nt.nodes.new('ShaderNodeTexImage')
+        kind.image=bpy.data.images.load(str((folder/'rock-sand-turf.png').resolve()),check_existing=True)
+        kind.image.colorspace_settings.name='Non-Color';kind.extension='CLIP'
+        nt.links.new(tex.inputs['Vector'].links[0].from_socket,kind.inputs['Vector'])
+        rgb=nt.nodes.new('ShaderNodeSeparateColor');nt.links.new(kind.outputs['Color'],rgb.inputs[0])
+        def channel(key):
+            gate=nt.nodes.new('ShaderNodeMath');gate.operation='MULTIPLY'
+            nt.links.new(a,gate.inputs[0]);nt.links.new(rgb.outputs[key],gate.inputs[1])
+            return gate.outputs[0]
+        grains(mat,folder,channel('Red'))
+        grains(mat,folder,channel('Green'),sand=True)
 
 def apply(meshes,folder,tag,loc):
     shader(meshes,folder)
@@ -42,7 +52,7 @@ def apply(meshes,folder,tag,loc):
         for ob in set(bpy.data.objects)-before:
             if ob.type=='MESH' and abs(-ob.location.y-loc[2])>55:ob.hide_render=True
 
-def grains(mat,folder,site_mask=None,stone=False):
+def grains(mat,folder,site_mask=None,stone=False,sand=False):
     """Chipped metre-scale rock joints and centimetre quartz on real close faces.
 
     Use stable world metres and two unrelated rotations, not Generated UVs:
@@ -53,15 +63,16 @@ def grains(mat,folder,site_mask=None,stone=False):
     nodes=nt.nodes;link=nt.links.new
     bs=next(n for n in nodes if n.type=='BSDF_PRINCIPLED')
     geo=nodes.new('ShaderNodeNewGeometry')
-    dye=bpy.data.images.load(str((folder/'rind-pigment.png').resolve()),check_existing=True)
-    ht=bpy.data.images.load(str((folder/'rind-relief.png').resolve()),check_existing=True)
+    dye=bpy.data.images.load(str((folder/('strand-grit.png' if sand else 'rind-pigment.png')).resolve()),check_existing=True)
+    ht=bpy.data.images.load(str((folder/('strand-grit.png' if sand else 'rind-relief.png')).resolve()),check_existing=True)
     dye.colorspace_settings.name='Non-Color';ht.colorspace_settings.name='Non-Color'
     # Position is transformed into the two axes of local strike: relief can be
     # seen on the hillside as well as on a nearly horizontal flat.
     sep=nodes.new('ShaderNodeSeparateXYZ');link(geo.outputs['Position'],sep.inputs[0])
     xz=nodes.new('ShaderNodeMath');xz.operation='MULTIPLY_ADD';link(sep.outputs['Z'],xz.inputs[0]);xz.inputs[1].default_value=.57;link(sep.outputs['X'],xz.inputs[2])
     planar=nodes.new('ShaderNodeCombineXYZ');link(xz.outputs[0],planar.inputs[0]);link(sep.outputs['Y'],planar.inputs[1])
-    for i,(metres,angle,power,depth) in enumerate(((1.38,.37,.95,.027),(.281,-.68,.57,.008))):
+    settings = ((1.55,.4,.62,.0038),(.23,-.16,.32,.0015)) if sand else ((1.38,.37,.95,.027),(.281,-.68,.57,.008))
+    for metres,angle,power,depth in settings:
         rot=nodes.new('ShaderNodeVectorRotate');rot.rotation_type='Z_AXIS';link(planar.outputs[0],rot.inputs['Vector']);rot.inputs['Angle'].default_value=angle
         size=nodes.new('ShaderNodeVectorMath');size.operation='SCALE';link(rot.outputs['Vector'],size.inputs[0]);size.inputs['Scale'].default_value=1/metres
         colour=nodes.new('ShaderNodeTexImage');colour.image=dye;colour.label='Mineral flecks, physical metres';link(size.outputs['Vector'],colour.inputs['Vector'])

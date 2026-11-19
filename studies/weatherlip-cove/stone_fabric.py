@@ -31,6 +31,13 @@ def fabric(folder):
     p=np.stack((v+.027*warmth,v+.013*warmth,v-.019*warmth),axis=-1)
     Image.fromarray(np.uint8(p.clip(0,1)*255)).save(folder/'rind-pigment.png')
     Image.fromarray(np.uint8(h*255)).save(folder/'rind-relief.png')
+    # Bare damp sand has short cusp ripples and shell grit, not stone fissures.
+    rb=n(9.6)
+    crests=np.clip((np.cos(2*np.pi*(7*x+2*y)+.9*broad+.32*rb)-.68)*2.5,0,1)
+    crests*=np.clip(.56+.31*n(16.),0,1)
+    gravel=np.clip((n(1.2)-1.8)*1.5,0,1)
+    sand=np.clip(.51+.034*rb+.049*spots+.11*crests+.13*gravel-.065*pits,.18,.85)
+    Image.fromarray(np.uint8(sand*255)).save(folder/'strand-grit.png')
 
 def clip(poly,n,bound):
     v=[]
