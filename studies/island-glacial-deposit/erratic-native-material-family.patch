@@ -1,0 +1,21 @@
+--- a/crates/alife_game_app/src/production_voxel_renderer/island.rs
++++ b/crates/alife_game_app/src/production_voxel_renderer/island.rs
+@@ -471,7 +471,9 @@
+         }
+         // Most ordinary props use vertex pigment. Rock, fern and broadleaf each
+         // have their own UVs: never borrow an atlas for another family.
+-        let mut shared_prop_materials = [None, None, None, None];
++        // Close/middle erratics share one direction-grown glacial skin, not
++        // the fracture surface of the scree and tall coastal scarps.
++        let mut shared_prop_materials = [None, None, None, None, None];
+         for (index, p) in placements().into_iter().enumerate() {
+             let gltf = gltfs.get(&assets.props[&p.kind]).unwrap();
+             let position = grounded_prop_position(&p.kind, p.position, surface);
+@@ -516,6 +518,7 @@
+             let family = match p.kind.as_str() {
+                 "Fern" => 2,
+                 "Broadleaf" => 3,
++                "BoulderA" | "BoulderB" | "BoulderC" => 4,
+                 kind => usize::from(has_mineral_surface(kind)),
+             };
+             let material = shared_prop_materials[family]

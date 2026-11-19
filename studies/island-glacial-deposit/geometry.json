@@ -1,0 +1,35 @@
+{
+  "BoulderA": {
+    "original_cluster_count": 3,
+    "new_cluster_count": 3,
+    "budgets": {
+      "BoulderA_L0": 442,
+      "BoulderA_L1": 208,
+      "BoulderA_L2": 62
+    },
+    "fallback_far": "original native overview",
+    "source": "individual native component bounds; worn inward sole"
+  },
+  "BoulderB": {
+    "original_cluster_count": 3,
+    "new_cluster_count": 3,
+    "budgets": {
+      "BoulderB_L0": 442,
+      "BoulderB_L1": 216,
+      "BoulderB_L2": 62
+    },
+    "fallback_far": "original native overview",
+    "source": "individual native component bounds; worn inward sole"
+  },
+  "BoulderC": {
+    "original_cluster_count": 3,
+    "new_cluster_count": 3,
+    "budgets": {
+      "BoulderC_L0": 456,
+      "BoulderC_L1": 212,
+      "BoulderC_L2": 62
+    },
+    "fallback_far": "original native overview",
+    "source": "individual native component bounds; worn inward sole"
+  }
+}
