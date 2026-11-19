@@ -1,0 +1,30 @@
+{
+  "description": "Editable native-topology V1 field cut, colour study only. No sky/backdrop; authored normal grain not baked, not native gameplay.",
+  "records": {
+    "original_conifers": [
+      113,
+      250,
+      627,
+      638,
+      1051,
+      1203
+    ],
+    "original_hollow_roots": 539,
+    "new_roots": 181
+  },
+  "bounds": [
+    331.25,
+    418.75,
+    -109.375,
+    -56.25
+  ],
+  "unchanged_native_triangles": 1132,
+  "retained_original_vertices": 1224,
+  "atlas_pixels": [
+    720,
+    510
+  ],
+  "filled_percentage": 100.0,
+  "previous_hollow_coat": true,
+  "portable_colour_desk_not_pbr_match": true
+}
