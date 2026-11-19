@@ -155,3 +155,7 @@ Stand near x90,z451 and look across toward x114.8,z431.4. Verify actual fitted m
 ### Wild meadow and three native grass habits
 
 In a throwaway V1 profile, approach wild grass 3406 (74.75,301.40). Compare at 1.04 m near (76.4,303.65) toward (70.1,295.25) and in the 39 m guardian framing. The nursery and cultivated meadow are separate. Verify Grass/GrassSilver/GrassAmber use their proper three native meshes and at least one seed-bearing form in the stand, not just the ordinary fallback. Check visual roots on the sloping terrain, warm cup interiors, natural gaps, picking through cosmetic leaves, no extra objects in saves, native shadow cost and transitions at the existing 45 m prop range and 55 m/60 m swale gates. Look for any sudden overly pale gap as the meadow layer leaves view. Only promote after checking actual target-hardware cost and movement. No game/build/tests in this art session.
+
+### Original valley saplings
+
+In the same throwaway world, follow #1116 (45.447,237.543), then #933 and #423. Re-create the 1.04 m eye at (50.1,244.3). Inspect woody joins, honest tree/prop collisions, lit and shaded leaves, and current distance switches; the far boughs must not blink or turn into lone black spots. No new collision or saved world entity is intended. No game, tests or headset/GPU was used during this art pass.

@@ -598,23 +598,23 @@
     {
       "asset_id": "approved-island-sapling",
       "author": "A-Life approved Blender art",
-      "digest": "fnv1a64:05a143714ac5bdd1",
+      "digest": "fnv1a64:c2821bca535aa950",
       "external": false,
       "final_art": false,
       "generated": true,
       "generator": {
-        "config_path": "scripts/build_sapling_color.py",
-        "date": "2026-10-09",
-        "seed": "sapling-color-v1/from-ec5bb040",
-        "tool": "Blender-4.3.2"
+        "config_path": "scripts/studio_young_saltwood.py",
+        "date": "2026-11-19",
+        "seed": "419187-series / native juvenile timber",
+        "tool": "Qualia Blender 4.3 original split shoot authoring"
       },
       "license": "A-Life-Generated-Source",
       "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/island/Sapling.glb",
       "placeholder": false,
-      "replacement_policy": "edit-blender-source-and-refresh-manifest",
-      "size_bytes": 127320,
-      "source": "generated:approved-blender-model",
+      "replacement_policy": "edit-young-saltwood-and-refresh-manifest",
+      "size_bytes": 351856,
+      "source": "generated:original-young-saltwood-on-retained-native-timber",
       "usage_category": "environment-dressing"
     },
     {

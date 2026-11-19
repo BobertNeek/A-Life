@@ -106,7 +106,26 @@ def crown(b, forks, lod):
                 + Z * (lift * (1.26 * t - 0.26 * t * t))
             )
 
-        if lod < 2:
+        if lod == 2 and kind != "leader":
+            # The original overview has only the trunk. Carry its woody path
+            # to the leaf mass rather than hanging a distant green triangle in air.
+            root = Vector((-0.075, 0.03, 1.26))
+            join = top + outward * 0.035
+            trio = [
+                b.p(root + side * 0.014, pigment((102, 84, 64)), outward),
+                b.p(root - side * 0.014, pigment((98, 81, 64)), outward),
+                b.p(join, pigment((120, 98, 72)), outward),
+            ]
+            b.tri(*trio)
+        if lod == 1:
+            # Subpixel twigs need a connection, not a multi-ring tube.
+            segment = [
+                b.p(at(0) + side * 0.012, pigment((125, 103, 78)), Z),
+                b.p(at(0) - side * 0.012, pigment((116, 96, 73)), Z),
+                b.p(at(1), pigment((143, 120, 82)), Z),
+            ]
+            b.tri(*segment)
+        if lod == 0:
             twig(
                 b,
                 [at(v) for v in (0, 0.53, 1)],
@@ -134,34 +153,41 @@ def crown(b, forks, lod):
                     + side * turn2 * 0.031 * u * u
                 )
 
-            if lod == 2:
-                if k not in (0, 2, 4):
-                    continue
-                # A hand-tapered spray envelope, never a closed round solid.
-                rgb = (112 + 8 * (k == 4), 146 + 7 * (k == 4), 86 + 5 * (k == 4))
-                a = shoot(0.06)
-                q = shoot(0.64)
-                tip = shoot(1) + d * 0.14 + Z * 0.033
-                breadth = dist * 0.35
-                l = b.p(q - lat * breadth + Z * 0.071, pigment(rgb, 0.95), Z)
-                r = b.p(q + lat * breadth + Z * 0.042, pigment(rgb, 1.03), Z)
-                m = b.p(q + Z * 0.09, pigment(rgb, 1.04), Z)
-                start = b.p(a, pigment(rgb, 0.87), Z)
-                end = b.p(tip, pigment(rgb, 1.09), Z)
-                b.tri(r, start, m)
-                b.tri(m, start, l)
-                b.tri(m, l, end)
-                b.tri(r, m, end)
-                continue
-            if lod == 1 and k == 1:
-                continue
-            twig(
-                b,
-                [foot, shoot(0.48), shoot(1)],
-                [0.0064, 0.0042, 0.0018],
-                (145, 103, 73),
-                3,
-            )
+            if lod == 2 and k in ((1, 4) if kind != "lateral" else (2,)):
+                # Flatten the entire connected shoot into one moss-coloured
+                # bough with a light forward tip and a darker bent underside.
+                # Two directions overlap near the actual fork but stay open
+                # on their outside contour. No bundle of floating triangles.
+                rgb = (123, 148, 101) if j % 3 else (145, 157, 99)
+                back = top - outward * 0.07 - Z * 0.053
+                end = shoot(1) + d * 0.18 + Z * 0.007
+                mid = back.lerp(end, 0.57) + Z * 0.085
+                breadth = 0.151 + 0.031 * (j % 3)
+                l = b.p(mid - lat * breadth - Z * 0.046, pigment(rgb, 0.84), Z)
+                r = b.p(mid + lat * breadth, pigment(rgb, 0.88), Z)
+                tip = b.p(end, pigment(rgb, 0.97), Z)
+                start = b.p(back, pigment(rgb, 0.73), Z)
+                ridge = b.p(mid + d * 0.027 + Z * 0.046, pigment(rgb, 0.99), Z)
+                b.tri(r, start, ridge)
+                b.tri(ridge, start, l)
+                b.tri(ridge, l, tip)
+                b.tri(r, ridge, tip)
+            selected = k in (0, 2, 4)
+            if lod == 0:
+                twig(
+                    b,
+                    [foot, shoot(0.48), shoot(1)],
+                    [0.0064, 0.0042, 0.0018],
+                    (145, 103, 73),
+                    3,
+                )
+            elif lod == 1 and selected:
+                sl = [
+                    b.p(foot + lat * 0.005, pigment((139, 113, 78)), Z),
+                    b.p(foot - lat * 0.005, pigment((129, 102, 73)), Z),
+                    b.p(shoot(1), pigment((153, 124, 84)), Z),
+                ]
+                b.tri(*sl)
             for l in range(9):
                 u = 0.12 + 0.097 * l
                 sf = -1 if l % 2 else 1
@@ -182,16 +208,19 @@ def crown(b, forks, lod):
                     else ((154, 178, 101) if fresh else (117, 151, 99))
                 )
                 shift = rand.uniform(0.91, 1.07) * (1 - 0.04 * (1 - u))
-                colour = [x * shift for x in col]
-                if lod == 1 and l % 2 != 0:
+                colour = [x * shift * (0.92 if lod == 1 else 1) for x in col]
+                # Draw the same random sequence even when the far leaf is
+                # omitted: all its surviving sisters retain their L0 direction.
+                lilt = rand.uniform(-0.28, 0.35)
+                if lod == 2 or (lod == 1 and (not selected or l not in (0, 3, 6, 8))):
                     continue
                 leaf(
                     b,
                     shoot(u),
                     direction,
-                    length * (1.42 if lod == 1 else 1),
-                    width * (1.61 if lod == 1 else 1),
+                    length * (1.52 if lod == 1 else 1),
+                    width * (1.84 if lod == 1 else 1),
                     colour,
                     lod,
-                    rand.uniform(-0.28, 0.35),
+                    lilt,
                 )

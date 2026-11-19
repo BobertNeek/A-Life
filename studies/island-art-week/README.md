@@ -253,3 +253,7 @@ was performed for the new assets. The gallery is not native acceptance.
 ### The existing wild meadow
 
 [Creature-height](meadow-eye.jpg) · [guardian](meadow-reach.jpg) · [source, envelope and materials](MEADOW.md). The curled sedges and bellflowers are native-asset candidates, shown in Blender, on the original lower valley. No native validation performed this week.
+
+### Young saltwood, original valley
+
+[Original sapling 1116, same habitat and lens](young-saltwood.jpg) · [workbench, original versus revised](young-saltwood-workbench.jpg) · [original timber and asset source](YOUNG_SALTWOOD.md). Offline art only.

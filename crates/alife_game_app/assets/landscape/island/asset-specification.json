@@ -31,9 +31,12 @@
         2.5,
         4
       ],
-      "near_triangles": 3124,
-      "far_triangles": 672,
-      "overview_triangles": 56
+      "near_triangles": 5732,
+      "far_triangles": 612,
+      "overview_triangles": 180,
+      "editable_override": "young-saltwood.blend",
+      "export_recipe": "scripts/studio_young_saltwood.py",
+      "override_blender": "4.3.2"
     },
     "BerryBush": {
       "width_depth_height_m": [
