@@ -39,19 +39,38 @@ def apply(scene, sun, light, path):
     tree.links.new(mix.outputs[0], out.inputs["Surface"])
     scene.view_layers[0].use_pass_mist = True
     scene.world.mist_settings.falloff = "LINEAR"
-    scene.use_nodes = True
-    graph = scene.node_tree
-    graph.nodes.clear()
+    if bpy.app.version >= (5, 0, 0):
+        graph = bpy.data.node_groups.new("Coastal air", "CompositorNodeTree")
+        scene.compositing_node_group = graph
+        graph.interface.new_socket(
+            name="Image", in_out="OUTPUT", socket_type="NodeSocketColor"
+        )
+        output = graph.nodes.new("NodeGroupOutput")
+        math_id = "ShaderNodeMath"
+        mix_id = "ShaderNodeMix"
+    else:
+        scene.use_nodes = True
+        graph = scene.node_tree
+        graph.nodes.clear()
+        output = graph.nodes.new("CompositorNodeComposite")
+        math_id = "CompositorNodeMath"
+        mix_id = "CompositorNodeMixRGB"
     result = graph.nodes.new("CompositorNodeRLayers")
-    haze = graph.nodes.new("CompositorNodeMath")
+    haze = graph.nodes.new(math_id)
     haze.operation = "MULTIPLY"
     haze.inputs[1].default_value = p["air_strength"]
     graph.links.new(result.outputs["Mist"], haze.inputs[0])
-    combine = graph.nodes.new("CompositorNodeMixRGB")
+    combine = graph.nodes.new(mix_id)
     combine.blend_type = "MIX"
+    if mix_id == "ShaderNodeMix":
+        combine.data_type = "RGBA"
+        a, b = [s for s in combine.inputs if s.name in ("A", "B") and s.type == "RGBA"]
+        out = next(s for s in combine.outputs if s.type == "RGBA")
+    else:
+        a, b = combine.inputs[1:3]
+        out = combine.outputs[0]
     graph.links.new(haze.outputs[0], combine.inputs[0])
-    graph.links.new(result.outputs["Image"], combine.inputs[1])
-    combine.inputs[2].default_value = (*linear(p["air_srgb"]), 1)
-    output = graph.nodes.new("CompositorNodeComposite")
-    graph.links.new(combine.outputs[0], output.inputs["Image"])
+    graph.links.new(result.outputs["Image"], a)
+    b.default_value = (*linear(p["air_srgb"]), 1)
+    graph.links.new(out, output.inputs[0])
     return p
