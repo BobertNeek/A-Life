@@ -10,7 +10,7 @@ def photograph(root,d,surface,board,out,blender):
     props=json.loads((d/'props.json').read_text());report={}
     for index,(kind,_) in TARGETS.items():
         report[str(index)]=write(d/(kind+'.glb'),surface,props[index],index,stone/(f'{kind}Seat{index}.glb'))
-    paint(stone/'coastal-erratic',base)
+    paint(stone/'coastal-erratic',base,d/'minerals')
     (stone/'contact.json').write_text(json.dumps(report,indent=2)+'\n')
     # The generic stock library continues to supply *all* other stones,
     # including the neighbouring 1472. Only the two named keys exist here.

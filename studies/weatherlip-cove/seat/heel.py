@@ -37,53 +37,58 @@ def seats(q,ground,level,body,min_box,max_box,scale):
     grid=np.column_stack([X.ravel(),Z.ravel()])
     grid=grid[(grid@rim.equations[:,:2].T+rim.equations[:,2]<-.0005).all(1)]
     bed=ground(grid); original_gap=(underside(q,grid)-bed)*scale
-    # A broken abrasion ramp: capture the exact old crest and shoulder.
-    # Give the unsupported toe a short steep bevel, not a horizontal skirt.
-    retained=q[q[:,1]>=lo+height*(.43 if level==0 else .48)].copy()
-    retained[:,1]=np.clip(retained[:,1],lo,hi)
     original_contact=bed>=lo
     if original_contact.mean()<.12:
         raise ValueError('Source cannot support a truthful mounted heel.')
+    # The downhill bed is below the *physical* bottom. Widening a horizontal
+    # apron down to that level would produce a bigger black lip, not a true
+    # socket. Put the sole only on the uphill bearing area. Cut the unsupported
+    # underface on a steep raking bevel instead.
+    support=grid[bed>lo+.015/scale]
+    kh=ConvexHull(support); pol=support[kh.vertices]; hub=pol.mean(0)
+    dirs=np.linspace(0,2*math.pi,18 if level==0 else 11 if level==1 else 7,endpoint=False)
+    pol=pol[np.unique(np.argmax((pol-hub)@np.stack([np.cos(dirs),np.sin(dirs)]),axis=0))]
+    # Restore ordered polygon after directional vertex subsampling.
+    pol=pol[ConvexHull(pol).vertices];pol=hub+(pol-hub)*.992
+    base=np.clip(ground(pol)-.034/scale,lo,lo+height*.19)
+    foot=np.c_[pol[:,0],base,pol[:,1]]
+    ca=pol;cb=np.roll(ca,-1,axis=0); ab=cb-ca
+    def nearest(x):
+        tau=np.clip(((x[:,None,:]-ca)*ab).sum(-1)/np.maximum(1e-10,np.sum(ab*ab,axis=1)),0,1)
+        cand=ca+tau[:,:,None]*ab
+        near=cand[np.arange(len(x)),np.linalg.norm(cand-x[:,None,:],axis=2).argmin(1)]
+        blocked=(x@kh.equations[:,:2].T+kh.equations[:,2]<=0).all(1)
+        near[blocked]=x[blocked]
+        return near
+    peg=nearest(ring);dist=np.linalg.norm(ring-peg,axis=1)
+    exposed=ease(.015,.40*height,dist)
     ang=np.arctan2(ring[:,1]-c[1],ring[:,0]-c[0])
-    wf=.5+.5*np.cos(ang*2.2+body*.78)
-    outer_ground=ground(ring)
-    exposure=ease(0,.43,(lo-outer_ground)/height)
-    # Exact horizontal outline remains. The lowest bit belongs to the bed,
-    # not to the widest belt; a visibly fractured sloping shoulder remains.
-    belt_y=np.clip(np.maximum(lo+height*(.09+.065*wf+.085*exposure),
-                              outer_ground+height*(.04+.055*wf)),lo,lo+height*.53)
-    belt=np.c_[ring[:,0],belt_y,ring[:,1]]
-    # A second irregular half-shoulder splits an otherwise dark straight face.
-    partial=c+(ring-c)*(.973+.017*wf)[:,None]
-    py=np.clip(belt_y+height*(.14+.065*np.sin(ang+body*.57)),lo,lo+height*.72)
-    flank=np.c_[partial[:,0],py,partial[:,1]]
-    # Draw actual sloped bearing/heels only within the *old* projected rock.
-    # Under empty downhill box volume, end at the true physical lower bound.
-    sh=.965-.065*exposure-.020*wf
-    inner=c+(ring-c)*sh[:,None]
-    gy=ground(inner); foot_y=np.clip(gy-.032/scale,lo,lo+height*.28)
-    foot=np.c_[inner[:,0],foot_y,inner[:,1]]
-    support=grid[bed>lo+.013/scale]
-    hull=ConvexHull(support); hh=support[hull.vertices]; hub=hh.mean(0)
-    dd=np.linspace(0,2*math.pi,16 if level==0 else 10,endpoint=False)
-    hh=hh[np.unique(np.argmax((hh-hub)@np.stack((np.cos(dd),np.sin(dd))),axis=0))]
-    hh=hub+(hh-hub)*.989
-    key=np.c_[hh[:,0],np.clip(ground(hh)-.039/scale,lo,lo+height*.25),hh[:,1]]
-    # Include bed intersection on both sides of the physical floor where
-    # material can meet hard ground. These points belong to the same caster.
-    mid=(ring+np.roll(ring,1,axis=0))*.5
-    mid=c+(mid-c)*.935
-    my=np.clip(ground(mid)-.028/scale,lo,lo+height*.24)
-    toe=np.c_[mid[:,0],my,mid[:,1]]
-    if level==2:
-        # At distance retain the same true outline and crest with a single
-        # bearing ring. A second bevel would cost more than its silhouette.
-        rim_y=np.clip(ground(ring)-.026/scale,lo,lo+height*.29)
-        arr=np.vstack((retained,np.c_[ring[:,0],rim_y,ring[:,1]],key[::3]))
-    elif level==1:
-        arr=np.vstack((retained,belt,foot,key[::2]))
-    else:
-        arr=np.vstack((retained,belt,flank,foot,key,toe))
+    ridge=.5+.5*np.cos(ang*2.1+body*1.3)
+    # Keep every exposed plan extremum, but only on a shoulder where rock
+    # actually projects; preserve negative space between its three bodies.
+    by=np.maximum(lo+height*(.20+.10*ridge+.22*exposed),ground(ring)+.08*height)
+    by=np.clip(by,lo+.17*height,lo+.66*height)
+    belt=np.c_[ring[:,0],by,ring[:,1]]
+    # Break the near-facing fracture into two planes rather than a flat cut.
+    q1=peg+(ring-peg)*(.46+.11*ridge)[:,None]
+    q2=peg+(ring-peg)*(.82+.035*ridge)[:,None]
+    base0=np.clip(ground(peg)-.027/scale,lo,lo+height*.19)
+    ky1=base0+(by-base0)*(.28+.11*ridge)
+    ky2=base0+(by-base0)*(.63+.12*ridge)
+    flank1=np.c_[q1[:,0],ky1,q1[:,1]][dist>.035]
+    flank2=np.c_[q2[:,0],ky2,q2[:,1]][dist>.065]
+    # Retain original broad high faces. Let the downhill shoulder tip inward
+    # with bedding; one real old summit remains the native max. No hip is
+    # swelled outward just to cast a larger shadow onto the hillside.
+    retained=q[q[:,1]>=lo+height*.29].copy()
+    rr=retained[:,[0,2]]
+    ledge=1-ease(-.23,.13,(ground(rr)-lo)/height)
+    fac=ease(.23,.72,(retained[:,1]-lo)/height)
+    summit=int(np.argmax(retained[:,1]));held=float(retained[summit,1])
+    retained[:,1]=np.clip(retained[:,1]-.15*height*ledge*fac,lo,hi)
+    retained[summit,1]=min(held,hi)
+    # Keep high and low tiers shaped by the same rising substrate.
+    arr=np.vstack((retained,belt,foot,*( [flank1,flank2] if level==0 else [flank1[::2]] if level==1 else [] )))
     arr=np.unique(np.round(arr,7),axis=0)
     hull=ConvexHull(arr);v=arr[hull.vertices]
     ix=np.full(len(arr),-1);ix[hull.vertices]=np.arange(len(v));tri=ix[hull.simplices]
@@ -127,14 +132,18 @@ def write(src,surface,prop,index,dest):
             v,t,r=seats(q,floor,level,j,by[0],by[1],sc)
             # Stone relief is lit by the same sun and casts the true new shadow.
             # Site colour is material, not an alpha darkener on the soil.
-            near=cKDTree(q);dn,nn=near.query(v)
-            oldn=n0[ids][original_ids][nn]
+            near=cKDTree(q);_,nn=near.query(v)
+            # Each face keeps its related cleavage normals.
             fn=unit(np.cross(v[t[:,1]]-v[t[:,0]],v[t[:,2]]-v[t[:,0]]))
-            normals=np.zeros_like(v)
-            for k in range(3):np.add.at(normals,t[:,k],fn)
-            normals=unit(normals)
-            keep=(1-ease(.002,.08,dn))*ease(.29,.73,(v[:,1]-by[0])/(by[1]-by[0]))
-            normals=unit(normals*(1-keep[:,None])+oldn*keep[:,None])
+            N=np.empty((len(t),3,3))
+            incident=[[] for _ in v]
+            for ti,face in enumerate(t):
+                for vi in face:incident[vi].append(ti)
+            for ti,face in enumerate(t):
+                for ci,vi in enumerate(face):
+                    side=fn[incident[vi]];w=ease(.54,.89,side@fn[ti])
+                    soft=unit((side*w[:,None]).sum(0))
+                    N[ti,ci]=unit(.40*fn[ti]+.60*soft)
             c=c0[ids][original_ids][nn].copy()
             net=(v[:,1]-floor(v[:,[0,2]]))*sc
             damp=1-ease(-.01,.27,net)
@@ -144,7 +153,7 @@ def write(src,surface,prop,index,dest):
             # Preserve cool iron-shale B versus ochre glacial A. Dampen only
             # where the actual local V1 passes this stone, not a world Y stripe.
             uv=project(v,t,.91*(ord(kind[-1])-64)+2.14*j)
-            chunks.append(np.column_stack((v[t].reshape(-1,3),normals[t].reshape(-1,3),uv,c[t].reshape(-1,4))))
+            chunks.append(np.column_stack((v[t].reshape(-1,3),N.reshape(-1,3),uv,c[t].reshape(-1,4))))
             rows.append(r)
         allv,ii=np.unique(np.vstack(chunks).astype('<f4'),axis=0,return_inverse=True)
         pp,nn,uv,colour=np.split(allv,[3,6,8],axis=1)
