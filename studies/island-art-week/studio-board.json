@@ -2,7 +2,7 @@
   "subject": "erratics",
   "angles": [
     "moraine-soil",
-    "fern-hollow"
+    "erratic-foot"
   ],
   "paired": true,
   "quick": false,
@@ -11,8 +11,9 @@
   "mineral_study": true,
   "weather_rind": true,
   "rolled_toe": true,
-  "art_note": "The unique last atlas slot is held, not used: its preceding two authentic habitat images barely separated except for an ochre trace beneath 1570. Keep the original selected near atlas. BOTH sides retain the current boulder/till and physical terrain. At the right, a shared true-coordinate centimetre/millimetre microrelief breaks the existing macro near material into the four actual turf/sand/stone/grove media. Same daylight and 1.04 m eye, in a real wooded glacial deposit and a real fern hollow at a different location. Fade out by 13m, do not touch base colour, geometry or simulation. CPU Blender authoring proposal, no native material extension or tests.",
+  "art_note": "At the actual original wooded moraine, both halves use the unchanged selected native ground and the same weathered rocks, till and small woodrush. Right adds wind-combed communities of low silverleaf: genuinely connected runner stems, opposite folded leaves and sparse spent ivory headtufts, on the true physical surface and outside existing rocks. Leave gaps along the stream of mineral fragments. No invented edible plant or game state. The preceding microheight chart improves pixel-size grain but is deliberately left out here; these two CPU Blender views isolate form and ground coverage.",
   "glacial_train": true,
   "hero_soil": false,
-  "shared_microfield": true
+  "shared_microfield": false,
+  "silverleaf": true
 }

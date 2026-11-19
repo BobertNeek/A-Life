@@ -20,3 +20,6 @@ From a clean separate weekly-art checkout, run `python studies/island-glacial-de
 ### Held spare-slot ground trial
 
 The native habitat atlas has 56 possible slots and uses 55. [The locked Blender study](https://github.com/BobertNeek/A-Life/actions/runs/44509691508) used the sole unused slot for a 50.88→102.08 texels/metre close crop with four alternate UV corners on the same two physical native triangles. No added texture or geometry. It produces a slight warmer mineral trace but not enough improvement to spend that sole slot on just one boulder. All 424 original boulder cells were considered: this specific donor UV quadrant appears only at #1570. Source stays for study; **not selected/installed**. Instead compare the shared close substrate in two different actual habitats, not another one-off paint patch.
+
+
+The [shared four-substrate height study](https://github.com/BobertNeek/A-Life/actions/runs/44510763765) rendered both real moraine and fern hollow successfully. Very fine surface fibres are visible at native pixel size; full compositions show little more than a texture-grain change. Do not build or claim a Bevy shader for that evidence alone. This artwork remains optional source, not a substitute for useful clustered close geometry.
