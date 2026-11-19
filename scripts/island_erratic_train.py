@@ -12,6 +12,7 @@ import numpy as np
 from scipy.spatial import ConvexHull
 from build_island_strandline import Beach
 from finished_island_glb import parse, values, save
+from island_erratic_glb import streams
 from island_inlet_sod import Fibres
 
 
@@ -184,28 +185,7 @@ def bake(surface, original_library, props, dest, sites=(1570, 1383, 1675)):
     binary = bytearray()
     counts = {}
 
-    def attr(a, ct, ty, indices=False, color=False, bounds=False):
-        a = np.ascontiguousarray(a)
-        binary.extend(b"\0" * (-len(binary) % 4))
-        off = len(binary)
-        binary.extend(a.tobytes())
-        j = len(doc["bufferViews"])
-        doc["bufferViews"].append(
-            dict(
-                buffer=0,
-                byteOffset=off,
-                byteLength=a.nbytes,
-                target=34963 if indices else 34962,
-            )
-        )
-        record = dict(bufferView=j, componentType=ct, count=len(a), type=ty)
-        if color:
-            record["normalized"] = True
-        if bounds:
-            record.update(min=a.min(0).tolist(), max=a.max(0).tolist())
-        i = len(doc["accessors"])
-        doc["accessors"].append(record)
-        return i
+    attr = streams(doc, binary)
 
     for i, (index, g) in enumerate(groups.items()):
         origin = np.array(props[index]["position"])
@@ -219,7 +199,7 @@ def bake(surface, original_library, props, dest, sites=(1570, 1383, 1675)):
         attrs = dict(
             POSITION=attr(v, 5126, "VEC3", bounds=True),
             NORMAL=attr(n, 5126, "VEC3"),
-            COLOR_0=attr(np.asarray(g.c, "u1"), 5121, "VEC4", color=True),
+            COLOR_0=attr(np.asarray(g.c, "u1"), 5121, "VEC4", normalized=True),
         )
         name = f"Till_{index}"
         doc["meshes"].append(

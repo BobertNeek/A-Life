@@ -1,0 +1,91 @@
+{
+  "scope": "Original lower-ring vertices only at true V1 positions; an art source survey, no running physics or native gameplay",
+  "total": 424,
+  "percentiles": {
+    "10": 0.0344,
+    "25": 0.0634,
+    "50": 0.1769,
+    "75": 0.4241,
+    "90": 0.8888,
+    "95": 1.1435,
+    "99": 3.8862,
+    "100": 6.2724
+  },
+  "count_over_m": {
+    "0.1": 271,
+    "0.2": 203,
+    "0.3": 149,
+    "0.5": 87,
+    "1": 32,
+    "2": 9,
+    "5": 3
+  },
+  "worst": [
+    {
+      "index": 1524,
+      "kind": "BoulderB",
+      "physical_position": [
+        43.558063587178594,
+        65.94989438853301,
+        -161.72467317577616
+      ],
+      "upper_overlap": -6.2133,
+      "downhill_gap": 6.2724
+    },
+    {
+      "index": 1704,
+      "kind": "BoulderA",
+      "physical_position": [
+        44.72885503437692,
+        68.26144151749193,
+        -70.74503908800057
+      ],
+      "upper_overlap": -0.522,
+      "downhill_gap": 5.7921
+    },
+    {
+      "index": 1325,
+      "kind": "BoulderA",
+      "physical_position": [
+        20.672582170311216,
+        64.74313004876842,
+        -79.55828385036875
+      ],
+      "upper_overlap": 0.4998,
+      "downhill_gap": 5.72
+    },
+    {
+      "index": 1589,
+      "kind": "BoulderC",
+      "physical_position": [
+        40.46328241788734,
+        48.78052506269335,
+        -50.604687912040276
+      ],
+      "upper_overlap": -4.3096,
+      "downhill_gap": 4.2943
+    },
+    {
+      "index": 1352,
+      "kind": "BoulderA",
+      "physical_position": [
+        -10.091996332955091,
+        146.34106745300178,
+        -220.46454801756659
+      ],
+      "upper_overlap": -2.6338,
+      "downhill_gap": 3.8911
+    },
+    {
+      "index": 1779,
+      "kind": "BoulderC",
+      "physical_position": [
+        26.742852819713278,
+        36.93165313960143,
+        -101.87711198725515
+      ],
+      "upper_overlap": -5.1689,
+      "downhill_gap": 3.87
+    }
+  ]
+}
