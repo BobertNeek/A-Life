@@ -129,7 +129,7 @@ SEAMS = (
 def generate(out):
     out.mkdir(exist_ok=True, parents=True)
     a, b, c, d = BOUNDS
-    W, H = 920, 458
+    W, H = 1116, 556
     u, y = np.meshgrid(
         a + (np.arange(W, dtype="f") + 0.5) * (b - a) / W,
         d - (np.arange(H, dtype="f") + 0.5) * (d - c) / H,
@@ -174,7 +174,7 @@ def generate(out):
             width * (0.75 + 0.52 * (nz(u * 0.6 + 0.25 * h, y, 0.21, 324 + s))) + 0.003
         )
         broken = 0.43 + 0.57 * ease(-0.21, 0.18, h + 0.38 * micro)
-        channel = np.exp(-((closest / width) ** 2)) * end
+        channel = np.exp(-((closest / (0.72 * width)) ** 2)) * end
         lip = (
             np.exp(-(((side + width * 1.58) / (width * 0.72 + 0.009)) ** 2))
             * np.exp(-((closest / (width * 4.1)) ** 2))
@@ -205,15 +205,29 @@ def generate(out):
     rgb += flank[..., None] * np.array([21.0, 17.0, 10.0])
     rgb -= recess[..., None] * np.array([18.0, 17.0, 14.0])
     rgb += weather[..., None] * np.array([15.0, 0.0, -10.0])
-    rgb -= groove[..., None] * np.array([61.0, 59.0, 53.0])
-    rgb += edge[..., None] * np.array([49.0, 47.0, 35.0])
+    rgb -= groove[..., None] * np.array([48.0, 47.0, 42.0])
+    rgb += edge[..., None] * np.array([39.0, 38.0, 30.0])
     rgb *= 1 - wet[..., None] * 0.14
     # The held cliff colour shows through thin edges; tighter authored source
     # aligns very closely at the real toe without stamping the whole coast.
-    margin = ease(0, 0.79, np.minimum(u - a, b - u)) * ease(
-        0, 0.54, np.minimum(y - c, d - y)
+    # Do not cover this entire rectangle with a different absolute hue. The
+    # first guardian inspection made its boundary visible from ~100 m. Only
+    # discrete real-world joints and broken flanks carry the new pigment.
+    # Colour is neutral at scene-linear 0.5 (sRGB 188) for the overlay blend;
+    # the original large-scale colour stays underneath at every pixel.
+    base_weather = ease(-0.02, 0.34, g + 0.32 * h) * ease(-0.09, 0.26, h + 0.24 * micro)
+    support = np.clip(
+        0.04 * base_weather
+        + 1.22 * np.maximum(flank, recess)
+        + 0.45 * np.maximum(groove, edge),
+        0,
+        1,
     )
-    window = ease(-0.05, 0.83, margin + 0.11 * g + 0.04 * h) * (0.83 + 0.12 * mass)
+    xedge = np.minimum(u - a, b - u) + 0.32 * g + 0.16 * h
+    yedge = np.minimum(y - c, d - y) + 0.28 * g + 0.14 * h
+    margin = ease(0.12, 1.42, xedge) * ease(0.08, 0.93, yedge)
+    window = np.clip(support * margin * (0.72 + 0.16 * mass), 0, 0.89)
+    rgb = 187.5 + 0.94 * (rgb - np.array([139.0, 146.0, 137.0]))
     response = np.clip(
         0.72 + 0.12 * flank - 0.18 * wet - 0.22 * weather + 0.052 * h, 0.26, 0.95
     )
@@ -245,7 +259,7 @@ def generate(out):
                 plan=[357.0, 433.0, -170.0, -59.0],
                 elevation_pixel_metres=round((b - a) / W, 6),
                 joint_networks=len(SEAMS),
-                max_shading_depth_m=0.047,
+                max_shading_depth_m=0.033,
                 native_changed=False,
                 geometric_offset_m=0,
             ),

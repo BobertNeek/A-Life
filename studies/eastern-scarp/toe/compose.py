@@ -50,7 +50,7 @@ for name, cam in s["cams"].items():
             cameras=s["poses"],
             layers=[
                 "Four disconnected face exposures",
-                "1.2cm near rock and joints",
+                "1cm local relative-colour joints",
                 "148 real-seated casts",
                 "Three original below-sea wash noses",
             ],

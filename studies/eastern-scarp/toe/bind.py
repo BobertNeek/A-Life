@@ -17,7 +17,8 @@ def bind(ground, surf, base, near):
             colour="shelf-colour.png",
             roughness="shelf-roughness.png",
             height="shelf-height.png",
-            depth=0.047,
+            depth=0.033,
+            mix="OVERLAY",
             name="Wave-rubbed toeslab / split joints",
         ),
     )

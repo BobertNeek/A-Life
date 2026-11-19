@@ -1,0 +1,18 @@
+{
+  "plan": [
+    363.0,
+    432.0,
+    -165.0,
+    -64.0
+  ],
+  "noses_native_z": [
+    -140.75,
+    -106.25,
+    -89.25
+  ],
+  "original_submerged_shallows_texels": 78032,
+  "meaningfully_tinted_texels": 15946,
+  "spent_crest_texels": 646,
+  "stock_material_underneath": true,
+  "terrain_or_tide_changed": false
+}

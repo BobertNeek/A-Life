@@ -1,0 +1,36 @@
+{
+  "method": "Blender 4.3.2, one CPU thread, 840x500 at 24 Cycles samples; both sides use actual V1 shelf colour and 58m normal, identical native-position trees and lighting",
+  "cameras": {
+    "outside": [
+      [
+        485,
+        47,
+        -147
+      ],
+      [
+        397,
+        10,
+        -116
+      ],
+      119,
+      42
+    ],
+    "wave-eye": [
+      [
+        409.6,
+        1.2467735375165931,
+        -97.0
+      ],
+      [
+        403.25,
+        4.8,
+        -116.8
+      ],
+      0,
+      29
+    ]
+  },
+  "stock_sea_material": true,
+  "terrain_altered": false,
+  "native_gameplay_picture": false
+}

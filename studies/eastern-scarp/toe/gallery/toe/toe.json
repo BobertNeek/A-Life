@@ -1,0 +1,19 @@
+{
+  "side": [
+    -107.35,
+    -96.2,
+    0.16,
+    5.72
+  ],
+  "plan": [
+    357.0,
+    433.0,
+    -170.0,
+    -59.0
+  ],
+  "elevation_pixel_metres": 0.009991,
+  "joint_networks": 9,
+  "max_shading_depth_m": 0.033,
+  "native_changed": false,
+  "geometric_offset_m": 0
+}

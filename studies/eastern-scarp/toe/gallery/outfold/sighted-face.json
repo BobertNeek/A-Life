@@ -1,0 +1,31 @@
+{
+  "grid": [
+    27,
+    17
+  ],
+  "land_hits": 208,
+  "water_hits": 39,
+  "sky_or_not_within_90m": 212,
+  "height_5_25_50_75_95_m": [
+    0.788,
+    1.12,
+    1.436,
+    2.143,
+    4.367
+  ],
+  "z_5_25_50_75_95": [
+    -105.725,
+    -99.909,
+    -98.962,
+    -98.402,
+    -98.012
+  ],
+  "distance_percentiles_m": [
+    1.452,
+    1.849,
+    2.532,
+    4.011,
+    10.444
+  ],
+  "note": "Original held optics; cut off at 90 m. Not a native game or organism camera."
+}

@@ -1,0 +1,43 @@
+{
+  "source": "9b9999b592978e93d590609ec5daa402fe960494 / gallery/after",
+  "cameras": {
+    "outside": [
+      [
+        485,
+        47,
+        -147
+      ],
+      [
+        397,
+        10,
+        -116
+      ],
+      119,
+      42
+    ],
+    "wave-eye": [
+      [
+        409.6,
+        1.2467735375165931,
+        -97.0
+      ],
+      [
+        403.25,
+        4.8,
+        -116.8
+      ],
+      0,
+      29
+    ]
+  },
+  "layers": [
+    "Four disconnected face exposures",
+    "1cm local relative-colour joints",
+    "148 real-seated casts",
+    "Three original below-sea wash noses"
+  ],
+  "native_water_images_preserved": true,
+  "optical_water_modified_locally": true,
+  "native_game_capture": false,
+  "original_physical_surface": true
+}

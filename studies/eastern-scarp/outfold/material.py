@@ -3,9 +3,10 @@
 import json, bpy
 
 
-def mix_socket(nt, socket, replacement, factor, name):
+def mix_socket(nt, socket, replacement, factor, name, blend="MIX"):
     f = nt.nodes.new("ShaderNodeMixRGB")
     f.label = name
+    f.blend_type = blend
     if socket.is_linked:
         nt.links.new(socket.links[0].from_socket, f.inputs[1])
     else:
@@ -68,6 +69,7 @@ def bind(ground, surf, base, assets, panel=None):
             tex.outputs["Color"],
             a.outputs[0],
             "Broken exposed plate, not a full cliff coat",
+            panel.get("mix", "MIX"),
         )
         mix_socket(
             nt,
