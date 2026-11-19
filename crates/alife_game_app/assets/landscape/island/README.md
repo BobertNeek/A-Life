@@ -73,3 +73,14 @@ Append `--handoff` to render the same view of the river head at each LOD.
 For the dressed view append `--creature-height`. The perspective lens is 88 cm
 above the source surface. It uses approved production prop GLBs and their
 placements, but the lighting and camera are Blender, not Bevy.
+
+
+### Eastern strand and island tide line
+
+`strandline.glb` is display-only shingle, shell, wrack, reed, sand film and shallow
+wash. Its spatially bounded patches are fitted to the actual near triangles and
+culled with their parent terrain chunks. Rebuild with
+`python scripts/build_island_strandline.py`, then run
+`python scripts/verify_island_strandline.py crates/alife_game_app/assets/landscape/island/strandline.glb`
+and refresh the production manifest. Never treat this layer as a collision mesh or
+new water level. See the matched [island art studies](../../../../../studies/island-art-week/README.md).

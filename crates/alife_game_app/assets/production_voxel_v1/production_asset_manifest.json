@@ -662,6 +662,28 @@
       "usage_category": "environment-dressing"
     },
     {
+      "asset_id": "approved-island-strandline",
+      "author": "Qualia island environment art",
+      "digest": "fnv1a64:cd56995f06c9a177",
+      "external": false,
+      "final_art": false,
+      "generated": true,
+      "generator": {
+        "config_path": "scripts/build_island_strandline.py",
+        "date": "2026-11-19",
+        "seed": "1974682",
+        "tool": "Qualia fitted intertidal geometry and cellular wash painter"
+      },
+      "license": "A-Life-Generated-Source",
+      "license_ref": "README.md",
+      "local_path": "crates/alife_game_app/assets/landscape/island/strandline.glb",
+      "placeholder": false,
+      "replacement_policy": "edit-strandline-recipe-and-refresh-manifest",
+      "size_bytes": 5957012,
+      "source": "generated:island-strandline",
+      "usage_category": "environment-dressing"
+    },
+    {
       "asset_id": "approved-island-geology-relief",
       "author": "A-Life approved Blender art",
       "digest": "fnv1a64:6cbdebcbfef0576b",

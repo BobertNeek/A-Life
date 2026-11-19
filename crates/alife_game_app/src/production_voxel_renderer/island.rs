@@ -1,5 +1,6 @@
 //! Island chunk and prop rendering for the playable world.
 mod nursery;
+mod strandline;
 use super::*;
 use bevy::{
     gltf::{Gltf, GltfMesh},
@@ -231,6 +232,7 @@ pub(super) fn start(world: &mut World) {
         next_update: 0.0,
     });
     nursery::plant(world, &surface);
+    strandline::spawn(world);
     let (mesh, mut material, images) = terrain_water::island_water(&surface, size, center);
     let [shore, ripple] = images.map(|image| world.resource_mut::<Assets<Image>>().add(image));
     material.base_color_texture = Some(shore);
@@ -341,6 +343,7 @@ pub(super) fn update(
         Without<PropRange>,
     >,
     mut props: Query<(&mut Mesh3d, &mut Visibility, &mut PropRange), Without<TerrainLod>>,
+    mut strand_patches: strandline::PatchViews,
     cameras: Query<(&Transform, &Projection), With<Fvr03ProductionVoxelCamera>>,
     creatures: Query<&Transform, With<ProductionCreatureAssemblyRoot>>,
     mut suns: Query<(
@@ -466,6 +469,7 @@ pub(super) fn update(
     assets.next_update = time.elapsed_secs_f64() + 0.2;
     let focus = focus_on_surface(camera, &assets.surface);
     let height = view_height(projection);
+    strandline::update(&mut strand_patches, focus, height);
     for (mut light, mut cascades, sun) in &mut suns {
         let shadows_enabled = sun.enabled && height < 240.0;
         if light.shadows_enabled != shadows_enabled {

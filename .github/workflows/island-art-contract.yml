@@ -1,0 +1,28 @@
+name: Island artwork binding (CPU only)
+on:
+  push:
+    branches: ["qualia/island-graphics-week-20261119"]
+    paths:
+      - .github/workflows/island-art-contract.yml
+      - crates/alife_game_app/src/production_voxel_renderer/island.rs
+      - crates/alife_game_app/src/production_voxel_renderer/island/strandline.rs
+permissions:
+  contents: read
+jobs:
+  static-binding:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      CARGO_BUILD_JOBS: '2'
+      CARGO_INCREMENTAL: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8
+        with:
+          toolchain: stable
+      - name: Install native controller build dependency
+        run: sudo apt-get update && sudo apt-get install -y libudev-dev
+      - name: Test shipping glTF range centres, high/low visibility and component integration
+        run: cargo test --locked -p alife_game_app --features production-voxel-frontend --lib production_voxel_renderer::island::strandline::tests -- --test-threads=1
