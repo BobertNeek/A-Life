@@ -176,6 +176,7 @@ cli.add_argument(
         "sapling-eye",
         "scarp-eye",
         "erratic-foot",
+        "moraine-soil",
     ),
     default="slope",
 )
@@ -527,6 +528,11 @@ if (
             # Original #1116, one of three stock balloon-shaped juvenile trees.
             x, z, tx, tz = 50.1, 244.3, 45.447, 237.543
             shot = "sapling-eye"
+        elif args.copse_framing == "moraine-soil":
+            # Across the real lee face from one animal height, so the native
+            # 3.125m soil cell can be judged without a hovering spectator lens.
+            shot = "moraine-soil"
+            x, z, tx, tz = 254.93, -174.49, 255.29, -176.73
         elif args.copse_framing == "erratic-foot":
             # 1.04 m actual animal eye, three metres down and across the
             # slope from original 1570, looking back toward true pine 643.
@@ -555,6 +561,7 @@ if (
                         "meadow-bells": 0.28,
                         "scarp-eye": 4.46,
                         "erratic-foot": 0.74,
+                        "moraine-soil": 0.055,
                     }.get(shot, 0.38),
                     tz,
                 ),

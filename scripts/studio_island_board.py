@@ -144,6 +144,15 @@ elif subject == "erratics":
         (erratic_new / "till-source.json").write_text(
             json.dumps(counts, indent=2) + "\n"
         )
+    if board.get("hero_soil"):
+        from island_erratic_soil import build as resolve_soil
+
+        soil = out / "artist-moraine-soil"
+        description = resolve_soil(d, soil)
+        (soil / "source.json").write_text(json.dumps(description, indent=2) + "\n")
+        (soil / "geology").symlink_to(
+            (d / "geology").resolve(), target_is_directory=True
+        )
 elif subject == "fault-scarp":
     from island_fault_scarp import sculpt
 
@@ -504,6 +513,7 @@ views = {
     "sunlit-margin": ["--copse-eye", "--copse-framing", "sunlit-margin"],
     "stone-eye": ["--rock-eye"],
     "erratic-foot": ["--copse-eye", "--copse-framing", "erratic-foot"],
+    "moraine-soil": ["--copse-eye", "--copse-framing", "moraine-soil"],
     "erratic-reach": ["--guardian-review", "--grove-framing", "erratic-reach"],
     "pine-eye": ["--pine-eye"],
     "guardian-woods": ["--guardian-review", "--grove-framing", "dense"],
@@ -527,6 +537,10 @@ subject_label = {
 if subject == "erratics" and board.get("glacial_train"):
     subject_label = (
         "Same glacial rock: exposed till lenses and woodrush on the true slope"
+    )
+if subject == "erratics" and board.get("hero_soil"):
+    subject_label = (
+        "Sheltered till on the original soil, at twice the close pigment density"
     )
 if subject == "fault-scarp" and board.get("wall_beds"):
     subject_label = "Same seated scarp, with its exposed bed on the true hillside"
@@ -630,7 +644,7 @@ for tag in board["angles"]:
                 ["--wild-sward", moraine]
                 if subject == "erratics"
                 and board.get("glacial_train")
-                and side == "after"
+                and (side == "after" or board.get("hero_soil"))
                 else []
             ),
             *(
@@ -741,7 +755,13 @@ for tag in board["angles"]:
                 if subject == "fault-scarp"
                 and board.get("wall_beds")
                 and side == "after"
-                else d / "habitat-ground.glb"
+                else (
+                    soil / "habitat-ground.glb"
+                    if subject == "erratics"
+                    and board.get("hero_soil")
+                    and side == "after"
+                    else d / "habitat-ground.glb"
+                )
             ),
             *(
                 ["--broadleaf-library", alder if side == "after" else old_tree]

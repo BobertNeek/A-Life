@@ -1,8 +1,8 @@
 {
   "subject": "erratics",
   "angles": [
-    "erratic-foot",
-    "erratic-reach"
+    "moraine-soil",
+    "erratic-foot"
   ],
   "paired": true,
   "quick": false,
@@ -11,6 +11,7 @@
   "mineral_study": true,
   "weather_rind": true,
   "rolled_toe": true,
-  "art_note": "Actual V1 wooded moraine. In BOTH halves hold the 9b3dbe7c glacial boulders, rolled soles and direction-grown rind fixed. Right: physically grounded, discontinuous abraded till and folded woodrush at real original 1570, 1383 and 1675; avoid continuous rings, shafts and artificial foundation. Two fixed views, 1.04 m / three metres from 1570 and a real guardian deposit. No gameplay or QA.",
-  "glacial_train": true
+  "art_note": "Both halves carry the same original V1 terrain, rolled erratics, actual local woodrush/till, lens and light. The only change: the two true V1 faces below 1570 use the single formerly unreferenced atlas panel (7,6), preserving terrain's actual source material at the border and delivering ~102 instead of 51 textures samples per metre in the lee. No new maps, triangles, obstructions or new game state. Compare a lower soil composition and the earlier three-metre rock eye.",
+  "glacial_train": true,
+  "hero_soil": true
 }
