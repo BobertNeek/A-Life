@@ -1,0 +1,13 @@
+{
+  "plan": [
+    341.0,
+    403.0,
+    -107.0,
+    -59.0
+  ],
+  "existing_roots_undisturbed": 220,
+  "minimum_added_root_exclusion_metres": 0.67,
+  "active_source_area_percent": 47.7,
+  "actual_chart_grain_metre": 0.1,
+  "underfoot_geometry_displacement_m": 0
+}

@@ -1,0 +1,24 @@
+{
+  "bounds": [
+    341.0,
+    403.0,
+    -107.0,
+    -59.0
+  ],
+  "communities": [
+    "sheltered windwillow",
+    "sea-facing copper rush",
+    "twin-spruce duff and silver mat"
+  ],
+  "new_root_counts": [
+    124,
+    45,
+    12
+  ],
+  "original_trees": [
+    113,
+    638
+  ],
+  "no_rescatter_or_deletion": true,
+  "original_hollow_contacts_avoided_m": 0.67
+}

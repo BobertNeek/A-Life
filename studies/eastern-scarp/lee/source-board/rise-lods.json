@@ -1,0 +1,35 @@
+{
+  "eye": {
+    "roots": {
+      "near": 16,
+      "silhouette": 165
+    },
+    "triangles": {
+      "near": 37696,
+      "silhouette": 6666
+    },
+    "meshes": 12
+  },
+  "guardian": {
+    "roots": {
+      "near": 0,
+      "silhouette": 181
+    },
+    "triangles": {
+      "near": 0,
+      "silhouette": 7338
+    },
+    "meshes": 9
+  },
+  "edit": {
+    "roots": {
+      "near": 181,
+      "silhouette": 0
+    },
+    "triangles": {
+      "near": 351664,
+      "silhouette": 0
+    },
+    "meshes": 9
+  }
+}

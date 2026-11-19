@@ -1,0 +1,80 @@
+{
+  "name": "Twin Needle Rise / real lee cross-section",
+  "sha": "8d0e9cf6343ffe8ea5e82bcb7ad3e4ef77eef7207042cf0274de5d91f2457c38",
+  "profile_length_m": 64.538,
+  "samples": 159,
+  "low_lee_y": 4.586,
+  "true_highpoint_y": 21.391,
+  "height_change_to_crest_m": 16.805,
+  "provisional_first_clear_waterline_along_m": 56.634,
+  "ocean_sight_reference": [
+    448.0,
+    0.0,
+    -85.0
+  ],
+  "original_tree_records": {
+    "113": {
+      "kind": "Conifer",
+      "position": [
+        385.4047264232065,
+        20.773743692239254,
+        -82.46666317352924
+      ],
+      "scale": 1.0122610694652616,
+      "yaw": 3.9353272914886475,
+      "crown_form": 3
+    },
+    "638": {
+      "kind": "Conifer",
+      "position": [
+        387.29475052517637,
+        21.04952925966083,
+        -81.5853311877521
+      ],
+      "scale": 0.9713997683021922,
+      "yaw": 2.0604472160339355,
+      "crown_form": 2
+    }
+  },
+  "earlier_hollow_roots_in_overlap": 220,
+  "native_terrain_unchanged": true,
+  "actor_navigation_not_inferred": true,
+  "stations": [
+    {
+      "xz": [
+        344.0,
+        -75.0
+      ],
+      "native_y": 4.586307315826415,
+      "eye_y": 5.626307315826415,
+      "sea_blockage_m": 18.103
+    },
+    {
+      "xz": [
+        368.45238095238096,
+        -82.78095238095239
+      ],
+      "native_y": 13.512770790100136,
+      "eye_y": 14.552770790100137,
+      "sea_blockage_m": 11.756
+    },
+    {
+      "xz": [
+        390.5,
+        -84.7
+      ],
+      "native_y": 21.390870819091795,
+      "eye_y": 22.430870819091794,
+      "sea_blockage_m": 2.123
+    },
+    {
+      "xz": [
+        406.1090909090909,
+        -85.0
+      ],
+      "native_y": 12.11245114135738,
+      "eye_y": 13.152451141357378,
+      "sea_blockage_m": -3.774
+    }
+  ]
+}
