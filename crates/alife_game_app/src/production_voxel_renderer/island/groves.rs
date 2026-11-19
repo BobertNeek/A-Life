@@ -32,7 +32,9 @@ pub(super) fn at(index: usize, original: &Prop) -> Option<GroveForm> {
     // Never put a previously baked upper crown on a relocated or different
     // trunk if another island revision changes placement order.
     let xz = Vec2::new(original.position[0], original.position[2]);
-    if (1..=FORMS).contains(&entry.form) && xz.distance_squared(Vec2::from_array(entry.xz)) < 0.000004 {
+    if (1..=FORMS).contains(&entry.form)
+        && xz.distance_squared(Vec2::from_array(entry.xz)) < 0.000004
+    {
         NonZeroU8::new(entry.form).map(GroveForm)
     } else {
         None
@@ -62,7 +64,10 @@ pub(super) fn models(pack: &Gltf, assets: &Assets<GltfMesh>) -> Option<CrownMode
     let meshes = (1..=FORMS)
         .map(|f| Some([mesh(f, 0)?, mesh(f, 1)?, mesh(f, 2)?]))
         .collect::<Option<_>>()?;
-    Some(CrownModels { meshes, material: material.clone() })
+    Some(CrownModels {
+        meshes,
+        material: material.clone(),
+    })
 }
 
 pub(super) fn levels<'a>(form: &GroveForm, models: &'a CrownModels) -> &'a [Handle<Mesh>; 3] {
@@ -108,10 +113,17 @@ mod tests {
         let m = &materials[0];
         assert_eq!(m["pbrMetallicRoughness"]["baseColorTexture"]["index"], 0);
         assert_eq!(m["normalTexture"]["index"], 1);
-        assert_eq!(m["pbrMetallicRoughness"]["metallicRoughnessTexture"]["index"], 2);
+        assert_eq!(
+            m["pbrMetallicRoughness"]["metallicRoughnessTexture"]["index"],
+            2
+        );
         let images = doc["images"].as_array().unwrap();
         assert_eq!(images.len(), 3);
-        for (image, uri) in images.iter().zip(["canopy/needles.png", "canopy/needles-normal.png", "canopy/needles-orm.png"]) {
+        for (image, uri) in images.iter().zip([
+            "canopy/needles.png",
+            "canopy/needles-normal.png",
+            "canopy/needles-orm.png",
+        ]) {
             assert_eq!(image["uri"].as_str(), Some(uri));
         }
         for f in 1..=FORMS {

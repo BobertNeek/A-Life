@@ -2,7 +2,6 @@
 
 import argparse
 import json
-import struct
 import math
 import sys
 from pathlib import Path
@@ -81,7 +80,9 @@ cli.add_argument(
     "--rock-eye", action="store_true", help="1.03 m diagnostic at a real boulder foot"
 )
 cli.add_argument(
-    "--pine-eye", action="store_true", help="Creature among the lower sprays of actual pine 434"
+    "--pine-eye",
+    action="store_true",
+    help="Creature among the lower sprays of actual pine 434",
 )
 cli.add_argument(
     "--grove-framing",
@@ -99,7 +100,9 @@ scene = bpy.context.scene
 scene.render.engine = "CYCLES"
 scene.cycles.device = "CPU"
 scene.cycles.samples = (
-    48 if args.cove_showcase or args.guardian_review or args.rock_eye else 20
+    48
+    if args.cove_showcase or args.guardian_review or args.rock_eye or args.pine_eye
+    else 20
 )
 scene.cycles.use_denoising = (
     False  # OIDN erased metre-scale grass and swash ripples in the near field.
@@ -234,27 +237,10 @@ if (
     library = (
         args.prop_library or root / "crates/alife_game_app/assets/landscape/island"
     )
-    raw = (
-        args.surface or root / "crates/alife_world/assets/island-v1.bin"
-    ).read_bytes()
-    width, depth, ox, oz, spacing, _ = struct.unpack_from("<IIfffI", raw, 8)
-    heights = struct.unpack_from(f"<{width*depth}f", raw, 32)
+    from island_review_grid import Grid
 
-    def ground(x, z):
-        u, v = (x - ox) / spacing, (z - oz) / spacing
-        i, j = math.floor(u), math.floor(v)
-        u, v = u - i, v - j
-        a = j * width + i
-        p, q, r, s = (
-            heights[a],
-            heights[a + 1],
-            heights[a + width + 1],
-            heights[a + width],
-        )
-        return (
-            p + (q - p) * u + (r - q) * v if u >= v else p + (r - s) * u + (s - p) * v
-        )
-
+    grid = Grid.read(args.surface or root / "crates/alife_world/assets/island-v1.bin")
+    ground = grid.height
     x, z = 99.9, 256.9
     focus = (x, ground(x, z) + 0.88, z)
     aim = (98.3, ground(98.3, 253.1) + 0.045, 253.1)
@@ -295,13 +281,13 @@ if (
         dense = args.grove_framing == "dense"
         x, z = (-161.7, -38.25) if dense else (247.0, -184.0)
         eye = ground(x, z) + 2.0
-        width = 156 if dense else 240
+        ortho_width = 156 if dense else 240
         shots = [
             (
                 "guardian-woods" if dense else "guardian-grove",
                 (x + 230, eye + 176, z + 280),
                 (x, eye, z),
-                width,
+                ortho_width,
                 35,
                 1,
             )
@@ -425,25 +411,16 @@ for name, pos, aim, ortho, lens, lod in shots:
         for o in decor:
             cx = math.floor(o.location.x / 100) * 100 + 50
             cz = math.floor(-o.location.y / 100) * 100 + 50
-            o.hide_render = (
-                args.guardian_review or math.hypot(cx - focus.x, cz + focus.y) >= 150
-            )
+            o.hide_render = (args.guardian_review and review_span >= 100) or math.hypot(
+                cx - focus.x, cz + focus.y
+            ) >= 150
     for mesh in habitats.values():
         mesh.hide_render = True
     for ob in chunks:
         _, ix, iz, level = ob.name.split("_")
         key = int(ix), int(iz)
-        if args.cove_showcase or args.guardian_review or args.rock_eye:
-            # The showcase represents the ordinary unoccupied 100 m cells.
-            # Never draw a mountain with near-only geometry just to flatter it.
-            center_x = ox + min(32 * int(ix) + 16, width - 1) * spacing
-            center_z = oz + min(32 * int(iz) + 16, depth - 1) * spacing
-            distance = math.hypot(center_x - cove_focus.x, center_z + cove_focus.y)
-            target = (
-                0
-                if review_span < 100 and distance < 150
-                else 1 if distance < 350 else 2
-            )
+        if args.cove_showcase or args.guardian_review or args.rock_eye or args.pine_eye:
+            target = grid.level(key, (cove_focus.x, -cove_focus.y), review_span)
         else:
             target = lod
         drawn = level == f"L{target}"

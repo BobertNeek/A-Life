@@ -373,7 +373,12 @@ pub(super) fn update(
         Without<PropRange>,
     >,
     mut props: Query<
-        (&mut Mesh3d, &mut MeshMaterial3d<StandardMaterial>, &mut Visibility, &mut PropRange),
+        (
+            &mut Mesh3d,
+            &mut MeshMaterial3d<StandardMaterial>,
+            &mut Visibility,
+            &mut PropRange,
+        ),
         Without<TerrainLod>,
     >,
     mut strand_patches: strandline::PatchViews,
@@ -589,10 +594,12 @@ pub(super) fn update(
         assets.habitats_attached = true;
     }
     let grove_models = (!assets.groves_attached
-        && asset_server.as_ref().is_none_or(|server| server.is_loaded_with_dependencies(&assets.groves)))
-        .then(|| gltfs.get(&assets.groves))
-        .flatten()
-        .and_then(|pack| groves::models(pack, &gltf_meshes));
+        && asset_server
+            .as_ref()
+            .is_none_or(|server| server.is_loaded_with_dependencies(&assets.groves)))
+    .then(|| gltfs.get(&assets.groves))
+    .flatten()
+    .and_then(|pack| groves::models(pack, &gltf_meshes));
     let mut saw_prop = false;
     for (mut mesh, mut material, mut visibility, mut prop) in &mut props {
         saw_prop = true;

@@ -193,3 +193,11 @@ is bit-identical in local position, normal and color; all 421 physical trunk box
 The bound asset and these two plates are the exact output of hosted Blender 4.3.2 CPU study
 44456932447 at recipe 4547e3358d98f6e66c0e1d752339010fb8ab8c7f. These are offline poses on
 the separate V2 study surface. Neither they nor the CPU ECS tests are a live game or FPS result.
+
+**Review correction:** the old guardian camera reused the grid-width variable as its lens width.
+That left tree placements and the matched canopy change intact, but could misplace grounded
+small plants and select the wrong LOD for background chunks. The new frozen review grid
+requires an exact physical triangle match at all 3,716 placements and checks every chunk
+at three locked spans. The eye among pine 434 now uses the same local chunk gate as the
+native unoccupied terrain, rather than drawing the entire island at maximum detail. Keep
+the earlier plates as historical art comparisons, not native vegetation-contact evidence.

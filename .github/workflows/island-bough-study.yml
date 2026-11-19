@@ -8,6 +8,8 @@ on:
       - scripts/island_bough_mesh.py
       - scripts/island_canopy_outline.py
       - scripts/island_needle_surface.py
+      - scripts/island_review_grid.py
+      - scripts/render_island_geology.py
       - crates/alife_game_app/assets/landscape/island/grove-crowns.*
       - crates/alife_game_app/assets/landscape/island/canopy/**
 permissions:
@@ -31,6 +33,7 @@ jobs:
           python3 -m venv "$RUNNER_TEMP/bough-py"
           "$RUNNER_TEMP/bough-py/bin/pip" install --only-binary=:all: --disable-pip-version-check numpy==2.2.6 scipy==1.15.3 Pillow==11.3.0
           echo "$RUNNER_TEMP/bough-py/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/bough-py/bin/python" scripts/island_review_grid.py
           "$RUNNER_TEMP/bough-py/bin/python" scripts/build_island_boughs.py --out "$RUNNER_TEMP/bough"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:

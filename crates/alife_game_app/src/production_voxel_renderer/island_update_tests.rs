@@ -737,8 +737,16 @@ fn arriving_crown_pack_replaces_only_mapped_visuals_once_without_moving_a_trunk(
     app.update();
     let unique = app.world().resource::<Assets<Mesh>>().reserve_handle();
     let prim = primitive_fixture(&mut app, unique.clone());
-    let pine = app.world().resource::<Assets<StandardMaterial>>().reserve_handle();
-    app.world_mut().resource_mut::<Assets<GltfMesh>>().get_mut(&prim).unwrap().primitives[0].material = Some(pine.clone());
+    let pine = app
+        .world()
+        .resource::<Assets<StandardMaterial>>()
+        .reserve_handle();
+    app.world_mut()
+        .resource_mut::<Assets<GltfMesh>>()
+        .get_mut(&prim)
+        .unwrap()
+        .primitives[0]
+        .material = Some(pine.clone());
     let mut pack = pack_fixture();
     pack.materials.push(pine.clone());
     for form in 1..=groves::FORMS {
@@ -751,7 +759,8 @@ fn arriving_crown_pack_replaces_only_mapped_visuals_once_without_moving_a_trunk(
     }
     let world = app.world_mut();
     let before: std::collections::HashMap<_, _> = world
-        .query_filtered::<(Entity, &Transform, &MeshMaterial3d<StandardMaterial>), With<PropRange>>()
+        .query_filtered::<(Entity, &Transform, &MeshMaterial3d<StandardMaterial>), With<PropRange>>(
+        )
         .iter(world)
         .map(|(id, t, m)| (id, (*t, m.0.clone())))
         .collect();
@@ -764,17 +773,32 @@ fn arriving_crown_pack_replaces_only_mapped_visuals_once_without_moving_a_trunk(
     advance(&mut app, 201);
     let world = app.world_mut();
     assert!(!world.resource::<IslandAssets>().groves_attached);
-    for (entity, t, m) in world.query_filtered::<(Entity, &Transform, &MeshMaterial3d<StandardMaterial>), With<PropRange>>().iter(world) {
+    for (entity, t, m) in world
+        .query_filtered::<(Entity, &Transform, &MeshMaterial3d<StandardMaterial>), With<PropRange>>(
+        )
+        .iter(world)
+    {
         assert_eq!(*t, before[&entity].0);
         assert_eq!(m.0, before[&entity].1);
     }
-    world.resource_mut::<Assets<Gltf>>().get_mut(&pack).unwrap().named_meshes.insert(last.into_boxed_str(), last_mesh);
+    world
+        .resource_mut::<Assets<Gltf>>()
+        .get_mut(&pack)
+        .unwrap()
+        .named_meshes
+        .insert(last.into_boxed_str(), last_mesh);
     advance(&mut app, 201);
     let world = app.world_mut();
     assert!(world.resource::<IslandAssets>().groves_attached);
     let mut changed = 0;
     for (id, prop, t, mesh, mat) in world
-        .query::<(Entity, &PropRange, &Transform, &Mesh3d, &MeshMaterial3d<StandardMaterial>)>()
+        .query::<(
+            Entity,
+            &PropRange,
+            &Transform,
+            &Mesh3d,
+            &MeshMaterial3d<StandardMaterial>,
+        )>()
         .iter(world)
     {
         assert_eq!(*t, before[&id].0);
