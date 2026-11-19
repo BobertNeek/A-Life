@@ -74,7 +74,7 @@ scene.render.resolution_x, scene.render.resolution_y = 1000, 600
 scene.render.resolution_percentage = 52 if args.quick_proof else 100
 if args.quick_proof:
     scene.cycles.samples = 12
-scene.view_settings.view_transform = "AgX"
+scene.view_settings.view_transform = "AgX" if bpy.app.version >= (4, 0, 0) else "Filmic"
 scene.world = bpy.data.worlds.new("Overcast blue skylight")
 scene.world.use_nodes = True
 bg = scene.world.node_tree.nodes["Background"]
