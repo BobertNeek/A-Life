@@ -40,6 +40,11 @@ cli.add_argument(
     type=Path,
     help="Local fitted surface artwork on the two real southern cut banks",
 )
+cli.add_argument(
+    "--inlet-sculpt-study",
+    action="store_true",
+    help="DCC-only shape alternative; never serialized to game terrain",
+)
 cli.add_argument("--prop-library", type=Path)
 cli.add_argument(
     "--broadleaf-library", type=Path, help="Only the native Broadleaf model"
@@ -256,6 +261,7 @@ def native(p):
     return Vector((p[0], -p[2], p[1]))
 
 
+rigid_plants = []
 shots = [
     ("wide", (705, 795, 975), (0, 27, -12), 1120, 36, 2),
     ("estuary", (190, 54, 440), (4, 20, 236), 0, 35, 0),
@@ -467,6 +473,7 @@ if (
         instance.rotation_mode = "XYZ"
         instance.rotation_euler = (0, 0, prop["yaw"])
         instance.scale = (prop["scale"],) * 3
+        rigid_plants.append(instance)
 decor = []
 if args.strandline:
     old = set(bpy.data.objects)
@@ -488,6 +495,16 @@ if args.copse_floor:
     copse = [o for o in set(bpy.data.objects) - old if o.type == "MESH"]
     for ob in copse:
         ob.visible_shadow = False
+if args.inlet_sculpt_study:
+    here = Path(__file__).resolve().parents[1] / "studies/island-inlet-proposal"
+    sys.path.insert(0, str(here))
+    from form import Reach
+    from sculpt import finish
+
+    bpy.context.view_layer.update()
+    finish(
+        Reach(args.surface), [*chunks, *habitats.values(), *decor, *copse], rigid_plants
+    )
 if args.wide_only:
     shots = shots[:1]
 if args.handoff:

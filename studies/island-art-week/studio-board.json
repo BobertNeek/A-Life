@@ -1,5 +1,5 @@
 {
-  "subject": "inlet-ground",
+  "subject": "inlet-concept",
   "angles": [
     "inlet-eye",
     "inlet-bank"
@@ -8,7 +8,5 @@
   "samples": 48,
   "paired": true,
   "editable_canopy": false,
-  "art_note": "Fitted river cut on the existing physical V1: localized silt lenses and seated shingle, rooted turf on discontinuous convex lips, a low-pass pigment in its original far atlas. Fixed lens/water/terrain/daylight. This is not an alternative channel shape or a playtest.",
-  "rooted_cutbank": true,
-  "distance_paint": true
+  "art_note": "Comparison of completed original V1 bank against a separate, editable bank-and-channel sculpt. Native registry, game land and saves are not touched. Three shape controls, matching lamps and both original cameras."
 }

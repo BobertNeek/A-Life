@@ -158,6 +158,14 @@ elif subject == "inlet-ground":
             json.dumps({**json.loads(note.read_text()), **statistics}, indent=2) + "\n"
         )
 
+elif subject == "inlet-concept":
+    # This subject has no native export, no generated world and no save version.
+    study = root / "studies/island-inlet-proposal"
+    sys.path.insert(0, str(study))
+    from water import water as paint_concept_water
+
+    skin = d / "inlet-bank.glb"
+    blender(study / "editable.py", SURFACE, skin, out / "southern-inlet-proposal.blend")
 elif subject == "inlet-survey":
     # Two working photographs of real terrain; no candidate is invented here.
     pass
@@ -227,9 +235,10 @@ subject_label = {
     "coastal-alder": "Branch-grown maritime alders",
     "inlet-survey": "The actual southern inlet before new bank art",
     "inlet-ground": "The native southern tidal cut",
+    "inlet-concept": "Shape study: actual V1 and proposed asymmetric inlet",
 }[subject]
 base_water = root / "studies/island-art-week/water-inputs"
-if subject in ("coastal-alder", "inlet-survey", "inlet-ground"):
+if subject in ("coastal-alder", "inlet-survey", "inlet-ground", "inlet-concept"):
     base_water = out / "current-shelf"
     base_water.mkdir(exist_ok=True)
     for n in ("shore.png", "ripple.png"):
@@ -237,10 +246,15 @@ if subject in ("coastal-alder", "inlet-survey", "inlet-ground"):
     (base_water / "water.json").write_text(
         (root / "studies/island-art-week/water-selected.json").read_text()
     )
+if subject == "inlet-concept":
+    concept_water = out / "studied-water"
+    paint_concept_water(SURFACE, base_water, concept_water)
 for tag in board["angles"]:
     for side in ("before", "after") if paired else ("after",):
         pack = fresh if side == "after" else old
         water = chart if subject == "cove-water" and side == "after" else base_water
+        if subject == "inlet-concept" and side == "after":
+            water = concept_water
         dressing = None
         if subject == "forest-fern" and side == "before":
             dressing = fern_base / "copse-floor.glb"
@@ -254,6 +268,7 @@ for tag in board["angles"]:
                 "coastal-alder",
                 "inlet-survey",
                 "inlet-ground",
+                "inlet-concept",
             )
             and (d / "copse-floor.glb").is_file()
         ):
@@ -271,7 +286,8 @@ for tag in board["angles"]:
             *(["--quick-proof"] if approx else []),
             *(
                 ["--inlet-cut", skin]
-                if subject == "inlet-ground" and side == "after"
+                if subject == "inlet-concept"
+                or (subject == "inlet-ground" and side == "after")
                 else []
             ),
             *(
@@ -280,6 +296,11 @@ for tag in board["angles"]:
                     revised_pigment if side == "after" else frozen_pigment,
                 ]
                 if subject == "inlet-ground" and board.get("distance_paint")
+                else []
+            ),
+            *(
+                ["--inlet-sculpt-study"]
+                if subject == "inlet-concept" and side == "after"
                 else []
             ),
             "--coastal-light",
@@ -314,14 +335,22 @@ for tag in board["angles"]:
         make(
             out / "before" / f"{tag}.png",
             out / "after" / f"{tag}.png",
-            f"{subject_label} | {tag} | Same V1 terrain, lens and daylight | CPU Blender",
+            (
+                f"Editable inlet proposal | {tag} | V1 versus bank sculpt / same lens, daylight and water level | CPU Blender"
+                if subject == "inlet-concept"
+                else f"{subject_label} | {tag} | Same V1 terrain, lens and daylight | CPU Blender"
+            ),
             out / f"{tag}.jpg",
         )
 (out / "studio-note.json").write_text(
     json.dumps(
         {
             "board": board,
-            "terrain": "unchanged playable V1",
+            "terrain": (
+                "Original V1 at left; Blender-only inlet sculpt at right. No native binding."
+                if subject == "inlet-concept"
+                else "unchanged playable V1"
+            ),
             "tool": "locked CPU Blender art render; not gameplay",
         },
         indent=2,
