@@ -153,11 +153,12 @@ def build(terrain, surface, placements, out, rock_ground=False):
         factor = cover.multiplier(p[original, 0], p[original, 2])
         graded = color[:, :3] * factor
         if cover.deposit is not None:
-            graded = 255 * cover.deposit.mix(
-                graded / 255,
+            graded = cover.deposit.mix(
+                graded,
                 p[original, 0],
                 p[original, 2],
                 reference=linear(220 / 255),
+                units=255,
             )
         color[:, :3] = np.clip(np.rint(graded), 0, 255).astype("u1")
         attrs = {

@@ -124,7 +124,7 @@ class Deposit:
             for a in (self.strength, self.ochre)
         )
 
-    def mix(self, old, x, z, reference=1):
+    def mix(self, old, x, z, reference=1, units=1):
         w, warm = self.at(x, z)
         # Linear-light geologic endpoints. Store the mineral tone divided by
         # the near tile reference if this is the L0 per-corner multiplier.
@@ -134,7 +134,7 @@ class Deposit:
         buff = np.array((0.365, 0.278, 0.197))
         return (
             old * (1 - w[..., None])
-            + (w[..., None] * cool + warm[..., None] * (buff - cool)) / reference
+            + units * (w[..., None] * cool + warm[..., None] * (buff - cool)) / reference
         )
 
     def receipt(self):
