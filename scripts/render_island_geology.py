@@ -81,6 +81,12 @@ cli.add_argument(
     "--rock-eye", action="store_true", help="1.03 m diagnostic at a real boulder foot"
 )
 cli.add_argument(
+    "--grove-framing",
+    choices=("shoulder", "dense"),
+    default="shoulder",
+    help="Select one of the two fixed guardian cameras",
+)
+cli.add_argument(
     "--grove-forms", type=Path, help="Variants of existing upper crowns only"
 )
 args = cli.parse_args(sys.argv[sys.argv.index("--") + 1 :])
@@ -282,10 +288,19 @@ if (
             ("cove-showcase", (x, eye, z), (x + dx, eye + rise, z + dz), 0, lens, 0)
         ]
     if args.guardian_review:
-        x, z = 247.0, -184.0
+        dense = args.grove_framing == "dense"
+        x, z = (-161.7, -38.25) if dense else (247.0, -184.0)
         eye = ground(x, z) + 2.0
+        width = 156 if dense else 240
         shots = [
-            ("guardian-grove", (x + 230, eye + 176, z + 280), (x, eye, z), 240, 35, 1)
+            (
+                "guardian-woods" if dense else "guardian-grove",
+                (x + 230, eye + 176, z + 280),
+                (x, eye, z),
+                width,
+                35,
+                1,
+            )
         ]
     if args.rock_eye:
         x, z = 258.40, -170.00
@@ -305,7 +320,7 @@ if (
     from island_grove_review import sources, form
 
     forms = sources(args.grove_forms, models)
-    review_span = 144.0 if args.guardian_review else 45.0
+    review_span = shots[0][3] * 0.60 if args.guardian_review else 45.0
     cove_focus = None
     if args.cove_showcase:
         eye, aim = native(shots[0][1]), native(shots[0][2])
@@ -379,7 +394,7 @@ for name, pos, aim, ortho, lens, lod in shots:
         )
         span = (
             review_span
-            if name in ("cove-showcase", "guardian-grove")
+            if name in ("cove-showcase", "guardian-grove", "guardian-woods")
             else (45.0 if name == "strand-reach" else 8.0)
         )
         scene.world.mist_settings.start = focus_m + mood["air_start_beyond_focus_m"]

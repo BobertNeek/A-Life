@@ -1,0 +1,89 @@
+name: Island pine silhouettes from real ground and dense guardian woods
+on:
+  push:
+    branches: ["qualia/island-graphics-week-20261119"]
+    paths:
+      - .github/workflows/island-bough-study.yml
+      - scripts/build_island_boughs.py
+      - scripts/island_bough_mesh.py
+      - scripts/island_canopy_outline.py
+permissions:
+  contents: read
+concurrency:
+  group: island-bough-shapes-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  renders:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      OPENBLAS_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Build and validate genuine bough geometry against the original stems, proxies and budgets
+        run: |
+          python3 -m venv "$RUNNER_TEMP/bough-py"
+          "$RUNNER_TEMP/bough-py/bin/pip" install --only-binary=:all: --disable-pip-version-check numpy==2.2.6 scipy==1.15.3 Pillow==11.3.0
+          echo "$RUNNER_TEMP/bough-py/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/bough-py/bin/python" scripts/build_island_boughs.py --out "$RUNNER_TEMP/bough"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: verified-boughs
+          path: ${{ runner.temp }}/bough
+          retention-days: 7
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: ${{ runner.temp }}/blender-4.3.2-linux-x64.tar.xz
+          key: qualia-art-blender-4.3.2-linux-x64-4da1c956673c0485
+      - run: bash scripts/install_island_review_blender.sh
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: ${{ runner.temp }}/grove-massif
+          key: qualia-grove-massif-v1-e74964e203d40c1ad1dc6423e6f3f1fe96482b83e29f6968a9e96c2cfe4bd3ce
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: ${{ runner.temp }}/bough-minerals
+          key: qualia-versioned-rock-ground-2b1f05e1535eea1065f68b8a02ccab79
+      - name: Keep terrain and original canopy descriptor fixed
+        run: |
+          R="$RUNNER_TEMP/grove-massif"
+          M="$RUNNER_TEMP/bough-minerals"
+          D=crates/alife_game_app/assets/landscape/island
+          if ! test -f "$R/terrain-chunks.glb"; then python scripts/prototype_island_ridge.py "$R"; fi
+          cmp "$R/island-ridge-v2.bin" studies/island-ridge-v2/island-ridge-v2.bin
+          if ! test -f "$M/habitat-ground.glb"; then python scripts/build_island_habitats.py --rock-ground --surface "$R/island-ridge-v2.bin" --terrain "$R/terrain-chunks.glb" --placements "$R/props-ridge-v2.json" --out "$M"; fi
+          echo "2b1f05e1535eea1065f68b8a02ccab7983f592a04eac77540eaf8e4a4b202792  $M/habitat-ground.glb" | sha256sum -c
+          BASE=c6a3e18b36a8460307f525a0a69993da5c4a1cc9
+          git fetch --no-tags --depth=1 origin "$BASE"
+          mkdir -p "$RUNNER_TEMP/predecessor"
+          for ext in glb json; do git show "$BASE:$D/grove-crowns.$ext" > "$RUNNER_TEMP/predecessor/grove-crowns.$ext"; done
+      - name: Compare exact ground and dense guardian poses; change only pine crown meshes
+        run: |
+          D=crates/alife_game_app/assets/landscape/island
+          R="$RUNNER_TEMP/grove-massif"
+          P="$RUNNER_TEMP/tree-proof"
+          mkdir -p "$P"
+          blender --version | head -1 > "$P/renderer.txt"
+          for side in before after; do
+            C="$RUNNER_TEMP/predecessor"
+            if [ "$side" = after ]; then C="$RUNNER_TEMP/bough"; fi
+            for view in stone-eye guardian-woods; do
+              args=(--rock-eye)
+              if [ "$view" = guardian-woods ]; then args=(--guardian-review --grove-framing dense); fi
+              blender -b -t 2 --python-exit-code 1 -P scripts/render_island_geology.py -- "$R/terrain-chunks.glb" "$P/$side" "${args[@]}" --coastal-light "$D/coastal-daylight.json" --marine-sky "$D/marine-day.glb" --strandline "$D/strandline.glb" --surface "$R/island-ridge-v2.bin" --placements "$R/props-ridge-v2.json" --water-inputs studies/island-art-week/water-inputs --habitats "$RUNNER_TEMP/bough-minerals/habitat-ground.glb" --grove-forms "$C/grove-crowns.glb"
+            done
+          done
+          for view in stone-eye guardian-woods; do
+            python scripts/compare_island_art.py "$P/before/$view.png" "$P/after/$view.png" "$P/$view.jpg" --title "Interlocking boughs | $view | Identical tree anchors, terrain and light | CPU Blender"
+          done
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: paired-bough-heights
+          path: |
+            ${{ runner.temp }}/tree-proof/*.jpg
+            ${{ runner.temp }}/tree-proof/*.txt
+            ${{ runner.temp }}/tree-proof/after/*.png
+          retention-days: 7
