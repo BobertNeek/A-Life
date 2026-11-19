@@ -2,11 +2,17 @@
   "subject": "fault-scarp",
   "angles": [
     "scarp-eye",
-    "scarp-spur"
+    "scarp-spur",
+    "rift-root"
   ],
   "paired": true,
   "quick": false,
   "samples": 80,
   "editable_canopy": false,
-  "art_note": "Real native rock #1549 from creature height and a separate native foothill #1731. Photograph the old pencils and the sculpted faulted rock in identical native materials and surroundings. Nothing in the real original terrain, obstacle data, legacy saves or brain jobs is rewritten."
+  "art_note": "Do not install the shared unseated scarp. Selected real artist subjects now pull each unsupported toe inward to existing uphill rock, without going beneath or outside the old solid box. Include the extreme 1395 drop instead of hiding it. Static V1 only; not runtime behavior.",
+  "uphill_seating": [
+    1549,
+    1731,
+    1395
+  ]
 }

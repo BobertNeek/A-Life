@@ -264,7 +264,7 @@ def channels(p, tri, pigment_tree, pigment_source):
     )
 
 
-def sculpt(source, dest):
+def sculpt(source, dest, *, surface=None, landmark=None, key="Cliff"):
     d, original = parse(Path(source))
     prod = dict(d)
     prod.update(accessors=[], bufferViews=[], meshes=[])
@@ -298,6 +298,15 @@ def sculpt(source, dest):
         values(d, original, original_prim["attributes"]["COLOR_0"])
     )
     pigment_tree = cKDTree(pos)
+    contact = None
+    if landmark is not None:
+        from island_scarp_seating import Foot
+
+        contact = Foot(surface, landmark, pos)
+        if contact.tree is None:
+            raise ValueError(
+                "No genuine support under this native footprint; leave this anchor unselected."
+            )
     for level, amount in enumerate((780, 140, 40)):
         p, t, s = draft(pos, f, amount)
         if level == 0:
@@ -306,6 +315,13 @@ def sculpt(source, dest):
             allf = np.concatenate((t, b + len(p)))
         else:
             allp, allf = p, t
+        if contact is not None:
+            allp = contact.seat(allp)
+            pts = allp[allf]
+            area = np.linalg.norm(
+                np.cross(pts[:, 1] - pts[:, 0], pts[:, 2] - pts[:, 0]), axis=1
+            )
+            allf = allf[area > 1e-9]
         n, uv, col = channels(allp, allf, pigment_tree, pigment_source)
         q = allp[allf].reshape(-1, 3)
         attrs = dict(
@@ -319,9 +335,14 @@ def sculpt(source, dest):
             indices=att(np.arange(len(q), dtype="<u2"), 5123, "SCALAR", 34963),
             material=0,
         )
-        name = f"Cliff_L{level}"
+        name = f"{key}_L{level}"
         prod["meshes"].append(dict(name=name, primitives=[prim]))
         rows[name] = len(allf)
+    if key != "Cliff":
+        prod["nodes"] = [
+            {**node, "name": node["name"].replace("Cliff_L", f"{key}_L")}
+            for node in prod["nodes"]
+        ]
     prod["buffers"] = [{"byteLength": len(raw)}]
     dest = Path(dest)
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -329,6 +350,11 @@ def sculpt(source, dest):
     return {
         "source": "Existing 8 x 4 x 12 m Cliff.glb, 16 native locations",
         "triangle_counts": rows,
-        "physical": "No world or collision authoring. Old true foot, yawed footprints and summit retained; carving is inside original native convex support.",
+        "physical": (
+            "View-only contact sculpt for an actual planted original V1 rock; preserve the anchored upper footprint, summit and existing obstacle. No geometry extends below the original lower box."
+            if contact
+            else "No world or collision authoring. Old true foot, yawed footprints and summit retained; carving stays inside the original native envelope."
+        ),
         "surface": "Original mineral colour/normal/roughness images.",
+        **({"root_contact": contact.receipt} if contact else {}),
     }

@@ -124,6 +124,21 @@ elif subject == "fault-scarp":
             (d / "minerals").resolve(), target_is_directory=True
         )
     note = sculpt(scarp_base / "Cliff.glb", scarp / "Cliff.glb")
+    if board.get("uphill_seating"):
+        props = json.loads((d / "props.json").read_text())
+        seats = {}
+        for i in board["uphill_seating"]:
+            key = f"CliffSeat{i}"
+            if props[i]["kind"] != "Cliff":
+                raise ValueError("Not a native cliff index")
+            seats[str(i)] = sculpt(
+                scarp_base / "Cliff.glb",
+                scarp / (key + ".glb"),
+                surface=SURFACE,
+                landmark=props[i],
+                key=key,
+            )
+        (scarp / "seated.json").write_text(json.dumps(seats, indent=2) + "\n")
     (scarp / "scarp-source.json").write_text(json.dumps(note, indent=2) + "\n")
     blender(
         "studio_fault_scarp_editable.py",
@@ -395,6 +410,7 @@ views = {
     "sapling-eye": ["--copse-eye", "--copse-framing", "sapling-eye"],
     "scarp-eye": ["--copse-eye", "--copse-framing", "scarp-eye"],
     "scarp-spur": ["--guardian-review", "--grove-framing", "scarp-spur"],
+    "rift-root": ["--guardian-review", "--grove-framing", "rift-root"],
     "meadow-bells": ["--copse-eye", "--copse-framing", "meadow-bells"],
     "meadow-eye": ["--copse-eye", "--copse-framing", "meadow-eye"],
     "meadow-reach": ["--guardian-review", "--grove-framing", "meadow-reach"],

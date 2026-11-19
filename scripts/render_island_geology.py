@@ -144,6 +144,7 @@ cli.add_argument(
         "inlet-bank",
         "meadow-reach",
         "scarp-spur",
+        "rift-root",
     ),
     default="shoulder",
     help="Select one of the two fixed guardian cameras",
@@ -420,6 +421,19 @@ if (
         if args.grove_framing == "inlet-bank":
             x, z = 98.0, 419.0
             shots = [("inlet-bank", (x + 47, 62, z + 96), (x, 2.3, z), 116, 35, 1)]
+        if args.grove_framing == "rift-root":
+            # Actual original 1395 extends out over the steep highland notch.
+            x, z = 16.12, -189.17
+            shots = [
+                (
+                    "rift-root",
+                    (x + 68, ground(x, z) + 26, z + 31),
+                    (x, ground(x, z) + 6, z),
+                    43,
+                    36,
+                    0,
+                )
+            ]
         if args.grove_framing == "scarp-spur":
             # Different native cliff: foothill 1731, including the real trees.
             x, z = 260.3, -282.2
@@ -557,6 +571,13 @@ if (
             else int(dist > 100 or (args.guardian_review and review_span > 80))
         )
         model_key = form(forms, index, kind, px, pz)
+        seated = (
+            kind == "Cliff"
+            and args.cliff_library
+            and (args.cliff_library / f"CliffSeat{index}.glb").is_file()
+        )
+        if seated:
+            model_key = f"CliffSeat{index}"
         if kind == "Grass" and args.meadow_habits:
             from island_meadow_variation import family
 
@@ -566,7 +587,11 @@ if (
             stone = kind in ("Cliff", "Scree", "BoulderA", "BoulderB", "BoulderC")
             where = args.stone_library if stone and args.stone_library else library
             if kind == "Cliff" and args.cliff_library:
-                where = args.cliff_library
+                where = (
+                    args.cliff_library
+                    if seated or not (args.cliff_library / "seated.json").is_file()
+                    else library
+                )
             if kind == "Sapling" and args.young_library:
                 where = args.young_library
             if kind == "Broadleaf" and args.broadleaf_library:
@@ -575,12 +600,14 @@ if (
                 where = args.fern_library
             if kind in ("Grass", "Flowers") and args.meadow_library:
                 where = args.meadow_library
-            bpy.ops.import_scene.gltf(filepath=str(where / f"{kind}.glb"))
+            bpy.ops.import_scene.gltf(
+                filepath=str(where / f"{model_key if seated else kind}.glb")
+            )
             items = set(bpy.data.objects) - old
             names = (
                 ["Grass", "GrassSilver", "GrassAmber"]
                 if kind == "Grass" and args.meadow_habits
-                else [kind]
+                else [model_key if seated else kind]
             )
             for name in names:
                 for lod_index in (0, 1, 2):
