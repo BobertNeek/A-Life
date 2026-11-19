@@ -1,13 +1,12 @@
 {
-  "subject": "forest-floor",
+  "subject": "cove-water",
   "angles": [
-    "sunlit-margin",
-    "copse-eye"
+    "shelf-eye",
+    "shelf-guardian"
   ],
   "quick": false,
-  "samples": 80,
+  "samples": 48,
   "paired": true,
-  "sculpted_bark": true,
-  "editable_canopy": true,
-  "art_note": "Correct the original downward cap normal on pine sides. A low exposed root becomes ground-level beyond the true trunk; keep the sun on this actual west-facing fern pocket, no extra lights. The second camera remains exactly locked to the original slope."
+  "editable_canopy": false,
+  "art_note": "Frame the true eastern shallows and deep water at 1.12 m and from above. Compare only the new painted V1 seabed optics and short-wave normals. No shoreline geometry, lights, world behavior or test run changes."
 }

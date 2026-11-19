@@ -37,6 +37,9 @@ cli.add_argument("--surface", type=Path)
 cli.add_argument("--placements", type=Path)
 cli.add_argument("--prop-library", type=Path)
 cli.add_argument(
+    "--fern-library", type=Path, help="Only the separably authored ordinary Fern model"
+)
+cli.add_argument(
     "--stone-library",
     type=Path,
     help="Actual candidate mineral skins for existing solid stones only",
@@ -418,6 +421,8 @@ if (
             old = set(bpy.data.objects)
             stone = kind in ("Cliff", "Scree", "BoulderA", "BoulderB", "BoulderC")
             where = args.stone_library if stone and args.stone_library else library
+            if kind == "Fern" and args.fern_library:
+                where = args.fern_library
             bpy.ops.import_scene.gltf(filepath=str(where / f"{kind}.glb"))
             items = set(bpy.data.objects) - old
             for lod_index in (0, 1, 2):

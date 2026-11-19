@@ -53,6 +53,9 @@ elif subject == "forest-floor":
 
         fresh = out / "artist-crowns"
         build(d / "Conifer.glb", d / "props.json", fresh, sculpted_bark=True)
+elif subject == "forest-fern":
+    fern = out / "artist-fern"
+    blender("studio_forest_fern.py", fern, "--author-from", d / "Fern.glb")
 elif subject == "cove-water":
     from island_cove_optics import world_paint
 
@@ -61,18 +64,32 @@ elif subject == "cove-water":
     world_paint(SURFACE, original_water, chart)
 else:
     raise ValueError(f"Unknown studio subject: {subject}")
-if paired and subject == "canopy":
+if paired and subject in ("canopy", "forest-floor"):
+    # Lock the left half across future branch installs. The steel-blue
+    # source bough and the subsequent feathered spruce do not use the
+    # same material files, so fetch only the inputs of that precise recipe.
     old = out / "old-source"
-    base = "c6a3e18b36a8460307f525a0a69993da5c4a1cc9"
+    base = (
+        "c6a3e18b36a8460307f525a0a69993da5c4a1cc9"
+        if subject == "canopy"
+        else "5d6181e662ddd9e6cf8daf16f4c9d39a5ef1fe9c"
+    )
     subprocess.run(
         ["git", "fetch", "--no-tags", "--depth=1", "origin", base], check=True
     )
-    old.mkdir(exist_ok=True)
-    for ext in ("glb", "json"):
-        name = f"grove-crowns.{ext}"
-        with (old / name).open("wb") as output:
+    names = ["grove-crowns.glb", "grove-crowns.json"]
+    if subject == "forest-floor":
+        names.extend(
+            "canopy/" + name
+            for name in ("needles.png", "needles-normal.png", "needles-orm.png")
+        )
+    for name in names:
+        native = d / name
+        dest = old / name
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        with dest.open("wb") as output:
             subprocess.run(
-                ["git", "show", f"{base}:{(d/name).relative_to(root).as_posix()}"],
+                ["git", "show", f"{base}:{native.relative_to(root).as_posix()}"],
                 stdout=output,
                 check=True,
             )
@@ -97,6 +114,7 @@ subject_label = {
     "canopy": "Maritime spruce",
     "forest-floor": "Rooted woodland floor",
     "cove-water": "Sheltered tidal shelf",
+    "forest-fern": "Divided woodland fern",
 }[subject]
 base_water = root / "studies/island-art-week/water-inputs"
 for tag in board["angles"]:
@@ -106,7 +124,10 @@ for tag in board["angles"]:
         dressing = None
         if subject == "forest-floor" and side == "after":
             dressing = floor
-        elif subject == "cove-water" and (d / "copse-floor.glb").is_file():
+        elif (
+            subject in ("cove-water", "forest-fern")
+            and (d / "copse-floor.glb").is_file()
+        ):
             dressing = d / "copse-floor.glb"
         blender(
             "render_island_geology.py",
@@ -136,6 +157,11 @@ for tag in board["angles"]:
             "--grove-forms",
             pack / "grove-crowns.glb",
             *(["--copse-floor", dressing] if dressing is not None else []),
+            *(
+                ["--fern-library", fern]
+                if subject == "forest-fern" and side == "after"
+                else []
+            ),
         )
     if paired:
         make(

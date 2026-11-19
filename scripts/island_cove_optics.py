@@ -132,17 +132,19 @@ def swell(size=256):
 def author(dest):
     dest = Path(dest)
     dest.mkdir(parents=True, exist_ok=True)
-    for key, img in (("shelf", palette()), ("wind-capillary", swell())):
+    for key, img in (("shelf", palette()), ("ripple", swell())):
         img.save(dest / (key + ".png"), compress_level=6)
 
 
 def compose(ground, dist, coords, lookup):
-    # Renderer supplies a real local mean from four bottom samples. Lines of
+    # Sample a real local mean from four nearby parts of the bed. Lines of
     # constant height by themselves would create bathymetric contour stripes.
     x, z = coords
+    four_x = 4 * (x[0, 1] - x[0, 0])
+    four_z = 4 * (z[1, 0] - z[0, 0])
     gx = np.hypot(
-        (np.roll(ground, -2, 1) - np.roll(ground, 2, 1)) / 4.53,
-        (np.roll(ground, -2, 0) - np.roll(ground, 2, 0)) / 5.31,
+        (np.roll(ground, -2, 1) - np.roll(ground, 2, 1)) / four_x,
+        (np.roll(ground, -2, 0) - np.roll(ground, 2, 0)) / four_z,
     )
     shoulder = (
         ground
@@ -203,13 +205,13 @@ def world_paint(surface, metadata, out):
         -32.0,
     )
     dist = distance_transform_edt(ground < 0, sampling=(wz / n, wx / n))
-    chart = compose(ground, dist, (x, z), np.asarray(palette()))
+    with Image.open(out / "shelf.png") as colours:
+        chart = compose(ground, dist, (x, z), np.asarray(colours))
     chart.save(out / "shore.png", compress_level=6)
-    swell().save(out / "ripple.png", compress_level=6)
     meta.update(
         ripple_metres=18.0,
         roughness=0.31,
         reflectance=0.38,
-        art_inputs="Matched artwork: bathymetry from the V1 close triangles, painted optical lookup, world-anchored wind capillaries; DCC, no engine verification.",
+        art_inputs="Blender artwork: V1 triangle bathymetry, painted optical lookup and a world-aligned wind/capillary normal. Native binding and cost not run this week.",
     )
     (out / "water.json").write_text(json.dumps(meta, indent=2) + "\n")

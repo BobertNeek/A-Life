@@ -24,3 +24,10 @@ world-derived material fallback for all other surfaces. Pan through shallow
 foam, check roughness and normal amplitude in motion and in each graphics
 preset, then use a warmed RTX 3050 frame capture. Do not promote this solely
 from a static DCC plate.
+
+The gameplay lane is separately authoring optional willow-and-stone crossings
+which raise a limited set of existing shoal vertices only on player action.
+The inlet chart does not change the base binding or author those structures.
+Next week, make one crossing in a throwaway world. Its raised surface should
+occlude old 3 mm shoreline films and foam cleanly, not pick the underlying
+art patch, leave a floating surf stripe inland, or expose a dry cyan gap.
