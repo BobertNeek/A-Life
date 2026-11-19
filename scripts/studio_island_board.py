@@ -48,6 +48,11 @@ elif subject == "forest-floor":
     from build_island_copse_floor import export
 
     floor = export(out / "artist-floor")
+    if board.get("sculpted_bark"):
+        from build_island_boughs import build
+
+        fresh = out / "artist-crowns"
+        build(d / "Conifer.glb", d / "props.json", fresh, sculpted_bark=True)
 else:
     raise ValueError(f"Unknown studio subject: {subject}")
 if paired and subject == "canopy":

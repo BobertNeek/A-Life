@@ -12,12 +12,32 @@ import numpy as np
 from scipy.spatial import cKDTree
 from build_island_strandline import Beach, Patch, SURFACE, ASSET
 from finished_island_glb import save
-from island_copse_botany import root, moss, fern, sorrel, duff
+from island_copse_botany import collar, root, moss, fern, sorrel, duff
+from island_copse_mulch import bed, atlas
 
 TILE = 50.0
 ALTERNATE = (
     Path(__file__).resolve().parents[1] / "studies/island-ridge-v2/island-ridge-v2.bin"
 )
+
+
+class WoodlandPatch(Patch):
+    def surface(self, x, z, lift, color, uv):
+        return self.paint(x, z, self.beach.surface(x, z)[0] + lift, color, uv)
+
+    def paint(self, x, z, y, color, uv):
+        index = super().put_at(x, z, y, color)
+        self.uv.extend(uv)
+        return index
+
+    def put_at(self, x, z, y, color):
+        # The unpainted sprouts and spore stems sample an opaque, neutral
+        # padded patch. Vary coordinates so their tangent frames are defined.
+        uv = (
+            0.23 + 0.075 * math.sin(x * 2.1 + z),
+            0.947 + 0.032 * math.sin(z * 1.7 - x + 4.1 * y),
+        )
+        return self.paint(x, z, y, color, uv)
 
 
 def bake(surface, alternate, placements):
@@ -56,24 +76,37 @@ def bake(surface, alternate, placements):
             continue
         key = math.floor(x / TILE), math.floor(z / TILE)
         if key not in tiles:
-            tiles[key] = Patch(land)
+            tiles[key] = WoodlandPatch(land)
         p = tiles[key]
         wind = math.atan2(-dz, -dx) + r.uniform(-1.5, 1.5)
         if rooted:
             # Broadleaves already have flares; only expose extra wood around
             # the original pine cylinder, starting *inside* it at the soil.
             number = int(r.integers(2, 5))
-            for k in range(number):
-                root(
-                    p,
-                    r,
-                    x,
-                    z,
-                    q["scale"],
-                    wind + math.tau * k / number + r.uniform(-0.36, 0.36),
-                    offset,
-                )
+            headings = [
+                wind + math.tau * k / number + r.uniform(-0.36, 0.36)
+                for k in range(number)
+            ]
+            collar(p, x, z, q["scale"], q["yaw"], offset, headings)
+            for direction in headings:
+                root(p, r, x, z, q["scale"], direction, offset, q["yaw"])
             receipt["tapered_pine_feet"] += 1
+        litter = np.random.default_rng(234682 + i * 8171)
+        if green or (rooted and litter.random() < 0.82):
+            drift = wind + litter.uniform(-0.40, 0.40)
+            reach = litter.uniform(1.05, 2.40) * min(1.18, q["scale"] ** 0.3)
+            spread = reach * litter.uniform(0.46, 0.78)
+            bed(
+                p,
+                litter,
+                x + 0.29 * reach * math.cos(drift),
+                z + 0.29 * reach * math.sin(drift),
+                drift,
+                reach,
+                spread,
+                int(litter.integers(2)),
+            )
+            receipt["triangle_seated_duff_beds"] += 1
         if not green:
             continue
         receipt["irregular_green_pockets"] += 1
@@ -138,12 +171,25 @@ def write(tiles, path):
         meshes=[],
         bufferViews=[],
         accessors=[],
+        images=[
+            dict(uri="copse/" + s)
+            for s in ("duff-bark.png", "duff-bark-normal.png", "duff-bark-orm.png")
+        ],
+        samplers=[dict(magFilter=9729, minFilter=9987, wrapS=33071, wrapT=33071)],
+        textures=[dict(sampler=0, source=i) for i in range(3)],
         materials=[
             dict(
-                name="Wood, moss and sheltered leaves",
+                name="Exposed bark, broken leaf mould and sheltered greens",
+                alphaMode="MASK",
+                alphaCutoff=0.42,
+                normalTexture=dict(index=1),
+                occlusionTexture=dict(index=2, strength=0.72),
                 doubleSided=True,
                 pbrMetallicRoughness=dict(
-                    baseColorFactor=[1, 1, 1, 1], roughnessFactor=0.90, metallicFactor=0
+                    baseColorTexture=dict(index=0),
+                    metallicRoughnessTexture=dict(index=2),
+                    roughnessFactor=1,
+                    metallicFactor=0,
                 ),
             )
         ],
@@ -194,6 +240,9 @@ def write(tiles, path):
         nn[np.linalg.norm(nn, axis=1) < 1e-8] = [0, 1, 0]
         nn /= np.linalg.norm(nn, axis=1)[:, None]
         attr = dict(
+            TEXCOORD_0=attribute(
+                np.frombuffer(p.uv, "f4").reshape(-1, 2), "<f4", 5126, "VEC2"
+            ),
             POSITION=attribute(
                 v, "<f4", 5126, "VEC3", min=v.min(0).tolist(), max=v.max(0).tolist()
             ),
@@ -215,6 +264,7 @@ def write(tiles, path):
 
 def export(out):
     out.mkdir(exist_ok=True, parents=True)
+    atlas(out / "copse")
     tiles, notes = bake(SURFACE, ALTERNATE, ASSET.parent / "props.json")
     asset = out / "copse-floor.glb"
     write(tiles, asset)

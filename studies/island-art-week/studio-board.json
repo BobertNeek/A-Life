@@ -1,12 +1,12 @@
 {
   "subject": "forest-floor",
   "angles": [
-    "copse-eye",
-    "pine-eye"
+    "copse-eye"
   ],
   "quick": false,
-  "samples": 48,
+  "samples": 72,
   "paired": true,
-  "editable_canopy": false,
-  "art_note": "Actual V1 ground, 1.04 m beside established pine 803; then the floor of the dense guardian stand. Add only rooted moss, short ferns, real wood feet and irregular leaf/needle gathers. Art production only; all tests deferred."
+  "sculpted_bark": true,
+  "editable_canopy": true,
+  "art_note": "A creature on V1, in the same slope study as 9e91fe4d. Inspect the original bole silhouette, bark scales and contiguous root/duff/moss transition. Only Blender studio artwork this week."
 }

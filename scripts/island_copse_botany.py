@@ -7,32 +7,88 @@ from build_island_strandline import tint
 TAU = math.tau
 
 
-def root(p, r, x, z, s, a, delta):
-    length = r.uniform(0.58, 1.30) * s
-    width = r.uniform(0.098, 0.16) * s
-    turn = r.uniform(-0.37, 0.37)
-    colour = ((124, 101, 72), (116, 96, 68), (130, 108, 79))[r.integers(3)]
+def collar(p, x, z, s, yaw, delta, headings):
+    """Taper into the unmodified bole; only the flutes grow out onto the surface."""
+    from island_spruce_bark import rolled_u, wood_v
+
+    root_y = p.beach.surface(x, z)[0] + delta
+    n = 22
+    sides = []
+    for i in range(n + 1):
+        # Seam on the source trunk's meridian, even when planted with yaw.
+        a = TAU * i / n - yaw
+        c, k = math.cos(a), math.sin(a)
+        flute = max(
+            math.exp(-(((math.atan2(math.sin(a - d), math.cos(a - d))) / 0.31) ** 2))
+            for d in headings
+        )
+        ripple = 0.011 * math.sin(3 * a + 0.7) + 0.005 * math.sin(7 * a + yaw)
+        rows = []
+        for rad, wiggle, above, grade in (
+            (0.192, 0, 0.36 + 0.32 * flute, 0),
+            (0.237 + ripple, 0.022, 0.21 + 0.19 * flute, 0.15),
+            (0.285 + ripple, 0.10, 0.062 + 0.11 * flute, 0.76),
+            (0.34 + ripple, 0.22, -0.019, 1.0),
+        ):
+            radius = (rad + wiggle * flute) * s
+            px, pz = x + radius * c, z + radius * k
+            floor = p.beach.surface(px, pz)[0]
+            y = root_y * (1 - grade) + floor * grade + above * s
+            rows.append(
+                p.paint(
+                    px,
+                    pz,
+                    y,
+                    (239, 241, 237, 255),
+                    (rolled_u(i / n), wood_v((y - root_y) / s)),
+                )
+            )
+        sides.append(rows)
+    for lo, hi in zip(sides[:-1], sides[1:], strict=True):
+        for j in range(3):
+            p.fan(lo[j], hi[j], hi[j + 1])
+            p.fan(lo[j], hi[j + 1], lo[j + 1])
+
+
+def root(p, r, x, z, s, a, delta, yaw):
+    from island_spruce_bark import rolled_u, wood_v
+
+    length = r.uniform(0.72, 1.49) * s
+    width = r.uniform(0.085, 0.145) * s
+    turn = r.uniform(-0.49, 0.49)
+    root_y = p.beach.surface(x, z)[0] + delta
     lines = []
-    for t in (0, 0.18, 0.44, 0.69, 0.87, 1):
-        d = a + turn * (0.25 + 0.75 * t)
+    for t in (0, 0.12, 0.28, 0.47, 0.66, 0.81, 0.94, 1):
+        d = a + turn * t * (0.3 + 0.7 * t)
         c, k = math.cos(d), math.sin(d)
-        extent = 0.105 * s + length * t
-        cx = x + c * extent
-        cz = z + k * extent
-        w = width * (1 - t) ** 0.77 + 0.009
-        hump = max(
-            -0.006, 0.123 * s * (1 - t) ** 2.4 + 0.015 * (1 - t) + delta * (1 - t) ** 4
-        )
-        rib = w * (0.10 + 0.15 * math.sin(3.1 * t + a))
-        lines.append(
-            [
-                p.put(cx - k * w, cz + c * w, -0.008, tint(colour, 0.84)),
-                p.put(cx - k * rib, cz + c * rib, hump, tint(colour, 1.02 - 0.15 * t)),
-                p.put(cx + k * w * 0.82, cz - c * w * 0.82, -0.008, tint(colour, 0.86)),
-            ]
-        )
+        extent = 0.134 * s + length * t
+        cx, cz = x + c * extent, z + k * extent
+        w = width * (1 - t) ** 0.79 + 0.006
+        crown = 0.38 * s * (1 - t) ** 3.65 + 0.041 * s * (1 - t) ** 0.9
+        line = []
+        for q, lift in (
+            (-1, -0.017),
+            (-0.60, crown * 0.53),
+            (0.09, crown),
+            (0.65, crown * 0.40),
+            (0.97, -0.018),
+        ):
+            ox, oz = cx - k * q * w, cz + c * q * w
+            fy = p.beach.surface(ox, oz)[0] + lift + delta * (1 - t) ** 4.1
+            angle = math.atan2(oz - z, ox - x) + yaw
+            # Carry one continuous narrow strip onto the tangentially running
+            # root, with bark flow along the wood rather than across the soil.
+            base = ((a + yaw) / TAU) % 1
+            du = math.atan2(math.sin(angle - a - yaw), math.cos(angle - a - yaw)) / TAU
+            yy = (fy - root_y) / s + 0.78 * t
+            line.append(
+                p.paint(
+                    ox, oz, fy, (240, 242, 236, 255), (rolled_u(base + du), wood_v(yy))
+                )
+            )
+        lines.append(line)
     for lo, hi in zip(lines[:-1], lines[1:], strict=True):
-        for j in (0, 1):
+        for j in range(4):
             p.fan(lo[j], lo[j + 1], hi[j + 1])
             p.fan(lo[j], hi[j + 1], hi[j])
 

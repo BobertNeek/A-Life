@@ -87,7 +87,7 @@ def normals(p, f):
     return nn / lengths[:, None]
 
 
-def build(source, placements, out):
+def build(source, placements, out, sculpted_bark=False):
     doc0, bin0 = parse(source)
     stems = []
     for m in doc0["meshes"]:
@@ -96,6 +96,10 @@ def build(source, placements, out):
     from island_needle_surface import bake
 
     mean = bake(out / "canopy")
+    if sculpted_bark:
+        from island_spruce_bark import atlas, paint, unwrap
+
+        atlas(out / "canopy", paint())
     doc = dict(
         asset=dict(version="2.0", generator="Qualia interlocking maritime boughs"),
         scene=0,
@@ -175,23 +179,34 @@ def build(source, placements, out):
                 foliage[:, :3] = (
                     np.rint(255 * np.array(new.c) / mean).clip(0, 255).astype("u1")
                 )
+                wood_indices = ft
+                wood_colour = oldc
+                if sculpted_bark:
+                    pt, nt, wood_colour, wood_indices, bark_uv = unwrap(
+                        old, pt, nt, ft, profile, quarter
+                    )
                 xyz = np.vstack((pt, p))
                 norm = np.vstack((nt, n))
-                col = np.vstack((oldc, foliage))
-                faces = np.vstack((ft, len(pt) + f))
+                col = np.vstack((wood_colour, foliage))
+                faces = np.vstack((wood_indices, len(pt) + f))
                 assert len(faces) <= budget and xyz[:, 1].max() < 12.001
                 name = f"PineForm{(profile-1)*4+quarter+1}_L{l}"
                 # White, flat, padded bark swatch. Nondegenerate coordinates
                 # let native tangent generation run even on triangles wholly
                 # inside the unchanged original trunk.
-                bark_uv = np.column_stack(
-                    (
-                        0.048 + 0.071 * old[:, 0],
-                        0.944 + 0.024 * old[:, 1] / 12 + 0.046 * old[:, 2],
+                if sculpted_bark:
+                    leaf_uv = np.array(new.uv)
+                    leaf_uv[:, 0] *= 0.5
+                else:
+                    leaf_uv = new.uv
+                    bark_uv = np.column_stack(
+                        (
+                            0.048 + 0.071 * old[:, 0],
+                            0.944 + 0.024 * old[:, 1] / 12 + 0.046 * old[:, 2],
+                        )
                     )
-                )
-                bark_uv = np.clip(bark_uv, (0.006, 0.915), (0.081, 0.984))
-                tex = np.vstack((bark_uv, new.uv))
+                    bark_uv = np.clip(bark_uv, (0.006, 0.915), (0.081, 0.984))
+                tex = np.vstack((bark_uv, leaf_uv))
                 raw = dict(
                     TEXCOORD_0=attr(tex, "<f4", 5126, "VEC2"),
                     POSITION=attr(xyz, "<f4", 5126, "VEC3", bounds=True),
