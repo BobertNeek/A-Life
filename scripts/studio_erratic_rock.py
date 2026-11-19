@@ -6,7 +6,7 @@ import numpy as np
 from scipy.spatial import cKDTree
 from finished_island_glb import parse, save, values
 from island_fault_scarp import channels
-from island_erratic_blocks import clusters, block
+from island_erratic_blocks import clusters, abraded
 
 
 def carve(source, destination):
@@ -67,19 +67,29 @@ def carve(source, destination):
             )
             indices = faces.astype("<u2")
         else:
+            ss = []
             ps = []
             fs = []
             total = 0
             for k, stone in enumerate(stones):
                 count = (65, 49, 38)[min(k, 2)] if lod == 0 else (27, 19, 11)[min(k, 2)]
-                q, t = block(stone, count, ord(name[-1]) - 62 + k * 4)
+                q, t, norm = abraded(stone, count, ord(name[-1]) - 62 + k * 4)
+                ss.extend(norm)
                 ps.extend(q)
                 fs.extend(t + total)
                 total += len(q)
             points, faces = np.asarray(ps), np.asarray(fs)
             N, U, C = channels(points, faces, tree, col)
             P = points[faces].reshape(-1, 3)
-            indices = np.arange(len(P), dtype="<u2")
+            N = np.asarray(ss)[faces].reshape(-1, 3)
+            # Share exact PBR corners where UV projection and shading agree.
+            # Keep UV seams separate; the renderer uses a single primitive.
+            rows = np.column_stack((P, N, U, C)).astype("<f4")
+            _, first, indices = np.unique(
+                rows, axis=0, return_index=True, return_inverse=True
+            )
+            P, N, U, C = P[first], N[first], U[first], C[first]
+            indices = indices.astype("<u2")
         ad = {
             "POSITION": a(P.astype("<f4"), 5126, "VEC3", bound=True),
             "NORMAL": a(N.astype("<f4"), 5126, "VEC3"),
@@ -100,5 +110,5 @@ def carve(source, destination):
         "new_cluster_count": len(stones),
         "budgets": budgets,
         "fallback_far": "original native overview",
-        "source": "individual convex bounds and actual preserved upper/foot supports, original UV-scale/rock pigments",
+        "source": "individual native component bounds and original contiguous foot; old overview, UV scale, signed mineral and existing pigment family",
     }

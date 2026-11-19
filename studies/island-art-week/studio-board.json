@@ -1,19 +1,12 @@
 {
-  "subject": "fault-scarp",
+  "subject": "erratics",
   "angles": [
-    "scarp-eye",
-    "scarp-spur",
-    "rift-root"
+    "stone-eye",
+    "erratic-reach"
   ],
   "paired": true,
   "quick": false,
   "samples": 80,
   "editable_canopy": false,
-  "art_note": "After comparing native upper-toe seating, keep the same 3 seated scarps on both sides. Photograph a proposed exposure of rock in the actual native slope, never a skirt appended from the prop into empty air. Source floor faces/UVs/material stay fixed; localized mineral pigment, short weathering and very shallow surface relief live only on original physical planes. Publish both original macro-map references beside the separate bed mesh; no difference in distant lighting or pigment between the halves.",
-  "uphill_seating": [
-    1549,
-    1731,
-    1395
-  ],
-  "wall_beds": true
+  "art_note": "At the actual V1 wooded glacial deposit, photograph the old horizontal height bands versus abraded tilted stone planes. Keep the three real constituent stones in each native A/B/C, full foot, separate component dimensions, native far silhouette, terrain, stock scree, woods and coastal lighting fixed. No native binding or tests."
 }

@@ -145,6 +145,7 @@ cli.add_argument(
         "meadow-reach",
         "scarp-spur",
         "rift-root",
+        "erratic-reach",
     ),
     default="shoulder",
     help="Select one of the two fixed guardian cameras",
@@ -431,6 +432,20 @@ if (
                     (x, ground(x, z) + 6, z),
                     43,
                     36,
+                    0,
+                )
+            ]
+        if args.grove_framing == "erratic-reach":
+            # Use the actual deposit, not a tabletop arrangement: 1570, 1383
+            # and 1675, with unaltered scree 1303 and the original treeline.
+            tx, tz = 257.65, -184.20
+            shots = [
+                (
+                    "erratic-reach",
+                    (286.0, ground(tx, tz) + 22.5, -149.0),
+                    (tx, ground(tx, tz) + 1.0, tz),
+                    43.0,
+                    37,
                     0,
                 )
             ]

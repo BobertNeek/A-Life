@@ -96,6 +96,34 @@ elif subject == "forest-fern":
             fern / "Fern.glb",
             out / "fern-atelier.png",
         )
+elif subject == "erratics":
+    from studio_erratic_rock import carve
+
+    # Native A/B/C each contain three separate stones. The old pencil cliff
+    # and stock scree stay the same on both sides of these two photographs.
+    frozen = "01d86f19569e67d41fcd2c6c8b5b689143e05175"
+    erratic_old, erratic_new = out / "original-erratics", out / "artist-erratics"
+    for folder in (erratic_old, erratic_new):
+        folder.mkdir(exist_ok=True)
+        (folder / "minerals").symlink_to(
+            (d / "minerals").resolve(), target_is_directory=True
+        )
+        for kind in ("Cliff", "Scree"):
+            (folder / f"{kind}.glb").symlink_to((d / f"{kind}.glb").resolve())
+    subprocess.run(
+        ["git", "fetch", "--no-tags", "--depth=1", "origin", frozen], check=True
+    )
+    catalogue = {}
+    for kind in ("BoulderA", "BoulderB", "BoulderC"):
+        piece = kind + ".glb"
+        with (erratic_old / piece).open("wb") as target:
+            subprocess.run(
+                ["git", "show", f"{frozen}:{(d/piece).relative_to(root).as_posix()}"],
+                stdout=target,
+                check=True,
+            )
+        catalogue[kind] = carve(erratic_old / piece, erratic_new / piece)
+    (erratic_new / "catalogue.json").write_text(json.dumps(catalogue, indent=2) + "\n")
 elif subject == "fault-scarp":
     from island_fault_scarp import sculpt
 
@@ -455,6 +483,7 @@ views = {
     "fern-hollow": ["--copse-eye", "--copse-framing", "fern-hollow"],
     "sunlit-margin": ["--copse-eye", "--copse-framing", "sunlit-margin"],
     "stone-eye": ["--rock-eye"],
+    "erratic-reach": ["--guardian-review", "--grove-framing", "erratic-reach"],
     "pine-eye": ["--pine-eye"],
     "guardian-woods": ["--guardian-review", "--grove-framing", "dense"],
 }
@@ -464,6 +493,7 @@ subject_label = {
     "cove-water": "Sheltered tidal shelf",
     "forest-fern": "Feather moss and divided fern",
     "coastal-alder": "Branch-grown maritime alders",
+    "erratics": "Glacial erratics on the real wooded slope",
     "fault-scarp": "Planted fractured scarp: original posts versus joined stone",
     "meadow-survey": "Actual starting-valley meadow at grass 3406",
     "wild-meadow": "Current meadow and coastal sedge / bellflower study",
@@ -481,6 +511,7 @@ base_water = root / "studies/island-art-week/water-inputs"
 if subject in (
     "coastal-alder",
     "fault-scarp",
+    "erratics",
     "inlet-survey",
     "estuary-optics",
     "inlet-ground",
@@ -553,6 +584,7 @@ for tag in board["angles"]:
                 "forest-fern",
                 "coastal-alder",
                 "fault-scarp",
+                "erratics",
                 "inlet-survey",
                 "estuary-optics",
                 "inlet-ground",
@@ -569,6 +601,11 @@ for tag in board["angles"]:
             d / "terrain-chunks.glb",
             out / side,
             *views[tag],
+            *(
+                ["--stone-library", erratic_new if side == "after" else erratic_old]
+                if subject == "erratics"
+                else []
+            ),
             *(
                 [
                     "--cliff-library",
