@@ -1,0 +1,66 @@
+{
+  "windward": "Lanternback to existing spruce #643",
+  "bounds": [
+    225.0,
+    260.0,
+    -195.0,
+    -144.0
+  ],
+  "held_eye": [
+    245.0,
+    48.26626788330077,
+    -140.6
+  ],
+  "distinct_roots": {
+    "643": {
+      "horizontal_m": 39.094,
+      "kind": "Conifer",
+      "position": [
+        242.36873997078396,
+        51.068633604936075,
+        -179.60572858195644
+      ],
+      "scale": 1.0985665204161443,
+      "yaw": 4.604076862335205
+    },
+    "1095": {
+      "horizontal_m": 46.951,
+      "kind": "Conifer",
+      "position": [
+        225.18817982335815,
+        58.42361586724873,
+        -183.16579763699008
+      ],
+      "scale": 1.099518513611581,
+      "yaw": 5.180785655975342
+    },
+    "0": {
+      "horizontal_m": 53.785,
+      "kind": "Conifer",
+      "position": [
+        223.64716790455532,
+        58.74023942911918,
+        -189.96433522825703
+      ],
+      "scale": 1.0183624443821928,
+      "yaw": 3.698033332824707
+    },
+    "979": {
+      "horizontal_m": 54.824,
+      "kind": "Conifer",
+      "position": [
+        232.7887411675531,
+        56.0023817470983,
+        -194.0471149257104
+      ],
+      "scale": 0.9418901825223776,
+      "yaw": 3.8041396141052246
+    }
+  },
+  "native_hash": "8d0e9cf6343ffe8ea5e82bcb7ad3e4ef77eef7207042cf0274de5d91f2457c38",
+  "original_landform": true,
+  "sampled_area_m2": 1785,
+  "visible_30cm_cells": 1176,
+  "visible_surface_cells": 777,
+  "solid_envelopes": 7
+}

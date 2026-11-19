@@ -1,0 +1,38 @@
+{
+  "method": "Blender Cycles; original V1 ground, trees and existing seven windcups held; 24 samples, 840x500, same sky/lamps",
+  "guardian": [
+    "spruce-lee",
+    [
+      275.0,
+      73.0,
+      -149.0
+    ],
+    [
+      242.5,
+      50.0,
+      -170.9
+    ],
+    58.0,
+    40,
+    1
+  ],
+  "eye": [
+    "stone-eye",
+    [
+      245.0,
+      48.26626788330077,
+      -140.6
+    ],
+    [
+      246.9,
+      47.443752044677765,
+      -150.4
+    ],
+    0,
+    25,
+    0
+  ],
+  "first_eye_control": "Final coastal eye from the 28859c3f Windcups archive",
+  "near_or_middle": "Middle forms at both camera distances; near palette lives in the editable",
+  "native": false
+}

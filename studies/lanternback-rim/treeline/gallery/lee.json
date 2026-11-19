@@ -1,0 +1,31 @@
+{
+  "name": "Spruce Lee",
+  "bounds": [
+    225.0,
+    260.0,
+    -195.0,
+    -144.0
+  ],
+  "native_hash": "8d0e9cf6343ffe8ea5e82bcb7ad3e4ef77eef7207042cf0274de5d91f2457c38",
+  "near": {
+    "meshes": 6,
+    "triangles": 15934,
+    "instances": 36,
+    "instanced_triangles": 82208
+  },
+  "middle": {
+    "meshes": 6,
+    "triangles": 4936,
+    "instances": 36,
+    "instanced_triangles": 25348
+  },
+  "roots": 36,
+  "unchanged_wilderness": true,
+  "original_tree_ids": [
+    643,
+    1095,
+    0,
+    979
+  ],
+  "not_registered": true
+}
