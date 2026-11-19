@@ -719,6 +719,7 @@ for tag in board["angles"]:
                 and board.get("glacial_train")
                 and (
                     side == "after"
+                    or board.get("silverleaf")
                     or board.get("hero_soil")
                     or board.get("shared_microfield")
                 )

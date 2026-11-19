@@ -9,3 +9,5 @@ Original art release 01d86f19569e67d41fcd2c6c8b5b689143e05175. This selected stu
 [True slope deposit, three metres from 1570](till-erratic-foot.jpg) · [sheltered woodland till at reach scale](till-erratic-reach.jpg) · [near-only study mesh](models/deposit-till.glb). Both halves have the same weathered rock; isolated clusters of true-ground chippings and woodrush appear on the right.
 
 [Physical limits, editing caveats and next-week native recipe](NATIVE_NEXT.md) · [triangle tally](geometry.json). Rebuild selected original/revised props using scripts/studio_erratic_rock.py with original A/B/C donors. scripts/island_erratic_rind.py provides the directional surface shared by L0/1. Original L2 is deliberately retained to avoid multiplying far cost; a static rendering cannot establish smooth motion between levels.
+
+[Optional silverleaf study, seen against the actual woodrush baseline](silverleaf/). Offline only.
