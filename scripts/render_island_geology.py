@@ -62,6 +62,11 @@ cli.add_argument(
     type=Path,
     help="Frozen predecessor's shared far pigment for an exact A/B",
 )
+cli.add_argument(
+    "--marine-sky",
+    type=Path,
+    help="Actual checksummed marine-layer backdrop; not an invented world gradient",
+)
 args = cli.parse_args(sys.argv[sys.argv.index("--") + 1 :])
 args.out.mkdir(parents=True, exist_ok=True)
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -122,6 +127,18 @@ if args.habitats:
         if mesh.type == "MESH":
             _, ix, iz = mesh.name.split("_")
             habitats[int(ix), int(iz)] = mesh
+if args.marine_sky:
+    old = set(bpy.data.objects)
+    bpy.ops.import_scene.gltf(filepath=str(args.marine_sky.resolve()))
+    envelope = next(i for i in set(bpy.data.objects) - old if i.type == "MESH")
+    for property_name in (
+        "visible_shadow",
+        "visible_diffuse",
+        "visible_glossy",
+        "visible_transmission",
+        "visible_volume_scatter",
+    ):
+        setattr(envelope, property_name, False)
 sun = bpy.data.lights.new("Low warm sun", "SUN")
 sun.energy, sun.angle = 2.2, math.radians(8)
 sun.color = (1.0, 0.89, 0.75)

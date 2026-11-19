@@ -22,8 +22,11 @@ def brush():
         im = Image.new("RGBA", (w, h), (118, 143, 90, 0))
         pen = ImageDraw.Draw(im)
         for front in range(3):
-            for j in range(125 if front == 0 else 82):
-                x = r.uniform(0.026, 0.972) * w
+            # Unequal inner rosettes break the long flat lower profile; let
+            # real ground show through even at the centre of a dense colony.
+            centers = np.array((0.17, 0.44, 0.76)) + r.uniform(-0.055, 0.055, 3)
+            for j in range(78 if front == 0 else 63):
+                x = np.clip(r.choice(centers) + r.normal(0, 0.066), 0.028, 0.967) * w
                 crown = (0.18 + 0.82 * math.sin(math.pi * x / w) ** 0.66) * (
                     0.74
                     + 0.19 * math.sin(x / w * 8 + q)
@@ -59,7 +62,7 @@ def brush():
                     )
                     rows.append([(cx - half, cy), (cx + half, cy)])
                 for n, (a, b) in enumerate(zip(rows[:-1], rows[1:])):
-                    shade = 0.55 + 0.11 * n + front * 0.059 + r.uniform(-0.025, 0.025)
+                    shade = 0.78 + 0.058 * n + front * 0.031 + r.uniform(-0.025, 0.025)
                     col = tuple(int(np.clip(k * shade, 0, 255)) for k in rgb) + (255,)
                     pen.polygon([*a, b[1], b[0]], fill=col)
                 if front == 0 and j % 8 == 0 and q != 3:
@@ -90,7 +93,7 @@ def ribbon(p, r, x, z, angle, length, height, variant):
     # Three curved/upright rows and three lateral sections keep the surface
     # from repeatedly exposing a perfectly straight transparent side wall.
     c, s = math.cos(angle), math.sin(angle)
-    arc = r.uniform(-0.34, 0.34) * length
+    arc = r.uniform(-0.48, 0.48) * length
     lean = r.uniform(0.13, 0.31) * height
     rows = []
     tint = r.uniform(0.92, 1.0)
@@ -138,8 +141,8 @@ def hummock(beach, patch, r, px, pz, heading, extent, heath):
                 x + 0.04 * k,
                 z - 0.06 * k,
                 heading + r.uniform(-0.25, 0.25) + k * r.uniform(0.77, 1.29),
-                size * r.uniform(1.1, 1.65),
-                size * r.uniform(0.25, 0.50),
+                size * r.uniform(0.85, 1.35),
+                size * r.uniform(0.21, 0.44),
                 int(r.choice((0, 1, 1, 2) if heath else (0, 1, 2, 3))),
             )
         beds += 1
