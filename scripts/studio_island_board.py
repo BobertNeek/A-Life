@@ -109,6 +109,8 @@ elif subject == "erratics":
             (d / "minerals").resolve(), target_is_directory=True
         )
         for kind in ("Cliff", "Scree"):
+            if kind == "Scree" and folder == erratic_new and board.get("talus_study"):
+                continue
             (folder / f"{kind}.glb").symlink_to((d / f"{kind}.glb").resolve())
     subprocess.run(
         ["git", "fetch", "--no-tags", "--depth=1", "origin", frozen], check=True
@@ -135,6 +137,24 @@ elif subject == "erratics":
             crown_rind=board.get("weather_rind", False),
             rolled_toe=board.get("rolled_toe", False),
         )
+    if board.get("talus_study"):
+        catalogue["Scree"] = carve(erratic_old / "Scree.glb", erratic_new / "Scree.glb")
+        pre_talus = out / "before-cleaved-talus"
+        pre_talus.mkdir(exist_ok=True)
+        for name in (
+            "minerals",
+            "erratic",
+            "BoulderA.glb",
+            "BoulderB.glb",
+            "BoulderC.glb",
+            "Cliff.glb",
+            "Scree.glb",
+        ):
+            donor = (erratic_old if name == "Scree.glb" else erratic_new) / name
+            if donor.exists():
+                (pre_talus / name).symlink_to(
+                    donor.resolve(), target_is_directory=donor.is_dir()
+                )
     (erratic_new / "catalogue.json").write_text(json.dumps(catalogue, indent=2) + "\n")
     if board.get("glacial_train"):
         from island_erratic_train import bake
@@ -528,6 +548,7 @@ views = {
     "stone-eye": ["--rock-eye"],
     "erratic-foot": ["--copse-eye", "--copse-framing", "erratic-foot"],
     "moraine-soil": ["--copse-eye", "--copse-framing", "moraine-soil"],
+    "talus-eye": ["--copse-eye", "--copse-framing", "talus-eye"],
     "erratic-reach": ["--guardian-review", "--grove-framing", "erratic-reach"],
     "pine-eye": ["--pine-eye"],
     "guardian-woods": ["--guardian-review", "--grove-framing", "dense"],
@@ -564,6 +585,8 @@ if subject == "erratics" and board.get("silverleaf"):
     subject_label = (
         "Real moraine: the woodrush patch and its sheltered silverleaf runners"
     )
+if subject == "erratics" and board.get("talus_study"):
+    subject_label = "Woodland talus: the original 22 stones, flaked against the bedding"
 if subject == "fault-scarp" and board.get("wall_beds"):
     subject_label = "Same seated scarp, with its exposed bed on the true hillside"
 if subject == "inlet-underpaint" and board.get("tidecast_pockets"):
@@ -691,9 +714,15 @@ for tag in board["angles"]:
                 [
                     "--stone-library",
                     (
-                        erratic_new
-                        if side == "after" or board.get("glacial_train")
-                        else erratic_old
+                        pre_talus
+                        if board.get("talus_study") and side == "before"
+                        else (
+                            erratic_new
+                            if side == "after"
+                            or board.get("glacial_train")
+                            or board.get("talus_study")
+                            else erratic_old
+                        )
                     ),
                 ]
                 if subject == "erratics"

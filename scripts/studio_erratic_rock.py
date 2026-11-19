@@ -17,8 +17,13 @@ def carve(
     dest = Path(destination)
     base, body = parse(source)
     name = base["meshes"][0]["name"].split("_L")[0]
-    if name not in ("BoulderA", "BoulderB", "BoulderC"):
+    if name not in ("BoulderA", "BoulderB", "BoulderC", "Scree"):
         raise ValueError("Use an original native erratic asset.")
+    talus = name == "Scree"
+    if talus and (crystalline or crown_rind or rolled_toe):
+        raise ValueError(
+            "Loose talus retains the native cliff/scree fracture material."
+        )
     p0 = base["meshes"][0]["primitives"][0]
     pos = np.array(values(base, body, p0["attributes"]["POSITION"]))
     col = np.array(values(base, body, p0["attributes"]["COLOR_0"]))
@@ -81,15 +86,30 @@ def carve(
             fs = []
             total = 0
             for k, stone in enumerate(stones):
-                count = (65, 49, 38)[min(k, 2)] if lod == 0 else (27, 19, 11)[min(k, 2)]
-                q, t, norm = abraded(stone, count, ord(name[-1]) - 62 + k * 4)
-                if rolled_toe:
-                    q, norm = worn_sole(q, norm)
-                if crown_rind:
-                    from island_erratic_rind import project
+                if talus:
+                    from island_talus_fragments import cleave
 
-                    atlas.extend(project(q, t, 0.91 * (ord(name[-1]) - 64) + 2.14 * k))
-                ss.extend(norm)
+                    q, t = cleave(
+                        stone,
+                        lod == 0,
+                        k,
+                        preserve_peak=abs(stone[:, 1].max() - pos[:, 1].max())
+                        < 0.00001,
+                    )
+                else:
+                    count = (
+                        (65, 49, 38)[min(k, 2)] if lod == 0 else (27, 19, 11)[min(k, 2)]
+                    )
+                    q, t, norm = abraded(stone, count, ord(name[-1]) - 62 + k * 4)
+                    if rolled_toe:
+                        q, norm = worn_sole(q, norm)
+                    if crown_rind:
+                        from island_erratic_rind import project
+
+                        atlas.extend(
+                            project(q, t, 0.91 * (ord(name[-1]) - 64) + 2.14 * k)
+                        )
+                    ss.extend(norm)
                 ps.extend(q)
                 fs.extend(t + total)
                 total += len(q)
@@ -98,7 +118,17 @@ def carve(
             if crown_rind:
                 U = np.asarray(atlas)
             P = points[faces].reshape(-1, 3)
-            N = np.asarray(ss)[faces].reshape(-1, 3)
+            if talus:
+                # Preserve just the original cliff/scree mineral image;
+                # centres of each broken bed need not display an entire cell
+                # net over a 20 cm flake. Hard broad facets share corners.
+                v = points[faces]
+                norm = np.cross(v[:, 1] - v[:, 0], v[:, 2] - v[:, 0])
+                norm /= np.maximum(1e-9, np.linalg.norm(norm, axis=1, keepdims=True))
+                N = np.repeat(np.round(norm, 5), 3, axis=0)
+                U = np.round(U * 0.43 + np.array([0.233, 0.657]), 5)
+            else:
+                N = np.asarray(ss)[faces].reshape(-1, 3)
             # Share exact PBR corners where UV projection and shading agree.
             # Keep UV seams separate; the renderer uses a single primitive.
             rows = np.column_stack((P, N, U, C)).astype("<f4")
@@ -130,8 +160,12 @@ def carve(
         "budgets": budgets,
         "fallback_far": "original native overview",
         "source": (
-            "individual native component bounds; worn inward sole"
-            if rolled_toe
-            else "individual native component bounds and original contiguous foot"
+            "twenty-two original x/z footprints and soles; differently tilted cleaved slabs within the old complete native bounds"
+            if talus
+            else (
+                "individual native component bounds; worn inward sole"
+                if rolled_toe
+                else "individual native component bounds and original contiguous foot"
+            )
         ),
     }
