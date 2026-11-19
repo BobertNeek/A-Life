@@ -74,11 +74,11 @@
         0.9,
         0.75
       ],
-      "near_triangles": 700,
-      "far_triangles": 294,
-      "overview_triangles": 154,
-      "editable_override": "fern-connected-fronds.blend",
-      "export_recipe": "scripts/build_fern_fronds.py",
+      "near_triangles": 906,
+      "far_triangles": 414,
+      "overview_triangles": 258,
+      "editable_override": "fern-sori.blend",
+      "export_recipe": "scripts/studio_forest_fern.py",
       "override_blender": "4.3.2"
     },
     "Flowers": {

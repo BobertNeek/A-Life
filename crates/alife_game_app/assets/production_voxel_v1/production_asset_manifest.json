@@ -532,22 +532,22 @@
     {
       "asset_id": "approved-island-fern",
       "author": "A-Life approved Blender art",
-      "digest": "fnv1a64:96df1a849c4aaa10",
+      "digest": "fnv1a64:0bdb6d3b84c0d3e3",
       "external": false,
       "final_art": false,
       "generated": true,
       "generator": {
-        "config_path": "scripts/build_fern_fronds.py",
-        "date": "2026-10-16",
-        "seed": "connected-fern-fronds-20261016",
-        "tool": "Blender-4.3.2"
+        "config_path": "scripts/studio_forest_fern.py",
+        "date": "2026-11-19",
+        "seed": "993871, 29931",
+        "tool": "Blender 4.3.2; nine arched, cut-leaf fronds and solid petioles"
       },
       "license": "A-Life-Generated-Source",
       "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/island/Fern.glb",
       "placeholder": false,
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
-      "size_bytes": 55168,
+      "size_bytes": 333160,
       "source": "generated:approved-blender-model",
       "usage_category": "environment-dressing"
     },
@@ -1390,88 +1390,88 @@
     {
       "asset_id": "approved-island-copse-floor",
       "author": "Qualia island environment art",
-      "digest": "fnv1a64:97190846b9f0e1b6",
+      "digest": "fnv1a64:fec6418d7dbb4587",
       "external": false,
       "final_art": false,
       "generated": true,
       "generator": {
         "config_path": "scripts/build_island_copse_floor.py",
         "date": "2026-11-19",
-        "seed": "247112, 234682, 43192, 954731, 8561951",
-        "tool": "Qualia seated root flares, fallen duff, fern and moss painter"
+        "seed": "247112, 234682, 43192, 954731, 8561951, 77161, 91737",
+        "tool": "Qualia fitted woodland with divided ferns and creeping feather moss"
       },
       "license": "A-Life-Generated-Source",
       "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/island/copse-floor.glb",
       "placeholder": false,
       "replacement_policy": "edit-copse-and-trunk-recipe-and-refresh-manifest",
-      "size_bytes": 9832156,
+      "size_bytes": 10860604,
       "source": "generated:island-sheltered-forest-floor",
       "usage_category": "environment-dressing"
     },
     {
       "asset_id": "approved-island-copse-duff-bark",
       "author": "Qualia island environment art",
-      "digest": "fnv1a64:8ed7d42af3172c49",
+      "digest": "fnv1a64:775a66d734d628cb",
       "external": false,
       "final_art": false,
       "generated": true,
       "generator": {
         "config_path": "scripts/build_island_copse_floor.py",
         "date": "2026-11-19",
-        "seed": "247112, 234682, 43192, 954731, 8561951",
-        "tool": "Qualia seated root flares, fallen duff, fern and moss painter"
+        "seed": "247112, 234682, 43192, 954731, 8561951, 77161, 91737",
+        "tool": "Qualia fitted woodland with divided ferns and creeping feather moss"
       },
       "license": "A-Life-Generated-Source",
       "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/island/copse/duff-bark.png",
       "placeholder": false,
       "replacement_policy": "edit-copse-and-trunk-recipe-and-refresh-manifest",
-      "size_bytes": 810783,
+      "size_bytes": 1014796,
       "source": "generated:island-sheltered-forest-floor",
       "usage_category": "environment-dressing"
     },
     {
       "asset_id": "approved-island-copse-duff-bark-normal",
       "author": "Qualia island environment art",
-      "digest": "fnv1a64:23f80c50414397cc",
+      "digest": "fnv1a64:bfeaca4a0d56e0b0",
       "external": false,
       "final_art": false,
       "generated": true,
       "generator": {
         "config_path": "scripts/build_island_copse_floor.py",
         "date": "2026-11-19",
-        "seed": "247112, 234682, 43192, 954731, 8561951",
-        "tool": "Qualia seated root flares, fallen duff, fern and moss painter"
+        "seed": "247112, 234682, 43192, 954731, 8561951, 77161, 91737",
+        "tool": "Qualia fitted woodland with divided ferns and creeping feather moss"
       },
       "license": "A-Life-Generated-Source",
       "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/island/copse/duff-bark-normal.png",
       "placeholder": false,
       "replacement_policy": "edit-copse-and-trunk-recipe-and-refresh-manifest",
-      "size_bytes": 555861,
+      "size_bytes": 832444,
       "source": "generated:island-sheltered-forest-floor",
       "usage_category": "environment-dressing"
     },
     {
       "asset_id": "approved-island-copse-duff-bark-orm",
       "author": "Qualia island environment art",
-      "digest": "fnv1a64:d6a3ae51cd80642d",
+      "digest": "fnv1a64:66d60234b08b3089",
       "external": false,
       "final_art": false,
       "generated": true,
       "generator": {
         "config_path": "scripts/build_island_copse_floor.py",
         "date": "2026-11-19",
-        "seed": "247112, 234682, 43192, 954731, 8561951",
-        "tool": "Qualia seated root flares, fallen duff, fern and moss painter"
+        "seed": "247112, 234682, 43192, 954731, 8561951, 77161, 91737",
+        "tool": "Qualia fitted woodland with divided ferns and creeping feather moss"
       },
       "license": "A-Life-Generated-Source",
       "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/island/copse/duff-bark-orm.png",
       "placeholder": false,
       "replacement_policy": "edit-copse-and-trunk-recipe-and-refresh-manifest",
-      "size_bytes": 106721,
+      "size_bytes": 177300,
       "source": "generated:island-sheltered-forest-floor",
       "usage_category": "environment-dressing"
     },

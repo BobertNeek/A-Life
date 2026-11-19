@@ -454,10 +454,9 @@ pub(super) fn update(
                 ));
             }
         }
-        // Reuse exactly two source materials rather than the material of the
-        // first prop for the entire island. The five stone meshes share one PBR
-        // atlas; its normals must never be sent to foliage without those UVs.
-        let mut shared_prop_materials = [None, None];
+        // Most ordinary props use vertex pigment. Rock and cutout fern each
+        // have their own UVs: never borrow either atlas for another family.
+        let mut shared_prop_materials = [None, None, None];
         for (index, p) in placements().into_iter().enumerate() {
             let gltf = gltfs.get(&assets.props[&p.kind]).unwrap();
             let position = grounded_prop_position(&p.kind, p.position, surface);
@@ -482,7 +481,11 @@ pub(super) fn update(
                     .mesh
                     .clone()
             });
-            let family = usize::from(has_mineral_surface(&p.kind));
+            let family = if p.kind == "Fern" {
+                2
+            } else {
+                usize::from(has_mineral_surface(&p.kind))
+            };
             let material = shared_prop_materials[family]
                 .get_or_insert_with(|| primitive.material.clone().unwrap())
                 .clone();
@@ -917,3 +920,4 @@ mod tests {
 #[cfg(test)]
 #[path = "island_camera_tests.rs"]
 mod camera_tests;
+
