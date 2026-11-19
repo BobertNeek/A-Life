@@ -35,6 +35,11 @@ def blender(script, *args):
 # The GLB exporter is the production operation. Do not call its separate
 # test/verification CLI in a studio workweek.
 subject = board["subject"]
+if subject == "weatherlip-cove":
+    sys.path.insert(0, str(root / "studies/weatherlip-cove"))
+    from atelier import photograph
+    photograph(root, d, SURFACE, board, out, blender)
+    raise SystemExit(0)
 if subject == "leeward-passage":
     # An independent artwork; neither a game asset install nor a test lane.
     sys.path.insert(0, str(root / "studies/leeward-passage"))

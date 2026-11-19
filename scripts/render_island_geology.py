@@ -209,6 +209,8 @@ cli.add_argument(
     type=Path,
     help="Offline only; import the actual exported range-selected instancing file",
 )
+cli.add_argument("--weatherlip-view", choices=("bight-high", "bight-tooth", "bight-beach"))
+cli.add_argument("--weatherlip-field", type=Path, help="Optional artist's Weatherlip west-bight field.")
 args = cli.parse_args(sys.argv[sys.argv.index("--") + 1 :])
 args.out.mkdir(parents=True, exist_ok=True)
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -632,6 +634,10 @@ if (
                 0,
             )
         ]
+    if args.weatherlip_view:
+        sys.path.insert(0, str(root / "studies/weatherlip-cove"))
+        from stations import frame as weatherlip_frame
+        shots = [weatherlip_frame(args.weatherlip_view, ground)]
     if args.leeward_view:
         sys.path.insert(0, str(root / "studies/leeward-passage"))
         from cameras import frame as leeward_frame
@@ -766,6 +772,12 @@ if args.copse_floor:
     copse = [o for o in set(bpy.data.objects) - old if o.type == "MESH"]
     for ob in copse:
         ob.visible_shadow = False
+if args.weatherlip_field:
+    from importlib.util import spec_from_file_location, module_from_spec
+    src = Path(__file__).resolve().parents[1] / "studies/weatherlip-cove/material.py"
+    spec = spec_from_file_location("weatherlip_material",src)
+    wm = module_from_spec(spec); spec.loader.exec_module(wm)
+    wm.apply([*chunks,*habitats.values()], args.weatherlip_field, args.weatherlip_view, shots[0][1])
 if args.leeward_paint:
     from material import bind as paint_reach, growth as plant_reach
 

@@ -1,13 +1,11 @@
 {
-  "subject": "leeward-passage",
+  "subject": "weatherlip-cove",
   "angles": [
-    "reach-guardian",
-    "reach-meadow",
-    "reach-alder",
-    "reach-strand"
+    "bight-high",
+    "bight-tooth",
+    "bight-beach"
   ],
-  "paired": false,
-  "placed_palette": true,
+  "paired": true,
   "samples": 48,
-  "art_note": "Render only the new efficient placed-palette side: real EXT_mesh_gpu_instancing, dry V1, exact previous cameras and light, with 9d8e82b2 full-quality actual control photographs retained. No native renderer import, performance test or game build."
+  "art_note": "One protected artist folio: ordinary V1 on both sides, actual 337m western bight. Genuine three matched geographic stations with identical stock scene, sun, sea and lenses. The only change is the added original-ground coastal artwork; include packed editable cut. No engine, build, play, QA or user machine."
 }
