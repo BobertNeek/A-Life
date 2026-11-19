@@ -28,7 +28,7 @@ class Mesh:
         self.tri.append(t)
 
 
-def approach(reach, out):
+def approach(reach, out, *, collector=None):
     R = np.random.default_rng(59818)
     tiles = defaultdict(Mesh)
     count = Counter()
@@ -263,10 +263,13 @@ def approach(reach, out):
                 continue
             g = tiles[(int(max(0, s) // 28), "leaves")]
             size = scale * R.uniform(0.64, 1.19)
+            start = (len(g.xyz), len(g.tri)) if collector else None
             if fam == "samphire":
                 glasswort(p, size)
             else:
                 sedge(p, size, fam)
+            if collector:
+                collector.take(fam, p, g, start, int(s // 28))
             count[fam] += 1
     # Glacial chert + later storm deposits appear in overlapping small pans,
     # not evenly spaced stones, and most of the long passage is open turf.
@@ -302,7 +305,9 @@ def approach(reach, out):
         nonlocal g
         g = mesh
 
-    thickets(reach, tiles, count, width, pt, tri, set_mesh)
+    thickets(reach, tiles, count, width, pt, tri, set_mesh, collector=collector)
+    if collector:
+        return dict(count)
     foreground = {key: v for key, v in tiles.items() if key[1] != "scrub"}
     thicket = {key: v for key, v in tiles.items() if key[1] == "scrub"}
     return save_tiles(foreground, out / "reach-detail.glb") + save_tiles(

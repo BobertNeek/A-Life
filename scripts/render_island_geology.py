@@ -204,6 +204,11 @@ cli.add_argument(
 cli.add_argument(
     "--leeward-paint", type=Path, help="One isolated 219m Shellback Reach art study"
 )
+cli.add_argument(
+    "--leeward-instances",
+    type=Path,
+    help="Offline only; import the actual exported range-selected instancing file",
+)
 args = cli.parse_args(sys.argv[sys.argv.index("--") + 1 :])
 args.out.mkdir(parents=True, exist_ok=True)
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -776,7 +781,21 @@ if args.leeward_paint:
         skins if args.inlet_cut else (),
         near_bluff,
     )
-    plant_reach(args.leeward_paint, args.guardian_review, near_bluff)
+    if args.leeward_instances:
+        # Blender reads the actual EXT_mesh_gpu_instancing accessors. It may
+        # represent these internally as linked objects; do not flatten them
+        # or pretend that its CPU scene reports native render draw calls.
+        frozen = [
+            args.leeward_instances / "planted.glb",
+            args.leeward_instances / "fitted-flakes.glb",
+        ]
+        if near_bluff:
+            frozen.append(args.leeward_paint / "bluff-foot.glb")
+        for entry in frozen:
+            if entry.is_file():
+                bpy.ops.import_scene.gltf(filepath=str(entry.resolve()))
+    else:
+        plant_reach(args.leeward_paint, args.guardian_review, near_bluff)
 if args.inlet_sculpt_study:
     here = Path(__file__).resolve().parents[1] / "studies/island-inlet-proposal"
     sys.path.insert(0, str(here))

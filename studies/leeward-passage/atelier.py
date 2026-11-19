@@ -36,7 +36,18 @@ def assets(surface, props, out):
 
 def photograph(root, d, surface, board, out, blender, pair):
     geometry = out / "artists-reach"
-    assets(surface, d / "props.json", geometry)
+    bank = None
+    if board.get("placed_palette"):
+        # The left photographs and the installed full-quality gallery are
+        # immutable. Only make the efficient artist object bank on this board.
+        sys.path.insert(0, str(Path(__file__).resolve().parent / "palette"))
+        from export_lods import create
+
+        geometry = root / "studies/leeward-passage/gallery"
+        bank = out / "placed-bank"
+        create(surface, geometry, bank)
+    else:
+        assets(surface, d / "props.json", geometry)
     water = out / "shelf"
     water.mkdir(exist_ok=True)
     for n in ("ripple.png", "shore.png"):
@@ -55,6 +66,11 @@ def photograph(root, d, surface, board, out, blender, pair):
                 "--leeward-view",
                 tag,
                 *(["--leeward-paint", geometry] if side == "after" else []),
+                *(
+                    ["--leeward-instances", bank / tag]
+                    if bank and side == "after"
+                    else []
+                ),
                 "--surface",
                 surface,
                 "--placements",

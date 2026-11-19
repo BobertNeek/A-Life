@@ -44,7 +44,7 @@ def beds(s, d):
     return values
 
 
-def thickets(reach, tiles, count, width, pt, tri, set_mesh):
+def thickets(reach, tiles, count, width, pt, tri, set_mesh, *, collector=None):
     rand = np.random.default_rng(17899)
 
     def Y(p):
@@ -104,6 +104,7 @@ def thickets(reach, tiles, count, width, pt, tri, set_mesh):
                 continue
             g = tiles[(int(s // 28), "scrub")]
             set_mesh(g)
+            start = (len(g.xyz), len(g.tri)) if collector else None
             size = (
                 rand.uniform(0.62, 1.37)
                 * (1.10 - 0.46 * rad**1.7)
@@ -155,4 +156,6 @@ def thickets(reach, tiles, count, width, pt, tri, set_mesh):
                     size * 0.047,
                     ink * 1.035,
                 )
+            if collector:
+                collector.take(kind, p, g, start, int(s // 28))
             count["dune_scrub_stools"] += 1
