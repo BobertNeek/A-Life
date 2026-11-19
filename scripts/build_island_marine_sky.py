@@ -62,7 +62,7 @@ def paint(palette):
     low = 0.066 + 0.023 * wobble + 0.018 * noise(u * 6, v * 4, q * 6, 478)
     thick = 0.07 + 0.13 * ease(-0.67, 0.67, wobble * 0.68 + texture * 0.65)
     profile = np.clip((v - low) / np.maximum(thick, 0.025), 0, 1)
-    volume = np.sin(profile * math.pi) ** 0.75
+    volume = np.maximum(0, np.sin(profile * math.pi)) ** 0.75
     mask = ease(0.34, 0.59, volume * (0.78 + 0.30 * wobble) + texture * 0.64)
     mask *= ease(0.023, 0.073, v) * (1 - ease(0.25, 0.54, v))
     light = ease(0.02, 0.95, profile * 0.82 + texture * 0.48 + warmth * 0.24)
@@ -81,6 +81,10 @@ def paint(palette):
     )
     # All colour approaches one zenith at the pinched pole.
     sky = mix(sky, np.array([86, 142, 178]), ease(0.79, 1, v))
+    if not np.isfinite(sky).all():
+        raise ValueError("Non-finite sky radiance")
+    if np.max(np.abs(sky[:, 0] - sky[:, -1])) > 20:
+        raise ValueError("Visible seam in coastal panorama")
     buf = io.BytesIO()
     Image.fromarray(np.uint8(np.clip(np.rint(sky), 0, 255))).save(
         buf, "PNG", optimize=True
