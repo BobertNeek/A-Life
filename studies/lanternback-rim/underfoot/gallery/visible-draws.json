@@ -1,0 +1,14 @@
+{
+  "upper-rim": {
+    "mesh_groups": 0,
+    "triangles": 0
+  },
+  "stone-eye": {
+    "mesh_groups": 21,
+    "triangles": 10823
+  },
+  "pennon-eye": {
+    "mesh_groups": 21,
+    "triangles": 10644
+  }
+}

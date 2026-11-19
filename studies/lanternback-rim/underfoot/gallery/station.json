@@ -1,0 +1,25 @@
+{
+  "ground_camera": [
+    "pennon-eye",
+    [
+      246.02,
+      47.651998565673864,
+      -141.34
+    ],
+    [
+      245.11,
+      47.528276275634745,
+      -143.45
+    ],
+    0,
+    30,
+    0
+  ],
+  "resolution": [
+    840,
+    500
+  ],
+  "samples": 24,
+  "held": "3de1d24c3e3d6f9b848b1ca61cda0da012f5374b",
+  "method": "Cycles offline artist comparison, no game"
+}

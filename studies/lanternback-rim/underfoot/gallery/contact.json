@@ -1,0 +1,60 @@
+{
+  "meshes": 35,
+  "triangles": 42786,
+  "middle": {
+    "meshes": 34,
+    "triangles": 5368
+  },
+  "counts": {
+    "weathered-sheath": 159,
+    "split-seedcase": 69,
+    "slate-grit": 2120
+  },
+  "name": "Lanternback / Pennon Drift",
+  "bounds": [
+    234.0,
+    264.0,
+    -165.0,
+    -134.0
+  ],
+  "terrain_sha256": "8d0e9cf6343ffe8ea5e82bcb7ad3e4ef77eef7207042cf0274de5d91f2457c38",
+  "parent_roots": 85,
+  "parent_woody_roots": 27,
+  "parent_beds": 26,
+  "stations": {
+    "upper-rim": [
+      "upper-rim",
+      [
+        375.0,
+        130.0,
+        -55.0
+      ],
+      [
+        246.0,
+        42.5,
+        -123.0
+      ],
+      143.0,
+      42,
+      1
+    ],
+    "stone-eye": [
+      "stone-eye",
+      [
+        245.0,
+        48.26626788330077,
+        -140.6
+      ],
+      [
+        246.9,
+        47.443752044677765,
+        -150.4
+      ],
+      0,
+      25,
+      0
+    ]
+  },
+  "heights_changed": false,
+  "native_registered": false
+}

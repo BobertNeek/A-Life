@@ -1,0 +1,97 @@
+{
+  "method": "Blender 4.3.2 Cycles, locked held island light. Native game not launched.",
+  "held": "3de1d24c3e3d6f9b848b1ca61cda0da012f5374b",
+  "image_sha256": {
+    "before/pennon-eye.png": "6d513c30c9b4b31d1c29fd67d1b547d6083fb5d5f02a35f44ddc06d01f44ebd0",
+    "after/pennon-eye.png": "a646bf1b1569c7b690414ffe62a5eb29283f64755b625f4a1b2592fc4803b8ec",
+    "before/stone-eye.png": "445eaadad162b28172db7a44c50efc33f65059e9634eefc833c33de7daabe449",
+    "after/stone-eye.png": "a806c7e34428b6b63b297b6f016dbe8a7ef6f7b455efdc1c80f87480b56f0b2f",
+    "before/upper-rim.png": "de976f281b79082239fe9f931b65c1eecd8ccdd81e627cfcabf833d8f7fb6d9d",
+    "after/upper-rim.png": "cfbc884ce49f6b46549d538492b9575bca3d797fb5cd8d325ff838f7f7c35a8b"
+  },
+  "detail": {
+    "meshes": 35,
+    "triangles": 42786,
+    "middle": {
+      "meshes": 34,
+      "triangles": 5368
+    },
+    "counts": {
+      "weathered-sheath": 159,
+      "split-seedcase": 69,
+      "slate-grit": 2120
+    },
+    "name": "Lanternback / Pennon Drift",
+    "bounds": [
+      234.0,
+      264.0,
+      -165.0,
+      -134.0
+    ],
+    "terrain_sha256": "8d0e9cf6343ffe8ea5e82bcb7ad3e4ef77eef7207042cf0274de5d91f2457c38",
+    "parent_roots": 85,
+    "parent_woody_roots": 27,
+    "parent_beds": 26,
+    "stations": {
+      "upper-rim": [
+        "upper-rim",
+        [
+          375.0,
+          130.0,
+          -55.0
+        ],
+        [
+          246.0,
+          42.5,
+          -123.0
+        ],
+        143.0,
+        42,
+        1
+      ],
+      "stone-eye": [
+        "stone-eye",
+        [
+          245.0,
+          48.26626788330077,
+          -140.6
+        ],
+        [
+          246.9,
+          47.443752044677765,
+          -150.4
+        ],
+        0,
+        25,
+        0
+      ]
+    },
+    "heights_changed": false,
+    "native_registered": false
+  },
+  "close": {
+    "ground_camera": [
+      "pennon-eye",
+      [
+        246.02,
+        47.651998565673864,
+        -141.34
+      ],
+      [
+        245.11,
+        47.528276275634745,
+        -143.45
+      ],
+      0,
+      30,
+      0
+    ],
+    "resolution": [
+      840,
+      500
+    ],
+    "samples": 24,
+    "held": "3de1d24c3e3d6f9b848b1ca61cda0da012f5374b",
+    "method": "Cycles offline artist comparison, no game"
+  }
+}
