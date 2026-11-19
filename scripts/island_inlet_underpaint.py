@@ -42,7 +42,20 @@ class Habitat:
                 continue
             normals = mesh.attr(a["NORMAL"])
             pix = np.rint((p[:, (0, 2)] - (g.x0, g.z0)) / g.s).astype(int)
-            for (ix, iz), nn in zip(pix, normals):
+            # Vertical terrain skirts have no projected ground area but their
+            # centroids can alias a true face's cell exactly on x=100/z=400.
+            # Never project material from these dark edge closure triangles.
+            faces = mesh.attr(prim["indices"]).reshape(-1, 3)
+            points = p[:, (0, 2)][faces]
+            e = points[:, 1] - points[:, 0]
+            f = points[:, 2] - points[:, 0]
+            top = np.abs(p[:, 1] - g.h[pix[:, 1], pix[:, 0]]) < 0.004
+            faces = faces[
+                (np.abs(e[:, 0] * f[:, 1] - e[:, 1] * f[:, 0]) > 0.01)
+                & top[faces].all(axis=1)
+            ]
+            vertices = np.unique(faces)
+            for (ix, iz), nn in zip(pix[vertices], normals[vertices]):
                 self.n_grid[int(ix), int(iz)] = nn
             for k, v in [
                 ("p", p),
@@ -51,7 +64,6 @@ class Habitat:
                 ("rgb", mesh.attr(a["COLOR_0"])[:, :3]),
             ]:
                 dat[k].append(v)
-            faces = mesh.attr(prim["indices"]).reshape(-1, 3)
             corners.append(faces.astype("i4") + n)
             n += len(p)
         self.p, self.n, self.uv, self.rgb = [
@@ -154,7 +166,7 @@ class Habitat:
         return rgb, norm, orm
 
 
-def smooth_bank(source, terrain, original, dest):
+def smooth_bank(source, terrain, original, dest, opaque_finish=False):
     original, dest = map(Path, (original, dest))
     panel = dest / "inlet"
     panel.mkdir(parents=True, exist_ok=True)
@@ -206,12 +218,21 @@ def smooth_bank(source, terrain, original, dest):
         im = im.resize(size, Image.Resampling.BOX) if size else im
         im.save(panel / name, optimize=True)
 
+    if opaque_finish:
+        # Every texel on the *already existing* selected triangles has an
+        # actual continuous base coat. A mask no longer belongs in the close
+        # material; keep its old footprint only for the far macro composite.
+        write(out_c, "../far-pigment-cut.png")
+        out_c[..., 3] = 255
     write(out_c, "inlet-bed.png")
     write(out_n, "inlet-normal.png")
     write(out_o, "inlet-orm.png", small.size)
     # Apply source smoothing normals to the fitted terrain film only; leave
     # every stone/plant and every position and triangle exactly as authored.
     glb, buf = parse(original / "inlet-bank.glb")
+    if opaque_finish:
+        glb["materials"][0].pop("alphaMode", None)
+        glb["materials"][0].pop("alphaCutoff", None)
     for node in glb["nodes"]:
         for prim in glb["meshes"][node["mesh"]]["primitives"]:
             if prim["material"] != 0:
@@ -232,6 +253,12 @@ def smooth_bank(source, terrain, original, dest):
     note = dict(
         subject="Material transition independent of the editable southern inlet",
         native_triangle_geometry="unchanged original bank",
+        near_finish=(
+            "continuous sampled opaque surface"
+            if opaque_finish
+            else "interior feather with original mask"
+        ),
+        far_coverage="original cut-bank mask only",
         gradual_undercoat_metres=[0.12, 1.35],
         old_covered_pixels=int(old_mask.sum()),
         core_repainted_pixels=int((blend > 0.92).sum()),

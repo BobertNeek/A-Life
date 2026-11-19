@@ -148,6 +148,7 @@ elif subject == "inlet-underpaint":
         SURFACE,
         original_bank,
         out / "artist-inlet-underpaint",
+        opaque_finish=board.get("opaque_bank", False),
     )
     if board.get("tidecast_pockets"):
         from build_island_inlet import V2
@@ -182,7 +183,10 @@ elif subject == "inlet-underpaint":
     stats = far_pigment(
         SURFACE,
         V2,
-        skin.parent / "inlet/inlet-bed.png",
+        skin.parent
+        / (
+            "far-pigment-cut.png" if board.get("opaque_bank") else "inlet/inlet-bed.png"
+        ),
         frozen_pigment,
         revised_pigment,
     )
