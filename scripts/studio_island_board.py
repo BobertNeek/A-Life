@@ -54,7 +54,10 @@ elif subject == "forest-floor":
         fresh = out / "artist-crowns"
         build(d / "Conifer.glb", d / "props.json", fresh, sculpted_bark=True)
 elif subject == "forest-fern":
+    from build_island_copse_floor import export
+
     fern = out / "artist-fern"
+    floor = export(out / "artist-floor", creeping=True)
     blender("studio_forest_fern.py", fern, "--author-from", d / "Fern.glb")
 elif subject == "cove-water":
     from island_cove_optics import world_paint
@@ -122,7 +125,7 @@ for tag in board["angles"]:
         pack = fresh if side == "after" else old
         water = chart if subject == "cove-water" and side == "after" else base_water
         dressing = None
-        if subject == "forest-floor" and side == "after":
+        if subject in ("forest-floor", "forest-fern") and side == "after":
             dressing = floor
         elif (
             subject in ("cove-water", "forest-fern")

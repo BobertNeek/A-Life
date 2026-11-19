@@ -1,12 +1,12 @@
 {
-  "subject": "cove-water",
+  "subject": "forest-fern",
   "angles": [
-    "shelf-eye",
-    "shelf-guardian"
+    "copse-eye",
+    "sunlit-margin"
   ],
   "quick": false,
-  "samples": 48,
+  "samples": 80,
   "paired": true,
   "editable_canopy": false,
-  "art_note": "Frame the true eastern shallows and deep water at 1.12 m and from above. Compare only the new painted V1 seabed optics and short-wave normals. No shoreline geometry, lights, world behavior or test run changes."
+  "art_note": "Reject the cut-off green humps. Replace them with irregular rooted strands and centimetre-scale shoots among bare soil and leaf mould, retaining the earlier noninteractive fern/sorrel sites. At the other original slope the obsolete folded umbrella fern now has seven connected divided fronds. Identical installed pine/trunks and V1 terrain."
 }

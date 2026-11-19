@@ -22,8 +22,9 @@ ALTERNATE = (
 
 
 class WoodlandPatch(Patch):
-    def __init__(self, land):
+    def __init__(self, land, creeping=False):
         super().__init__(land)
+        self.creeping = creeping
         self.bole_normals = {}
 
     def surface(self, x, z, lift, color, uv):
@@ -31,6 +32,13 @@ class WoodlandPatch(Patch):
 
     def paint(self, x, z, y, color, uv):
         index = super().put_at(x, z, y, color)
+        self.uv.extend((uv[0], uv[1] * (2 / 3 if self.creeping else 1)))
+        return index
+
+    def lower(self, point, lift, uv, color):
+        # The bottom 256-pixel spring-feather strip uses square PBR panels.
+        x, z = point
+        index = super().put_at(x, z, self.beach.surface(x, z)[0] + lift, color)
         self.uv.extend(uv)
         return index
 
@@ -44,7 +52,7 @@ class WoodlandPatch(Patch):
         return self.paint(x, z, y, color, uv)
 
 
-def bake(surface, alternate, placements):
+def bake(surface, alternate, placements, creeping=False):
     land, other = Beach(surface), Beach(alternate)
     props = json.loads(placements.read_text())
     stems = [
@@ -85,7 +93,7 @@ def bake(surface, alternate, placements):
             continue
         key = math.floor(x / TILE), math.floor(z / TILE)
         if key not in tiles:
-            tiles[key] = WoodlandPatch(land)
+            tiles[key] = WoodlandPatch(land, creeping)
         p = tiles[key]
         wind = math.atan2(-dz, -dx) + r.uniform(-1.5, 1.5)
         if pine and not rooted:
@@ -156,6 +164,23 @@ def bake(surface, alternate, placements):
         c, s = math.cos(a), math.sin(a)
         extent = r.uniform(0.70, 1.62)
         px, pz = x + c * r.uniform(0.85, 1.60), z + s * r.uniform(0.85, 1.60)
+        if creeping:
+            from island_feather_moss import field
+
+            mh = np.random.default_rng(77161 + i * 1913)
+            # One low, branching colony per sheltered receiving pocket. Do not
+            # lay overlapping discs under every individual moss/flower shoot.
+            field(
+                p,
+                mh,
+                px,
+                pz,
+                a,
+                extent * mh.uniform(0.86, 1.28),
+                extent * mh.uniform(0.48, 0.76),
+                int(mh.integers(4)),
+            )
+            receipt["ground_tracing_feather_colonies"] += 1
         for k in range(int(r.integers(3, 8))):
             u = r.uniform(-0.86, 1.15) * extent
             v = r.normal(0, 0.27)
@@ -169,7 +194,7 @@ def bake(surface, alternate, placements):
                 sz * r.uniform(0.34, 0.72),
                 a + r.uniform(-0.65, 0.65),
             )
-            receipt["moss_cushions"] += 1
+            receipt["feather_shoot_sites" if creeping else "moss_cushions"] += 1
         dry = np.random.default_rng(51943 + i * 7561)
         for k in range(int(dry.integers(2, 6))):
             v = dry.choice((-1, 1)) * dry.uniform(0.14, 0.45)
@@ -315,10 +340,10 @@ def write(tiles, path):
     save(doc, buf, path)
 
 
-def export(out):
+def export(out, creeping=False):
     out.mkdir(exist_ok=True, parents=True)
-    atlas(out / "copse")
-    tiles, notes = bake(SURFACE, ALTERNATE, ASSET.parent / "props.json")
+    atlas(out / "copse", creeping)
+    tiles, notes = bake(SURFACE, ALTERNATE, ASSET.parent / "props.json", creeping)
     asset = out / "copse-floor.glb"
     write(tiles, asset)
     (out / "woodland-composition.json").write_text(json.dumps(notes, indent=2) + "\n")

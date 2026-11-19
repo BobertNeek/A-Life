@@ -123,6 +123,21 @@ def moss(p, r, x, z, length, width, a):
         (106, 117, 65),
     )
     col = palette[r.integers(len(palette))]
+    # These samples are reserved for this site, regardless of the artist's
+    # moss treatment. Old fern/sorrel placements keep their original stream.
+    shoots = [
+        (r.uniform(0.52, 0.81), r.uniform(0.34, 0.95), r.uniform(0.84, 1.11))
+        for _ in range(n)
+    ]
+    if p.creeping:
+        from island_feather_moss import tuft
+
+        local = np.random.default_rng(
+            (round(x * 11239) ^ round(z * 7193) ^ 374919) & 0xFFFFFFFF
+        )
+        if local.random() < 0.53:
+            tuft(p, local, x, z, length * (0.78 + 0.18 * rad.mean()), width, a)
+        return
 
     def sponge(px, pz, lift, colour):
         u = (c * (px - x) + s * (pz - z)) / (2.5 * length) + 0.5
@@ -139,13 +154,13 @@ def moss(p, r, x, z, length, width, a):
         v = width * rad[i] * math.sin(t)
         ox, oz = c * u - s * v, s * u + c * v
         rim.append(sponge(x + ox, z + oz, -0.005, tint(col, 0.77)))
-        k = r.uniform(0.52, 0.81)
+        k, local_height, local_gain = shoots[i]
         inner.append(
             sponge(
                 x + k * ox,
                 z + k * oz,
-                h * r.uniform(0.34, 0.95),
-                tint(col, r.uniform(0.84, 1.11)),
+                h * local_height,
+                tint(col, local_gain),
             )
         )
     peak = sponge(x + 0.06 * length * c, z + 0.06 * length * s, h, tint(col, 1.03))

@@ -138,23 +138,31 @@ def sponge_skin():
     )
 
 
-def atlas(dest):
+def atlas(dest, creeping=False):
     dest.mkdir(parents=True, exist_ok=True)
     bark = paint()
-    sponge = sponge_skin()
+    sponge = None if creeping else sponge_skin()
+    if creeping:
+        from island_feather_moss import colony
+
+        colonies = [colony(seed) for seed in (91737, 428719, 872115, 914565)]
     variants = [plate(s) for s in (43192, 954731)]
     for k, name in enumerate(
         ("duff-bark.png", "duff-bark-normal.png", "duff-bark-orm.png")
     ):
         mode = "RGBA" if k == 0 else "RGB"
         fill = ((255, 255, 255, 255), (128, 128, 255), (252, 212, 0))[k]
-        out = Image.new(mode, (1024, 512), fill)
+        out = Image.new(mode, (1024, 768 if creeping else 512), fill)
         out.paste(bark[k].convert(mode), (512, 0))
-        out.paste(sponge[k].convert(mode), (60, 456))
+        if sponge is not None:
+            out.paste(sponge[k].convert(mode), (60, 456))
+        if creeping:
+            for index, colony_art in enumerate(colonies):
+                out.paste(colony_art[k].convert(mode), (index * 256, 512))
         for row, items in enumerate(variants):
             out.paste(items[k].convert(mode), (0, 228 * row))
         if k == 2:
-            out = out.resize((512, 256), Image.Resampling.BOX)
+            out = out.resize((512, out.height // 2), Image.Resampling.BOX)
         out.save(dest / name, compress_level=6)
 
 
@@ -183,6 +191,20 @@ def clip(polygon, edge_a, edge_b):
 
 
 def bed(p, r, x, z, a, long, wide, variant):
+    tone = round(r.uniform(224, 251))
+
+    def sample(point, u, v):
+        return p.surface(
+            *point,
+            0.0052,
+            (tone, tone, tone, 255),
+            ((2 + 507 * u) / 1024, (2 + 228 * variant + 223 * v) / 512)
+        )
+
+    terrain_stamp(p, x, z, a, long, wide, sample)
+
+
+def terrain_stamp(p, x, z, a, long, wide, sample):
     # Draw only original height-field triangles intersecting this paint. A
     # single flat quad would float off the downslope on the next cell's ridge.
     axis = np.array([math.cos(a), math.sin(a)])
@@ -196,7 +218,6 @@ def bed(p, r, x, z, a, long, wide, variant):
     grid = (np.array(rect) - [land.x0, land.z0]) / land.s
     lo = np.floor(grid.min(0)).astype(int)
     hi = np.floor(grid.max(0)).astype(int)
-    tone = round(r.uniform(224, 251))
     for j in range(max(0, lo[1]), min(land.h.shape[0] - 2, hi[1]) + 1):
         for i in range(max(0, lo[0]), min(land.h.shape[1] - 2, hi[0]) + 1):
             corners = [
@@ -212,15 +233,6 @@ def bed(p, r, x, z, a, long, wide, variant):
                     delta = point - origin
                     u = 0.5 + np.dot(delta, axis) / (2 * long)
                     v = 0.5 + np.dot(delta, cross) / (2 * wide)
-                    pixel_u = 2 + 507 * u
-                    pixel_v = 2 + 228 * variant + 223 * v
-                    verts.append(
-                        p.surface(
-                            *point,
-                            0.0052,
-                            (tone, tone, tone, 255),
-                            (pixel_u / 1024, pixel_v / 512)
-                        )
-                    )
+                    verts.append(sample(point, u, v))
                 for k in range(1, len(verts) - 1):
                     p.fan(verts[0], verts[k], verts[k + 1])
