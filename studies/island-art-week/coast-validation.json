@@ -1,0 +1,21 @@
+{
+  "patches_stone_reed_film_wash_thicket": [
+    39,
+    11,
+    78,
+    84,
+    28
+  ],
+  "triangles": 225408,
+  "largest_patch_triangles": 8604,
+  "maximum_height_above_ground_m": [
+    0.04200813875185094,
+    0.27944215439084763,
+    0.0030171318203646713,
+    1.4590078945146419,
+    1.092609187075869
+  ],
+  "bytes": 9099772,
+  "sha256": "2dd4cc7e1bb41903abe46b06c37b3e1b23e10bf7bf89709b503dfb07dcbb162a",
+  "terrain": "Every decoration vertex uses the same underlying V1/V2 height"
+}

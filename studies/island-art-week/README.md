@@ -1,46 +1,65 @@
-# Island art week – work in progress
+# Island art week
 
-Single graphics branch for iterative Qualia island art. Existing terrain pass is PR #412;
-the isolated physical V2 and its compatibility check remain under ../island-ridge-v2.
-V1 remains the default. No brains, user saves, or terrain authority change here.
-No user-PC, native gameplay, or RTX testing during art week.
+Single working branch for Qualia's coastal habitat. The original terrain
+material and geometry pass is PR #412. Its separate [physical ridge
+study](../island-ridge-v2/README.md) changes both render and collision for
+opt-in testing, not the default map or current saves. No native gameplay or
+user-PC performance test has been run during this art week.
 
-**Current study: eastern strand.** Actual terrain triangles determine deposit positions
-and support every stone, rolled ribbon of wrack, scallop and tuft. The narrow wrack
-and upper salt-reed bands occur only on suitable outer shores and break into local
-drifts with open stretches. Four shared PBR finishes: wet stone, dry reed, a thin sand film, and a depth-fitted, cellular-lace wash.
-A dedicated hosted CPU Blender study locks the light and both cameras, uses real assets,
-and records an independent V1/V2 geometry receipt. Water is a stand-in on these plates.
-Do not mistake them for screenshots or FPS evidence.
+## From the dry bank to the windbreak
 
-To reproduce the artwork and plates in a checkout with a compatible Blender:
-1. Run `python scripts/build_island_strandline.py --out /tmp/strandline.glb`.
-2. Run `python scripts/verify_island_strandline.py /tmp/strandline.glb`.
-3. Run the two `render_island_geology.py --tidal-review` invocations in
-   .github/workflows/island-art-study.yml. Only the second includes the strandline GLB.
-4. Review the 86cm shoreline view and the bank view together. Inspect scale, silvery
-   wet highlights, animation-free contacts, visible repetition and patch culling.
+Water sorts the old constant-height pebble string into grouped anchor stones
+and smaller satellites. Eleven reed patches and the wet wrack occupy sheltered
+outer shores. The next layer grows only on dry, sufficiently gentle banks with
+a real exposed shelf toward water: 82 separate wind-shaped stands, 332 rooted
+sprays/clumps. They add olive and silver folded leaves, dry seed combs and
+actual short shadows, not glowing point sprites. Existing trees and solid
+obstacles keep their original placements, collision and pick behaviour.
 
-**Accepted coastal checkpoint:** [eye-height before/after](strand-eye.jpg),
-[bank before/after](strand-reach.jpg), [independent geometry receipt](strand-validation.json).
-Three passes were compared: loose beach dressing alone, a damp strip with over-broad
-foam, then the present broken fine wash. The wet film is 3 mm above the source plane;
-solid-looking shingle never projects more than 4.21 cm. The actual form is batched in
-50 m tiles inside the existing 100 m chunks, not entities per pebble. The whole
-island contains 137,431 decoration triangles; no patch exceeds 6,989. Patches are
-nonpickable, do not cast shadows, and are visible only over the exact near terrain.
-Neither these counts nor Blender timings are game FPS.
+The near shore uses five shared finishes. 240 patches on the *whole* island
+contain 225,408 triangles; the heaviest is 8,604. The approved eye-height
+area selects 28 before frustum culling, 35,058 triangles versus 23,855
+previously. The bank selects 45,666 versus 26,497. These are static geometry
+counts, not GPU timing. The wet sand is 3 mm off the exact surface, shingle
+at most 4.21 cm high, folded plants below 1.10 m. The wash lies 9 mm above
+water, not above the submerged floor. Each decoration vertex sits above
+identical V1 and opt-in V2 underlying terrain. [Independent vertex and file
+receipt](coast-validation.json).
 
-**Resume point: inland ground contact and visual scale.** Inspect the current plant/ground
-edges from the 88 cm nursery view and a second camera on the forest approach. Keep the
-centre clear. Give the rooted bases small occluded leaf fans and interwoven seedling
-patches at their actual anchors, with authored gaps. Avoid duplicating the earlier
-nursery understory, painting a general noise carpet, or changing interactive plants.
-Judge both silhouettes and colour against the locked original. Next, inspect shadow
-hierarchy and near/far continuity at the two asymmetric northern summits. Use a single
-weekly branch, run isolated renders remotely, and keep the learner's workspace free.
+The warm sun and cool fill are an island-only profile. Linear fog begins
+beyond the camera's ground focus: zooming the orthographic camera out no
+longer puts the habitat itself under a fully developed green veil. Leaving
+the island restores the original camera and sun state. Rebuilding an island
+scene acquires its replacement sun. The hosted island CPU/ECS suite passed
+32 tests including restore/rebuild and camera replay, at `255d80a` (run
+44440093415); this is not a GPU or gameplay gate.
 
-Next week, use a disposable profile and matched native habitat/shore cameras. Test a
-walking creature and a rolling toy across the visible contact surfaces. Measure target
-RTX cost only when the machine and adapter have been confirmed free; compare the same
-camera, resolution, quality settings, save and warm-up. No such test has yet been run.
+## Art evidence and reproduction
+
+[Composed coast A/B](cove-showcase.jpg) · [neutral 86 cm control](coast-eye.jpg) · [neutral bank control](coast-bank.jpg).
+
+The shore-to-massif composition uses the real imported terrain, existing prop
+LODs, near-only strandline patches, and the [native water inputs](water-inputs/README.md).
+Both sides use the exact same opt-in V2 physical surface, byte-compared to the frozen compatibility fixture. The diagnostic controls use default V1. It is rendered in CPU Blender 4.3.2 (hosted run 44442858406). The same lens is used on both sides; daylight
+and atmosphere intentionally change on the revised side. The two established
+shore controls hold camera *and light* fixed and still use a neutral sea plane.
+
+Reproduce the matched plates with [.github/workflows/island-art-study.yml](../../.github/workflows/island-art-study.yml).
+The earlier beach baseline is pinned to `810e4f872680dc569affa6c8d2e3c31f79caa86c`;
+the workflow verifies its SHA-256 before comparison. It verifies the new
+geometry separately first with `scripts/verify_island_strandline.py`.
+
+**Prior checkpoint:** [eye-height before/after](strand-eye.jpg),
+[bank before/after](strand-reach.jpg), [earlier geometry](strand-validation.json).
+This was the first wet film and broken lace pass, before the windbreaks.
+
+**Art verdict and next iteration.** The first air study obscured the mountain;
+this one holds its profile and leaves the close plants readable. The near lawn
+still reads like coloured gravel and the far trees like isolated pins. Next
+give turf, exposed stone and sand *different* close-scale relief instead of
+stamping the same ground tile everywhere, then group plant contact/litter by
+real rooted habitat. Keep the existing collision and test at the same camera.
+A more saturated sky alone would not solve that floor.
+
+**Next week:** [disposable profile, same native camera, contacts and timing](NEXT_WEEK.md).
+No established save or guarded learner belongs in a review checkout.

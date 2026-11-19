@@ -306,7 +306,8 @@ mod tests {
         fs::create_dir(&path).expect("review output must be a fresh directory");
         let terrain = alife_world::island_terrain();
         let surface = terrain.surface();
-        let (_, material, images) = island_water(surface, bevy::prelude::Vec2::splat(10000.0), Vec3::ZERO);
+        let (_, material, images) =
+            island_water(surface, bevy::prelude::Vec2::splat(10000.0), Vec3::ZERO);
         for (name, image) in ["shore", "ripple"].into_iter().zip(images) {
             let (w, h) = (image.width() as usize, image.height() as usize);
             // PPM is lossless and explicit about top-to-bottom row order; level
@@ -314,8 +315,10 @@ mod tests {
             let mut file = fs::File::create_new(path.join(format!("{name}.ppm"))).unwrap();
             write!(file, "P6\n{w} {h}\n255\n").unwrap();
             let pixels = image.data.unwrap();
-            let rgb = pixels[..w * h * 4].chunks_exact(4)
-                .flat_map(|rgba| rgba[..3].iter().copied()).collect::<Vec<_>>();
+            let rgb = pixels[..w * h * 4]
+                .chunks_exact(4)
+                .flat_map(|rgba| rgba[..3].iter().copied())
+                .collect::<Vec<_>>();
             file.write_all(&rgb).unwrap();
         }
         let meta = serde_json::json!({
@@ -327,7 +330,11 @@ mod tests {
             "ripple_metres": RIPPLE_METRES, "roughness": material.perceptual_roughness,
             "reflectance": material.reflectance, "colour_space": "sRGB", "normal_space": "linear",
         });
-        fs::write(path.join("water.json"), serde_json::to_vec_pretty(&meta).unwrap()).unwrap();
+        fs::write(
+            path.join("water.json"),
+            serde_json::to_vec_pretty(&meta).unwrap(),
+        )
+        .unwrap();
     }
 
     #[test]

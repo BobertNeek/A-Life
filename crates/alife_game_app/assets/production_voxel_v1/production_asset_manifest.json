@@ -664,7 +664,7 @@
     {
       "asset_id": "approved-island-strandline",
       "author": "Qualia island environment art",
-      "digest": "fnv1a64:cd56995f06c9a177",
+      "digest": "fnv1a64:0a3e7165c44d69c4",
       "external": false,
       "final_art": false,
       "generated": true,
@@ -679,7 +679,7 @@
       "local_path": "crates/alife_game_app/assets/landscape/island/strandline.glb",
       "placeholder": false,
       "replacement_policy": "edit-strandline-recipe-and-refresh-manifest",
-      "size_bytes": 5957012,
+      "size_bytes": 9099772,
       "source": "generated:island-strandline",
       "usage_category": "environment-dressing"
     },

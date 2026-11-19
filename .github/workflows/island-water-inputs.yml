@@ -21,7 +21,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8
         with:
           toolchain: stable
-          components: rustfmt
       - run: sudo apt-get update && sudo apt-get install -y libudev-dev python3-pil
       - name: Call the same CPU material builder used by the renderer
         env:
@@ -38,19 +37,10 @@ jobs:
               image.save(dest, optimize=True)
               assert Image.open(dest).tobytes() == image.tobytes()
           PY
-      - name: Prepare formatted changed Rust modules, without touching shipping files
-        run: |
-          D=crates/alife_game_app/src/production_voxel_renderer
-          mkdir -p "$RUNNER_TEMP/coast/formatted"
-          for f in "$D/island/atmosphere.rs" "$D/island/capture_pose.rs" "$D/terrain_water.rs"; do
-            cp "$f" "$RUNNER_TEMP/coast/formatted/$(basename "$f")"
-            rustfmt --edition 2021 --config skip_children=true "$RUNNER_TEMP/coast/formatted/$(basename "$f")"
-          done
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: actual-island-water-inputs
           path: |
             ${{ runner.temp }}/coast/*.png
             ${{ runner.temp }}/coast/water.json
-            ${{ runner.temp }}/coast/formatted/*.rs
           retention-days: 7

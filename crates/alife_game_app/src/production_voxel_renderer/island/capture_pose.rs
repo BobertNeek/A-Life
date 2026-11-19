@@ -17,21 +17,27 @@ struct Pose {
 impl Pose {
     fn valid(&self) -> bool {
         let q = Quat::from_array(self.rotation);
-        self.position.iter().all(|v| v.is_finite() && v.abs() < 10000.0)
+        self.position
+            .iter()
+            .all(|v| v.is_finite() && v.abs() < 10000.0)
             && q.is_finite()
             && (q.length_squared() - 1.0).abs() < 0.0001
             && (q * Vec3::NEG_Z).y < -0.05
-            && (camera_navigation::ENCOUNTER_HEIGHT - 0.001..=1600.001).contains(&self.view_height_m)
+            && (camera_navigation::ENCOUNTER_HEIGHT - 0.001..=1600.001)
+                .contains(&self.view_height_m)
     }
 }
 
 pub(in crate::production_voxel_renderer) fn install(app: &mut App) {
-    let Some(path) = std::env::var_os("ALIFE_ISLAND_CAPTURE_POSE") else { return; };
+    let Some(path) = std::env::var_os("ALIFE_ISLAND_CAPTURE_POSE") else {
+        return;
+    };
     // Never load a file just because the environment carries a stray pose path.
     if std::env::var_os("ALIFE_GRAPHICS_CAPTURE_DIR").is_none() {
         return;
     }
-    let pose: Option<Receipt> = fs::metadata(&path).ok()
+    let pose: Option<Receipt> = fs::metadata(&path)
+        .ok()
         .filter(|m| m.is_file() && m.len() <= 2 * 1024 * 1024)
         .and_then(|_| fs::read(&path).ok())
         .and_then(|bytes| serde_json::from_slice(&bytes).ok());
@@ -53,16 +59,22 @@ fn hold(
     active: Option<Res<creature_grounding::SelectedTerrain>>,
     mut cameras: Query<(&mut Transform, &mut Projection), With<Fvr03ProductionVoxelCamera>>,
 ) {
-    if !active.is_some_and(|a| a.0.binding() == receipt.terrain_binding) { return; }
+    if !active.is_some_and(|a| a.0.binding() == receipt.terrain_binding) {
+        return;
+    }
     let p = &receipt.camera;
     for (mut view, mut projection) in &mut cameras {
-        let Projection::Orthographic(lens) = &*projection else { continue; };
+        let Projection::Orthographic(lens) = &*projection else {
+            continue;
+        };
         let bevy::camera::ScalingMode::FixedVertical { viewport_height } = lens.scaling_mode else {
             continue;
         };
         let scale = p.view_height_m / viewport_height;
         if lens.scale != scale {
-            if let Projection::Orthographic(lens) = &mut *projection { lens.scale = scale; }
+            if let Projection::Orthographic(lens) = &mut *projection {
+                lens.scale = scale;
+            }
         }
         let mut locked = *view;
         locked.translation = Vec3::from_array(p.position);
@@ -95,21 +107,38 @@ mod tests {
         r.terrain_binding.digest ^= 1;
         let mut app = App::new();
         app.insert_resource(creature_grounding::SelectedTerrain(t))
-            .insert_resource(r).add_systems(Update, hold);
-        let camera = app.world_mut().spawn((
-            Fvr03ProductionVoxelCamera { mode: Fvr03ProductionVoxelCameraMode::OrthographicIsometric },
-            Transform::default(),
-            Projection::Orthographic(OrthographicProjection {
-                scaling_mode: bevy::camera::ScalingMode::FixedVertical { viewport_height: 12.0 },
-                ..OrthographicProjection::default_3d()
-            }),
-        )).id();
+            .insert_resource(r)
+            .add_systems(Update, hold);
+        let camera = app
+            .world_mut()
+            .spawn((
+                Fvr03ProductionVoxelCamera {
+                    mode: Fvr03ProductionVoxelCameraMode::OrthographicIsometric,
+                },
+                Transform::default(),
+                Projection::Orthographic(OrthographicProjection {
+                    scaling_mode: bevy::camera::ScalingMode::FixedVertical {
+                        viewport_height: 12.0,
+                    },
+                    ..OrthographicProjection::default_3d()
+                }),
+            ))
+            .id();
         app.update();
-        assert_eq!(app.world().get::<Transform>(camera).unwrap().translation, Vec3::ZERO);
+        assert_eq!(
+            app.world().get::<Transform>(camera).unwrap().translation,
+            Vec3::ZERO
+        );
         app.world_mut().resource_mut::<Receipt>().terrain_binding = good;
         app.update();
-        assert_eq!(app.world().get::<Transform>(camera).unwrap().translation, Vec3::new(340.0, 480.0, 380.0));
-        assert_eq!(view_height(app.world().get::<Projection>(camera).unwrap()), 24.0);
+        assert_eq!(
+            app.world().get::<Transform>(camera).unwrap().translation,
+            Vec3::new(340.0, 480.0, 380.0)
+        );
+        assert_eq!(
+            view_height(app.world().get::<Projection>(camera).unwrap()),
+            24.0
+        );
         let mut p = app.world_mut().resource_mut::<Receipt>();
         p.camera.rotation = [0.0; 4];
         assert!(!p.camera.valid());

@@ -21,7 +21,7 @@ fn palette() -> &'static Palette {
         serde_json::from_str(include_str!(
             "../../../assets/landscape/island/coastal-daylight.json"
         ))
-            .expect("approved island daylight")
+        .expect("approved island daylight")
     })
 }
 
@@ -49,7 +49,9 @@ pub(super) fn enter(world: &mut World) {
         With<Fvr03ProductionVoxelCamera>,
     >();
     for (id, mut camera, mut fill, mut fog) in cameras.iter_mut(world) {
-        saved.cameras.push((id, camera.clear_color.clone(), fill.color, fog.clone()));
+        saved
+            .cameras
+            .push((id, camera.clear_color.clone(), fill.color, fog.clone()));
         let old_alpha = fog.color.to_srgba().alpha;
         camera.clear_color = bevy::camera::ClearColorConfig::Custom(rgba(p.clear_srgb, 1.0));
         fill.color = rgba(p.sky_fill_srgb, 1.0);
@@ -60,8 +62,8 @@ pub(super) fn enter(world: &mut World) {
     for (id, ..) in &saved.cameras {
         world.entity_mut(*id).insert(CoastalAir);
     }
-    let mut suns = world
-        .query_filtered::<(Entity, &mut DirectionalLight, &mut Transform), With<TerrainSun>>();
+    let mut suns =
+        world.query_filtered::<(Entity, &mut DirectionalLight, &mut Transform), With<TerrainSun>>();
     let rotation = Transform::default()
         .looking_to(Vec3::from_array(p.sun_ray_direction), Vec3::Y)
         .rotation;
@@ -106,12 +108,16 @@ pub(super) fn leave(world: &mut World) {
 fn range(distance: f32, span: f32) -> (f32, f32) {
     let p = palette();
     let start = distance.max(0.0) + p.air_start_beyond_focus_m;
-    (start, start + p.air_span_min_m + span.clamp(0.0, 1200.0) * 0.62)
+    (
+        start,
+        start + p.air_span_min_m + span.clamp(0.0, 1200.0) * 0.62,
+    )
 }
 
 pub(super) fn refocus(fog: &mut Mut<DistanceFog>, distance: f32, span: f32) {
     let (start, end) = range(distance, span);
-    if matches!(fog.falloff, FogFalloff::Linear { start: old, end: far } if (old - start).abs() < 0.35 && (far - end).abs() < 0.35) {
+    if matches!(fog.falloff, FogFalloff::Linear { start: old, end: far } if (old - start).abs() < 0.35 && (far - end).abs() < 0.35)
+    {
         return;
     }
     fog.falloff = FogFalloff::Linear { start, end };
@@ -126,17 +132,38 @@ mod tests {
         let mut world = World::new();
         let fill = Color::srgb(0.19, 0.44, 0.69);
         let mist = Color::srgba(0.13, 0.47, 0.26, 0.22);
-        let sun = world.spawn((
-            TerrainSun { enabled: true, cascades: 2 },
-            DirectionalLight { color: fill, ..default() },
-            Transform::from_rotation(Quat::from_rotation_y(0.61)),
-        )).id();
-        let view = world.spawn((
-            Fvr03ProductionVoxelCamera { mode: Fvr03ProductionVoxelCameraMode::OrthographicIsometric },
-            Camera { clear_color: bevy::camera::ClearColorConfig::None, ..default() },
-            AmbientLight { color: fill, ..default() },
-            DistanceFog { color: mist, ..default() },
-        )).id();
+        let sun = world
+            .spawn((
+                TerrainSun {
+                    enabled: true,
+                    cascades: 2,
+                },
+                DirectionalLight {
+                    color: fill,
+                    ..default()
+                },
+                Transform::from_rotation(Quat::from_rotation_y(0.61)),
+            ))
+            .id();
+        let view = world
+            .spawn((
+                Fvr03ProductionVoxelCamera {
+                    mode: Fvr03ProductionVoxelCameraMode::OrthographicIsometric,
+                },
+                Camera {
+                    clear_color: bevy::camera::ClearColorConfig::None,
+                    ..default()
+                },
+                AmbientLight {
+                    color: fill,
+                    ..default()
+                },
+                DistanceFog {
+                    color: mist,
+                    ..default()
+                },
+            ))
+            .id();
         enter(&mut world);
         enter(&mut world);
         assert_ne!(world.get::<AmbientLight>(view).unwrap().color, fill);
@@ -144,24 +171,42 @@ mod tests {
         assert_ne!(world.get::<DirectionalLight>(sun).unwrap().color, fill);
         leave(&mut world);
         assert!(world.get::<CoastalAir>(view).is_none());
-        assert!(matches!(world.get::<Camera>(view).unwrap().clear_color, bevy::camera::ClearColorConfig::None));
+        assert!(matches!(
+            world.get::<Camera>(view).unwrap().clear_color,
+            bevy::camera::ClearColorConfig::None
+        ));
         assert_eq!(world.get::<AmbientLight>(view).unwrap().color, fill);
         assert_eq!(world.get::<DistanceFog>(view).unwrap().color, mist);
         assert_eq!(world.get::<DirectionalLight>(sun).unwrap().color, fill);
-        assert_eq!(world.get::<Transform>(sun).unwrap().rotation, Quat::from_rotation_y(0.61));
+        assert_eq!(
+            world.get::<Transform>(sun).unwrap().rotation,
+            Quat::from_rotation_y(0.61)
+        );
     }
 
     #[test]
     fn island_rebuild_rebinds_the_new_scene_sun_and_keeps_the_camera() {
         let mut world = World::new();
-        world.insert_resource(creature_grounding::SelectedTerrain(alife_world::island_terrain()));
-        let camera = world.spawn((
-            Fvr03ProductionVoxelCamera { mode: Fvr03ProductionVoxelCameraMode::OrthographicIsometric },
-            Camera::default(), AmbientLight::default(), DistanceFog::default(),
-        )).id();
+        world.insert_resource(creature_grounding::SelectedTerrain(
+            alife_world::island_terrain(),
+        ));
+        let camera = world
+            .spawn((
+                Fvr03ProductionVoxelCamera {
+                    mode: Fvr03ProductionVoxelCameraMode::OrthographicIsometric,
+                },
+                Camera::default(),
+                AmbientLight::default(),
+                DistanceFog::default(),
+            ))
+            .id();
         let lighting = || Fvr04PreparedLighting {
-            directional_shadows: true, shadow_cascades: 2, shadow_maximum_distance: 180.0,
-            contact_shadow_mesh: None, contact_shadow_material: None, contact_shadows: vec![],
+            directional_shadows: true,
+            shadow_cascades: 2,
+            shadow_maximum_distance: 180.0,
+            contact_shadow_mesh: None,
+            contact_shadow_material: None,
+            contact_shadows: vec![],
         };
         for _ in 0..2 {
             spawn_fvr04_prepared_lighting(&mut world, lighting());
