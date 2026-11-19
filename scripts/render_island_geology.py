@@ -31,6 +31,9 @@ cli.add_argument(
 cli.add_argument(
     "--water-inputs", type=Path, help="Lossless maps from the native CPU water builder"
 )
+cli.add_argument(
+    "--habitats", type=Path, help="Replace only the corresponding selected L0 chunks"
+)
 cli.add_argument("--surface", type=Path)
 cli.add_argument("--placements", type=Path)
 cli.add_argument("--prop-library", type=Path)
@@ -50,8 +53,8 @@ bpy.ops.wm.read_factory_settings(use_empty=True)
 scene = bpy.context.scene
 scene.render.engine = "CYCLES"
 scene.cycles.device = "CPU"
-scene.cycles.samples = 12
-scene.cycles.use_denoising = False
+scene.cycles.samples = 32 if args.cove_showcase else 12
+scene.cycles.use_denoising = args.cove_showcase
 scene.cycles.seed = 27
 scene.render.threads_mode = "FIXED"
 scene.render.threads = 2
@@ -66,6 +69,14 @@ bg.inputs["Strength"].default_value = 0.62
 bpy.ops.import_scene.gltf(filepath=str(args.glb.resolve()))
 chunks = [o for o in bpy.data.objects if o.type == "MESH"]
 assert len(chunks) == 360
+habitats = {}
+if args.habitats:
+    previous = set(bpy.data.objects)
+    bpy.ops.import_scene.gltf(filepath=str(args.habitats.resolve()))
+    for mesh in set(bpy.data.objects) - previous:
+        if mesh.type == "MESH":
+            _, ix, iz = mesh.name.split("_")
+            habitats[int(ix), int(iz)] = mesh
 sun = bpy.data.lights.new("Low warm sun", "SUN")
 sun.energy, sun.angle = 2.2, math.radians(8)
 sun.color = (1.0, 0.89, 0.75)
@@ -237,18 +248,25 @@ for name, pos, aim, ortho, lens, lod in shots:
             cx = math.floor(o.location.x / 100) * 100 + 50
             cz = math.floor(-o.location.y / 100) * 100 + 50
             o.hide_render = math.hypot(cx - focus.x, cz + focus.y) >= 150
+    for mesh in habitats.values():
+        mesh.hide_render = True
     for ob in chunks:
+        _, ix, iz, level = ob.name.split("_")
+        key = int(ix), int(iz)
         if args.cove_showcase:
             # The showcase represents the ordinary unoccupied 100 m cells.
             # Never draw a mountain with near-only geometry just to flatter it.
-            _, ix, iz, _ = ob.name.split("_")
             center_x = ox + min(32 * int(ix) + 16, width - 1) * spacing
             center_z = oz + min(32 * int(iz) + 16, depth - 1) * spacing
             distance = math.hypot(center_x - cove_focus.x, center_z + cove_focus.y)
             target = 0 if distance < 150 else 1 if distance < 350 else 2
         else:
             target = lod
-        ob.hide_render = not ob.name.endswith(f"_L{target}")
+        drawn = level == f"L{target}"
+        replace = drawn and target == 0 and key in habitats
+        ob.hide_render = not drawn or replace
+        if replace:
+            habitats[key].hide_render = False
     obj.location = native(pos)
     obj.rotation_euler = (
         (native(aim) - obj.location).to_track_quat("-Z", "Y").to_euler()
