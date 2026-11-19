@@ -13,7 +13,8 @@ from mathutils import Vector
 
 H = Path(__file__).resolve().parent
 args = sys.argv[sys.argv.index("--") + 1 :]
-seat = len(args) == 7 and args[-1] == "with-seated-shoulders"
+edition={"with-joined-beds":"joined","with-pineglass":"pineglass"}.get(args[-1]) if len(args)==7 else None
+seat = bool(edition) or (len(args)==7 and args[-1]=="with-seated-shoulders")
 show_forest = seat or (len(args) == 7 and args[-1] == "with-registered-floor")
 if show_forest:
     args = args[:-1]
@@ -148,11 +149,18 @@ for side in ("before", "after"):
         grab(source / "cone-husks-eye.glb") if side == "after" and show_forest else []
     )
     new_ledge = {}
+    ground_kit=[]
     if seat and side == "after":
         for ob in old_shoulders:
             ob.hide_render = True
         for lod in (0, 1):
             new_ledge[lod] = grab(source / ("slope-shoulders-L" + str(lod) + ".glb"))
+            if edition=='joined':
+                held=[]
+                for o in new_ledge[lod]:
+                    if o.name.split('.')[0]=='Shoulder_1695':o.hide_render=True
+                    else:held.append(o)
+                new_ledge[lod]=held+grab(source/('joined-1695-L'+str(lod)+'.glb'))
         fmod = mod("cloudstep_optical_stone", H / "forest.py")
         fmod.tint(
             ground,
@@ -172,7 +180,15 @@ for side in ("before", "after"):
             "Broken granite and original mantle",
             granite["neutral"],
         )
+        if edition:
+            pic,register={'joined':('joined-true-beds','joined-true-beds'),'pineglass':('pineglass-mineral','pineglass')}[edition]
+            local_info=json.loads((source/(register+'.json')).read_text())
+            fmod.tint(ground,surf,source/(pic+'.png'),local_info['native_plan_xz'],edition,local_info['neutral'])
+            if edition=='pineglass':
+                ground_kit=grab(source/'pineglass-eye.glb')
+                mod('pineglass_bump',H/'pineglass_blender.py').optics(ground,surf,source,local_info['native_plan_xz'])
     for name, cam in cams.items():
+        for o in ground_kit:o.hide_render = name=='shelf-section'
         for lod, objs in new_ledge.items():
             for ob in objs:
                 ob.hide_render = lod != int(name == "shelf-section")
@@ -195,6 +211,7 @@ for side in ("before", "after"):
                 else "optical contact weathering on eligible mountain ground"
             ),
             visual_shoulder_seats=(list((1335, 1695, 1847)) if seat else []),
+            follow_on_source=edition,
             poses=poses,
         ),
         indent=2,

@@ -112,7 +112,7 @@ def qrot(q):
     )
 
 
-def traverse(draw, native, copse, folder, with_cones=False, shoulders=False):
+def traverse(draw, native, copse, folder, with_cones=False, shoulders=False, edition=None):
     eye = draw.eye
     ident = np.eye(3, dtype="f")
     zero = np.zeros(3, "f")
@@ -191,17 +191,18 @@ def traverse(draw, native, copse, folder, with_cones=False, shoulders=False):
             node(s, nodes[name], R, p["scale"], np.asarray(p["position"], "f"), "prop")
         s.close()
     if shoulders:
-        s = Source(folder / ("slope-shoulders-L" + str(draw.shoulder_lod) + ".glb"))
-        for n in s.doc["nodes"]:
-            node(
-                s,
-                n,
-                qrot(n["rotation"]),
-                n["scale"][0],
-                np.array(n["translation"], "f"),
-                "shoulder",
-            )
-        s.close()
+        files=['slope-shoulders-L'+str(draw.shoulder_lod)+'.glb']
+        if edition=='joined':files.append('joined-1695-L'+str(draw.shoulder_lod)+'.glb')
+        for ix,filename in enumerate(files):
+            s=Source(folder/filename)
+            for n in s.doc['nodes']:
+                if edition=='joined' and ix==0 and n['name']=='Shoulder_1695':continue
+                node(s,n,qrot(n['rotation']),n['scale'][0],np.asarray(n['translation'],'f'),'shoulder')
+            s.close()
+        if edition=='pineglass' and draw.shoulder_lod==0:
+            s=Source(folder/'pineglass-eye.glb')
+            for n in s.doc['nodes']:node(s,n,tag='pineglass')
+            s.close()
     if not draw.shadow:
         s = Source(native / "marine-day.glb")
         for n in s.doc["nodes"]:

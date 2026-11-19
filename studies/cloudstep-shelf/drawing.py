@@ -333,7 +333,7 @@ class Board:
                     )
 
 
-def main(native, copse, folder, lens, water, seated=False):
+def main(native, copse, folder, lens, water, seated=False, edition=None):
     guard = 4509715661
     reserved = 1024 * 1024
     if shutil.disk_usage(folder).free <= guard + reserved:
@@ -343,13 +343,13 @@ def main(native, copse, folder, lens, water, seated=False):
     day = json.loads((native / "coastal-daylight.json").read_text())
     sun = -unit(np.array(day["sun_ray_direction"], "f"))
 
-    def frame(reseat):
+    def frame(reseat,variant=None):
         lights = []
         for centre, span, n in [([60, 104, -364], 218, 416), ([81, 69, -410], 27, 320)]:
             centre = np.array(centre, "f")
             v = Board(centre + sun * 330, centre, (n, n), span, 0, True)
             v.shoulder_lod = 1 if p["span"] else 0
-            traverse(v, native, copse, folder, shoulders=reseat)
+            traverse(v, native, copse, folder, shoulders=reseat,edition=variant)
             lights.append(v)
         board = Board(
             p["eye"],
@@ -394,6 +394,10 @@ def main(native, copse, folder, lens, water, seated=False):
                     skin["neutral"],
                 )
             )
+        if variant:
+            image_name,register_name={'joined':('joined-true-beds','joined-true-beds'),'pineglass':('pineglass-mineral','pineglass')}[variant]
+            m=json.loads((folder/(register_name+'.json')).read_text())
+            board.fields.append(((np.asarray(Image.open(folder/(image_name+'.png')).convert('RGB')),33071,33071),m['native_plan_xz'],m['neutral']))
         if lens == "summit-window":
             board.witnesses = dict.fromkeys(
                 [
@@ -413,17 +417,17 @@ def main(native, copse, folder, lens, water, seated=False):
             copse,
             folder,
             with_cones=not bool(p["span"]),
-            shoulders=reseat,
+            shoulders=reseat,edition=variant,
         )
         return board
 
-    b = frame(False)
+    b = frame(bool(edition))
     sz = (b.w, b.h)
     if seated:
-        original = b.images[0].copy()
+        original = b.images[1 if edition else 0].copy()
         original_witnesses = b.witnesses
         del b
-        b = frame(True)
+        b = frame(True,edition)
         b.images[0] = original
         if original_witnesses:
             print("Original witnesses", original_witnesses, flush=True)
@@ -432,7 +436,7 @@ def main(native, copse, folder, lens, water, seated=False):
         print("Source witnesses", b.witnesses, flush=True)
     gap = np.full((sz[1], 7, 3), [43, 46, 44], "B")
     joined = np.concatenate((b.images[0], gap, b.images[1]), axis=1)
-    out = folder / (lens + "-matched.jpg")
+    out = folder / (lens + ("-"+edition if edition else "") + "-matched.jpg")
     if shutil.disk_usage(folder).free <= guard + reserved:
         raise SystemExit("Artist floor: hold final picture")
     if lens == "sheltered-boles":
@@ -469,5 +473,6 @@ if __name__ == "__main__":
         Path(sys.argv[3]),
         sys.argv[4],
         Path(sys.argv[5]),
-        "--seated" in sys.argv[5:],
+        any(k in sys.argv[5:] for k in ("--seated","--joined","--pineglass")),
+        "joined" if "--joined" in sys.argv[5:] else "pineglass" if "--pineglass" in sys.argv[5:] else None,
     )
