@@ -37,30 +37,65 @@ def bellflowers(level):
         return tuple(a[i] + weight * b[i] for i in range(3))
 
     def leaf(start, a, ln, ht, w):
+        # Each basil-like basal leaf opens on a short petiole, rolls one
+        # shoulder back and returns to the ground. The older plant used a
+        # three-step rectangular midsection that read as folded sheet metal.
         axis = (cos(a), sin(a), 0)
         cross = (-sin(a), cos(a), 0)
+        sway = 0.27 * sin(3.6 * a + ln)
+        arch = 0.75 + 0.10 * cos(2.1 * a)
         last = None
-        for t in (0, 0.34, 0.67, 1) if level == 0 else (0, 0.48, 1):
-            c = add(start, axis, ln * (0.5 * t + 0.5 * t * t))
-            c = add(c, (0, 0, 1), ht * (0.55 * t + 0.65 * sin(pi * t)))
-            color = mix((0.21, 0.33, 0.16), (0.50, 0.62, 0.34), 0.1 + 0.76 * t)
+        stations = (
+            (0, 0.14, 0.28, 0.45, 0.58, 0.73, 0.86, 0.95, 1)
+            if level == 0
+            else (
+                (0, 0.19, 0.47, 0.74, 0.91, 1)
+                if level == 1
+                else (0, 0.28, 0.61, 0.86, 1)
+            )
+        )
+        base_ink = (0.27, 0.40, 0.235)
+        rim = (0.49, 0.63, 0.36)
+        for t in stations:
+            point = add(start, axis, ln * (0.21 * t + 0.85 * t * t))
+            point = add(point, cross, sway * ln * sin(pi * t) * 0.23)
+            point = add(point, (0, 0, 1), ht * (0.21 * t + arch * sin(pi * t) ** 0.93))
+            ink = mix(base_ink, rim, 0.18 + 0.78 * t)
+            if t == 0:
+                last = [m.add(point, base_ink)]
+                continue
             if t == 1:
-                tip = m.add(c, color)
-                m.triangle(last[1], last[0], tip)
-                m.triangle(last[2], last[1], tip)
+                tip = m.add(point, light(ink, 1.04))
+                for i in range(len(last) - 1):
+                    m.triangle(last[i + 1], last[i], tip)
                 break
-            width = w * (0.14 + 0.86 * sin(pi * t) ** 0.63)
-            row = [
-                m.add(
-                    add(add(c, cross, width * j), (0, 0, 1), width * 0.32 * (j == 0)),
-                    light(color, 1.08 if not j else 0.94),
+            width = (
+                w
+                * (0.056 + 0.99 * sin(pi * t**0.83) ** 0.78)
+                * (1 + 0.075 * sin(t * pi * 7 + a))
+            )
+            row = []
+            ribs = (-1.0, -0.50, 0.0, 0.54, 1.0) if level == 0 else (-1.0, 0.0, 1.0)
+            for k in ribs:
+                lr = 1 + 0.17 * sin(3.8 * a + t * 2.7) * k
+                pos = add(point, cross, k * width * lr)
+                fold = 0.43 * width * (1 - abs(k)) + 0.16 * width * k * sin(
+                    a * 3 + 4 * t
                 )
-                for j in (-1, 0, 1)
-            ]
-            if last:
-                for j in (0, 1):
-                    m.triangle(last[j + 1], last[j], row[j + 1])
-                    m.triangle(last[j], row[j], row[j + 1])
+                pos = add(pos, (0, 0, 1), fold)
+                col = mix(
+                    ink,
+                    (0.62, 0.72, 0.44),
+                    0.195 * (1 - abs(k)) ** 5 * sin(pi * t) ** 0.7,
+                )
+                row.append(m.add(pos, light(col, 1 + 0.042 * k)))
+            if len(last) == 1:
+                for i in range(len(row) - 1):
+                    m.triangle(last[0], row[i], row[i + 1])
+            else:
+                for i in range(len(row) - 1):
+                    m.triangle(last[i + 1], last[i], row[i + 1])
+                    m.triangle(last[i], row[i], row[i + 1])
             last = row
 
     bases = ((-0.073, 0.035), (0.05, -0.04), (0.038, 0.067))
@@ -111,7 +146,6 @@ def bellflowers(level):
         bend = (d[0] * 0.4146, d[1] * 0.4146, 0.91)
         length = (0.065, 0.062, 0.053, 0.047, 0.061)[i]
         rad = (0.042, 0.04, 0.035, 0.029, 0.038)[i]
-        count_side = [10, 8, 6][level]
         petal = [
             (0.85, 0.67, 0.55),
             (0.77, 0.65, 0.76),
@@ -119,28 +153,24 @@ def bellflowers(level):
             (0.72, 0.65, 0.78),
             (0.84, 0.74, 0.64),
         ][i]
-        center = p
-        # Branch attachment and calyx are part of the body of each bell.
-        last = circle(center, side, bend, rad * 0.19, count_side, (0.37, 0.46, 0.23))
-        for j, (t, mult) in enumerate(((0.20, 0.52), (0.62, 0.81), (1, 1))):
-            row = []
-            for k in range(count_side):
-                theta = k * tau / count_side
-                lip = 1 if k % 2 == 0 else 0.76
-                endt = t + (0.09 * (1 if k % 2 == 0 else -1) if j == 2 else 0)
-                rr = rad * mult * (lip if j == 2 else 1)
-                c = add(
-                    add(add(center, axis, length * endt), side, cos(theta) * rr),
-                    bend,
-                    sin(theta) * rr,
-                )
-                row.append(m.add(c, mix((0.50, 0.50, 0.33), petal, (0.33, 0.87, 1)[j])))
-            join(last, row)
-            last = row
-        throat = add(center, axis, length * 0.56)
-        inner = circle(throat, side, bend, rad * 0.43, count_side, (0.80, 0.61, 0.32))
-        join(last, inner)
-        kernel = m.add(add(throat, axis, 0.009), (0.92, 0.75, 0.37))
-        for k in range(count_side):
-            m.triangle(inner[k], inner[(k + 1) % count_side], kernel)
+        # A real bending neck joins upright stem to pendant corolla.
+        end = p
+        for bend_t, up in ((0.54, 0.020), (1, 0.015)):
+            end = tuple(
+                p[k] + axis[k] * 0.031 * bend_t + (up if k == 2 else 0)
+                for k in range(3)
+            )
+            rr = circle(
+                end,
+                side,
+                bend,
+                0.0025 if level == 0 else 0.003,
+                [4, 3, 3][level],
+                (0.44, 0.50, 0.29),
+            )
+            join(last, rr)
+            last = rr
+        from island_meadow_calyx import petal_bell
+
+        petal_bell(m, end, axis, side, bend, length, rad, petal, level, i)
     return m

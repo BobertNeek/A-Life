@@ -9,5 +9,5 @@
   "quick": false,
   "samples": 48,
   "editable_canopy": false,
-  "art_note": "The upstream material fault traces the existing binary cut-bank mask exactly. Compare bare original terrain, installed V1 and material-underpainted V1 from the same lens; transition by sampling the actual habitat materials through the old band. Existing heights, roots, shoreline and separate editable inlet shape remain untouched."
+  "art_note": "Held first material photo: bright original normal channels wrapped in byte storage before decoding, incorrectly blackening the far bank. Decode the original bank normal into signed float before tangent-frame feathering, retaining all original relief texels at full paint and the same three cameras. Do not stage art with black slopes."
 }

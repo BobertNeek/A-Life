@@ -165,7 +165,10 @@ def smooth_bank(source, terrain, original, dest):
     h, w = raw.shape[:2]
     ink = linear(raw[..., :3] / 255)
     old_n = unit(
-        2 * np.array(Image.open(old / "inlet-normal.png").convert("RGB")) / 255 - 1
+        2
+        * np.asarray(Image.open(old / "inlet-normal.png").convert("RGB"), dtype="f")
+        / 255
+        - 1
     )
     small = Image.open(old / "inlet-orm.png").convert("RGB")
     orm = np.asarray(small.resize((w, h), Image.Resampling.BILINEAR)) / 255
