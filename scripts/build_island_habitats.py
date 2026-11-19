@@ -19,14 +19,31 @@ from island_habitat_field import (
     signatures,
 )
 from island_habitat_tiles import GUTTER, N, bake
+from island_habitat_massing import linear, srgb
+from island_geology_paint import Island
+from PIL import Image
+import io
 
 
 def build(terrain, surface, placements, out):
-    h, labels, (x0, z0, step) = habitat(surface, placements)
+    h, labels, (x0, z0, step), cover = habitat(surface, placements)
     inventory = signatures(labels)
     variants = {key: canonical(key) for key in inventory}
     keys = sorted({v[0] for v in variants.values()})
     cols, rows = bake(keys, out / "habitats")
+    # Synthesize from the ungraded terrain recipe, not the last saved PNG; a
+    # rebuild of the weekly checkout must never apply the understory grade twice.
+    raw, _ = Island(surface).atlas()
+    pigment = np.array(Image.open(io.BytesIO(raw)).convert("RGB"))
+    atlas_height, atlas_width = pigment.shape[:2]
+    xx = x0 + (np.arange(atlas_width)[None, :] + 0.5) * step * (h.shape[1] - 1) / atlas_width
+    for j in range(0, atlas_height, 48):
+        rr = np.arange(j, min(j + 48, atlas_height))
+        zz = z0 + (rr[:, None] + 0.5) * step * (h.shape[0] - 1) / atlas_height
+        corrected = srgb(linear(pigment[rr] / 255.0) * cover.multiplier(xx, zz))
+        pigment[rr] = np.clip(np.rint(corrected * 255), 0, 255).astype("u1")
+    (out / "geology").mkdir(exist_ok=True)
+    Image.fromarray(pigment).save(out / "geology/pigment.png", compress_level=8)
     slots = {key: i for i, key in enumerate(keys)}
     size = N + GUTTER * 2
     src = Glb(terrain)
@@ -123,6 +140,9 @@ def build(terrain, surface, placements, out):
             uv[mask, 1] = ((slot // cols) * size + GUTTER + 0.5 + v * (N - 1)) / (
                 rows * size
             )
+        color = src.attr(ref["COLOR_0"])[original].astype("u1").copy()
+        factor = cover.multiplier(p[original, 0], p[original, 2])
+        color[:, :3] = np.clip(np.rint(color[:, :3] * factor), 0, 255).astype("u1")
         attrs = {
             "POSITION": attr(p[original].astype("<f4"), 5126, "VEC3", bounds=True),
             "NORMAL": attr(
@@ -130,7 +150,7 @@ def build(terrain, surface, placements, out):
             ),
             "TEXCOORD_0": attr(uv.astype("<f4"), 5126, "VEC2"),
             "COLOR_0": attr(
-                src.attr(ref["COLOR_0"])[original].astype("u1"),
+                color,
                 5121,
                 "VEC4",
                 normalized=True,

@@ -29,6 +29,9 @@ def habitat(surface, placements):
         i, j = round((px - x0) / step), round((pz - z0) / step)
         if 0 <= i < w and 0 <= j < d:
             stems[j, i] += prop["scale"] ** 1.4
+    from island_habitat_massing import Cover
+
+    cover = Cover(h, x0, z0, step, stems)
     canopy = gaussian_filter(stems, 4.4) * 98
     broken = np.sin(xx / 31 + 0.68 * np.cos(zz / 27)) + 0.6 * np.sin(zz / 18 - xx / 41)
     label = np.full(h.shape, TURF, np.uint8)
@@ -39,7 +42,7 @@ def habitat(surface, placements):
         (grade > 0.68 + 0.07 * broken) | ((h > 50) & (grade > 0.48 + 0.06 * broken))
     ] = STONE
     label[h < 0] = SAND
-    return h, label[::PATCH_CELLS, ::PATCH_CELLS], (x0, z0, step)
+    return h, label[::PATCH_CELLS, ::PATCH_CELLS], (x0, z0, step), cover
 
 
 def signature(labels, ix, iz):

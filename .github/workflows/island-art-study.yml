@@ -9,6 +9,7 @@ on:
       - scripts/verify_island_habitats.py
       - scripts/island_habitat_field.py
       - scripts/island_habitat_tiles.py
+      - scripts/island_habitat_massing.py
       - scripts/island_tidal_film.py
       - scripts/island_coast_plants.py
       - scripts/island_dune_communities.py
@@ -88,7 +89,7 @@ jobs:
             blender -b -t 2 --python-exit-code 1 -P scripts/render_island_geology.py -- "$R/terrain-chunks.glb" "$@" --cove-showcase --water-inputs "$W" --surface "$R/island-ridge-v2.bin" --placements "$R/props-ridge-v2.json"
           }
           python3 scripts/build_island_habitats.py --surface "$R/island-ridge-v2.bin" --terrain "$R/terrain-chunks.glb" --placements "$R/props-ridge-v2.json" --out "$R/substrates"
-          python3 scripts/verify_island_habitats.py "$R/terrain-chunks.glb" "$R/substrates/habitat-ground.glb"
+          python3 scripts/verify_island_habitats.py "$R/terrain-chunks.glb" "$R/substrates/habitat-ground.glb" --surface "$R/island-ridge-v2.bin" --placements "$R/props-ridge-v2.json"
           showcase "$S/before" --strandline "$D/strandline.glb" --coastal-light "$D/coastal-daylight.json"
           showcase "$S/after" --strandline "$S/strandline.glb" --coastal-light "$D/coastal-daylight.json" --habitats "$R/substrates/habitat-ground.glb"
           compare strand-eye 'Eastern strand at 86 cm | Same neutral light and lens'

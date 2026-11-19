@@ -187,6 +187,14 @@ def substrate(kind, variation):
         rgb += lichen[..., None] * np.array((6, 8, -19))
         occ *= 1 - 0.27 * slit
         rough = 0.69 + 0.17 * lichen + 0.08 * slit + 0.04 * brush
+    # Match average reflected light, not average encoded RGB. Each biome then
+    # preserves the world pigment as L0 hands off to the world-space L1 map.
+    # Keep the in-tile variation, with no large green/dark tile at a seam.
+    from island_habitat_massing import linear, srgb
+
+    reflectance = linear(np.clip(rgb / 255, 0, 1))
+    gain = linear(np.array([220, 220, 220]) / 255.0) / reflectance.mean(axis=(0, 1))
+    rgb = 255 * srgb(np.clip(reflectance * gain, 0, 1))
     return np.dstack((rgb, h, rough, occ)).astype("f")
 
 

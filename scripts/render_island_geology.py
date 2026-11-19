@@ -73,6 +73,15 @@ chunks = [o for o in bpy.data.objects if o.type == "MESH"]
 assert len(chunks) == 360
 habitats = {}
 if args.habitats:
+    # Far and middle use the literal replacement for the old global pigment;
+    # normal/roughness, all mesh topology and the stock range gate stay intact.
+    old = next(
+        i
+        for i in bpy.data.images
+        if Path(bpy.path.abspath(i.filepath)).name == "pigment.png"
+    )
+    old.filepath = str((args.habitats.parent / "geology" / "pigment.png").resolve())
+    old.reload()
     previous = set(bpy.data.objects)
     bpy.ops.import_scene.gltf(filepath=str(args.habitats.resolve()))
     for mesh in set(bpy.data.objects) - previous:
