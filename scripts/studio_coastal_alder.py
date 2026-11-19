@@ -17,6 +17,8 @@ from island_alder_bough import Brush, crown, distant
 
 def wood_and_tips(mesh, b):
     colour = mesh.color_attributes.active_color
+    old_normals = {}
+    b.wood_normals = []
     timber = []
     parent = {}
 
@@ -36,6 +38,10 @@ def wood_and_tips(mesh, b):
         ].color
         if g >= r:
             continue
+        for li in poly.loop_indices:
+            old_normals[mesh.loops[li].vertex_index] = mesh.corner_normals[
+                li
+            ].vector.copy()
         ids = [named(v) for v in poly.vertices]
         key = root(ids[0])
         for q in ids[1:]:
@@ -74,13 +80,14 @@ def wood_and_tips(mesh, b):
                 b.add(
                     p,
                     (
-                        0.14 + 0.47 * a,
+                        0.285 + 0.37 * a,
                         0.5095 + 0.0715 * (p.z - zmin) / max(zmax - zmin, 0.001),
                     ),
                 )
                 for p, a in zip(coords, angles)
             ]
             b.tri(*new)
+            b.wood_normals.extend(old_normals[i] for i in tri)
     return [p for _, p in sorted(ends, key=lambda pair: pair[0])]
 
 
@@ -158,8 +165,20 @@ def author(src, out):
             uv.data[loop.index].uv = b.uv[loop.vertex_index]
         for po in me.polygons:
             po.use_smooth = True
+        me.normals_split_custom_set(
+            [
+                (
+                    b.wood_normals[l.vertex_index]
+                    if l.vertex_index < wood
+                    else b.soft_normals.get(l.vertex_index, (0, 0, 0))
+                )
+                for l in me.loops
+            ]
+        )
         ob.data = me
         bpy.data.meshes.remove(old)
+        # The native model table addresses the glTF mesh by this stable name.
+        me.name = ob.name
         ob["art_owner"] = "alder-boughs.blend"
         ob["wood"] = "all original wood triangles in their original coordinates"
         ob.hide_set(level != 0)

@@ -27,3 +27,14 @@ space and shoreline. Use one reproducible editable .blend first; do not
 install a family of variants until that candidate reads materially better in
 both views. No native acceptance tests this week; do not overwrite the
 separate gameplay lane's village willow assets.
+
+The first full native-asset Blender board at `94b624b7` (44473796744)
+removed the tiered solid leaves nicely at 1.04 m, but the 146 m-wide guardian
+composition exposed a thinned, almost winter canopy. Do not install that file;
+its exported mesh names also need the stable native `Broadleaf_L0/1/2`
+contract. The new author preserves the original woody normals as well as
+coordinates, rolls small stem-supported clusters through the hollow canopy
+and gives the middle model a few dappled opaque *interior* leaf masses. Edges
+remain the finer real leaf silhouettes. The near forms do not gain a whole
+opaque roof. Photograph both cameras again; one convincing close model is
+not enough when the guardian view is the main playing perspective.

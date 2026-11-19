@@ -106,7 +106,10 @@ def clumps():
                 return mid(t) + transverse * wid * side
 
             t = [k / 18 for k in range(19)]
-            col = base * shade
+            # A few warm outer sprays hold the sun against a cool shaded interior.
+            col = base * shade + np.array([11, 12, 2]) * (
+                0.42 + 0.58 * max(0, 1 - p[1] / 512)
+            )
             one = [edge(q, 1) for q in t]
 
             def rgb(x):

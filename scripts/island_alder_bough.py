@@ -9,6 +9,7 @@ Z = Vector((0, 0, 1))
 
 class Brush:
     def __init__(self):
+        self.soft_normals = {}
         self.v = []
         self.uv = []
         self.f = []
@@ -44,7 +45,7 @@ def rod(b, pts, radii, sides):
                 b.add(
                     p + r * (math.cos(a) * u + math.sin(a) * v),
                     (
-                        0.14 + 0.80 * k / sides,
+                        0.29 + 0.66 * k / sides,
                         0.517 + 0.060 * (0.5 + 0.45 * math.sin(length)),
                     ),
                 )
@@ -66,8 +67,16 @@ def tile(b, root, forward, wide, roll, fall, chart, level, packet=False):
     cross = side * math.cos(roll) + up * math.sin(roll)
     # Bent, axial sprays grow from a precise point on the woody twig and
     # overlap neighbours obliquely; nothing rotates toward the camera.
-    ts = (0, 0.32, 0.66, 1) if level == 0 else (0, 0.5, 1) if level == 1 else (0, 1)
-    qs = (-1, 0, 1) if level < 2 else (-1, 1)
+    ts = (
+        (0, 0.32, 0.66, 1)
+        if level == 0 and packet
+        else (0, 0.5, 1) if level == 0 or level == 1 and packet else (0, 1)
+    )
+    qs = (
+        (-1, 0, 1)
+        if level == 0 or (level == 1 and packet and chart % 3 == 0)
+        else (-1, 1)
+    )
     rows = []
     for t in ts:
         row = []
@@ -166,9 +175,11 @@ def crown(b, hub, center, level, index, live_fork):
         bend = h + d * 0.34 * ln + c * k + Z * (rise * 0.6 + 0.15)
         tip = h + d * ln + c * k * 0.6 + Z * rise
         if level == 0:
-            rod(b, [h, bend, tip], [0.042, 0.024, 0.006], 4)
+            rod(b, [h, bend, tip], [0.042, 0.024, 0.006], 3)
         elif level == 1 and arm % 2 == 0:
             rod(b, [h, tip], [0.035, 0.006], 3)
+        if arm in (0, 2, 4):
+            knot(b, bend.lerp(tip, 0.27) + Z * 0.09, d, index * 5 + arm, level)
         # The body of a crown is several oblique and folded forked sprays.
         # Individual thinner shoots escape its margins and negative spaces.
         packet_rng = Random(731683 + index * 97 + arm * 1739)
@@ -214,7 +225,11 @@ def crown(b, hub, center, level, index, live_fork):
             roll = rng.uniform(-1.22, 1.18)
             fall = rng.uniform(-0.23, 0.08)
             ch = (index + arm + cluster) % 4
-            if level == 1 and cluster not in (1, 4):
+            if level == 0 and (
+                cluster == 0 and (arm + index) % 2 == 0 or cluster == 4 and arm % 2 == 0
+            ):
+                continue
+            if level == 1 and (cluster != 3 or arm % 2 != 0):
                 continue
             if level == 2 and (arm not in (0, 2, 4) or cluster not in (1, 4)):
                 continue
@@ -259,3 +274,67 @@ def distant(b, hub, index):
     for k in range(5):
         b.tri(ids[k], ids[(k + 1) % 5], top)
         b.tri(ids[(k + 1) % 5], ids[k], bot)
+
+
+def knot(b, at, facing, index, level):
+    """Palm-sized sprays overlap around a shaded nonplanar heart of the bough.
+
+    This little five-lobed core stays inboard of the loose terminal leaves:
+    rotated, taller than its half-width, never an entire solid canopy cap.
+    It uses the dense interior of the real cut-leaf print, not a flat chip.
+    """
+    rng = Random(842911 + index * 691)
+    rad = Vector(facing)
+    rad.z = rng.uniform(-0.3, 0.43)
+    rad.normalize()
+    side = rad.cross(Z).normalized()
+    up = side.cross(rad).normalized()
+    c = Vector(at)
+    long = rng.uniform(0.36, 0.55)
+    wide = rng.uniform(0.24, 0.41)
+    high = rng.uniform(0.26, 0.43)
+    opaque = level == 1 or index % 5 == 2
+    if level == 1:
+        long *= 1.80
+        wide *= 1.86
+        high *= 1.88
+        c += rad * 0.15 + side * (0.16 * math.sin(index))
+    n = 7 if level == 0 else 5
+    shape = []
+    chart = index % 4
+    for k in range(n):
+        a = (k + 0.15 * math.sin(index)) * math.tau / n
+        shape.append(
+            c
+            + rad * (long * math.cos(a))
+            + side * (wide * math.sin(a))
+            + up * (0.29 * high * math.sin(2 * a + index))
+        )
+    bottom = c + side * wide * 0.12 - rad * long * 0.26 - up * high * 0.68
+    top = c - side * wide * 0.21 + rad * long * 0.18 + up * high * 0.85
+
+    def add(p, u, v):
+        tex = (
+            ((106 + 151 * u) / 1024, 1 - (426 + 79 * (1 - v)) / 1024)
+            if opaque
+            else ((chart + u) * 0.25, v * 0.5)
+        )
+        vid = b.add(p, tex)
+        delta = p - c
+        normal = (
+            rad * (delta.dot(rad) / (long * long))
+            + side * (delta.dot(side) / (wide * wide))
+            + up * (delta.dot(up) / (high * high))
+        )
+        b.soft_normals[vid] = (normal.normalized() + 0.16 * Z).normalized()
+        return vid
+
+    # Overlap the moss-green leaf texture through this interior. It is neither
+    # a silhouette disc nor a zero-thickness face-to-camera layer.
+    for k in range(n):
+        a = shape[k]
+        z = shape[(k + 1) % n]
+        u0 = 0.06 + 0.035 * (k % 2)
+        u1 = 0.93 - 0.03 * (k % 3)
+        b.tri(add(a, u0, 0.19), add(z, u1, 0.24), add(top, 0.52, 0.90))
+        b.tri(add(z, u1, 0.83), add(a, u0, 0.79), add(bottom, 0.49, 0.13))

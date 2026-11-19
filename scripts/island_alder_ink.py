@@ -132,10 +132,10 @@ def paint(path):
     brush = ImageDraw.Draw(atlas)
     for i, tone in enumerate(
         (
-            (72, 100, 74),
-            (85, 118, 77),
-            (102, 134, 81),
-            (119, 144, 82),
+            (77, 106, 73),
+            (91, 124, 77),
+            (110, 141, 82),
+            (128, 154, 83),
             (80, 112, 83),
             (90, 125, 81),
         )
@@ -144,6 +144,15 @@ def paint(path):
     from island_alder_clusters import clumps
 
     whole = Image.new("RGBA", (1024, 1024))
+    foliage = clumps()
+    # Distant bough hearts use the actual leaf painting over a shaded interior.
+    # There are no opaque discs at the outline; only the interior gets this
+    # patch where a dozen sub-pixel leaves visually combine at guardian height.
+    interior = Image.new("RGB", (158, 84), (83, 113, 73))
+    for n, dx in enumerate((68, 17, 148)):
+        img = foliage.crop((dx, 143 + n * 37, dx + 158, 227 + n * 37))
+        interior.paste(img.convert("RGB"), mask=img.getchannel("A"))
+    atlas.paste(interior, (103, 424))
     whole.paste(atlas, (0, 0))
-    whole.paste(clumps(), (0, 512))
+    whole.paste(foliage, (0, 512))
     whole.save(path, optimize=True)
