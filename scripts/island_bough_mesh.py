@@ -7,6 +7,7 @@ and some clear sky, not a stack of horizontal discs or camera-facing cards.
 
 import math
 import numpy as np
+from island_needle_surface import uv
 
 
 def unit(v):
@@ -17,9 +18,16 @@ class Crown:
     def __init__(self):
         self.v = []
         self.c = []
+        self.uv = []
         self.f = []
 
-    def vertex(self, p, c):
+    def vertex(self, p, c, tex=None):
+        if tex is None:
+            tex = (
+                0.15 + 0.76 * np.clip(p[1] / 12, 0, 1),
+                0.89 + 0.072 * math.sin(0.87 * p[0] + 0.68 * p[2] + 0.16 * p[1]),
+            )
+        self.uv.append(tex)
         self.v.append(np.array(p))
         self.c.append(np.array(c))
         return len(self.v) - 1
@@ -139,7 +147,8 @@ def spray(out, b, lod, boundary, seed, sub=False):
         stations = [0.36, 0.71] if not sub else [0.5]
     else:
         stations = [0.48]
-    start = out.vertex(axis(b, 0.0), b["tint"] * 0.76)
+    alt = bool(seed % 2)
+    start = out.vertex(axis(b, 0.0), b["tint"] * 0.76, uv(0, 0, alt))
     rows = []
     for j, t in enumerate(stations):
         p = axis(b, t)
@@ -147,6 +156,8 @@ def spray(out, b, lod, boundary, seed, sub=False):
         a = half * swell * (0.8 + 0.33 * rng.random())
         low = reach * (0.25 + 0.19 * rng.random()) * (1 - 0.32 * t)
         rise = reach * (0.13 + 0.14 * rng.random()) * swell
+        low *= (1, 1.12, 1.42)[lod]
+        rise *= (1, 1.08, 1.27)[lod]
         # Ordered in the cross section (viewed from tip), not flat billboards.
         vs = [
             p + np.array((0.0, rise, 0.0)),
@@ -166,8 +177,15 @@ def spray(out, b, lod, boundary, seed, sub=False):
             b["tint"] * (0.66 + 0.11 * t),
             b["tint"] * (0.92 + 0.13 * t),
         ]
-        rows.append([out.vertex(v, c) for v, c in zip(vs, cols, strict=True)])
-    end = out.vertex(axis(b, 1.0), b["tint"] * 1.25 + np.array((0.025, 0.027, 0.007)))
+        rows.append(
+            [
+                out.vertex(v, c, uv(t, f, alt))
+                for v, c, f in zip(vs, cols, (0, 1, 0, -1), strict=True)
+            ]
+        )
+    end = out.vertex(
+        axis(b, 1.0), b["tint"] * 1.25 + np.array((0.025, 0.027, 0.007)), uv(1, 0, alt)
+    )
     for j in range(4):
         out.tri(start, rows[0][(j + 1) % 4], rows[0][j])
     for a, bb in zip(rows, rows[1:]):
@@ -273,12 +291,16 @@ def mesh(boughs, profile, quarter, lod):
                 mid = origin + 0.49 * (end - origin)
                 n = t["side"] * t["width"] * 0.65
                 col = b["tint"] * (0.84 + 0.07 * idx)
-                begin = out.vertex(origin, col * 0.79)
-                tip = out.vertex(end, col * 1.18)
+                begin = out.vertex(origin, col * 0.79, uv(0, 0, idx % 2))
+                tip = out.vertex(end, col * 1.18, uv(1, 0, idx % 2))
                 ring = (
-                    out.vertex(mid + n, col * 0.91),
-                    out.vertex(mid + np.array((0, t["width"] * 0.73, 0)), col * 1.15),
-                    out.vertex(mid - n, col * 0.90),
+                    out.vertex(mid + n, col * 0.91, uv(0.48, 1, idx % 2)),
+                    out.vertex(
+                        mid + np.array((0, t["width"] * 0.73, 0)),
+                        col * 1.15,
+                        uv(0.48, 0, idx % 2),
+                    ),
+                    out.vertex(mid - n, col * 0.90, uv(0.48, -1, idx % 2)),
                 )
                 for v in range(3):
                     out.tri(begin, ring[v], ring[(v + 1) % 3])
@@ -304,6 +326,7 @@ def mesh(boughs, profile, quarter, lod):
             * (1 - 0.81 * t) ** 0.7
             * (0.72 + 0.27 * math.sin(t * math.pi))
         )
+        rad *= (1, 1.14, 1.67)[lod]
         row = []
         for a in range(angles):
             az = (

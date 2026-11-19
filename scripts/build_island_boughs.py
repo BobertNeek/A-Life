@@ -93,13 +93,35 @@ def build(source, placements, out):
     for m in doc0["meshes"]:
         stems.append(rooted_trunk(doc0, bin0, m["primitives"][0]))
     out.mkdir(exist_ok=True, parents=True)
+    from island_needle_surface import bake
+
+    mean = bake(out / "canopy")
     doc = dict(
         asset=dict(version="2.0", generator="Qualia interlocking maritime boughs"),
         scene=0,
         scenes=[dict(nodes=[])],
         nodes=[],
         meshes=[],
-        materials=doc0["materials"],
+        materials=[
+            dict(
+                name="Rooted pine bark and needle sprays",
+                doubleSided=True,
+                normalTexture=dict(index=1),
+                occlusionTexture=dict(index=2, strength=0.72),
+                pbrMetallicRoughness=dict(
+                    baseColorTexture=dict(index=0),
+                    metallicRoughnessTexture=dict(index=2),
+                    metallicFactor=0,
+                    roughnessFactor=1,
+                ),
+            )
+        ],
+        images=[
+            dict(uri="canopy/" + s)
+            for s in ("needles.png", "needles-normal.png", "needles-orm.png")
+        ],
+        samplers=[dict(magFilter=9729, minFilter=9987, wrapS=33071, wrapT=33071)],
+        textures=[dict(sampler=0, source=k) for k in range(3)],
         bufferViews=[],
         accessors=[],
     )
@@ -149,7 +171,7 @@ def build(source, placements, out):
                 n = normals(p, f)
                 foliage = np.full((len(p), 4), 255, "u1")
                 foliage[:, :3] = (
-                    np.rint(255 * np.array(new.c)).clip(0, 255).astype("u1")
+                    np.rint(255 * np.array(new.c) / mean).clip(0, 255).astype("u1")
                 )
                 xyz = np.vstack((pt, p))
                 norm = np.vstack((nt, n))
@@ -157,7 +179,19 @@ def build(source, placements, out):
                 faces = np.vstack((ft, len(pt) + f))
                 assert len(faces) <= budget and xyz[:, 1].max() < 12.001
                 name = f"PineForm{(profile-1)*4+quarter+1}_L{l}"
+                # White, flat, padded bark swatch. Nondegenerate coordinates
+                # let native tangent generation run even on triangles wholly
+                # inside the unchanged original trunk.
+                bark_uv = np.column_stack(
+                    (
+                        0.048 + 0.071 * old[:, 0],
+                        0.944 + 0.024 * old[:, 1] / 12 + 0.046 * old[:, 2],
+                    )
+                )
+                bark_uv = np.clip(bark_uv, (0.006, 0.915), (0.081, 0.984))
+                tex = np.vstack((bark_uv, new.uv))
                 raw = dict(
+                    TEXCOORD_0=attr(tex, "<f4", 5126, "VEC2"),
                     POSITION=attr(xyz, "<f4", 5126, "VEC3", bounds=True),
                     NORMAL=attr(norm, "<f4", 5126, "VEC3"),
                     COLOR_0=attr(col, "u1", 5121, "VEC4", norm=True),
@@ -194,7 +228,16 @@ def build(source, placements, out):
 def verify(source, placements, surface, out):
     d0, b0 = parse(source)
     d, b = parse(out / "grove-crowns.glb")
-    assert len(d["meshes"]) == 36 and d["materials"] == d0["materials"]
+    assert (
+        len(d["meshes"]) == 36
+        and len(d["materials"]) == 1
+        and len(d["images"]) == 3
+        and d["materials"][0]["normalTexture"]["index"] == 1
+    )
+    from PIL import Image
+
+    for e in d["images"]:
+        Image.open(out / e["uri"]).verify()
     roots = [rooted_trunk(d0, b0, m["primitives"][0]) for m in d0["meshes"]]
     bounds = {}
     outlines = {}
@@ -210,6 +253,13 @@ def verify(source, placements, surface, out):
         nn = np.array(values(d, b, a["NORMAL"]))
         cc = np.array(values(d, b, a["COLOR_0"], normalize=False))
         ix = np.array(values(d, b, pr["indices"])).reshape(-1, 3)
+        tex = np.array(values(d, b, a["TEXCOORD_0"]))
+        assert np.isfinite(tex).all() and tex.min() > 0 and tex.max() < 1
+        a_uv, b_uv = tex[ix[:, 1]] - tex[ix[:, 0]], tex[ix[:, 2]] - tex[ix[:, 0]]
+        assert np.min(np.abs(a_uv[:, 0] * b_uv[:, 1] - a_uv[:, 1] * b_uv[:, 0])) > 1e-12
+        assert np.all(tex[: len(p0), 0] < 47 / 512) and np.all(
+            tex[: len(p0), 1] > 461 / 512
+        )
         assert (
             np.array_equal(ix[: len(ft)], ft)
             and len(ix) <= maxtri
@@ -249,6 +299,12 @@ def verify(source, placements, surface, out):
         )
         for i in range(2)
     }
+    # Eight real projected canopy outlines per form; simply matching height
+    # and axes does not prevent far trees from turning into thin black pins.
+    for l, (iou, area) in enumerate(((0.72, 0.78), (0.68, 0.75))):
+        assert screens[:, l, :, 0].min() > iou, projected
+        assert screens[:, l, :, 1].min() > area, projected
+        assert screens[:, l, :, 1].max() < 1.20, projected
     ratio = []
     for v in bounds.values():
         assert np.ptp([q[0] for q in v]) < 0.02

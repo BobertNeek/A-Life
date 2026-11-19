@@ -7,6 +7,7 @@ on:
       - scripts/build_island_boughs.py
       - scripts/island_bough_mesh.py
       - scripts/island_canopy_outline.py
+      - scripts/island_needle_surface.py
 permissions:
   contents: read
 concurrency:
