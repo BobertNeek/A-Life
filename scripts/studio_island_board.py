@@ -153,6 +153,11 @@ elif subject == "erratics":
         (soil / "geology").symlink_to(
             (d / "geology").resolve(), target_is_directory=True
         )
+    if board.get("shared_microfield"):
+        from island_ground_microfield import build as microfield
+
+        micro = out / "artist-microfield"
+        microfield(SURFACE, d / "props.json", micro)
 elif subject == "fault-scarp":
     from island_fault_scarp import sculpt
 
@@ -542,6 +547,10 @@ if subject == "erratics" and board.get("hero_soil"):
     subject_label = (
         "Sheltered till on the original soil, at twice the close pigment density"
     )
+if subject == "erratics" and board.get("shared_microfield"):
+    subject_label = (
+        "Original habitat pigment, additional centimetre-scale island relief"
+    )
 if subject == "fault-scarp" and board.get("wall_beds"):
     subject_label = "Same seated scarp, with its exposed bed on the true hillside"
 if subject == "inlet-underpaint" and board.get("tidecast_pockets"):
@@ -641,10 +650,21 @@ for tag in board["angles"]:
             out / side,
             *views[tag],
             *(
+                ["--ground-microfield", micro]
+                if subject == "erratics"
+                and board.get("shared_microfield")
+                and side == "after"
+                else []
+            ),
+            *(
                 ["--wild-sward", moraine]
                 if subject == "erratics"
                 and board.get("glacial_train")
-                and (side == "after" or board.get("hero_soil"))
+                and (
+                    side == "after"
+                    or board.get("hero_soil")
+                    or board.get("shared_microfield")
+                )
                 else []
             ),
             *(
@@ -759,7 +779,7 @@ for tag in board["angles"]:
                     soil / "habitat-ground.glb"
                     if subject == "erratics"
                     and board.get("hero_soil")
-                    and side == "after"
+                    and (side == "after" or board.get("shared_microfield"))
                     else d / "habitat-ground.glb"
                 )
             ),

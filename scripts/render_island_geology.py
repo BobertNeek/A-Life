@@ -33,6 +33,11 @@ cli.add_argument(
 cli.add_argument(
     "--habitats", type=Path, help="Replace only the corresponding selected L0 chunks"
 )
+cli.add_argument(
+    "--ground-microfield",
+    type=Path,
+    help="Optional real-coordinate close substrate for DCC art only",
+)
 cli.add_argument("--surface", type=Path)
 cli.add_argument("--placements", type=Path)
 cli.add_argument(
@@ -272,6 +277,10 @@ if args.habitats:
         if mesh.type == "MESH":
             _, ix, iz = mesh.name.split("_")
             habitats[int(ix), int(iz)] = mesh
+if args.ground_microfield:
+    from studio_ground_microfield import bind as apply_microfield
+
+    apply_microfield(habitats.values(), args.ground_microfield)
 if args.marine_sky:
     old = set(bpy.data.objects)
     bpy.ops.import_scene.gltf(filepath=str(args.marine_sky.resolve()))
