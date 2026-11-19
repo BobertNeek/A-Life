@@ -1,0 +1,16 @@
+{
+  "editor": {
+    "originally_rooted_sites": 88,
+    "placed_triangles": 19854,
+    "models": 3
+  },
+  "body": {
+    "originally_rooted_sites": 11,
+    "placed_triangles": 2454,
+    "models": 3
+  },
+  "guardian": {
+    "placed_triangles": 0
+  },
+  "visual_meshes_only": true
+}
