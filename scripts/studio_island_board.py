@@ -121,6 +121,66 @@ elif subject == "coastal-alder":
     blender(
         "studio_coastal_alder.py", alder, "--author-from", old_tree / "Broadleaf.glb"
     )
+elif subject == "inlet-underpaint":
+    from island_inlet_underpaint import smooth_bank
+
+    original_bank = out / "stock-inlet"
+    selected = "0d2bfa94e2292fdce5d0b4b8abb04098d7e54385"
+    subprocess.run(
+        ["git", "fetch", "--no-tags", "--depth=1", "origin", selected], check=True
+    )
+    for piece in (
+        "inlet-bank.glb",
+        "inlet/inlet-bed.png",
+        "inlet/inlet-normal.png",
+        "inlet/inlet-orm.png",
+    ):
+        path = original_bank / piece
+        path.parent.mkdir(exist_ok=True, parents=True)
+        with path.open("wb") as to:
+            subprocess.run(
+                ["git", "show", f"{selected}:{(d/piece).relative_to(root).as_posix()}"],
+                stdout=to,
+                check=True,
+            )
+    skin = smooth_bank(
+        d / "habitat-ground.glb",
+        SURFACE,
+        original_bank,
+        out / "artist-inlet-underpaint",
+    )
+    # Regenerate the far paint once over the last *unpainted* pre-bank
+    # macro. A new V1 coat must not accumulate on the earlier one.
+    from build_island_inlet import V2
+    from island_inlet_distance import far_pigment
+
+    previous = "ae225e4a572c50c99140146322b33eb30c7b0b65"
+    frozen_pigment = out / "pre-bank.png"
+    subprocess.run(
+        ["git", "fetch", "--no-tags", "--depth=1", "origin", previous], check=True
+    )
+    with frozen_pigment.open("wb") as into:
+        subprocess.run(
+            [
+                "git",
+                "show",
+                f"{previous}:{(d/'geology/pigment.png').relative_to(root).as_posix()}",
+            ],
+            stdout=into,
+            check=True,
+        )
+    revised_pigment = skin.parent / "geology/pigment.png"
+    stats = far_pigment(
+        SURFACE,
+        V2,
+        skin.parent / "inlet/inlet-bed.png",
+        frozen_pigment,
+        revised_pigment,
+    )
+    note = skin.parent / "bank-source.json"
+    note.write_text(
+        json.dumps({**json.loads(note.read_text()), **stats}, indent=2) + "\n"
+    )
 elif subject == "inlet-ground":
     from build_island_inlet import export
 
@@ -301,6 +361,7 @@ subject_label = {
     "wild-meadow": "Current meadow and coastal sedge / bellflower study",
     "inlet-survey": "The actual southern inlet before new bank art",
     "inlet-ground": "The native southern tidal cut",
+    "inlet-underpaint": "Original bank pigment and native-material feathering",
     "inlet-concept": "Shape study: actual V1 and proposed asymmetric inlet",
 }[subject]
 base_water = root / "studies/island-art-week/water-inputs"
@@ -308,6 +369,7 @@ if subject in (
     "coastal-alder",
     "inlet-survey",
     "inlet-ground",
+    "inlet-underpaint",
     "inlet-concept",
     "meadow-survey",
     "wild-meadow",
@@ -323,7 +385,10 @@ if subject == "inlet-concept":
     concept_water = out / "studied-water"
     paint_concept_water(SURFACE, base_water, concept_water)
 for tag in board["angles"]:
-    for side in ("before", "after") if paired else ("after",):
+    sides = ("before", "after") if paired else ("after",)
+    if subject == "inlet-underpaint" and tag == "inlet-bar":
+        sides = ("bare", "before", "after")
+    for side in sides:
         pack = fresh if side == "after" else old
         water = chart if subject == "cove-water" and side == "after" else base_water
         if subject == "inlet-concept" and side == "after":
@@ -341,6 +406,7 @@ for tag in board["angles"]:
                 "coastal-alder",
                 "inlet-survey",
                 "inlet-ground",
+                "inlet-underpaint",
                 "inlet-concept",
                 "meadow-survey",
                 "wild-meadow",
@@ -360,9 +426,25 @@ for tag in board["angles"]:
             ),
             *(["--quick-proof"] if approx else []),
             *(
+                [
+                    "--inlet-cut",
+                    skin if side == "after" else original_bank / "inlet-bank.glb",
+                ]
+                if subject == "inlet-underpaint" and side != "bare"
+                else []
+            ),
+            *(
                 ["--inlet-cut", skin]
                 if subject == "inlet-concept"
                 or (subject == "inlet-ground" and side == "after")
+                else []
+            ),
+            *(
+                [
+                    "--original-macro",
+                    revised_pigment if side == "after" else frozen_pigment,
+                ]
+                if subject == "inlet-underpaint" and side != "before"
                 else []
             ),
             *(
@@ -427,6 +509,13 @@ for tag in board["angles"]:
                 if subject == "forest-fern"
                 else []
             ),
+        )
+    if subject == "inlet-underpaint" and tag == "inlet-bar":
+        make(
+            out / "bare" / f"{tag}.png",
+            out / "before" / f"{tag}.png",
+            "V1 original terrain only / existing V1 bank film | identical daylight and camera | Blender",
+            out / "inlet-bar-source.jpg",
         )
     if paired:
         caption = (

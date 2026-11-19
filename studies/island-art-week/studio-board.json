@@ -1,18 +1,13 @@
 {
-  "subject": "wild-meadow",
+  "subject": "inlet-underpaint",
   "angles": [
-    "meadow-eye",
-    "meadow-bells",
-    "meadow-reach",
-    "sapling-eye"
+    "inlet-bar",
+    "inlet-eye",
+    "inlet-bank"
   ],
   "paired": true,
   "quick": false,
   "samples": 48,
   "editable_canopy": false,
-  "meadow_sward": true,
-  "art_note": "Retain the selected grounded wind-combed grass, deepen its green turf, add low true triple-leaved herbs just around the actual old Flowers, preserve the grass and flower positions, and replace smooth balloon-like young tree crowns on the existing woody forks. Actual meadow, flower 3394 and sapling 1116; no game or physics changes.",
-  "inked_swards": false,
-  "felted_swards": true,
-  "young_saltwood": true
+  "art_note": "The upstream material fault traces the existing binary cut-bank mask exactly. Compare bare original terrain, installed V1 and material-underpainted V1 from the same lens; transition by sampling the actual habitat materials through the old band. Existing heights, roots, shoreline and separate editable inlet shape remain untouched."
 }
