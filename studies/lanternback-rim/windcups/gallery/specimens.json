@@ -1,0 +1,20 @@
+{
+  "meshes": 3,
+  "triangles": 6868,
+  "variants": {
+    "FoldedPennon1": 2384,
+    "FoldedPennon2": 2100,
+    "FoldedPennon3": 2384
+  },
+  "middle": {
+    "meshes": 3,
+    "triangles": 2034,
+    "variants": {
+      "FoldedPennon1": 708,
+      "FoldedPennon2": 618,
+      "FoldedPennon3": 708
+    }
+  },
+  "scale": "metres",
+  "not_registered": true
+}
