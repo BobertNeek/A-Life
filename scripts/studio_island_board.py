@@ -109,12 +109,26 @@ elif subject == "erratics":
             (d / "minerals").resolve(), target_is_directory=True
         )
         for kind in ("Cliff", "Scree"):
-            if kind == "Scree" and folder == erratic_new and board.get("talus_study"):
+            if kind == "Scree" and board.get("talus_study"):
                 continue
             (folder / f"{kind}.glb").symlink_to((d / f"{kind}.glb").resolve())
     subprocess.run(
         ["git", "fetch", "--no-tags", "--depth=1", "origin", frozen], check=True
     )
+    if board.get("talus_study"):
+        # After eventual selection the active Scree GLB is no longer the
+        # original. Both future rebakes and camera controls require the
+        # versioned donor to avoid quietly sculpting a sculpture again.
+        with (erratic_old / "Scree.glb").open("wb") as target:
+            subprocess.run(
+                [
+                    "git",
+                    "show",
+                    f"{frozen}:{(d/'Scree.glb').relative_to(root).as_posix()}",
+                ],
+                stdout=target,
+                check=True,
+            )
     if board.get("mineral_study"):
         if board.get("weather_rind"):
             from island_erratic_rind import paint as minerals
