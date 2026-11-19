@@ -16,5 +16,6 @@
   "hero_soil": false,
   "shared_microfield": false,
   "talus_study": true,
-  "art_note": "Only native 22-fragment Scree changes, over actual 1303. The neighbouring 1383 boulder/forest, placement transforms, material, ordinary V1 terrain and daylight stay identical. 1.04m eye and fixed guardian total deposit, CPU Blender only. Distinguish fracturing and silhouettes from a paint trick; no collider/game changes or tests."
+  "art_note": "At actual native #1303 the same cleaved shingle is photographed twice. Only the second placing seats each decorative body into the real triangle slope. Same yaw, scale and native placement, adjacent 1383 boulder, trees, ordinary V1 terrain and light. Offline CPU Blender artwork, not a game test.",
+  "talus_contact": true
 }

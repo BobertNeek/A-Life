@@ -169,6 +169,24 @@ elif subject == "erratics":
                 (pre_talus / name).symlink_to(
                     donor.resolve(), target_is_directory=donor.is_dir()
                 )
+    if board.get("talus_contact"):
+        from island_talus_contact import seated
+
+        if not board.get("talus_study"):
+            raise ValueError("Seat the same carved shingle on both sides.")
+        # The before artist library keeps its own unchanged carved Scree.glb;
+        # only after supplies one extra site-specific variant.
+        old_scree = pre_talus / "Scree.glb"
+        old_scree.unlink()
+        old_scree.symlink_to((erratic_new / "Scree.glb").resolve())
+        index = 1303
+        catalogue["seated_study"] = seated(
+            erratic_new / "Scree.glb",
+            erratic_new / f"ScreeSeat{index}.glb",
+            SURFACE,
+            json.loads((d / "props.json").read_text())[index],
+            index,
+        )
     (erratic_new / "catalogue.json").write_text(json.dumps(catalogue, indent=2) + "\n")
     if board.get("glacial_train"):
         from island_erratic_train import bake
@@ -601,6 +619,10 @@ if subject == "erratics" and board.get("silverleaf"):
     )
 if subject == "erratics" and board.get("talus_study"):
     subject_label = "Woodland talus: the original 22 stones, flaked against the bedding"
+if subject == "erratics" and board.get("talus_contact"):
+    subject_label = (
+        "Actual woodland shingle: the same 22 stones, seated on the individual slopes"
+    )
 if subject == "fault-scarp" and board.get("wall_beds"):
     subject_label = "Same seated scarp, with its exposed bed on the true hillside"
 if subject == "inlet-underpaint" and board.get("tidecast_pockets"):

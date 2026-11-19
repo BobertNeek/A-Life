@@ -621,8 +621,13 @@ if (
             and args.cliff_library
             and (args.cliff_library / f"CliffSeat{index}.glb").is_file()
         )
-        if seated:
-            model_key = f"CliffSeat{index}"
+        loose_seat = (
+            kind == "Scree"
+            and args.stone_library
+            and (args.stone_library / f"ScreeSeat{index}.glb").is_file()
+        )
+        if seated or loose_seat:
+            model_key = f"{kind}Seat{index}"
         if kind == "Grass" and args.meadow_habits:
             from island_meadow_variation import family
 
@@ -646,13 +651,15 @@ if (
             if kind in ("Grass", "Flowers") and args.meadow_library:
                 where = args.meadow_library
             bpy.ops.import_scene.gltf(
-                filepath=str(where / f"{model_key if seated else kind}.glb")
+                filepath=str(
+                    where / f"{model_key if seated or loose_seat else kind}.glb"
+                )
             )
             items = set(bpy.data.objects) - old
             names = (
                 ["Grass", "GrassSilver", "GrassAmber"]
                 if kind == "Grass" and args.meadow_habits
-                else [model_key if seated else kind]
+                else [model_key if seated or loose_seat else kind]
             )
             for name in names:
                 for lod_index in (0, 1, 2):
