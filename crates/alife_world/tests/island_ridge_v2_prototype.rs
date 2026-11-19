@@ -1,8 +1,10 @@
 //! Opt-in, in-memory compatibility receipt for the isolated study. No user profile,
 //! training fixture, or default new-game mapping participates.
-use alife_core::Vec3f;
+use alife_core::{BrainScaleTier, Vec3f};
 use alife_world::{
-    island_terrain, persistence::WorldSaveState, HeadlessScenarioBuilder, WorldTerrain,
+    island_terrain,
+    persistence::{AssetManifest, PortableSaveFile, RuntimeConfig},
+    HeadlessScenarioBuilder, WorldTerrain,
 };
 
 fn prototype() -> WorldTerrain {
@@ -26,7 +28,7 @@ fn prototype() -> WorldTerrain {
     WorldTerrain::new(data, old.limits()).unwrap()
 }
 
-fn save(terrain: Option<&WorldTerrain>) -> WorldSaveState {
+fn save(terrain: Option<&WorldTerrain>) -> PortableSaveFile {
     let mut world = HeadlessScenarioBuilder::new(412).build().unwrap();
     if let Some(map) = terrain {
         world
@@ -35,7 +37,15 @@ fn save(terrain: Option<&WorldTerrain>) -> WorldSaveState {
     } else {
         world.enable_island_for_new_game().unwrap();
     }
-    serde_json::from_slice(&serde_json::to_vec(&world.save_state()).unwrap()).unwrap()
+    let file = PortableSaveFile::from_headless_world(
+        "ridge-version-compatibility",
+        &world,
+        RuntimeConfig::deterministic_default(412, BrainScaleTier::Standard2048),
+        AssetManifest::empty(),
+        Vec::new(),
+    )
+    .unwrap();
+    PortableSaveFile::from_json_str(&file.to_json_string_pretty().unwrap()).unwrap()
 }
 
 #[test]
@@ -46,10 +56,10 @@ fn independent_ridge_and_original_terrain_survive_exact_save_restore() {
     let revised = prototype();
     let revised_save = save(Some(&revised));
     assert_ne!(legacy.binding(), revised.binding());
-    assert_eq!(original_save.terrain, Some(legacy.binding()));
-    assert_eq!(revised_save.terrain, Some(revised.binding()));
+    assert_eq!(original_save.world.terrain, Some(legacy.binding()));
+    assert_eq!(revised_save.world.terrain, Some(revised.binding()));
     for (source, expected) in [(&revised_save, &revised), (&original_save, &legacy)] {
-        let restored_world = source.restore().unwrap();
+        let restored_world = source.restore_headless_world().unwrap();
         let restored = restored_world.terrain().unwrap();
         assert_eq!(restored.binding(), expected.binding());
         assert_eq!(restored.state(), expected.state());
@@ -64,7 +74,7 @@ fn independent_ridge_and_original_terrain_survive_exact_save_restore() {
         assert!(restored.walkable(80.0, 250.0));
     }
     let mut mismatched = revised_save;
-    mismatched.terrain = original_save.terrain;
-    assert!(mismatched.restore().is_err());
-    assert_eq!(save(None).terrain, Some(legacy.binding()));
+    mismatched.world.terrain = original_save.world.terrain;
+    assert!(mismatched.restore_headless_world().is_err());
+    assert_eq!(save(None).world.terrain, Some(legacy.binding()));
 }
