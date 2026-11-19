@@ -1,24 +1,11 @@
 {
-  "subject": "erratics",
+  "subject": "leeward-passage",
   "angles": [
-    "woodland-gap",
-    "woodland-edge"
+    "reach-guardian",
+    "reach-strand",
+    "reach-meadow"
   ],
-  "paired": false,
-  "quick": false,
-  "samples": 80,
-  "editable_canopy": false,
-  "mineral_study": true,
-  "weather_rind": true,
-  "rolled_toe": true,
-  "glacial_train": false,
-  "silverleaf": false,
-  "hero_soil": false,
-  "shared_microfield": false,
-  "talus_study": true,
-  "art_note": "Two finished RIGHT frames only: source 5273dd86 already rendered both locked LEFT matched ordinary-V1 previous-brush controls and the final solid boulder A/B, save the unnecessary duplicate work. Same boulder socket, same image samples, same camera exposure, maps and original trees. Earlier four-species pass removed rows but dispersed into speckles; here its actual families collect near irregular partially overlapping nurse centres, with a fuller shaded fern and trefoil and low glaucous gravel edge. Assemble honest final single editable folio using the named frozen before camera frames.",
-  "talus_contact": true,
-  "woodland_edge": true,
-  "boulder_mount": true,
-  "edge_succession": true
+  "paired": true,
+  "samples": 48,
+  "art_note": "Shellback Reach: joined 218.88 metre dry native nursery approach to the southern sea. Actual terrain and props on both sides. Art only; no native, no test or game."
 }

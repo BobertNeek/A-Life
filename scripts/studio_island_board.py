@@ -35,6 +35,12 @@ def blender(script, *args):
 # The GLB exporter is the production operation. Do not call its separate
 # test/verification CLI in a studio workweek.
 subject = board["subject"]
+if subject == "leeward-passage":
+    # An independent artwork; neither a game asset install nor a test lane.
+    sys.path.insert(0, str(root / "studies/leeward-passage"))
+    from atelier import photograph
+    photograph(root, d, SURFACE, board, out, blender, make)
+    raise SystemExit(0)
 approx = board.get("quick", False)
 paired = board.get("paired", False)
 fresh = d

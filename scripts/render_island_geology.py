@@ -197,6 +197,8 @@ cli.add_argument(
 cli.add_argument(
     "--copse-floor", type=Path, help="Optional close-only rooted woodland community art"
 )
+cli.add_argument("--leeward-view", choices=("reach-meadow", "reach-strand", "reach-guardian"))
+cli.add_argument("--leeward-paint", type=Path, help="One isolated 219m Shellback Reach art study")
 args = cli.parse_args(sys.argv[sys.argv.index("--") + 1 :])
 args.out.mkdir(parents=True, exist_ok=True)
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -620,6 +622,10 @@ if (
                 0,
             )
         ]
+    if args.leeward_view:
+        sys.path.insert(0, str(root / "studies/leeward-passage"))
+        from cameras import frame as leeward_frame
+        shots = [leeward_frame(args.leeward_view, ground)]
     props = json.loads((args.placements or library / "props.json").read_text())
     models = {}
     from island_grove_review import sources, form
@@ -749,6 +755,10 @@ if args.copse_floor:
     copse = [o for o in set(bpy.data.objects) - old if o.type == "MESH"]
     for ob in copse:
         ob.visible_shadow = False
+if args.leeward_paint:
+    from material import bind as paint_reach, growth as plant_reach
+    paint_reach([*chunks, *habitats.values()], args.leeward_paint)
+    plant_reach(args.leeward_paint, args.guardian_review)
 if args.inlet_sculpt_study:
     here = Path(__file__).resolve().parents[1] / "studies/island-inlet-proposal"
     sys.path.insert(0, str(here))
