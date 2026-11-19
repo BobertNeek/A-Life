@@ -121,14 +121,14 @@ def communities(edge, out):
                     for sign in (-1, 1):
                         pin = (
                             L
-                            * (0.018 + 0.245 * (math.sin(t * math.pi * 0.90) ** 0.9))
+                            * (0.019 + 0.277 * (math.sin(t * math.pi * 0.90) ** 0.9))
                             * (1.0 - 0.28 * t)
                             * r.uniform(0.89, 1.09)
                         )
                         vein = u * 0.41 + n * sign * 0.93
                         q = cur + vein * pin
                         root = pt(cur, cy, green * 0.84)
-                        off = u * pin * 0.21
+                        off = u * pin * 0.31
                         mid = cur + (q - cur) * 0.58
                         left = pt(mid - off, cy + pin * 0.15, green * (0.9 + 0.13 * t))
                         ridge = pt(mid, cy + pin * 0.25, green * (1.04 + 0.04 * t))
@@ -161,10 +161,10 @@ def communities(edge, out):
             # mass is at its actual tip, not strung out along a wire runner.
             L = r.uniform(0.6, 1.12) * size
             q = p + d * L * 0.49
-            h = max(ground + L * 0.81, edge.y(q) + 0.025)
+            h = max(ground + L * 0.69, edge.y(q) + 0.025)
             ribbon(p, q, ground, h, 0.0028, ink * 0.89)
             for k in (0, 1, 2):
-                span = L * r.uniform(0.33, 0.66)
+                span = L * r.uniform(0.49, 0.81)
                 leaf(
                     q,
                     a + (k - 1) * r.uniform(1.73, 2.17),
@@ -190,7 +190,7 @@ def communities(edge, out):
                 p + vec(angle) * 0.012,
                 angle,
                 L,
-                L * r.uniform(0.034, 0.063),
+                L * r.uniform(0.049, 0.087),
                 ground,
                 L * r.uniform(0.33, 0.61),
                 green * r.uniform(0.89, 1.06),
@@ -217,7 +217,7 @@ def communities(edge, out):
         az = r.uniform(0, math.tau)
         ink = np.array(
             r.choice(
-                [(148, 163, 135), (143, 161, 131), (155, 165, 139), (130, 151, 125)]
+                [(160, 176, 149), (153, 172, 143), (167, 177, 150), (141, 162, 136)]
             ),
             float,
         )
@@ -286,21 +286,64 @@ def communities(edge, out):
     locations = {k: [] for k in stats}
     budget = dict(fern=23, shade_leaf=38, awn_grass=67, grit_rosette=33)
     ids = list(stats)
-    for _ in range(14000):
+    # Families arrive at irregular nurse nuclei, then spread into the
+    # overlapping habitat. Uniform rejection across 300 m² gave the first
+    # study speckles: join siblings into palpable low communities without
+    # returning to one stripe per plant type. The final fifth can wander.
+    nuclei = {
+        "fern": (
+            (1.3, -1.9, 1.4, 0.80),
+            (5.1, -2.5, 1.5, 1.2),
+            (8.4, 2.2, 1.7, 0.9),
+            (12.6, 2.2, 1.2, 1.0),
+        ),
+        "shade_leaf": (
+            (3.3, 1.4, 1.6, 1.8),
+            (5.7, -2.5, 1.9, 1.3),
+            (10.5, 2.9, 2.2, 1.4),
+            (15.5, -0.8, 1.1, 0.95),
+        ),
+        "awn_grass": (
+            (8.5, 3.7, 2.5, 1.4),
+            (15.3, -0.95, 1.9, 1.45),
+            (16.2, 4.1, 1.65, 0.90),
+            (20.2, -1.2, 1.5, 1.2),
+        ),
+        "grit_rosette": (
+            (17.3, -1.1, 1.25, 0.83),
+            (18.3, 2.3, 1.0, 0.66),
+            (21.1, 0.65, 1.59, 1.05),
+            (24.4, -1.4, 1.4, 0.62),
+        ),
+    }
+    for _ in range(18000):
         if all(len(locations[k]) >= n for k, n in budget.items()):
             break
-        u, v = r.uniform(-5.7, 27.0), r.uniform(-9.3, 10.0)
+        j = int(r.integers(4))
+        key = ids[j]
+        if len(locations[key]) >= budget[key]:
+            continue
+        if r.random() < 0.85:
+            a, b, wide, deep = nuclei[key][int(r.integers(4))]
+            noise_u, noise_v = r.normal(size=2)
+            u = a + noise_u * wide
+            v = (
+                b
+                + noise_v * deep
+                + 0.22 * noise_u * deep
+                + 0.26 * math.sin(1.31 * noise_u) * deep
+            )
+        else:
+            u, v = r.uniform(-5.7, 27.0), r.uniform(-9.3, 10.0)
         p = edge.world(u, v)
         w, shade, grade = niche(p)
         if grade > 0.83 or w.max() < 0.048:
             continue
         w /= np.array([0.57, 0.87, 0.81, 0.69])
-        j = int(r.integers(4))
-        key = ids[j]
         if len(locations[key]) >= budget[key] or r.random() > min(0.87, w[j] ** 1.38):
             continue
         if any(
-            np.linalg.norm(p - q) < (0.45 if key == "fern" else 0.30)
+            np.linalg.norm(p - q) < (0.32 if key == "fern" else 0.17)
             for q in locations[key]
         ):
             continue
@@ -320,10 +363,10 @@ def communities(edge, out):
         # can recur in a pocket of shade, but never on exposed shingle.
         wash = float(edge.fields(*p)[4])
         scale = {
-            "fern": 0.30 + 0.18 * shade,
-            "shade_leaf": 0.085 + 0.083 * shade,
-            "awn_grass": 0.14 + 0.11 * (1 - wash),
-            "grit_rosette": 0.115,
+            "fern": 0.41 + 0.25 * shade,
+            "shade_leaf": 0.13 + 0.105 * shade,
+            "awn_grass": 0.20 + 0.16 * (1 - wash),
+            "grit_rosette": 0.175,
         }[key]
         daughter = {
             "fern": (1, 3),

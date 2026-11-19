@@ -1,11 +1,10 @@
 {
   "subject": "erratics",
   "angles": [
-    "talus-eye",
     "woodland-gap",
     "woodland-edge"
   ],
-  "paired": true,
+  "paired": false,
   "quick": false,
   "samples": 80,
   "editable_canopy": false,
@@ -17,7 +16,7 @@
   "hero_soil": false,
   "shared_microfield": false,
   "talus_study": true,
-  "art_note": "Two isolated comparisons in one artist folio. For the 1.04m same talus-eye, both sides have the preceding woodland plus identical planted scree; ONLY the solid #1383 changes from its old rounded sole to a grounded split heel with softened transition inside original baked obstacle. For woodland-gap and woodland-edge, both sides already have the same final grounded boulder, seated scree, original trees and identical duff/stone chart. Left actual cb7dc207 brush GLB, right 4 overlapping plant communities. Same original transform, terrain, lighting and all gameplay. Offline CPU Blender art only.",
+  "art_note": "Two finished RIGHT frames only: source 5273dd86 already rendered both locked LEFT matched ordinary-V1 previous-brush controls and the final solid boulder A/B, save the unnecessary duplicate work. Same boulder socket, same image samples, same camera exposure, maps and original trees. Earlier four-species pass removed rows but dispersed into speckles; here its actual families collect near irregular partially overlapping nurse centres, with a fuller shaded fern and trefoil and low glaucous gravel edge. Assemble honest final single editable folio using the named frozen before camera frames.",
   "talus_contact": true,
   "woodland_edge": true,
   "boulder_mount": true,

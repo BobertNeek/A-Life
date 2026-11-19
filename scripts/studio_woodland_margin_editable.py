@@ -15,14 +15,13 @@ from studio_woodland_edge_material import bind
 
 argv = sys.argv[sys.argv.index("--") + 1 :]
 surface, placements, cleaved, seated, growth, out = map(Path, argv[:6])
-mount = None
-if len(argv) > 6:
-    if len(argv) != 10 or argv[6] != "--erratic-mount":
-        raise ValueError(
-            "optional --erratic-mount PREVIOUS_ROCK NEW_ROCK PRIOR_WOODLAND"
-        )
-    mount = tuple(map(Path, argv[7:10]))
+import argparse
 
+options = argparse.ArgumentParser(add_help=False)
+options.add_argument("--erratic-mount", nargs=3, type=Path)
+options.add_argument("--folio", type=Path)
+artist = options.parse_args(argv[6:])
+mount = tuple(artist.erratic_mount) if artist.erratic_mount else None
 props = json.loads(placements.read_text())
 notes = json.loads((growth / "woodland-source.json").read_text())
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -173,5 +172,21 @@ for a in bpy.context.screen.areas if bpy.context.screen else []:
 scene["read me"] = (
     "Neutral editable true V1 cut; use gallery photos for the real terrain albedo, light and trees. World X/Z props, original placement yaw/scale, sole artwork; no game data or upgraded physics."
 )
+if artist.folio:
+    image = bpy.data.images.load(str(artist.folio.resolve()), check_existing=False)
+    image.name = "Matched ordinary V1 CPU Blender photographs"
+    image.use_fake_user = True
+    image.pack()
+    window = bpy.data.workspaces.get("Rendering")
+    if window:
+        window.name = "Matched Photographs"
+        for screen in window.screens:
+            for area in screen.areas:
+                if area.type == "IMAGE_EDITOR":
+                    area.spaces.active.image = image
+    guide = bpy.data.texts.new("Start here · boulder and woodland")
+    guide.write(
+        "Use the Matched Photographs workspace (or the named packed image in the Image Editor) for the actual shaded comparisons. Layout shows a deliberately small editable V1 terrain cut; toggle the original solid and planting collections in the Outliner. Original baked physical obstacle 1362 is a hidden wire guide, not render geometry. The game, physics, saves and native renderer were not edited."
+    )
 bpy.ops.file.pack_all()
 bpy.ops.wm.save_as_mainfile(filepath=str(out.resolve()), compress=True)
