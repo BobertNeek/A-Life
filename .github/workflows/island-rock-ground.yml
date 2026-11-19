@@ -3,6 +3,8 @@ on:
   push:
     branches: ["qualia/island-graphics-week-20261119"]
     paths:
+      - scripts/build_island_minerals.py
+      - scripts/island_mineral_skin.py
       - scripts/island_colluvium.py
       - scripts/build_island_habitats.py
       - scripts/verify_island_habitats.py
@@ -45,6 +47,11 @@ jobs:
             python scripts/build_island_habitats.py --surface "$R/island-ridge-v2.bin" --terrain "$R/terrain-chunks.glb" --placements "$R/props-ridge-v2.json" --out "$R/substrates"
           fi
           echo "8eeaceae4cdd43a082539c80a056a47c2b9c8454c713883dfd1c9bcec145982c  $R/substrates/habitat-ground.glb" | sha256sum --check
+          BASE=c6a3e18b36a8460307f525a0a69993da5c4a1cc9
+          git fetch --no-tags --depth=1 origin "$BASE"
+          mkdir -p "$RUNNER_TEMP/source-stones"
+          for rock in Cliff Scree BoulderA BoulderB BoulderC; do git show "$BASE:$D/$rock.glb" > "$RUNNER_TEMP/source-stones/$rock.glb"; done
+          python scripts/build_island_minerals.py --source "$RUNNER_TEMP/source-stones" --out "$RUNNER_TEMP/stone-surfaces"
           cmp "$R/island-ridge-v2.bin" studies/island-ridge-v2/island-ridge-v2.bin
           python scripts/build_island_habitats.py --rock-ground --out "$RUNNER_TEMP/v1"
           python scripts/verify_island_habitats.py --rock-ground "$D/terrain-chunks.glb" "$RUNNER_TEMP/v1/habitat-ground.glb" > "$RUNNER_TEMP/v1/validation.json"
@@ -54,6 +61,11 @@ jobs:
         with:
           name: verified-rock-v1-assets
           path: ${{ runner.temp }}/v1
+          retention-days: 7
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: verified-rock-skins
+          path: ${{ runner.temp }}/stone-surfaces
           retention-days: 7
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -69,9 +81,10 @@ jobs:
           blender --version | head -1 > "$P/renderer.txt"
           for side in before after; do
             S="$R/substrates"
-            if [ "$side" = after ]; then S="$RUNNER_TEMP/v2"; fi
+            skins=(--stone-library "$RUNNER_TEMP/source-stones")
+            if [ "$side" = after ]; then S="$RUNNER_TEMP/v2"; skins=(--stone-library "$RUNNER_TEMP/stone-surfaces"); fi
             for pose in guardian-review cove-showcase rock-eye; do
-              blender -b -t 2 --python-exit-code 1 -P scripts/render_island_geology.py -- "$R/terrain-chunks.glb" "$P/$side" "--$pose" --coastal-light "$D/coastal-daylight.json" --marine-sky "$D/marine-day.glb" --strandline "$D/strandline.glb" --surface "$R/island-ridge-v2.bin" --placements "$R/props-ridge-v2.json" --water-inputs studies/island-art-week/water-inputs --habitats "$S/habitat-ground.glb" --grove-forms "$D/grove-crowns.glb"
+              blender -b -t 2 --python-exit-code 1 -P scripts/render_island_geology.py -- "$R/terrain-chunks.glb" "$P/$side" "--$pose" --coastal-light "$D/coastal-daylight.json" --marine-sky "$D/marine-day.glb" --strandline "$D/strandline.glb" --surface "$R/island-ridge-v2.bin" --placements "$R/props-ridge-v2.json" --water-inputs studies/island-art-week/water-inputs --habitats "$S/habitat-ground.glb" --grove-forms "$D/grove-crowns.glb" "${skins[@]}"
             done
           done
           for pose in guardian-grove cove-showcase stone-eye; do
