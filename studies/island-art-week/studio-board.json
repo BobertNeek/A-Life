@@ -1,8 +1,8 @@
 {
   "subject": "erratics",
   "angles": [
-    "talus-eye",
-    "erratic-reach"
+    "woodland-gap",
+    "woodland-edge"
   ],
   "paired": true,
   "quick": false,
@@ -16,6 +16,7 @@
   "hero_soil": false,
   "shared_microfield": false,
   "talus_study": true,
-  "art_note": "At actual native #1303 the same cleaved shingle is photographed twice. Only the second placing seats each decorative body into the real triangle slope. Same yaw, scale and native placement, adjacent 1383 boulder, trees, ordinary V1 terrain and light. Offline CPU Blender artwork, not a game test.",
-  "talus_contact": true
+  "art_note": "Same planted #1303 loose stones, actual 111/131 spruce, 2510 fern, 1383 boulder, camera/light/V1 surface on both sides. Only after: a winding progression from real spruce duff to mineral wash with connected living tongues and open ground across the genuine 24.47 metre span. Offline Blender artwork, no terrain displacement, native binding or game run.",
+  "talus_contact": true,
+  "woodland_edge": true
 }
