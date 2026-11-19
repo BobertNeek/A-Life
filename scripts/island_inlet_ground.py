@@ -4,7 +4,7 @@ from pathlib import Path
 import math, struct
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
-from scipy.ndimage import gaussian_filter, distance_transform_edt, map_coordinates
+from scipy.ndimage import gaussian_filter, distance_transform_edt
 
 # The cove is a sandy margin; this is the other, genuinely steep tidal cut.
 X0, X1, Z0, Z1 = 56.25, 137.50, 387.50, 459.375
@@ -117,7 +117,6 @@ def paint(src, folder):
         + 0.08 * vein
     )
     damp = np.clip(damp, 0, 1)
-    sand = ease(0.21, 0.59, grade)
     mott = np.clip(0.5 + 0.22 * broad + 0.18 * vein, 0, 1)
     clay = np.array([150, 128, 94])
     cold = np.array([122, 129, 119])
@@ -127,7 +126,11 @@ def paint(src, folder):
     pigment = pigment * (1 - stone[..., None]) + rock * stone[..., None]
     iron = ease(0.78, 1.7, broad * 0.58 + vein * 0.63) * (1 - 0.68 * damp)
     pigment += iron[..., None] * [15, -4, -13]
-    pigment += (4.0 * fine + 1.9 * grain)[..., None]
+    from island_inlet_alluvium import alluvium
+
+    lens, gravel, deposit_relief = alluvium(xx, zz, ground, gx, grade, fine, vein, rng)
+    pigment = pigment * (1 - lens[..., None]) + gravel * lens[..., None]
+    pigment += (4.2 * fine + 2.3 * grain)[..., None]
     pigment *= 1 - damp[..., None] * np.array([0.32, 0.24, 0.20])
     pigment -= rill[..., None] * [16, 11, 7]
     # A few subdued river-sorted, thumb-to-hand-size stones. Establish their
@@ -137,17 +140,31 @@ def paint(src, folder):
     relief = Image.new("L", (W, H), 128)
     stonebrush = ImageDraw.Draw(relief)
     sites = np.where((ground > 0.2) & (ground < 8.5) & (grade > 0.40))
-    for i in range(1500):
+    for i in range(2450):
         n = rng.integers(len(sites[0]))
         y, x = sites[0][n], sites[1][n]
-        density = 0.10 + 0.38 * max(0, float(mott[y, x] - 0.40)) + 0.85 * damp[y, x]
+        density = (
+            0.10
+            + 0.38 * max(0, float(mott[y, x] - 0.40))
+            + 0.73 * damp[y, x]
+            + 0.56 * lens[y, x]
+        )
         if rng.random() > density:
             continue
         a = rng.uniform(0, math.tau)
         d = np.array((math.cos(a), math.sin(a)))
         v = np.array((-d[1], d[0]))
-        ln = rng.uniform(0.08, 0.38) / scale
+        ln = rng.uniform(0.04, 0.25) / scale
         w = ln * rng.uniform(0.34, 0.68)
+        # An ellipse painted in plan alone stretches uphill on a steep bank.
+        # Project both face-plane brush axes into the horizontal texture.
+        slope = np.array([gx[y, x], gz[y, x]])
+        grad = np.linalg.norm(slope)
+        if grad > 0.01:
+            downhill = slope / grad
+            squash = 1 - 1 / math.sqrt(1 + grad * grad)
+            d -= downhill * float(d @ downhill) * squash
+            v -= downhill * float(v @ downhill) * squash
         c = np.array((x, y))
         phase = rng.uniform(-0.3, 0.3)
         poly = [
@@ -159,9 +176,13 @@ def paint(src, folder):
             )
             for k in range(7)
         ]
-        gain = rng.uniform(0.79, 1.22)
+        gain = rng.uniform(0.90, 1.13)
         base = np.clip(
-            np.array([124, 127, 117]) * gain * (1 - 0.18 * damp[y, x]), 0, 255
+            (0.69 * pigment[y, x] + 0.31 * np.array([125, 130, 121]))
+            * gain
+            * (1 - 0.18 * damp[y, x]),
+            0,
+            255,
         )
         brush.polygon(poly, tuple(base.astype("u1")))
         brush.polygon(
@@ -169,7 +190,8 @@ def paint(src, folder):
         )
         stonebrush.polygon(poly, fill=int(rng.integers(147, 177)))
     rim = np.minimum.reduce((xx - X0, X1 - xx, zz - Z0, Z1 - zz))
-    exposure = ease(0.32, 0.78, grade + 0.072 * vein + 0.052 * fine)
+    cross_cut = ease(0.30, 0.66, np.abs(gx) / (0.02 + np.hypot(gx, gz)))
+    exposure = ease(0.32, 0.78, grade + 0.072 * vein + 0.052 * fine) * cross_cut
     mask = (
         exposure
         * ease(0.12, 0.47, ground)
@@ -183,7 +205,8 @@ def paint(src, folder):
     color.putalpha(image(255 * alpha))
     color.save(dest / "inlet-bed.png", optimize=True)
     h = (
-        0.010 * fine
+        deposit_relief
+        + 0.010 * fine
         + 0.004 * vein
         + 0.001 * grain
         - 0.034 * rill

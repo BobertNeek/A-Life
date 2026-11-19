@@ -19,7 +19,7 @@ V2 = ROOT / "studies/island-ridge-v2/island-ridge-v2.bin"
 TILE = 50
 
 
-def export(dest, source=SOURCE, variant=V2):
+def export(dest, source=SOURCE, variant=V2, rooted=False):
     dest = Path(dest)
     panel = dest / "inlet"
     note = paint(source, panel)
@@ -88,9 +88,24 @@ def export(dest, source=SOURCE, variant=V2):
             }
         ],
     }
+    plants = {}
+    if rooted:
+        from island_inlet_sod import fringe
+
+        plants, botany = fringe(base, alternate)
+        note.update(botany)
+        for key in plants:
+            tiles.setdefault(key, [])
+        doc["materials"].append(
+            dict(
+                name="Cut-edge turf and embedded shingle",
+                doubleSided=True,
+                pbrMetallicRoughness=dict(roughnessFactor=0.87, metallicFactor=0.0),
+            )
+        )
     blob = bytearray()
 
-    def accessor(a, component, kind, index=False, bounds=False):
+    def accessor(a, component, kind, index=False, bounds=False, normalized=False):
         blob.extend(b"\0" * (-len(blob) % 4))
         at = len(blob)
         blob.extend(a.tobytes())
@@ -104,6 +119,8 @@ def export(dest, source=SOURCE, variant=V2):
             )
         )
         rec = dict(bufferView=ix, componentType=component, count=len(a), type=kind)
+        if normalized:
+            rec["normalized"] = True
         if bounds:
             rec.update(min=a.min(axis=0).tolist(), max=a.max(axis=0).tolist())
         key = len(doc["accessors"])
@@ -139,17 +156,48 @@ def export(dest, source=SOURCE, variant=V2):
                 vertex(i, j + 1),
             )
             indices.extend([a, c, b, a, d, c])
-        attr = {
-            "POSITION": accessor(np.asarray(points, "<f4"), 5126, "VEC3", bounds=True),
-            "NORMAL": accessor(np.asarray(norm, "<f4"), 5126, "VEC3"),
-            "TEXCOORD_0": accessor(np.asarray(uv, "<f4"), 5126, "VEC2"),
-        }
-        ix = accessor(np.asarray(indices, "<u2"), 5123, "SCALAR", index=True)
+        primitives = []
+        if points:
+            attr = {
+                "POSITION": accessor(
+                    np.asarray(points, "<f4"), 5126, "VEC3", bounds=True
+                ),
+                "NORMAL": accessor(np.asarray(norm, "<f4"), 5126, "VEC3"),
+                "TEXCOORD_0": accessor(np.asarray(uv, "<f4"), 5126, "VEC2"),
+            }
+            ix = accessor(np.asarray(indices, "<u2"), 5123, "SCALAR", index=True)
+            primitives.append(dict(attributes=attr, indices=ix, material=0))
+        tuft = plants.get((tx, tz))
+        if tuft is not None and tuft.tri:
+            v = np.asarray(tuft.v, dtype="<f4") - np.array([ox, 0, oz], dtype="<f4")
+            faces = np.asarray(tuft.tri, "<i4")
+            perface = np.cross(
+                v[faces[:, 1]] - v[faces[:, 0]], v[faces[:, 2]] - v[faces[:, 0]]
+            )
+            normals = np.zeros_like(v)
+            for i in range(3):
+                np.add.at(normals, faces[:, i], perface)
+            ln = np.linalg.norm(normals, axis=1)
+            normals[ln > 1e-10] /= ln[ln > 1e-10, None]
+            normals[ln <= 1e-10] = (0, 1, 0)
+            attr = {
+                "POSITION": accessor(v, 5126, "VEC3", bounds=True),
+                "NORMAL": accessor(normals, 5126, "VEC3"),
+                "COLOR_0": accessor(
+                    np.asarray(tuft.c, "u1"), 5121, "VEC4", normalized=True
+                ),
+            }
+            wide = len(v) > 65535
+            ix = accessor(
+                faces.ravel().astype("<u4" if wide else "<u2"),
+                5125 if wide else 5123,
+                "SCALAR",
+                index=True,
+            )
+            primitives.append(dict(attributes=attr, indices=ix, material=1))
         name = f"Inlet_{tx}_{tz}"
         k = len(doc["nodes"])
-        doc["meshes"].append(
-            dict(name=name, primitives=[dict(attributes=attr, indices=ix, material=0)])
-        )
+        doc["meshes"].append(dict(name=name, primitives=primitives))
         doc["nodes"].append(dict(name=name, mesh=k, translation=[ox, 0, oz]))
         doc["scenes"][0]["nodes"].append(k)
     doc["buffers"] = [dict(byteLength=len(blob))]
@@ -157,7 +205,8 @@ def export(dest, source=SOURCE, variant=V2):
     save(doc, blob, asset)
     note.update(
         near_tiles=len(tiles),
-        triangles=2 * sum(map(len, tiles.values())),
+        fitted_terrain_triangles=2 * sum(map(len, tiles.values())),
+        root_and_embedded_gravel_triangles=sum(len(p.tri) for p in plants.values()),
         omitted_changed_cells=skip,
         render_separation_mm=6,
     )

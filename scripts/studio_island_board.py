@@ -124,7 +124,40 @@ elif subject == "coastal-alder":
 elif subject == "inlet-ground":
     from build_island_inlet import export
 
-    skin = export(out / "artist-inlet")
+    skin = export(out / "artist-inlet", rooted=board.get("rooted_cutbank", False))
+    if board.get("distance_paint"):
+        from build_island_inlet import V2
+        from island_inlet_distance import far_pigment
+
+        # Left must remain the last approved picture after the maps are installed.
+        previous = "ae225e4a572c50c99140146322b33eb30c7b0b65"
+        frozen_pigment = out / "pre-inlet-pigment.png"
+        subprocess.run(
+            ["git", "fetch", "--no-tags", "--depth=1", "origin", previous], check=True
+        )
+        with frozen_pigment.open("wb") as into:
+            subprocess.run(
+                [
+                    "git",
+                    "show",
+                    f"{previous}:{(d/'geology/pigment.png').relative_to(root).as_posix()}",
+                ],
+                stdout=into,
+                check=True,
+            )
+        revised_pigment = skin.parent / "geology/pigment.png"
+        statistics = far_pigment(
+            SURFACE,
+            V2,
+            skin.parent / "inlet/inlet-bed.png",
+            frozen_pigment,
+            revised_pigment,
+        )
+        note = skin.parent / "inlet-painting.json"
+        note.write_text(
+            json.dumps({**json.loads(note.read_text()), **statistics}, indent=2) + "\n"
+        )
+
 elif subject == "inlet-survey":
     # Two working photographs of real terrain; no candidate is invented here.
     pass
@@ -239,6 +272,14 @@ for tag in board["angles"]:
             *(
                 ["--inlet-cut", skin]
                 if subject == "inlet-ground" and side == "after"
+                else []
+            ),
+            *(
+                [
+                    "--original-macro",
+                    revised_pigment if side == "after" else frozen_pigment,
+                ]
+                if subject == "inlet-ground" and board.get("distance_paint")
                 else []
             ),
             "--coastal-light",

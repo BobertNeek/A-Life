@@ -8,5 +8,7 @@
   "samples": 48,
   "paired": true,
   "editable_canopy": false,
-  "art_note": "Original broad nearly blank canal walls against a local fitted material: weathered silt, damp hollows, thirteen runoff starts, embedded pebbles and a grassy lip. Do not mislabel this as a river-shape fix or a non-original collision surface. Same water, daylight and lens; art only."
+  "art_note": "Fitted river cut on the existing physical V1: localized silt lenses and seated shingle, rooted turf on discontinuous convex lips, a low-pass pigment in its original far atlas. Fixed lens/water/terrain/daylight. This is not an alternative channel shape or a playtest.",
+  "rooted_cutbank": true,
+  "distance_paint": true
 }
