@@ -1,0 +1,19 @@
+{
+  "colour_space": "sRGB",
+  "normal_space": "linear",
+  "origin_xz": [
+    -580.0,
+    -680.0
+  ],
+  "reflectance": 0.3499999940395355,
+  "ripple_metres": 32.0,
+  "roughness": 0.3799999952316284,
+  "span_xz": [
+    1160.0,
+    1360.0
+  ],
+  "terrain_binding": {
+    "digest": 9751419906031474721,
+    "version": 2
+  }
+}
