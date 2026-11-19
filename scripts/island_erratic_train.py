@@ -20,7 +20,15 @@ def unit(p):
     return p / max(1e-9, np.linalg.norm(p))
 
 
-def bake(surface, original_library, props, dest, sites=(1570, 1383, 1675)):
+def bake(
+    surface,
+    original_library,
+    props,
+    dest,
+    sites=(1570, 1383, 1675),
+    *,
+    silverleaf=False,
+):
     land = Beach(Path(surface))
     rocks = Path(original_library)
     props = json.loads(Path(props).read_text())
@@ -165,6 +173,10 @@ def bake(surface, original_library, props, dest, sites=(1570, 1383, 1675)):
                     )
                     if outside(pos, 0.015):
                         woodrush(pos, rng.uniform(0.11, 0.29))
+        if silverleaf:
+            from island_erratic_silverleaf import cover
+
+            cover(g, land, center, down, cross, edge, outside, prop["scale"], index)
         groups[index] = g
     doc = dict(
         asset=dict(version="2.0", generator="Qualia: rooted glacial till and woodrush"),

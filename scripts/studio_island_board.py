@@ -140,7 +140,16 @@ elif subject == "erratics":
         from island_erratic_train import bake
 
         moraine = erratic_new / "deposit-till.glb"
-        counts = bake(SURFACE, erratic_old, d / "props.json", moraine)
+        if board.get("silverleaf"):
+            previous_till = erratic_new / "deposit-before-runners.glb"
+            bake(SURFACE, erratic_old, d / "props.json", previous_till)
+        counts = bake(
+            SURFACE,
+            erratic_old,
+            d / "props.json",
+            moraine,
+            silverleaf=board.get("silverleaf", False),
+        )
         (erratic_new / "till-source.json").write_text(
             json.dumps(counts, indent=2) + "\n"
         )
@@ -551,6 +560,10 @@ if subject == "erratics" and board.get("shared_microfield"):
     subject_label = (
         "Original habitat pigment, additional centimetre-scale island relief"
     )
+if subject == "erratics" and board.get("silverleaf"):
+    subject_label = (
+        "Real moraine: the woodrush patch and its sheltered silverleaf runners"
+    )
 if subject == "fault-scarp" and board.get("wall_beds"):
     subject_label = "Same seated scarp, with its exposed bed on the true hillside"
 if subject == "inlet-underpaint" and board.get("tidecast_pockets"):
@@ -657,7 +670,14 @@ for tag in board["angles"]:
                 else []
             ),
             *(
-                ["--wild-sward", moraine]
+                [
+                    "--wild-sward",
+                    (
+                        previous_till
+                        if board.get("silverleaf") and side == "before"
+                        else moraine
+                    ),
+                ]
                 if subject == "erratics"
                 and board.get("glacial_train")
                 and (
@@ -779,7 +799,11 @@ for tag in board["angles"]:
                     soil / "habitat-ground.glb"
                     if subject == "erratics"
                     and board.get("hero_soil")
-                    and (side == "after" or board.get("shared_microfield"))
+                    and (
+                        side == "after"
+                        or board.get("shared_microfield")
+                        or board.get("silverleaf")
+                    )
                     else d / "habitat-ground.glb"
                 )
             ),
