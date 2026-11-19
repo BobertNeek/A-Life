@@ -15,8 +15,12 @@ cli.add_argument("glb", type=Path)
 cli.add_argument("out", type=Path)
 cli.add_argument("--wide-only", action="store_true")
 cli.add_argument("--creature-height", action="store_true")
-cli.add_argument("--tidal-review", action="store_true", help="Two fixed views of the eastern strand")
-cli.add_argument("--strandline", type=Path, help="Optional actual strand GLB for matched art review")
+cli.add_argument(
+    "--tidal-review", action="store_true", help="Two fixed views of the eastern strand"
+)
+cli.add_argument(
+    "--strandline", type=Path, help="Optional actual strand GLB for matched art review"
+)
 cli.add_argument(
     "--handoff",
     action="store_true",
@@ -111,10 +115,24 @@ if args.creature_height or args.tidal_review:
     aim = (98.3, ground(98.3, 253.1) + 0.045, 253.1)
     shots = [("creature-height", focus, aim, 0, 30, 0)]
     if args.tidal_review:
-        x,z = 344.8,114.8
+        x, z = 344.8, 114.8
         shots = [
-            ("strand-eye", (x,ground(x,z)+.86,z), (347.05,ground(347.05,110.86)+.16,110.86), 0, 32, 0),
-            ("strand-reach", (334.4,ground(334.4,139.3)+4.2,139.3), (348.2,1.05,104.8), 0, 43, 0),
+            (
+                "strand-eye",
+                (x, ground(x, z) + 0.86, z),
+                (347.05, ground(347.05, 110.86) + 0.16, 110.86),
+                0,
+                32,
+                0,
+            ),
+            (
+                "strand-reach",
+                (334.4, ground(334.4, 139.3) + 4.2, 139.3),
+                (348.2, 1.05, 104.8),
+                0,
+                43,
+                0,
+            ),
         ]
     props = json.loads((args.placements or library / "props.json").read_text())
     models = {}
