@@ -52,3 +52,43 @@ def pair(folder):
 
 if __name__ == "__main__":
     pair(Path(sys.argv[1]))
+
+
+def one_glance(folder):
+    """When only the exact amended close pair exists, never fill rows from obsolete studies."""
+    names = [
+        ("glance-1.png", "Held rise and original windwillow"),
+        ("glance-2.png", "Rooted meadow, seed heads and leaf litter"),
+    ]
+    paper = Image.new("RGB", (1460, 511), "#e8e5d9")
+    ink = ImageDraw.Draw(paper)
+
+    def font(sz, bold=False):
+        try:
+            return ImageFont.truetype(
+                "DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf", sz
+            )
+        except OSError:
+            return ImageFont.load_default()
+
+    ink.text((11, 8), "TWIN NEEDLE RISE", font=font(20, True), fill="#293c32")
+    ink.text(
+        (228, 10),
+        "The same 1.04 m eye, looking down into the meadow",
+        font=font(17),
+        fill="#445c4e",
+    )
+    for i, (src, label) in enumerate(names):
+        pic = Image.open(folder / src).convert("RGB")
+        if pic.size != (720, 428):
+            raise ValueError("Mismatched art desk size")
+        x = 7 + i * 727
+        ink.text((x + 3, 38), label, font=font(15), fill="#334837")
+        paper.paste(pic, (x, 60))
+    ink.text(
+        (10, 493),
+        "CPU illustration of the editable GLB at original island coordinates. Source-mesh sunlight; not Blender or an in-game capture.",
+        font=font(12),
+        fill="#455d4f",
+    )
+    paper.save(folder / "Twin-Needle-Ground.jpg", quality=89, optimize=True)

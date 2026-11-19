@@ -57,7 +57,16 @@ def add(src, stage):
         d["meshes"][d["nodes"][idx]["mesh"]]["primitives"][0]["indices"] = surface_ix
     orig = d["materials"][attrib["material"]]
     c = orig["pbrMetallicRoughness"]["baseColorTexture"]["index"]
-    png, size = chart(data(c), records, stage)
+    old_woody = []
+    for oi in d["scenes"][1]["nodes"]:
+        source_node = d["nodes"][oi]
+        if "windwillow" not in source_node["name"]:
+            continue
+        ix = source_node["extensions"]["EXT_mesh_gpu_instancing"]["attributes"][
+            "TRANSLATION"
+        ]
+        old_woody.extend([dict(x=x, z=z) for x, y, z in values(d, raw, ix)])
+    png, size = chart(data(c), records, stage, old_woody)
     binary.extend(b"\x00" * (-len(binary) % 4))
     vi = len(d["bufferViews"])
     d["bufferViews"].append(dict(buffer=0, byteOffset=len(binary), byteLength=len(png)))
@@ -203,15 +212,6 @@ def add(src, stage):
         stats[name]["triangles"] += len(ii) * len(rows)
     from litter import make as seat_litter
 
-    old_woody = []
-    for oi in d["scenes"][1]["nodes"]:
-        source_node = d["nodes"][oi]
-        if "windwillow" not in source_node["name"]:
-            continue
-        ix = source_node["extensions"]["EXT_mesh_gpu_instancing"]["attributes"][
-            "TRANSLATION"
-        ]
-        old_woody.extend([dict(x=x, z=z) for x, y, z in values(d, raw, ix)])
     lp, ln, lc, li, litter_counts = seat_litter(points, tri, records, old_woody)
     litter_mat = len(d["materials"])
     d["materials"].append(

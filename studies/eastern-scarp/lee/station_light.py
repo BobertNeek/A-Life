@@ -15,8 +15,8 @@ class LocalSun:
         self.up = np.cross(sun, self.right)
         self.axes = np.column_stack((self.right, self.up, sun)).astype("f")
         self.origin = np.array(origin, "f")
-        self.res = 640
-        self.width = 13.0
+        self.res = 896
+        self.width = 9.6
         self.depth = np.full((self.res, self.res), -np.inf, "f")
 
     def project(self, points):
@@ -72,24 +72,43 @@ class LocalSun:
 
     def transmission(self, world):
         p = self.project(world)
-        ix = np.floor(p[:, 0]).astype(int)
-        iy = np.floor(p[:, 1]).astype(int)
+        px = p[:, 0] - 0.5
+        py = p[:, 1] - 0.5
+        ix = np.floor(px).astype(int)
+        iy = np.floor(py).astype(int)
         margin = np.minimum.reduce((ix, iy, self.res - 1 - ix, self.res - 1 - iy))
-        active = margin > 2
+        active = margin > 4
         vis = np.ones(len(ix), "f")
         if active.any():
-            x, y, z = ix[active], iy[active], p[active, 2]
-            transmission = np.zeros(len(x), "f")
-            # A few source-space samples soften subpixel stems. A slope-biased
-            # 2.4 cm floor guards against self-shadow acne in the 2 cm map.
-            for dx, dy, w in (
-                (0, 0, 0.4),
-                (-1, 0, 0.15),
-                (1, 0, 0.15),
-                (0, -1, 0.15),
-                (0, 1, 0.15),
+            px, py, z = px[active], py[active], p[active, 2]
+            # Bilinear *comparisons*, not nearest hard cell boundaries.
+            # The small disk models finite sun angle at low vegetation height.
+            transmission = np.zeros(len(px), "f")
+            for ox, oy, wt in (
+                (0, 0, 0.24),
+                (-1.4, -0.37, 0.12),
+                (-0.46, 1.27, 0.12),
+                (0.37, -1.53, 0.12),
+                (1.19, 0.71, 0.12),
+                (-1.75, 1.08, 0.07),
+                (1.68, -0.82, 0.07),
+                (0.76, 1.62, 0.07),
+                (-0.95, -1.52, 0.07),
             ):
-                transmission += w * (self.depth[y + dy, x + dx] <= z + 0.024)
-            w = np.clip((margin[active] - 2) / 10, 0, 1)
+                xx = px + ox
+                yy = py + oy
+                ix = np.floor(xx).astype(int)
+                iy = np.floor(yy).astype(int)
+                fx = xx - ix
+                fy = yy - iy
+
+                def light(dx, dy):
+                    return self.depth[iy + dy, ix + dx] <= z + 0.019
+
+                sample = (1 - fy) * ((1 - fx) * light(0, 0) + fx * light(1, 0)) + fy * (
+                    (1 - fx) * light(0, 1) + fx * light(1, 1)
+                )
+                transmission += wt * sample
+            w = np.clip((margin[active] - 4) / 12, 0, 1)
             vis[active] = 1 - w * (1 - transmission)
         return vis

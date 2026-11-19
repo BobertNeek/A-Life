@@ -19,7 +19,7 @@ from island_inlet_ground import ease
 BOX = (362.5, 381.25, -90.625, -78.125)
 
 
-def chart(src, records, paint_dir=None):
+def chart(src, records, paint_dir=None, woody=()):
     a, b, c, d = BOX
     L, R, B, T = CUT
     W, H = 960, 640
@@ -27,6 +27,14 @@ def chart(src, records, paint_dir=None):
     transfer = np.empty((H, W, 4), "B")
     xx = np.array([[float(r["x"]), float(r["z"])] for r in records])
     tree = cKDTree(xx)
+    # True old and proposed woody roots, not dots painted where the camera
+    # happens to be. Broad broken soils between running grass shoots are warm
+    # organic beds rather than blurry green grass with a varnish on top.
+    trees = (
+        cKDTree(np.asarray([[float(r["x"]), float(r["z"])] for r in woody]))
+        if woody
+        else None
+    )
     for start in range(0, H, 16):
         end = min(H, start + 16)
         x, z = np.meshgrid(
@@ -67,7 +75,22 @@ def chart(src, records, paint_dir=None):
             -1,
         )
         gain = 1 + change * (0.22 * flake + 0.13 * grain + 0.16 * m - 0.22 * loam)
-        offset = stain * change[..., None]
+        dense = 1 - ease(0.28, 1.17, dist[:, 2].reshape(x.shape))
+        if trees is not None:
+            wd, wi = trees.query(np.column_stack((x.ravel() + 0.11, z.ravel() - 0.04)))
+            wood = 1 - ease(0.15, 0.85, wd.reshape(x.shape) + m * 0.20 + flake * 0.13)
+        else:
+            wood = np.zeros_like(x)
+        belt = np.maximum(wood * 0.89, dense * (0.59 + 0.37 * fw))
+        broken = ease(-0.28, 0.31, m + 0.64 * flake + 0.33 * grain + 0.10)
+        peat = np.clip(belt * (0.46 + 0.54 * broken) * edge, 0, 1)
+        gain *= 1 - peat * (0.25 + 0.18 * loam)
+        # Olive turf survives between communities. Soil interiors can vary
+        # from umber to exposed sandy loam, with genuinely placed hulls.
+        ox = peat * (0.026 + 0.018 * thatch)
+        oy = -peat * (0.022 + 0.014 * loam)
+        oz = -peat * (0.015 + 0.010 * loam)
+        offset = stain * change[..., None] + np.stack((ox, oy, oz), axis=-1)
         col = np.clip(base * gain[..., None] + offset, 0, 1)
         # RGB stores bounded signed additive linear offset, A the linear
         # multiplier. Border gives exact neutral (128,128,128,128).
