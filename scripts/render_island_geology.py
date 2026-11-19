@@ -763,12 +763,19 @@ if args.copse_floor:
 if args.leeward_paint:
     from material import bind as paint_reach, growth as plant_reach
 
+    # True close-field distance to bluff alder 559. The far guardian and
+    # the distant nursery meadow use precisely the completed broad study.
+    camera_x, _, camera_z = shots[0][1]
+    near_bluff = (
+        not args.guardian_review and math.hypot(camera_x - 133.0, camera_z - 444.8) < 50
+    )
     paint_reach(
         [*chunks, *habitats.values()],
         args.leeward_paint,
         skins if args.inlet_cut else (),
+        near_bluff,
     )
-    plant_reach(args.leeward_paint, args.guardian_review)
+    plant_reach(args.leeward_paint, args.guardian_review, near_bluff)
 if args.inlet_sculpt_study:
     here = Path(__file__).resolve().parents[1] / "studies/island-inlet-proposal"
     sys.path.insert(0, str(here))

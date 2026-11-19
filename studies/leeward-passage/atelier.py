@@ -19,10 +19,15 @@ def assets(surface, props, out):
         raise ValueError(
             "The studio map is not this original dry passage; do not mount the artwork."
         )
+    from strand import build as cast_bluff
+
+    foot = cast_bluff(reach, props, out)
+    (out / "bluff-foot.json").write_text(json.dumps(foot, indent=2) + "\n")
     stats.update(paint(reach, out))
     tris, counts = approach(reach, out)
     stats.update(
-        art_triangles=tris,
+        art_triangles=tris + foot["near_only_triangles"],
+        bluff_close_field=foot,
         artist_groups=counts,
         range="This one corridor. No native binding, no physical mesh, no tested play.",
     )

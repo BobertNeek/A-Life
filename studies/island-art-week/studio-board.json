@@ -1,11 +1,9 @@
 {
   "subject": "leeward-passage",
   "angles": [
-    "reach-guardian",
-    "reach-strand",
-    "reach-meadow"
+    "reach-strand"
   ],
   "paired": false,
   "samples": 48,
-  "art_note": "Three true after-only photographs. 0561c4ef already holds the identical lefts. Correct a single untinted existing bank overlay, shelter real scrub islands and leave open passage at the shoulders by natural shingle."
+  "art_note": "Final close-only art at original bluff alder 559. Genuine native terrain, rooted elbow, silt flecks on weathered flats, ripples at actual wet elevations. Far guardian and meadow are outside the fixed local 50 m envelope; use their true prior 6bda7af2 after/0561c4ef before. Never redraw unrelated pictures."
 }

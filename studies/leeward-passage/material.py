@@ -4,10 +4,29 @@ import bpy, json
 from pathlib import Path
 
 
-def bind(meshes, folder, bank_skin=()):
-    x0, x1, z0, z1 = json.loads((folder / "route.json").read_text())["bounds"]
+def bind(meshes, folder, bank_skin=(), near_bluff=False):
+    _bind_layer(
+        meshes, folder, bank_skin, "route.json", "reach-wash.png", 23.0, 0.007, 0.31
+    )
+    if near_bluff:
+        _bind_layer(
+            meshes,
+            folder,
+            bank_skin,
+            "bluff-foot.json",
+            "bluff-grain.png",
+            40.0,
+            0.005,
+            0.24,
+        )
+
+
+def _bind_layer(
+    meshes, folder, bank_skin, manifest, filename, frequency, depth, strength
+):
+    x0, x1, z0, z1 = json.loads((folder / manifest).read_text())["bounds"]
     image = bpy.data.images.load(
-        str((folder / "reach-wash.png").resolve()), check_existing=True
+        str((folder / filename).resolve()), check_existing=True
     )
     image.alpha_mode = "CHANNEL_PACKED"
     mats = {slot.material for o in meshes for slot in o.material_slots if slot.material}
@@ -57,15 +76,15 @@ def bind(meshes, folder, bank_skin=()):
         # not vector displacement or relief beneath a solid prop.
         noise = n("ShaderNodeTexNoise")
         noise.noise_dimensions = "3D"
-        noise.inputs["Scale"].default_value = 23.0
+        noise.inputs["Scale"].default_value = frequency
         noise.inputs["Detail"].default_value = 2.0
         link(position, noise.inputs["Vector"])
         bump = n("ShaderNodeBump")
-        bump.inputs["Distance"].default_value = 0.007
+        bump.inputs["Distance"].default_value = depth
         gain = n("ShaderNodeMath")
         gain.operation = "MULTIPLY"
         link(t.outputs["Alpha"], gain.inputs[0])
-        gain.inputs[1].default_value = 0.31
+        gain.inputs[1].default_value = strength
         link(gain.outputs[0], bump.inputs["Strength"])
         link(noise.outputs["Fac"], bump.inputs["Height"])
         norm = sh.inputs["Normal"]
@@ -74,9 +93,13 @@ def bind(meshes, folder, bank_skin=()):
         link(bump.outputs[0], norm)
 
 
-def growth(folder, guardian):
+def growth(folder, guardian, near_bluff=False):
     before = set(bpy.data.objects)
-    for name in ("reach-detail.glb", "reach-scrub.glb"):
+    for name in (
+        "reach-detail.glb",
+        "reach-scrub.glb",
+        *(("bluff-foot.glb",) if near_bluff else ()),
+    ):
         bpy.ops.import_scene.gltf(filepath=str((folder / name).resolve()))
     for ob in set(bpy.data.objects) - before:
         if ob.type == "MESH" and guardian and ob.name.endswith("flakes"):

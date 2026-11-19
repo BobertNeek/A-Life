@@ -100,13 +100,16 @@ p = base.node_tree.nodes.get("Principled BSDF")
 base.node_tree.links.new(t.outputs["Color"], p.inputs["Base Color"])
 p.inputs["Roughness"].default_value = 0.9
 m.materials.append(base)
-bind([ob], detail)
+bind([ob], detail, near_bluff=True)
 g = group("02 · Wind growth, gravel and hinged shells")
 for o in imp(detail / "reach-detail.glb"):
     attach(o, g)
 nurses = group("02b · Connected dune scrub bodies")
 for o in imp(detail / "reach-scrub.glb"):
     attach(o, nurses)
+rootwork = group("02c · Original bluff alder root and weathered silt")
+for o in imp(detail / "bluff-foot.glb"):
+    attach(o, rootwork)
 props = json.loads(propsfile.read_text())
 # The same real ground witnesses as in the photographed view, grouped by
 # native model. Real yaw, uniform scale and original ground placement.
