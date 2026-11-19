@@ -1,0 +1,17 @@
+{
+  "standing_native_eye": [
+    409.6,
+    1.2467735375165931,
+    -97.0
+  ],
+  "close_target": [
+    408.5,
+    1.249394019842047,
+    -99.72
+  ],
+  "close_lens_mm": 33,
+  "hold": "9b9999b592978e93d590609ec5daa402fe960494",
+  "real_terrain": true,
+  "sea_images_held": true,
+  "not_native": true
+}

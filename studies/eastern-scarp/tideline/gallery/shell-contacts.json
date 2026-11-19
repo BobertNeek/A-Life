@@ -1,0 +1,9 @@
+{
+  "wave_pockets": 9,
+  "actual_surface_contacts": 148,
+  "within_8m_of_held_eye": 43,
+  "minimum_ground_m": 0.18485124024629002,
+  "maximum_ground_m": 1.7004700182442465,
+  "static_visual_only": true,
+  "changes_world": false
+}

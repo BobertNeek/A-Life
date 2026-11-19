@@ -44,8 +44,8 @@ def layout(prior, photo):
             ),
             (
                 "foothold",
-                "Looking down at the foothold",
-                "Same 1.04 m eye, now tilted toward a real tide pocket.",
+                "Across the low foothold",
+                "Same 1.04 m eye, aimed nearly level at the original low rocks.",
                 photo / "before/foothold.png",
             ),
         )

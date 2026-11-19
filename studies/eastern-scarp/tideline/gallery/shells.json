@@ -1,0 +1,30 @@
+{
+  "near": {
+    "1": {
+      "roots": 48,
+      "triangles_each": 210
+    },
+    "2": {
+      "roots": 46,
+      "triangles_each": 252
+    },
+    "3": {
+      "roots": 54,
+      "triangles_each": 168
+    }
+  },
+  "middle": {
+    "1": {
+      "roots": 48,
+      "triangles_each": 70
+    },
+    "2": {
+      "roots": 46,
+      "triangles_each": 84
+    },
+    "3": {
+      "roots": 54,
+      "triangles_each": 56
+    }
+  }
+}
