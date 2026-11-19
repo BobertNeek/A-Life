@@ -117,7 +117,7 @@ subject_label = {
     "canopy": "Maritime spruce",
     "forest-floor": "Rooted woodland floor",
     "cove-water": "Sheltered tidal shelf",
-    "forest-fern": "Divided woodland fern",
+    "forest-fern": "Feather moss and divided fern",
 }[subject]
 base_water = root / "studies/island-art-week/water-inputs"
 for tag in board["angles"]:
@@ -170,7 +170,7 @@ for tag in board["angles"]:
         make(
             out / "before" / f"{tag}.png",
             out / "after" / f"{tag}.png",
-            f"{subject_label} | {tag} | Identical V1 geometry, lens and daylight | CPU Blender",
+            f"{subject_label} | {tag} | Same V1 terrain, lens and daylight | CPU Blender",
             out / f"{tag}.jpg",
         )
 (out / "studio-note.json").write_text(

@@ -15,8 +15,8 @@ from scipy.ndimage import distance_transform_edt
 DEPTHS = np.array([0.0, 0.32, 1.05, 2.4, 5.2, 10, 18, 32], dtype=float)
 SHELL = np.array(
     [
-        [166, 167, 126],
-        [150, 168, 134],
+        [157, 171, 146],
+        [142, 169, 148],
         [109, 169, 148],
         [71, 153, 149],
         [42, 127, 140],
@@ -28,7 +28,7 @@ SHELL = np.array(
 )
 ROCK = np.array(
     [
-        [116, 121, 101],
+        [114, 128, 111],
         [108, 132, 117],
         [84, 141, 130],
         [57, 132, 135],
@@ -77,53 +77,70 @@ def palette():
     return image(255 * srgb(a[None, :] * (1 - mineral) + b[None, :] * mineral))
 
 
+SWELL_TILE_METRES = 58.0
+
+
 def swell(size=256):
-    # A seamless height field of long, shallow swell, locally wind-brushed
-    # beads and shorter hooked crests. Vary the shape *along* each wave so
-    # shelter does not look like a tiled corrugated iron sea.
+    # A short-crested directional spectrum avoids the identifiable repeated
+    # chevrons from a pair of phase-modulated sine waves. The 58 m swatch has
+    # 46 independent large, middle and wind-scuffed modes. No bright motif or
+    # camera-dependent sunlight is painted into the normal.
     y, x = (np.indices((size, size), dtype=float) + 0.5) / size
     tau = math.tau
-    a = (
-        tau * (3 * x + 2 * y)
-        + 0.67 * np.sin(tau * (x - 2 * y))
-        + 0.22 * np.cos(tau * (3 * x + y))
+    rng = np.random.default_rng(5308216)
+    # A periodic domain warp rotates the local group in shelter without a
+    # fold: small compared with a fundamental wavelength at either boundary.
+    u = (
+        x
+        + 0.0048 * np.sin(tau * (x + 2 * y) + 0.91)
+        + 0.0033 * np.sin(tau * (3 * x - y) - 0.55)
     )
-    b = (
-        tau * (7 * x - 4 * y)
-        + 0.72 * np.cos(tau * (2 * x + y))
-        + 0.39 * np.sin(tau * (x + 3 * y))
+    v = (
+        y
+        + 0.0059 * np.sin(tau * (2 * x + y) - 0.72)
+        + 0.0027 * np.cos(tau * (x - 3 * y) + 0.80)
     )
-    patch = smooth(
-        -0.83,
-        0.84,
-        0.67 * np.sin(tau * (2 * x + y))
-        + 0.44 * np.cos(tau * (x - 3 * y))
-        + 0.20 * np.sin(2 * a),
-    )
-    # Heights in metres. The island is a cove, not an ocean storm; the small
-    # crosswind facets catch glints rather than whitening the whole plane.
-    height = 0.072 * (np.sin(a) + 0.21 * np.sin(2 * a - 0.35)) + 0.025 * (
-        0.40 + patch * 0.60
-    ) * np.sin(b)
-    for k, (i, j, h, w) in enumerate(
-        (
-            (13, 8, 0.013, 1),
-            (21, 13, 0.0061, 1),
-            (-19, 11, 0.005, 0),
-            (38, 17, 0.0034, 1),
-            (53, -25, 0.0017, 0),
-            (66, 31, 0.0016, 1),
-        )
+    height = np.zeros_like(x)
+    used = set()
+    for count, k0, k1, slope, spread in (
+        (8, 3.7, 8.9, 0.050, 0.42),
+        (15, 9, 22, 0.059, 0.48),
+        (15, 22, 47, 0.048, 0.57),
+        (8, 47, 79, 0.027, 0.71),
     ):
-        phase = (
-            tau * (i * x + j * y) + 0.89 * np.sin(a + k) + 0.56 * np.sin(b + k * 0.43)
-        )
-        crest = np.sin(phase) + 0.20 * np.sin(2 * phase + 0.33 * k)
-        height += h * crest * (0.21 + 0.79 * (patch if w else 1 - patch))
-    # The 18 m tile is fixed in island space and keeps a normalized mip chain.
-    metres = 18.0
-    dx = (np.roll(height, -1, 1) - np.roll(height, 1, 1)) * size / (2 * metres)
-    dy = (np.roll(height, -1, 0) - np.roll(height, 1, 0)) * size / (2 * metres)
+        for j in range(count):
+            while True:
+                k = rng.uniform(k0, k1)
+                angle = 0.41 + rng.normal(0, spread)
+                if j % 7 == 6:
+                    angle += 1.17
+                kx, kz = round(k * math.cos(angle)), round(k * math.sin(angle))
+                if (kx, kz) not in used:
+                    break
+            used.add((kx, kz))
+            phase = tau * (kx * u + kz * v) + rng.uniform(-math.pi, math.pi)
+            # Short crests arrive in different groups. Their envelopes are
+            # independent; several waves never peak in the same grid lane.
+            env = 0.86 + 0.14 * np.sin(
+                tau * (rng.integers(1, 4) * x + rng.integers(-3, 4) * y)
+                + rng.uniform(-3.1, 3.1)
+            )
+            omega = tau * math.hypot(kx, kz) / SWELL_TILE_METRES
+            amp = slope * rng.uniform(0.71, 1.36) / (omega * math.sqrt(count * 0.5))
+            wave = np.sin(phase)
+            if k1 < 48:
+                wave += 0.10 * np.sin(2 * phase + 0.28)
+            height += amp * env * wave
+    dx = (
+        (np.roll(height, -1, 1) - np.roll(height, 1, 1))
+        * size
+        / (2 * SWELL_TILE_METRES)
+    )
+    dy = (
+        (np.roll(height, -1, 0) - np.roll(height, 1, 0))
+        * size
+        / (2 * SWELL_TILE_METRES)
+    )
     n = np.stack((-dx, -dy, np.ones_like(dx)), -1)
     n /= np.linalg.norm(n, axis=-1)[..., None]
     return image(127.5 * (1 + n))
@@ -168,7 +185,27 @@ def compose(ground, dist, coords, lookup):
     effective = depth + (32 - depth) * (1 - shelf)
     u = np.rint(255 * np.sqrt(np.clip(effective / 32, 0, 1))).astype(int)
     v = np.rint(63 * fac).astype(int)
-    return image(lookup[v, u])
+    col = linear(lookup[v, u].astype(float))
+    # Thin retreat lines stay visible at guardian height, but the water does
+    # not become a complete white outline around each metre of coast.
+    beat = (
+        0.49
+        + 0.26 * np.sin(0.092 * x - 0.068 * z + 1.14 * np.sin(0.026 * z))
+        + 0.18 * np.cos(0.14 * z + 0.061 * x)
+    )
+    front = 0.12 + 0.15 * beat + 0.057 * np.sin(0.31 * x - 0.27 * z)
+    lip = (1 - smooth(0.025, 0.23, np.abs(depth - front))) * smooth(0.08, 0.81, beat)
+    residual = (1 - smooth(0.20, 0.62, depth)) * (0.08 + 0.09 * beat)
+    wash = (
+        (lip * 0.28 + residual)
+        * smooth(0.002, 0.081, depth)
+        * (1 - smooth(4, 15, dist))
+    )
+    col = (
+        col * (1 - wash[..., None])
+        + linear(np.array([192.0, 212.0, 196.0])) * wash[..., None]
+    )
+    return image(255 * srgb(col))
 
 
 def world_paint(surface, metadata, out):
@@ -209,9 +246,9 @@ def world_paint(surface, metadata, out):
         chart = compose(ground, dist, (x, z), np.asarray(colours))
     chart.save(out / "shore.png", compress_level=6)
     meta.update(
-        ripple_metres=18.0,
-        roughness=0.31,
-        reflectance=0.38,
+        ripple_metres=SWELL_TILE_METRES,
+        roughness=0.36,
+        reflectance=0.36,
         art_inputs="Blender artwork: V1 triangle bathymetry, painted optical lookup and a world-aligned wind/capillary normal. Native binding and cost not run this week.",
     )
     (out / "water.json").write_text(json.dumps(meta, indent=2) + "\n")

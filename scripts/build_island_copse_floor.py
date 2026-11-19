@@ -168,19 +168,27 @@ def bake(surface, alternate, placements, creeping=False):
             from island_feather_moss import field
 
             mh = np.random.default_rng(77161 + i * 1913)
-            # One low, branching colony per sheltered receiving pocket. Do not
-            # lay overlapping discs under every individual moss/flower shoot.
-            field(
-                p,
-                mh,
-                px,
-                pz,
-                a,
-                extent * mh.uniform(0.86, 1.28),
-                extent * mh.uniform(0.48, 0.76),
-                int(mh.integers(4)),
-            )
+            # Split the wet seam into related, natural-sized shoots. A whole
+            # multi-metre chart enlarged a few pixels into lettuce in the
+            # creature lens even though its support really touched the ground.
+            count = int(mh.integers(2, 5))
+            for shard in range(count):
+                u = (shard / (count - 1) - 0.5) * extent * 1.16
+                v = mh.uniform(-0.18, 0.18) * extent
+                ln = min(0.79, extent * mh.uniform(0.38, 0.64))
+                field(
+                    p,
+                    mh,
+                    px + c * u - s * v,
+                    pz + s * u + c * v,
+                    a + mh.uniform(-0.65, 0.65),
+                    ln,
+                    ln * mh.uniform(0.46, 0.74),
+                    int(mh.integers(4)),
+                    shard,
+                )
             receipt["ground_tracing_feather_colonies"] += 1
+            receipt["feather_moss_branches"] += count
         for k in range(int(r.integers(3, 8))):
             u = r.uniform(-0.86, 1.15) * extent
             v = r.normal(0, 0.27)

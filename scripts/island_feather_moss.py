@@ -77,7 +77,7 @@ def colony(seed):
             o = np.array([-v[1], v[0]]) * rng.uniform(0.20, 0.40)
             t = rng.uniform(-1, 1)
             g = rng.uniform(0.83, 1.1)
-            tone = np.array((110 + 9 * t, 134 + 10 * t, 76 + 6 * t)) * g
+            tone = np.array((106 + 9 * t, 126 + 10 * t, 78 + 6 * t)) * g
 
             def line(a, b, c, h, width=1):
                 pts = [tuple(a), tuple(b)]
@@ -107,17 +107,22 @@ def colony(seed):
     return rgb, normal, orm
 
 
-def field(p, r, x, z, angle, long, wide, variant):
+def field(p, r, x, z, angle, long, wide, variant, shard):
     from island_copse_mulch import terrain_stamp
 
     u0, v0 = variant * 256, 512
 
+    gain = round(255 * r.uniform(0.63, 0.85))
+    # A stable millimetre order only separates the occasional crossing. Both
+    # footprints still trace the exact same terrain triangle, not parallel cards.
+    lift = 0.0076 + 0.0009 * shard
+
     def sample(point, u, v):
         return p.lower(
             point,
-            0.009,
+            lift,
             ((u0 + 3 + 249 * u) / 1024, (v0 + 3 + 249 * v) / 768),
-            (246, 250, 246, 255),
+            (gain, round(0.99 * gain), round(0.97 * gain), 255),
         )
 
     terrain_stamp(p, x, z, angle, long, wide, sample)

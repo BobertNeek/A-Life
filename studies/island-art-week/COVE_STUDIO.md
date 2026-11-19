@@ -3,7 +3,7 @@
 The submerged floor changes the colour of eastern cove water before the surface
 goes deep. The initial palette is intentionally mineral-quieter at an exposed
 bottom and clearer above a sandy reach. A long swell, crosswind and finer
-capillaries are painted into a single world-aligned 18 metre rough surface. No
+capillaries are painted into a single world-aligned 58 metre rough surface. No
 paint changes the sea height, the water contact plane, the submerged floor or
 any object. Do not add standing rocks or skerries above collision-free water
 merely to improve the still.
@@ -31,3 +31,8 @@ The inlet chart does not change the base binding or author those structures.
 Next week, make one crossing in a throwaway world. Its raised surface should
 occlude old 3 mm shoreline films and foam cleanly, not pick the underlying
 art patch, leave a floating surf stripe inland, or expose a dry cyan gap.
+
+The first study `d082c965` showed more credible shoal tint but an obvious repeated
+herringbone in the reflective surface and too little contact foam from above.
+Do not install that result. Candidate two trades the tile for 46 independent
+directional modes and reinstates a thin, interrupted line of spent water.
