@@ -41,6 +41,6 @@ def photograph(root,d,src,board,out,blender):
                     '--grove-forms',d/'grove-crowns.glb','--water-inputs',shelf,
                     '--habitats',d/'habitat-ground.glb','--wild-sward',d/'meadow-sward.glb',
                     '--meadow-library',d,'--meadow-habits','--strandline',d/'strandline.glb',
-                    '--copse-floor',d/'copse-floor.glb','--studio-samples',40)
+                    '--copse-floor',d/'copse-floor.glb','--studio-samples',48)
     blender('studio_sunspindle_desk.py',src,field,out/'Sunspindle-Hollow.blend')
     (out/'studio-note.json').write_text(json.dumps(board,indent=2)+'\n')
