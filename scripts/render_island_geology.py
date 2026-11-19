@@ -209,6 +209,8 @@ cli.add_argument(
     type=Path,
     help="Offline only; import the actual exported range-selected instancing file",
 )
+cli.add_argument("--sunspindle-view", choices=("slack-guardian", "slack-eye"))
+cli.add_argument("--sunspindle-field", type=Path, help="Registered artwork in the actual eastern dry slack.")
 cli.add_argument("--weatherlip-view", choices=("bight-high", "bight-tooth", "bight-beach"))
 cli.add_argument("--weatherlip-field", type=Path, help="Optional artist's Weatherlip west-bight field.")
 cli.add_argument("--cove-seats", type=Path, help="Only Weatherlip's two individually fitted artist solids.")
@@ -635,6 +637,10 @@ if (
                 0,
             )
         ]
+    if args.sunspindle_view:
+        sys.path.insert(0, str(root / "studies/sunspindle-hollow"))
+        from stations import frame as hollow_frame
+        shots = [hollow_frame(args.sunspindle_view, ground)]
     if args.weatherlip_view:
         sys.path.insert(0, str(root / "studies/weatherlip-cove"))
         from stations import frame as weatherlip_frame
@@ -776,6 +782,10 @@ if args.copse_floor:
     copse = [o for o in set(bpy.data.objects) - old if o.type == "MESH"]
     for ob in copse:
         ob.visible_shadow = False
+if args.sunspindle_field:
+    from material import coat as colour_hollow, plant as plant_hollow
+    colour_hollow([*chunks,*habitats.values()],args.sunspindle_field)
+    plant_hollow(args.sunspindle_field / ("registered-guardian.glb" if args.guardian_review else "registered-close.glb"))
 if args.weatherlip_field:
     from importlib.util import spec_from_file_location, module_from_spec
     src = Path(__file__).resolve().parents[1] / "studies/weatherlip-cove/material.py"
