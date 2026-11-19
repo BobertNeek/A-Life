@@ -13,3 +13,5 @@ Original art release 01d86f19569e67d41fcd2c6c8b5b689143e05175. This selected stu
 [Optional silverleaf study, seen against the actual woodrush baseline](silverleaf/). Offline only.
 
 [The 22-piece woodland scree and artist source](talus/). Separate study only. The ordinary native Scree GLB on the branch is unchanged.
+
+[Seated true woodland shingle and the two-spruce dripline](woodland-edge/). Matched CPU Blender art and editable source, outside the game.

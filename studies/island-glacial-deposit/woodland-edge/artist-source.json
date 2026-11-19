@@ -1,0 +1,458 @@
+{
+  "artist_only": true,
+  "native_installed": false,
+  "old_native_scree_git": "e0a6dd0aee6633030b8fd165b104c4cf0c8e5f72",
+  "seat_source": "6c281c22253ef95549733f85a11510fabe1dfc81",
+  "seat_cpu_blender": 44517420030,
+  "edge_source": "01673a7475ceed0abe02aee6b4bf2c27bef975ef",
+  "edge_cpu_blender": 44519953532,
+  "fields": {
+    "bounds": [
+      239,
+      277,
+      -219,
+      -181
+    ],
+    "chart_texels": [
+      704,
+      704
+    ],
+    "painted_area_m2": 329.22,
+    "rush_stools": 165,
+    "connected_runners": 200,
+    "leaves": 4767,
+    "triangles": 42642,
+    "actual_canopy": [
+      111,
+      131
+    ],
+    "fern": 2510,
+    "scree": 1303,
+    "boulder": 1383,
+    "origin": [
+      249.4290155665576,
+      -208.77803474146356
+    ],
+    "span_between_real_anchors_metres": 24.47,
+    "scope": "Offline woodland edge at original V1 placements. Change no physical surface, landmarks, saves, lights or gameplay."
+  },
+  "source_surfaces": {
+    "index": 1303,
+    "original_transform": {
+      "kind": "Scree",
+      "position": [
+        265.9730458635644,
+        39.08905426327728,
+        -190.7477306494808
+      ],
+      "scale": 1.319693620527036,
+      "yaw": 3.197354316711426
+    },
+    "scope": "Offline variant at original V1 anchor only; decorative Scree is not a physical obstacle",
+    "levels": {
+      "L0": [
+        {
+          "height_shift_m": -0.6993,
+          "uniform_fit": 0.992,
+          "original_sole_gap_m": 0.5442,
+          "lowest_revised_clearance_m": -0.0679
+        },
+        {
+          "height_shift_m": -0.7095,
+          "uniform_fit": 0.8524,
+          "original_sole_gap_m": 0.4588,
+          "lowest_revised_clearance_m": -0.1076
+        },
+        {
+          "height_shift_m": -0.5234,
+          "uniform_fit": 0.8977,
+          "original_sole_gap_m": 0.3362,
+          "lowest_revised_clearance_m": -0.0981
+        },
+        {
+          "height_shift_m": -0.4503,
+          "uniform_fit": 1,
+          "original_sole_gap_m": 0.2683,
+          "lowest_revised_clearance_m": -0.0666
+        },
+        {
+          "height_shift_m": -0.7879,
+          "uniform_fit": 0.9476,
+          "original_sole_gap_m": 0.6103,
+          "lowest_revised_clearance_m": -0.0725
+        },
+        {
+          "height_shift_m": -0.3995,
+          "uniform_fit": 0.9511,
+          "original_sole_gap_m": 0.126,
+          "lowest_revised_clearance_m": -0.0956
+        },
+        {
+          "height_shift_m": -0.4725,
+          "uniform_fit": 0.9913,
+          "original_sole_gap_m": 0.3407,
+          "lowest_revised_clearance_m": -0.0581
+        },
+        {
+          "height_shift_m": -0.1309,
+          "uniform_fit": 0.9653,
+          "original_sole_gap_m": -0.0938,
+          "lowest_revised_clearance_m": -0.085
+        },
+        {
+          "height_shift_m": -0.0299,
+          "uniform_fit": 1,
+          "original_sole_gap_m": -0.1552,
+          "lowest_revised_clearance_m": -0.0559
+        },
+        {
+          "height_shift_m": -0.2467,
+          "uniform_fit": 1,
+          "original_sole_gap_m": -0.0513,
+          "lowest_revised_clearance_m": -0.1272
+        },
+        {
+          "height_shift_m": -0.2886,
+          "uniform_fit": 0.9383,
+          "original_sole_gap_m": 0.1017,
+          "lowest_revised_clearance_m": -0.1086
+        },
+        {
+          "height_shift_m": 0.2284,
+          "uniform_fit": 1,
+          "original_sole_gap_m": -0.4665,
+          "lowest_revised_clearance_m": -0.1291
+        },
+        {
+          "height_shift_m": 0.1294,
+          "uniform_fit": 1,
+          "original_sole_gap_m": -0.2972,
+          "lowest_revised_clearance_m": -0.0514
+        },
+        {
+          "height_shift_m": -0.0409,
+          "uniform_fit": 1,
+          "original_sole_gap_m": -0.1114,
+          "lowest_revised_clearance_m": -0.0975
+        },
+        {
+          "height_shift_m": 0.0734,
+          "uniform_fit": 0.9112,
+          "original_sole_gap_m": -0.3736,
+          "lowest_revised_clearance_m": -0.1569
+        },
+        {
+          "height_shift_m": 0.53,
+          "uniform_fit": 1,
+          "original_sole_gap_m": -0.6908,
+          "lowest_revised_clearance_m": -0.0697
+        },
+        {
+          "height_shift_m": 0.4303,
+          "uniform_fit": 0.9897,
+          "original_sole_gap_m": -0.6184,
+          "lowest_revised_clearance_m": -0.0677
+        },
+        {
+          "height_shift_m": 0.1968,
+          "uniform_fit": 0.9226,
+          "original_sole_gap_m": -0.4053,
+          "lowest_revised_clearance_m": -0.094
+        },
+        {
+          "height_shift_m": 0.5305,
+          "uniform_fit": 0.9238,
+          "original_sole_gap_m": -0.7309,
+          "lowest_revised_clearance_m": -0.0715
+        },
+        {
+          "height_shift_m": 0.4141,
+          "uniform_fit": 0.9462,
+          "original_sole_gap_m": -0.627,
+          "lowest_revised_clearance_m": -0.1124
+        },
+        {
+          "height_shift_m": 0.8163,
+          "uniform_fit": 1,
+          "original_sole_gap_m": -1.0403,
+          "lowest_revised_clearance_m": -0.0598
+        },
+        {
+          "height_shift_m": 0.4394,
+          "uniform_fit": 0.9825,
+          "original_sole_gap_m": -0.6064,
+          "lowest_revised_clearance_m": -0.1048
+        }
+      ],
+      "L1": [
+        {
+          "height_shift_m": -0.7003,
+          "uniform_fit": 0.9868,
+          "original_sole_gap_m": 0.5392,
+          "lowest_revised_clearance_m": -0.0678
+        },
+        {
+          "height_shift_m": -0.713,
+          "uniform_fit": 0.8513,
+          "original_sole_gap_m": 0.4557,
+          "lowest_revised_clearance_m": -0.1075
+        },
+        {
+          "height_shift_m": -0.5259,
+          "uniform_fit": 0.8902,
+          "original_sole_gap_m": 0.3341,
+          "lowest_revised_clearance_m": -0.0973
+        },
+        {
+          "height_shift_m": -0.4484,
+          "uniform_fit": 1,
+          "original_sole_gap_m": 0.2686,
+          "lowest_revised_clearance_m": -0.0661
+        },
+        {
+          "height_shift_m": -0.7861,
+          "uniform_fit": 0.9513,
+          "original_sole_gap_m": 0.6093,
+          "lowest_revised_clearance_m": -0.0727
+        },
+        {
+          "height_shift_m": -0.3995,
+          "uniform_fit": 0.946,
+          "original_sole_gap_m": 0.1186,
+          "lowest_revised_clearance_m": -0.0953
+        },
+        {
+          "height_shift_m": -0.4733,
+          "uniform_fit": 0.9951,
+          "original_sole_gap_m": 0.339,
+          "lowest_revised_clearance_m": -0.0583
+        },
+        {
+          "height_shift_m": -0.1328,
+          "uniform_fit": 0.969,
+          "original_sole_gap_m": -0.0887,
+          "lowest_revised_clearance_m": -0.0852
+        },
+        {
+          "height_shift_m": -0.0308,
+          "uniform_fit": 1,
+          "original_sole_gap_m": -0.1546,
+          "lowest_revised_clearance_m": -0.0558
+        },
+        {
+          "height_shift_m": -0.2507,
+          "uniform_fit": 1,
+          "original_sole_gap_m": -0.0551,
+          "lowest_revised_clearance_m": -0.1274
+        },
+        {
+          "height_shift_m": -0.2879,
+          "uniform_fit": 0.9403,
+          "original_sole_gap_m": 0.0903,
+          "lowest_revised_clearance_m": -0.1086
+        },
+        {
+          "height_shift_m": 0.2241,
+          "uniform_fit": 1,
+          "original_sole_gap_m": -0.4705,
+          "lowest_revised_clearance_m": -0.1292
+        },
+        {
+          "height_shift_m": 0.1299,
+          "uniform_fit": 1,
+          "original_sole_gap_m": -0.2843,
+          "lowest_revised_clearance_m": -0.0515
+        },
+        {
+          "height_shift_m": -0.0402,
+          "uniform_fit": 1,
+          "original_sole_gap_m": -0.1153,
+          "lowest_revised_clearance_m": -0.0975
+        },
+        {
+          "height_shift_m": 0.0609,
+          "uniform_fit": 0.8847,
+          "original_sole_gap_m": -0.3806,
+          "lowest_revised_clearance_m": -0.154
+        },
+        {
+          "height_shift_m": 0.5254,
+          "uniform_fit": 1,
+          "original_sole_gap_m": -0.6887,
+          "lowest_revised_clearance_m": -0.0697
+        },
+        {
+          "height_shift_m": 0.4272,
+          "uniform_fit": 0.9825,
+          "original_sole_gap_m": -0.6182,
+          "lowest_revised_clearance_m": -0.0674
+        },
+        {
+          "height_shift_m": 0.1958,
+          "uniform_fit": 0.9256,
+          "original_sole_gap_m": -0.4068,
+          "lowest_revised_clearance_m": -0.0942
+        },
+        {
+          "height_shift_m": 0.5284,
+          "uniform_fit": 0.9247,
+          "original_sole_gap_m": -0.7342,
+          "lowest_revised_clearance_m": -0.0712
+        },
+        {
+          "height_shift_m": 0.4111,
+          "uniform_fit": 0.9489,
+          "original_sole_gap_m": -0.6245,
+          "lowest_revised_clearance_m": -0.1126
+        },
+        {
+          "height_shift_m": 0.8142,
+          "uniform_fit": 1,
+          "original_sole_gap_m": -1.0434,
+          "lowest_revised_clearance_m": -0.0599
+        },
+        {
+          "height_shift_m": 0.4357,
+          "uniform_fit": 0.973,
+          "original_sole_gap_m": -0.6059,
+          "lowest_revised_clearance_m": -0.104
+        }
+      ],
+      "L2": [
+        {
+          "height_shift_m": -0.6353,
+          "uniform_fit": 0.9896,
+          "original_sole_gap_m": 0.6259,
+          "lowest_revised_clearance_m": -0.0866
+        },
+        {
+          "height_shift_m": -0.6724,
+          "uniform_fit": 0.9443,
+          "original_sole_gap_m": 0.544,
+          "lowest_revised_clearance_m": -0.1335
+        },
+        {
+          "height_shift_m": -0.5153,
+          "uniform_fit": 0.9893,
+          "original_sole_gap_m": 0.4497,
+          "lowest_revised_clearance_m": -0.1418
+        },
+        {
+          "height_shift_m": -0.4976,
+          "uniform_fit": 1,
+          "original_sole_gap_m": 0.3409,
+          "lowest_revised_clearance_m": -0.1074
+        },
+        {
+          "height_shift_m": -0.7609,
+          "uniform_fit": 1,
+          "original_sole_gap_m": 0.7436,
+          "lowest_revised_clearance_m": -0.0747
+        },
+        {
+          "height_shift_m": -0.4311,
+          "uniform_fit": 0.9774,
+          "original_sole_gap_m": 0.2723,
+          "lowest_revised_clearance_m": -0.138
+        },
+        {
+          "height_shift_m": -0.4719,
+          "uniform_fit": 0.972,
+          "original_sole_gap_m": 0.4003,
+          "lowest_revised_clearance_m": -0.0775
+        },
+        {
+          "height_shift_m": -0.0822,
+          "uniform_fit": 0.977,
+          "original_sole_gap_m": -0.0223,
+          "lowest_revised_clearance_m": -0.0918
+        },
+        {
+          "height_shift_m": -0.013,
+          "uniform_fit": 0.9859,
+          "original_sole_gap_m": -0.0539,
+          "lowest_revised_clearance_m": -0.0616
+        },
+        {
+          "height_shift_m": -0.2353,
+          "uniform_fit": 0.8114,
+          "original_sole_gap_m": -0.0039,
+          "lowest_revised_clearance_m": -0.1335
+        },
+        {
+          "height_shift_m": -0.3008,
+          "uniform_fit": 0.9366,
+          "original_sole_gap_m": 0.1424,
+          "lowest_revised_clearance_m": -0.1513
+        },
+        {
+          "height_shift_m": 0.2521,
+          "uniform_fit": 0.9821,
+          "original_sole_gap_m": -0.3913,
+          "lowest_revised_clearance_m": -0.156
+        },
+        {
+          "height_shift_m": 0.1626,
+          "uniform_fit": 1,
+          "original_sole_gap_m": -0.2541,
+          "lowest_revised_clearance_m": -0.069
+        },
+        {
+          "height_shift_m": -0.0459,
+          "uniform_fit": 0.9949,
+          "original_sole_gap_m": -0.0829,
+          "lowest_revised_clearance_m": -0.1526
+        },
+        {
+          "height_shift_m": 0.1261,
+          "uniform_fit": 0.9873,
+          "original_sole_gap_m": -0.316,
+          "lowest_revised_clearance_m": -0.1653
+        },
+        {
+          "height_shift_m": 0.5126,
+          "uniform_fit": 0.9672,
+          "original_sole_gap_m": -0.6256,
+          "lowest_revised_clearance_m": -0.09
+        },
+        {
+          "height_shift_m": 0.4215,
+          "uniform_fit": 0.983,
+          "original_sole_gap_m": -0.4889,
+          "lowest_revised_clearance_m": -0.0902
+        },
+        {
+          "height_shift_m": 0.198,
+          "uniform_fit": 0.9862,
+          "original_sole_gap_m": -0.3184,
+          "lowest_revised_clearance_m": -0.1469
+        },
+        {
+          "height_shift_m": 0.5347,
+          "uniform_fit": 0.9618,
+          "original_sole_gap_m": -0.6459,
+          "lowest_revised_clearance_m": -0.0959
+        },
+        {
+          "height_shift_m": 0.4487,
+          "uniform_fit": 0.9774,
+          "original_sole_gap_m": -0.5433,
+          "lowest_revised_clearance_m": -0.1117
+        },
+        {
+          "height_shift_m": 0.8288,
+          "uniform_fit": 1,
+          "original_sole_gap_m": -0.9203,
+          "lowest_revised_clearance_m": -0.0702
+        },
+        {
+          "height_shift_m": 0.3877,
+          "uniform_fit": 0.9317,
+          "original_sole_gap_m": -0.5407,
+          "lowest_revised_clearance_m": -0.1438
+        }
+      ]
+    }
+  },
+  "read": "At the low #1303 camera, the old row of hanging front-left stones has settled onto the slope. Individual stone faces still read angular and the adjacent large boulder keeps its separate original downhill gap. The guardian silhouette changes little, as it should for low shingle. At the woodland gap, the bare foreground now has overlapping low leaf clusters leading to the two original spruce; from above, darker needle earth runs into separated mineral and green patches instead of a hard forest boundary. An earlier tall, straight-runners draft (04608607) read like seedlings in rows and was not selected. The revised foreground still gathers in a few bands, so the 24.47 m edge is an optional local art source rather than a recommendation to scatter it all over the island."
+}
