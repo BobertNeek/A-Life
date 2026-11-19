@@ -12,7 +12,12 @@ use bevy::{
 const SHORE_SIZE: u32 = 1024;
 const RIPPLE_SIZE: u32 = 128;
 const SHORE_PADDING: f32 = 80.0;
-const RIPPLE_METRES: f32 = 32.0;
+// The stock V1 art uses a 58 m patch of intersecting long and capillary waves.
+const RIPPLE_METRES: f32 = 58.0;
+const DYNAMIC_RIPPLE_METRES: f32 = 32.0;
+// Recorded when the original native world-aligned colour map was exported.
+// Other terrain (including a future edited world) keeps the live depth builder.
+const STOCK_ART_TERRAIN: u64 = 9_751_419_906_031_474_721;
 
 fn smooth(a: f32, b: f32, x: f32) -> f32 {
     let t = ((x - a) / (b - a)).clamp(0.0, 1.0);
@@ -168,17 +173,56 @@ fn image_with_mips(size: u32, mut pixels: Vec<[f32; 4]>, normal: bool, repeat: b
     image
 }
 
-pub(super) fn island_water(
+fn painted_water(bytes: &[u8], size: u32, normal: bool) -> Option<Image> {
+    let img = ::image::load_from_memory_with_format(bytes, ::image::ImageFormat::Png)
+        .ok()?
+        .to_rgb8();
+    if img.dimensions() != (size, size) {
+        return None;
+    }
+    let pixels = img
+        .pixels()
+        .map(|p| {
+            let [r, g, b] = p.0;
+            if normal {
+                [
+                    f32::from(r) / 127.5 - 1.0,
+                    f32::from(g) / 127.5 - 1.0,
+                    f32::from(b) / 127.5 - 1.0,
+                    1.0,
+                ]
+            } else {
+                let c = Color::srgb_u8(r, g, b).to_linear();
+                [c.red, c.green, c.blue, 1.0]
+            }
+        })
+        .collect();
+    Some(image_with_mips(size, pixels, normal, normal))
+}
+
+fn stock_shelf_material(surface: &alife_world::TerrainSurface) -> Option<[Image; 2]> {
+    if surface.digest != STOCK_ART_TERRAIN {
+        return None;
+    }
+    Some([
+        painted_water(
+            include_bytes!("../../assets/landscape/island/cove-water/shore.png"),
+            SHORE_SIZE,
+            false,
+        )?,
+        painted_water(
+            include_bytes!("../../assets/landscape/island/cove-water/ripple.png"),
+            256,
+            true,
+        )?,
+    ])
+}
+
+fn dynamic_water(
     surface: &alife_world::TerrainSurface,
-    size: bevy::prelude::Vec2,
-    center: Vec3,
-) -> (Mesh, StandardMaterial, [Image; 2]) {
-    let span = bevy::prelude::Vec2::new(
-        (surface.width - 1) as f32 * surface.spacing,
-        (surface.depth - 1) as f32 * surface.spacing,
-    ) + bevy::prelude::Vec2::splat(SHORE_PADDING * 2.0);
-    let origin = bevy::prelude::Vec2::new(surface.origin_x, surface.origin_z)
-        - bevy::prelude::Vec2::splat(SHORE_PADDING);
+    origin: Vec2,
+    span: Vec2,
+) -> [Image; 2] {
     let mut ground = Vec::with_capacity((SHORE_SIZE * SHORE_SIZE) as usize);
     for y in 0..SHORE_SIZE {
         for x in 0..SHORE_SIZE {
@@ -209,6 +253,28 @@ pub(super) fn island_water(
             normals.push([n.x, n.y, n.z, 1.0]);
         }
     }
+    [
+        image_with_mips(SHORE_SIZE, shore, false, false),
+        image_with_mips(RIPPLE_SIZE, normals, true, true),
+    ]
+}
+
+pub(super) fn island_water(
+    surface: &alife_world::TerrainSurface,
+    size: bevy::prelude::Vec2,
+    center: Vec3,
+) -> (Mesh, StandardMaterial, [Image; 2]) {
+    let span = bevy::prelude::Vec2::new(
+        (surface.width - 1) as f32 * surface.spacing,
+        (surface.depth - 1) as f32 * surface.spacing,
+    ) + bevy::prelude::Vec2::splat(SHORE_PADDING * 2.0);
+    let origin = bevy::prelude::Vec2::new(surface.origin_x, surface.origin_z)
+        - bevy::prelude::Vec2::splat(SHORE_PADDING);
+    let (maps, metres, roughness, reflectance) = if let Some(maps) = stock_shelf_material(surface) {
+        (maps, RIPPLE_METRES, 0.36, 0.36)
+    } else {
+        (dynamic_water(surface, origin, span), DYNAMIC_RIPPLE_METRES, 0.38, 0.35)
+    };
     let mut mesh = Mesh::from(
         bevy::prelude::Plane3d::default()
             .mesh()
@@ -232,8 +298,8 @@ pub(super) fn island_water(
         .iter()
         .map(|p| {
             [
-                (p[0] + center.x) / RIPPLE_METRES,
-                (p[2] + center.z) / RIPPLE_METRES,
+                (p[0] + center.x) / metres,
+                (p[2] + center.z) / metres,
             ]
         })
         .collect();
@@ -243,15 +309,12 @@ pub(super) fn island_water(
     (
         mesh,
         StandardMaterial {
-            perceptual_roughness: 0.38,
-            reflectance: 0.35,
+            perceptual_roughness: roughness,
+            reflectance,
             normal_map_channel: UvChannel::Uv1,
             ..default()
         },
-        [
-            image_with_mips(SHORE_SIZE, shore, false, false),
-            image_with_mips(RIPPLE_SIZE, normals, true, true),
-        ],
+        maps,
     )
 }
 

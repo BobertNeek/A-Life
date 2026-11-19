@@ -1474,6 +1474,50 @@
       "size_bytes": 106721,
       "source": "generated:island-sheltered-forest-floor",
       "usage_category": "environment-dressing"
+    },
+    {
+      "asset_id": "approved-island-cove-shore",
+      "author": "Qualia island environment art",
+      "digest": "fnv1a64:fdb7cc7e25548873",
+      "external": false,
+      "final_art": false,
+      "generated": true,
+      "generator": {
+        "config_path": "scripts/island_cove_optics.py",
+        "date": "2026-11-19",
+        "seed": "5308216",
+        "tool": "Qualia fitted shelf pigments and directional capillaries"
+      },
+      "license": "A-Life-Generated-Source",
+      "license_ref": "README.md",
+      "local_path": "crates/alife_game_app/assets/landscape/island/cove-water/shore.png",
+      "placeholder": false,
+      "replacement_policy": "edit-cove-optics-and-refresh-manifest",
+      "size_bytes": 335630,
+      "source": "generated:island-optical-shelf",
+      "usage_category": "environment-dressing"
+    },
+    {
+      "asset_id": "approved-island-cove-ripple",
+      "author": "Qualia island environment art",
+      "digest": "fnv1a64:4b0091721c087c23",
+      "external": false,
+      "final_art": false,
+      "generated": true,
+      "generator": {
+        "config_path": "scripts/island_cove_optics.py",
+        "date": "2026-11-19",
+        "seed": "5308216",
+        "tool": "Qualia fitted shelf pigments and directional capillaries"
+      },
+      "license": "A-Life-Generated-Source",
+      "license_ref": "README.md",
+      "local_path": "crates/alife_game_app/assets/landscape/island/cove-water/ripple.png",
+      "placeholder": false,
+      "replacement_policy": "edit-cove-optics-and-refresh-manifest",
+      "size_bytes": 72316,
+      "source": "generated:island-optical-shelf",
+      "usage_category": "environment-dressing"
     }
   ],
   "pack_id": "production-voxel-v1",

@@ -1,0 +1,40 @@
+# Eastern cove studio: a cool shelf below warm sand
+
+The submerged floor changes the colour of eastern cove water before the surface
+goes deep. The initial palette is intentionally mineral-quieter at an exposed
+bottom and clearer above a sandy reach. A long swell, crosswind and finer
+capillaries are painted into a single world-aligned 58 metre rough surface. No
+paint changes the sea height, the water contact plane, the submerged floor or
+any object. Do not add standing rocks or skerries above collision-free water
+merely to improve the still.
+
+`scripts/island_cove_optics.py` samples the actual two triangles in each original
+V1 cell. Water outside the island's supplied bed fades to deep sea instead of
+inheriting an endless turquoise ribbon. The shell/stone lookup is used only
+while painting, not sampled by a new per-fragment shader. The Blender material
+uses the saved shore and normal image files plus the ordinary sun and sky,
+with no painted camera glint. `shelf-eye` is a 1.12 metre perspective artwork;
+`shelf-guardian` looks down across the eastern reach. A studio still is not
+evidence of a native material load or a moving wave.
+
+Art board subject: `cove-water`, angles `shelf-eye, shelf-guardian`. The minimal
+next-week native integration is two saved, mipped images on the existing sea
+quad. Use the V1 chart only for the exact original terrain binding; keep the
+world-derived material fallback for all other surfaces. Pan through shallow
+foam, check roughness and normal amplitude in motion and in each graphics
+preset, then use a warmed RTX 3050 frame capture. Do not promote this solely
+from a static DCC plate.
+
+The gameplay lane is separately authoring optional willow-and-stone crossings
+which raise a limited set of existing shoal vertices only on player action.
+The inlet chart does not change the base binding or author those structures.
+Next week, make one crossing in a throwaway world. Its raised surface should
+occlude old 3 mm shoreline films and foam cleanly, not pick the underlying
+art patch, leave a floating surf stripe inland, or expose a dry cyan gap.
+
+The first study `d082c965` showed more credible shoal tint but an obvious repeated
+herringbone in the reflective surface and too little contact foam from above.
+Do not install that result. Candidate two trades the tile for 46 independent
+directional modes and reinstates a thin, interrupted line of spent water.
+
+The retained second material was drawn at `90353a9592b1f77f569acb7f5668a27581560a32`, pure Blender art run **44471053617**. The long equally spaced bands of the original water are gone, and the opaque blue/cyan edge becomes a sandy-to-green shelf. The spent-water line is quieter, not a new animated surf system. Two mipmapped textures are authored into the existing stock-water path on this isolated branch; this is not a live material, motion or performance result. [Shelf from above](shelf-guardian.jpg) and [low sheltered reach](shelf-eye.jpg).

@@ -24,6 +24,8 @@ paths += [ROOT / 'crates/alife_game_app/assets/landscape/island/canopy' / name
           for name in ('needles.png', 'needles-normal.png', 'needles-orm.png')]
 paths += [ROOT / 'crates/alife_game_app/assets/landscape/island/copse' / name
           for name in ('duff-bark.png', 'duff-bark-normal.png', 'duff-bark-orm.png')]
+paths += [ROOT / 'crates/alife_game_app/assets/landscape/island/cove-water' / name
+          for name in ('shore.png', 'ripple.png')]
 paths += [ROOT / 'crates/alife_game_app/assets/hand/wizard-god-hand.glb']
 for path in paths:
     local_path = path.relative_to(ROOT).as_posix()

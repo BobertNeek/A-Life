@@ -229,3 +229,7 @@ was performed for the new assets. The gallery is not native acceptance.
 ### Rooted woodland at creature scale
 
 [The locked slope](sheltered-slope.jpg) and [the sunlit fern hollow](sunlit-margin.jpg) were made by Blender 4.3.2 CPU art run **44466525999** at artist source `a4ffdc232aa0b5d3b0ea3c1fa32641b8752b15da`. The left image is the installed feathered-spruce checkpoint, the right changes the visible bark, root flares and woodland floor, not the tree positions or walkable island. [How it was drawn and what remains to check next week](WOODLAND.md). No game/PC/performance test in this studio-only week.
+
+### The sheltered tidal shelf
+
+[Original bands versus sand, near and guardian waters](COVE.md). Stock V1 only; all other bindings retain live depth-derived water color. Same plane, no simulation or gameplay changes. No native or performance testing this week.
