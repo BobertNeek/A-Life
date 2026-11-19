@@ -133,3 +133,28 @@ def abraded(body, detail, seed):
     wrong = np.einsum("ij,ij->i", fn, p[tri].mean(1) - interior) < 0
     tri[wrong] = tri[wrong][:, [0, 2, 1]]
     return p, tri, shade
+
+
+def worn_sole(points, normals):
+    """Keep the native outer box but break the ruler-cut projecting ground lip.
+
+    Only the bottom third rolls in, landing on an actual, smaller flat sole
+    of the original rock. No false stone is extended below its opaque bound.
+    This cosmetic option does NOT guarantee contact on a near-vertical slope.
+    """
+    lo, hi = points.min(0), points.max(0)
+    footprint = points[points[:, 1] <= lo[1] + 0.005 * (hi[1] - lo[1])][:, [0, 2]]
+    toe = footprint.mean(0)
+    span = max(0.001, (hi[1] - lo[1]) * 0.46)
+    t = np.clip((points[:, 1] - lo[1]) / span, 0, 1)
+    stretch = 1 - 0.54 * (1 - t) ** 2
+    change = 1.08 * (1 - t) / span
+    delta = points[:, [0, 2]] - toe
+    p = points.copy()
+    p[:, [0, 2]] = toe + stretch[:, None] * delta
+    n = normals.copy()
+    n[:, [0, 2]] /= stretch[:, None]
+    n[:, 1] -= (n[:, [0, 2]] * delta).sum(1) * change
+    rawlo, rawhi = p.min(0), p.max(0)
+    scale = (hi - lo) / np.maximum(0.001, rawhi - rawlo)
+    return lo + (p - rawlo) * scale, unit(n / scale)

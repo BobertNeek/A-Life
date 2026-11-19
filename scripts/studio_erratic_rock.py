@@ -6,10 +6,12 @@ import numpy as np
 from scipy.spatial import cKDTree
 from finished_island_glb import parse, save, values
 from island_fault_scarp import channels
-from island_erratic_blocks import clusters, abraded
+from island_erratic_blocks import clusters, abraded, worn_sole
 
 
-def carve(source, destination, *, crystalline=False):
+def carve(
+    source, destination, *, crystalline=False, crown_rind=False, rolled_toe=False
+):
     source = Path(source)
     dest = Path(destination)
     base, body = parse(source)
@@ -93,6 +95,7 @@ def carve(source, destination, *, crystalline=False):
             )
             indices = faces.astype("<u2")
         else:
+            atlas = []
             ss = []
             ps = []
             fs = []
@@ -100,12 +103,20 @@ def carve(source, destination, *, crystalline=False):
             for k, stone in enumerate(stones):
                 count = (65, 49, 38)[min(k, 2)] if lod == 0 else (27, 19, 11)[min(k, 2)]
                 q, t, norm = abraded(stone, count, ord(name[-1]) - 62 + k * 4)
+                if rolled_toe:
+                    q, norm = worn_sole(q, norm)
+                if crown_rind:
+                    from island_erratic_rind import project
+
+                    atlas.extend(project(q, t, 0.91 * (ord(name[-1]) - 64) + 2.14 * k))
                 ss.extend(norm)
                 ps.extend(q)
                 fs.extend(t + total)
                 total += len(q)
             points, faces = np.asarray(ps), np.asarray(fs)
             N, U, C = channels(points, faces, tree, col)
+            if crown_rind:
+                U = np.asarray(atlas)
             P = points[faces].reshape(-1, 3)
             N = np.asarray(ss)[faces].reshape(-1, 3)
             # Share exact PBR corners where UV projection and shading agree.
@@ -138,5 +149,9 @@ def carve(source, destination, *, crystalline=False):
         "new_cluster_count": len(stones),
         "budgets": budgets,
         "fallback_far": "original native overview",
-        "source": "individual native component bounds and original contiguous foot; old overview, UV scale, signed mineral and existing pigment family",
+        "source": (
+            "individual native component bounds; worn inward sole"
+            if rolled_toe
+            else "individual native component bounds and original contiguous foot"
+        ),
     }

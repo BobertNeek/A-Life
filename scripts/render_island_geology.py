@@ -175,6 +175,7 @@ cli.add_argument(
         "meadow-bells",
         "sapling-eye",
         "scarp-eye",
+        "erratic-foot",
     ),
     default="slope",
 )
@@ -526,6 +527,11 @@ if (
             # Original #1116, one of three stock balloon-shaped juvenile trees.
             x, z, tx, tz = 50.1, 244.3, 45.447, 237.543
             shot = "sapling-eye"
+        elif args.copse_framing == "erratic-foot":
+            # 1.04 m actual animal eye, three metres down and across the
+            # slope from original 1570, looking back toward true pine 643.
+            shot = "erratic-foot"
+            x, z, tx, tz = 257.48, -176.11, 254.68, -177.67
         elif args.copse_framing == "scarp-eye":
             # Native highland cliff 1549. A 1.04m eye on the actual V1
             # northwest bench, with a clear 28m approach to the front.
@@ -548,6 +554,7 @@ if (
                         "sapling-eye": 2.7,
                         "meadow-bells": 0.28,
                         "scarp-eye": 4.46,
+                        "erratic-foot": 0.74,
                     }.get(shot, 0.38),
                     tz,
                 ),

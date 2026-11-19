@@ -114,9 +114,11 @@ elif subject == "erratics":
         ["git", "fetch", "--no-tags", "--depth=1", "origin", frozen], check=True
     )
     if board.get("mineral_study"):
-        from island_erratic_minerals import granite
-
-        granite(erratic_new / "erratic")
+        if board.get("weather_rind"):
+            from island_erratic_rind import paint as minerals
+        else:
+            from island_erratic_minerals import granite as minerals
+        minerals(erratic_new / "erratic")
     catalogue = {}
     for kind in ("BoulderA", "BoulderB", "BoulderC"):
         piece = kind + ".glb"
@@ -130,6 +132,8 @@ elif subject == "erratics":
             erratic_old / piece,
             erratic_new / piece,
             crystalline=board.get("mineral_study", False),
+            crown_rind=board.get("weather_rind", False),
+            rolled_toe=board.get("rolled_toe", False),
         )
     (erratic_new / "catalogue.json").write_text(json.dumps(catalogue, indent=2) + "\n")
 elif subject == "fault-scarp":
@@ -491,6 +495,7 @@ views = {
     "fern-hollow": ["--copse-eye", "--copse-framing", "fern-hollow"],
     "sunlit-margin": ["--copse-eye", "--copse-framing", "sunlit-margin"],
     "stone-eye": ["--rock-eye"],
+    "erratic-foot": ["--copse-eye", "--copse-framing", "erratic-foot"],
     "erratic-reach": ["--guardian-review", "--grove-framing", "erratic-reach"],
     "pine-eye": ["--pine-eye"],
     "guardian-woods": ["--guardian-review", "--grove-framing", "dense"],
