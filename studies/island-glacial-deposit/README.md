@@ -11,3 +11,5 @@ Original art release 01d86f19569e67d41fcd2c6c8b5b689143e05175. This selected stu
 [Physical limits, editing caveats and next-week native recipe](NATIVE_NEXT.md) · [triangle tally](geometry.json). Rebuild selected original/revised props using scripts/studio_erratic_rock.py with original A/B/C donors. scripts/island_erratic_rind.py provides the directional surface shared by L0/1. Original L2 is deliberately retained to avoid multiplying far cost; a static rendering cannot establish smooth motion between levels.
 
 [Optional silverleaf study, seen against the actual woodrush baseline](silverleaf/). Offline only.
+
+[The 22-piece woodland scree and artist source](talus/). Separate study only. The ordinary native Scree GLB on the branch is unchanged.

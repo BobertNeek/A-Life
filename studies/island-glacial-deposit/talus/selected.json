@@ -1,0 +1,34 @@
+{
+  "source_art": "fa0fc086bd30bf003c02da6afb1b4d9a5f034000",
+  "blender_art_run": 44513337044,
+  "installed_on_weekly_art_branch": false,
+  "original_native_git_blob": "e0a6dd0aee6633030b8fd165b104c4cf0c8e5f72",
+  "original_triangles": [
+    2288,
+    1028,
+    456
+  ],
+  "revised": {
+    "Scree_L0": 2232,
+    "Scree_L1": 852,
+    "Scree_L2": 456
+  },
+  "body_count": 22,
+  "source_bounds": [
+    [
+      -2,
+      0,
+      -1.5
+    ],
+    [
+      2,
+      0.6000000238418579,
+      1.5
+    ]
+  ],
+  "prior_bytes": 314700,
+  "scope": "Unseated shape study. Same 22 native source fragments, each original X/Z range and low plane, whole AABB. Several upper silhouettes are lower. No gameplay, default terrain, obstacle bake or save edits.",
+  "native_collision": "Original vegetation bake emits trunk boxes and Boulder*/Cliff bounds, but no Scree box. Do not confuse solid-prop render-distance policy with physical collision.",
+  "art_disposition": "HOLD. #1303 low eye exposes lifted downhill pieces. Re-seat the 22 purely visual fragments against the real terrain before any selection.",
+  "new_bytes": 251756
+}
