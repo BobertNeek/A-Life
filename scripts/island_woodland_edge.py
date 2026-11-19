@@ -403,6 +403,16 @@ def growth(edge, out):
                     int(r.integers(4, 7)),
                     tone,
                 )
+    return dict(
+        rush_stools=plants,
+        connected_runners=runners,
+        leaves=leaves,
+        triangles=write_growth_mesh(g, edge, out),
+    )
+
+
+def write_growth_mesh(g, edge, out):
+    """One near artist primitive; shared by the original and succession studies."""
     doc = dict(
         asset={"version": "2.0", "generator": "Qualia two-spruce woodland edge"},
         scene=0,
@@ -454,18 +464,22 @@ def growth(edge, out):
     )
     doc["buffers"] = [dict(byteLength=len(buf))]
     save(doc, buf, out / "woodland-edge.glb")
-    return dict(
-        rush_stools=plants, connected_runners=runners, leaves=leaves, triangles=len(t)
-    )
+    return len(t)
 
 
-def build(surface, placements, folder):
+def build(surface, placements, folder, *, succession=False):
     out = Path(folder)
     out.mkdir(parents=True, exist_ok=True)
     edge = Edge(surface, placements)
+    if succession:
+        from island_woodland_succession import communities
+
+        vegetation = communities(edge, out)
+    else:
+        vegetation = growth(edge, out)
     data = {
         **paint(edge, out),
-        **growth(edge, out),
+        **vegetation,
         "actual_canopy": [111, 131],
         "fern": 2510,
         "scree": 1303,

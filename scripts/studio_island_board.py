@@ -198,7 +198,26 @@ elif subject == "erratics":
             (erratic_new / "ScreeSeat1303.glb").resolve()
         )
         edge_folder = out / "artist-woodland-edge"
-        woodland_study(SURFACE, d / "props.json", edge_folder)
+        woodland_study(
+            SURFACE,
+            d / "props.json",
+            edge_folder,
+            succession=board.get("edge_succession", False),
+        )
+        # An immutable ordinary-V1 control already exists as completed
+        # artwork, including the exact four-channel coverage, not a bare field.
+        if board.get("edge_succession"):
+            published = root / "studies/island-glacial-deposit/woodland-edge"
+            prev_edge = out / "previous-woodland"
+            prev_edge.mkdir(exist_ok=True)
+            for name in ("woodland-edge.glb", "woodland-bed.png"):
+                (prev_edge / name).symlink_to((published / name).resolve())
+            (prev_edge / "woodland-source.json").write_text(
+                json.dumps(
+                    json.loads((published / "artist-source.json").read_text())["fields"]
+                )
+                + "\n"
+            )
     if board.get("boulder_mount"):
         from island_boulder_bedjoint import mount
 
@@ -213,6 +232,14 @@ elif subject == "erratics":
             json.loads((d / "props.json").read_text())[index],
             index,
             erratic_new / f"BoulderASeat{index}.glb",
+        )
+        if board.get("edge_succession"):
+            (pre_talus / f"BoulderASeat{index}.glb").symlink_to(
+                (erratic_new / f"BoulderASeat{index}.glb").resolve()
+            )
+    if board.get("edge_succession") and not board.get("boulder_mount"):
+        raise ValueError(
+            "Both species portraits must retain the same selected bedjoint."
         )
     (erratic_new / "catalogue.json").write_text(json.dumps(catalogue, indent=2) + "\n")
     if board.get("glacial_train"):
@@ -659,6 +686,10 @@ if subject == "erratics" and board.get("woodland_edge"):
     )
 if subject == "erratics" and board.get("boulder_mount"):
     subject_label = "One solid glacial boulder, fitted inside its genuine rising bed"
+if subject == "erratics" and board.get("edge_succession"):
+    subject_label = (
+        "Spruce shade, fern hollow and open shingle | A local woodland succession"
+    )
 if subject == "fault-scarp" and board.get("wall_beds"):
     subject_label = "Same seated scarp, with its exposed bed on the true hillside"
 if subject == "inlet-underpaint" and board.get("tidecast_pockets"):
@@ -758,7 +789,14 @@ for tag in board["angles"]:
             out / side,
             *views[tag],
             *(
-                ["--woodland-edge", edge_folder]
+                [
+                    "--woodland-edge",
+                    (
+                        prev_edge
+                        if board.get("edge_succession") and side == "before"
+                        else edge_folder
+                    ),
+                ]
                 if subject == "erratics"
                 and board.get("woodland_edge")
                 and (side == "after" or board.get("boulder_mount"))
