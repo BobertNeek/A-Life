@@ -1,0 +1,170 @@
+{
+  "final_vegetation_after_source": "07e07f93a004fb2ce6f16447223afb636a15a27c",
+  "final_vegetation_after_blender_run": 44525718692,
+  "solid_boulder_pair_and_both_previous_brush_frames_source": "5273dd86d94b851c2e466cfbbaf864fa7fc20660",
+  "solid_boulder_pair_and_both_previous_brush_frames_blender_run": 44523484343,
+  "ordinary_native_island_tree": "d6c329e6f38f56415af090c30c8a154975a48959",
+  "natively_bound": false,
+  "scope": "One V1 anchor, no colliders or saved data were made or changed",
+  "rock": {
+    "anchor": 1383,
+    "physical_original_box": [
+      262.7835693359375,
+      -192.71739196777344,
+      266.16009521484375,
+      -189.56410217285156,
+      39.66132354736328,
+      41.6793098449707
+    ],
+    "physical_box_index": 1362,
+    "prop": {
+      "kind": "BoulderA",
+      "position": [
+        264.4718242376166,
+        39.66132402977159,
+        -191.14074495100658
+      ],
+      "scale": 1.1211040139062494,
+      "yaw": 5.857433795928955
+    },
+    "levels": {
+      "L0": {
+        "triangles": 374,
+        "components": [
+          {
+            "projected_body_area": 2.7145534853644997,
+            "available_socket_area": 1.468163996486825,
+            "true_bed_minmax": [
+              -0.31448314517478554,
+              0.42758855919748506
+            ],
+            "visible_upper_held_vertices": 49,
+            "base_min": 0
+          },
+          {
+            "projected_body_area": 1.8457110921204998,
+            "available_socket_area": 0.36389498959604377,
+            "true_bed_minmax": [
+              -0.43812768421675274,
+              0.1661087399921223
+            ],
+            "visible_upper_held_vertices": 38,
+            "base_min": 0
+          },
+          {
+            "projected_body_area": 1.042540406685,
+            "available_socket_area": 0.249759580730767,
+            "true_bed_minmax": [
+              -0.3128699040807404,
+              0.1666222654601809
+            ],
+            "visible_upper_held_vertices": 35,
+            "base_min": 0
+          }
+        ]
+      },
+      "L1": {
+        "triangles": 192,
+        "components": [
+          {
+            "projected_body_area": 2.574513107592,
+            "available_socket_area": 1.3875297254503711,
+            "true_bed_minmax": [
+              -0.31448314517478554,
+              0.42758855919748506
+            ],
+            "visible_upper_held_vertices": 23,
+            "base_min": 0
+          },
+          {
+            "projected_body_area": 1.7655319686595001,
+            "available_socket_area": 0.3462906302173563,
+            "true_bed_minmax": [
+              -0.43790683059372115,
+              0.16494871576953782
+            ],
+            "visible_upper_held_vertices": 18,
+            "base_min": 0
+          },
+          {
+            "projected_body_area": 0.9498961067539999,
+            "available_socket_area": 0.2136043305894571,
+            "true_bed_minmax": [
+              -0.3121692439698731,
+              0.1654216449947382
+            ],
+            "visible_upper_held_vertices": 13,
+            "base_min": 0
+          }
+        ]
+      },
+      "L2": {
+        "triangles": 62,
+        "components": []
+      }
+    },
+    "policy": "Ordinary V1 authoring only. Saved obstacle, original parent transform, other rocks and physical terrain are unchanged. Every new heel is inside its original solid body projection and above the old floor, and intersects positive true ground."
+  },
+  "woodland": {
+    "bounds": [
+      239,
+      277,
+      -219,
+      -181
+    ],
+    "chart_texels": [
+      704,
+      704
+    ],
+    "painted_area_m2": 329.22,
+    "communities": {
+      "fern": {
+        "mother_sites": 23,
+        "rooted_groups": 40,
+        "nominal_size_m": [
+          0.364,
+          0.722
+        ]
+      },
+      "shade_leaf": {
+        "mother_sites": 38,
+        "rooted_groups": 125,
+        "nominal_size_m": [
+          0.099,
+          0.259
+        ]
+      },
+      "awn_grass": {
+        "mother_sites": 67,
+        "rooted_groups": 133,
+        "nominal_size_m": [
+          0.171,
+          0.394
+        ]
+      },
+      "grit_rosette": {
+        "mother_sites": 33,
+        "rooted_groups": 99,
+        "nominal_size_m": [
+          0.116,
+          0.198
+        ]
+      }
+    },
+    "triangles": 45435,
+    "scope_of_growth": "Shade trifolium / divided nurse fronds; flexible warm awned rush at the opening; short waxy stone rosettes. Rooted only in the bounded ordinary woodland edge, no invented landmarks.",
+    "actual_canopy": [
+      111,
+      131
+    ],
+    "fern": 2510,
+    "scree": 1303,
+    "boulder": 1383,
+    "origin": [
+      249.4290155665576,
+      -208.77803474146356
+    ],
+    "span_between_real_anchors_metres": 24.47,
+    "scope": "Offline woodland edge at original V1 placements. Change no physical surface, landmarks, saves, lights or gameplay."
+  }
+}

@@ -15,3 +15,5 @@ Original art release 01d86f19569e67d41fcd2c6c8b5b689143e05175. This selected stu
 [The 22-piece woodland scree and artist source](talus/). Separate study only. The ordinary native Scree GLB on the branch is unchanged.
 
 [Seated true woodland shingle and the two-spruce dripline](woodland-edge/). Matched CPU Blender art and editable source, outside the game.
+
+[A solid boulder keyed into real terrain and the local four-habitat margin](bedjoint/). One editable offline artist folio, not a native replacement.
