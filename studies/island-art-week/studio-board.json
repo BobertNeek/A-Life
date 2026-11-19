@@ -1,7 +1,6 @@
 {
   "subject": "erratics",
   "angles": [
-    "stone-eye",
     "erratic-foot",
     "erratic-reach"
   ],
@@ -12,5 +11,6 @@
   "mineral_study": true,
   "weather_rind": true,
   "rolled_toe": true,
-  "art_note": "Actual unchanged V1 glacial deposit. Hold in place all three original boulder constituents/bounds and the 62-triangle original overview. At near and middle, rollback the old square floor lip into a curved smaller sole, and give upward planes a broken pale lichen/crystal skin. The actual ground below the old 1570 downhill lip falls 58 cm: nothing is added down into clear air. Hold the tree, scree, surface and physical data still. New 1.04 m animal-eye view is three metres from this same real original."
+  "art_note": "Actual V1 wooded moraine. In BOTH halves hold the 9b3dbe7c glacial boulders, rolled soles and direction-grown rind fixed. Right: physically grounded, discontinuous abraded till and folded woodrush at real original 1570, 1383 and 1675; avoid continuous rings, shafts and artificial foundation. Two fixed views, 1.04 m / three metres from 1570 and a real guardian deposit. No gameplay or QA.",
+  "glacial_train": true
 }
