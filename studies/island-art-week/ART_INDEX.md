@@ -14,3 +14,5 @@ All photographs here are Blender artist views. None demonstrates gameplay, a fra
 | [Southern editable channel proposal](../island-inlet-proposal) | `507a2cbd`: three camera comparisons and a packed, artist-editable `.blend`, not a playable island variant. | **No runtime binding at all**. |
 
 For the first native review, use the game’s own orthographic camera and a paired saved pose. The 1.04 m DCC valley eye is a ground-art magnifier, not a camera promised to ship. Record actual GPU, fps and frame-time tails, allocation, alpha-leaf/shadow load on forest zooms, visibility gates and fallback assets. Terrain and vegetation edits should never affect active learning or require opening an existing world.
+
+[Planted cliff contact proposal](../island-scarp-contact): separate editable display study, not a new physical ridge or an installed game change.

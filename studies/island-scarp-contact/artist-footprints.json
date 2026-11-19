@@ -1,0 +1,424 @@
+{
+  "original_asset": "ff545d9cbf4f71bbd428e87fa69482bbaa4b5f5d",
+  "surface": "V1 original only",
+  "fallback": "original three unmodified Cliff_L* meshes and original first scene",
+  "anchors": {
+    "1291": {
+      "source": "Existing 8 x 4 x 12 m Cliff.glb, 16 native locations",
+      "triangle_counts": {
+        "CliffSeat1291_L0": 2443,
+        "CliffSeat1291_L1": 638,
+        "CliffSeat1291_L2": 144
+      },
+      "physical": "View-only contact sculpt for an actual planted original V1 rock; preserve the anchored upper footprint, summit and existing obstacle. No geometry extends below the original lower box.",
+      "surface": "Original mineral colour/normal/roughness images.",
+      "root_contact": {
+        "available_contact_points": 290,
+        "surface_under_foot_min_m": -27.355023829479514,
+        "surface_under_foot_max_m": 8.705042516303443,
+        "strategy": "pull unsupported toes diagonally into true uphill contact, inside frozen native box; do not bridge air below original floor"
+      },
+      "original_placement": {
+        "kind": "Cliff",
+        "position": [
+          11.119141869554028,
+          36.189803951431834,
+          -4.806006251715303
+        ],
+        "scale": 1.1981704340756345,
+        "yaw": 2.673933982849121
+      }
+    },
+    "1335": {
+      "source": "Existing 8 x 4 x 12 m Cliff.glb, 16 native locations",
+      "triangle_counts": {
+        "CliffSeat1335_L0": 2484,
+        "CliffSeat1335_L1": 644,
+        "CliffSeat1335_L2": 146
+      },
+      "physical": "View-only contact sculpt for an actual planted original V1 rock; preserve the anchored upper footprint, summit and existing obstacle. No geometry extends below the original lower box.",
+      "surface": "Original mineral colour/normal/roughness images.",
+      "root_contact": {
+        "available_contact_points": 916,
+        "surface_under_foot_min_m": -6.157257609252014,
+        "surface_under_foot_max_m": 6.071958126327388,
+        "strategy": "pull unsupported toes diagonally into true uphill contact, inside frozen native box; do not bridge air below original floor"
+      },
+      "original_placement": {
+        "kind": "Cliff",
+        "position": [
+          33.54921294509859,
+          90.49755767999685,
+          -382.1478805693962
+        ],
+        "scale": 1.123209091725825,
+        "yaw": 5.498024940490723
+      }
+    },
+    "1351": {
+      "source": "Existing 8 x 4 x 12 m Cliff.glb, 16 native locations",
+      "triangle_counts": {
+        "CliffSeat1351_L0": 2467,
+        "CliffSeat1351_L1": 642,
+        "CliffSeat1351_L2": 144
+      },
+      "physical": "View-only contact sculpt for an actual planted original V1 rock; preserve the anchored upper footprint, summit and existing obstacle. No geometry extends below the original lower box.",
+      "surface": "Original mineral colour/normal/roughness images.",
+      "root_contact": {
+        "available_contact_points": 522,
+        "surface_under_foot_min_m": -8.492493838078488,
+        "surface_under_foot_max_m": 10.899199668818412,
+        "strategy": "pull unsupported toes diagonally into true uphill contact, inside frozen native box; do not bridge air below original floor"
+      },
+      "original_placement": {
+        "kind": "Cliff",
+        "position": [
+          -133.66980805955654,
+          44.176373976832316,
+          -380.8010070689354
+        ],
+        "scale": 1.0973787995142377,
+        "yaw": 1.6743063926696777
+      }
+    },
+    "1388": {
+      "source": "Existing 8 x 4 x 12 m Cliff.glb, 16 native locations",
+      "triangle_counts": {
+        "CliffSeat1388_L0": 2480,
+        "CliffSeat1388_L1": 642,
+        "CliffSeat1388_L2": 144
+      },
+      "physical": "View-only contact sculpt for an actual planted original V1 rock; preserve the anchored upper footprint, summit and existing obstacle. No geometry extends below the original lower box.",
+      "surface": "Original mineral colour/normal/roughness images.",
+      "root_contact": {
+        "available_contact_points": 1283,
+        "surface_under_foot_min_m": -4.565804116577425,
+        "surface_under_foot_max_m": 2.4634124798257346,
+        "strategy": "pull unsupported toes diagonally into true uphill contact, inside frozen native box; do not bridge air below original floor"
+      },
+      "original_placement": {
+        "kind": "Cliff",
+        "position": [
+          -225.14790167852473,
+          70.54835547075679,
+          -260.14707681026425
+        ],
+        "scale": 1.3349022463661195,
+        "yaw": 3.906954765319824
+      }
+    },
+    "1395": {
+      "source": "Existing 8 x 4 x 12 m Cliff.glb, 16 native locations",
+      "triangle_counts": {
+        "CliffSeat1395_L0": 2406,
+        "CliffSeat1395_L1": 644,
+        "CliffSeat1395_L2": 146
+      },
+      "physical": "View-only contact sculpt for an actual planted original V1 rock; preserve the anchored upper footprint, summit and existing obstacle. No geometry extends below the original lower box.",
+      "surface": "Original mineral colour/normal/roughness images.",
+      "root_contact": {
+        "available_contact_points": 460,
+        "surface_under_foot_min_m": -40.34472818245192,
+        "surface_under_foot_max_m": 0.9531174100008286,
+        "strategy": "pull unsupported toes diagonally into true uphill contact, inside frozen native box; do not bridge air below original floor"
+      },
+      "original_placement": {
+        "kind": "Cliff",
+        "position": [
+          16.123751005538338,
+          132.70441020518066,
+          -189.1682106418791
+        ],
+        "scale": 1.084425392119261,
+        "yaw": 0.1720609813928604
+      }
+    },
+    "1505": {
+      "source": "Existing 8 x 4 x 12 m Cliff.glb, 16 native locations",
+      "triangle_counts": {
+        "CliffSeat1505_L0": 2467,
+        "CliffSeat1505_L1": 642,
+        "CliffSeat1505_L2": 144
+      },
+      "physical": "View-only contact sculpt for an actual planted original V1 rock; preserve the anchored upper footprint, summit and existing obstacle. No geometry extends below the original lower box.",
+      "surface": "Original mineral colour/normal/roughness images.",
+      "root_contact": {
+        "available_contact_points": 943,
+        "surface_under_foot_min_m": -6.035199345708492,
+        "surface_under_foot_max_m": 4.437022278647106,
+        "strategy": "pull unsupported toes diagonally into true uphill contact, inside frozen native box; do not bridge air below original floor"
+      },
+      "original_placement": {
+        "kind": "Cliff",
+        "position": [
+          -155.89061414663968,
+          141.04346860330162,
+          -195.1695098328497
+        ],
+        "scale": 1.2026054948872194,
+        "yaw": 5.565427303314209
+      }
+    },
+    "1549": {
+      "source": "Existing 8 x 4 x 12 m Cliff.glb, 16 native locations",
+      "triangle_counts": {
+        "CliffSeat1549_L0": 2485,
+        "CliffSeat1549_L1": 644,
+        "CliffSeat1549_L2": 146
+      },
+      "physical": "View-only contact sculpt for an actual planted original V1 rock; preserve the anchored upper footprint, summit and existing obstacle. No geometry extends below the original lower box.",
+      "surface": "Original mineral colour/normal/roughness images.",
+      "root_contact": {
+        "available_contact_points": 1497,
+        "surface_under_foot_min_m": -2.174734894709246,
+        "surface_under_foot_max_m": 3.003307084431384,
+        "strategy": "pull unsupported toes diagonally into true uphill contact, inside frozen native box; do not bridge air below original floor"
+      },
+      "original_placement": {
+        "kind": "Cliff",
+        "position": [
+          112.89820782544894,
+          132.324776580865,
+          -205.866234988148
+        ],
+        "scale": 0.8152151609277024,
+        "yaw": 1.6927229166030884
+      }
+    },
+    "1558": {
+      "source": "Existing 8 x 4 x 12 m Cliff.glb, 16 native locations",
+      "triangle_counts": {
+        "CliffSeat1558_L0": 2459,
+        "CliffSeat1558_L1": 642,
+        "CliffSeat1558_L2": 144
+      },
+      "physical": "View-only contact sculpt for an actual planted original V1 rock; preserve the anchored upper footprint, summit and existing obstacle. No geometry extends below the original lower box.",
+      "surface": "Original mineral colour/normal/roughness images.",
+      "root_contact": {
+        "available_contact_points": 1241,
+        "surface_under_foot_min_m": -3.131862924111573,
+        "surface_under_foot_max_m": 3.6869299259738004,
+        "strategy": "pull unsupported toes diagonally into true uphill contact, inside frozen native box; do not bridge air below original floor"
+      },
+      "original_placement": {
+        "kind": "Cliff",
+        "position": [
+          160.49982044853266,
+          98.7423395615079,
+          -221.38809486930734
+        ],
+        "scale": 1.2881630323620938,
+        "yaw": 4.835095405578613
+      }
+    },
+    "1560": {
+      "source": "Existing 8 x 4 x 12 m Cliff.glb, 16 native locations",
+      "triangle_counts": {
+        "CliffSeat1560_L0": 2470,
+        "CliffSeat1560_L1": 644,
+        "CliffSeat1560_L2": 146
+      },
+      "physical": "View-only contact sculpt for an actual planted original V1 rock; preserve the anchored upper footprint, summit and existing obstacle. No geometry extends below the original lower box.",
+      "surface": "Original mineral colour/normal/roughness images.",
+      "root_contact": {
+        "available_contact_points": 1587,
+        "surface_under_foot_min_m": -3.3798936537893596,
+        "surface_under_foot_max_m": 3.555005199977039,
+        "strategy": "pull unsupported toes diagonally into true uphill contact, inside frozen native box; do not bridge air below original floor"
+      },
+      "original_placement": {
+        "kind": "Cliff",
+        "position": [
+          84.1841411475259,
+          49.0784209183163,
+          -439.79636079835063
+        ],
+        "scale": 1.2600210724697485,
+        "yaw": 5.69949197769165
+      }
+    },
+    "1579": {
+      "source": "Existing 8 x 4 x 12 m Cliff.glb, 16 native locations",
+      "triangle_counts": {
+        "CliffSeat1579_L0": 2477,
+        "CliffSeat1579_L1": 644,
+        "CliffSeat1579_L2": 146
+      },
+      "physical": "View-only contact sculpt for an actual planted original V1 rock; preserve the anchored upper footprint, summit and existing obstacle. No geometry extends below the original lower box.",
+      "surface": "Original mineral colour/normal/roughness images.",
+      "root_contact": {
+        "available_contact_points": 1439,
+        "surface_under_foot_min_m": -3.162373774344133,
+        "surface_under_foot_max_m": 3.639419974446753,
+        "strategy": "pull unsupported toes diagonally into true uphill contact, inside frozen native box; do not bridge air below original floor"
+      },
+      "original_placement": {
+        "kind": "Cliff",
+        "position": [
+          -208.73335150884895,
+          95.57834688587123,
+          -223.07969454030422
+        ],
+        "scale": 1.071570761950324,
+        "yaw": 1.6401761770248413
+      }
+    },
+    "1695": {
+      "source": "Existing 8 x 4 x 12 m Cliff.glb, 16 native locations",
+      "triangle_counts": {
+        "CliffSeat1695_L0": 2408,
+        "CliffSeat1695_L1": 637,
+        "CliffSeat1695_L2": 141
+      },
+      "physical": "View-only contact sculpt for an actual planted original V1 rock; preserve the anchored upper footprint, summit and existing obstacle. No geometry extends below the original lower box.",
+      "surface": "Original mineral colour/normal/roughness images.",
+      "root_contact": {
+        "available_contact_points": 988,
+        "surface_under_foot_min_m": -7.608178162789741,
+        "surface_under_foot_max_m": 3.087135266073915,
+        "strategy": "pull unsupported toes diagonally into true uphill contact, inside frozen native box; do not bridge air below original floor"
+      },
+      "original_placement": {
+        "kind": "Cliff",
+        "position": [
+          57.081199516721256,
+          121.40263917602493,
+          -350.47100977864966
+        ],
+        "scale": 1.1358928216278281,
+        "yaw": 3.1208672523498535
+      }
+    },
+    "1717": {
+      "source": "Existing 8 x 4 x 12 m Cliff.glb, 16 native locations",
+      "triangle_counts": {
+        "CliffSeat1717_L0": 2488,
+        "CliffSeat1717_L1": 642,
+        "CliffSeat1717_L2": 144
+      },
+      "physical": "View-only contact sculpt for an actual planted original V1 rock; preserve the anchored upper footprint, summit and existing obstacle. No geometry extends below the original lower box.",
+      "surface": "Original mineral colour/normal/roughness images.",
+      "root_contact": {
+        "available_contact_points": 1441,
+        "surface_under_foot_min_m": -3.12308171356381,
+        "surface_under_foot_max_m": 5.400276116770939,
+        "strategy": "pull unsupported toes diagonally into true uphill contact, inside frozen native box; do not bridge air below original floor"
+      },
+      "original_placement": {
+        "kind": "Cliff",
+        "position": [
+          -49.08714274839201,
+          32.750890067706734,
+          -449.9755851138044
+        ],
+        "scale": 1.3698256794946264,
+        "yaw": 1.0662403106689453
+      }
+    },
+    "1731": {
+      "source": "Existing 8 x 4 x 12 m Cliff.glb, 16 native locations",
+      "triangle_counts": {
+        "CliffSeat1731_L0": 2480,
+        "CliffSeat1731_L1": 642,
+        "CliffSeat1731_L2": 144
+      },
+      "physical": "View-only contact sculpt for an actual planted original V1 rock; preserve the anchored upper footprint, summit and existing obstacle. No geometry extends below the original lower box.",
+      "surface": "Original mineral colour/normal/roughness images.",
+      "root_contact": {
+        "available_contact_points": 1100,
+        "surface_under_foot_min_m": -3.2521737228357104,
+        "surface_under_foot_max_m": 2.3250967064205454,
+        "strategy": "pull unsupported toes diagonally into true uphill contact, inside frozen native box; do not bridge air below original floor"
+      },
+      "original_placement": {
+        "kind": "Cliff",
+        "position": [
+          260.27528827622564,
+          34.41300646814849,
+          -282.2070860151979
+        ],
+        "scale": 1.197823022355079,
+        "yaw": 2.1551618576049805
+      }
+    },
+    "1745": {
+      "source": "Existing 8 x 4 x 12 m Cliff.glb, 16 native locations",
+      "triangle_counts": {
+        "CliffSeat1745_L0": 2445,
+        "CliffSeat1745_L1": 636,
+        "CliffSeat1745_L2": 142
+      },
+      "physical": "View-only contact sculpt for an actual planted original V1 rock; preserve the anchored upper footprint, summit and existing obstacle. No geometry extends below the original lower box.",
+      "surface": "Original mineral colour/normal/roughness images.",
+      "root_contact": {
+        "available_contact_points": 662,
+        "surface_under_foot_min_m": -5.163430859200204,
+        "surface_under_foot_max_m": 5.705860804325653,
+        "strategy": "pull unsupported toes diagonally into true uphill contact, inside frozen native box; do not bridge air below original floor"
+      },
+      "original_placement": {
+        "kind": "Cliff",
+        "position": [
+          -54.84594752736098,
+          125.49961756670854,
+          -293.5132583917242
+        ],
+        "scale": 0.8052433122454613,
+        "yaw": 4.598459720611572
+      }
+    },
+    "1817": {
+      "source": "Existing 8 x 4 x 12 m Cliff.glb, 16 native locations",
+      "triangle_counts": {
+        "CliffSeat1817_L0": 2490,
+        "CliffSeat1817_L1": 644,
+        "CliffSeat1817_L2": 146
+      },
+      "physical": "View-only contact sculpt for an actual planted original V1 rock; preserve the anchored upper footprint, summit and existing obstacle. No geometry extends below the original lower box.",
+      "surface": "Original mineral colour/normal/roughness images.",
+      "root_contact": {
+        "available_contact_points": 2114,
+        "surface_under_foot_min_m": -0.6775001682012061,
+        "surface_under_foot_max_m": 4.53774541870375,
+        "strategy": "pull unsupported toes diagonally into true uphill contact, inside frozen native box; do not bridge air below original floor"
+      },
+      "original_placement": {
+        "kind": "Cliff",
+        "position": [
+          51.95868358589246,
+          95.61852208533638,
+          -172.51082384582662
+        ],
+        "scale": 1.1888279821360743,
+        "yaw": 3.2354657649993896
+      }
+    },
+    "1847": {
+      "source": "Existing 8 x 4 x 12 m Cliff.glb, 16 native locations",
+      "triangle_counts": {
+        "CliffSeat1847_L0": 2443,
+        "CliffSeat1847_L1": 642,
+        "CliffSeat1847_L2": 144
+      },
+      "physical": "View-only contact sculpt for an actual planted original V1 rock; preserve the anchored upper footprint, summit and existing obstacle. No geometry extends below the original lower box.",
+      "surface": "Original mineral colour/normal/roughness images.",
+      "root_contact": {
+        "available_contact_points": 1302,
+        "surface_under_foot_min_m": -4.0505215933749525,
+        "surface_under_foot_max_m": 4.577745364283814,
+        "strategy": "pull unsupported toes diagonally into true uphill contact, inside frozen native box; do not bridge air below original floor"
+      },
+      "original_placement": {
+        "kind": "Cliff",
+        "position": [
+          4.831033451935923,
+          67.07341872220937,
+          -413.84595764251264
+        ],
+        "scale": 1.221004733308661,
+        "yaw": 2.0762863159179688
+      }
+    }
+  },
+  "pack_bytes": 5977732
+}
