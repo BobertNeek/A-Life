@@ -15,3 +15,8 @@ The 3-site local till proposal adds partially buried 2–14 cm long, at most 5 c
 ### Optional isolated overlay, only after the model gallery exists
 
 From a clean separate weekly-art checkout, run `python studies/island-glacial-deposit/prepare_glacial_preview.py <new-empty-path-outside-checkout>`. The script refuses different original rock hashes and an existing destination. It assembles the three models, three near-only texture maps, the scoped manifest and a separate unapplied `erratic-native-material-family.patch`. It does not change the checkout or open the game. There is deliberately no launcher, save or optional gameplay tile in this overlay. For next week's visual session, place that overlay into a purpose-made disposable checkout, check/apply the supplied material-family patch there, and use the [existing clean-profile capture recipe](../island-art-week/NEXT_WEEK.md). The optional three-site till still requires a safe near-lane binding and terrain-edit fallback; do not describe it as present in that build.
+
+
+### Held spare-slot ground trial
+
+The native habitat atlas has 56 possible slots and uses 55. [The locked Blender study](https://github.com/BobertNeek/A-Life/actions/runs/44509691508) used the sole unused slot for a 50.88→102.08 texels/metre close crop with four alternate UV corners on the same two physical native triangles. No added texture or geometry. It produces a slight warmer mineral trace but not enough improvement to spend that sole slot on just one boulder. All 424 original boulder cells were considered: this specific donor UV quadrant appears only at #1570. Source stays for study; **not selected/installed**. Instead compare the shared close substrate in two different actual habitats, not another one-off paint patch.
