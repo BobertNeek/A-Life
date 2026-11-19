@@ -1,0 +1,455 @@
+{
+  "name": "Cloudstep Shelf",
+  "original_V1_sha256": "8d0e9cf6343ffe8ea5e82bcb7ad3e4ef77eef7207042cf0274de5d91f2457c38",
+  "bounds_xz": [
+    48.0,
+    127.0,
+    -447.0,
+    -369.0
+  ],
+  "original_ground_range_m": [
+    -3.799,
+    99.227
+  ],
+  "relief_in_named_60m_square_m": 91.756,
+  "survey_resolution_m": 1,
+  "one_metre_centres_connected": 2186,
+  "gentle_survey_grade_max": 0.44,
+  "gentle_survey_height_m": [
+    57,
+    73
+  ],
+  "original_pines_on_connected_centres": 14,
+  "real_native_props_in_window": [
+    {
+      "id": 3,
+      "kind": "Conifer",
+      "original_xyz": [
+        78.22090299147328,
+        61.87667221901068,
+        -431.45057631279326
+      ],
+      "scale": 1.0106873569220967,
+      "yaw": 3.4235785007476807,
+      "original_v1_y": 61.8434,
+      "native_grade": 0.7651,
+      "on_gentle_connected_shelf": true
+    },
+    {
+      "id": 97,
+      "kind": "Conifer",
+      "original_xyz": [
+        84.63504390185221,
+        73.77348785104476,
+        -382.20161538942864
+      ],
+      "scale": 1.1000066146630172,
+      "yaw": 5.669682502746582,
+      "original_v1_y": 73.778,
+      "native_grade": 0.4965,
+      "on_gentle_connected_shelf": false
+    },
+    {
+      "id": 141,
+      "kind": "Conifer",
+      "original_xyz": [
+        110.49452074400028,
+        63.205570583184304,
+        -381.8173036528807
+      ],
+      "scale": 0.9920235639755769,
+      "yaw": 3.3441057205200195,
+      "original_v1_y": 63.2143,
+      "native_grade": 0.5162,
+      "on_gentle_connected_shelf": false
+    },
+    {
+      "id": 264,
+      "kind": "Conifer",
+      "original_xyz": [
+        63.104650471741024,
+        59.78702412727906,
+        -440.95807544981267
+      ],
+      "scale": 1.003434288715034,
+      "yaw": 0.7140180468559265,
+      "original_v1_y": 59.7078,
+      "native_grade": 0.4545,
+      "on_gentle_connected_shelf": false
+    },
+    {
+      "id": 349,
+      "kind": "Conifer",
+      "original_xyz": [
+        92.17422019128128,
+        66.67285659927322,
+        -405.2195855639203
+      ],
+      "scale": 0.870496558739978,
+      "yaw": 5.674039840698242,
+      "original_v1_y": 66.6685,
+      "native_grade": 0.2825,
+      "on_gentle_connected_shelf": true
+    },
+    {
+      "id": 412,
+      "kind": "Conifer",
+      "original_xyz": [
+        52.833873974494225,
+        61.86494304270154,
+        -419.9306410448486
+      ],
+      "scale": 0.852606687320429,
+      "yaw": 2.8459200859069824,
+      "original_v1_y": 61.8898,
+      "native_grade": 0.3597,
+      "on_gentle_connected_shelf": true
+    },
+    {
+      "id": 426,
+      "kind": "Conifer",
+      "original_xyz": [
+        95.37513687317232,
+        65.5840942868138,
+        -408.012466927697
+      ],
+      "scale": 1.0873056664278993,
+      "yaw": 2.938887119293213,
+      "original_v1_y": 65.554,
+      "native_grade": 0.2598,
+      "on_gentle_connected_shelf": true
+    },
+    {
+      "id": 461,
+      "kind": "Conifer",
+      "original_xyz": [
+        67.96565695596036,
+        63.93234004018643,
+        -424.48559460121965
+      ],
+      "scale": 0.9092089056122603,
+      "yaw": 0.8976824283599854,
+      "original_v1_y": 63.916,
+      "native_grade": 0.2637,
+      "on_gentle_connected_shelf": true
+    },
+    {
+      "id": 483,
+      "kind": "Conifer",
+      "original_xyz": [
+        65.028826665704,
+        65.78598142346362,
+        -408.00452454779304
+      ],
+      "scale": 1.2434623216773413,
+      "yaw": 2.358285427093506,
+      "original_v1_y": 65.8483,
+      "native_grade": 0.2945,
+      "on_gentle_connected_shelf": true
+    },
+    {
+      "id": 533,
+      "kind": "Conifer",
+      "original_xyz": [
+        77.27091073841768,
+        68.46716282063066,
+        -405.81506531709783
+      ],
+      "scale": 1.2037303241857378,
+      "yaw": 3.894836187362671,
+      "original_v1_y": 68.4457,
+      "native_grade": 0.1381,
+      "on_gentle_connected_shelf": true
+    },
+    {
+      "id": 578,
+      "kind": "Conifer",
+      "original_xyz": [
+        97.52433652707725,
+        64.8873736830663,
+        -409.5146586925646
+      ],
+      "scale": 1.0438953993210909,
+      "yaw": 3.822838068008423,
+      "original_v1_y": 64.8611,
+      "native_grade": 0.327,
+      "on_gentle_connected_shelf": true
+    },
+    {
+      "id": 614,
+      "kind": "Conifer",
+      "original_xyz": [
+        126.06226699485103,
+        55.91397517172363,
+        -374.9804238954704
+      ],
+      "scale": 1.1797716806559395,
+      "yaw": 1.962188959121704,
+      "original_v1_y": 55.9105,
+      "native_grade": 0.4161,
+      "on_gentle_connected_shelf": false
+    },
+    {
+      "id": 671,
+      "kind": "Conifer",
+      "original_xyz": [
+        71.7619294832993,
+        64.90020219408832,
+        -422.9921893611755
+      ],
+      "scale": 0.8286111031830664,
+      "yaw": 1.810695767402649,
+      "original_v1_y": 64.862,
+      "native_grade": 0.2675,
+      "on_gentle_connected_shelf": true
+    },
+    {
+      "id": 694,
+      "kind": "Conifer",
+      "original_xyz": [
+        99.90182165181864,
+        68.94523038784403,
+        -373.7800508144752
+      ],
+      "scale": 0.8639281777766761,
+      "yaw": 2.963745355606079,
+      "original_v1_y": 68.9425,
+      "native_grade": 0.4677,
+      "on_gentle_connected_shelf": false
+    },
+    {
+      "id": 842,
+      "kind": "Conifer",
+      "original_xyz": [
+        105.384720811492,
+        66.89410402958835,
+        -373.85243390074845
+      ],
+      "scale": 0.8672734613329092,
+      "yaw": 5.6173415184021,
+      "original_v1_y": 66.9196,
+      "native_grade": 0.3133,
+      "on_gentle_connected_shelf": true
+    },
+    {
+      "id": 947,
+      "kind": "Conifer",
+      "original_xyz": [
+        118.75117923561527,
+        59.68148426984566,
+        -382.77219934538493
+      ],
+      "scale": 1.1954671457114416,
+      "yaw": 1.3920693397521973,
+      "original_v1_y": 59.6687,
+      "native_grade": 0.4161,
+      "on_gentle_connected_shelf": true
+    },
+    {
+      "id": 991,
+      "kind": "Conifer",
+      "original_xyz": [
+        78.60121500610097,
+        67.63097235909567,
+        -415.6066720963761
+      ],
+      "scale": 0.8404654999400898,
+      "yaw": 0.25219476222991943,
+      "original_v1_y": 67.629,
+      "native_grade": 0.4369,
+      "on_gentle_connected_shelf": false
+    },
+    {
+      "id": 1069,
+      "kind": "Conifer",
+      "original_xyz": [
+        59.951445859669604,
+        60.34003364364052,
+        -437.71970485715303
+      ],
+      "scale": 1.2222058890214713,
+      "yaw": 6.256635665893555,
+      "original_v1_y": 60.3222,
+      "native_grade": 0.2619,
+      "on_gentle_connected_shelf": true
+    },
+    {
+      "id": 1076,
+      "kind": "Conifer",
+      "original_xyz": [
+        53.261359269314426,
+        63.01962018647651,
+        -417.0293064278917
+      ],
+      "scale": 1.2006003568430947,
+      "yaw": 4.269638538360596,
+      "original_v1_y": 63.0489,
+      "native_grade": 0.4615,
+      "on_gentle_connected_shelf": false
+    },
+    {
+      "id": 1220,
+      "kind": "Conifer",
+      "original_xyz": [
+        100.20011292474271,
+        68.74682558520934,
+        -372.3092397439799
+      ],
+      "scale": 0.8554026834304543,
+      "yaw": 6.035883903503418,
+      "original_v1_y": 68.7549,
+      "native_grade": 0.4687,
+      "on_gentle_connected_shelf": false
+    },
+    {
+      "id": 1236,
+      "kind": "Conifer",
+      "original_xyz": [
+        72.62564244398783,
+        67.95182270205481,
+        -404.25952302883525
+      ],
+      "scale": 1.2142328166448277,
+      "yaw": 5.227513790130615,
+      "original_v1_y": 67.9452,
+      "native_grade": 0.1646,
+      "on_gentle_connected_shelf": true
+    },
+    {
+      "id": 1257,
+      "kind": "Conifer",
+      "original_xyz": [
+        106.74519375290026,
+        63.89452660555554,
+        -389.1600206326681
+      ],
+      "scale": 1.1783152998698454,
+      "yaw": 4.893062591552734,
+      "original_v1_y": 63.9203,
+      "native_grade": 0.415,
+      "on_gentle_connected_shelf": true
+    },
+    {
+      "id": 1330,
+      "kind": "BoulderC",
+      "original_xyz": [
+        77.56110556754209,
+        67.92868790861387,
+        -414.37072651120525
+      ],
+      "scale": 1.2870714772566776,
+      "yaw": 2.5907630920410156,
+      "original_v1_y": 67.8711,
+      "native_grade": 0.2676,
+      "on_gentle_connected_shelf": true
+    },
+    {
+      "id": 1421,
+      "kind": "BoulderC",
+      "original_xyz": [
+        60.281633176905075,
+        92.25014007871128,
+        -382.8231884162991
+      ],
+      "scale": 0.8253116640888116,
+      "yaw": 5.694057941436768,
+      "original_v1_y": 92.1258,
+      "native_grade": 0.6594,
+      "on_gentle_connected_shelf": false
+    },
+    {
+      "id": 1483,
+      "kind": "BoulderA",
+      "original_xyz": [
+        83.97019711206508,
+        77.59237440902827,
+        -373.6484948854604
+      ],
+      "scale": 0.8731183242699457,
+      "yaw": 3.606448173522949,
+      "original_v1_y": 77.7492,
+      "native_grade": 1.0632,
+      "on_gentle_connected_shelf": false
+    },
+    {
+      "id": 1560,
+      "kind": "Cliff",
+      "original_xyz": [
+        84.1841411475259,
+        49.0784209183163,
+        -439.79636079835063
+      ],
+      "scale": 1.2600210724697485,
+      "yaw": 5.69949197769165,
+      "original_v1_y": 49.0381,
+      "native_grade": 1.6779,
+      "on_gentle_connected_shelf": false
+    },
+    {
+      "id": 1794,
+      "kind": "BoulderB",
+      "original_xyz": [
+        99.69405725235913,
+        43.99348875091718,
+        -430.4818450933967
+      ],
+      "scale": 0.7675931038875842,
+      "yaw": 2.2023098468780518,
+      "original_v1_y": 43.9982,
+      "native_grade": 1.7993,
+      "on_gentle_connected_shelf": false
+    },
+    {
+      "id": 1838,
+      "kind": "BoulderA",
+      "original_xyz": [
+        103.0278811347846,
+        64.67884908660415,
+        -393.8254460274825
+      ],
+      "scale": 1.0241869100089258,
+      "yaw": 1.331357717514038,
+      "original_v1_y": 64.678,
+      "native_grade": 0.4409,
+      "on_gentle_connected_shelf": true
+    }
+  ],
+  "registered_eye_xyz": [
+    82.0,
+    69.93579284667969,
+    -408.0
+  ],
+  "physical_sight_witnesses": {
+    "real_summit": {
+      "xyz": [
+        28.125,
+        240.0,
+        -275.0
+      ],
+      "ground_profile": {
+        "blocked_over_ray_m": -1.02,
+        "max_blocker_xz": [
+          28.34,
+          -275.53
+        ]
+      }
+    },
+    "seaward_reference": {
+      "xyz": [
+        118.0,
+        0.0,
+        -461.0
+      ],
+      "ground_profile": {
+        "blocked_over_ray_m": 10.636,
+        "max_blocker_xz": [
+          92.28,
+          -423.14
+        ]
+      }
+    }
+  },
+  "sampled_stations": 1330,
+  "clearance_or_navigation_checked": false,
+  "changed_native_bytes": 0
+}

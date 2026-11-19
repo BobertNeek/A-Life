@@ -1,0 +1,321 @@
+{
+  "method": "Existing original terrain and triangle alpha-mask rays, not a rendered image or navigation proof",
+  "stations": [
+    {
+      "eye": [
+        82.0,
+        69.93579284667969,
+        -408.0
+      ],
+      "ground_grade": 0.049,
+      "rays": {
+        "true summit": {
+          "target": [
+            28.125,
+            240.0,
+            -275.0
+          ],
+          "terrain": {
+            "blocked_over_ray_m": -1.02,
+            "max_blocker_xz": [
+              28.34,
+              -275.53
+            ]
+          },
+          "prop_hits": []
+        },
+        "left spur": {
+          "target": [
+            3.0,
+            168.44673522949225,
+            -300.0
+          ],
+          "terrain": {
+            "blocked_over_ray_m": 10.622,
+            "max_blocker_xz": [
+              25.56,
+              -330.84
+            ]
+          },
+          "prop_hits": [
+            [
+              533,
+              "Conifer",
+              4.941
+            ]
+          ]
+        },
+        "near pine shoulder": {
+          "target": [
+            62.0,
+            93.71487182617189,
+            -373.0
+          ],
+          "terrain": {
+            "blocked_over_ray_m": 5.562,
+            "max_blocker_xz": [
+              65.63,
+              -379.36
+            ]
+          },
+          "prop_hits": [
+            [
+              533,
+              "Conifer",
+              5.145
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "eye": [
+        80.0,
+        69.27338500976563,
+        -413.0
+      ],
+      "ground_grade": 0.203,
+      "rays": {
+        "true summit": {
+          "target": [
+            28.125,
+            240.0,
+            -275.0
+          ],
+          "terrain": {
+            "blocked_over_ray_m": -1.04,
+            "max_blocker_xz": [
+              28.33,
+              -275.55
+            ]
+          },
+          "prop_hits": [
+            [
+              533,
+              "Conifer",
+              8.564
+            ]
+          ]
+        },
+        "left spur": {
+          "target": [
+            3.0,
+            168.44673522949225,
+            -300.0
+          ],
+          "terrain": {
+            "blocked_over_ray_m": 8.264,
+            "max_blocker_xz": [
+              24.66,
+              -331.78
+            ]
+          },
+          "prop_hits": [
+            [
+              533,
+              "Conifer",
+              6.316
+            ],
+            [
+              1236,
+              "Conifer",
+              11.881
+            ]
+          ]
+        },
+        "near pine shoulder": {
+          "target": [
+            62.0,
+            93.71487182617189,
+            -373.0
+          ],
+          "terrain": {
+            "blocked_over_ray_m": 5.312,
+            "max_blocker_xz": [
+              65.66,
+              -381.13
+            ]
+          },
+          "prop_hits": [
+            [
+              533,
+              "Conifer",
+              6.842
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "eye": [
+        85.25,
+        67.24987518310547,
+        -416.0
+      ],
+      "ground_grade": 0.369,
+      "rays": {
+        "true summit": {
+          "target": [
+            28.125,
+            240.0,
+            -275.0
+          ],
+          "terrain": {
+            "blocked_over_ray_m": -1.111,
+            "max_blocker_xz": [
+              28.35,
+              -275.56
+            ]
+          },
+          "prop_hits": []
+        },
+        "left spur": {
+          "target": [
+            3.0,
+            168.44673522949225,
+            -300.0
+          ],
+          "terrain": {
+            "blocked_over_ray_m": 8.89,
+            "max_blocker_xz": [
+              25.06,
+              -331.12
+            ]
+          },
+          "prop_hits": [
+            [
+              533,
+              "Conifer",
+              14.372
+            ]
+          ]
+        },
+        "near pine shoulder": {
+          "target": [
+            62.0,
+            93.71487182617189,
+            -373.0
+          ],
+          "terrain": {
+            "blocked_over_ray_m": 5.198,
+            "max_blocker_xz": [
+              65.62,
+              -379.69
+            ]
+          },
+          "prop_hits": []
+        }
+      }
+    },
+    {
+      "eye": [
+        86.62,
+        69.53130870361328,
+        -404.75
+      ],
+      "ground_grade": 0.365,
+      "rays": {
+        "true summit": {
+          "target": [
+            28.125,
+            240.0,
+            -275.0
+          ],
+          "terrain": {
+            "blocked_over_ray_m": -1.036,
+            "max_blocker_xz": [
+              28.36,
+              -275.52
+            ]
+          },
+          "prop_hits": []
+        },
+        "left spur": {
+          "target": [
+            3.0,
+            168.44673522949225,
+            -300.0
+          ],
+          "terrain": {
+            "blocked_over_ray_m": 12.816,
+            "max_blocker_xz": [
+              26.88,
+              -329.91
+            ]
+          },
+          "prop_hits": []
+        },
+        "near pine shoulder": {
+          "target": [
+            62.0,
+            93.71487182617189,
+            -373.0
+          ],
+          "terrain": {
+            "blocked_over_ray_m": 5.648,
+            "max_blocker_xz": [
+              65.83,
+              -377.94
+            ]
+          },
+          "prop_hits": []
+        }
+      }
+    },
+    {
+      "eye": [
+        72.75,
+        67.84648620605469,
+        -414.5
+      ],
+      "ground_grade": 0.32,
+      "rays": {
+        "true summit": {
+          "target": [
+            28.125,
+            240.0,
+            -275.0
+          ],
+          "terrain": {
+            "blocked_over_ray_m": -0.975,
+            "max_blocker_xz": [
+              28.3,
+              -275.56
+            ]
+          },
+          "prop_hits": []
+        },
+        "left spur": {
+          "target": [
+            3.0,
+            168.44673522949225,
+            -300.0
+          ],
+          "terrain": {
+            "blocked_over_ray_m": 7.353,
+            "max_blocker_xz": [
+              6.6,
+              -305.91
+            ]
+          },
+          "prop_hits": []
+        },
+        "near pine shoulder": {
+          "target": [
+            62.0,
+            93.71487182617189,
+            -373.0
+          ],
+          "terrain": {
+            "blocked_over_ray_m": 5.534,
+            "max_blocker_xz": [
+              64.42,
+              -382.33
+            ]
+          },
+          "prop_hits": []
+        }
+      }
+    }
+  ]
+}
