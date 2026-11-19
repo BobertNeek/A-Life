@@ -1,0 +1,45 @@
+{
+  "new_shoots": 590,
+  "added_kit_meshes": 8,
+  "placed_triangles": {
+    "folded": {
+      "roots": 122,
+      "triangles": 32904
+    },
+    "silhouette": {
+      "roots": 468,
+      "triangles": 28080
+    },
+    "guardian": {
+      "roots": 590,
+      "triangles": 2936
+    }
+  },
+  "source_primitive_triangles": 1132,
+  "actual_V1_slope_triangles": 952,
+  "excluded_vertical_streamer_skirt_faces": 180,
+  "real_ground_triangles_inside": 48,
+  "true_wet_triangles": 108,
+  "close_chart_m": [
+    18.75,
+    12.5
+  ],
+  "close_chart_px": [
+    960,
+    640
+  ],
+  "ground_vertices_moved": 0,
+  "matched_second_eye": {
+    "eye": [
+      366.2,
+      13.49161032867437,
+      -83.7
+    ],
+    "aim": [
+      367.55,
+      13.3,
+      -84.65
+    ],
+    "lens": 34
+  }
+}

@@ -58,16 +58,18 @@ def picture(p, scene_index, cam_index, out):
     textures = {}
 
     def material(m):
-        mat = d["materials"][m]["pbrMetallicRoughness"]
+        desc = d["materials"][m]
+        mat = desc["pbrMetallicRoughness"]
         t = mat.get("baseColorTexture", {}).get("index")
         if t is not None and t not in textures:
             im = d["images"][d["textures"][t]["source"]]
             v = d["bufferViews"][im["bufferView"]]
             i = v.get("byteOffset", 0)
             textures[t] = np.asarray(
-                Image.open(io.BytesIO(raw[i : i + v["byteLength"]])).convert("RGB")
+                Image.open(io.BytesIO(raw[i : i + v["byteLength"]])).convert("RGBA")
             )
-        return t
+        cutoff = desc.get("alphaCutoff", 0.5) if desc.get("alphaMode") == "MASK" else 0
+        return t, cutoff
 
     cameras = [v for v in d["nodes"] if "camera" in v]
     cam = cameras[cam_index]
@@ -127,18 +129,45 @@ def picture(p, scene_index, cam_index, out):
             return
         ys = ys[keep]
         xs = xs[keep]
-        facebuf[ys, xs] = depth[keep]
+        depth = depth[keep]
         a = a[keep, None]
         b = b[keep, None]
         c = c[keep, None]
         col = a * v[0, 3:6] + b * v[1, 3:6] + c * v[2, 3:6]
+        texture, cutoff = texture
         if texture is not None:
             uv = a * v[0, 6:8] + b * v[1, 6:8] + c * v[2, 6:8]
             pic = textures[texture]
             hh, ww = pic.shape[:2]
-            s = np.clip(uv[:, 0], 0, 0.999999) * ww
-            t = np.clip(uv[:, 1], 0, 0.999999) * hh
-            col *= lin(pic[t.astype(int), s.astype(int)] / 255.0)
+            # Artist GLB uses glTF's default repeat and linear magnification.
+            # Respect real crown cutouts before committing visibility.
+            xy = uv * np.array([ww, hh], "f") - 0.5
+            low = np.floor(xy).astype("i")
+            f = xy - low
+            u0, v0 = low[:, 0] % ww, low[:, 1] % hh
+            u1, v1 = (u0 + 1) % ww, (v0 + 1) % hh
+            fx, fy = f[:, :1], f[:, 1:]
+
+            # Interpolate source texels in linear light, not sRGB.
+            def texel(iy, ix):
+                a = pic[iy, ix].astype("f") / 255
+                a[:, :3] = lin(a[:, :3])
+                return a
+
+            sample = (1 - fy) * ((1 - fx) * texel(v0, u0) + fx * texel(v0, u1)) + fy * (
+                (1 - fx) * texel(v1, u0) + fx * texel(v1, u1)
+            )
+            if cutoff:
+                shows = sample[:, 3] >= cutoff
+                ys, xs, depth, col, sample = (
+                    ys[shows],
+                    xs[shows],
+                    depth[shows],
+                    col[shows],
+                    sample[shows],
+                )
+            col *= sample[:, :3]
+        facebuf[ys, xs] = depth
         rgb[ys, xs] = np.uint8(np.clip(255 * srgb(col), 0, 255))
 
     # Geometric near clipping, not deleting the genuine terrain triangle that
