@@ -1,0 +1,18 @@
+{
+  "near_only_triangles": 6288,
+  "existing_alder": 559,
+  "actual_stem": [
+    132.9546921832416,
+    7.338521202250575,
+    444.7508474129243
+  ],
+  "exposed_root_fingers": 7,
+  "siltstone_fragments": 66,
+  "bounds": [
+    119.0,
+    149.0,
+    439.0,
+    470.0
+  ],
+  "scope": "Ground relief only; terminal close field, no collision or object placement."
+}

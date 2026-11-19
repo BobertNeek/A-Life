@@ -20,9 +20,14 @@ VIEWS = (
         "1.04 m eye, 51 m from the start. A quiet centre winds between rooted sweeps and the native wild grass.",
     ),
     (
+        "reach-alder",
+        "03   AT THE BLUFF ALDER",
+        "1.04 m eye, looking back toward the original tree. This alder, its neighbours and their shadows stay fixed.",
+    ),
+    (
         "reach-strand",
-        "03   OVER THE LAST SALT BLUFF",
-        "1.04 m eye, looking seaward. Wind-combed shore growth and shell/gravel lenses sit on the real descent.",
+        "04   OVER THE LAST SALT BLUFF",
+        "1.04 m eye, looking seaward. Follow exposed alder roots and weathered siltstone over the last sandy bluff.",
     ),
 )
 
@@ -31,7 +36,7 @@ def fonts(size, bold=False):
     return ImageFont.truetype("DejaVuSans" + ("-Bold" if bold else "") + ".ttf", size)
 
 
-def compose(before, after, terrain, out):
+def compose(before, after, terrain, out, strand=None):
     reach = Reach(terrain)
     w, h = Image.open(before / "before" / "reach-guardian.png").size
     pad = 27
@@ -103,7 +108,9 @@ def compose(before, after, terrain, out):
         yy = head + j * (h + 95)
         add(pad, yy + 5, title, 25, True)
         add(pad, yy + 44, caption, 18, False, "#cbd3c4")
-        for k, folder in enumerate((before / "before", after / "after")):
+        right = strand if name in ("reach-alder", "reach-strand") and strand else after
+        left = strand if name == "reach-alder" and strand else before
+        for k, folder in enumerate((left / "before", right / "after")):
             pic = Image.open(folder / (name + ".png")).convert("RGB")
             if pic.size != (w, h):
                 raise ValueError("The actual camera outputs are not a matched pair")
@@ -115,5 +122,10 @@ if __name__ == "__main__":
     cli = argparse.ArgumentParser(description=__doc__)
     for name in ("before", "after", "terrain", "out"):
         cli.add_argument(name, type=Path)
+    cli.add_argument(
+        "--strand",
+        type=Path,
+        help="Terminal close-only source folder; distant controls stay unchanged",
+    )
     args = cli.parse_args()
-    compose(args.before, args.after, args.terrain, args.out)
+    compose(args.before, args.after, args.terrain, args.out, args.strand)
