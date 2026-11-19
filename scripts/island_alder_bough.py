@@ -58,6 +58,8 @@ def rod(b, pts, radii, sides):
 
 
 def tile(b, root, forward, wide, roll, fall, chart, level, packet=False):
+    if packet:
+        chart %= 2
     axis = Vector(forward).normalized()
     side = axis.cross(Z)
     if side.length < 0.03:
@@ -277,64 +279,49 @@ def distant(b, hub, index):
 
 
 def knot(b, at, facing, index, level):
-    """Palm-sized sprays overlap around a shaded nonplanar heart of the bough.
-
-    This little five-lobed core stays inboard of the loose terminal leaves:
-    rotated, taller than its half-width, never an entire solid canopy cap.
-    It uses the dense interior of the real cut-leaf print, not a flat chip.
-    """
+    """Nested, gently cupped, nonparallel gatherings with real cut-leaf contours."""
     rng = Random(842911 + index * 691)
     rad = Vector(facing)
-    rad.z = rng.uniform(-0.3, 0.43)
+    rad.z = 0
     rad.normalize()
-    side = rad.cross(Z).normalized()
-    up = side.cross(rad).normalized()
-    c = Vector(at)
-    long = rng.uniform(0.36, 0.55)
-    wide = rng.uniform(0.24, 0.41)
-    high = rng.uniform(0.26, 0.43)
-    opaque = level == 1 or index % 5 == 2
-    if level == 1:
-        long *= 1.80
-        wide *= 1.86
-        high *= 1.88
-        c += rad * 0.15 + side * (0.16 * math.sin(index))
-    n = 7 if level == 0 else 5
-    shape = []
-    chart = index % 4
-    for k in range(n):
-        a = (k + 0.15 * math.sin(index)) * math.tau / n
-        shape.append(
-            c
-            + rad * (long * math.cos(a))
-            + side * (wide * math.sin(a))
-            + up * (0.29 * high * math.sin(2 * a + index))
+    side = Vector((-rad.y, rad.x, 0))
+    center = Vector(at)
+    size = (0.90 if level == 0 else 1.35) * rng.uniform(0.90, 1.13)
+    # A much coarser model still needs a filled interior between the fine
+    # hanging branch ends. The leaf print never reaches the patch boundary.
+    for i in range(2 if level == 0 else 3):
+        turn = rng.uniform(-0.70, 0.70) + (i - 0.5) * 0.65
+        along = rad * math.cos(turn) + side * math.sin(turn)
+        across = Vector((-along.y, along.x, 0))
+        a = along * size * 0.99 + Z * (rng.uniform(-0.29, 0.26) * size)
+        tilt = (0.28, 0.81, -0.72)[i] + rng.uniform(-0.14, 0.12)
+        c = (across * math.cos(tilt) + Z * math.sin(tilt)) * size * 0.80
+        normal = a.cross(c).normalized()
+        origin = (
+            center + along * (0.07 + 0.11 * i) + Z * (rng.uniform(-0.14, 0.13) * size)
         )
-    bottom = c + side * wide * 0.12 - rad * long * 0.26 - up * high * 0.68
-    top = c - side * wide * 0.21 + rad * long * 0.18 + up * high * 0.85
+        ch = (index + i) % 4
 
-    def add(p, u, v):
-        tex = (
-            ((106 + 151 * u) / 1024, 1 - (426 + 79 * (1 - v)) / 1024)
-            if opaque
-            else ((chart + u) * 0.25, v * 0.5)
-        )
-        vid = b.add(p, tex)
-        delta = p - c
-        normal = (
-            rad * (delta.dot(rad) / (long * long))
-            + side * (delta.dot(side) / (wide * wide))
-            + up * (delta.dot(up) / (high * high))
-        )
-        b.soft_normals[vid] = (normal.normalized() + 0.16 * Z).normalized()
-        return vid
+        def vert(u, v):
+            # Slightly convex grouping, a rolled corner, no facing-camera cards.
+            x, y = 2 * u - 1, 2 * v - 1
+            p = (
+                origin
+                + a * x
+                + c * y
+                + normal * (size * (0.13 * (1 - 0.5 * (x * x + y * y)) + 0.11 * x * y))
+            )
+            uv = (
+                (512 + 256 * (ch % 2) + 3 + 250 * u) / 1024,
+                1 - (512 + 256 * (ch // 2) + 3 + 250 * (1 - v)) / 1024,
+            )
+            vtx = b.add(p, uv)
+            b.soft_normals[vtx] = (
+                normal + 0.21 * x * along + 0.20 * y * across
+            ).normalized()
+            return vtx
 
-    # Overlap the moss-green leaf texture through this interior. It is neither
-    # a silhouette disc nor a zero-thickness face-to-camera layer.
-    for k in range(n):
-        a = shape[k]
-        z = shape[(k + 1) % n]
-        u0 = 0.06 + 0.035 * (k % 2)
-        u1 = 0.93 - 0.03 * (k % 3)
-        b.tri(add(a, u0, 0.19), add(z, u1, 0.24), add(top, 0.52, 0.90))
-        b.tri(add(z, u1, 0.83), add(a, u0, 0.79), add(bottom, 0.49, 0.13))
+        corners = [vert(0, 0), vert(1, 0), vert(1, 1), vert(0, 1)]
+        mid = vert(0.49, 0.53)
+        for j in range(4):
+            b.tri(corners[j], corners[(j + 1) % 4], mid)

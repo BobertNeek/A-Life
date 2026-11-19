@@ -38,3 +38,21 @@ and gives the middle model a few dappled opaque *interior* leaf masses. Edges
 remain the finer real leaf silhouettes. The near forms do not gain a whole
 opaque roof. Photograph both cameras again; one convincing close model is
 not enough when the guardian view is the main playing perspective.
+
+Authoring re-export after selection: open the later `alder-boughs.blend` to
+edit branches or its packed native leaf painting. Run
+`blender -b -t 1 --python-exit-code 1 -P scripts/studio_coastal_alder.py -- crates/alife_game_app/assets/landscape/island`
+to export those edits; do not pass `--author-from` when opening an existing
+artist file. The older October `broadleaf-canopy.blend` is kept for comparison.
+Similarly the new fern reopens with `scripts/studio_forest_fern.py` and
+`fern-sori.blend`. The historical whole-library generator overwrites ordinary
+prop outputs, so re-export selected overrides after intentionally rebuilding that
+library, then refresh the approved-art receipts. Static counts are not GPU costs.
+
+The first opaque mid-distance volume corrected the missing canopy density but
+turned almost black in the guardian image. Correct winding exposed a second
+real problem: the shape was too crystalline even when lit. It was rejected.
+The current middle crown uses four original square leaf-cluster paintings,
+their contour drawn only by overlapping individual leaves. Nonparallel curved
+structures carry those printed clusters through the crown. No opaque pyramids
+or full-size green caps are installed into the near or middle models.

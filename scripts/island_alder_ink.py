@@ -155,4 +155,12 @@ def paint(path):
     atlas.paste(interior, (103, 424))
     whole.paste(atlas, (0, 0))
     whole.paste(foliage, (0, 512))
+    # Keep two full lower panels for forked leafy sprays. The four square
+    # panels here are more crowded in the centre and ragged at their contour.
+    from island_alder_clumps import compact
+
+    for i in range(4):
+        whole.paste(
+            compact(971663 + i * 1709), (512 + (i % 2) * 256, 512 + (i // 2) * 256)
+        )
     whole.save(path, optimize=True)
