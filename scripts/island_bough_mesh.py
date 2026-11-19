@@ -135,18 +135,12 @@ def axis(b, t):
     )
 
 
-def spray(out, b, lod, boundary, seed, sub=False):
+def far_mass(out, b, boundary, seed):
     rng = np.random.default_rng(seed)
     half = b["width"] * boundary
     reach = b["reach"]
-    # Four-point cross section is closed even at L2. The cluster is very
-    # unequal vertically: short sunlit spine, long torn lower needles.
-    if lod == 0:
-        stations = [0.21, 0.40, 0.61, 0.79, 0.91] if not sub else [0.31, 0.62, 0.82]
-    elif lod == 1:
-        stations = [0.36, 0.71] if not sub else [0.5]
-    else:
-        stations = [0.48]
+    # One small, closed envelope for a whole branch at the farthest LOD.
+    stations = [0.48]
     alt = bool(seed % 2)
     start = out.vertex(axis(b, 0.0), b["tint"] * 0.76, uv(0, 0, alt))
     rows = []
@@ -156,8 +150,8 @@ def spray(out, b, lod, boundary, seed, sub=False):
         a = half * swell * (0.8 + 0.33 * rng.random())
         low = reach * (0.25 + 0.19 * rng.random()) * (1 - 0.32 * t)
         rise = reach * (0.13 + 0.14 * rng.random()) * swell
-        low *= (1, 1.12, 1.42)[lod]
-        rise *= (1, 1.08, 1.27)[lod]
+        low *= 1.42
+        rise *= 1.27
         # Ordered in the cross section (viewed from tip), not flat billboards.
         vs = [
             p + np.array((0.0, rise, 0.0)),
@@ -193,23 +187,6 @@ def spray(out, b, lod, boundary, seed, sub=False):
             out.quad(a[j], a[(j + 1) % 4], bb[(j + 1) % 4], bb[j])
     for j in range(4):
         out.tri(rows[-1][j], rows[-1][(j + 1) % 4], end)
-
-
-def twig(b, forward, hand, size, angle, seed):
-    d = unit(b["d"] * math.cos(angle) + b["side"] * (hand * math.sin(angle)))
-    return dict(
-        b,
-        org=axis(b, forward),
-        d=d,
-        side=np.array((-d[2], 0, d[0])),
-        reach=b["reach"] * size,
-        width=b["width"] * (0.49 + 0.35 * size),
-        drop=b["drop"] * (0.55 + size * 0.30),
-        rise=b["rise"] * (1.08 + size * 0.23),
-        curve=-b["curve"] * hand * 0.85,
-        seed=seed,
-        tint=b["tint"] * (1.02 + 0.05 * hand),
-    )
 
 
 def mesh(boughs, profile, quarter, lod):
@@ -261,53 +238,12 @@ def mesh(boughs, profile, quarter, lod):
     for k, b in enumerate(boughs):
         if k not in chosen:
             continue
-        spray(out, b, lod, 1.0 if lod == 0 else 1.32 if lod == 1 else 1.66, b["seed"])
-        if lod == 0:
-            for f, hand, l, a in (
-                (0.22, -1, 0.66, 0.53),
-                (0.34, 1, 0.64, 0.52),
-            ):
-                t = twig(b, f, hand, l, a, b["seed"] + int(f * 100))
-                spray(out, t, 0, 0.88, t["seed"], sub=True)
-            for idx, (fr, hand) in enumerate(
-                ((0.36, -1), (0.49, 1), (0.71, -1), (0.79, 1))
-            ):
-                # Short pendulous needle fingers divide a broad spray's
-                # silhouette. Four little irregular closed solids, no alpha.
-                t = twig(
-                    b,
-                    fr,
-                    hand,
-                    0.32 + 0.08 * (idx % 2),
-                    0.77 + 0.05 * idx,
-                    b["seed"] + 113 + idx,
-                )
-                origin = axis(t, 0.0) + b["side"] * (0.37 * hand * b["width"])
-                end = (
-                    axis(t, 1.0)
-                    + b["side"] * (0.67 * hand * b["width"])
-                    - np.array((0, 0.16 + 0.11 * b["reach"], 0))
-                )
-                mid = origin + 0.49 * (end - origin)
-                n = t["side"] * t["width"] * 0.65
-                col = b["tint"] * (0.84 + 0.07 * idx)
-                begin = out.vertex(origin, col * 0.79, uv(0, 0, idx % 2))
-                tip = out.vertex(end, col * 1.18, uv(1, 0, idx % 2))
-                ring = (
-                    out.vertex(mid + n, col * 0.91, uv(0.48, 1, idx % 2)),
-                    out.vertex(
-                        mid + np.array((0, t["width"] * 0.73, 0)),
-                        col * 1.15,
-                        uv(0.48, 0, idx % 2),
-                    ),
-                    out.vertex(mid - n, col * 0.90, uv(0.48, -1, idx % 2)),
-                )
-                for v in range(3):
-                    out.tri(begin, ring[v], ring[(v + 1) % 3])
-                    out.tri(ring[v], tip, ring[(v + 1) % 3])
-        elif lod == 1 and k % 4 == 1:
-            t = twig(b, 0.27, -1, 0.66, 0.54, b["seed"] + 27)
-            spray(out, t, 1, 1.15, t["seed"], sub=True)
+        if lod < 2:
+            from island_pine_sprays import emit
+
+            emit(out, b, lod, axis)
+        else:
+            far_mass(out, b, 1.56, b["seed"])
     # Connecting needles belong to several height ranges at once, not a disk
     # at each growth year. Seven unequal oblique ridges leave room for the
     # independently drooping sprays and interrupt the straight visible bole.
@@ -326,7 +262,7 @@ def mesh(boughs, profile, quarter, lod):
             * (1 - 0.81 * t) ** 0.7
             * (0.72 + 0.27 * math.sin(t * math.pi))
         )
-        rad *= (1, 1.14, 1.67)[lod]
+        rad *= (0.61, 0.94, 1.52)[lod]
         row = []
         for a in range(angles):
             az = (

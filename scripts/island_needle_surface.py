@@ -5,7 +5,6 @@ mass of background twigs, plus a padded untextured bark swatch. Every exposed
 needle uses coordinated pigment, roughness and raised relief, not painted sun.
 """
 
-from pathlib import Path
 import math
 import numpy as np
 from PIL import Image, ImageDraw
@@ -16,7 +15,6 @@ def bake(folder):
     folder.mkdir(parents=True, exist_ok=True)
     N = 512
     ss = 2
-    yy, xx = np.indices((N, N), dtype="f")
     rng = np.random.default_rng(971935)
     fine = rng.uniform(-1, 1, (N, N)).astype("f")
     grain = gaussian_filter(fine, 1.6) * 6
@@ -56,48 +54,9 @@ def bake(folder):
         ht.polygon(points, fill=int(relief))
         rr.polygon(points, fill=int(rng.integers(162, 208)))
 
-    for k, (top, bottom) in enumerate(((12, 203), (214, 404))):
-        mid = (top + bottom) / 2
-        am = (bottom - top) * 0.5
-        for layer in range(3):
-            # Each bough surface carries a hierarchy: ten-centimetre twig
-            # sprays, individual needle strokes and scattered new flushes.
-            for side in (-1, 1):
-                n = (31, 38, 34)[layer]
-                xs = np.linspace(-15, 528, n) + rng.uniform(-5, 5, n)
-                for x in xs:
-                    ox = x
-                    oy = mid + side * rng.uniform(-2, am * 0.55)
-                    stretch = rng.uniform(28, 58)
-                    lift = rng.uniform(22, 62)
-                    for j in range(16):
-                        t = j / 15
-                        cx = ox + stretch * t
-                        cy = oy + side * lift * t * (1.12 - 0.38 * t)
-                        for hand in (-1, 1):
-                            dx = (0.69 + 0.40 * t) * rng.uniform(5.9, 13.8)
-                            dy = side * (
-                                (1.2 - t * 0.55) * hand * rng.uniform(2.8, 7.7) + 1.9
-                            )
-                            ca = (
-                                (203 if layer == 0 else 220 if layer == 1 else 231)
-                                + rng.uniform(-10, 10)
-                                + 4 * t
-                            )
-                            tint = (
-                                np.array((ca - 8, ca + 2, ca - 7))
-                                if k == 0
-                                else np.array((ca - 3, ca + 4, ca - 12))
-                            )
-                            needle(
-                                cx,
-                                cy,
-                                cx + dx,
-                                cy + dy,
-                                rng.uniform(0.3, 1.05),
-                                tint,
-                                81 + layer * 29 + int(rng.uniform(0, 19)),
-                            )
+    from island_needle_sprigs import articulated
+
+    articulated(col, height, rough, ss)
     for _ in range(4800):
         x = rng.uniform(-9, 515)
         y = rng.uniform(416, 517)
