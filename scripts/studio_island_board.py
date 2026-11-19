@@ -39,6 +39,7 @@ if subject == "leeward-passage":
     # An independent artwork; neither a game asset install nor a test lane.
     sys.path.insert(0, str(root / "studies/leeward-passage"))
     from atelier import photograph
+
     photograph(root, d, SURFACE, board, out, blender, make)
     raise SystemExit(0)
 approx = board.get("quick", False)
