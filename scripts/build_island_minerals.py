@@ -1,4 +1,4 @@
-"""Dress the actual five rock GLBs without moving or subdividing a single face.
+"""Dress five real island stone GLBs inside their original collision support.
 
 UVs follow each original block around its own axis. A hard cap is a separate
 planar chart. All LODs use the same L0 block origin, circumference and palette.
@@ -151,6 +151,9 @@ def rebuild(kind, srcpath, target):
         assert len(ii) == len(ref[0]) == len(ct) and np.array_equal(
             ii, np.arange(len(ii))
         )
+        from island_rock_profiles import weather
+
+        p, n, stats = weather(p, n, tri, labs, kind)
         comp = jj[labs]
         ctr = ref[0][comp]
         r = p - ctr
@@ -198,6 +201,8 @@ def rebuild(kind, srcpath, target):
                 original_vertices=len(p),
                 new_vertices=len(idx),
                 source_shells=len(ct),
+                unfolded_vertices=sum(e["changed"] for e in stats),
+                max_inner_adjustment_m=round(max(e["max_m"] for e in stats), 5),
             )
         )
     doc["buffers"] = [dict(byteLength=len(data))]
@@ -205,7 +210,7 @@ def rebuild(kind, srcpath, target):
     return numbers
 
 
-def verify(kind, source, result):
+def verify(kind, source, result, poses):
     orig, b0 = parse(source)
     art, b1 = parse(result)
     for a, b in zip(orig["meshes"], art["meshes"], strict=True):
@@ -216,11 +221,39 @@ def verify(kind, source, result):
             for d, p, q in ((orig, b0, pa), (art, b1, pb))
         )
         assert len(i) == len(j) and len(b["primitives"]) == 1
-        for key in ("POSITION", "NORMAL"):
-            assert np.array_equal(
-                np.array(values(orig, b0, pa["attributes"][key]))[i],
-                np.array(values(art, b1, pb["attributes"][key]))[j],
+        old = np.array(values(orig, b0, pa["attributes"]["POSITION"]))
+        new = np.array(values(art, b1, pb["attributes"]["POSITION"]))[j]
+        n = np.array(values(art, b1, pb["attributes"]["NORMAL"]))
+        assert np.max(np.abs(np.linalg.norm(n, axis=1) - 1)) < 0.0003
+        from scipy.spatial import ConvexHull
+
+        tri = i.reshape(-1, 3)
+        labs, _, _ = shells(old, tri)
+        old = old[i]
+        assert np.array_equal(old[:, 1], new[:, 1])
+        for lab in np.unique(labs):
+            sel = labs[i] == lab
+            prev, now = old[sel], new[sel]
+            hull = ConvexHull(prev)
+            assert np.array_equal(prev[hull.vertices], now[hull.vertices])
+            assert (now @ hull.equations[:, :3].T + hull.equations[:, 3]).max() < 2e-6
+            foot = prev[:, 1] < prev[:, 1].min() + max(0.065, 0.09 * np.ptp(prev[:, 1]))
+            assert np.array_equal(prev[foot], now[foot])
+        for prop in poses:
+            if prop["kind"] != kind:
+                continue
+            a = prop["yaw"]
+            # Compare actual minimum/maximum in both game X/Z directions,
+            # not just an axis-aligned source-space box.
+            rot = np.array([[np.cos(a), -np.sin(a)], [np.sin(a), np.cos(a)]])
+            p0, p1 = old[:, [0, 2]] @ rot, new[:, [0, 2]] @ rot
+            assert np.array_equal(p0.min(0), p1.min(0)) and np.array_equal(
+                p0.max(0), p1.max(0)
             )
+        before, after = old.reshape(-1, 3, 3), new.reshape(-1, 3, 3)
+        cross = lambda v: np.cross(v[:, 1] - v[:, 0], v[:, 2] - v[:, 0])
+        t0, t1 = cross(before), cross(after)
+        assert np.all(np.sum(t0 * t1, axis=1)[np.linalg.norm(t0, axis=1) > 1e-9] > 0)
         uv = np.array(values(art, b1, pb["attributes"]["TEXCOORD_0"]))[j].reshape(
             -1, 3, 2
         )
@@ -233,16 +266,18 @@ if __name__ == "__main__":
     cli = argparse.ArgumentParser(description=__doc__)
     cli.add_argument("--source", type=Path, default=ROOT)
     cli.add_argument("--out", type=Path, required=True)
+    cli.add_argument("--placements", type=Path, default=ROOT / "props.json")
     a = cli.parse_args()
+    poses = json.loads(a.placements.read_text())
     skins(a.out / "minerals")
     result = {}
     for name in KINDS:
         src = a.source / (name + ".glb")
         target = a.out / (name + ".glb")
         result[name] = rebuild(name, src, target)
-        verify(name, src, target)
+        verify(name, src, target, poses)
     (a.out / "verification.json").write_text(json.dumps(result, indent=2) + "\n")
     print(
         sum(x["triangles"] for meshes in result.values() for x in meshes),
-        "ordered triangles, positions and source normals unchanged",
+        "ordered triangles; no flips; original solid hulls and feet, all placement AABB extents unchanged",
     )

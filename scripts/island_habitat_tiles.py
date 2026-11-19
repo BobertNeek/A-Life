@@ -69,7 +69,7 @@ def panel_noise(x, y, nx, ny, seed):
     return np.sqrt(second) - np.sqrt(near), stone
 
 
-def substrate(kind, variation):
+def substrate(kind, variation, rock_ground=False):
     y, x = (np.indices((N, N), dtype="f") + 0.5) / N
     k = 9271 + kind * 21 + variation * 7919
     r = np.random.default_rng(k)
@@ -187,6 +187,10 @@ def substrate(kind, variation):
         rgb += lichen[..., None] * np.array((6, 8, -19))
         occ *= 1 - 0.27 * slit
         rough = 0.69 + 0.17 * lichen + 0.08 * slit + 0.04 * brush
+        if rock_ground:
+            from island_shale_floor import floor
+
+            rgb, h, occ, rough = floor(r, x, y, field, brush, grain, fleck, seam, face)
     # Match average reflected light, not average encoded RGB. Each biome then
     # preserves the world pigment as L0 hands off to the world-space L1 map.
     # Keep the in-tile variation, with no large green/dark tile at a seam.
@@ -205,7 +209,7 @@ def symmetric_edge(image):
     )
 
 
-def bake(keys, dest):
+def bake(keys, dest, rock_ground=False):
     dest = Path(dest)
     dest.mkdir(parents=True, exist_ok=True)
     y, x = (np.indices((N, N), dtype="f") + 0.5) / N
@@ -213,10 +217,10 @@ def bake(keys, dest):
     preserve = ease(0.012, 0.067, edge)[..., None]
     treatments = {}
     for k in range(4):
-        base = substrate(k, 0)
+        base = substrate(k, 0, rock_ground)
         rim = symmetric_edge(base)
         for v in range(4):
-            raw = base if v == 0 else substrate(k, v)
+            raw = base if v == 0 else substrate(k, v, rock_ground)
             treatments[k, v] = rim + (raw - rim) * preserve
     m = noise(9, 730, x, y) * 0.23 + noise(35, 17, x, y) * 0.065
     m = symmetric_edge(m) + (m - symmetric_edge(m)) * preserve[:, :, 0]

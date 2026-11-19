@@ -75,7 +75,8 @@ def fault_cells(u, v):
 
 
 class Island:
-    def __init__(self, source):
+    def __init__(self, source, fractured_rock=False):
+        self.fractured_rock = fractured_rock
         data = source.read_bytes()
         if data[:8] != b"HLAND001":
             raise ValueError(
@@ -269,6 +270,16 @@ class Island:
         rock = ramp(
             0.38, 1.12, g + 0.22 * brush + 0.21 * knot + 0.08 * broken + 0.10 * alpine
         )
+        new_relief = None
+        if self.fractured_rock:
+            from island_exposed_beds import exposed
+
+            fresh_cliff, new_relief, new_show = exposed(
+                x, z, h, g, knot, brush, broken, grit
+            )
+            highland = ramp(13, 34, h)
+            cliff = pigment(cliff, fresh_cliff, highland)
+            rock = np.maximum(rock, new_show * highland * ramp(0.29, 0.66, g) * 0.90)
         # Low-lying rocky headlands also get their own geological read.
         talus = (
             ramp(0.17, 0.69, g)
@@ -318,6 +329,8 @@ class Island:
             + 0.13 * broken
             + 0.045 * grit
         )
+        if new_relief is not None:
+            stone_relief += highland * (new_relief - stone_relief)
         turf_relief = 0.075 * brush + 0.053 * broken + 0.031 * grit
         tide_relief = (
             0.065 * np.sin(3.4 * h + 1.4 * brush + 0.35 * broken) + 0.033 * grit

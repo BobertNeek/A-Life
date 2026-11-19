@@ -10,6 +10,18 @@ from island_habitat_field import habitat
 
 def verify(source, pack, surface, placements, rock_ground=False):
     _, _, _, cover = habitat(surface, placements, rock_ground)
+    correction = None
+    if rock_ground:
+        from island_geology_paint import Island
+        from island_exposed_beds import CornerCorrection
+
+        correction = CornerCorrection(
+            Island(surface, fractured_rock=True),
+            source.parent / "geology/close-pigment.png",
+        )
+        assert np.any(correction.delta) and np.any(
+            np.all(correction.delta == 0, axis=-1)
+        )
     base = Glb(source)
     study = Glb(pack)
     original = {m["name"]: m for m in base.doc["meshes"]}
@@ -35,7 +47,11 @@ def verify(source, pack, surface, placements, rock_ground=False):
         factor = cover.multiplier(xyz[:, 0], xyz[:, 2])
         assert 0.63 - 1e-5 <= factor.min() and factor.max() <= 1.241
         assert np.array_equal(old_rgb[:, 3], new_rgb[:, 3])
-        expected = old_rgb[:, :3] * factor
+        albedo = old_rgb[:, :3]
+        if correction is not None:
+            delta = correction.at(xyz[:, 0], xyz[:, 2])
+            albedo = np.clip(albedo.astype("i2") + delta, 0, 255).astype("u1")
+        expected = albedo * factor
         if cover.deposit is not None:
             from island_habitat_massing import linear
 

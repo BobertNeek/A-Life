@@ -138,6 +138,25 @@ if args.habitats or args.original_macro:
     assert (
         matches > 0
     ), "Real far terrain material must consume the actual replacement pigment"
+if args.habitats and (args.habitats.parent / "geology/relief.png").is_file():
+    old_normal = next(
+        i
+        for i in bpy.data.images
+        if i.name in ("Island geological relief", "relief.png")
+        or Path(bpy.path.abspath(i.filepath)).name == "relief.png"
+    )
+    new_normal = bpy.data.images.load(
+        str((args.habitats.parent / "geology/relief.png").resolve())
+    )
+    new_normal.colorspace_settings.name = "Non-Color"
+    bound = 0
+    for mat in bpy.data.materials:
+        if mat.use_nodes:
+            for node in mat.node_tree.nodes:
+                if getattr(node, "image", None) == old_normal:
+                    node.image = new_normal
+                    bound += 1
+    assert bound > 0, "Far normal texture not changed by mineral art"
 if args.habitats:
     previous = set(bpy.data.objects)
     bpy.ops.import_scene.gltf(filepath=str(args.habitats.resolve()))

@@ -30,10 +30,19 @@ def build(terrain, surface, placements, out, rock_ground=False):
     inventory = signatures(labels)
     variants = {key: canonical(key) for key in inventory}
     keys = sorted({v[0] for v in variants.values()})
-    cols, rows = bake(keys, out / "habitats")
+    cols, rows = bake(keys, out / "habitats", rock_ground)
     # Synthesize from the ungraded terrain recipe, not the last saved PNG; a
     # rebuild of the weekly checkout must never apply the understory grade twice.
-    raw, _ = Island(surface).atlas()
+    island = Island(surface, fractured_rock=rock_ground)
+    raw, normal = island.atlas()
+    correction = None
+    if rock_ground:
+        from island_exposed_beds import CornerCorrection
+
+        correction = CornerCorrection(
+            island, terrain.parent / "geology/close-pigment.png"
+        )
+
     pigment = np.array(Image.open(io.BytesIO(raw)).convert("RGB"))
     atlas_height, atlas_width = pigment.shape[:2]
     xx = (
@@ -53,6 +62,8 @@ def build(terrain, surface, placements, out, rock_ground=False):
         pigment[rr] = np.clip(np.rint(corrected * 255), 0, 255).astype("u1")
     (out / "geology").mkdir(exist_ok=True)
     Image.fromarray(pigment).save(out / "geology/pigment.png", compress_level=8)
+    if rock_ground:
+        (out / "geology/relief.png").write_bytes(normal)
     slots = {key: i for i, key in enumerate(keys)}
     size = N + GUTTER * 2
     src = Glb(terrain)
@@ -151,7 +162,14 @@ def build(terrain, surface, placements, out, rock_ground=False):
             )
         color = src.attr(ref["COLOR_0"])[original].astype("u1").copy()
         factor = cover.multiplier(p[original, 0], p[original, 2])
-        graded = color[:, :3] * factor
+        albedo = color[:, :3]
+        if correction is not None:
+            albedo = np.clip(
+                albedo.astype("i2") + correction.at(p[original, 0], p[original, 2]),
+                0,
+                255,
+            ).astype("u1")
+        graded = albedo * factor
         if cover.deposit is not None:
             graded = cover.deposit.mix(
                 graded,
