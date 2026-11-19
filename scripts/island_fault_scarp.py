@@ -26,6 +26,24 @@ def draft(original, triangles, density):
     old = np.unique(original, axis=0)
     hull = ConvexHull(old)
     support = old[hull.vertices]
+    if density < 70:
+        # Overview needs the outline, not the old pencil cap interior points.
+        sole = old[old[:, 1] < 0.01]
+        support = np.unique(
+            np.r_[
+                old[ConvexHull(old[:, [0, 2]]).vertices],
+                sole[ConvexHull(sole[:, [0, 2]]).vertices],
+                old[[np.argmax(old[:, 1])]],
+                support[
+                    cKDTree(support).query(
+                        np.array(
+                            [[-2, 10, 1], [1, 10, 1], [2.5, 9, -1], [-0.5, 11, 1.3]]
+                        )
+                    )[1]
+                ],
+            ],
+            axis=0,
+        )
     # Work on an anisotropic sphere with the true aspect ratio, otherwise
     # a thin vertical escarpment receives too few samples on its broad face.
     origin = np.array([0, 5.75, 0.0])
@@ -46,7 +64,7 @@ def draft(original, triangles, density):
     # localized in the sculpt below; not every plane goes around the rock.
     if density > 70:
         seam = []
-        count = 24 if density > 400 else 16
+        count = 24 if density > 400 else 10
         for lev in (2.4, 4.85, 7.25, 9.05):
             for side in (-0.32, 0, 0.32):
                 roots = np.array([0, lev + side, 0])
@@ -147,6 +165,10 @@ def draft(original, triangles, density):
     carved[:, [0, 2]] = base + delta * (1 - low * (1 - ratio + 0.012))[:, None]
     carved[:, 1] = np.maximum(0.017, carved[:, 1])
     exact = cKDTree(pinned).query(support)[0] < 1e-7
+    if density < 400:
+        # Keep the touching original outer toe, not 200 hidden interior
+        # triangles of individual columns reenacted at overview distance.
+        exact |= support[:, 1] < 0.01
     carved[: len(support)][exact] = support[exact]
     # Face winding, rounded by local angle only when writing normals below.
     fn = np.cross(
@@ -276,13 +298,14 @@ def sculpt(source, dest):
         values(d, original, original_prim["attributes"]["COLOR_0"])
     )
     pigment_tree = cKDTree(pos)
-    for level, amount in enumerate((780, 240, 52)):
+    for level, amount in enumerate((780, 140, 40)):
         p, t, s = draft(pos, f, amount)
-        a, b = clipped_foot(pos, f, (0.23, 0.17, 0.10)[level])
-        # The true planted sole is retained rather than a fake new flat plane
-        # under the wider body. No physical collisions or terrain are exported.
-        allp = np.concatenate((p, a))
-        allf = np.concatenate((t, b + len(p)))
+        if level == 0:
+            a, b = clipped_foot(pos, f, 0.23)
+            allp = np.concatenate((p, a))
+            allf = np.concatenate((t, b + len(p)))
+        else:
+            allp, allf = p, t
         n, uv, col = channels(allp, allf, pigment_tree, pigment_source)
         q = allp[allf].reshape(-1, 3)
         attrs = dict(
