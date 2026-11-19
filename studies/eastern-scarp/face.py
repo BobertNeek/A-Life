@@ -75,17 +75,55 @@ def art(native, out):
     seams = (
         1 - ease(0.08, 0.31, np.abs(np.sin(cross * 1.1 + 0.29 * np.sin(cross * 1.8))))
     ) * ease(0.44, 0.69, nz(u * 0.58, y, 3.9, 49))
-    mineral = ease(0.34, 0.72, 0.70 * fabric + 0.3 * strands)
-    cool = np.array([113.0, 124.0, 125.0])
-    pale = np.array([163.0, 159.0, 139.0])
-    rgb = cool[None, None, :] + mineral[..., None] * (pale - cool)
-    rust = ease(0.42, 0.72, nz(along * 0.75, cross * 0.73, 4.7, 27) + 0.19 * B) * (
-        0.40 + 0.60 * ease(3, 16, y)
+    # Regional rock remains massive, not a zebra-striped wall. Foliation is
+    # readable in only three separated ore lenses. No stripe crosses the face.
+    window = np.zeros_like(y)
+    for cu, cy, wx, wy, tilt in (
+        (-149.0, 12.8, 6.3, 2.7, 0.26),
+        (-115.0, 5.7, 7.8, 2.9, -0.10),
+        (-86.0, 15.3, 4.5, 3.6, -0.41),
+    ):
+        q = np.hypot((u - cu + 0.7 * B) / wx, (y - cy + (u - cu) * tilt + 0.7 * C) / wy)
+        window = np.maximum(window, 1 - ease(0.35, 1.21, q))
+    mass = 0.72 * nz(u + 2 * B, y + 0.78 * A, 5.1, 72) + 0.28 * nz(
+        u * 1.41 + 0.3 * C, y * 0.78, 1.92, 73
+    )
+    mineral = 0.77 * ease(0.17, 0.85, mass) + window * 0.28 * ease(
+        0.36, 0.69, 0.68 * fabric + 0.32 * strands
+    )
+    cool = np.array([115.0, 123.0, 121.0])
+    pale = np.array([154.0, 147.0, 132.0])
+    rgb = cool + (pale - cool) * mineral[..., None]
+    seams *= window
+    rust = ease(0.56, 0.81, nz(u * 0.86, y * 1.11, 4.3, 29) + 0.13 * A) * (
+        0.24 + 0.60 * ease(3, 17, y)
     )
     rgb = (
-        rgb * (1 - 0.54 * rust[..., None])
-        + np.array([158.0, 126.0, 97.0]) * 0.54 * rust[..., None]
+        rgb * (1 - 0.52 * rust[..., None])
+        + np.array([153.0, 115.0, 88.0]) * 0.52 * rust[..., None]
     )
+    # Diffuse, broken rain seepage follows gullies beneath a few genuine
+    # upper ledges. Non-uniform length, width, colour, and lateral position.
+    seep = np.zeros_like(y)
+    for cu, top, reach, ww in (
+        (-157, 18, 8, 0.32),
+        (-139, 17, 12, 0.38),
+        (-133, 21, 7, 0.78),
+        (-118, 19, 9, 0.38),
+        (-106, 20, 15, 0.46),
+        (-99, 18, 11, 0.53),
+        (-78, 19, 9, 0.72),
+    ):
+        t = (top - y) / reach
+        centre = cu + 0.51 * np.sin(t * 2.2 + cu) + 0.32 * C + 0.30 * t
+        seep += (
+            np.exp(
+                -(((u - centre) / (ww * (0.5 + 0.47 * np.clip(t, 0, 1)) + 0.09)) ** 2)
+            )
+            * ease(-0.09, 0.18, t)
+            * (1 - ease(0.67, 1.06, t))
+        )
+    rgb -= np.minimum(1.0, seep)[..., None] * np.array([15.0, 13.0, 8.0])
     # Coarse fracture families intersect and terminate, with discontinuous
     # glancing mineral edges. Draw in native metres, then modulate with grain.
     lines = Image.new("L", (wd, ht))
@@ -137,7 +175,7 @@ def art(native, out):
     )
     relief = (
         128
-        + 15 * (fabric - 0.5)
+        + (5 + 14 * window) * (fabric - 0.5)
         + 9 * strands
         - 64 * cracks
         + 27 * lip
@@ -150,6 +188,50 @@ def art(native, out):
     Image.fromarray(np.uint8(np.clip(relief, 0, 255))).save(
         out / "face-relief.png", optimize=True
     )
+    # Small-metre non-colour tile; readable one centimetre mica flecks are
+    # physically separate from the giant same-colour masses above them.
+    nn = 384
+    rng = np.random.default_rng(735700)
+    field = rng.normal(size=(nn, nn)).astype("f")
+    a0 = gaussian_filter(field, 2.7, mode="wrap")
+    a0 /= max(0.01, a0.std())
+    a1 = gaussian_filter(field, (0.83, 1.42), mode="wrap")
+    a1 /= max(0.01, a1.std())
+    ht = 125 + 10 * a0 + 11 * a1 + 5 * field
+    tile = np.empty((nn, nn, 3), "f")
+    tile[:] = [173, 174, 165]
+    tile += (11 * a0 + 10 * a1 + 6 * field)[..., None]
+    stone = Image.fromarray(np.uint8(np.clip(tile, 0, 255)))
+    rel = Image.fromarray(np.uint8(np.clip(ht, 0, 255)))
+    pen = ImageDraw.Draw(stone)
+    ch = ImageDraw.Draw(rel)
+    for j in range(1140):
+        x0, y0 = rng.uniform(0, nn, 2)
+        length = rng.uniform(1.5, 9.4)
+        th = rng.uniform(0.72, 2.8)
+        ang = rng.normal(0.33, 0.47)
+        vv = np.array([math.cos(ang), math.sin(ang)])
+        tt = np.array([-vv[1], vv[0]])
+        shape = np.asarray(
+            [
+                -0.52 * length * vv,
+                -0.19 * length * vv + tt * th,
+                0.47 * length * vv + tt * 0.32 * th,
+                0.43 * length * vv - tt * 0.52 * th,
+                -0.13 * length * vv - tt * 0.64 * th,
+            ]
+        ) + [x0, y0]
+        warm = j % 6 == 0
+        value = rng.integers(95, 137) if j % 3 == 0 else rng.integers(169, 219)
+        tint = (int(value + 8), int(value), int(value - 16 if warm else value - 4))
+        for sx in (0, nn) if x0 < 12 else (-nn, 0) if x0 > nn - 12 else (0,):
+            for sy in (0, nn) if y0 < 12 else (-nn, 0) if y0 > nn - 12 else (0,):
+                pl = [tuple(p) for p in shape + [sx, sy]]
+                pen.polygon(pl, fill=tint)
+                ch.polygon(pl, fill=int(164 if j % 3 else 105))
+                ch.line(pl[:2], fill=184, width=1)
+    stone.save(out / "mica-colour.png", optimize=True)
+    rel.save(out / "mica-height.png", optimize=True)
     (out / "face.json").write_text(
         json.dumps(
             dict(

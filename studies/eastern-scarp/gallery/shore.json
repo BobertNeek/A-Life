@@ -1,0 +1,165 @@
+{
+  "name": "Eastern wind cut \u00b7 source scout",
+  "native_hash": "8d0e9cf6343ffe8ea5e82bcb7ad3e4ef77eef7207042cf0274de5d91f2457c38",
+  "control": "Stage the real V1 sea on both sides, never the previous approximate flat artist reference.",
+  "native_water_git_blobs": {
+    "shore.png": "4bd37bff0fe575cbed69089fea51cc20456ef3f8",
+    "ripple.png": "ad8380546003865c90bbbf674bcaf87687f79800"
+  },
+  "source_material": {
+    "colour_space": "sRGB",
+    "normal_space": "linear",
+    "origin_xz": [
+      -580.0,
+      -680.0
+    ],
+    "reflectance": 0.36,
+    "ripple_metres": 58.0,
+    "roughness": 0.36,
+    "span_xz": [
+      1160.0,
+      1360.0
+    ],
+    "terrain_binding": {
+      "digest": 9751419906031474721,
+      "version": 2
+    },
+    "art_inputs": "Blender artwork: V1 triangle bathymetry, painted optical lookup and a world-aligned wind/capillary normal. Native binding and cost not run this week."
+  },
+  "survey_rows": 98,
+  "max_rise_from_sea_at_10_m": 20.087129411226343,
+  "landmarks": {
+    "113": {
+      "kind": "Conifer",
+      "position": [
+        385.4047264232065,
+        20.773743692239254,
+        -82.46666317352924
+      ],
+      "scale": 1.0122610694652616,
+      "yaw": 3.9353272914886475
+    },
+    "250": {
+      "kind": "Conifer",
+      "position": [
+        401.7739968664645,
+        20.315033734186184,
+        -80.6657226902588
+      ],
+      "scale": 1.1591009609909273,
+      "yaw": 4.253036022186279
+    },
+    "498": {
+      "kind": "Conifer",
+      "position": [
+        358.8296804169746,
+        23.21381678669806,
+        -159.9092835922479
+      ],
+      "scale": 0.82957093859217,
+      "yaw": 4.582800388336182
+    },
+    "627": {
+      "kind": "Conifer",
+      "position": [
+        397.0200030619766,
+        20.91053675049492,
+        -100.45235796995871
+      ],
+      "scale": 0.9316117045572807,
+      "yaw": 4.140475749969482
+    },
+    "638": {
+      "kind": "Conifer",
+      "position": [
+        387.29475052517637,
+        21.04952925966083,
+        -81.5853311877521
+      ],
+      "scale": 0.9713997683021922,
+      "yaw": 2.0604472160339355
+    },
+    "761": {
+      "kind": "Conifer",
+      "position": [
+        383.8586428381882,
+        22.081782453579105,
+        -127.45685204408142
+      ],
+      "scale": 1.041108846393588,
+      "yaw": 4.767568111419678
+    },
+    "769": {
+      "kind": "Conifer",
+      "position": [
+        367.01451405765476,
+        23.178432711395388,
+        -150.12112969566874
+      ],
+      "scale": 1.1849102098769895,
+      "yaw": 1.4127566814422607
+    },
+    "846": {
+      "kind": "Conifer",
+      "position": [
+        384.4815715404277,
+        22.030992255184444,
+        -126.44009809620036
+      ],
+      "scale": 1.0048286992427025,
+      "yaw": 0.8142852783203125
+    },
+    "1008": {
+      "kind": "Conifer",
+      "position": [
+        383.95025962955935,
+        22.08173841390199,
+        -127.21745940744177
+      ],
+      "scale": 1.1981745889103448,
+      "yaw": 5.356166839599609
+    },
+    "1051": {
+      "kind": "Conifer",
+      "position": [
+        397.804244081747,
+        20.790145666230053,
+        -101.90641927723982
+      ],
+      "scale": 0.8236130140731169,
+      "yaw": 5.475644588470459
+    },
+    "1203": {
+      "kind": "Conifer",
+      "position": [
+        398.3902799807713,
+        20.74154054541253,
+        -86.96460663462221
+      ],
+      "scale": 1.2402068740884926,
+      "yaw": 5.553047180175781
+    },
+    "1241": {
+      "kind": "Conifer",
+      "position": [
+        374.2847595060065,
+        21.338043394905785,
+        -149.41570780706968
+      ],
+      "scale": 0.9851019967893349,
+      "yaw": 5.706587791442871
+    },
+    "1247": {
+      "kind": "Conifer",
+      "position": [
+        357.70706990067436,
+        24.990305485704603,
+        -153.49098913664875
+      ],
+      "scale": 1.0933437279160394,
+      "yaw": 2.0913329124450684
+    }
+  },
+  "priority": "Real east face / high-angle rock, aspect-corrected geological material rather than duplicate broad roof geometry.",
+  "not_native": true
+}

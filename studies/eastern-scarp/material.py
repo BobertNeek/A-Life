@@ -109,7 +109,14 @@ def stone(ground, field):
         mul.inputs[1].default_value = 0.88
         nt.links.new(mask, mul.inputs[0])
         nt.links.new(mul.outputs[0], mix.inputs[0])
-        nt.links.new(col, mix.inputs[2])
+        smalluv = coords(nt, (1, -1 / 1.51, 0), (2, 1 / 1.51, 0))
+        grain = image(nt, field / "mica-colour.png", smalluv, repeat=True)
+        mod = nt.nodes.new("ShaderNodeMixRGB")
+        mod.blend_type = "MULTIPLY"
+        mod.inputs[0].default_value = 0.26
+        nt.links.new(col, mod.inputs[1])
+        nt.links.new(grain, mod.inputs[2])
+        nt.links.new(mod.outputs[0], mix.inputs[2])
         nt.links.new(mix.outputs[0], orig)
         bump = nt.nodes.new("ShaderNodeBump")
         bump.inputs["Distance"].default_value = 0.034
@@ -122,4 +129,16 @@ def stone(ground, field):
         n = bs.inputs["Normal"]
         if n.is_linked:
             nt.links.new(n.links[0].from_socket, bump.inputs["Normal"])
-        nt.links.new(bump.outputs[0], n)
+        micro = nt.nodes.new("ShaderNodeBump")
+        micro.inputs["Distance"].default_value = 0.008
+        amp = nt.nodes.new("ShaderNodeMath")
+        amp.operation = "MULTIPLY"
+        amp.inputs[1].default_value = 0.56
+        nt.links.new(mask, amp.inputs[0])
+        nt.links.new(amp.outputs[0], micro.inputs["Strength"])
+        nt.links.new(
+            image(nt, field / "mica-height.png", smalluv, True, True),
+            micro.inputs["Height"],
+        )
+        nt.links.new(bump.outputs[0], micro.inputs["Normal"])
+        nt.links.new(micro.outputs[0], n)

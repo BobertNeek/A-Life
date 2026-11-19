@@ -1,0 +1,23 @@
+{
+  "name": "Gullglass Head",
+  "plan": [
+    357.0,
+    433.0,
+    -170.0,
+    -59.0
+  ],
+  "side": [
+    -170.0,
+    -59.0,
+    -3.0,
+    29.0
+  ],
+  "axes": "YZ vertical elevation texture, native z horizontal and true native y up; world xz gate",
+  "mineral": [
+    "mica-grey",
+    "faded iron",
+    "pale interrupted seams"
+  ],
+  "new_vertices": 0,
+  "native_bound": false
+}
