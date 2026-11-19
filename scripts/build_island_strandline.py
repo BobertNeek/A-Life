@@ -13,7 +13,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 SURFACE = ROOT / "crates/alife_world/assets/island-v1.bin"
 ASSET = ROOT / "crates/alife_game_app/assets/landscape/island/strandline.glb"
-TILE = 48
+TILE = 50
 SEED = 1974682
 
 
@@ -65,7 +65,10 @@ class Patch:
         self.beach=beach
         self.vertices=array("f");self.colors=array("B");self.tris=array("I")
     def put(self,x,z,lift,color):
-        self.vertices.extend((x,self.beach.surface(x,z)[0]+lift,z));self.colors.extend(color)
+        return self.put_at(x,z,self.beach.surface(x,z)[0]+lift,color)
+
+    def put_at(self,x,z,y,color):
+        self.vertices.extend((x,y,z));self.colors.extend(color)
         return len(self.vertices)//3-1
     def fan(self,a,b,c):
         self.tris.extend((a,c,b))
@@ -190,14 +193,17 @@ def make(beach):
             px,pz=x+r.normal(0,.23),z+r.normal(0,.23);p=patch(px,pz,0);counts['wrack']+=1
             for j in range(r.integers(3,8)):
                 ribbon(p,r,px+r.normal(0,.03),pz+r.normal(0,.03),angle+r.normal(0,.78),r.uniform(.16,.47))
-    return patches,counts,anchors
+    from island_tidal_film import lay
+    lay(beach,patch,driftfield,tint)
+    return {k:p for k,p in patches.items() if len(p.tris)},counts,anchors
 
 
 def write(patches,out):
     doc={'asset':{'version':'2.0','generator':'Qualia tidal strandline; seeded, source-triangle grounded'},
          'scene':0,'scenes':[{'nodes':[]}],'nodes':[],'meshes':[],'accessors':[],'bufferViews':[],
          'materials':[{'name':label,'doubleSided':True,'pbrMetallicRoughness':{'metallicFactor':0.,'roughnessFactor':rough}}
-            for label,rough in [('Tideworn mineral and wrack',.55),('Dry salt reed',.87)]]}
+            for label,rough in [('Tideworn mineral and wrack',.56),('Dry salt reed',.87),('Damp tidal sand film',.24),('Spent edge wash',.27)]]}
+    for material in doc['materials'][2:]:material['alphaMode']='BLEND'
     buf=bytearray()
     def attribute(a,component,shape,target,normalized=False,bounds=False):
         a=np.ascontiguousarray(a);buf.extend(b'\0'*(-len(buf)%4));off=len(buf);buf.extend(a.tobytes())
@@ -218,7 +224,7 @@ def write(patches,out):
         attrib={'POSITION':attribute(pos,5126,'VEC3',34962,bounds=True),
                 'NORMAL':attribute(n,5126,'VEC3',34962),'COLOR_0':attribute(colors,5121,'VEC4',34962,True)}
         ix=attribute(idx.ravel().astype('<u2'),5123,'SCALAR',34963)
-        name=f'Strand_{cx}_{cz}_{("wet","reed")[mat]}';i=len(doc['meshes'])
+        name=f'Strand_{cx}_{cz}_{("wet","reed","film","wash")[mat]}';i=len(doc['meshes'])
         doc['meshes'].append({'name':name,'primitives':[dict(attributes=attrib,indices=ix,material=mat)]})
         doc['nodes'].append({'name':name,'mesh':i,'translation':offset.tolist()});doc['scenes'][0]['nodes'].append(i)
     doc['buffers']=[dict(byteLength=len(buf))]

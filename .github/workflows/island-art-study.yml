@@ -5,6 +5,7 @@ on:
     paths:
       - .github/workflows/island-art-study.yml
       - scripts/build_island_strandline.py
+      - scripts/island_tidal_film.py
       - scripts/render_island_geology.py
       - scripts/verify_island_strandline.py
       - scripts/compare_island_art.py
