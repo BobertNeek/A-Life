@@ -106,33 +106,34 @@ def emit(out, b, lod, axis):
             for k in range(len(a) - 1):
                 out.quad(a[k], c[k], c[k + 1], a[k + 1])
 
-    # Dense, irregular woody-needle heart *along* each arm, never a sleeve
-    # around the trunk. The outer frayed banks obscure it up close. At
-    # distance it prevents hundreds of subpixel tips from losing the tree.
-    root_at = 0.10 if lod == 0 else 0.035
-    reach_at = 0.66 if lod == 0 else 0.88
+    # At guardian distance keep the projected body of many tiny needles.
+    # Never expose this uncut interior at creature height: its underside
+    # reads as a slab even behind convincing individual sprays.
+    if lod == 1:
+        root_at = 0.035
+        reach_at = 0.88
 
-    def core(pos, f, uv_t, cross):
-        return out.vertex(pos, tint * f, (0.14 + 0.71 * uv_t, 0.876 + 0.026 * cross))
+        def core(pos, f, uv_t, cross):
+            return out.vertex(pos, tint * f, (0.14 + 0.71 * uv_t, 0.876 + 0.026 * cross))
 
-    r0 = core(axis(b, root_at), 0.64, 0.015, 0)
-    end0 = core(axis(b, reach_at) - up * 0.12 * length, 0.89, 0.986, 0)
-    ctr = axis(b, (root_at + reach_at) * 0.45)
-    kk = b["width"] * (0.70 if lod == 0 else 1.05)
-    row = [
-        core(ctr + right * kk - up * 0.11 * length, 0.79, 0.46, 1),
-        core(ctr + up * (0.10 if lod == 0 else 0.18) * length, 0.93, 0.42, 0.018),
-        core(ctr - right * kk * 0.88 - up * 0.10 * length, 0.80, 0.47, -1),
-        core(
-            ctr - right * kk * 0.12 - up * (0.24 if lod == 0 else 0.36) * length,
-            0.69,
-            0.43,
-            -0.02,
-        ),
-    ]
-    for k in range(4):
-        out.tri(r0, row[(k + 1) % 4], row[k])
-        out.tri(row[k], row[(k + 1) % 4], end0)
+        r0 = core(axis(b, root_at), 0.64, 0.015, 0)
+        end0 = core(axis(b, reach_at) - up * 0.12 * length, 0.89, 0.986, 0)
+        ctr = axis(b, (root_at + reach_at) * 0.45)
+        kk = b["width"] * 1.05
+        row = [
+            core(ctr + right * kk - up * 0.11 * length, 0.79, 0.46, 1),
+            core(ctr + up * 0.18 * length, 0.93, 0.42, 0.018),
+            core(ctr - right * kk * 0.88 - up * 0.10 * length, 0.80, 0.47, -1),
+            core(
+                ctr - right * kk * 0.12 - up * 0.36 * length,
+                0.69,
+                0.43,
+                -0.02,
+            ),
+        ]
+        for k in range(4):
+            out.tri(r0, row[(k + 1) % 4], row[k])
+            out.tri(row[k], row[(k + 1) % 4], end0)
 
     # The long central stem supports its own three-dimensional spray, plus
     # unequal lateral and pendulous banks. These are physical twig sheets
@@ -167,4 +168,13 @@ def emit(out, b, lod, axis):
             b["drop"] * (0.72 + 0.10 * math.sin(b["seed"])) * down + length * 0.115,
             roll,
             b["seed"] + 123 + j,
+        )
+
+    if lod == 0 and b["seed"] % 3 == 1:
+        # A smaller counter-shoot crosses the space between two large limbs.
+        # It uses the same clipped needles instead of an opaque filler leaf.
+        turn = 1 if b["seed"] % 2 else -1
+        plume(
+            0.072, length * 0.62, breadth * 0.63, turn * 1.97,
+            b["drop"] * 0.43 + length * 0.075, -turn * 0.62, b["seed"] + 716,
         )
