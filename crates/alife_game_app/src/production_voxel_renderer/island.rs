@@ -454,9 +454,9 @@ pub(super) fn update(
                 ));
             }
         }
-        // Most ordinary props use vertex pigment. Rock and cutout fern each
-        // have their own UVs: never borrow either atlas for another family.
-        let mut shared_prop_materials = [None, None, None];
+        // Most ordinary props use vertex pigment. Rock, fern and broadleaf each
+        // have their own UVs: never borrow an atlas for another family.
+        let mut shared_prop_materials = [None, None, None, None];
         for (index, p) in placements().into_iter().enumerate() {
             let gltf = gltfs.get(&assets.props[&p.kind]).unwrap();
             let position = grounded_prop_position(&p.kind, p.position, surface);
@@ -481,10 +481,10 @@ pub(super) fn update(
                     .mesh
                     .clone()
             });
-            let family = if p.kind == "Fern" {
-                2
-            } else {
-                usize::from(has_mineral_surface(&p.kind))
+            let family = match p.kind.as_str() {
+                "Fern" => 2,
+                "Broadleaf" => 3,
+                kind => usize::from(has_mineral_surface(kind)),
             };
             let material = shared_prop_materials[family]
                 .get_or_insert_with(|| primitive.material.clone().unwrap())

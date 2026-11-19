@@ -56,3 +56,5 @@ The current middle crown uses four original square leaf-cluster paintings,
 their contour drawn only by overlapping individual leaves. Nonparallel curved
 structures carry those printed clusters through the crown. No opaque pyramids
 or full-size green caps are installed into the near or middle models.
+
+Retained studio board: `f9af064dc905106c387ff69fa7ad760732f79236`; Blender-only art run **44475423297**. The coast uses its actual 691 Broadleaf transforms. One close model has 4206 triangles, middle 1140, distant 98, versus the earlier 4462/916/86. One embedded texture and one cutout family replace the leaf and wood finish together; this does not measure sampler/shadow cost. No game or tests in this week.

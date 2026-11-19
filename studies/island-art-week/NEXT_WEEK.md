@@ -108,3 +108,42 @@ handoff and an actual far guardian span above 350 m. Check clipped shadows,
 grazing sunlight and moving-camera shimmer on the real GPU. Record fragment and
 shadow work as well as triangle count. The new crowns in
 the workbench do not change tree transforms or their inherited solid trunks.
+
+### Later island additions: three targeted playable observations
+
+Only in the prearranged next-week slot and disposable profile above:
+
+* **Moss and the new Fern.** In the original V1, first record a normal native
+  camera looking at the shelter around pine 803 (x=250.4,z=-210.0), then the
+  brighter edge of pine 952 (x=-146.4,z=4.88). Use `fc5d22dc` as the branch
+  predecessor and `9450218b` as the installed fern/floor checkpoint. The
+  cutout must not appear as nine solid ribbons or disappear at grazing
+  angles; it must not give unrelated grass and berries the leaf texture.
+  Cross the optional forest-floor visibility boundary and the fern's 45 m
+  radius and look for shimmering transparent borders, rising mats or flicker.
+  Move the creature past the tree foot and roll one toy as before. The new
+  branch-grown moss is not a physical obstacle or a game resource.
+* **Eastern shelf.** Native stock-water candidate `96c5b1e4`, pre-water
+  `fc5d22dc`. On the same original V1 camera (x=345.2,z=116.7), pan from
+  sand to deep sea, and orbit the bank above x=350.6,z=105.1. Assess the
+  slope/roughness in motion and alternate settings, not just a still. New
+  maps should appear only for original digest 9751419906031474721. Use
+  the separately opted-in or edited terrain only in its dedicated profile;
+  preserve its live depth material. If the gameplay lane is included, build
+  a willow-stone crossing: raised shoals must hide old water films. Leave
+  ordinary saves untouched.
+* **Coastal hardwood, if installed.** Use `9450218b` for the old Broadleaf
+  and the exact artifact-owning weekly commit for the candidate. A low native
+  camera around x=321.6,z=148.5 faces the original overlapping trees 1010
+  and 1202, and a guardian camera is centred at x=294.8,z=148.0. Record
+  the real camera receipt: the studio's nearby perspective lens is not the
+  native one. Pan across displayed height 80/350 m and focus distance 100/240 m.
+  A hollow winter canopy, flat masses at mid distance, leaf masks on stone or
+  grass, invisible stems, or native key lookup error are not acceptable.
+  Compare warmed tree-heavy GPU scenes with the same settings; never infer
+  frame time from triangle or image-file sizes.
+
+Authoring sources in `native-staging` are snapshots, **not** complete files to
+overwrite newer shared renderer work with during integration. Reconcile the
+small selected material-family or water change against the actual merge base.
+No result in these three sections represents a native test already run.

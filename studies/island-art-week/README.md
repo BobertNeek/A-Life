@@ -237,3 +237,7 @@ was performed for the new assets. The gallery is not native acceptance.
 ### Woodland fern and creeping moss
 
 [At eye level beside pine 803](divided-fern-slope.jpg) · [sunlit forest floor](feather-moss-margin.jpg) · [the two actual models on the artist’s workbench](fern-botanical.png) · [authoring and next-week checks](FERN.md). The previous 0.75 m fern with folded umbrella tops has nine tapering fronds, a solid crown and original two-sided cutout ink. The moss is ground-tracing vegetation and scattered shoots rather than solid green humps. The existing 278 ordinary ferns keep their original positions, bounds and ground anchor. 906/414/258 model triangles per LOD; one masked material, with no changes to the other props. Blender-only board 43ff89ef1be32e8c592b2b8fa3cf2fdc4e5655c7 (art run **44472178781**), not a screenshot or performance test.
+
+### Native coastal hardwood, shown in Blender
+
+[Creature-height cove](coastal-alder-eye.jpg) · [same bank from above](coastal-alder-bank.jpg) · [source, geometry and caveats](ALDER.md). The old horizontal crown plates are replaced by branching summer leaf sprays and compact, sheltered interior masses. All 691 pre-existing broadleaf positions and their stock wood remain in place. Capture native motion and actual RTX costs next week before promoting.
