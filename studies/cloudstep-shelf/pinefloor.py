@@ -88,8 +88,15 @@ def make(native,folder,limit=1550000):
         normal[j:stop]=np.uint8(np.rint(255*np.stack((rough,relief,.64*edge),-1)))
     files={}
     files['pineglass-mineral.png'],ae=chart(albedo)
+    # Keep the nearby mineral family at guardian distance without aliasing
+    # centimetre flakes or disappearing the colour patch at a hard threshold.
+    # Linear gain is averaged before PNG encoding, not after sRGB conversion.
+    far=Image.fromarray(albedo).resize((48,54),Image.Resampling.BOX)
+    small=io.BytesIO();far.save(small,format='PNG',optimize=True)
+    files['pineglass-mineral-far.png']=small.getvalue()
     files['pineglass-response.png'],re=chart(normal)
     note=placement(native,folder,land,files)
+    note['native_camera_micro_to_macro_blend_m']=[12.,28.]
     note['texture_max_encoding_error_255']=dict(mineral=ae,optical_response=re)
     note['payload_bytes']={k:len(v) for k,v in files.items()}
     files['pineglass.json']=(json.dumps(note,indent=2)+'\n').encode()

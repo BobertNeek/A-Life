@@ -95,6 +95,7 @@ class Board:
         self.images[:] = clear
         # Exact chart optical multipliers, sampled on original scene fragments.
         self.fields = []
+        self.macros={}
         for name, box in [
             (
                 "mountain-gain",
@@ -320,14 +321,20 @@ class Board:
                             base * (1 - haze) + self.air * haze
                         )
                     if tag == "ground":
-                        for chart, (a1, b1, c1, d1), neutral in self.fields:
+                        for field_id,(chart, (a1, b1, c1, d1), neutral) in enumerate(self.fields):
                             u = (world[:, 0] - a1) / (b1 - a1)
                             v0 = (world[:, 2] - c1) / (d1 - c1)
                             mask = (u >= 0) & (u <= 1) & (v0 >= 0) & (v0 <= 1)
                             if mask.any():
-                                base[mask] *= sample(
-                                    chart, np.stack((u[mask], v0[mask]), 1)
-                                )[:, :3] * (255 / neutral)
+                                uv0=np.stack((u[mask],v0[mask]),1)
+                                gain=sample(chart,uv0)[:,:3]*(255/neutral)
+                                if field_id in self.macros:
+                                    macro,lo,hi=self.macros[field_id]
+                                    dist=np.linalg.norm(world[mask]-self.eye,axis=1)
+                                    w0=np.clip((dist-lo)/(hi-lo),0,1)[:,None]
+                                    w0=w0*w0*(3-2*w0)
+                                    gain=(1-w0)*gain+w0*sample(macro,uv0)[:,:3]*(255/neutral)
+                                base[mask]*=gain
                     self.images[1, yi, xi] = display(
                         base * (1 - haze) + self.air * haze
                     )
@@ -395,9 +402,18 @@ def main(native, copse, folder, lens, water, seated=False, edition=None):
                 )
             )
         if variant:
-            image_name,register_name={'joined':('joined-true-beds','joined-true-beds'),'pineglass':('pineglass-mineral','pineglass')}[variant]
-            m=json.loads((folder/(register_name+'.json')).read_text())
-            board.fields.append(((np.asarray(Image.open(folder/(image_name+'.png')).convert('RGB')),33071,33071),m['native_plan_xz'],m['neutral']))
+            overlays={
+                'joined':[('joined-true-beds','joined-true-beds')],
+                'pineglass':[('pineglass-mineral','pineglass')],
+                'approach':[('joined-true-beds','joined-true-beds'),('pineglass-mineral','pineglass'),('approach-transition','approach-transition'),('second-face-fan','second-face-fan')]
+            }[variant]
+            for name,register_name in overlays:
+                m=json.loads((folder/(register_name+'.json')).read_text())
+                if register_name=='pineglass':
+                    lo,hi=m['native_camera_micro_to_macro_blend_m']
+                    far=np.asarray(Image.open(folder/'pineglass-mineral-far.png').convert('RGB'))
+                    board.macros[len(board.fields)]=((far,33071,33071),lo,hi)
+                board.fields.append(((np.asarray(Image.open(folder/(name+'.png')).convert('RGB')),33071,33071),m['native_plan_xz'],m['neutral']))
         if lens == "summit-window":
             board.witnesses = dict.fromkeys(
                 [
@@ -421,7 +437,7 @@ def main(native, copse, folder, lens, water, seated=False, edition=None):
         )
         return board
 
-    b = frame(bool(edition))
+    b = frame(bool(edition),"joined" if edition=="approach" else None)
     sz = (b.w, b.h)
     if seated:
         original = b.images[1 if edition else 0].copy()
@@ -473,6 +489,6 @@ if __name__ == "__main__":
         Path(sys.argv[3]),
         sys.argv[4],
         Path(sys.argv[5]),
-        any(k in sys.argv[5:] for k in ("--seated","--joined","--pineglass")),
-        "joined" if "--joined" in sys.argv[5:] else "pineglass" if "--pineglass" in sys.argv[5:] else None,
+        any(k in sys.argv[5:] for k in ("--seated","--joined","--pineglass","--approach")),
+        "approach" if "--approach" in sys.argv[5:] else "joined" if "--joined" in sys.argv[5:] else "pineglass" if "--pineglass" in sys.argv[5:] else None,
     )

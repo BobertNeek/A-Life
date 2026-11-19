@@ -13,7 +13,7 @@ from mathutils import Vector
 
 H = Path(__file__).resolve().parent
 args = sys.argv[sys.argv.index("--") + 1 :]
-edition={"with-joined-beds":"joined","with-pineglass":"pineglass"}.get(args[-1]) if len(args)==7 else None
+edition={"with-joined-beds":"joined","with-pineglass":"pineglass","with-registered-approach":"approach"}.get(args[-1]) if len(args)==7 else None
 seat = bool(edition) or (len(args)==7 and args[-1]=="with-seated-shoulders")
 show_forest = seat or (len(args) == 7 and args[-1] == "with-registered-floor")
 if show_forest:
@@ -155,7 +155,7 @@ for side in ("before", "after"):
             ob.hide_render = True
         for lod in (0, 1):
             new_ledge[lod] = grab(source / ("slope-shoulders-L" + str(lod) + ".glb"))
-            if edition=='joined':
+            if edition in ('joined','approach'):
                 held=[]
                 for o in new_ledge[lod]:
                     if o.name.split('.')[0]=='Shoulder_1695':o.hide_render=True
@@ -181,12 +181,19 @@ for side in ("before", "after"):
             granite["neutral"],
         )
         if edition:
-            pic,register={'joined':('joined-true-beds','joined-true-beds'),'pineglass':('pineglass-mineral','pineglass')}[edition]
-            local_info=json.loads((source/(register+'.json')).read_text())
-            fmod.tint(ground,surf,source/(pic+'.png'),local_info['native_plan_xz'],edition,local_info['neutral'])
-            if edition=='pineglass':
-                ground_kit=grab(source/'pineglass-eye.glb')
-                mod('pineglass_bump',H/'pineglass_blender.py').optics(ground,surf,source,local_info['native_plan_xz'])
+            layers={
+                'joined':[('joined-true-beds','joined-true-beds')],
+                'pineglass':[('pineglass-mineral','pineglass')],
+                'approach':[('joined-true-beds','joined-true-beds'),('pineglass-mineral','pineglass'),('approach-transition','approach-transition'),('second-face-fan','second-face-fan')]
+            }[edition]
+            for pic,register in layers:
+                info=json.loads((source/(register+'.json')).read_text())
+                if register=='pineglass':
+                    ground_kit=grab(source/'pineglass-eye.glb')
+                    vm=mod('pineglass_studio',H/'pineglass_blender.py')
+                    vm.pigment(ground,surf,source,info)
+                    vm.optics(ground,surf,source,info['native_plan_xz'])
+                else:fmod.tint(ground,surf,source/(pic+'.png'),info['native_plan_xz'],register,info['neutral'])
     for name, cam in cams.items():
         for o in ground_kit:o.hide_render = name=='shelf-section'
         for lod, objs in new_ledge.items():
