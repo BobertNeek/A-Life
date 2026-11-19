@@ -67,13 +67,21 @@ cli.add_argument(
     type=Path,
     help="Actual checksummed marine-layer backdrop; not an invented world gradient",
 )
+cli.add_argument(
+    "--guardian-review",
+    action="store_true",
+    help="Fixed orthographic grove and ridge shoulder",
+)
+cli.add_argument(
+    "--grove-forms", type=Path, help="Variants of existing upper crowns only"
+)
 args = cli.parse_args(sys.argv[sys.argv.index("--") + 1 :])
 args.out.mkdir(parents=True, exist_ok=True)
 bpy.ops.wm.read_factory_settings(use_empty=True)
 scene = bpy.context.scene
 scene.render.engine = "CYCLES"
 scene.cycles.device = "CPU"
-scene.cycles.samples = 48 if args.cove_showcase else 20
+scene.cycles.samples = 48 if args.cove_showcase or args.guardian_review else 20
 scene.cycles.use_denoising = (
     False  # OIDN erased metre-scale grass and swash ripples in the near field.
 )
@@ -176,7 +184,12 @@ shots = [
     ("estuary", (190, 54, 440), (4, 20, 236), 0, 35, 0),
     ("headland", (-480, 51, -72), (-265, 30, -212), 0, 36, 0),
 ]
-if args.creature_height or args.tidal_review or args.cove_showcase:
+if (
+    args.creature_height
+    or args.tidal_review
+    or args.cove_showcase
+    or args.guardian_review
+):
     root = Path(__file__).resolve().parents[1]
     library = (
         args.prop_library or root / "crates/alife_game_app/assets/landscape/island"
@@ -238,13 +251,25 @@ if args.creature_height or args.tidal_review or args.cove_showcase:
         shots = [
             ("cove-showcase", (x, eye, z), (x + dx, eye + rise, z + dz), 0, lens, 0)
         ]
+    if args.guardian_review:
+        x, z = 247.0, -184.0
+        eye = ground(x, z) + 2.0
+        shots = [
+            ("guardian-grove", (x + 230, eye + 176, z + 280), (x, eye, z), 240, 35, 1)
+        ]
     props = json.loads((args.placements or library / "props.json").read_text())
     models = {}
+    from island_grove_review import sources, form
+
+    forms = sources(args.grove_forms, models)
+    review_span = 144.0 if args.guardian_review else 45.0
     cove_focus = None
     if args.cove_showcase:
         eye, aim = native(shots[0][1]), native(shots[0][2])
         cove_focus = eye + (aim - eye).normalized() * 15.0
-    for prop in props:
+    if args.guardian_review:
+        cove_focus = native(shots[0][2])
+    for index, prop in enumerate(props):
         px, py, pz = prop["position"]
         kind = prop["kind"]
         tree = kind in ("Broadleaf", "Conifer", "Sapling")
@@ -256,8 +281,13 @@ if args.creature_height or args.tidal_review or args.cove_showcase:
             limit = 65
         if dist >= limit:
             continue
-        level = 2 if dist > 240 else int(dist > 100)
-        if (kind, level) not in models:
+        level = (
+            2
+            if dist > 240
+            else int(dist > 100 or (args.guardian_review and review_span > 80))
+        )
+        model_key = form(forms, index, kind, px, pz)
+        if (model_key, level) not in models:
             old = set(bpy.data.objects)
             bpy.ops.import_scene.gltf(filepath=str(library / f"{kind}.glb"))
             items = set(bpy.data.objects) - old
@@ -269,7 +299,7 @@ if args.creature_height or args.tidal_review or args.cove_showcase:
                     models[kind, lod_index] = item
             for o in items:
                 o.hide_render = True
-        instance = models[kind, level].copy()
+        instance = models[model_key, level].copy()
         scene.collection.objects.link(instance)
         instance.hide_render = False
         if kind in ("Grass", "Fern", "Flowers", "BerryBush", "CoastalShrub"):
@@ -302,7 +332,11 @@ for name, pos, aim, ortho, lens, lod in shots:
         focus_m = (
             15.0 if name == "cove-showcase" else (native(aim) - native(pos)).length
         )
-        span = 45.0 if name in ("cove-showcase", "strand-reach") else 8.0
+        span = (
+            review_span
+            if name in ("cove-showcase", "guardian-grove")
+            else (45.0 if name == "strand-reach" else 8.0)
+        )
         scene.world.mist_settings.start = focus_m + mood["air_start_beyond_focus_m"]
         scene.world.mist_settings.depth = mood["air_span_min_m"] + 0.62 * span
     if decor:
@@ -313,19 +347,25 @@ for name, pos, aim, ortho, lens, lod in shots:
         for o in decor:
             cx = math.floor(o.location.x / 100) * 100 + 50
             cz = math.floor(-o.location.y / 100) * 100 + 50
-            o.hide_render = math.hypot(cx - focus.x, cz + focus.y) >= 150
+            o.hide_render = (
+                args.guardian_review or math.hypot(cx - focus.x, cz + focus.y) >= 150
+            )
     for mesh in habitats.values():
         mesh.hide_render = True
     for ob in chunks:
         _, ix, iz, level = ob.name.split("_")
         key = int(ix), int(iz)
-        if args.cove_showcase:
+        if args.cove_showcase or args.guardian_review:
             # The showcase represents the ordinary unoccupied 100 m cells.
             # Never draw a mountain with near-only geometry just to flatter it.
             center_x = ox + min(32 * int(ix) + 16, width - 1) * spacing
             center_z = oz + min(32 * int(iz) + 16, depth - 1) * spacing
             distance = math.hypot(center_x - cove_focus.x, center_z + cove_focus.y)
-            target = 0 if distance < 150 else 1 if distance < 350 else 2
+            target = (
+                0
+                if review_span < 100 and distance < 150
+                else 1 if distance < 350 else 2
+            )
         else:
             target = lod
         drawn = level == f"L{target}"

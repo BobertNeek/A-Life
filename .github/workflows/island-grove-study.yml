@@ -1,0 +1,85 @@
+name: Island grove and grounded hillside study
+on:
+  push:
+    branches: ["qualia/island-graphics-week-20261119"]
+    paths:
+      - .github/workflows/island-grove-study.yml
+      - scripts/build_island_grove_forms.py
+      - scripts/verify_island_groves.py
+      - scripts/island_grove_review.py
+      - scripts/install_island_review_blender.sh
+concurrency:
+  group: island-grove-study-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  two-heights:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    env:
+      OPENBLAS_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Prepare deterministic art tools and crown variants
+        run: |
+          python3 -m venv "$RUNNER_TEMP/grove-py"
+          source "$RUNNER_TEMP/grove-py/bin/activate"
+          pip install --only-binary=:all: --disable-pip-version-check numpy==2.2.6 scipy==1.15.3 Pillow==11.3.0
+          echo "$RUNNER_TEMP/grove-py/bin" >> "$GITHUB_PATH"
+          C="$RUNNER_TEMP/grove"
+          python scripts/build_island_grove_forms.py --out "$C"
+          python scripts/verify_island_groves.py "$C/grove-crowns.glb" > "$C/verification.json"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: verified-grove-crowns
+          path: ${{ runner.temp }}/grove
+          retention-days: 7
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: ${{ runner.temp }}/blender-4.3.2-linux-x64.tar.xz
+          key: qualia-art-blender-4.3.2-linux-x64-4da1c956673c0485
+      - run: bash scripts/install_island_review_blender.sh
+      - name: Reuse the exact alternate physical massif and its habitat across art-only revisions
+        id: massif
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: ${{ runner.temp }}/grove-massif
+          key: qualia-grove-massif-v1-${{ hashFiles('scripts/prototype_island_ridge.py','scripts/build_island_geology.py','scripts/island_geology_*.py','scripts/build_island_habitats.py','scripts/island_habitat*.py','scripts/island_ground_finish.py','studies/island-ridge-v2/island-ridge-v2.bin','crates/alife_game_app/assets/landscape/island/props.json','crates/alife_game_app/assets/landscape/island/terrain-chunks.glb') }}
+      - name: Prepare lockable physical terrain once for both sides
+        if: steps.massif.outputs.cache-hit != 'true'
+        run: |
+          R="$RUNNER_TEMP/grove-massif"
+          python scripts/prototype_island_ridge.py "$R"
+          python scripts/build_island_habitats.py --surface "$R/island-ridge-v2.bin" --terrain "$R/terrain-chunks.glb" --placements "$R/props-ridge-v2.json" --out "$R/substrates"
+          python scripts/verify_island_habitats.py "$R/terrain-chunks.glb" "$R/substrates/habitat-ground.glb" --surface "$R/island-ridge-v2.bin" --placements "$R/props-ridge-v2.json"
+      - name: Matched creature-height and guardian-height proof
+        run: |
+          D=crates/alife_game_app/assets/landscape/island
+          R="$RUNNER_TEMP/grove-massif"
+          C="$RUNNER_TEMP/grove"
+          P="$RUNNER_TEMP/grove-proof"
+          mkdir -p "$P"
+          cmp "$R/island-ridge-v2.bin" studies/island-ridge-v2/island-ridge-v2.bin
+          blender --version | head -1 > "$P/renderer.txt"
+          render() {
+            blender -b -t 2 --python-exit-code 1 -P scripts/render_island_geology.py -- "$R/terrain-chunks.glb" "$@" --coastal-light "$D/coastal-daylight.json" --marine-sky "$D/marine-day.glb" --strandline "$D/strandline.glb" --surface "$R/island-ridge-v2.bin" --placements "$R/props-ridge-v2.json" --water-inputs studies/island-art-week/water-inputs --habitats "$R/substrates/habitat-ground.glb"
+          }
+          for pose in cove-showcase guardian-review; do
+            render "$P/before" "--$pose"
+            render "$P/after" "--$pose" --grove-forms "$C/grove-crowns.glb"
+          done
+          for pose in cove-showcase guardian-grove; do
+            python scripts/compare_island_art.py "$P/before/$pose.png" "$P/after/$pose.png" "$P/$pose.jpg" --title "Rooted pines | $pose | Same terrain, light, tree positions and lens | CPU Blender"
+          done
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: paired-grove-heights
+          path: |
+            ${{ runner.temp }}/grove-proof/*.jpg
+            ${{ runner.temp }}/grove-proof/after/*.png
+            ${{ runner.temp }}/grove-proof/renderer.txt
+          retention-days: 7
