@@ -1,23 +1,8 @@
 name: Island contact geology, matched ground and guardian heights
+# Parked during the studio-only art week; dispatch only in a booked test window.
 on:
-  push:
-    branches: ["qualia/island-graphics-week-20261119"]
-    paths:
-      - crates/alife_game_app/assets/landscape/island/Boulder*.glb
-      - crates/alife_game_app/assets/landscape/island/Cliff.glb
-      - crates/alife_game_app/assets/landscape/island/Scree.glb
-      - crates/alife_game_app/assets/landscape/island/minerals/**
-      - scripts/build_island_minerals.py
-      - scripts/island_mineral_skin.py
-      - scripts/island_rock_profiles.py
-      - scripts/island_shale_floor.py
-      - scripts/island_exposed_beds.py
-      - scripts/island_geology_paint.py
-      - scripts/island_colluvium.py
-      - scripts/build_island_habitats.py
-      - scripts/verify_island_habitats.py
-      - scripts/island_habitat_field.py
-      - .github/workflows/island-rock-ground.yml
+  workflow_dispatch:
+
 permissions:
   contents: read
 concurrency:

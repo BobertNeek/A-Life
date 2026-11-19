@@ -1,27 +1,8 @@
 name: Isolated island art study
+# Parked during the studio-only art week; dispatch only in a booked test window.
 on:
-  push:
-    branches: ["qualia/island-graphics-week-20261119"]
-    paths:
-      - .github/workflows/island-art-study.yml
-      - scripts/build_island_strandline.py
-      - scripts/island_habitat_tiles.py
-      - scripts/island_habitat_massing.py
-      - scripts/island_tidal_film.py
-      - scripts/island_coast_plants.py
-      - scripts/island_dune_communities.py
-      - scripts/island_salt_sward.py
-      - scripts/build_island_marine_sky.py
-      - scripts/island_review_light.py
-      - scripts/island_review_water.py
-      - studies/island-art-week/water-inputs/**
-      - crates/alife_game_app/assets/landscape/island/coastal-daylight.json
-      - scripts/verify_island_strandline.py
-      - scripts/compare_island_art.py
-# Do not spend hosted Blender minutes on superseded drafts.
-concurrency:
-  group: island-art-study-${{ github.ref }}
-  cancel-in-progress: true
+  workflow_dispatch:
+
 permissions:
   contents: read
 jobs:

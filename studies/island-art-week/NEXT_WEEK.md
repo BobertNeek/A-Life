@@ -92,3 +92,11 @@ loads, the same trunk still stops the toy, all three LODs show the same needle m
 and broadleaves/stones keep their own. Pan through the 100 m/240 m prop transitions in a
 dense clump. Profile one shared pine surface and the three mipped needle maps; the source
 and candidate have the same per-visible-tree draw count, not a measured frame-time result.
+
+**Studio-only pause (19 November, 04:34 UTC).** All six branch-specific automated
+validation workflows are manual-only. Do not dispatch them, run game/PC checks,
+or open a draft PR that would start the general CI run this week. Keep their
+previously completed artifacts. A separate Blender-only studio render can
+produce art; this does not imply a new validation pass. At the next agreed
+test window, dispatch the narrow asset/runtime checks deliberately and record
+the exact checked-out release before proceeding with interactive acceptance.

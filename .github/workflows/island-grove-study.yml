@@ -1,16 +1,8 @@
 name: Island grove and grounded hillside study
+# Parked during the studio-only art week; dispatch only in a booked test window.
 on:
-  push:
-    branches: ["qualia/island-graphics-week-20261119"]
-    paths:
-      - .github/workflows/island-grove-study.yml
-      - scripts/build_island_grove_forms.py
-      - scripts/verify_island_groves.py
-      - scripts/island_grove_review.py
-      - scripts/install_island_review_blender.sh
-concurrency:
-  group: island-grove-study-${{ github.ref }}
-  cancel-in-progress: true
+  workflow_dispatch:
+
 permissions:
   contents: read
 jobs:

@@ -1,19 +1,8 @@
 name: Island pine silhouettes from real ground and dense guardian woods
+# Parked during the studio-only art week; dispatch only in a booked test window.
 on:
-  push:
-    branches: ["qualia/island-graphics-week-20261119"]
-    paths:
-      - .github/workflows/island-bough-study.yml
-      - scripts/build_island_boughs.py
-      - scripts/island_bough_mesh.py
-      - scripts/island_canopy_outline.py
-      - scripts/island_needle_surface.py
-      - scripts/island_needle_sprigs.py
-      - scripts/island_pine_sprays.py
-      - scripts/island_review_grid.py
-      - scripts/render_island_geology.py
-      - crates/alife_game_app/assets/landscape/island/grove-crowns.*
-      - crates/alife_game_app/assets/landscape/island/canopy/**
+  workflow_dispatch:
+
 permissions:
   contents: read
 concurrency:

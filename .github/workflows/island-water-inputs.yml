@@ -1,10 +1,8 @@
 name: Export actual Bevy coastal water samples without gameplay
+# Parked during the studio-only art week; dispatch only in a booked test window.
 on:
-  push:
-    branches: ["qualia/island-graphics-week-20261119"]
-    paths:
-      - .github/workflows/island-water-inputs.yml
-      - crates/alife_game_app/src/production_voxel_renderer/terrain_water.rs
+  workflow_dispatch:
+
 permissions:
   contents: read
 jobs:
