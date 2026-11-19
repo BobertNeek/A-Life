@@ -205,7 +205,7 @@ def shots(side):
         bpy.ops.render.render(write_still=True)
 
 
-if mode == "desk":
+if mode in ("desk", "setup-desk"):
     ground = desk()
 else:
     ground = grab(scene_dir / "ground.glb") + grab(scene_dir / "near.glb")
@@ -262,7 +262,7 @@ else:
         ins.rotation_mode = "XYZ"
         ins.rotation_euler = (0, 0, t["yaw"])
         ins.scale = (t["scale"],) * 3
-    if mode != "after":
+    if mode not in ("after", "setup"):
         shots("before")
 skin(ground, True)
 skin(grab(art / "fitted-outcrops.glb"))
@@ -289,5 +289,5 @@ if mode == "desk":
     bpy.ops.wm.save_as_mainfile(
         filepath=str(out / "Lanternback-Rim.blend"), compress=True
     )
-else:
+elif mode not in ("setup", "setup-desk"):
     shots("after")
