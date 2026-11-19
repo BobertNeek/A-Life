@@ -13,7 +13,8 @@ from mathutils import Vector
 
 H = Path(__file__).resolve().parent
 args = sys.argv[sys.argv.index("--") + 1 :]
-show_forest = len(args) == 7 and args[-1] == 'with-registered-floor'
+seat = len(args) == 7 and args[-1] == "with-seated-shoulders"
+show_forest = seat or (len(args) == 7 and args[-1] == "with-registered-floor")
 if show_forest:
     args = args[:-1]
 if len(args) != 6:
@@ -93,6 +94,7 @@ surf.sea(o, water)
 props = json.loads((native / "props.json").read_text())
 crowns = json.loads((native / "grove-crowns.json").read_text())
 lib = {}
+old_shoulders = []
 for i, q in enumerate(props):
     x, y, z = q["position"]
     dist = math.hypot(x - 71.0, z + 379.0)
@@ -121,6 +123,8 @@ for i, q in enumerate(props):
     ob.rotation_mode = "XYZ"
     ob.rotation_euler = (0, 0, q["yaw"])
     ob.scale = (q["scale"],) * 3
+    if i in (1335, 1695, 1847):
+        old_shoulders.append(ob)
 poses = json.loads((source / "views.json").read_text())
 cams = {}
 for k, q in poses.items():
@@ -139,11 +143,32 @@ for side in ("before", "after"):
     if side == "after":
         mod("shelf_source_coat", H / "material.py").coat(ground, surf, source)
         if show_forest:
-            mod('held_pine_duff', H / 'forest.py').coat(ground, surf, source)
-    husks = grab(source / 'cone-husks-eye.glb') if side == 'after' and show_forest else []
+            mod("held_pine_duff", H / "forest.py").coat(ground, surf, source)
+    husks = (
+        grab(source / "cone-husks-eye.glb") if side == "after" and show_forest else []
+    )
+    new_ledge = {}
+    if seat and side == "after":
+        for ob in old_shoulders:
+            ob.hide_render = True
+        for lod in (0, 1):
+            new_ledge[lod] = grab(source / ("slope-shoulders-L" + str(lod) + ".glb"))
+        fmod = mod("cloudstep_optical_stone", H / "forest.py")
+        fmod.tint(
+            ground,
+            surf,
+            source / "shoulder-talus.png",
+            json.loads((source / "shoulders.json").read_text())["talus"][
+                "native_plan_xz"
+            ],
+            "Unbroken steep talus from the three original cliff seats",
+        )
     for name, cam in cams.items():
+        for lod, objs in new_ledge.items():
+            for ob in objs:
+                ob.hide_render = lod != int(name == "shelf-section")
         for ob in husks:
-            ob.hide_render = name == 'shelf-section'
+            ob.hide_render = name == "shelf-section"
         sc.camera = cam
         sc.render.filepath = str(out / side / (name + ".png"))
         bpy.ops.render.render(write_still=True)
@@ -155,7 +180,12 @@ for side in ("before", "after"):
             held_stock_sky_water=True,
             original_terrain_and_props=True,
             source_copse_footprint_triangles=9456,
-            only_change="optical contacts on mountain ground; original-needlefall glaze and small spent cones" if show_forest else "optical contact weathering on eligible mountain ground",
+            only_change=(
+                "optical contacts on mountain ground; original-needlefall glaze and small spent cones"
+                if show_forest
+                else "optical contact weathering on eligible mountain ground"
+            ),
+            visual_shoulder_seats=(list((1335, 1695, 1847)) if seat else []),
             poses=poses,
         ),
         indent=2,
