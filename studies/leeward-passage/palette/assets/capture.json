@@ -1,0 +1,47 @@
+{
+  "artist_source_commit": "d6a60649ebe02643b5d8c12faf45789f7580ca80",
+  "studio_run": 44536515840,
+  "studio": "Art-only Blender 4.3.2 Cycles, locked 1000x600, no game run",
+  "previous_gallery_commit": "9d8e82b2ce0a39e3a41880a2b1c04fa8d1a72323",
+  "stations": {
+    "reach-guardian": {
+      "original_photo_sha256": "870a9569decca340d88bd5a2ab9e24a835e2ce042904353f4d7d4423db9c1a11",
+      "original_studio_commit": "6bda7af2767ca286ee38d70d757ee79dd14d3132",
+      "original_studio_run": 44531429703,
+      "new_photo_sha256": "c4a0f4d4a9d5d7a2a5f26172eaf1ea478ebcf4ee81974a98a201f072bc050d2c"
+    },
+    "reach-meadow": {
+      "original_photo_sha256": "90a548979746e237e2a344b4d8e984d64e7a55f2a0c1a4624a6f65936c672f64",
+      "original_studio_commit": "6bda7af2767ca286ee38d70d757ee79dd14d3132",
+      "original_studio_run": 44531429703,
+      "new_photo_sha256": "8fd6b3c990c89995694059574acdd80a24275ae33b90d7f7e9f5505ad594f28c"
+    },
+    "reach-alder": {
+      "original_photo_sha256": "be3fa9cf7e59b51bfac1071c79772033f8e64ba1ab27503a68f4831396cccf11",
+      "original_studio_commit": "af39a3fcd87831bd888db15b2c37581e77f4b179",
+      "original_studio_run": 44533292757,
+      "new_photo_sha256": "f8d1a8016f1eed68291327bf3e25e299661c919ef5c7513752ea23c6c21fac5f"
+    },
+    "reach-strand": {
+      "original_photo_sha256": "fbd6a22452a504b6ea62b36350193f821d0dbcd6034a4f4d8ce36bc1cb7db3d4",
+      "original_studio_commit": "af39a3fcd87831bd888db15b2c37581e77f4b179",
+      "original_studio_run": 44533292757,
+      "new_photo_sha256": "34dee1b097a76f58bdcf233dd2dfac5aa302c8972af10dacbcc49fe093597d48"
+    }
+  },
+  "artist_bank_assets": {
+    "placed-palette.glb": "6dd22e3ea96c9e578619135fbf10fe6a18ad61ada0a764d1c28e423fb3cccfaa",
+    "fitted-flakes.glb": "4560d148bf850a1dd73bfc4c42ac9c2931a64ac1bc34e48f933d7a488b0dfa08",
+    "roots.csv": "76d1b0f90773a86fd73840036ff05edfa2dbf8687b4bed11a35b2e16d94ce6c8",
+    "palette.json": "0553b96515a1de9cf751720bc4b99faf415bc909647cda3c98a4c90d996385c6"
+  },
+  "reference_root_and_paint": {
+    "bluff-foot.glb": "82e84a298b737c5147380e39948bf730b7dcf93381321efdb493d129b5cad44f",
+    "reach-wash.png": "4118a86962aa1c925fa55ed5bf1f45d2bcb6579c58600e6950b9492f2871e0d8",
+    "bluff-grain.png": "724af237359b74bc19838ab9e1a20a30ff7529da6331049b064a4eefd7c91a99"
+  },
+  "core_only_specimen_shelf_sha256": "2693dc7e1471307da61015f0f3911275ec4d2b7c9ef43b6ede32b74e6d89db7a",
+  "matched_sheet_sha256": "29960eb2051e3fadb153a836ad4be0ff4f64a036b665da6374d67ae22baf2555",
+  "engine_integrated": false,
+  "native_performance_measured": false
+}

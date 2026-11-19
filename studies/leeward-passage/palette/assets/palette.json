@@ -1,0 +1,353 @@
+{
+  "source_full_quality": "9d8e82b2ce0a39e3a41880a2b1c04fa8d1a72323",
+  "terrain_sha256": "8d0e9cf6343ffe8ea5e82bcb7ad3e4ef77eef7207042cf0274de5d91f2457c38",
+  "policy": "Camera XZ range 17m high/52m middle; geometry outside 105m or 148m omitted. Guardian retains actual >.21m diameter or woody. No frustum, occlusion, performance, draw-call or runtime measurement.",
+  "full_source_triangles": 303804,
+  "old_plant_triangles": 274596,
+  "exact_fitted_flake_triangles": 22920,
+  "exact_bluff_mesh_triangles": 6288,
+  "number_unique_specimens": 12,
+  "unique_triangles_all_lods": 4442,
+  "total_original_stools": 1578,
+  "original_counts": {
+    "oat": 601,
+    "reed": 469,
+    "samphire": 84,
+    "shore": 79,
+    "shingle": 1094,
+    "valves": 111,
+    "dune_scrub_stools": 345,
+    "visual_seat_offset_m": [
+      -0.015274782653138416,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "mean_original_16_bearing_fill": [
+      0.08852810121888531,
+      0.5909786037364062,
+      0.7907702039944822,
+      0.8719587642280354,
+      1.0
+    ]
+  },
+  "glb_bytes": 303192,
+  "source_geometry_bytes": 11348720,
+  "separate_flake_bytes": 612052,
+  "source_specimens": [
+    {
+      "key": "hazel-1",
+      "family": "hazel",
+      "original_family_index": 98,
+      "original_native_xyz": [
+        116.89972338441463,
+        5.849171255476231,
+        383.0235295243758
+      ],
+      "old_triangles": 560,
+      "tiers": [
+        384,
+        192,
+        48
+      ]
+    },
+    {
+      "key": "hazel-2",
+      "family": "hazel",
+      "original_family_index": 71,
+      "original_native_xyz": [
+        116.95591633294895,
+        5.521227459162278,
+        380.0461777005054
+      ],
+      "old_triangles": 560,
+      "tiers": [
+        384,
+        192,
+        48
+      ]
+    },
+    {
+      "key": "myrtle-1",
+      "family": "myrtle",
+      "original_family_index": 85,
+      "original_native_xyz": [
+        98.4754337427531,
+        5.4168897894676915,
+        374.47515604718393
+      ],
+      "old_triangles": 630,
+      "tiers": [
+        432,
+        216,
+        54
+      ]
+    },
+    {
+      "key": "myrtle-2",
+      "family": "myrtle",
+      "original_family_index": 60,
+      "original_native_xyz": [
+        90.82016269702616,
+        5.041298931434606,
+        360.1390578204429
+      ],
+      "old_triangles": 630,
+      "tiers": [
+        432,
+        216,
+        54
+      ]
+    },
+    {
+      "key": "oat-1",
+      "family": "oat",
+      "original_family_index": 54,
+      "original_native_xyz": [
+        85.43335389956188,
+        5.296528004061604,
+        283.457294332766
+      ],
+      "old_triangles": 72,
+      "tiers": [
+        48,
+        24,
+        8
+      ]
+    },
+    {
+      "key": "oat-2",
+      "family": "oat",
+      "original_family_index": 56,
+      "original_native_xyz": [
+        86.38096997592409,
+        5.360567044368842,
+        279.59940050266766
+      ],
+      "old_triangles": 95,
+      "tiers": [
+        75,
+        41,
+        8
+      ]
+    },
+    {
+      "key": "reed-1",
+      "family": "reed",
+      "original_family_index": 394,
+      "original_native_xyz": [
+        130.99549978720316,
+        7.8661781396961,
+        400.74264543125713
+      ],
+      "old_triangles": 63,
+      "tiers": [
+        43,
+        21,
+        8
+      ]
+    },
+    {
+      "key": "reed-2",
+      "family": "reed",
+      "original_family_index": 78,
+      "original_native_xyz": [
+        80.13013321239755,
+        5.797566178174082,
+        284.4300131177784
+      ],
+      "old_triangles": 63,
+      "tiers": [
+        43,
+        21,
+        8
+      ]
+    },
+    {
+      "key": "salt-1",
+      "family": "salt",
+      "original_family_index": 10,
+      "original_native_xyz": [
+        132.5904951502045,
+        6.55730302068133,
+        447.202754880026
+      ],
+      "old_triangles": 420,
+      "tiers": [
+        288,
+        144,
+        36
+      ]
+    },
+    {
+      "key": "salt-2",
+      "family": "salt",
+      "original_family_index": 11,
+      "original_native_xyz": [
+        138.83361643223424,
+        5.9573169859122315,
+        447.52249013542826
+      ],
+      "old_triangles": 630,
+      "tiers": [
+        432,
+        216,
+        54
+      ]
+    },
+    {
+      "key": "samphire-1",
+      "family": "samphire",
+      "original_family_index": 21,
+      "original_native_xyz": [
+        87.76030910268798,
+        4.860235183895173,
+        287.94724914514387
+      ],
+      "old_triangles": 147,
+      "tiers": [
+        127,
+        49,
+        8
+      ]
+    },
+    {
+      "key": "shore-1",
+      "family": "shore",
+      "original_family_index": 24,
+      "original_native_xyz": [
+        132.92537044052625,
+        8.218604580278853,
+        441.74004648057
+      ],
+      "old_triangles": 81,
+      "tiers": [
+        53,
+        27,
+        8
+      ]
+    }
+  ],
+  "all_fixed_level_scenes": [
+    {
+      "instances": 1578,
+      "instanced_primitive_groups": 12,
+      "expanded_plant_triangles": 207789,
+      "levels": {
+        "L0": 1578
+      },
+      "shared_meshes_referenced": 12
+    },
+    {
+      "instances": 1578,
+      "instanced_primitive_groups": 12,
+      "expanded_plant_triangles": 103367,
+      "levels": {
+        "L1": 1578
+      },
+      "shared_meshes_referenced": 12
+    },
+    {
+      "instances": 1578,
+      "instanced_primitive_groups": 12,
+      "expanded_plant_triangles": 27000,
+      "levels": {
+        "L2": 1578
+      },
+      "shared_meshes_referenced": 12
+    }
+  ],
+  "stations": {
+    "reach-guardian": {
+      "camera_native_xyz": [
+        306.0,
+        142.0,
+        431.0
+      ],
+      "old_visible_artist_triangles": 274596,
+      "old_mesh_objects": 16,
+      "instances": 1578,
+      "instanced_primitive_groups": 12,
+      "expanded_plant_triangles": 27000,
+      "levels": {
+        "L2": 1578
+      },
+      "shared_meshes_referenced": 12,
+      "fitted_flake_tiles": 0,
+      "original_flake_triangles_loaded": 0,
+      "original_bluff_triangles": 0,
+      "selected_total_triangles": 27000,
+      "selected_total_primitive_groups": 12
+    },
+    "reach-meadow": {
+      "camera_native_xyz": [
+        76.6,
+        6.599721279144287,
+        315.5
+      ],
+      "old_visible_artist_triangles": 297516,
+      "old_mesh_objects": 23,
+      "instances": 1379,
+      "instanced_primitive_groups": 28,
+      "expanded_plant_triangles": 71192,
+      "levels": {
+        "L0": 245,
+        "L1": 559,
+        "L2": 575
+      },
+      "shared_meshes_referenced": 28,
+      "fitted_flake_tiles": 3,
+      "original_flake_triangles_loaded": 7281,
+      "original_bluff_triangles": 0,
+      "selected_total_triangles": 78473,
+      "selected_total_primitive_groups": 31
+    },
+    "reach-alder": {
+      "camera_native_xyz": [
+        128.9,
+        5.640528684616067,
+        453.4
+      ],
+      "old_visible_artist_triangles": 303804,
+      "old_mesh_objects": 24,
+      "instances": 887,
+      "instanced_primitive_groups": 27,
+      "expanded_plant_triangles": 55184,
+      "levels": {
+        "L1": 237,
+        "L2": 493,
+        "L0": 157
+      },
+      "shared_meshes_referenced": 27,
+      "fitted_flake_tiles": 3,
+      "original_flake_triangles_loaded": 13116,
+      "original_bluff_triangles": 6288,
+      "selected_total_triangles": 74588,
+      "selected_total_primitive_groups": 31
+    },
+    "reach-strand": {
+      "camera_native_xyz": [
+        126.82,
+        8.179431721496591,
+        446.35
+      ],
+      "old_visible_artist_triangles": 303804,
+      "old_mesh_objects": 24,
+      "instances": 918,
+      "instanced_primitive_groups": 30,
+      "expanded_plant_triangles": 58351,
+      "levels": {
+        "L0": 140,
+        "L1": 325,
+        "L2": 453
+      },
+      "shared_meshes_referenced": 30,
+      "fitted_flake_tiles": 3,
+      "original_flake_triangles_loaded": 13116,
+      "original_bluff_triangles": 6288,
+      "selected_total_triangles": 77755,
+      "selected_total_primitive_groups": 34
+    }
+  }
+}
