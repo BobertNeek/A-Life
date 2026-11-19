@@ -309,8 +309,9 @@ elif subject == "inlet-concept":
         bar_ink,
         out / "southern-inlet-proposal.blend",
     )
-elif subject in ("inlet-survey", "meadow-survey"):
-    # Two working photographs of real terrain; no candidate is invented here.
+elif subject in ("inlet-survey", "meadow-survey", "estuary-optics"):
+    # Photograph real terrain. The localized estuary variant is painted below
+    # after the original shelf maps have been recovered.
     pass
 elif subject == "cove-water":
     from island_cove_optics import world_paint
@@ -365,6 +366,8 @@ views = {
     "alder-bank": ["--guardian-review", "--grove-framing", "alder-bank"],
     "inlet-eye": ["--cove-showcase", "--cove-framing", "inlet-eye"],
     "inlet-bar": ["--cove-showcase", "--cove-framing", "inlet-bar"],
+    "estuary-mouth": ["--cove-showcase", "--cove-framing", "estuary-mouth"],
+    "inlet-landing": ["--cove-showcase", "--cove-framing", "inlet-landing"],
     "inlet-bank": ["--guardian-review", "--grove-framing", "inlet-bank"],
     "shelf-eye": ["--cove-showcase", "--cove-framing", "shelf-edge"],
     "shelf-guardian": ["--guardian-review", "--grove-framing", "shelf"],
@@ -385,6 +388,7 @@ subject_label = {
     "wild-meadow": "Current meadow and coastal sedge / bellflower study",
     "inlet-survey": "The actual southern inlet before new bank art",
     "inlet-ground": "The native southern tidal cut",
+    "estuary-optics": "Shallow jade creek and marine-blue mouth",
     "inlet-underpaint": "Original bank pigment and native-material feathering",
     "inlet-concept": "Shape study: actual V1 and proposed asymmetric inlet",
 }[subject]
@@ -394,6 +398,7 @@ base_water = root / "studies/island-art-week/water-inputs"
 if subject in (
     "coastal-alder",
     "inlet-survey",
+    "estuary-optics",
     "inlet-ground",
     "inlet-underpaint",
     "inlet-concept",
@@ -407,6 +412,33 @@ if subject in (
     (base_water / "water.json").write_text(
         (root / "studies/island-art-week/water-selected.json").read_text()
     )
+if subject == "estuary-optics":
+    from island_estuary_optics import author as estuary_chart
+
+    # The selected strip itself may later install, so archive the original
+    # shelf input by fixed SHA. This keeps the two photographed states distinct.
+    original_water = out / "pre-estuary"
+    original_water.mkdir(exist_ok=True)
+    original = "bf017e222a6cdced3c9f91243c9fad76af96d8ad"
+    subprocess.run(
+        ["git", "fetch", "--no-tags", "--depth=1", "origin", original], check=True
+    )
+    for name in ("shore.png", "ripple.png"):
+        with (original_water / name).open("wb") as target:
+            subprocess.run(
+                [
+                    "git",
+                    "show",
+                    f"{original}:{(d/'cove-water'/name).relative_to(root).as_posix()}",
+                ],
+                stdout=target,
+                check=True,
+            )
+    (original_water / "water.json").write_bytes(
+        (base_water / "water.json").read_bytes()
+    )
+    base_water = original_water
+    estuary = estuary_chart(SURFACE, base_water, out / "artist-estuary")
 if subject == "inlet-concept":
     concept_water = out / "studied-water"
     paint_concept_water(SURFACE, base_water, concept_water)
@@ -421,6 +453,8 @@ for tag in board["angles"]:
     for side in sides:
         pack = fresh if side == "after" else old
         water = chart if subject == "cove-water" and side == "after" else base_water
+        if subject == "estuary-optics" and side == "after":
+            water = estuary
         if subject == "inlet-concept" and side == "after":
             water = concept_water
         dressing = None
@@ -435,6 +469,7 @@ for tag in board["angles"]:
                 "forest-fern",
                 "coastal-alder",
                 "inlet-survey",
+                "estuary-optics",
                 "inlet-ground",
                 "inlet-underpaint",
                 "inlet-concept",
@@ -461,6 +496,11 @@ for tag in board["angles"]:
                     skin if side == "after" else evidence_before,
                 ]
                 if subject == "inlet-underpaint" and side != "bare"
+                else []
+            ),
+            *(
+                ["--inlet-cut", d / "inlet-bank.glb"]
+                if subject == "estuary-optics"
                 else []
             ),
             *(

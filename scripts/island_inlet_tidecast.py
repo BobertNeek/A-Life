@@ -33,6 +33,8 @@ def tidecast(terrain, variant):
         "shale_pieces": 0,
         "short_wrack_ribbons": 0,
         "contact_shards": 0,
+        "grit_scales": 0,
+        "pocket_nuclei": 0,
     }
 
     def ht(p):
@@ -109,6 +111,9 @@ def tidecast(terrain, variant):
         )
         toe = []
         edge = []
+        plateau = []
+        rim = np.array([0.97, 0.96, 0.93]) * pal
+        apex = p + d * L * 0.07
         for j in range(n):
             a = math.tau * j / n
             off = rough[j] * (L * math.cos(a) * d + w * math.sin(a) * c)
@@ -122,12 +127,25 @@ def tidecast(terrain, variant):
                     pal * rng.uniform(0.89, 0.96),
                 )
             )
-        top = pin(g, p + 0.16 * L * d, lift, pal * (0.97 if chip else 1.08))
+            # Scarp blocks are broken, nearly parallel plates. The old
+            # single central vertex made a pile of little pointy pyramids.
+            top_xy = apex + off * (0.51 + 0.18 * math.cos(a - 0.34))
+            plateau.append(
+                pin(
+                    g,
+                    top_xy,
+                    0.009 + lift * (0.49 + 0.17 * math.cos(a)),
+                    rim * rng.uniform(0.98, 1.04),
+                )
+            )
+        top = pin(g, apex, 0.009 + lift * 0.61, pal * 1.025)
         for j in range(n):
             k = (j + 1) % n
             g.face(toe[j], toe[k], edge[k])
             g.face(toe[j], edge[k], edge[j])
-            g.face(edge[j], edge[k], top)
+            g.face(edge[j], edge[k], plateau[k])
+            g.face(edge[j], plateau[k], plateau[j])
+            g.face(plateau[j], plateau[k], top)
         num["contact_shards" if chip else "shale_pieces"] += 1
 
     def ribbon(g, p, az, L):
@@ -162,30 +180,99 @@ def tidecast(terrain, variant):
             last = row
         num["short_wrack_ribbons"] += 1
 
-    for x, z, wide, long, density in BEDS:
-        for idx in range(round(51 * density)):
-            step = rng.normal(0, 0.69)
-            cove = np.array(
+    def lamina(g, p, az, radius):
+        # Granules are big enough to read as gathered sediment, not full
+        # screen grain. Six weathered points lie against the coat; no atlas
+        # cutout or painted shadow is needed for their disappearing margins.
+        d = np.array((math.cos(az), math.sin(az)))
+        c = np.array((-d[1], d[0]))
+        w = radius * rng.uniform(0.36, 0.70)
+        pal = np.array(
+            rng.choice(
+                [
+                    (133, 128, 117),
+                    (142, 137, 123),
+                    (126, 126, 116),
+                    (147, 141, 126),
+                    (128, 124, 113),
+                ]
+            )
+        )
+        phase = rng.uniform(-0.25, 0.25)
+        edge = []
+        for j in range(5):
+            a = math.tau * j / 5 + phase
+            q = p + (radius * math.cos(a) * d + w * math.sin(a) * c) * rng.uniform(
+                0.75, 1.17
+            )
+            edge.append(pin(g, q, 0.0045, pal * rng.uniform(0.94, 1.01)))
+        mid = pin(
+            g, p + 0.04 * radius * d, 0.009 + min(0.006, 0.22 * radius), pal * 1.035
+        )
+        for j in range(5):
+            g.face(edge[j], edge[(j + 1) % 5], mid)
+        num["grit_scales"] += 1
+
+    def choose(p):
+        h, dx, dz = ground.floor(*p)
+        if not 0.25 < h < 3.4 or not 0.23 < np.hypot(dx, dz) < 1.55 or not safe(p):
+            return None, 0
+        return tiles[math.floor(p[0] / 50), math.floor(p[1] / 50)], math.atan2(dx, -dz)
+
+    for row, (x, z, wide, long, density) in enumerate(BEDS):
+        # Two to five *actual* depositional pockets per reach and much empty
+        # foreshore between reaches. A larger tabular stone splits the drift:
+        # two overlapping teardrops of granules/valves, not uniform random
+        # droplets or the same stone sampled continuously along a strandline.
+        marks = (
+            [-0.48, 0.36, 0.82]
+            if row == 0
+            else sorted(rng.uniform(-0.9, 0.9, max(2, round(4 * density))))
+        )
+        for part, along in enumerate(marks):
+            p0 = np.array(
                 (
-                    x + wide * rng.normal(0, 0.75) + 0.22 * math.sin(step * 2),
-                    z + long * step,
+                    x + wide * (0.7 * math.sin(2.3 * along) + rng.uniform(-0.24, 0.26)),
+                    z + long * along,
                 )
             )
-            h, dx, dz = ground.floor(*cove)
-            grade = np.hypot(dx, dz)
-            if not 0.3 < h < 3.3 or not 0.27 < grade < 1.5 or not safe(cove):
+            g, az = choose(p0)
+            if g is None:
                 continue
-            tile = tiles[math.floor(cove[0] / 50), math.floor(cove[1] / 50)]
-            az = math.atan2(dx, -dz) + rng.normal(0, 0.57)
-            f = rng.random()
-            if f < 0.11:
-                shell(tile, cove, az, rng.uniform(0.047, 0.119), rng.random() < 0.59)
-            elif f < 0.20:
-                ribbon(tile, cove, az, rng.uniform(0.15, 0.36))
-            elif f < 0.60:
-                flake(tile, cove, az, rng.uniform(0.046, 0.144))
-            else:
-                flake(tile, cove, az, rng.uniform(0.018, 0.051), True)
+            az += rng.normal(0, 0.23)
+            d = np.array((math.cos(az), math.sin(az)))
+            c = np.array((-d[1], d[0]))
+            span = rng.uniform(0.18, 0.47) * (1.3 if row == 0 else 1)
+            num["pocket_nuclei"] += 1
+            flake(g, p0, az + rng.uniform(-0.48, 0.32), rng.uniform(0.09, 0.18), False)
+            if part % 2 == 0:
+                ribbon(
+                    g,
+                    p0 + c * span * 0.19,
+                    az + rng.uniform(-0.37, 0.32),
+                    rng.uniform(0.24, 0.46),
+                )
+            for k in range(rng.integers(8, 15)):
+                u = rng.normal(0.39, 0.68)
+                v = rng.normal(-0.20 if u > 0.35 else 0.22, 0.31)
+                q = p0 + d * (u * span) + c * (v * span)
+                g, local_angle = choose(q)
+                if g is None:
+                    continue
+                turn = az + rng.normal(0, 0.52)
+                if k == 0 or (k == 2 and part % 3 == 1):
+                    shell(g, q, turn, rng.uniform(0.052, 0.109), rng.random() < 0.55)
+                elif k <= 3:
+                    flake(g, q, turn, rng.uniform(0.043, 0.091), False)
+                else:
+                    flake(g, q, turn, rng.uniform(0.019, 0.047), True)
+            for k in range(rng.integers(54, 94)):
+                u = rng.normal(0.43, 0.89)
+                v = rng.normal(-0.18 if u > 0.32 else 0.26, 0.23 + 0.14 * abs(u))
+                q = p0 + d * (u * span) + c * (v * span + 0.045 * math.sin(u * 3.1))
+                g, _ = choose(q)
+                if g is not None:
+                    lamina(g, q, az + rng.normal(0, 0.60), rng.uniform(0.006, 0.022))
     return tiles, num
 
 

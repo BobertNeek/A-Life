@@ -2,14 +2,14 @@
   "subject": "inlet-underpaint",
   "angles": [
     "inlet-bar",
-    "inlet-eye",
+    "inlet-landing",
     "inlet-bank"
   ],
   "paired": true,
   "quick": false,
   "samples": 48,
   "editable_canopy": false,
-  "art_note": "Source the native V1 shoulder just upstream of the sea. Small shell, washed shale and wrack pockets interrupt the otherwise bare reach. Compare both sides against the already selected continuous underpaint; unchanged physics, lens, daylight, water and original placed trees.",
+  "art_note": "The isolated dot scatter was held, not installed. Selective sorted drifts: fractured shale with flat chipped tops and fine local grit around actual gathered shell and wrack. Include an additional 1.12 m view onto the actual landing, not a camera-only prop. Native bank finish and ocean held fixed.",
   "opaque_bank": true,
   "tidecast_pockets": true
 }

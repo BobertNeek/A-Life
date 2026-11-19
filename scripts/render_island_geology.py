@@ -96,6 +96,8 @@ cli.add_argument(
         "shelf-edge",
         "inlet-eye",
         "inlet-bar",
+        "estuary-mouth",
+        "inlet-landing",
     ),
     default="open-bank",
 )
@@ -349,6 +351,8 @@ if (
         x, z, dx, dz, rise, lens = {
             "open-bank": (330.60, 125.65, -12.0, -66, 4.1, 21),
             "inlet-eye": (90.0, 451.0, 24.8, -19.6, -0.52, 33),
+            "inlet-landing": (94.7, 454.0, -1.6, -4.0, -1.10, 36),
+            "estuary-mouth": (128.8, 458.2, -21.4, 4.7, -3.35, 33),
             "inlet-bar": (94.15, 453.9, 2.45, -29.2, -1.20, 29),
             "shelf-edge": (345.20, 116.70, 13.7, -27.4, -1.36, 29),
             "grove-edge": (319.85, 143.85, 4.0, -66, 3.6, 22),
@@ -361,6 +365,8 @@ if (
                     "shelf-edge": "shelf-eye",
                     "inlet-eye": "inlet-eye",
                     "inlet-bar": "inlet-bar",
+                    "estuary-mouth": "estuary-mouth",
+                    "inlet-landing": "inlet-landing",
                 }.get(args.cove_framing, "cove-showcase"),
                 (x, eye, z),
                 (x + dx, eye + rise, z + dz),
@@ -617,7 +623,8 @@ for name, pos, aim, ortho, lens, lod in shots:
     if mood:
         focus_m = (
             15.0
-            if name in ("cove-showcase", "shelf-eye", "inlet-eye", "inlet-bar")
+            if name
+            in ("cove-showcase", "shelf-eye", "inlet-eye", "inlet-bar", "estuary-mouth")
             else (native(aim) - native(pos)).length
         )
         span = (
@@ -640,7 +647,8 @@ for name, pos, aim, ortho, lens, lod in shots:
         a, b = native(pos), native(aim)
         focus = (
             a + (b - a).normalized() * 15.0
-            if name in ("cove-showcase", "shelf-eye", "inlet-eye", "inlet-bar")
+            if name
+            in ("cove-showcase", "shelf-eye", "inlet-eye", "inlet-bar", "estuary-mouth")
             else b
         )
         for o in decor:
