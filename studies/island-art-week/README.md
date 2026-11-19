@@ -166,3 +166,10 @@ The material binding uses two reusable surface handles (plants and stones)
 instead of accidentally texturing every prop with the first plant's material.
 A separate render/byte check reproduces the final opaque RGBA packing and
 rock tangent-normal convention before selecting the final review plates.
+
+Final renderer-matched [guardian](mineral-guardian.jpg), [1.03 m creature eye](mineral-creature.jpg)
+and [unchanged wide camera](mineral-cove.jpg) come from **44454766679**. The
+first exact-byte job caught sub-micro-unit differences between local and hosted
+rock UVs/normals (positions and RGBA were identical). The five checked-in
+GLBs now use the actual hosted producer behind these renders. This is a
+reproducibility correction, not a claim that the first byte gate passed.
