@@ -1,0 +1,44 @@
+name: Isolated island art study
+on:
+  push:
+    branches: ["qualia/island-graphics-week-20261119"]
+    paths:
+      - .github/workflows/island-art-study.yml
+      - scripts/build_island_strandline.py
+      - scripts/render_island_geology.py
+      - scripts/verify_island_strandline.py
+      - scripts/compare_island_art.py
+permissions:
+  contents: read
+jobs:
+  paired-strand:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Prepare offline Blender and image dependencies
+        run: sudo apt-get -qq update && sudo apt-get install -y --no-install-recommends blender python3-numpy python3-pil
+      - name: Bake and verify the actual near-field shore asset
+        run: |
+          mkdir -p "$RUNNER_TEMP/shore"
+          /usr/bin/python3 scripts/build_island_strandline.py --out "$RUNNER_TEMP/shore/strandline.glb"
+          /usr/bin/python3 scripts/verify_island_strandline.py "$RUNNER_TEMP/shore/strandline.glb" > "$RUNNER_TEMP/shore/validation.json"
+      - name: Matched CPU Blender study at two fixed elevations
+        env:
+          OPENBLAS_NUM_THREADS: "1"
+        run: |
+          T=crates/alife_game_app/assets/landscape/island/terrain-chunks.glb
+          S="$RUNNER_TEMP/shore"
+          blender -b -t 2 --python-exit-code 1 -P scripts/render_island_geology.py -- "$T" "$S/before" --tidal-review
+          blender -b -t 2 --python-exit-code 1 -P scripts/render_island_geology.py -- "$T" "$S/after" --tidal-review --strandline "$S/strandline.glb"
+          /usr/bin/python3 scripts/compare_island_art.py "$S/before/strand-eye.png" "$S/after/strand-eye.png" "$S/strand-eye.jpg" --title 'Eastern strand at 86 cm | Matched CPU Blender study; water is a stand-in'
+          /usr/bin/python3 scripts/compare_island_art.py "$S/before/strand-reach.png" "$S/after/strand-reach.png" "$S/strand-reach.jpg" --title 'Eastern strand from the bank | Matched CPU Blender study; water is a stand-in'
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: island-paired-strand
+          path: |
+            ${{ runner.temp }}/shore/strandline.glb
+            ${{ runner.temp }}/shore/validation.json
+            ${{ runner.temp }}/shore/strand-eye.jpg
+            ${{ runner.temp }}/shore/strand-reach.jpg
+          retention-days: 7
