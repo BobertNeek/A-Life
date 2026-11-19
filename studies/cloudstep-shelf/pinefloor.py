@@ -3,14 +3,14 @@ A high eye pixel is not a reason to put pine duff in an open clearing.
 Source-only soil, cryptogam and loose flake artwork, never collisions or food.
 """
 from pathlib import Path
-import csv,json,math,struct,sys
+import csv,json,math,struct,sys,io,shutil
 import numpy as np
 from PIL import Image
 HERE=Path(__file__).resolve().parent
 sys.path[:0]=[str(HERE),str(HERE.parents[1]/"scripts"),str(HERE.parent/"lanternback-rim")]
 from island_inlet_ground import Inlet,ease
 from island_erratic_glb import streams
-from finished_island_glb import save
+
 from strata import nz
 from mountainskin import plates
 BOX=(73.5,86.5,-418.5,-404.0)
@@ -55,7 +55,29 @@ def environment(land,folder,x,z):
     relief=np.clip(.48+.18*peb+.09*sm+.065*micro-.18*split,.03,.98)
     return gain,rough,relief,edge,exposure,moss,duff,keep,y,gx,gz
 
-def make(native,folder):
+def glb_bytes(doc,bin_chunk):
+    metadata=json.dumps(doc,separators=(',',':')).encode()
+    metadata+=b' '*(-len(metadata)%4)
+    raw=bytes(bin_chunk)+b'\0'*(-len(bin_chunk)%4)
+    return struct.pack('<III',0x46546c67,2,28+len(metadata)+len(raw))+struct.pack('<II',len(metadata),0x4e4f534a)+metadata+struct.pack('<II',len(raw),0x004e4942)+raw
+
+def chart(rgb):
+    # The gain/response channels are coherent fields. Try lossless first;
+    # use a 256-entry, non-dithered chart only when it saves significant bytes.
+    target=io.BytesIO();im=Image.fromarray(rgb);im.save(target,format='PNG',optimize=True)
+    complete=target.getvalue()
+    if len(complete)<260000:return complete,0
+    q=im.quantize(256,method=Image.Quantize.MEDIANCUT,dither=Image.Dither.NONE)
+    err=np.abs(np.asarray(q.convert('RGB')).astype('i2')-rgb)
+    target=io.BytesIO();q.save(target,format='PNG',optimize=True)
+    alternative=target.getvalue()
+    # Protect source optics, not just file size. Worst/outlier response
+    # values cannot dominate a peak-eye pixel outside the source range.
+    peak=int(err.max())
+    if len(alternative)<.88*len(complete) and peak<=8:return alternative,peak
+    return complete,0
+
+def make(native,folder,limit=1550000):
     land=Inlet(native/'island-v1.bin');a,b,c,d=BOX;W,H=680,758
     albedo=np.empty((H,W,3),'B');normal=np.empty((H,W,3),'B')
     for j in range(0,H,20):
@@ -64,15 +86,25 @@ def make(native,folder):
         g,rough,relief,edge,*_=environment(land,folder,x,z)
         albedo[j:stop]=np.uint8(np.clip(np.rint(g*112),0,255))
         normal[j:stop]=np.uint8(np.rint(255*np.stack((rough,relief,.64*edge),-1)))
-    Image.fromarray(albedo).save(folder/'pineglass-mineral.png',optimize=True)
-    Image.fromarray(normal).save(folder/'pineglass-response.png',optimize=True)
-    return placement(native,folder,land)
+    files={}
+    files['pineglass-mineral.png'],ae=chart(albedo)
+    files['pineglass-response.png'],re=chart(normal)
+    note=placement(native,folder,land,files)
+    note['texture_max_encoding_error_255']=dict(mineral=ae,optical_response=re)
+    note['payload_bytes']={k:len(v) for k,v in files.items()}
+    files['pineglass.json']=(json.dumps(note,indent=2)+'\n').encode()
+    required=sum(len(v) for v in files.values())
+    if required>limit or shutil.disk_usage(folder).free < 4509715661+20971520+required+65536:
+        print('Held entirely in memory:',required,'bytes; no staged writes.')
+        return dict(staged=False,required_bytes=required)
+    for name,data in files.items():(folder/name).write_bytes(data)
+    return dict(staged=True,total_new_bytes_upper_bound=required,**note)
 
 def obstacles(native):
     raw=(native/'island-v1.bin').read_bytes();w,d=struct.unpack_from('<II',raw,8)
     return np.frombuffer(raw,dtype='<f4',offset=32+w*d*4).reshape(-1,6)
 
-def placement(native,folder,land):
+def placement(native,folder,land,files):
     a,b,c,d=BOX;r=np.random.default_rng(563750);x=r.uniform(a+.2,b-.2,2800);z=r.uniform(c+.2,d-.2,2800)
     _,_,_,e,open_,moss,duff,copse,y,dx,dz=environment(land,folder,x,z)
     obstacle=obstacles(native)
@@ -99,11 +131,13 @@ def placement(native,folder,land):
             roots.append([mi,typ,float(x[k]),float(y[k]),float(z[k]),rr,r.uniform(-math.pi,math.pi),float(dx[k]),float(dz[k])])
             taken.append(k)
             if len(taken)>=r.integers(6,14):break
-    with (folder/'pineglass-roots.csv').open('w',newline='') as f:
-        w=csv.writer(f);w.writerow(['colony','kind','x','v1_y','z','radius_m','yaw','native_dx','native_dz']);w.writerows(roots)
-    return save_floor(land,folder,roots,len(sectors),len(relevant))
+    f=io.StringIO(newline='');w=csv.writer(f)
+    w.writerow(['colony','kind','x','v1_y','z','radius_m','yaw','native_dx','native_dz'])
+    for row in roots:w.writerow([row[0],row[1],*[round(float(v),7) for v in row[2:]]])
+    files['pineglass-roots.csv']=f.getvalue().encode()
+    return save_floor(land,folder,roots,len(sectors),len(relevant),files)
 
-def save_floor(land,folder,roots,ncolonies,nobstacles):
+def save_floor(land,folder,roots,ncolonies,nobstacles,files):
     P=[];C=[];F=[];rng=np.random.default_rng(91677)
     def patch(cx,cz,rad,angle,lichen):
         sides=14 if lichen else 8
@@ -140,12 +174,11 @@ def save_floor(land,folder,roots,ncolonies,nobstacles):
              nodes=[dict(name='Pineglass near shelf only',mesh=0)],meshes=[],accessors=[],bufferViews=[],
              materials=[dict(name='Worn mineral fines and sage lichens',doubleSided=True,pbrMetallicRoughness=dict(metallicFactor=0,roughnessFactor=.91))])
     buf=bytearray();emit=streams(doc,buf)
-    attrs=dict(POSITION=emit(p,5126,'VEC3',bounds=True),NORMAL=emit(n,5126,'VEC3'),COLOR_0=emit(c,5126,'VEC3'))
+    attrs=dict(POSITION=emit(p,5126,'VEC3',bounds=True),NORMAL=emit(n,5126,'VEC3'),COLOR_0=emit(np.column_stack((np.uint8(np.clip(np.rint(c*255),0,255)),np.full(len(c),255,'u1'))),5121,'VEC4',normalized=True))
     doc['meshes']=[dict(primitives=[dict(material=0,attributes=attrs,indices=emit(tri.ravel(),5123,'SCALAR',indices=True))])]
-    doc['buffers']=[dict(byteLength=len(buf))];save(doc,buf,folder/'pineglass-eye.glb')
+    doc['buffers']=[dict(byteLength=len(buf))];files['pineglass-eye.glb']=glb_bytes(doc,buf)
     info=dict(native_plan_xz=BOX,neutral=112,metres_per_texel=[13/680,14.5/758],artist_colonies=ncolonies,
               rooted_sites=len(roots),held_native_obstacles_in_window=nobstacles,original_copse_footprint_respected=True,
               placement_depends_on_camera=False,draw_once_body_triangles=len(tri),guardian_triangles=0,game_objects=0)
-    (folder/'pineglass.json').write_text(json.dumps(info,indent=2)+'\n')
     return info
-if __name__=='__main__':print(make(*(Path(v) for v in sys.argv[1:])))
+if __name__=='__main__':print(make(Path(sys.argv[1]),Path(sys.argv[2]),int(sys.argv[3]) if len(sys.argv)>3 else 1550000))
