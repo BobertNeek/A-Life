@@ -57,7 +57,7 @@ def center(profile, y, quarter):
 
 def scaffold(profile, quarter):
     rng = np.random.default_rng(7263 + profile * 193 + quarter * 271)
-    count = (25, 27, 29)[profile - 1]
+    count = (23, 25, 25)[profile - 1]
     # The sequence is phyllotactic in height; no repeated star of six
     # equidistant boughs in a single horizontal plane.
     heights = np.r_[0, np.cumsum(rng.uniform(0.52, 1.55, count - 1))]
@@ -80,7 +80,7 @@ def scaffold(profile, quarter):
         # Old crowns got narrower in ten identical concentric rings. These
         # hang in offset, unequal groups and form intermittent negative spaces.
         reach = (
-            (2.60, 2.25, 1.97)[profile - 1]
+            (3.04, 2.77, 2.45)[profile - 1]
             * (1 - 0.83 * t) ** 0.68
             * (0.83 + 0.25 * np.sin(a * 2.17 + t * 4.2 + profile) + 0.12 * sidewind)
             * rng.uniform(0.80, 1.17)
@@ -244,87 +244,31 @@ def mesh(boughs, profile, quarter, lod):
             emit(out, b, lod, axis)
         else:
             far_mass(out, b, 1.56, b["seed"])
-    # Connecting needles belong to several height ranges at once, not a disk
-    # at each growth year. Seven unequal oblique ridges leave room for the
-    # independently drooping sprays and interrupt the straight visible bole.
-    rows = []
-    angles = (7, 6, 4)[lod]
-    fractions = (
-        (0.12, 0.27, 0.42, 0.57, 0.71, 0.86, 0.96)
-        if lod < 2
-        else (0.13, 0.38, 0.69, 0.95)
-    )
-    for j, t in enumerate(fractions):
-        y = 1.7 + 10.23 * t
-        axis_p = center(profile, y, quarter)
-        rad = (
-            (1.10, 0.99, 0.89)[profile - 1]
-            * (1 - 0.81 * t) ** 0.7
-            * (0.72 + 0.27 * math.sin(t * math.pi))
-        )
-        rad *= (0.61, 0.94, 1.52)[lod]
-        row = []
-        for a in range(angles):
-            az = (
-                a * math.tau / angles
-                + 0.24 * math.sin(0.3 * quarter + 4 * t + a * 0.81)
-                + quarter * 0.53
-            )
-            width = rad * (
-                0.84
-                + 0.25 * math.sin(a * 2.36 + profile + 3 * t)
-                + 0.18 * math.cos(9 * t - a)
-            )
-            lean = np.array((math.cos(az), 0, math.sin(az)))
-            delta = (0.25 + 0.22 * (1 - t)) * math.sin(a * 2.4 + t * 3.7 + quarter)
-            if j == 0:
-                delta -= 0.31 + 0.36 * (0.5 + 0.5 * math.sin(a * 1.92 + quarter))
-            pos = axis_p + width * lean + np.array((0, delta, 0))
-            pos[1] = min(pos[1], (7.96, 9.84, 12.0)[profile - 1] - 0.19)
-            hue = np.array((0.091, 0.191, 0.105)) * (
-                0.84 + 0.17 * t + 0.065 * math.sin(a * 2.35 + t * 3.91)
-            )
-            row.append(out.vertex(pos, hue))
-        rows.append(row)
-    for lo, hi in zip(rows, rows[1:]):
-        for j in range(angles):
-            out.quad(lo[j], hi[j], hi[(j + 1) % angles], lo[(j + 1) % angles])
-    # A small forked terminal plume replaces the old tree-top button.
+    # No opaque green sleeve down the centre. Shorter forks from the real
+    # woody leader fill the inner canopy irregularly. The original stem
+    # remains visible naturally through negatives between sprays.
     H = (7.96, 9.84, 12.0)[profile - 1]
     top = center(profile, 12.0, quarter)
     top[1] = H
-    base = center(profile, 10.63, quarter)
-    last = top - base
-    direction = unit(np.array((0.69, 0, 0.34)))
-    rad = 0.37 if profile != 3 else 0.29
-    rings = []
-    for t, rv in ((0.0, 0.34), (0.36, 1.0), (0.67, 0.75)):
-        p = base + last * t
-        j = range(5 if lod < 2 else 4)
-        rings.append(
-            [
-                out.vertex(
-                    p
-                    + rad
-                    * rv
-                    * np.array(
-                        (
-                            math.cos(a * math.tau / len(j) + 0.48 * t),
-                            -0.11 * math.sin(a * 2.4),
-                            math.sin(a * math.tau / len(j) + 0.48 * t),
-                        )
-                    ),
-                    np.array((0.14, 0.269, 0.152)) * (0.74 + 0.31 * t),
-                )
-                for a in j
-            ]
+    foot = center(profile, 10.68, quarter)
+    direction = unit(np.array((0.48, 0, 0.81)))
+    for j in range(3 if lod < 2 else 2):
+        az = j * 2.4 + quarter * 0.73
+        side = np.array((math.cos(az), 0, math.sin(az)))
+        base = foot + side * 0.06
+        tip = top - side * (0.16 if j else 0)
+        a = out.vertex(base, np.array((0.10, 0.20, 0.11)), uv(0, 0.02, j % 2))
+        b = out.vertex(
+            foot + 0.38 * (tip - foot) + side * 0.29,
+            np.array((0.125, 0.24, 0.126)),
+            uv(0.38, -0.95, j % 2),
         )
-    tip = out.vertex(top, np.array((0.172, 0.304, 0.166)))
-    # Keep the leader at exactly the same elevation even from far away.
-    n = len(rings[0])
-    for lo, hi in zip(rings, rings[1:]):
-        for j in range(n):
-            out.quad(lo[j], hi[j], hi[(j + 1) % n], lo[(j + 1) % n])
-    for j in range(n):
-        out.tri(rings[-1][j], tip, rings[-1][(j + 1) % n])
+        c = out.vertex(
+            foot + 0.48 * (tip - foot) - side * 0.27,
+            np.array((0.14, 0.25, 0.13)),
+            uv(0.48, 0.95, j % 2),
+        )
+        e = out.vertex(tip, np.array((0.18, 0.31, 0.15)), uv(1, 0.02, j % 2))
+        out.tri(a, b, c)
+        out.tri(c, b, e)
     return out

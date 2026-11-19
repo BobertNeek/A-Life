@@ -104,7 +104,9 @@ def build(source, placements, out):
         meshes=[],
         materials=[
             dict(
-                name="Rooted pine bark and needle sprays",
+                name="Rooted pine bark and clipped branch needles",
+                alphaMode="MASK",
+                alphaCutoff=0.34,
                 doubleSided=True,
                 normalTexture=dict(index=1),
                 occlusionTexture=dict(index=2, strength=0.72),

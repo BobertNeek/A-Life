@@ -1,4 +1,4 @@
-"""Opaque conifer spray texture. Needles follow their bough rather than world UVs.
+"""Cutout conifer spray texture. Needles follow their bough rather than world UVs.
 
 Two separately seeded profiles occupy the upper image. The bottom is a softer
 mass of background twigs, plus a padded untextured bark swatch. Every exposed
@@ -56,7 +56,7 @@ def bake(folder):
 
     from island_needle_sprigs import articulated
 
-    articulated(col, height, rough, ss)
+    alpha = articulated(col, height, rough, ss)
     for _ in range(4800):
         x = rng.uniform(-9, 515)
         y = rng.uniform(416, 517)
@@ -93,6 +93,8 @@ def bake(folder):
         (orm, (255, 209, 0)),
     ):
         ImageDraw.Draw(im).rectangle((0, 461, 47, 511), fill=color)
+    alpha = alpha.resize((N, N), Image.Resampling.LANCZOS)
+    col.putalpha(alpha)
     col.save(folder / "needles.png", compress_level=6)
     normal.save(folder / "needles-normal.png", compress_level=6)
     orm.resize((256, 256), Image.Resampling.BOX).save(
@@ -100,7 +102,8 @@ def bake(folder):
     )
     from island_habitat_massing import linear
 
-    return linear(np.asarray(col, dtype=float)[12:404] / 255).mean(axis=(0, 1))
+    px = np.asarray(col, dtype=float)[12:404]
+    return linear(px[..., :3][px[..., 3] > 130] / 255).mean(axis=0)
 
 
 def uv(t, cross, alternate=False):

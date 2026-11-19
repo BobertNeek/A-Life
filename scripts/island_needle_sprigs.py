@@ -7,11 +7,13 @@ a local recess. The native sun remains free to light the branch from any side.
 
 import math
 import numpy as np
-from PIL import ImageDraw
+from PIL import Image, ImageDraw
 
 
 def articulated(col, height, rough, ss):
     rng = np.random.default_rng(680115)
+    mask = Image.new("L", col.size, 255)
+    ink = ImageDraw.Draw(mask)
     rgb = ImageDraw.Draw(col)
     rel = ImageDraw.Draw(height)
     rr = ImageDraw.Draw(rough)
@@ -19,6 +21,7 @@ def articulated(col, height, rough, ss):
     def stroke(points, px, tone, lift, rrv):
         pts = [(round(x * ss), round(y * ss)) for x, y in points]
         width = max(1, round(px * ss))
+        ink.line(pts, fill=255, width=max(1, round(width * 1.14)))
         rgb.line(pts, fill=tuple(int(v) for v in tone), width=width)
         rel.line(pts, fill=int(lift), width=width)
         rr.line(pts, fill=int(rrv), width=width)
@@ -30,6 +33,7 @@ def articulated(col, height, rough, ss):
         # Begin with shaded fine needles instead of a white carpet. The
         # coloured gaps show through the bright clusters as narrow pockets.
         rect = (0, start * ss, 512 * ss, end * ss)
+        ink.rectangle(rect, fill=0)
         rgb.rectangle(rect, fill=(165, 185, 159))
         rel.rectangle(rect, fill=61)
         rr.rectangle(rect, fill=210)
@@ -113,3 +117,4 @@ def articulated(col, height, rough, ss):
                                 190,
                                 172,
                             )
+    return mask

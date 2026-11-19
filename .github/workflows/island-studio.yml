@@ -1,0 +1,39 @@
+name: Blender island art studio (artwork only)
+on:
+  push:
+    branches: ["qualia/island-graphics-week-20261119"]
+    paths:
+      - studies/island-art-week/studio-board.json
+permissions:
+  contents: read
+concurrency:
+  group: qualia-weekly-art-studio
+  cancel-in-progress: true
+jobs:
+  studio:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    env:
+      OPENBLAS_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Set up the art compositor
+        run: |
+          python3 -m venv "$RUNNER_TEMP/art-py"
+          "$RUNNER_TEMP/art-py/bin/pip" install --only-binary=:all: --disable-pip-version-check numpy==2.2.6 scipy==1.15.3 Pillow==11.3.0
+          echo "$RUNNER_TEMP/art-py/bin" >> "$GITHUB_PATH"
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: ${{ runner.temp }}/blender-4.3.2-linux-x64.tar.xz
+          key: qualia-art-blender-4.3.2-linux-x64-4da1c956673c0485
+      - run: bash scripts/install_island_review_blender.sh
+      - name: Produce the current art board and editable DCC source
+        run: python scripts/studio_island_board.py studies/island-art-week/studio-board.json "$RUNNER_TEMP/art"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: qualia-island-art-board
+          path: ${{ runner.temp }}/art
+          retention-days: 14
