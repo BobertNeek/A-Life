@@ -147,6 +147,14 @@ elif subject == "fault-scarp":
             (substrate / "habitats").symlink_to(
                 (d / "habitats").resolve(), target_is_directory=True
             )
+            # Both views must share the selected macro map and its signed
+            # far-relief tint. The renderer looks next to the habitat GLB.
+            macro = substrate / "geology"
+            macro.mkdir(exist_ok=True)
+            for name in ("pigment.png", "relief.png"):
+                original = (d / "geology" / name).resolve()
+                if original.is_file():
+                    (macro / name).symlink_to(original)
             wall = substrate / "habitat-ground.glb"
             bed_note = expose(
                 d / "habitat-ground.glb",
