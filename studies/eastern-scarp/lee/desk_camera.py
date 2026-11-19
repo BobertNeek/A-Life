@@ -42,7 +42,7 @@ def srgb(v):
     )
 
 
-def picture(p, scene_index, cam_index, out):
+def picture(p, scene_index, cam_index, out, contact_light=False):
     d, raw = parse(p)
     W, H = 720, 428
     facebuf = np.full((H, W), np.inf, "f")
@@ -134,6 +134,12 @@ def picture(p, scene_index, cam_index, out):
         b = b[keep, None]
         c = c[keep, None]
         col = a * v[0, 3:6] + b * v[1, 3:6] + c * v[2, 3:6]
+        if shadow:
+            physical = a * v[0, 11:14] + b * v[1, 11:14] + c * v[2, 11:14]
+            energy = a * v[0, 8:11] + b * v[1, 8:11] + c * v[2, 8:11]
+            col = np.maximum(
+                0, col - energy * (1 - shadow.transmission(physical)[:, None])
+            )
         texture, cutoff = texture
         if texture is not None:
             uv = a * v[0, 6:8] + b * v[1, 6:8] + c * v[2, 6:8]
@@ -182,7 +188,11 @@ def picture(p, scene_index, cam_index, out):
             0.76 + 0.24 * np.maximum(0, normal[:, 1, None])
         )
         col = np.clip(vc * (ambient + direct), 0.0, 1.0)
-        vv = np.column_stack((cam, col, uv))
+        vv = (
+            np.column_stack((cam, col, uv, direct * vc, model))
+            if shadow
+            else np.column_stack((cam, col, uv))
+        )
 
         def project(v):
             s = f / np.maximum(0.065, v[:, 2]) if persp else np.full(len(v), f)
@@ -218,44 +228,59 @@ def picture(p, scene_index, cam_index, out):
                 for i in range(1, len(ring) - 1):
                     paint(r, s, np.array([0, i, i + 1]), tex)
 
-    for k in d["scenes"][scene_index]["nodes"]:
-        node = d["nodes"][k]
-        if "mesh" not in node:
-            continue
-        ext = (
-            node.get("extensions", {})
-            .get("EXT_mesh_gpu_instancing", {})
-            .get("attributes", {})
-        )
-        if ext:
-            pos = ac(ext["TRANSLATION"])
-            qq = ac(ext["ROTATION"])
-            ss = ac(ext["SCALE"])
-        else:
-            pos = [node.get("translation", [0, 0, 0])]
-            qq = [node.get("rotation", [0, 0, 0, 1])]
-            ss = [node.get("scale", [1, 1, 1])]
-        for pr in d["meshes"][node["mesh"]]["primitives"]:
-            aa = pr["attributes"]
-            v = ac(aa["POSITION"])
-            norm = ac(aa["NORMAL"])
-            colour = ac(aa["COLOR_0"])[:, :3] if "COLOR_0" in aa else np.ones_like(v)
-            uv = (
-                ac(aa["TEXCOORD_0"])
-                if "TEXCOORD_0" in aa
-                else np.zeros((len(v), 2), "f")
+    def mesh_instances():
+        for k in d["scenes"][scene_index]["nodes"]:
+            node = d["nodes"][k]
+            if "mesh" not in node:
+                continue
+            ext = (
+                node.get("extensions", {})
+                .get("EXT_mesh_gpu_instancing", {})
+                .get("attributes", {})
             )
-            tri = ac(pr["indices"]).ravel().astype(int).reshape(-1, 3)
-            texture = material(pr.get("material", 0))
-            for trans, q, scale in zip(pos, qq, ss):
-                model = (v * scale) @ rot(q).T + np.array(trans, "f")
-                normals = unit((norm / scale) @ rot(q).T)
-                submit(model, normals, colour, uv, tri, texture)
+            if ext:
+                pos = ac(ext["TRANSLATION"])
+                qq = ac(ext["ROTATION"])
+                ss = ac(ext["SCALE"])
+            else:
+                pos = [node.get("translation", [0, 0, 0])]
+                qq = [node.get("rotation", [0, 0, 0, 1])]
+                ss = [node.get("scale", [1, 1, 1])]
+            for pr in d["meshes"][node["mesh"]]["primitives"]:
+                aa = pr["attributes"]
+                v = ac(aa["POSITION"])
+                norm = ac(aa["NORMAL"])
+                colour = (
+                    ac(aa["COLOR_0"])[:, :3] if "COLOR_0" in aa else np.ones_like(v)
+                )
+                uv = (
+                    ac(aa["TEXCOORD_0"])
+                    if "TEXCOORD_0" in aa
+                    else np.zeros((len(v), 2), "f")
+                )
+                tri = ac(pr["indices"]).ravel().astype(int).reshape(-1, 3)
+                texture = material(pr.get("material", 0))
+                for trans, q, scale in zip(pos, qq, ss):
+                    model = (v * scale) @ rot(q).T + np.array(trans, "f")
+                    normals = unit((norm / scale) @ rot(q).T)
+                    yield model, normals, colour, uv, tri, texture
+
+    shadow = None
+    if contact_light:
+        from station_light import LocalSun
+
+        shadow = LocalSun([eye[0], eye[1] - 1.04, eye[2]], sun)
+        for model, norm, col, uv, tri, (tex, threshold) in mesh_instances():
+            cut = (textures[tex], threshold) if threshold and tex is not None else None
+            shadow.cast(model, tri, uv, cut)
+    for args in mesh_instances():
+        submit(*args)
     out.parent.mkdir(parents=True, exist_ok=True)
     Image.fromarray(rgb).save(out)
     return dict(
         pixels=[W, H],
         colour_scope="GLB albedo/vertex tint, fixed studio diffuse, no sky or native shading",
+        local_directional_mesh_shadows=bool(shadow),
         state=scene_index,
         camera=cam_index,
     )
@@ -264,6 +289,10 @@ def picture(p, scene_index, cam_index, out):
 if __name__ == "__main__":
     print(
         picture(
-            Path(sys.argv[1]), int(sys.argv[2]), int(sys.argv[3]), Path(sys.argv[4])
+            Path(sys.argv[1]),
+            int(sys.argv[2]),
+            int(sys.argv[3]),
+            Path(sys.argv[4]),
+            "--contact-light" in sys.argv[5:],
         )
     )

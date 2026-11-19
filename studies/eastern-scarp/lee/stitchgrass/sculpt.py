@@ -31,12 +31,13 @@ def shape(form, close):
         cc = []
         ff = []
         for j, t in enumerate(ts):
-            r = (
-                base
-                + a * stretch * (0.10 * t + 0.90 * t * t)
-                + b * (0.07 * stretch * math.sin(math.pi * t) * twist)
-            )
-            r[1] += lift * (math.sin(1.83 * t) ** 1.08 - 0.26 * t * t * t)
+            # Blades initially rise through a common sheath, then separate.
+            # Only the distal tips share the wind, not a row of identical
+            # downward hooks. Old ochre leaves turn lower than green ones.
+            r = base + a * stretch * (0.35 * t + 0.65 * t * t)
+            r += b * (0.075 * stretch * math.sin(math.pi * t) * twist)
+            r[0] -= 0.065 * t * t
+            r[1] += lift * (t * (1.26 - 0.26 * t) - (0.34 if dry else 0.08) * t**4)
             w = wide * (0.16 * (1 - t) + math.sin(math.pi * (t**0.85)) ** 0.75)
             theta = twist * (0.19 + 0.94 * t)
             wing = b * (math.cos(theta) * w) + np.array([0, math.sin(theta) * w, 0])
@@ -73,19 +74,57 @@ def shape(form, close):
                 cc.append(gold * 1.07)
         add(pp, cc, ff)
 
+    def culm(base, height, heading, shade):
+        """Real slender rooted culm with offset, tapered amber seed scales."""
+        side = np.array([-math.sin(heading), 0, math.cos(heading)])
+        lean = np.array([math.cos(heading), 0, math.sin(heading)]) * 0.065
+        pp = []
+        cc = []
+        ff = []
+        ts = (0.0, 0.34, 0.72, 1.0)
+        for k, t in enumerate(ts):
+            mid = base + lean * t * t + np.array([-0.042 * t * t, height * t, 0])
+            radius = 0.0038 * (1 - 0.51 * t)
+            for j in range(3):
+                ang = j * 2 * math.pi / 3
+                pp.append(mid + radius * np.array([math.cos(ang), 0, math.sin(ang)]))
+                cc.append(
+                    np.array([0.094, 0.118, 0.043])
+                    * (0.60 + 0.38 * t + 0.12 * math.cos(ang))
+                )
+            if k:
+                for j in range(3):
+                    a = (k - 1) * 3 + j
+                    b = (k - 1) * 3 + (j + 1) % 3
+                    ff.extend(((a, b, a + 3), (b, b + 3, a + 3)))
+        add(pp, cc, ff)
+        for j in range(4 if close else 2):
+            t = 0.72 + 0.078 * j
+            sign = 1 if j % 2 else -1
+            base2 = base + lean * t * t + np.array([-0.042 * t * t, height * t, 0])
+            mid = base2 + sign * side * 0.014 + [0, 0.016, 0]
+            tip = base2 + sign * side * 0.033 + [0, 0.042, 0]
+            breadth = np.cross(side, [0, 1, 0]) * 0.0062
+            light = np.array([0.31, 0.209, 0.079]) * shade
+            add(
+                [base2, mid - breadth, mid + [0, 0.004, 0], mid + breadth, tip],
+                [light * 0.52, light * 0.81, light * 1.15, light, light * 1.35],
+                [(0, 2, 1), (0, 3, 2), (1, 2, 4), (2, 3, 4)],
+            )
+
     # All fan bases are close enough to share the same tiny physical root.
     for j in range(0 if close == "guardian" else 2 + int(form == 2 and close)):
-        base = np.array([0.028 * j - 0.02, -0.014, (0.032 if j % 2 else -0.024)])
+        base = np.array([0.012 * j - 0.014, -0.023, (0.018 if j % 2 else -0.015)])
         n = (6 + int(form % 2 == 0)) if close else 3
         for k in range(n):
             step = (k + 0.5) / n
             th = (
                 math.pi
-                + (0.81 if j % 2 else -0.80) * (step - 0.27)
-                + rng.normal(0, 0.25)
+                + (2.54 if j % 2 else -2.32) * (step - 0.30)
+                + rng.normal(0, 0.29)
             )
-            length = (0.16 + 0.27 * step) * rng.uniform(0.83, 1.12)
-            high = (0.14 + 0.13 * (1 - step)) * rng.uniform(0.83, 1.12)
+            length = (0.10 + 0.18 * step) * rng.uniform(0.78, 1.14)
+            high = (0.13 + 0.19 * (1 - step)) * rng.uniform(0.83, 1.15)
             if k == 1 and j == 0:
                 th += 1.43
                 length *= 0.75
@@ -98,9 +137,16 @@ def shape(form, close):
                 th,
                 high,
                 length,
-                rng.uniform(0.010, 0.021),
+                rng.uniform(0.006, 0.014),
                 rng.uniform(-1.16, 1.16),
                 k % 4 == 1 and form != 3,
+            )
+        if j == 0 and form in (0, 1, 2):
+            culm(
+                base,
+                0.32 + 0.07 * form,
+                math.pi - 0.40 + form * 0.37,
+                0.78 + 0.12 * form,
             )
     if close == "guardian":
         vertices = []

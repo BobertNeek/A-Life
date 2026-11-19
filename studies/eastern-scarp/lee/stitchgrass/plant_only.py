@@ -51,8 +51,9 @@ def extract(source, raw, rows, out):
             p["material"] = mv[mi]
             p["indices"] = get(p["indices"])
             p["attributes"] = {k: get(v) for k, v in p["attributes"].items()}
-        ext = node["extensions"]["EXT_mesh_gpu_instancing"]
-        ext["attributes"] = {k: get(v) for k, v in ext["attributes"].items()}
+        ext = node.get("extensions", {}).get("EXT_mesh_gpu_instancing")
+        if ext:
+            ext["attributes"] = {k: get(v) for k, v in ext["attributes"].items()}
         node["mesh"] = len(g["meshes"])
         g["meshes"].append(mesh)
         g["scenes"][0]["nodes"].append(len(g["nodes"]))

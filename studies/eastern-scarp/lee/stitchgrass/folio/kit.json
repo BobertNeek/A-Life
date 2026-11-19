@@ -4,17 +4,23 @@
   "placed_triangles": {
     "folded": {
       "roots": 122,
-      "triangles": 32904
+      "triangles": 36066
     },
     "silhouette": {
       "roots": 468,
-      "triangles": 28080
+      "triangles": 37232
     },
     "guardian": {
       "roots": 590,
       "triangles": 2936
     }
   },
+  "ground_litter_pieces": {
+    "grit": 260,
+    "split hull": 491,
+    "spent blade": 341
+  },
+  "near_only_litter_triangles": 4628,
   "source_primitive_triangles": 1132,
   "actual_V1_slope_triangles": 952,
   "excluded_vertical_streamer_skirt_faces": 180,

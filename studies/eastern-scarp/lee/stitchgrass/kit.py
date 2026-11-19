@@ -201,10 +201,44 @@ def add(src, stage):
         )
         stats[name]["roots"] += len(rows)
         stats[name]["triangles"] += len(ii) * len(rows)
+    from litter import make as seat_litter
+
+    old_woody = []
+    for oi in d["scenes"][1]["nodes"]:
+        source_node = d["nodes"][oi]
+        if "windwillow" not in source_node["name"]:
+            continue
+        ix = source_node["extensions"]["EXT_mesh_gpu_instancing"]["attributes"][
+            "TRANSLATION"
+        ]
+        old_woody.extend([dict(x=x, z=z) for x, y, z in values(d, raw, ix)])
+    lp, ln, lc, li, litter_counts = seat_litter(points, tri, records, old_woody)
+    litter_mat = len(d["materials"])
+    d["materials"].append(
+        dict(
+            name="Spent hulls, fallen blades and weathered grit",
+            doubleSided=True,
+            pbrMetallicRoughness=dict(metallicFactor=0.0, roughnessFactor=0.91),
+        )
+    )
+    litter_node = node(
+        "True-soil litter, six-metre meadow material",
+        [
+            prim(
+                li.ravel(),
+                litter_mat,
+                dict(
+                    POSITION=emit(lp, 5126, "VEC3", bounds=True),
+                    NORMAL=emit(ln, 5126, "VEC3"),
+                    COLOR_0=emit(lc, 5126, "VEC3"),
+                ),
+            )
+        ],
+    )
     d["scenes"].append(
         dict(
             name="Rooted lee meadow / new surface and folded grass",
-            nodes=[new_ground, *d["scenes"][1]["nodes"][1:], *draws],
+            nodes=[new_ground, *d["scenes"][1]["nodes"][1:], *draws, litter_node],
         )
     )
     d["scene"] = 2
@@ -245,6 +279,8 @@ def add(src, stage):
         new_shoots=len(records),
         added_kit_meshes=len(draws),
         placed_triangles=stats,
+        ground_litter_pieces=litter_counts,
+        near_only_litter_triangles=len(li),
         source_primitive_triangles=len(source_tri),
         actual_V1_slope_triangles=len(tri),
         excluded_vertical_streamer_skirt_faces=int((~surface).sum()),
@@ -260,7 +296,7 @@ def add(src, stage):
     save(d, binary, stage / "Twin-Needle-Stitchgrass.glb")
     from plant_only import extract
 
-    for label, rows in [("eye", draws), ("guardian", far)]:
+    for label, rows in [("eye", [*draws, litter_node]), ("guardian", far)]:
         extract(d, binary, rows, stage / ("stitchgrass-" + label + ".glb"))
     (stage / "kit.json").write_text(json.dumps(note, indent=2) + "\n")
     return note
