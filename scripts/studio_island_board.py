@@ -150,6 +150,11 @@ elif subject == "inlet-underpaint":
         out / "artist-inlet-underpaint",
         opaque_finish=board.get("opaque_bank", False),
     )
+    # Keep the old masked film as donor to bake the selected opaque coat.
+    # A subsequent tidecast board must isolate *only* the actual new clasts.
+    evidence_before = (
+        d if board.get("tidecast_pockets") else original_bank
+    ) / "inlet-bank.glb"
     if board.get("tidecast_pockets"):
         from build_island_inlet import V2
         from island_inlet_tidecast import embed
@@ -383,6 +388,8 @@ subject_label = {
     "inlet-underpaint": "Original bank pigment and native-material feathering",
     "inlet-concept": "Shape study: actual V1 and proposed asymmetric inlet",
 }[subject]
+if subject == "inlet-underpaint" and board.get("tidecast_pockets"):
+    subject_label = "Rooted V1 inlet and low tidecast"
 base_water = root / "studies/island-art-week/water-inputs"
 if subject in (
     "coastal-alder",
@@ -405,7 +412,11 @@ if subject == "inlet-concept":
     paint_concept_water(SURFACE, base_water, concept_water)
 for tag in board["angles"]:
     sides = ("before", "after") if paired else ("after",)
-    if subject == "inlet-underpaint" and tag == "inlet-bar":
+    if (
+        subject == "inlet-underpaint"
+        and tag == "inlet-bar"
+        and not board.get("tidecast_pockets")
+    ):
         sides = ("bare", "before", "after")
     for side in sides:
         pack = fresh if side == "after" else old
@@ -447,7 +458,7 @@ for tag in board["angles"]:
             *(
                 [
                     "--inlet-cut",
-                    skin if side == "after" else original_bank / "inlet-bank.glb",
+                    skin if side == "after" else evidence_before,
                 ]
                 if subject == "inlet-underpaint" and side != "bare"
                 else []
@@ -463,7 +474,9 @@ for tag in board["angles"]:
                     "--original-macro",
                     revised_pigment if side == "after" else frozen_pigment,
                 ]
-                if subject == "inlet-underpaint" and side != "before"
+                if subject == "inlet-underpaint"
+                and side != "before"
+                and not board.get("tidecast_pockets")
                 else []
             ),
             *(
@@ -529,7 +542,11 @@ for tag in board["angles"]:
                 else []
             ),
         )
-    if subject == "inlet-underpaint" and tag == "inlet-bar":
+    if (
+        subject == "inlet-underpaint"
+        and tag == "inlet-bar"
+        and not board.get("tidecast_pockets")
+    ):
         make(
             out / "bare" / f"{tag}.png",
             out / "before" / f"{tag}.png",

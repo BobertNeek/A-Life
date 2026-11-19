@@ -9,6 +9,7 @@
   "quick": false,
   "samples": 48,
   "editable_canopy": false,
-  "art_note": "Second study restored the opposite bank but exposed black cut-triangles at the original 100 m chunk skirt. Reject vertical and sub-surface skirt faces when sampling native materials; continuous opaque native coat at the near scale removes the last ink contour. Keep the old footprint mask only for distant pigment and the exact old soil topology. No new geometry or props in this three-way plate.",
-  "opaque_bank": true
+  "art_note": "Source the native V1 shoulder just upstream of the sea. Small shell, washed shale and wrack pockets interrupt the otherwise bare reach. Compare both sides against the already selected continuous underpaint; unchanged physics, lens, daylight, water and original placed trees.",
+  "opaque_bank": true,
+  "tidecast_pockets": true
 }
