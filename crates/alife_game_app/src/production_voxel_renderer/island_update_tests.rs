@@ -55,6 +55,8 @@ fn fixture() -> (App, Entity) {
         .init_resource::<ChangedOutputs>()
         .insert_resource(IslandAssets {
             terrain: Handle::default(),
+            habitats: Handle::default(),
+            habitats_attached: false,
             props: BTreeMap::new(),
             surface: std::sync::Arc::new(flat_surface()),
             spawned: true,
@@ -457,6 +459,7 @@ fn stationary_camera_still_tracks_creature_occupancy_and_removal() {
             Mesh3d(meshes[0].clone()),
             MeshMaterial3d(near_material.clone()),
             TerrainLod {
+                coord: (0, 0),
                 meshes,
                 materials,
                 center,
@@ -598,4 +601,74 @@ fn deferred_initial_population_is_reconciled_then_stops_visibility_writes() {
     assert!(visible > 0);
     advance(&mut app, 201);
     assert_quiet(&app);
+}
+
+#[test]
+fn late_habitat_material_replaces_only_near_and_never_blocks_original_population() {
+    let (mut app, _) = fixture();
+    install_spawn_assets(&mut app);
+    app.update();
+    // No loaded optional artwork, but the original terrain and props already exist.
+    assert!(app.world().resource::<IslandAssets>().spawned);
+    assert!(!app.world().resource::<IslandAssets>().habitats_attached);
+    let unique = app.world_mut().resource_mut::<Assets<Mesh>>().reserve_handle();
+    let handle = app.world_mut().resource_mut::<Assets<GltfMesh>>().add(GltfMesh {
+        index: 0,
+        name: "Habitat_0_0".into(),
+        primitives: vec![GltfPrimitive {
+            index: 0, parent_mesh_index: 0, name: "salt turf".into(), mesh: unique.clone(),
+            material: Some(Handle::default()), extras: None, material_extras: None,
+        }],
+        extras: None,
+    });
+    let mut pack = Gltf {
+        scenes: vec![], named_scenes: default(), meshes: vec![], named_meshes: default(),
+        materials: vec![], named_materials: default(), nodes: vec![], named_nodes: default(),
+        skins: vec![], named_skins: default(), default_scene: None,
+        animations: vec![], named_animations: default(), source: None,
+    };
+    pack.named_meshes.insert("Habitat_0_0".into(), handle);
+    let pack = app.world_mut().resource_mut::<Assets<Gltf>>().add(pack);
+    app.world_mut().resource_mut::<IslandAssets>().habitats = pack;
+    advance(&mut app, 201);
+    assert!(app.world().resource::<IslandAssets>().habitats_attached);
+    let world = app.world_mut();
+    let lod = world.query::<&TerrainLod>().single(world).unwrap();
+    assert_eq!(lod.meshes[0], unique);
+    assert_ne!(lod.meshes[1], unique);
+    assert_ne!(lod.meshes[2], unique);
+    advance(&mut app, 201);
+    assert_quiet(&app);
+}
+
+#[test]
+fn shipping_substrates_are_locked_to_near_chunks_and_real_pbr_maps() {
+    let raw = include_bytes!("../../assets/landscape/island/habitat-ground.glb");
+    assert_eq!(&raw[..4], b"glTF");
+    let len = u32::from_le_bytes(raw[12..16].try_into().unwrap()) as usize;
+    let doc: serde_json::Value = serde_json::from_slice(&raw[20..20 + len]).unwrap();
+    let nodes = doc["nodes"].as_array().unwrap();
+    let meshes = doc["meshes"].as_array().unwrap();
+    assert_eq!(nodes.len(), 76);
+    for node in nodes {
+        let m = &meshes[node["mesh"].as_u64().unwrap() as usize];
+        assert_eq!(node["name"], m["name"]);
+        let parts: Vec<_> = m["name"].as_str().unwrap().split('_').collect();
+        assert_eq!(parts.len(), 3);
+        assert_eq!(parts[0], "Habitat");
+        assert!(parts[1].parse::<usize>().unwrap() < 10);
+        assert!(parts[2].parse::<usize>().unwrap() < 12);
+        assert!(node["translation"].is_null() && node["scale"].is_null());
+        assert_eq!(m["primitives"].as_array().unwrap().len(), 1);
+        assert_eq!(m["primitives"][0]["material"], 0);
+    }
+    let m = &doc["materials"][0];
+    assert_eq!(m["normalTexture"]["index"], 1);
+    assert_eq!(m["pbrMetallicRoughness"]["baseColorTexture"]["index"], 0);
+    assert_eq!(m["pbrMetallicRoughness"]["metallicRoughnessTexture"]["index"], 2);
+    for (entry, uri) in doc["images"].as_array().unwrap().iter().zip([
+        "habitats/substrates.png", "habitats/substrates-normal.png", "habitats/substrates-orm.png"
+    ]) {
+        assert_eq!(entry["uri"].as_str(), Some(uri));
+    }
 }

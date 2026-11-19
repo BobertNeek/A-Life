@@ -91,10 +91,19 @@ jobs:
         run: |
           D=crates/alife_game_app/assets/landscape/island
           S="$RUNNER_TEMP/shore"
+          # Freeze the comparison in Git, even after the accepted replacements
+          # themselves are checked in on this branch. No ungraded map is inferred.
+          BASE=4bf90a3438bc160665580ba711c44c1c96526879
+          git fetch --no-tags --depth=1 origin "$BASE"
+          mkdir -p "$S/previous"
+          git show "$BASE:$D/strandline.glb" > "$S/previous/strandline.glb"
+          git show "$BASE:$D/geology/pigment.png" > "$S/previous/pigment.png"
+          echo "2dd4cc7e1bb41903abe46b06c37b3e1b23e10bf7bf89709b503dfb07dcbb162a  $S/previous/strandline.glb" | sha256sum -c
+          echo "1b0b041b5ffe6bd73950f4d475b66c136041746b5fa8c21f27b9eb6451ab6338  $S/previous/pigment.png" | sha256sum -c
           blender --version | head -1 > "$S/renderer.txt"
           render() { blender -b -t 2 --python-exit-code 1 -P scripts/render_island_geology.py -- "$D/terrain-chunks.glb" "$@"; }
           compare() { python3 scripts/compare_island_art.py "$S/before/$1.png" "$S/after/$1.png" "$S/$1.jpg" --title "$2"; }
-          render "$S/before" --tidal-review --strandline "$D/strandline.glb"
+          render "$S/before" --tidal-review --strandline "$S/previous/strandline.glb" --original-macro "$S/previous/pigment.png"
           render "$S/after" --tidal-review --strandline "$S/strandline.glb" --habitats "$RUNNER_TEMP/substrates/habitat-ground.glb"
           W=studies/island-art-week/water-inputs
           R="$RUNNER_TEMP/versioned-massif"
@@ -105,7 +114,7 @@ jobs:
           }
           python3 scripts/build_island_habitats.py --surface "$R/island-ridge-v2.bin" --terrain "$R/terrain-chunks.glb" --placements "$R/props-ridge-v2.json" --out "$R/substrates"
           python3 scripts/verify_island_habitats.py "$R/terrain-chunks.glb" "$R/substrates/habitat-ground.glb" --surface "$R/island-ridge-v2.bin" --placements "$R/props-ridge-v2.json"
-          showcase "$S/before" --strandline "$D/strandline.glb" --coastal-light "$D/coastal-daylight.json"
+          showcase "$S/before" --strandline "$S/previous/strandline.glb" --coastal-light "$D/coastal-daylight.json"
           showcase "$S/after" --strandline "$S/strandline.glb" --coastal-light "$D/coastal-daylight.json" --habitats "$R/substrates/habitat-ground.glb"
           for pose in grove-edge grove-gate; do
             showcase "$S/scout/$pose" --quick-proof --cove-framing "$pose" --strandline "$S/strandline.glb" --coastal-light "$D/coastal-daylight.json" --habitats "$R/substrates/habitat-ground.glb"

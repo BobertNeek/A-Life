@@ -84,3 +84,27 @@ culled with their parent terrain chunks. Rebuild with
 `python scripts/verify_island_strandline.py crates/alife_game_app/assets/landscape/island/strandline.glb`
 and refresh the production manifest. Never treat this layer as a collision mesh or
 new water level. See the matched [island art studies](../../../../../studies/island-art-week/README.md).
+
+### Rooted habitat substrate and salt meadow (weekly art branch)
+
+Rebuild in this order: `python scripts/build_island_geology.py`,
+`python scripts/build_island_habitats.py --out crates/alife_game_app/assets/landscape/island`,
+`python scripts/build_island_strandline.py`, then
+`python scripts/register_approved_art.py`. The habitat recipe starts its
+shared macro colour from the original generated surface, so running it twice
+cannot darken the coppices twice. All commands are art-only.
+
+The near extension uses 76 existing land-adjacent chunks. Islands of turf,
+dry sand, talus and grove loam cross each other inside 6.25 m PBR charts;
+the other submerged chunks keep their original mesh. The same physical near
+triangles, skirts and normals remain intact. A broad tree-density colour
+field grades both the near vertex pigment and the shared middle/far map.
+The 8-pixel gutters and filtered quarter-size ORM avoid wasting three
+full-size texture allocations on recess light and roughness.
+
+The packed `strandline.glb` has 50 m spatial batches for gravel, wash,
+reed, windbreak and salt sward. Short non-billboard curved cutouts make
+continuous grass beds; low rooted folded geometry and heath flowers break
+their outline. The original progress-critical asset never waits on the
+optional close habitat pack: a late pack is bound only to near mesh handles.
+Normal terrain selection and all placements, saves and collision are unchanged.

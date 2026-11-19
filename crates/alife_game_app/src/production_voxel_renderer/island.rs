@@ -23,6 +23,8 @@ pub(super) fn has_baked_art(terrain: Option<&alife_world::WorldTerrain>) -> bool
 #[derive(Resource)]
 pub(super) struct IslandAssets {
     terrain: Handle<Gltf>,
+    habitats: Handle<Gltf>,
+    habitats_attached: bool,
     props: BTreeMap<String, Handle<Gltf>>,
     surface: std::sync::Arc<alife_world::TerrainSurface>,
     spawned: bool,
@@ -31,6 +33,7 @@ pub(super) struct IslandAssets {
 }
 #[derive(Component)]
 pub(super) struct TerrainLod {
+    coord: (usize, usize),
     materials: [Handle<StandardMaterial>; 3],
     meshes: [Handle<Mesh>; 3],
     center: Vec3,
@@ -204,6 +207,7 @@ pub(super) fn start(world: &mut World) {
             .or_insert_with(|| server.load(format!("landscape/island/{}.glb", p.kind)));
     }
     let terrain = server.load("landscape/island/terrain-chunks.glb");
+    let habitats = server.load("landscape/island/habitat-ground.glb");
     let size = Vec2::splat(10000.0);
     let center = Vec3::new(
         surface.origin_x + (surface.width - 1) as f32 * surface.spacing * 0.5,
@@ -232,6 +236,8 @@ pub(super) fn start(world: &mut World) {
         .id();
     world.insert_resource(IslandAssets {
         terrain,
+        habitats,
+        habitats_attached: false,
         props: handles,
         surface: surface.clone(),
         spawned: false,
@@ -409,6 +415,7 @@ pub(super) fn update(
                     MeshMaterial3d(materials[0].clone()),
                     Transform::default(),
                     TerrainLod {
+                        coord: (x, z),
                         meshes: levels,
                         materials,
                         center,
@@ -505,7 +512,26 @@ pub(super) fn update(
             }
         }
     }
+    // Optional presentation art must never hold the island or its inhabitants
+    // behind a slow/missing texture fetch. Bind once after the original chunks
+    // are live; L1/L2 and the underwater chunks stay on their original asset.
+    let ready_habitats = (!assets.habitats_attached)
+        .then(|| gltfs.get(&assets.habitats))
+        .flatten()
+        .filter(|pack| pack.named_meshes.values().all(|h| gltf_meshes.get(h).is_some()));
+    let mut saw_chunk = false;
     for (mut mesh, mut material, mut lod) in &mut chunks {
+        saw_chunk = true;
+        let mut near_replaced = false;
+        if let Some(pack) = ready_habitats {
+            let (x, z) = lod.coord;
+            if let Some(handle) = pack.named_meshes.get(format!("Habitat_{x}_{z}").as_str()) {
+                let prim = &gltf_meshes.get(handle).expect("ready habitat").primitives[0];
+                lod.meshes[0] = prim.mesh.clone();
+                lod.materials[0] = prim.material.clone().expect("approved habitat material");
+                near_replaced = true;
+            }
+        }
         let distance = Vec2::new(lod.center.x - focus.x, lod.center.z - focus.z).length();
         let occupied = creatures.iter().any(|c| {
             (c.translation.x - lod.center.x).abs() < assets.surface.spacing * 16.5
@@ -518,13 +544,16 @@ pub(super) fn update(
         } else {
             2
         };
-        if target != lod.current {
+        if target != lod.current || (target == 0 && near_replaced) {
             mesh.0 = lod.meshes[target].clone();
             if material.0 != lod.materials[target] {
                 material.0 = lod.materials[target].clone();
             }
             lod.current = target;
         }
+    }
+    if saw_chunk && ready_habitats.is_some() {
+        assets.habitats_attached = true;
     }
     for (mut mesh, mut visibility, mut prop) in &mut props {
         let distance = Vec2::new(prop.position.x - focus.x, prop.position.z - focus.z).length();

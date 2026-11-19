@@ -5,6 +5,10 @@ on:
     paths:
       - .github/workflows/island-art-contract.yml
       - crates/alife_game_app/src/production_voxel_renderer/island.rs
+      - crates/alife_game_app/src/production_voxel_renderer/island_update_tests.rs
+      - crates/alife_game_app/assets/landscape/island/habitat-ground.glb
+      - crates/alife_game_app/assets/landscape/island/habitats/**
+      - crates/alife_game_app/assets/landscape/island/strandline.glb
       - crates/alife_game_app/src/production_voxel_renderer/island/strandline.rs
       - crates/alife_game_app/src/production_voxel_renderer/island/atmosphere.rs
       - crates/alife_game_app/src/production_voxel_renderer/island/capture_pose.rs
@@ -25,6 +29,17 @@ jobs:
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8
         with:
           toolchain: stable
+      - name: Export standard formatting for the focused island integration
+        run: |
+          mkdir -p "$RUNNER_TEMP/island-rustfmt"
+          for file in island.rs island_update_tests.rs; do
+            rustfmt --config skip_children=true --edition 2021 --emit stdout "crates/alife_game_app/src/production_voxel_renderer/$file" > "$RUNNER_TEMP/island-rustfmt/$file"
+          done
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: formatted-island-integration
+          path: ${{ runner.temp }}/island-rustfmt
+          retention-days: 7
       - name: Install native controller build dependency
         run: sudo apt-get update && sudo apt-get install -y libudev-dev
       - name: Test shipping island light, range centres, camera and component integration

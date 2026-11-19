@@ -63,3 +63,37 @@ A more saturated sky alone would not solve that floor.
 
 **Next week:** [disposable profile, same native camera, contacts and timing](NEXT_WEEK.md).
 No established save or guarded learner belongs in a review checkout.
+
+## Turfs, lee meadows and grove openings
+
+[Locked coast comparison](habitat-cove.jpg) · [86 cm sand control](habitat-strand.jpg) · [bank control](habitat-bank.jpg).
+
+Hosted CPU Blender 4.3.2, run **44446749282**. The camera, physical terrain,
+solar direction, water maps and prior prop placements match on both sides.
+The showcase uses the V2 physical study; the two neutral locks use actual
+default V1. Two private camera scouts by the tree trunk hid the main ridge,
+so the open shoreline frame stays the lock. These are not screenshots or
+performance readings from the game.
+
+One shared near glTF material distinguishes wind-laid turf, ribbed shore sand,
+fractured stone and shaded leaf litter using 51 rotation/reflection-equivalent
+padded transition charts. An actual tree-density field grades understory and
+openings across the near and far meshes. The real 175,104 affected triangles
+in 76 land-adjacent chunks keep their ordered corners, skirts and smooth
+normals. The UV seams increase these chunks from 92,492 to 189,392 stored
+vertices, not draw calls. The near PBR atlas costs at most around 66.3 MiB
+for three RGBA8 textures with a complete mip chain before compression
+(2688×2352 colour and normal, 672×588 ORM); no GPU allocation was measured.
+
+In the near coast, 82 lee-side windbreaks gain groups of curved, fixed
+grass sheaves plus folded specimen plants. The six-material shore asset
+contains 276,228 triangles in 271 spatial batches, largest 9,220 triangles.
+The open-bank focus selects 42,538 versus 35,058 strand triangles before
+frustum culling, 31 potential patches. The new sheaves reach at most 0.560 m;
+all underlying V1 and V2 heights matched. The first ultra-soft texture and
+thin, sparse isolated tussocks were rejected. The current grass/shingle
+are materially different, but a few cutouts read as square hedges in profile
+and the uniform sky still makes the ridge feel flat. Work next on those two
+visible weaknesses, not another density increase over the entire island.
+
+[Substrate geometry](habitat-validation.json) · [shore bounds](salt-meadow-validation.json) · [view budgets](habitat-view-budgets.json).

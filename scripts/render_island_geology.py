@@ -57,6 +57,11 @@ cli.add_argument(
     action="store_true",
     help="Private reduced framing scout, not an acceptance plate",
 )
+cli.add_argument(
+    "--original-macro",
+    type=Path,
+    help="Frozen predecessor's shared far pigment for an exact A/B",
+)
 args = cli.parse_args(sys.argv[sys.argv.index("--") + 1 :])
 args.out.mkdir(parents=True, exist_ok=True)
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -84,7 +89,7 @@ bpy.ops.import_scene.gltf(filepath=str(args.glb.resolve()))
 chunks = [o for o in bpy.data.objects if o.type == "MESH"]
 assert len(chunks) == 360
 habitats = {}
-if args.habitats:
+if args.habitats or args.original_macro:
     # Far and middle use the literal replacement for the old global pigment;
     # normal/roughness, all mesh topology and the stock range gate stay intact.
     old = next(
@@ -94,7 +99,11 @@ if args.habitats:
         or i.name in ("Island salt and stone", "pigment.png")
     )
     replacement = bpy.data.images.load(
-        str((args.habitats.parent / "geology/pigment.png").resolve())
+        str(
+            (
+                args.original_macro or (args.habitats.parent / "geology/pigment.png")
+            ).resolve()
+        )
     )
     matches = 0
     for material in bpy.data.materials:
@@ -106,6 +115,7 @@ if args.habitats:
     assert (
         matches > 0
     ), "Real far terrain material must consume the actual replacement pigment"
+if args.habitats:
     previous = set(bpy.data.objects)
     bpy.ops.import_scene.gltf(filepath=str(args.habitats.resolve()))
     for mesh in set(bpy.data.objects) - previous:

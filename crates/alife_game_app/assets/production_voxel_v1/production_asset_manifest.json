@@ -664,7 +664,7 @@
     {
       "asset_id": "approved-island-strandline",
       "author": "Qualia island environment art",
-      "digest": "fnv1a64:0a3e7165c44d69c4",
+      "digest": "fnv1a64:8d3075db046dc722",
       "external": false,
       "final_art": false,
       "generated": true,
@@ -679,7 +679,7 @@
       "local_path": "crates/alife_game_app/assets/landscape/island/strandline.glb",
       "placeholder": false,
       "replacement_policy": "edit-strandline-recipe-and-refresh-manifest",
-      "size_bytes": 9099772,
+      "size_bytes": 11489300,
       "source": "generated:island-strandline",
       "usage_category": "environment-dressing"
     },
@@ -708,22 +708,22 @@
     {
       "asset_id": "approved-island-geology-pigment",
       "author": "A-Life approved Blender art",
-      "digest": "fnv1a64:b21ce2e2111dcd7c",
+      "digest": "fnv1a64:2a5b5a90dde42750",
       "external": false,
       "final_art": false,
       "generated": true,
       "generator": {
-        "config_path": "scripts/build_island_geology.py",
+        "config_path": "scripts/build_island_habitats.py",
         "date": "2026-11-19",
         "seed": "approved-island-blueprints",
-        "tool": "Blender-5.2.1-LTS + offline geology finish"
+        "tool": "Qualia geological pigment with a rooted grove grade"
       },
       "license": "A-Life-Generated-Source",
       "license_ref": "README.md",
       "local_path": "crates/alife_game_app/assets/landscape/island/geology/pigment.png",
       "placeholder": false,
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
-      "size_bytes": 2553401,
+      "size_bytes": 2577525,
       "source": "generated:island-geology",
       "usage_category": "environment-dressing"
     },
@@ -1099,6 +1099,94 @@
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
       "size_bytes": 69400,
       "source": "generated:sanctuary-landmarks",
+      "usage_category": "environment-dressing"
+    },
+    {
+      "asset_id": "approved-island-habitat-ground",
+      "author": "Qualia island environment art",
+      "digest": "fnv1a64:0d065b8f0c627eba",
+      "external": false,
+      "final_art": false,
+      "generated": true,
+      "generator": {
+        "config_path": "scripts/build_island_habitats.py",
+        "date": "2026-11-19",
+        "seed": "9271",
+        "tool": "Qualia tile-blended PBR substrate and habitat field"
+      },
+      "license": "A-Life-Generated-Source",
+      "license_ref": "README.md",
+      "local_path": "crates/alife_game_app/assets/landscape/island/habitat-ground.glb",
+      "placeholder": false,
+      "replacement_policy": "edit-habitat-recipe-and-refresh-manifest",
+      "size_bytes": 7940992,
+      "source": "generated:island-rooted-habitats",
+      "usage_category": "environment-dressing"
+    },
+    {
+      "asset_id": "approved-island-habitat-pigment",
+      "author": "Qualia island environment art",
+      "digest": "fnv1a64:dc1ae0f1e1b2a11d",
+      "external": false,
+      "final_art": false,
+      "generated": true,
+      "generator": {
+        "config_path": "scripts/build_island_habitats.py",
+        "date": "2026-11-19",
+        "seed": "9271",
+        "tool": "Qualia tile-blended PBR substrate and habitat field"
+      },
+      "license": "A-Life-Generated-Source",
+      "license_ref": "README.md",
+      "local_path": "crates/alife_game_app/assets/landscape/island/habitats/substrates.png",
+      "placeholder": false,
+      "replacement_policy": "edit-habitat-recipe-and-refresh-manifest",
+      "size_bytes": 6969429,
+      "source": "generated:island-rooted-habitats",
+      "usage_category": "environment-dressing"
+    },
+    {
+      "asset_id": "approved-island-habitat-orm",
+      "author": "Qualia island environment art",
+      "digest": "fnv1a64:689da3d28874ae8b",
+      "external": false,
+      "final_art": false,
+      "generated": true,
+      "generator": {
+        "config_path": "scripts/build_island_habitats.py",
+        "date": "2026-11-19",
+        "seed": "9271",
+        "tool": "Qualia tile-blended PBR substrate and habitat field"
+      },
+      "license": "A-Life-Generated-Source",
+      "license_ref": "README.md",
+      "local_path": "crates/alife_game_app/assets/landscape/island/habitats/substrates-orm.png",
+      "placeholder": false,
+      "replacement_policy": "edit-habitat-recipe-and-refresh-manifest",
+      "size_bytes": 299934,
+      "source": "generated:island-rooted-habitats",
+      "usage_category": "environment-dressing"
+    },
+    {
+      "asset_id": "approved-island-habitat-normal",
+      "author": "Qualia island environment art",
+      "digest": "fnv1a64:b7e3a51e6558bc1a",
+      "external": false,
+      "final_art": false,
+      "generated": true,
+      "generator": {
+        "config_path": "scripts/build_island_habitats.py",
+        "date": "2026-11-19",
+        "seed": "9271",
+        "tool": "Qualia tile-blended PBR substrate and habitat field"
+      },
+      "license": "A-Life-Generated-Source",
+      "license_ref": "README.md",
+      "local_path": "crates/alife_game_app/assets/landscape/island/habitats/substrates-normal.png",
+      "placeholder": false,
+      "replacement_policy": "edit-habitat-recipe-and-refresh-manifest",
+      "size_bytes": 5960209,
+      "source": "generated:island-rooted-habitats",
       "usage_category": "environment-dressing"
     }
   ],

@@ -1,0 +1,6 @@
+{
+  "checked_chunks": 76,
+  "checked_triangles": 175104,
+  "preserves": "ordered triangle corners, smooth normals, skirts identical; bounded pigment grade verified at every corner",
+  "sha256": "39d55db298e0046dae007a8a8d6d101d6356ba802c5c18d64d9ed5b49fcc29a0"
+}

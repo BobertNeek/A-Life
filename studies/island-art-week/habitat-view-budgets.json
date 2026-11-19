@@ -1,0 +1,127 @@
+{
+  "strand-eye": {
+    "previous": {
+      "patch_draws_before_frustum": 28,
+      "triangles_before_frustum": 35058,
+      "by_material": {
+        "Dry salt reed": 2840,
+        "Damp tidal sand film": 2746,
+        "Windrail thicket": 12790,
+        "Tideworn mineral and wrack": 13442,
+        "Spent edge wash": 3240
+      }
+    },
+    "candidate": {
+      "patch_draws_before_frustum": 31,
+      "triangles_before_frustum": 42538,
+      "by_material": {
+        "Dry salt reed": 2840,
+        "Damp tidal sand film": 2746,
+        "Windrail thicket": 14078,
+        "Wind-bent salt sward": 6192,
+        "Tideworn mineral and wrack": 13442,
+        "Spent edge wash": 3240
+      }
+    }
+  },
+  "strand-reach": {
+    "previous": {
+      "patch_draws_before_frustum": 28,
+      "triangles_before_frustum": 35058,
+      "by_material": {
+        "Dry salt reed": 2840,
+        "Damp tidal sand film": 2746,
+        "Windrail thicket": 12790,
+        "Tideworn mineral and wrack": 13442,
+        "Spent edge wash": 3240
+      }
+    },
+    "candidate": {
+      "patch_draws_before_frustum": 31,
+      "triangles_before_frustum": 42538,
+      "by_material": {
+        "Dry salt reed": 2840,
+        "Damp tidal sand film": 2746,
+        "Windrail thicket": 14078,
+        "Wind-bent salt sward": 6192,
+        "Tideworn mineral and wrack": 13442,
+        "Spent edge wash": 3240
+      }
+    }
+  },
+  "open-bank": {
+    "previous": {
+      "patch_draws_before_frustum": 28,
+      "triangles_before_frustum": 35058,
+      "by_material": {
+        "Dry salt reed": 2840,
+        "Damp tidal sand film": 2746,
+        "Windrail thicket": 12790,
+        "Tideworn mineral and wrack": 13442,
+        "Spent edge wash": 3240
+      }
+    },
+    "candidate": {
+      "patch_draws_before_frustum": 31,
+      "triangles_before_frustum": 42538,
+      "by_material": {
+        "Dry salt reed": 2840,
+        "Damp tidal sand film": 2746,
+        "Windrail thicket": 14078,
+        "Wind-bent salt sward": 6192,
+        "Tideworn mineral and wrack": 13442,
+        "Spent edge wash": 3240
+      }
+    }
+  },
+  "grove-edge": {
+    "previous": {
+      "patch_draws_before_frustum": 31,
+      "triangles_before_frustum": 45661,
+      "by_material": {
+        "Tideworn mineral and wrack": 15372,
+        "Damp tidal sand film": 2990,
+        "Spent edge wash": 3423,
+        "Windrail thicket": 21036,
+        "Dry salt reed": 2840
+      }
+    },
+    "candidate": {
+      "patch_draws_before_frustum": 36,
+      "triangles_before_frustum": 58013,
+      "by_material": {
+        "Wind-bent salt sward": 10224,
+        "Tideworn mineral and wrack": 15372,
+        "Damp tidal sand film": 2990,
+        "Spent edge wash": 3423,
+        "Windrail thicket": 23164,
+        "Dry salt reed": 2840
+      }
+    }
+  },
+  "grove-gate": {
+    "previous": {
+      "patch_draws_before_frustum": 31,
+      "triangles_before_frustum": 45661,
+      "by_material": {
+        "Tideworn mineral and wrack": 15372,
+        "Damp tidal sand film": 2990,
+        "Spent edge wash": 3423,
+        "Windrail thicket": 21036,
+        "Dry salt reed": 2840
+      }
+    },
+    "candidate": {
+      "patch_draws_before_frustum": 36,
+      "triangles_before_frustum": 58013,
+      "by_material": {
+        "Wind-bent salt sward": 10224,
+        "Tideworn mineral and wrack": 15372,
+        "Damp tidal sand film": 2990,
+        "Spent edge wash": 3423,
+        "Windrail thicket": 23164,
+        "Dry salt reed": 2840
+      }
+    }
+  }
+}

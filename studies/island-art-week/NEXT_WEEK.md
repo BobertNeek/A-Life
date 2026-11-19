@@ -51,3 +51,14 @@ recipe is for a separately booked RTX 3050 window. It has not been run.
 The default and this recipe use V1: its binding must match the original save.
 The northern V2 alternate remains an isolated generated map with a separate
 restore test, not an unqualified playable switch. Do not overwrite V1 to stage V2.
+
+For the new material pass, use `4bf90a3438bc160665580ba711c44c1c96526879`
+as the additional isolated predecessor. Port each setup to its own writable
+profile; compare the same V1 camera receipt before/after. Verify that the
+first ordinary terrain/trees appear even if the 76 near habitat chunks stream
+later. Inspect the junction between meadow and dry sand, wet/rough glints,
+reed roots and the real gap through each grass colony. At the 150 m
+handoff check hue as well as silhouette: normal + albedo atlas are 2688×2352;
+the less sensitive AO/roughness pack is 672×588. Check cutout foliage shimmer
+and alpha overlap against the original on both min-spec and normal profiles.
+Record driver allocated memory rather than equating PNG bytes with VRAM.
