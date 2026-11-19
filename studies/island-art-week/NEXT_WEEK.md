@@ -159,3 +159,7 @@ In a throwaway V1 profile, approach wild grass 3406 (74.75,301.40). Compare at 1
 ### Original valley saplings
 
 In the same throwaway world, follow #1116 (45.447,237.543), then #933 and #423. Re-create the 1.04 m eye at (50.1,244.3). Inspect woody joins, honest tree/prop collisions, lit and shaded leaves, and current distance switches; the far boughs must not blink or turn into lone black spots. No new collision or saved world entity is intended. No game, tests or headset/GPU was used during this art pass.
+
+### Upstream bank material, not the inlet shape concept
+
+At x94.15,z453.9 orient along (+2.45,-29.2), eye 1.12 m above the actual V1 floor. Inspect the formerly hard beige material islands just beyond the camera, check the map atlas/normal orientation and six-millimetre coating on the grazing view; retreat past the native range to the paired macro. Repeat along the opposite bank and at the actual guardian view. The fitted bank remains cosmetic and the collider is V1. Game, saves, native light, mip transitions and performance were not checked during the art week.

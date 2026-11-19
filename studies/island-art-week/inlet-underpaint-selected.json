@@ -1,0 +1,23 @@
+{
+  "subject": "Material transition independent of the editable southern inlet",
+  "native_triangle_geometry": "unchanged original bank",
+  "near_finish": "continuous sampled opaque surface",
+  "far_coverage": "original cut-bank mask only",
+  "gradual_undercoat_metres": [
+    0.12,
+    1.35
+  ],
+  "old_covered_pixels": 146919,
+  "core_repainted_pixels": 83700,
+  "scope": "Actual native near habitat sampled along original triangles; corresponding UV basis used for normals.",
+  "original_pixel_rect_xz": [
+    1139,
+    1685,
+    1306,
+    1808
+  ],
+  "far_pixels_repainted": 3404,
+  "far_atlas_pixels": 4194304,
+  "studio_source": "12ea60929fd30ae95f70223d4bc7e2a03e8f6819",
+  "studio_art": 44493038772
+}

@@ -1,5 +1,7 @@
 # Island art week
 
+[Start here: selected native art, V1/V2 and unbound studies](ART_INDEX.md). Earlier test and studio reports below are historical, not instructions to run the game this week.
+
 Single working branch for Qualia's coastal habitat. The original terrain
 material and geometry pass is PR #412. Its separate [physical ridge
 study](../island-ridge-v2/README.md) changes both render and collision for
@@ -257,3 +259,7 @@ was performed for the new assets. The gallery is not native acceptance.
 ### Young saltwood, original valley
 
 [Original sapling 1116, same habitat and lens](young-saltwood.jpg) · [workbench, original versus revised](young-saltwood-workbench.jpg) · [original timber and asset source](YOUNG_SALTWOOD.md). Offline art only.
+
+### The close V1 stream wall
+
+[Old and joined upstream terrain finish](inlet-bar-feathered.jpg) · [actual original two materials](inlet-bare-versus-original.jpg) · [material source](INLET_UNDERPAINT.md). This is the original V1 surface, not the editable alternative landform and not a running game.
