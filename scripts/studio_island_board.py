@@ -139,6 +139,26 @@ elif subject == "fault-scarp":
                 key=key,
             )
         (scarp / "seated.json").write_text(json.dumps(seats, indent=2) + "\n")
+        if board.get("wall_beds"):
+            from island_scarp_beds import expose
+
+            substrate = out / "artist-scarp-ground"
+            substrate.mkdir(exist_ok=True)
+            (substrate / "habitats").symlink_to(
+                (d / "habitats").resolve(), target_is_directory=True
+            )
+            wall = substrate / "habitat-ground.glb"
+            bed_note = expose(
+                d / "habitat-ground.glb",
+                SURFACE,
+                scarp_base / "Cliff.glb",
+                d / "props.json",
+                wall,
+                board["uphill_seating"],
+            )
+            (substrate / "bed-source.json").write_text(
+                json.dumps(bed_note, indent=2) + "\n"
+            )
     (scarp / "scarp-source.json").write_text(json.dumps(note, indent=2) + "\n")
     blender(
         "studio_fault_scarp_editable.py",
@@ -445,6 +465,8 @@ subject_label = {
     "inlet-underpaint": "Original bank pigment and native-material feathering",
     "inlet-concept": "Shape study: actual V1 and proposed asymmetric inlet",
 }[subject]
+if subject == "fault-scarp" and board.get("wall_beds"):
+    subject_label = "Same seated scarp, with its exposed bed on the true hillside"
 if subject == "inlet-underpaint" and board.get("tidecast_pockets"):
     subject_label = "Rooted V1 inlet and low tidecast"
 base_water = root / "studies/island-art-week/water-inputs"
@@ -540,7 +562,10 @@ for tag in board["angles"]:
             out / side,
             *views[tag],
             *(
-                ["--cliff-library", scarp if side == "after" else scarp_base]
+                [
+                    "--cliff-library",
+                    scarp if side == "after" or board.get("wall_beds") else scarp_base,
+                ]
                 if subject == "fault-scarp"
                 else []
             ),
@@ -627,7 +652,13 @@ for tag in board["angles"]:
             "--water-inputs",
             water,
             "--habitats",
-            d / "habitat-ground.glb",
+            (
+                wall
+                if subject == "fault-scarp"
+                and board.get("wall_beds")
+                and side == "after"
+                else d / "habitat-ground.glb"
+            ),
             *(
                 ["--broadleaf-library", alder if side == "after" else old_tree]
                 if subject == "coastal-alder"

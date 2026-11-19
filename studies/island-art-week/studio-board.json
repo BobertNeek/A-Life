@@ -9,10 +9,11 @@
   "quick": false,
   "samples": 80,
   "editable_canopy": false,
-  "art_note": "Do not install the shared unseated scarp. Selected real artist subjects now pull each unsupported toe inward to existing uphill rock, without going beneath or outside the old solid box. Include the extreme 1395 drop instead of hiding it. Static V1 only; not runtime behavior.",
+  "art_note": "After comparing native upper-toe seating, keep the same 3 seated scarps on both sides. Photograph a proposed exposure of rock in the actual native slope, never a skirt appended from the prop into empty air. Source floor faces/UVs/material stay fixed; localized mineral pigment, short weathering and very shallow surface relief live only on original physical planes.",
   "uphill_seating": [
     1549,
     1731,
     1395
-  ]
+  ],
+  "wall_beds": true
 }
