@@ -28,24 +28,24 @@ class Reach:
         x = self.x0 + i * self.s
         # Measured native thalweg at z390 ~85.75, z422 ~98, z448 ~106.5.
         q = x - (97.05 + 0.366 * (z - 419))
-        boundary = ease(353, 377, z) * (1 - ease(439, 450, z))
+        boundary = ease(353, 377, z) * (1 - ease(431, 450, z))
         outer = 1 - ease(16, 49, np.abs(q))
-        peak = np.exp(-(((z - 425.0) / 15.8) ** 2))
-        upstream = np.exp(-(((z - 393.5) / 13.0) ** 2))
+        peak = np.exp(-(((z - 424.0) / 24.5) ** 2))
+        upstream = np.exp(-(((z - 382.5) / 19.5) ** 2))
         self.parts = []
         self.parts.append(
-            ((10.5 * peak - 6.7 * upstream) * outer * boundary, np.zeros_like(x))
+            ((7.6 * peak - 3.4 * upstream) * outer * boundary, np.zeros_like(x))
         )
-        apron = np.exp(-(((z - 427) / 14.0) ** 2))
+        apron = 1 - ease(5.3, 22.5, np.abs(z - 425))
         # Extend the inside (west) waterline, but open out the upper bank
         # behind it: a low, asymmetric bar, not simply a sideways canal.
         toe = np.exp(-(((q + 8.5) / 8.3) ** 2))
-        bench = np.exp(-(((q + 16) / 8.4) ** 2))
-        bar_x = (5.2 * toe - 2.6 * bench) * apron * boundary
+        bench = 1 - ease(6.0, 16.5, np.abs(q + 16.6))
+        bar_x = (4.8 * toe + 0.50 * bench) * apron * boundary
         dry = np.maximum(0, self.h)
         bar_y = (
-            -np.minimum(4.4, 0.66 * dry)
-            * ease(0.35, 2.1, dry)
+            -np.maximum(0.0, dry - (0.16 + 0.16 * np.maximum(0, -q - 10)))
+            * ease(0.12, 1.0, dry)
             * apron
             * bench
             * boundary
@@ -53,10 +53,10 @@ class Reach:
         self.parts.append((bar_x, bar_y))
         # A shorter outside cut concentrates erosion just upstream of the
         # point. The reciprocal upstream reach erodes the opposite bank.
-        long = np.exp(-(((z - 416) / 13.5) ** 2))
+        long = np.exp(-(((z - 417) / 18.5) ** 2))
         spot = np.exp(-(((q - 11.8) / 8.7) ** 2))
         back = np.exp(-(((q + 12) / 9.1) ** 2))
-        xx = (4.8 * long * spot - 3.7 * upstream * back) * boundary
+        xx = (3.4 * long * spot - 1.8 * upstream * back) * boundary
         yy = (
             -np.minimum(1.25, 0.16 * dry)
             * ease(0.35, 2.1, dry)

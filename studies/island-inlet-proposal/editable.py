@@ -10,7 +10,7 @@ sys.path.insert(0, str(here))
 from form import Reach, CONTROLS
 from sculpt import deform
 
-surface, skin, out = map(Path, sys.argv[sys.argv.index("--") + 1 :])
+surface, skin, deposit, out = map(Path, sys.argv[sys.argv.index("--") + 1 :])
 bpy.ops.wm.read_factory_settings(use_empty=True)
 scene = bpy.context.scene
 r = Reach(surface)
@@ -83,6 +83,19 @@ bpy.context.view_layer.update()
 for ob in set(bpy.data.objects) - before:
     if ob.type == "MESH":
         deform(ob, r, ctrl)
+from deposit import attach as inner_sand
+
+sediment = inner_sand(r, deposit)
+bpy.context.view_layer.update()
+deform(sediment, r, ctrl)
+# Hide the point-bar material along with its shape when the artist zeroes it.
+for key in ("hide_viewport", "hide_render"):
+    drv = sediment.driver_add(key).driver
+    vv = drv.variables.new()
+    vv.name = "bar"
+    vv.targets[0].id = ctrl
+    vv.targets[0].data_path = '["Tapered point bar"]'
+    drv.expression = "bar < 0.15"
 bpy.ops.mesh.primitive_plane_add(size=2, location=(108, -410, 0))
 sea = bpy.context.object
 sea.name = "03 · sea level (unchanged)"

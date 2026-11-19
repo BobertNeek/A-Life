@@ -164,8 +164,18 @@ elif subject == "inlet-concept":
     sys.path.insert(0, str(study))
     from water import water as paint_concept_water
 
+    from deposit import paint as inner_sand
+
     skin = d / "inlet-bank.glb"
-    blender(study / "editable.py", SURFACE, skin, out / "southern-inlet-proposal.blend")
+    bar_ink = out / "study-ink/inner-bar.png"
+    inner_sand(SURFACE, bar_ink)
+    blender(
+        study / "editable.py",
+        SURFACE,
+        skin,
+        bar_ink,
+        out / "southern-inlet-proposal.blend",
+    )
 elif subject == "inlet-survey":
     # Two working photographs of real terrain; no candidate is invented here.
     pass
@@ -299,7 +309,7 @@ for tag in board["angles"]:
                 else []
             ),
             *(
-                ["--inlet-sculpt-study"]
+                ["--inlet-sculpt-study", bar_ink]
                 if subject == "inlet-concept" and side == "after"
                 else []
             ),

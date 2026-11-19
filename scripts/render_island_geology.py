@@ -42,7 +42,7 @@ cli.add_argument(
 )
 cli.add_argument(
     "--inlet-sculpt-study",
-    action="store_true",
+    type=Path,
     help="DCC-only shape alternative; never serialized to game terrain",
 )
 cli.add_argument("--prop-library", type=Path)
@@ -502,8 +502,13 @@ if args.inlet_sculpt_study:
     from sculpt import finish
 
     bpy.context.view_layer.update()
+    from deposit import attach as inner_sand
+
+    sculpt = Reach(args.surface)
+    sediment = inner_sand(sculpt, args.inlet_sculpt_study)
+    bpy.context.view_layer.update()
     finish(
-        Reach(args.surface), [*chunks, *habitats.values(), *decor, *copse], rigid_plants
+        sculpt, [*chunks, *habitats.values(), *decor, *copse, sediment], rigid_plants
     )
 if args.wide_only:
     shots = shots[:1]
