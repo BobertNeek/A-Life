@@ -52,8 +52,15 @@ class Glb:
         ).reshape(a["count"], -1)
 
 
-def build(source, destination):
-    terrain, src = Island(SURFACE), Glb(source)
+def build(source, destination, *, terrain=None, original_heights=None):
+    terrain = Island(SURFACE) if terrain is None else terrain
+    src = Glb(source)
+    old_h = terrain.h if original_heights is None else original_heights
+    if original_heights is not None:
+        from scipy.ndimage import maximum_filter
+
+        resculpted = maximum_filter(terrain.h != old_h, size=3)
+
     doc = src.doc.copy()
     doc.update(accessors=[], bufferViews=[], images=[])
     buf = bytearray()
@@ -181,7 +188,7 @@ def build(source, destination):
             pos = src.attr(original["POSITION"])
             gx = np.rint((pos[:, 0] - terrain.x) / terrain.spacing).astype(int)
             gz = np.rint((pos[:, 2] - terrain.z) / terrain.spacing).astype(int)
-            skirt = pos[:, 1] < terrain.h[gz, gx] - 10
+            skirt = pos[:, 1] < old_h[gz, gx] - 10
             near[x0, z0] = (
                 original,
                 {
@@ -203,6 +210,14 @@ def build(source, destination):
         gx = np.rint((p[:, 0] - terrain.x) / terrain.spacing).astype(int)
         gz = np.rint((p[:, 2] - terrain.z) / terrain.spacing).astype(int)
         fix = terrain.deband[gz, gx]
+        if original_heights is not None:
+            # The near GLB and all derived representations use the very same new
+            # physical samples. Only the invisible skirt is allowed below them.
+            skirt = p[:, 1] < old_h[gz, gx] - 10
+            p = p.copy()
+            p[:, 1] = terrain.h[gz, gx] - 20.0 * skirt
+            attrs["POSITION"] = p
+            fix = fix | resculpted[gz, gx]
         if fix.any():
             # Use the same orientation at a point on every chunk, skirt and LOD.
             nx, nz = -terrain.dx[gz[fix], gx[fix]], -terrain.dz[gz[fix], gx[fix]]

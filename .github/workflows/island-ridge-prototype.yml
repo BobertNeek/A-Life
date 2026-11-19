@@ -1,0 +1,19 @@
+name: Isolated physical island save compatibility
+on:
+  push:
+    branches: ["qualia/island-ridge-v2-prototype-20261119"]
+permissions:
+  contents: read
+jobs:
+  world-restore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CARGO_INCREMENTAL: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8
+        with:
+          toolchain: stable
+      - run: cargo test --locked -p alife_world --test island_ridge_v2_prototype -- --ignored

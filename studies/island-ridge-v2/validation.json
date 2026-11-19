@@ -1,0 +1,30 @@
+{
+  "grid_nodes": 123585,
+  "changed_nodes": 6983,
+  "max_height_change_m": 27.307601928710938,
+  "walkable_grade_faces_before": 88609,
+  "walkable_grade_faces_after": 88597,
+  "grade_pass_to_fail": 1262,
+  "grade_fail_to_pass": 1250,
+  "nursery_component_before": 37795,
+  "nursery_component_after": 37795,
+  "nursery_faces_lost": 0,
+  "nursery_faces_gained": 0,
+  "old_and_new_probe_reachability": [
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true
+  ],
+  "prop_placements": 3716,
+  "solid_bodies": 1716,
+  "authored_rock_corrections": 5,
+  "triangles": [
+    276480,
+    101056,
+    40960
+  ]
+}

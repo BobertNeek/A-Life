@@ -20,6 +20,9 @@ cli.add_argument(
     action="store_true",
     help="hold the camera at the river head and vary only surface LOD",
 )
+cli.add_argument("--surface", type=Path)
+cli.add_argument("--placements", type=Path)
+cli.add_argument("--prop-library", type=Path)
 args = cli.parse_args(sys.argv[sys.argv.index("--") + 1 :])
 args.out.mkdir(parents=True, exist_ok=True)
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -77,8 +80,12 @@ shots = [
 ]
 if args.creature_height:
     root = Path(__file__).resolve().parents[1]
-    library = root / "crates/alife_game_app/assets/landscape/island"
-    raw = (root / "crates/alife_world/assets/island-v1.bin").read_bytes()
+    library = (
+        args.prop_library or root / "crates/alife_game_app/assets/landscape/island"
+    )
+    raw = (
+        args.surface or root / "crates/alife_world/assets/island-v1.bin"
+    ).read_bytes()
     width, depth, ox, oz, spacing, _ = struct.unpack_from("<IIfffI", raw, 8)
     heights = struct.unpack_from(f"<{width*depth}f", raw, 32)
 
@@ -101,7 +108,7 @@ if args.creature_height:
     focus = (x, ground(x, z) + 0.88, z)
     aim = (98.3, ground(98.3, 253.1) + 0.045, 253.1)
     shots = [("creature-height", focus, aim, 0, 30, 0)]
-    props = json.loads((library / "props.json").read_text())
+    props = json.loads((args.placements or library / "props.json").read_text())
     models = {}
     for prop in props:
         px, py, pz = prop["position"]
