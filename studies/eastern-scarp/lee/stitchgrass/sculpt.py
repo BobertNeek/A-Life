@@ -149,27 +149,49 @@ def shape(form, close):
                 0.78 + 0.12 * form,
             )
     if close == "guardian":
-        vertices = []
-        colours = []
-        faces = []
-        for j in range(2 + form % 2):
-            th = math.pi + (-0.67 + j * 0.58 + form * 0.075)
-            l = 0.25 + 0.036 * j
-            axis = np.array([math.cos(th), 0, math.sin(th)])
-            wide = np.array([-math.sin(th), 0, math.cos(th)]) * 0.019
-            base = np.array([0, -0.012, (j - 1) * 0.028])
-            mid = base + axis * l * 0.50 + [0, 0.16 + 0.018 * j, 0]
-            tip = base + axis * l + [0, 0.135 - 0.012 * j, 0]
+        # Four separate folded silhouettes: preserve the true high seed,
+        # downwind reach and both side leaves. No viewer-facing billboard,
+        # uniformly shortened seed heads, or generic cardboard clump.
+        near, _, col, _ = shape(form, True)
+        roles = [
+            np.argmax(near[:, 1]),
+            np.argmin(near[:, 0]),
+            np.argmin(near[:, 2]),
+            np.argmax(near[:, 2]),
+            np.argmax(near[:, 0]),
+        ]
+        for j, k in enumerate(dict.fromkeys(roles)):
+            tip = near[k].astype(float)
+            half = np.asarray([tip[0], 0, tip[2]])
+            axis = half / max(1e-8, np.linalg.norm(half))
+            side = np.asarray([-axis[2], 0, axis[0]])
+            width = 0.004 if j == 0 and form != 3 else 0.014
+            basal = np.asarray([-0.010, -0.023, 0.004 * (j - 2)])
+            middle = basal * 0.51 + tip * 0.49
+            middle[1] += min(0.045, max(0, tip[1] * 0.16))
+            colour = col[k]
             add(
-                [base, mid - wide, mid + wide, tip],
-                [
-                    [0.065, 0.080, 0.029],
-                    [0.127, 0.152, 0.042],
-                    [0.150, 0.177, 0.063],
-                    [0.214, 0.20, 0.076],
-                ],
+                [basal, middle - side * width, middle + side * width, tip],
+                [colour * 0.54, colour * 0.80, colour * 1.04, colour],
                 [(0, 1, 2), (1, 3, 2)],
             )
+    elif not close:
+        # Mid forms have fewer blades. Keep their absolute root and fit each
+        # side of their silhouette to the actual detailed specimen, not to
+        # the camera. Don't expand a tiny positive root cap into a new leaf.
+        fine = shape(form, True)[0]
+        pts = np.asarray(vertices)
+        lo = pts.min(0)
+        hi = pts.max(0)
+        for k in range(3):
+            if k == 1:
+                continue
+            if lo[k] < -0.025:
+                pts[pts[:, k] < 0, k] *= min(1.55, fine[:, k].min() / lo[k])
+            if hi[k] > 0.025:
+                pts[pts[:, k] > 0, k] *= min(1.55, fine[:, k].max() / hi[k])
+        pts[pts[:, 1] > 0, 1] *= fine[:, 1].max() / hi[1]
+        vertices = pts.tolist()
     p = np.array(vertices, dtype="<f4")
     tri = np.array(faces, dtype="<u2")
     v = np.cross(p[tri[:, 1]] - p[tri[:, 0]], p[tri[:, 2]] - p[tri[:, 0]])

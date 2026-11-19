@@ -74,7 +74,7 @@ def shot(n, side):
     bpy.ops.render.render(write_still=True)
 
 
-if "after-only" not in mode:
+if "after-only" not in mode and "setup" not in mode:
     for n in poses:
         shot(n, "before")
 runpy.run_path(str(H / "material.py"))["paint"](ground, surf, rise)
@@ -82,6 +82,8 @@ runpy.run_path(str(H / "material.py"))["paint"](ground, surf, rise)
 # target is matched before/after within station, not forcing the two stations
 # to use identical viewing distances or foliage detail.
 for name, lod in [("holding-grove", "eye"), ("east-section", "guardian")]:
+    if "setup" in mode:
+        break
     objs = s["grab"](rise / ("rise-" + lod + ".glb"))
     shot(name, "after")
     for obj in objs:
