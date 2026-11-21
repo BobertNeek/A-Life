@@ -269,24 +269,35 @@ impl Fvr05ProductionUxSettings {
         path: &Path,
         paused_without_menu: bool,
     ) -> Result<(), GameAppShellError> {
-        let mut document = match fs::read_to_string(path) {
-            Ok(text) => {
+        let (mut document, permissions) = match fs::symlink_metadata(path) {
+            Ok(metadata) if metadata.is_file() => {
+                let text = fs::read_to_string(path)?;
                 Self::from_json_str(&text)?;
-                serde_json::from_str::<serde_json::Value>(&text)?
+                let permissions = metadata.permissions();
+                if permissions.readonly() {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::PermissionDenied,
+                        "foliage preferences are read-only",
+                    ).into());
+                }
+                (serde_json::from_str::<serde_json::Value>(&text)?, Some(permissions))
+            }
+            Ok(_) => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "foliage preferences must be a regular file, not a link",
+                ).into());
             }
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
                 let mut seed = self.clone();
                 seed.paused = paused_without_menu;
                 seed.validate()?;
-                serde_json::to_value(seed)?
+                (serde_json::to_value(seed)?, None)
             }
             Err(error) => return Err(error.into()),
         };
         document["foliage_density"] = self.foliage_density.into();
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)?;
-        }
-        fs::write(path, serde_json::to_string_pretty(&document)?)?;
+        write_foliage_preferences_atomic(path, &serde_json::to_vec_pretty(&document)?, permissions)?;
         Ok(())
     }
 
@@ -296,6 +307,73 @@ impl Fvr05ProductionUxSettings {
             .map(|overlay| overlay.label())
             .collect()
     }
+}
+
+// Session-local sequence: a failed cleanup or a stale same-PID stage must
+// never trap later explicit saves at one file name. Never remove a collision.
+const FOLIAGE_STAGE_ATTEMPTS: usize = 8;
+
+fn next_foliage_stage_id() -> std::io::Result<u64> {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    NEXT.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_add(1))
+        .map_err(|_| std::io::Error::other("foliage staging sequence exhausted"))
+}
+
+fn foliage_stage_path(path: &Path, sequence: u64) -> std::io::Result<std::path::PathBuf> {
+    let filename = path.file_name().ok_or_else(|| {
+        std::io::Error::new(std::io::ErrorKind::InvalidInput, "foliage preferences have no file name")
+    })?;
+    let mut name = std::ffi::OsString::from(".");
+    name.push(filename);
+    name.push(format!(".foliage.{}.{sequence}.tmp", std::process::id()));
+    Ok(path.with_file_name(name))
+}
+
+fn create_foliage_stage(
+    path: &Path,
+    mut next_id: impl FnMut() -> std::io::Result<u64>,
+) -> std::io::Result<(std::path::PathBuf, fs::File)> {
+    for _ in 0..FOLIAGE_STAGE_ATTEMPTS {
+        let temporary = foliage_stage_path(path, next_id()?)?;
+        match fs::OpenOptions::new().write(true).create_new(true).open(&temporary) {
+            Ok(file) => return Ok((temporary, file)),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error),
+        }
+    }
+    Err(std::io::Error::new(
+        std::io::ErrorKind::AlreadyExists, "foliage staging names are occupied",
+    ))
+}
+
+fn write_foliage_preferences_atomic(
+    path: &Path,
+    bytes: &[u8],
+    permissions: Option<fs::Permissions>,
+) -> std::io::Result<()> {
+    use std::io::Write;
+
+    if let Some(parent) = path.parent().filter(|dir| !dir.as_os_str().is_empty()) {
+        fs::create_dir_all(parent)?;
+    }
+    // Stage a complete file before stock replacement, never opening the
+    // original for writing. Only this call's exclusively opened stage is ours.
+    let (temporary, raw) = create_foliage_stage(path, next_foliage_stage_id)?;
+    let result = (|| {
+        let mut file = alife_storage::writer(&temporary, raw)?;
+        if let Some(permissions) = permissions {
+            fs::set_permissions(&temporary, permissions)?;
+        }
+        file.write_all(bytes)?;
+        file.sync_all()?;
+        drop(file);
+        alife_storage::rename(&temporary, path)
+    })();
+    if result.is_err() {
+        let _ = alife_storage::remove_file(&temporary);
+    }
+    result
 }
 
 fn fvr05_world_runtime_save_name(profile: &str, save_id: &str, seed: u64) -> String {
@@ -1721,6 +1799,43 @@ mod tests {
                 mode
             );
         }
+    }
+
+    #[test]
+    fn foliage_publish_failure_leaves_the_destination_and_removes_its_stage() {
+        let (fixture, _) = fvr05_test_launch();
+        let blocked = fixture.root.join("blocked-foliage.json");
+        fs::create_dir(&blocked).unwrap();
+        let sentinel = blocked.join("sentinel");
+        fs::write(&sentinel, b"prior output").unwrap();
+        let names = || fs::read_dir(&fixture.root).unwrap().map(|row| row.unwrap().file_name())
+            .collect::<std::collections::BTreeSet<_>>();
+        let before = names();
+        assert!(write_foliage_preferences_atomic(&blocked, b"new complete output", None).is_err());
+        assert_eq!(fs::read(&sentinel).unwrap(), b"prior output");
+        assert_eq!(names(), before);
+    }
+
+    #[test]
+    fn foliage_stage_collisions_are_bounded_and_do_not_own_foreign_files() {
+        let (fixture, _) = fvr05_test_launch();
+        let path = fixture.root.join("fresh-stage-prefs.json");
+        let stale = foliage_stage_path(&path, 7).unwrap();
+        fs::write(&stale, b"existing stage outside this attempt").unwrap();
+        let mut attempts = 0;
+        let error = create_foliage_stage(&path, || {
+            attempts += 1;
+            Ok(7)
+        }).unwrap_err();
+        assert_eq!(error.kind(), std::io::ErrorKind::AlreadyExists);
+        assert_eq!(attempts, FOLIAGE_STAGE_ATTEMPTS);
+        let mut sequence = 7..;
+        let (fresh, file) = create_foliage_stage(&path, || Ok(sequence.next().unwrap())).unwrap();
+        assert_eq!(fresh, foliage_stage_path(&path, 8).unwrap());
+        drop(file);
+        fs::remove_file(fresh).unwrap();
+        assert_eq!(fs::read(&stale).unwrap(), b"existing stage outside this attempt");
+        assert!(!path.exists());
     }
 
     #[test]

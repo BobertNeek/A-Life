@@ -996,16 +996,31 @@ fn handle_input_with_availability(world: &mut World, availability: LoadAvailabil
                     && node.contains_point(*transform, cursor)
             })
     });
+    let mut fresh_foliage_keys = ButtonInput::default();
     let mut outcome = world.resource_scope(|world, mut state: Mut<MenuState>| {
         // Drain the whole batch so a second key cannot become later consent.
         let mut fresh_enter = false;
         if let Some(messages) = world.get_resource::<bevy::ecs::message::Messages<KeyboardInput>>()
         {
             for message in state.key_reader.read(messages) {
-                fresh_enter |= matches!(message.key_code, KeyCode::Enter | KeyCode::NumpadEnter)
-                    && keyboard.just_pressed(message.key_code)
-                    && message.state == ButtonState::Pressed
-                    && !message.repeat;
+                let code = message.key_code;
+                if !keyboard.just_pressed(code)
+                    || message.state != ButtonState::Pressed
+                    || message.repeat
+                {
+                    continue;
+                }
+                fresh_enter |= matches!(code, KeyCode::Enter | KeyCode::NumpadEnter);
+                // Bevy clears held keys on window focus loss. An OS repeat
+                // after return is not a fresh request to change a saved notch.
+                if screen_before == Screen::Graphics
+                    && matches!(
+                        code,
+                        KeyCode::ArrowLeft | KeyCode::ArrowRight | KeyCode::Home | KeyCode::End
+                    )
+                {
+                    fresh_foliage_keys.press(code);
+                }
             }
         }
         state.input(
@@ -1022,8 +1037,14 @@ fn handle_input_with_availability(world: &mut World, availability: LoadAvailabil
         )
     });
     foliage::handle(
-        world, screen_before, &keyboard, focused, left_down, left_pressed,
-        cursor, accessible_foliage,
+        world,
+        screen_before,
+        &fresh_foliage_keys,
+        focused,
+        left_down,
+        left_pressed,
+        cursor,
+        accessible_foliage,
     );
     garden_survey::handle(world, &mut outcome, focused);
     let InputOutcome {
@@ -1509,7 +1530,7 @@ fn adapt_layout(world: &mut World) {
 
 #[cfg(test)]
 #[path = "menu_load_tests.rs"]
-mod load_tests;
+pub(super) mod load_tests;
 
 #[cfg(test)]
 mod tests {

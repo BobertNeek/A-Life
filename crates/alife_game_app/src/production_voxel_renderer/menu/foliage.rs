@@ -13,6 +13,7 @@ pub(super) struct Thumb;
 pub(super) struct Drag {
     held: bool,
     dirty: bool,
+    retry_pending: bool,
 }
 
 fn percent(v: u8) -> f32 {
@@ -134,53 +135,64 @@ pub(super) fn handle(
         let mut state = world.resource_mut::<MenuState>();
         let allowed = visible;
         let slider_selected = state.rows().get(state.selected).is_some_and(|row| row.0 == Action::Foliage);
-        let mut next = None;
+        let mut requested = None;
         if allowed {
             if pressed && pointer.is_some_and(|(inside, _)| inside) {
                 state.selected = 0;
                 state.foliage_drag.held = true;
             }
             if state.foliage_drag.held {
-                next = pointer.map(|(_, value)| value);
+                requested = pointer.map(|(_, value)| value);
             } else {
-                next = accessible.or_else(|| slider_selected.then(|| {
-                    if keyboard.just_pressed(KeyCode::Home) {
-                        0
+                requested = accessible.or_else(|| {
+                    if !slider_selected {
+                        None
+                    } else if keyboard.just_pressed(KeyCode::Home) {
+                        Some(0)
                     } else if keyboard.just_pressed(KeyCode::End) {
-                        FOLIAGE_MAX
+                        Some(FOLIAGE_MAX)
                     } else if keyboard.just_pressed(KeyCode::ArrowLeft) {
-                        current.saturating_sub(1)
+                        Some(current.saturating_sub(1))
                     } else if keyboard.just_pressed(KeyCode::ArrowRight) {
-                        current.saturating_add(1).min(FOLIAGE_MAX)
+                        Some(current.saturating_add(1).min(FOLIAGE_MAX))
                     } else {
-                        current
+                        None
                     }
-                }));
+                });
             }
         }
         if !allowed || !down {
             state.foliage_drag.held = false;
         }
-        let next = next.filter(|value| *value != current);
+        let next = requested.filter(|value| *value != current);
         state.foliage_drag.dirty |= next.is_some();
-        let persist = !state.foliage_drag.held && std::mem::take(&mut state.foliage_drag.dirty);
+        let persist = !state.foliage_drag.held
+            && (std::mem::take(&mut state.foliage_drag.dirty)
+                || (state.foliage_drag.retry_pending && requested.is_some()));
         (next, persist, !state.resume_on_close)
     };
-    let mut ux = world.resource_mut::<Fvr05ProductionUxStateResource>();
-    if let Some(value) = next {
-        ux.settings.foliage_density = value;
-    }
-    if persist {
-        match ux.settings.persist_foliage(&ux.ui_settings_path, paused_without_menu) {
+    let failed = {
+        let mut ux = world.resource_mut::<Fvr05ProductionUxStateResource>();
+        if let Some(value) = next {
+            ux.settings.foliage_density = value;
+        }
+        persist.then(|| match ux.settings.persist_foliage(&ux.ui_settings_path, paused_without_menu) {
             Ok(()) => {
                 ux.last_error = None;
                 ux.last_action = "Saved foliage density".into();
+                false
             }
             Err(error) => {
                 ux.last_error = Some(error.to_string());
                 ux.last_action = "Foliage setting not saved".into();
+                true
             }
-        }
+        })
+    };
+    if let Some(failed) = failed {
+        // Failure is retained intent, not dirty work to replay every frame.
+        // A real explicit same-value gesture (including owned release) may retry.
+        world.resource_mut::<MenuState>().foliage_drag.retry_pending = failed;
     }
 }
 

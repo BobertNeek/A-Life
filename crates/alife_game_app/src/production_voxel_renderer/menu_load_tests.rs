@@ -470,7 +470,7 @@ fn actual_input_blocks_opening_and_dismissal_frames_and_requires_raw_fresh_enter
 }
 
 // UI-only resource metadata; this does not construct or select a GPU runtime.
-fn ux() -> Fvr05ProductionUxStateResource {
+pub(in crate::production_voxel_renderer) fn ux() -> Fvr05ProductionUxStateResource {
     let profile = ProductionFrontendProfileId::MinimumSettings30x30;
     Fvr05ProductionUxStateResource{
         settings:Fvr05ProductionUxSettings{
@@ -1076,6 +1076,7 @@ mod accessible_input {
             Screen::Main,
             Screen::Speed,
             Screen::Settings,
+            Screen::Graphics,
             Screen::ConfirmLoad,
         ] {
             app.world_mut().resource_mut::<MenuState>().screen = screen;
@@ -1085,9 +1086,17 @@ mod accessible_input {
                 .query::<(&MenuButton, &AccessibilityNode)>()
                 .iter(app.world())
             {
-                assert_eq!(node.role(), Role::Button);
                 assert!(node.label().is_some_and(|label| !label.is_empty()));
-                assert!(node.supports_action(AccessibleAction::Click));
+                if button.action == Action::Foliage {
+                    assert_eq!(node.role(), Role::Slider);
+                    for action in [AccessibleAction::Increment, AccessibleAction::Decrement,
+                                   AccessibleAction::SetValue] {
+                        assert!(node.supports_action(action));
+                    }
+                } else {
+                    assert_eq!(node.role(), Role::Button);
+                    assert!(node.supports_action(AccessibleAction::Click));
+                }
                 assert_eq!(node.is_hidden(), button.screen != screen);
             }
             let entry = button(app.world_mut(), Screen::Closed, Action::Open);
@@ -1553,4 +1562,153 @@ fn graphics_adjustment_is_live_when_paused_and_a_closed_control_cannot_reapply()
     assert!(!save.exists());
     fs::remove_file(&config).unwrap();
     fs::remove_dir(scratch).unwrap();
+}
+
+#[test]
+fn failed_foliage_write_retries_the_same_explicit_notch_without_an_idle_write() {
+    let mut app = input_app();
+    let scratch = std::env::temp_dir().join(format!(
+        "qualia-foliage-retry-{}-{}",
+        std::process::id(), std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos(),
+    ));
+    fs::create_dir(&scratch).unwrap();
+    let config = scratch.join("preferences.json");
+    let save = scratch.join("must-not-be-written.json");
+    let intact = scratch.join("intact-preferences.json");
+    let mut original = {
+        let mut ux = app.world_mut().resource_mut::<Fvr05ProductionUxStateResource>();
+        ux.ui_settings_path = config.clone();
+        ux.settings.source_save_path = "untouched-origin.json".into();
+        ux.settings.runtime_save_path = save.display().to_string();
+        ux.settings.created_world_save_path = "untouched-created.json".into();
+        ux.settings.asset_manifest_path = "untouched-manifest.json".into();
+        ux.settings.validation_receipt = "private CPU fixture".into();
+        serde_json::from_str::<serde_json::Value>(&ux.settings.to_json_string_pretty().unwrap()).unwrap()
+    };
+    original["unknown_setting"] = serde_json::json!({"preserve": [true, 7]});
+    let bytes = original.to_string();
+    fs::write(&config, &bytes).unwrap();
+    // A temporary non-regular target gives deterministic refusal on both
+    // platforms without relying on chmod, administrator privileges or timing.
+    fs::rename(&config, &intact).unwrap();
+    fs::create_dir(&config).unwrap();
+    app.world_mut().resource_mut::<MenuState>().open(false);
+    app.world_mut().resource_mut::<MenuState>().screen = Screen::Graphics;
+    frame(&mut app, &[], false);
+
+    for _ in 0..2 {
+        frame(&mut app, &[], false);
+        app.world_mut().resource_mut::<Fvr05ProductionUxStateResource>()
+            .last_action = "waiting for explicit scratch retry".into();
+        frame(&mut app, &[KeyCode::Home], false);
+        let ux = app.world().resource::<Fvr05ProductionUxStateResource>();
+        assert_eq!(ux.settings.foliage_density, 0);
+        // The second same-value gesture really did attempt a write again.
+        assert_eq!(ux.last_action, "Foliage setting not saved");
+        assert!(ux.last_error.is_some());
+        assert!(config.is_dir());
+        assert_eq!(fs::read_to_string(&intact).unwrap(), bytes);
+    }
+
+    fs::remove_dir(&config).unwrap();
+    fs::rename(&intact, &config).unwrap();
+    for _ in 0..3 {
+        frame(&mut app, &[], false);
+    }
+    // Writer now can succeed; a frame without input still must not write.
+    assert_eq!(fs::read_to_string(&config).unwrap(), bytes);
+    assert_eq!(fs::read_dir(&scratch).unwrap().count(), 1);
+    frame(&mut app, &[KeyCode::Home], false);
+    assert!(app.world().resource::<Fvr05ProductionUxStateResource>().last_error.is_none());
+
+    // Re-read through the production client preference parser used at startup.
+    let restarted = Fvr05ProductionUxSettings::from_json_file(&config).unwrap();
+    assert_eq!(restarted.foliage_density, 0);
+    original["foliage_density"] = 0.into();
+    assert_eq!(serde_json::from_str::<serde_json::Value>(&fs::read_to_string(&config).unwrap()).unwrap(), original);
+    assert_eq!(fs::read_dir(&scratch).unwrap().count(), 1);
+    assert!(!save.exists());
+    fs::remove_file(&config).unwrap();
+    fs::remove_dir(scratch).unwrap();
+}
+
+
+#[test]
+fn foliage_focus_return_repeats_cannot_change_or_save_a_notch() {
+    use crate::production_voxel_frontend::{FOLIAGE_DEFAULT, FOLIAGE_MAX};
+    for (code, expected) in [
+        (KeyCode::ArrowLeft, FOLIAGE_DEFAULT - 1),
+        (KeyCode::ArrowRight, FOLIAGE_DEFAULT + 1),
+        (KeyCode::Home, 0),
+        (KeyCode::End, FOLIAGE_MAX),
+    ] {
+        let mut app = keypad_input_app();
+        let primary = app.world_mut().spawn((Window::default(), PrimaryWindow)).id();
+        let scratch = std::env::temp_dir().join(format!(
+            "qualia-foliage-focus-{}-{}-{code:?}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos(),
+        ));
+        fs::create_dir(&scratch).unwrap();
+        let config = scratch.join("preferences.json");
+        let save = scratch.join("must-not-be-written.json");
+        {
+            let mut ux = app.world_mut().resource_mut::<Fvr05ProductionUxStateResource>();
+            ux.ui_settings_path = config.clone();
+            ux.settings.source_save_path = "untouched-origin.json".into();
+            ux.settings.runtime_save_path = save.display().to_string();
+            ux.settings.created_world_save_path = "untouched-created.json".into();
+            ux.settings.asset_manifest_path = "untouched-manifest.json".into();
+            ux.settings.validation_receipt = "private CPU fixture".into();
+            ux.settings.foliage_density = FOLIAGE_DEFAULT;
+        }
+        let key_frame = |app: &mut App, state, repeat| {
+            app.world_mut().resource_mut::<Messages<KeyboardInput>>().write(KeyboardInput {
+                key_code: code,
+                logical_key: Key::Unidentified(bevy::input::keyboard::NativeKey::Unidentified),
+                state,
+                text: None,
+                repeat,
+                window: primary,
+            });
+            app.update();
+        };
+        // Key held before the Graphics page; it is not a new adjustment there.
+        key_frame(&mut app, ButtonState::Pressed, false);
+        {
+            let mut state = app.world_mut().resource_mut::<MenuState>();
+            state.open(false);
+            state.screen = Screen::Graphics;
+        }
+        app.update();
+        app.world_mut().get_mut::<Window>(primary).unwrap().focused = false;
+        app.world_mut()
+            .resource_mut::<Messages<bevy::input::keyboard::KeyboardFocusLost>>()
+            .write(bevy::input::keyboard::KeyboardFocusLost);
+        app.update();
+        assert!(!app.world().resource::<ButtonInput<KeyCode>>().pressed(code));
+        app.world_mut().get_mut::<Window>(primary).unwrap().focused = true;
+
+        // This is a genuine Bevy edge, but the raw delivery identifies a repeat.
+        key_frame(&mut app, ButtonState::Pressed, true);
+        assert!(app.world().resource::<ButtonInput<KeyCode>>().just_pressed(code));
+        assert_eq!(app.world().resource::<Fvr05ProductionUxStateResource>().settings.foliage_density,
+                   FOLIAGE_DEFAULT);
+        assert!(!config.exists());
+        key_frame(&mut app, ButtonState::Pressed, true);
+        assert!(!config.exists());
+
+        // Release, then a real new press still changes and saves exactly that notch.
+        key_frame(&mut app, ButtonState::Released, false);
+        key_frame(&mut app, ButtonState::Pressed, false);
+        assert_eq!(app.world().resource::<Fvr05ProductionUxStateResource>().settings.foliage_density,
+                   expected);
+        let restored = Fvr05ProductionUxSettings::from_json_file(&config).unwrap();
+        assert_eq!(restored.foliage_density, expected);
+        assert!(!restored.paused);
+        assert!(!save.exists());
+        fs::remove_file(config).unwrap();
+        fs::remove_dir(scratch).unwrap();
+    }
 }

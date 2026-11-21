@@ -575,3 +575,68 @@ fn deferred_initial_population_is_reconciled_then_stops_visibility_writes() {
     advance(&mut app, 201);
     assert_quiet(&app);
 }
+
+#[test]
+fn same_view_off_hides_only_the_stock_decorative_entities_and_preserves_ownership() {
+    let (mut app, camera) = fixture();
+    let mut ux = crate::production_voxel_renderer::menu::load_tests::ux();
+    let full = crate::production_voxel_frontend::FOLIAGE_MAX;
+    ux.settings.foliage_density = full;
+    app.insert_resource(ux);
+    // Stock update decodes the checked-in placements and applies the real
+    // DecorativeGround tags. These CPU fixtures use placeholder mesh handles.
+    install_spawn_assets(&mut app);
+    app.update();
+    advance(&mut app, 201);
+
+    let snapshots = |app: &mut App| {
+        let world = app.world_mut();
+        world
+            .query_filtered::<(
+                Entity,
+                &PropRange,
+                &Visibility,
+                &Mesh3d,
+                &MeshMaterial3d<StandardMaterial>,
+                Option<&DecorativeGround>,
+            ), With<Fvr04ProductionRuntimeSceneRoot>>()
+            .iter(world)
+            .map(|(id, prop, visibility, mesh, material, decorative)| {
+                (id, (decorative.map(|tag| tag.0), *visibility, mesh.0.id(),
+                    material.0.id(), prop.current))
+            })
+            .collect::<BTreeMap<_, _>>()
+    };
+    let before = snapshots(&mut app);
+    assert_eq!(before.len(), 3716);
+    assert_eq!(before.values().filter(|row| row.0.is_some()).count(), 1531);
+    assert!(before.values().any(|row| row.0.is_some() && row.1 == Visibility::Inherited));
+    assert!(before.values().any(|row| row.0.is_none() && row.1 == Visibility::Inherited));
+
+    // Same camera, same time, and no ordinary streaming pass to explain a hide.
+    let now = app.world().resource::<Time>().elapsed_secs_f64();
+    let next_update = app.world().resource::<IslandAssets>().next_update;
+    let view = (changed_tick::<Transform>(&app, camera), changed_tick::<Projection>(&app, camera));
+    assert!(now < next_update);
+    app.world_mut().resource_mut::<Fvr05ProductionUxStateResource>().settings.foliage_density = 0;
+    app.update();
+    let off = snapshots(&mut app);
+    assert_eq!(off.len(), before.len());
+    for (id, row) in &before {
+        let expected_visibility = if row.0.is_some() { Visibility::Hidden } else { row.1 };
+        assert_eq!(off.get(id), Some(&(row.0, expected_visibility, row.2, row.3, row.4)), "{id:?}");
+    }
+    app.update();
+    assert_quiet(&app);
+
+    // Re-enable in the same view: the same old entities and LOD/material keys return.
+    app.world_mut().resource_mut::<Fvr05ProductionUxStateResource>().settings.foliage_density = full;
+    app.update();
+    assert!(snapshots(&mut app) == before);
+    assert_eq!(app.world().resource::<Time>().elapsed_secs_f64(), now);
+    assert_eq!(app.world().resource::<IslandAssets>().next_update, next_update);
+    assert_eq!(
+        (changed_tick::<Transform>(&app, camera), changed_tick::<Projection>(&app, camera)),
+        view,
+    );
+}
