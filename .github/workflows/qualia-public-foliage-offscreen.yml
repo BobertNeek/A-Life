@@ -1,0 +1,234 @@
+name: Qualia public foliage offscreen witness
+
+on:
+  push:
+    branches: ["qualia-ci/foliage-offscreen-2befb1a"]
+    paths: [".github/workflows/qualia-public-foliage-offscreen.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  public-foliage-offscreen:
+    if: >-
+      github.repository == 'BobertNeek/A-Life' &&
+      github.ref == 'refs/heads/qualia-ci/foliage-offscreen-2befb1a' &&
+      github.event.before == '67e350001b9756366702de74d1a7ee8829e4fb1d' &&
+      github.run_attempt == '1' &&
+      !github.event.created && !github.event.deleted && !github.event.forced
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      CARGO_BUILD_JOBS: '2'
+      CARGO_INCREMENTAL: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      RUST_TEST_THREADS: '1'
+      RUST_MIN_STACK: '33554432'
+      LP_NUM_THREADS: '2'
+    steps:
+      - name: Checkout only the immutable public witness
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 2
+          lfs: false
+          submodules: false
+      - name: Pin the exact three-path child and compile-input bytes
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          import os
+          from pathlib import Path
+          import subprocess
+          import struct
+
+          def git(*args):
+              return subprocess.check_output(["git", *args])
+
+          base = "67e350001b9756366702de74d1a7ee8829e4fb1d"
+          base_tree = "186901a8212666fbc8ca619a1ef5bed551a90f44"
+          renderer = "crates/alife_game_app/src/production_voxel_renderer/"
+          workflow = ".github/workflows/qualia-public-foliage-offscreen.yml"
+          expected = {
+              renderer + "menu.rs": ("M", "e3e6e35e17fa92055a0838e7332e4a3292cc1ac1",
+                  "f1f5d0b965b2b449ec9e19d1a74dc210f70215595df616838673546ff31142a2"),
+              renderer + "menu_offscreen_foliage_tests.rs": ("A", "f1e5ac421f9a0c6e1e2a4e17d97259a34d03ac11",
+                  "3256b4cc179e6f42f0c5a67a2b631c2831d3233c88cd946de36145bac2c9277a"),
+          }
+          head = os.environ["GITHUB_SHA"]
+          assert git("rev-parse", "HEAD").decode().strip() == head
+          assert git("rev-list", "--parents", "-n", "1", "HEAD").decode().split() == [head, base]
+          assert git("rev-parse", f"{base}^{{tree}}").decode().strip() == base_tree
+          assert not git("status", "--porcelain", "--untracked-files=all")
+          raw = git("diff-tree", "--no-commit-id", "-r", "--no-renames", "--name-status", "-z", base, head)
+          bits = raw.decode().split("\0")
+          assert bits[-1] == "" and len(bits) == 7
+          assert dict(zip(bits[1:-1:2], bits[0:-1:2])) == {
+              workflow: "A", **{p: s for p, (s, _, _) in expected.items()}
+          }
+          for path, (_, blob, digest) in expected.items():
+              assert git("ls-tree", "HEAD", "--", path).decode().strip() == f"100644 blob {blob}\t{path}"
+              data = Path(path).read_bytes()
+              assert hashlib.sha256(data).hexdigest() == digest
+              assert data == git("show", f"HEAD:{path}")
+          w = git("ls-tree", "HEAD", "--", workflow).decode().strip().split(None, 3)
+          assert len(w) == 4 and w[:2] == ["100644", "blob"] and w[3] == workflow
+          print("PUBLIC_FOLIAGE_WITNESS", head, git("rev-parse", "HEAD^{tree}").decode().strip(), w[2])
+
+          island = Path("crates/alife_game_app/assets/landscape/island")
+          names = ["terrain-chunks", "BerryBush", "BoulderA", "BoulderB", "BoulderC",
+                   "Broadleaf", "Cliff", "CoastalShrub", "Conifer", "Fern", "Flowers",
+                   "Grass", "Sapling", "Scree"]
+          starter = ["review/starter_scatter/" + p for p in ["GrassTuft", "Rosette", "Sedge"]]
+          for name in [*names, *starter]:
+              p = island / (name + ".glb")
+              with p.open("rb") as f:
+                  magic, version, size = struct.unpack("<4sII", f.read(12))
+              assert magic == b"glTF" and version == 2 and size == p.stat().st_size, str(p)
+          PY
+      - name: Install exactly the stock-observed Rust release
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8
+        with:
+          toolchain: '1.100.0'
+      - name: Install official Ubuntu build libraries and Mesa Vulkan
+        timeout-minutes: 6
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d "$RUNNER_TEMP"
+          test -w "$RUNNER_TEMP"
+          . /etc/os-release
+          test "$ID" = ubuntu
+          test "$VERSION_ID" = 24.04
+          test "$VERSION_CODENAME" = noble
+          keyring=/usr/share/keyrings/ubuntu-archive-keyring.gpg
+          test -r "$keyring"
+          list="$RUNNER_TEMP/qualia-public-offscreen-ubuntu.list"
+          printf '%s\n' \
+            "deb [signed-by=$keyring] https://archive.ubuntu.com/ubuntu noble main universe" \
+            "deb [signed-by=$keyring] https://archive.ubuntu.com/ubuntu noble-updates main universe" \
+            "deb [signed-by=$keyring] https://security.ubuntu.com/ubuntu noble-security main universe" > "$list"
+          apt_options=(-o "Dir::Etc::sourcelist=$list" -o 'Dir::Etc::sourceparts=-' \
+            -o 'Acquire::https::Timeout=20' -o 'Acquire::Retries=2' -o 'APT::Update::Error-Mode=any')
+          packages=(libudev-dev libwayland-dev libxkbcommon-dev libvulkan1 mesa-vulkan-drivers)
+          sudo apt-get "${apt_options[@]}" update
+          sudo apt-get "${apt_options[@]}" install -y --no-install-recommends "${packages[@]}"
+          dpkg-query -W "${packages[@]}"
+      - name: Compile one renderer-only libtest and require one actual graphics witness
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$RUNNER_TEMP" in /*) ;; *) exit 1 ;; esac
+          export CARGO_TARGET_DIR="$RUNNER_TEMP/qualia-foliage-offscreen-target"
+          export TMPDIR="$RUNNER_TEMP"
+          export QUALIA_PUBLIC_FOLIAGE_CAPTURE_SCRATCH
+          QUALIA_PUBLIC_FOLIAGE_CAPTURE_SCRATCH="$(mktemp -d "$RUNNER_TEMP/qualia-foliage-offscreen-capture.XXXXXX")"
+          export XDG_RUNTIME_DIR
+          XDG_RUNTIME_DIR="$(mktemp -d "$RUNNER_TEMP/qualia-foliage-offscreen-xdg.XXXXXX")"
+          unset DISPLAY WAYLAND_DISPLAY XAUTHORITY VK_ADD_DRIVER_FILES VK_INSTANCE_LAYERS VK_LAYER_PATH WGPU_ADAPTER_NAME
+          shopt -s nullglob
+          icds=(/usr/share/vulkan/icd.d/lvp_icd*.json)
+          test "${#icds[@]}" -eq 1
+          test -f "${icds[0]}"
+          dpkg-query -S "${icds[0]}" | grep -E '^mesa-vulkan-drivers(:[^: ]+)?: '
+          export VK_DRIVER_FILES="${icds[0]}"
+          export VK_ICD_FILENAMES="${icds[0]}"
+          sha256sum "$VK_DRIVER_FILES"
+          rustc --version --verbose
+          cargo --version
+          results="$RUNNER_TEMP/qualia-foliage-offscreen-cargo.jsonl"
+          cargo test --locked --no-default-features -p alife_game_app --features bevy-app --lib \
+            --no-run --message-format=json-render-diagnostics > "$results"
+          python3 - "$results" <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          import re
+          import subprocess
+          import sys
+
+          workspace = Path.cwd().resolve()
+          manifest = workspace / "crates/alife_game_app/Cargo.toml"
+          target = Path(os.environ["CARGO_TARGET_DIR"]).resolve()
+          scratch = Path(os.environ["QUALIA_PUBLIC_FOLIAGE_CAPTURE_SCRATCH"]).resolve()
+          assert not list(scratch.iterdir())
+          selected = []
+          with open(sys.argv[1], encoding="utf-8") as messages:
+              for line in messages:
+                  if not line.startswith("{"):
+                      continue
+                  row = json.loads(line)
+                  t = row.get("target", {})
+                  if (row.get("reason") == "compiler-artifact"
+                      and Path(row["manifest_path"]).resolve() == manifest
+                      and t.get("name") == "alife_game_app"
+                      and t.get("kind") == ["lib"]
+                      and Path(t["src_path"]).resolve() == manifest.parent / "src/lib.rs"
+                      and row.get("profile", {}).get("test") is True and row.get("executable")):
+                      assert set(row.get("features", [])) == {"bevy-app"}, row.get("features")
+                      selected.append(Path(row["executable"]).resolve())
+          assert len(selected) == 1, len(selected)
+          binary, = selected
+          assert binary.is_relative_to(target) and binary.is_file()
+          with binary.open("rb") as handle:
+              print("PUBLIC_FOLIAGE_EXECUTABLE", hashlib.file_digest(handle, "sha256").hexdigest(), flush=True)
+
+          case = "production_voxel_renderer::menu::offscreen_foliage_tests::public_stock_foliage_off_full_offscreen_software_vulkan"
+          flags = [str(binary), case, "--exact", "--ignored", "--test-threads=1", "--color=never"]
+          listing = subprocess.check_output([*flags, "--list"], text=True, cwd=manifest.parent)
+          assert [line.strip() for line in listing.splitlines() if line.strip()] == [
+              f"{case}: test", "1 test, 0 benchmarks"
+          ], listing
+          # Launch exactly one ignored test; --list above executed none.
+          run = subprocess.run([*flags, "--nocapture", "--format=pretty"], cwd=manifest.parent,
+                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=600)
+          print(run.stdout, end="", flush=True)
+          assert run.returncode == 0, run.returncode
+          text = run.stdout
+          assert len(re.findall(r"(?m)^running 1 test$", text)) == 1
+          assert len(re.findall(r"(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;", text)) == 1
+          # libtest can prepend its test heading to the fixture's first write.
+          prefix = f"test {case} ... "
+          assert text.count(prefix) == 1
+          text = text.replace(prefix, "", 1)
+          adapters = re.findall(r"(?m)^PUBLIC_FOLIAGE_RENDER_ADAPTER Cpu Vulkan (llvmpipe[^\n]*)$", text)
+          assert len(adapters) == 1, "actual Bevy CPU/Vulkan llvmpipe renderer did not report"
+          summary = re.findall(
+              r"(?m)^PUBLIC_FOLIAGE_OFFSCREEN 512x320 camera=\S+ tile=Island chunk \d+/\d+ "
+              r"full=([0-9a-f]{64}) off=([0-9a-f]{64}) tagged_pixels=(\d+) untagged_pixels=(\d+)$", text)
+          assert len(summary) == 1, "no unique actual rendered scene summary"
+          full, off, tagged, retained = summary[0]
+          assert full != off and min(int(tagged), int(retained)) >= 12
+          labels = ["full", "full-tagged-mask", "full-restored", "off", "off-untagged-mask", "off-restored"]
+          cuts = re.findall(r"(?m)^PUBLIC_FOLIAGE_CUT (\S+) target=(.+?) request=(.+?) bytes=(\d+) b3=([0-9a-f]{64})$", text)
+          assert [key for key, *_ in cuts] == labels
+          assert len({key for _, key, *_ in cuts}) == len({row[2] for row in cuts}) == 6
+          assert all(int(row[3]) == 655360 for row in cuts)
+          assert cuts[0][4] == cuts[2][4] == full and cuts[3][4] == cuts[5][4] == off
+          assert cuts[1][4] != full and cuts[4][4] != off
+
+          dirs = list(scratch.iterdir())
+          assert len(dirs) == 1 and dirs[0].is_dir() and not dirs[0].is_symlink()
+          session, = dirs
+          assert {f.name for f in session.iterdir()} == {"settings.json", *[s + ".bgra" for s in labels]}
+          assert json.loads((session / "settings.json").read_text())["foliage_density"] == 0
+          pixels = [(session / (label + ".bgra")).read_bytes() for label in labels]
+          assert all(len(raw) == 655360 for raw in pixels)
+          assert pixels[0] == pixels[2] and pixels[3] == pixels[5]
+          tagged_pixels = retained_pixels = 0
+          for start in range(0, 655360, 4):
+              f, t, o, u = [pixels[i][start:start + 3] for i in (0, 1, 3, 4)]
+              def delta(x, y):
+                  return max(abs(a - b) for a, b in zip(x, y))
+              tagged_pixels += delta(f, t) >= 16 and delta(o, t) <= 3
+              retained_pixels += delta(o, u) >= 16 and delta(f, o) <= 3
+          assert (tagged_pixels, retained_pixels) == (int(tagged), int(retained))
+          print("PUBLIC_FOLIAGE_GRAPHICS_VERIFIED",
+                "full_sha256=" + hashlib.sha256(pixels[0]).hexdigest(),
+                "off_sha256=" + hashlib.sha256(pixels[3]).hexdigest(),
+                "changed=" + tagged, "retained=" + retained, flush=True)
+          PY

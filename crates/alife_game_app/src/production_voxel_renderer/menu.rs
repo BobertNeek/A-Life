@@ -1532,6 +1532,10 @@ fn adapt_layout(world: &mut World) {
 #[path = "menu_load_tests.rs"]
 pub(super) mod load_tests;
 
+#[cfg(all(test, target_os = "linux", not(feature = "gpu-runtime")))]
+#[path = "menu_offscreen_foliage_tests.rs"]
+mod offscreen_foliage_tests;
+
 #[cfg(test)]
 mod tests {
     use super::*;
