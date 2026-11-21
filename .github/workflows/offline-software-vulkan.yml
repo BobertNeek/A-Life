@@ -2,7 +2,7 @@ name: Offline software-Vulkan correctness
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'qualia-ci/nano512-stock-8429f54']
     paths:
       - 'crates/**'
       - 'Cargo.toml'
@@ -26,6 +26,7 @@ permissions:
 
 jobs:
   offline-software-vulkan:
+    if: github.ref != 'refs/heads/qualia-ci/nano512-stock-8429f54'
     name: Offline correctness on the actual CPU Vulkan adapter
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -190,3 +191,268 @@ jobs:
             visible_object_ports_match_cpu_encoding_on_software_vulkan \
             -- --ignored --exact --nocapture --test-threads=1 2>&1 | tee "$log"
           grep -Eq '^test result: ok\. 1 passed; 0 failed; 0 ignored;' "$log"
+
+  public-nano512-opening-export:
+    name: Exact public Nano512 one-opening witness
+    if: >-
+      ${{ github.repository == 'BobertNeek/A-Life' &&
+          github.event_name == 'push' &&
+          github.ref == 'refs/heads/qualia-ci/nano512-stock-8429f54' &&
+          github.run_attempt == '1' &&
+          github.event.created == false &&
+          github.event.deleted == false &&
+          github.event.forced == false &&
+          github.event.before == '8429f54f29e0569a699b3766d70e62bac2c92225' &&
+          github.event.after == github.sha &&
+          'd2fbd322aa0ee0e3ada08f936401f75dc1ca2d1cb90542491bc8cdfa259f40d6' != 'PENDING' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: bash
+    env:
+      BASE_SOURCE: 8429f54f29e0569a699b3766d70e62bac2c92225
+      LOCK_BLOB: af9d91aa4c79a1c2fbb6d662bc747ec916db5bfb
+      EXAMPLE_SOURCE: crates/alife_game_app/examples/public_nano512_opening_smoke.rs
+      EXAMPLE_SHA256: 'd2fbd322aa0ee0e3ada08f936401f75dc1ca2d1cb90542491bc8cdfa259f40d6'
+      EXAMPLE_BLOB: '939a75e2671fefd35e21f3c402f2183f990a1d74'
+      CARGO_BUILD_JOBS: '2'
+      CARGO_INCREMENTAL: '0'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
+      LP_NUM_THREADS: '2'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Verify exact public source diff and unchanged Cargo lock
+        run: |
+          set -euo pipefail
+          export GIT_OPTIONAL_LOCKS=0
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$GITHUB_EVENT_NAME" = push
+          test "$GITHUB_REPOSITORY" = 'BobertNeek/A-Life'
+          test "$GITHUB_REF" = 'refs/heads/qualia-ci/nano512-stock-8429f54'
+          test "$GITHUB_WORKFLOW_SHA" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-list --parents -n 1 HEAD)" = "$GITHUB_SHA $BASE_SOURCE"
+          workflow=.github/workflows/offline-software-vulkan.yml
+          actual="$(git diff-tree --no-commit-id --name-status --no-renames -r "$BASE_SOURCE" HEAD | LC_ALL=C sort)"
+          expected="$(printf 'A\t%s\nM\t%s\n' "$EXAMPLE_SOURCE" "$workflow" | LC_ALL=C sort)"
+          test "$actual" = "$expected"
+          test "$(git ls-tree HEAD -- "$EXAMPLE_SOURCE" | cut -d ' ' -f1)" = 100644
+          test -f "$EXAMPLE_SOURCE" && test ! -L "$EXAMPLE_SOURCE"
+          test "$(git hash-object --no-filters "$EXAMPLE_SOURCE")" = "$EXAMPLE_BLOB"
+          printf '%s  %s\n' "$EXAMPLE_SHA256" "$EXAMPLE_SOURCE" | sha256sum --strict -c
+          test "$(git hash-object --no-filters Cargo.lock)" = "$LOCK_BLOB"
+          git diff-index --quiet HEAD --
+          printf 'NANO512_RECEIVER_COMMIT=%s\nNANO512_RECEIVER_TREE=%s\n' "$GITHUB_SHA" "$(git rev-parse 'HEAD^{tree}')"
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # pinned action
+        with:
+          toolchain: 1.100.0
+          targets: x86_64-unknown-linux-gnu
+      - name: Install and pin the historical signed Ubuntu software Vulkan driver
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          . /etc/os-release
+          test "$ID" = ubuntu && test "$VERSION_ID" = '24.04' && test "$VERSION_CODENAME" = noble
+          test "$(dpkg --print-architecture)" = amd64
+          keyring=/usr/share/keyrings/ubuntu-archive-keyring.gpg
+          test -r "$keyring"
+          sources="$RUNNER_TEMP/qualia-nano512-ubuntu.list"
+          printf '%s\n' \
+            "deb [signed-by=$keyring] https://archive.ubuntu.com/ubuntu noble main universe" \
+            "deb [signed-by=$keyring] https://archive.ubuntu.com/ubuntu noble-updates main universe" \
+            "deb [signed-by=$keyring] https://security.ubuntu.com/ubuntu noble-security main universe" > "$sources"
+          apt_options=(-o "Dir::Etc::sourcelist=$sources" -o 'Dir::Etc::sourceparts=-'
+            -o 'Acquire::https::Timeout=20' -o 'Acquire::http::Timeout=20'
+            -o 'Acquire::Retries=2' -o 'APT::Update::Error-Mode=any')
+          sudo apt-get "${apt_options[@]}" update
+          sudo apt-get "${apt_options[@]}" install --no-install-recommends -y \
+            'libvulkan1=1.3.275.0-1build1' 'mesa-vulkan-drivers=25.2.8-0ubuntu0.24.04.5'
+          test "$(dpkg-query -W -f='${Version}' libvulkan1)" = '1.3.275.0-1build1'
+          test "$(dpkg-query -W -f='${Version}' mesa-vulkan-drivers)" = '25.2.8-0ubuntu0.24.04.5'
+          shopt -s nullglob
+          icds=(/usr/share/vulkan/icd.d/lvp_icd*.json)
+          test "${#icds[@]}" -eq 1
+          test -f "${icds[0]}"
+          printf 'VK_DRIVER_FILES=%s\n' "${icds[0]}" >> "$GITHUB_ENV"
+          dpkg-query -W libvulkan1 mesa-vulkan-drivers
+          cat "${icds[0]}"
+      - name: Fetch checksum-locked public crates and build the single example frozen
+        timeout-minutes: 15
+        run: |
+          set -euo pipefail
+          export CARGO_HOME="$RUNNER_TEMP/qualia-nano512-cargo"
+          export CARGO_TARGET_DIR="$RUNNER_TEMP/qualia-nano512-target"
+          mkdir "$CARGO_HOME" "$CARGO_TARGET_DIR"
+          rustc +1.100.0 -vV | tee "$RUNNER_TEMP/qualia-nano512-rustc.txt"
+          grep -Fx 'commit-hash: 0ef1bc386059596dada8fb65b50425aab2ea637a' "$RUNNER_TEMP/qualia-nano512-rustc.txt"
+          grep -Fx 'release: 1.100.0' "$RUNNER_TEMP/qualia-nano512-rustc.txt"
+          grep -Fx 'host: x86_64-unknown-linux-gnu' "$RUNNER_TEMP/qualia-nano512-rustc.txt"
+          cargo +1.100.0 -V | tee "$RUNNER_TEMP/qualia-nano512-cargo.txt"
+          grep -E '^cargo 1\.100\.0 ' "$RUNNER_TEMP/qualia-nano512-cargo.txt"
+          cargo +1.100.0 fetch --locked --target x86_64-unknown-linux-gnu
+          python3 - <<'PY'
+          import hashlib, os, pathlib, tomllib
+          lock = tomllib.loads(pathlib.Path('Cargo.lock').read_text('utf-8'))
+          registry = 'registry+https://github.com/rust-lang/crates.io-index'
+          pins = {}
+          for p in lock['package']:
+              if 'source' not in p:
+                  continue
+              if p['source'] != registry or p.get('checksum') is None:
+                  raise SystemExit('unsupported or unpinned Cargo source')
+              name = f"{p['name']}-{p['version']}.crate"
+              if name in pins:
+                  raise SystemExit('duplicate Cargo source identity')
+              pins[name] = p['checksum']
+          cache = pathlib.Path(os.environ['CARGO_HOME']) / 'registry' / 'cache'
+          files = sorted(cache.glob('*/*.crate'))
+          if not files:
+              raise SystemExit('empty public Cargo cache')
+          rows = []
+          for f in files:
+              sha = hashlib.sha256(f.read_bytes()).hexdigest()
+              if sha != pins.get(f.name):
+                  raise SystemExit(f'unknown or mismatched locked crate: {f.name}')
+              rows.append(f'{sha}  {f.name}')
+          if len(rows) != len(set(rows)):
+              raise SystemExit('duplicated registry cache')
+          out = pathlib.Path(os.environ['RUNNER_TEMP']) / 'qualia-nano512-crates.txt'
+          out.write_text('\n'.join(rows) + '\n', encoding='ascii')
+          print(f'locked_public_crate_count={len(rows)}')
+          PY
+          cargo +1.100.0 build --frozen --target x86_64-unknown-linux-gnu \
+            -p alife_game_app --no-default-features --features gpu-tests \
+            --example public_nano512_opening_smoke
+          git diff --exit-code -- Cargo.lock
+      - name: Run the exact public one-opening receipt once
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/qualia-nano512-target/x86_64-unknown-linux-gnu/debug/examples"
+          binary="$root/public_nano512_opening_smoke"
+          test -f "$binary" && test -x "$binary" && test ! -L "$binary"
+          header="$(readelf --file-header --wide "$binary")"
+          grep -E '^ *Class: +ELF64 *$' <<< "$header"
+          grep -E '^ *Machine:.*X86-64 *$' <<< "$header"
+          /lib64/ld-linux-x86-64.so.2 --list "$binary" > "$RUNNER_TEMP/qualia-nano512-needed.txt"
+          cd "$RUNNER_TEMP"
+          install -d -m 700 qualia-nano512-run
+          cd qualia-nano512-run
+          export XDG_RUNTIME_DIR="$PWD/runtime"
+          export XDG_CACHE_HOME="$PWD/cache"
+          mkdir -m 700 "$XDG_RUNTIME_DIR" "$XDG_CACHE_HOME"
+          export QUALIA_PUBLIC_NANO512_WITNESS=1 ALIFE_SLM_PRIOR=off ALIFE_SLM_PRIOR_BACKEND=off
+          timeout --kill-after=5s 120s "$binary" --one-awake-opening |
+            tee "$RUNNER_TEMP/qualia-nano512-result.txt"
+          python3 - "$RUNNER_TEMP/qualia-nano512-result.txt" <<'PY'
+          import json, math, pathlib, re, struct, sys
+          lines = pathlib.Path(sys.argv[1]).read_text(encoding='utf-8').splitlines()
+          stages = [
+              'admitted-example-args', 'fresh-fixture-ready',
+              'explicit-named-software-runtime-device-ready',
+              'one-fresh-nano512-awake-resident-ready',
+          ]
+          if lines[:-1] != ['NANO512_OPENING_STAGE ' + stage for stage in stages]:
+              raise SystemExit('missing, repeated, reordered or unexpected public receipt lines')
+          def unique(pairs):
+              d = dict(pairs)
+              if len(d) != len(pairs):
+                  raise ValueError('duplicate JSON key')
+              return d
+          row = json.loads(lines[-1], object_pairs_hook=unique)
+          expected_keys = {
+              'schema', 'adapter', 'driver_info', 'same_owner', 'decision_tick',
+              'outcome_tick', 'world_seed', 'neural_action', 'candidate_index',
+              'logit_f32_bits', 'real_channel_count', 'actual_patch_success',
+              'body_entity', 'settled_channels', 'accepted_nonzero_paid_channel',
+              'joint_patch_digest', 'authority_digest', 'slot', 'slot_generation',
+              'dispatch_generation', 'phenotype_hash', 'hardware_gpu_qualification',
+              'save_or_replay_used',
+          }
+          if set(row) != expected_keys:
+              raise SystemExit('unknown or incomplete terminal receipt shape')
+          def uint(x, bits=64):
+              return type(x) is int and 0 <= x < 1 << bits
+          def finite_f32(x):
+              if not uint(x, 32):
+                  raise ValueError('non-u32 IEEE payload')
+              f = struct.unpack('!f', x.to_bytes(4, 'big'))[0]
+              if not math.isfinite(f):
+                  raise ValueError('nonfinite IEEE payload')
+              return f
+          checks = {
+              'schema': 'nano512-ordinary-offline-software-opening-v1',
+              'driver_info': 'Mesa 25.2.8-0ubuntu0.24.04.5 (LLVM 20.1.2)',
+              'same_owner': 1, 'decision_tick': 0, 'outcome_tick': 1, 'world_seed': 31117,
+              'hardware_gpu_qualification': False, 'save_or_replay_used': False,
+              'accepted_nonzero_paid_channel': True,
+          }
+          if any(type(row[k]) is not type(v) or row[k] != v for k, v in checks.items()):
+              raise SystemExit('wrong named source/clock/driver/admission result')
+          if not re.fullmatch(r'llvmpipe \(LLVM 20\.1\.2, [1-9][0-9]* bits\)', row['adapter']):
+              raise SystemExit('not the matched stock software adapter')
+          for k in ('body_entity', 'slot_generation', 'dispatch_generation'):
+              if not uint(row[k]) or row[k] == 0:
+                  raise SystemExit('absent owner/authority identity')
+          if not (uint(row['slot']) and row['slot'] < 32 and uint(row['neural_action']) and
+                  uint(row['candidate_index']) and type(row['actual_patch_success']) is bool):
+              raise SystemExit('invalid resident slot, candidate or patch status')
+          finite_f32(row['logit_f32_bits'])
+          for k in ('joint_patch_digest', 'authority_digest', 'phenotype_hash'):
+              h = row[k]
+              if not isinstance(h, list) or len(h) != 4 or not all(uint(w) for w in h) or not any(h):
+                  raise SystemExit('missing accepted exact digest')
+          channels = row['settled_channels']
+          if (not isinstance(channels, list) or not channels or
+                  not uint(row['real_channel_count']) or len(channels) != row['real_channel_count']):
+              raise SystemExit('no real complete settled channel window')
+          fees = []
+          for ch in channels:
+              if set(ch) != {'phase', 'contact', 'energy_fee_f32_bits'} or not all(
+                      isinstance(ch[k], str) and ch[k] for k in ('phase', 'contact')):
+                  raise SystemExit('invalid settled channel cut')
+              fees.append(finite_f32(ch['energy_fee_f32_bits']))
+          if any(x < 0 for x in fees) or not any(x > 0 for x in fees):
+              raise SystemExit('paid action claim is unsupported by channel bytes')
+          print('NANO512_PUBLIC_OPENING_EXPORT_QUALIFIED')
+          PY
+      - name: Package only the qualified executable and public provenance
+        run: |
+          set -euo pipefail
+          stage="$RUNNER_TEMP/qualia-nano512-export"
+          mkdir "$stage"
+          binary="$RUNNER_TEMP/qualia-nano512-target/x86_64-unknown-linux-gnu/debug/examples/public_nano512_opening_smoke"
+          install -m 0755 "$binary" "$stage/public_nano512_opening_smoke"
+          for tag in rustc cargo crates needed result; do
+            install -m 0644 "$RUNNER_TEMP/qualia-nano512-$tag.txt" "$stage/$tag.txt"
+          done
+          {
+            printf 'commit=%s\ntree=%s\nbase=%s\ncargo_lock_git=%s\n' \
+              "$GITHUB_SHA" "$(git rev-parse 'HEAD^{tree}')" "$BASE_SOURCE" "$LOCK_BLOB"
+            printf 'example_git=%s\nexample_sha256=%s\nrun_id=%s\nrun_attempt=%s\n' \
+              "$EXAMPLE_BLOB" "$EXAMPLE_SHA256" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
+            dpkg-query -W libvulkan1 mesa-vulkan-drivers
+            sha256sum "$VK_DRIVER_FILES" /usr/lib/x86_64-linux-gnu/libvulkan_lvp.so
+          } > "$stage/PROVENANCE.txt"
+          (
+            cd "$stage"
+            LC_ALL=C sha256sum PROVENANCE.txt cargo.txt crates.txt needed.txt public_nano512_opening_smoke result.txt rustc.txt > SHA256SUMS
+            cat SHA256SUMS
+            tar --format=ustar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner \
+              -cf - PROVENANCE.txt SHA256SUMS cargo.txt crates.txt needed.txt public_nano512_opening_smoke result.txt rustc.txt |
+              gzip -n > "$RUNNER_TEMP/qualia-public-nano512-opening.tar.gz"
+          )
+          sha256sum "$RUNNER_TEMP/qualia-public-nano512-opening.tar.gz"
+      - name: Export only the exact qualified public fixture
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: qualia-public-nano512-opening
+          path: ${{ runner.temp }}/qualia-public-nano512-opening.tar.gz
+          if-no-files-found: error
+          retention-days: 1
