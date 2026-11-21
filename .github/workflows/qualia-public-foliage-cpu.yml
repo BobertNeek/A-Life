@@ -13,7 +13,7 @@ jobs:
   public-foliage-cpu:
     if: >-
       github.repository == 'BobertNeek/A-Life' &&
-      github.event.before == '67e350001b9756366702de74d1a7ee8829e4fb1d' &&
+      github.event.before == '56cb0f46e7393cf8f0e6924040ea5c00aa4ab339' &&
       !github.event.created && !github.event.deleted && !github.event.forced
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -24,8 +24,6 @@ jobs:
       CARGO_PROFILE_DEV_DEBUG: '0'
       RUST_MIN_STACK: '33554432'
       RUST_TEST_THREADS: '1'
-      CARGO_TARGET_DIR: ${{ runner.temp }}/qualia-foliage-cpu
-      TMPDIR: ${{ runner.temp }}
     steps:
       - name: Checkout the immutable public review, not the workflow branch
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # stock v4
@@ -53,6 +51,12 @@ jobs:
       - name: Compile the library test binary once and run four exact CPU checks
         shell: bash
         run: |
+          case "$RUNNER_TEMP" in
+            /*) ;;
+            *) printf '%s\n' 'RUNNER_TEMP must be an absolute runner path' >&2; exit 1 ;;
+          esac
+          export CARGO_TARGET_DIR="$RUNNER_TEMP/qualia-foliage-cpu"
+          export TMPDIR="$RUNNER_TEMP"
           rustc --version --verbose
           cargo --version
           metadata="$RUNNER_TEMP/qualia-foliage-cargo.jsonl"
