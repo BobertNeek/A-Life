@@ -265,6 +265,7 @@ fn ux() -> Fvr05ProductionUxStateResource {
     let profile = ProductionFrontendProfileId::MinimumSettings30x30;
     Fvr05ProductionUxStateResource{
         settings:Fvr05ProductionUxSettings{
+            foliage_density: crate::production_voxel_frontend::FOLIAGE_DEFAULT,
             schema:"alife.fvr05.production_ux.v1".into(),schema_version:1,
             selected_profile:profile,preferred_profile_for_next_launch:profile,
             active_inspector_tab:Fvr05ProductionInspectorTab::Creature,enabled_overlays:vec![],

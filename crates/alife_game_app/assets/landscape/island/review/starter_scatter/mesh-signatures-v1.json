@@ -1,0 +1,36 @@
+{
+  "terrain_sha256": "65bed5720b89b6c4462e55d15e24e7d860d5fd4109844d4376fafc50d914928c",
+  "surface_sha256": "8d0e9cf6343ffe8ea5e82bcb7ad3e4ef77eef7207042cf0274de5d91f2457c38",
+  "tile": {
+    "positions": 1217,
+    "indices": 6912,
+    "position_words": 7587283746244413890,
+    "index_words": 7269646719423337233
+  },
+  "species": [
+    {
+      "positions": 105,
+      "indices": 336,
+      "position_words": 17352411478998060741,
+      "index_words": 9218998972543990237,
+      "normal_words": 18338175483865933526,
+      "rgba_words": 5546199694823087670
+    },
+    {
+      "positions": 126,
+      "indices": 420,
+      "position_words": 9230074513892782579,
+      "index_words": 10776108597744688353,
+      "normal_words": 17142436826907795186,
+      "rgba_words": 12970755277458052726
+    },
+    {
+      "positions": 111,
+      "indices": 360,
+      "position_words": 7962741924908888578,
+      "index_words": 211100351107361201,
+      "normal_words": 10237313665131126735,
+      "rgba_words": 17419676292174441532
+    }
+  ]
+}

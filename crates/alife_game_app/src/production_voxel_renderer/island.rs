@@ -1,5 +1,7 @@
 //! Island chunk and prop rendering for the playable world.
 mod nursery;
+pub(super) mod scatter;
+use crate::production_voxel_frontend::FOLIAGE_DEFAULT;
 use super::*;
 use bevy::{
     gltf::{Gltf, GltfMesh},
@@ -39,6 +41,23 @@ pub(super) struct PropRange {
     meshes: [Handle<Mesh>; 3],
     current: usize,
     tree: bool,
+}
+
+#[derive(Component)]
+pub(super) struct DecorativeGround(u8);
+
+// Identity is the stable index in the original canonical placements table.
+// The same signed plants are retained across a settings change, not rerolled.
+fn foliage_rank(index: usize) -> u8 {
+    let mut bits = (index as u64).wrapping_add(0x9e3779b97f4a7c15);
+    bits = (bits ^ (bits >> 30)).wrapping_mul(0xbf58476d1ce4e5b9);
+    bits = (bits ^ (bits >> 27)).wrapping_mul(0x94d049bb133111eb);
+    ((bits ^ (bits >> 31)) >> 56) as u8
+}
+
+fn keep_foliage(rank: u8, level: u8) -> bool {
+    u16::from(rank) < [0, 85, 171, 256, 256, 256]
+        .get(usize::from(level)).copied().unwrap_or(256)
 }
 
 // Non-tree prop visibility must remain below the L2 selection cutoffs.
@@ -331,7 +350,12 @@ pub(super) fn update(
     gltfs: Option<Res<Assets<Gltf>>>,
     gltf_meshes: Option<Res<Assets<GltfMesh>>>,
     mut chunks: Query<(&mut Mesh3d, &mut TerrainLod), Without<PropRange>>,
-    mut props: Query<(&mut Mesh3d, &mut Visibility, &mut PropRange), Without<TerrainLod>>,
+    mut props: Query<
+        (&mut Mesh3d, &mut Visibility, &mut PropRange, Option<&DecorativeGround>),
+        Without<TerrainLod>,
+    >,
+    ux: Option<Res<Fvr05ProductionUxStateResource>>,
+    mut last_density: Local<Option<u8>>,
     cameras: Query<(&Transform, &Projection), With<Fvr03ProductionVoxelCamera>>,
     creatures: Query<&Transform, With<ProductionCreatureAssemblyRoot>>,
     mut suns: Query<(
@@ -341,6 +365,17 @@ pub(super) fn update(
     )>,
     mut shadow_configs: Local<ShadowConfigCache>,
 ) {
+    let density = ux.as_ref().map_or(FOLIAGE_DEFAULT, |ux| ux.settings.foliage_density);
+    let density_changed = *last_density != Some(density);
+    // Restrictions apply ahead of the streaming/camera/throttle exits. A
+    // previously visible plant cannot leak through an Off or lower change.
+    if density_changed {
+        for (_, mut visibility, _, foliage) in &mut props {
+            if foliage.is_some_and(|f| !keep_foliage(f.0, density)) {
+                visibility.set_if_neq(Visibility::Hidden);
+            }
+        }
+    }
     let Some(mut assets) = assets else {
         return;
     };
@@ -390,7 +425,7 @@ pub(super) fn update(
             }
         }
         let mut shared_prop_material = None;
-        for p in placements() {
+        for (index, p) in placements().into_iter().enumerate() {
             let gltf = gltfs.get(&assets.props[&p.kind]).unwrap();
             let position = grounded_prop_position(&p.kind, p.position, surface);
             let tree = matches!(p.kind.as_str(), "Broadleaf" | "Conifer" | "Sapling");
@@ -435,7 +470,7 @@ pub(super) fn update(
                 Fvr04ProductionRuntimeSceneRoot,
             ));
             if small {
-                entity.insert(NotShadowCaster);
+                entity.insert((NotShadowCaster, DecorativeGround(foliage_rank(index))));
             }
         }
         info!("Island loaded: {nx}x{nz} terrain chunks, shared prop meshes, 3 LODs");
@@ -444,13 +479,51 @@ pub(super) fn update(
         }
         assets.spawned = true;
     }
-    if time.elapsed_secs_f64() < assets.next_update {
+    *last_density = Some(density);
+    let now = time.elapsed_secs_f64();
+    let full = now >= assets.next_update;
+    if !full && !density_changed {
         return;
     }
-    assets.next_update = time.elapsed_secs_f64() + 0.2;
     let focus = focus_on_surface(camera, &assets.surface);
     let height = view_height(projection);
-    for (mut light, mut cascades, sun) in &mut suns {
+    if full {
+        assets.next_update = now + 0.2;
+        update_chunk_and_sun(
+            &mut suns, &mut shadow_configs, &mut chunks, &creatures,
+            &assets.surface, camera, focus, height,
+        );
+    }
+    for (mut mesh, mut visibility, mut prop, foliage) in &mut props {
+        if !full && foliage.is_none() {
+            continue;
+        }
+        if foliage.is_some_and(|f| !keep_foliage(f.0, density)) {
+            visibility.set_if_neq(Visibility::Hidden);
+            continue;
+        }
+        let distance = Vec2::new(prop.position.x - focus.x, prop.position.z - focus.z).length();
+        let (next_visibility, target) = prop_view_state(prop.tree, prop.distance, distance, height);
+        visibility.set_if_neq(next_visibility);
+        if target != prop.current {
+            mesh.0 = prop.meshes[target].clone();
+            prop.current = target;
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments, reason = "Retain the original camera-throttled update")]
+fn update_chunk_and_sun(
+    suns: &mut Query<(&mut DirectionalLight, &mut bevy::light::CascadeShadowConfig, &TerrainSun)>,
+    shadow_configs: &mut ShadowConfigCache,
+    chunks: &mut Query<(&mut Mesh3d, &mut TerrainLod), Without<PropRange>>,
+    creatures: &Query<&Transform, With<ProductionCreatureAssemblyRoot>>,
+    surface: &alife_world::TerrainSurface,
+    camera: &Transform,
+    focus: Vec3,
+    height: f32,
+) {
+    for (mut light, mut cascades, sun) in suns {
         let shadows_enabled = sun.enabled && height < 240.0;
         if light.shadows_enabled != shadows_enabled {
             light.shadows_enabled = shadows_enabled;
@@ -472,11 +545,11 @@ pub(super) fn update(
             }
         }
     }
-    for (mut mesh, mut lod) in &mut chunks {
+    for (mut mesh, mut lod) in chunks {
         let distance = Vec2::new(lod.center.x - focus.x, lod.center.z - focus.z).length();
         let occupied = creatures.iter().any(|c| {
-            (c.translation.x - lod.center.x).abs() < assets.surface.spacing * 16.5
-                && (c.translation.z - lod.center.z).abs() < assets.surface.spacing * 16.5
+            (c.translation.x - lod.center.x).abs() < surface.spacing * 16.5
+                && (c.translation.z - lod.center.z).abs() < surface.spacing * 16.5
         });
         let target = if occupied || (height < 100.0 && distance < 150.0) {
             0
@@ -490,15 +563,31 @@ pub(super) fn update(
             lod.current = target;
         }
     }
-    for (mut mesh, mut visibility, mut prop) in &mut props {
-        let distance = Vec2::new(prop.position.x - focus.x, prop.position.z - focus.z).length();
-        let (next_visibility, target) = prop_view_state(prop.tree, prop.distance, distance, height);
-        visibility.set_if_neq(next_visibility);
-        if target != prop.current {
-            mesh.0 = prop.meshes[target].clone();
-            prop.current = target;
+}
+
+#[cfg(test)]
+#[test]
+fn foliage_levels_are_strictly_nested_and_stock_is_exact() {
+    let mut prior = std::collections::BTreeSet::new();
+    for level in 0..=crate::production_voxel_frontend::FOLIAGE_MAX {
+        let live = placements().into_iter().enumerate()
+            .filter_map(|(index, row)| {
+                matches!(row.kind.as_str(), "Grass" | "Fern" | "Flowers")
+                    .then_some(index)
+                    .filter(|&i| keep_foliage(foliage_rank(i), level))
+            })
+            .collect::<std::collections::BTreeSet<_>>();
+        assert!(prior.is_subset(&live));
+        match level {
+            0 => assert!(live.is_empty()),
+            1 | 2 | 3 => assert!(live.len() > prior.len()),
+            4 | 5 => assert_eq!(live, prior),
+            _ => unreachable!(),
         }
+        prior = live;
     }
+    assert_eq!(prior.len(), placements().iter().filter(|row|
+        matches!(row.kind.as_str(), "Grass" | "Fern" | "Flowers")).count());
 }
 
 #[cfg(test)]

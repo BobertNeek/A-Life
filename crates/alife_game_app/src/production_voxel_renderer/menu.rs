@@ -1,5 +1,6 @@
 //! A small modal player menu. Debug rails remain separate; world truth stays in runtime.
 mod field_camera;
+mod foliage;
 mod garden_survey;
 use super::*;
 use accesskit::{Action as AccessibleAction, Role};
@@ -18,6 +19,7 @@ enum Screen {
     Main,
     Speed,
     Settings,
+    Graphics,
     Photos,
     Garden,
     ConfirmLoad,
@@ -33,6 +35,8 @@ pub(super) enum Action {
     CancelLoad,
     Speed,
     Settings,
+    Graphics,
+    Foliage,
     Quit,
     Photos,
     Garden,
@@ -82,7 +86,12 @@ const SPEED: [(Action, &str); 3] = [
     (Action::Max, "Max"),
     (Action::Back, "Back"),
 ];
-const SETTINGS: [(Action, &str); 2] = [(Action::Focus, "Autopause"), (Action::Back, "Back")];
+const SETTINGS: [(Action, &str); 3] = [
+    (Action::Focus, "Autopause"),
+    (Action::Graphics, "Graphics"),
+    (Action::Back, "Back"),
+];
+const GRAPHICS: [(Action, &str); 2] = [(Action::Foliage, "Foliage density"), (Action::Back, "Back")];
 
 const CONFIRM_LOAD: [(Action, &str); 2] = [
     (Action::CancelLoad, "Cancel"),
@@ -140,6 +149,7 @@ pub(crate) struct MenuState {
     key_reader: MessageCursor<KeyboardInput>,
     accessible_reader: MessageCursor<ActionRequest>,
     accessible_action: Option<Action>,
+    foliage_drag: foliage::Drag,
     pub(super) pending: Option<Action>,
     plate_action: Option<Action>,
     garden_action: Option<Action>,
@@ -192,8 +202,9 @@ impl MenuState {
         resume
     }
     fn back(&mut self) {
-        self.screen = Screen::Main;
-        self.selected = 0;
+        let from_graphics = self.screen == Screen::Graphics;
+        self.screen = if from_graphics { Screen::Settings } else { Screen::Main };
+        self.selected = usize::from(from_graphics);
     }
     fn rows(&self) -> &'static [(Action, &'static str)] {
         match self.screen {
@@ -202,6 +213,7 @@ impl MenuState {
             Screen::Garden => &GARDEN,
             Screen::Speed => &SPEED,
             Screen::Settings => &SETTINGS,
+            Screen::Graphics => &GRAPHICS,
             Screen::ConfirmLoad => &CONFIRM_LOAD,
             Screen::Closed => &[],
         }
@@ -457,6 +469,11 @@ impl MenuState {
                 self.screen = Screen::Settings;
                 self.selected = 0;
             }
+            Some(Action::Graphics) => {
+                self.screen = Screen::Graphics;
+                self.selected = 0;
+            }
+            Some(Action::Foliage) => {} // The visible slider owns its pointer and arrow input.
             Some(Action::Back) => self.back(),
             Some(action) => self.pending = Some(action),
             None => {}
@@ -582,6 +599,7 @@ struct MenuGlyphs {
     later: Handle<Image>,
     visit: Handle<Image>,
     sow: Handle<Image>,
+    foliage: Handle<Image>,
 }
 
 impl MenuGlyphs {
@@ -604,6 +622,7 @@ impl MenuGlyphs {
         Self {
             visit: load(include_bytes!("../../../../assets/ui/orchard/return.png")),
             sow: load(include_bytes!("../../../../assets/ui/orchard/sow.png")),
+            foliage: load(include_bytes!("../../../../assets/ui/settings/foliage.png")),
             shutter: load(include_bytes!(
                 "../../../../assets/ui/field_camera/shutter.png"
             )),
@@ -641,6 +660,7 @@ impl MenuGlyphs {
             Action::Newer | Action::NextBed => &self.later,
             Action::VisitBed => &self.visit,
             Action::FindSoil => &self.sow,
+            Action::Graphics | Action::Foliage => &self.foliage,
             Action::OneX => &self.play,
             Action::Max => &self.fast,
             Action::Focus => &self.pause,
@@ -659,6 +679,7 @@ fn spawn_ui(world: &mut World) {
         (Screen::Main, MAIN.as_slice()),
         (Screen::Speed, SPEED.as_slice()),
         (Screen::Settings, SETTINGS.as_slice()),
+        (Screen::Graphics, GRAPHICS.as_slice()),
         (Screen::Photos, PHOTOS.as_slice()),
         (Screen::Garden, GARDEN.as_slice()),
         (Screen::ConfirmLoad, CONFIRM_LOAD.as_slice()),
@@ -687,6 +708,7 @@ fn spawn_ui(world: &mut World) {
                             Screen::Main => "Menu",
                             Screen::Speed => "Speed",
                             Screen::Settings => "Settings",
+                            Screen::Graphics => "Graphics settings",
                             Screen::Photos => "Your field photographs",
                             Screen::Garden => "Map of your planted garden",
                             Screen::ConfirmLoad => LOAD_WARNING,
@@ -731,14 +753,18 @@ fn spawn_ui(world: &mut World) {
                                 }),
                                 Interaction::None,
                                 FocusPolicy::Block,
-                                accessible(
-                                    Role::Button,
-                                    if action == Action::ConfirmLoad {
-                                        "Load and discard unsaved changes"
-                                    } else {
-                                        label
-                                    },
-                                ),
+                                if action == Action::Foliage {
+                                    foliage::accessibility()
+                                } else {
+                                    accessible(
+                                        Role::Button,
+                                        if action == Action::ConfirmLoad {
+                                            "Load and discard unsaved changes"
+                                        } else {
+                                            label
+                                        },
+                                    )
+                                },
                                 MenuButton {
                                     screen,
                                     action,
@@ -763,7 +789,9 @@ fn spawn_ui(world: &mut World) {
                                         BackgroundColor(ink::JADE),
                                     ));
                                 }
-                                if screen == Screen::Main {
+                                if action == Action::Foliage {
+                                    foliage::mount(button, &glyphs.foliage);
+                                } else if screen == Screen::Main {
                                     button.spawn((
                                         Text::new(label),
                                         TextFont {
@@ -909,23 +937,27 @@ fn handle_input_with_availability(world: &mut World, availability: LoadAvailabil
         .iter(world)
         .next()
         .is_none_or(|window| window.focused);
+    let screen_before = world.resource::<MenuState>().screen;
+    let foliage_value = world.resource::<Fvr05ProductionUxStateResource>().settings.foliage_density;
+    let mut accessible_foliage = None;
     world.resource_scope(|world, mut state: Mut<MenuState>| {
         let mut action = None;
-        let screen_before = state.screen;
         if let Some(messages) = world.get_resource::<bevy::ecs::message::Messages<ActionRequest>>()
         {
             // Drain the whole batch even when blocked. Only controls on the
             // page visible before this batch can activate, never the next page.
             for request in state.accessible_reader.read(messages) {
-                if focused
-                    && !conversation_open
-                    && request.0.action == AccessibleAction::Click
-                    && action.is_none()
-                {
-                    action = controls.iter().find_map(|(entity, screen, action)| {
-                        (*entity == request.0.target.0 && *screen == screen_before)
-                            .then_some(*action)
-                    });
+                if !focused || conversation_open || action.is_some() || accessible_foliage.is_some() {
+                    continue;
+                }
+                let target = controls.iter().find_map(|(entity, screen, action)| {
+                    (*entity == request.0.target.0 && *screen == screen_before)
+                        .then_some(*action)
+                });
+                if target == Some(Action::Foliage) {
+                    accessible_foliage = foliage::access_value(&request.0, foliage_value);
+                } else if request.0.action == AccessibleAction::Click {
+                    action = target;
                 }
             }
         }
@@ -989,6 +1021,10 @@ fn handle_input_with_availability(world: &mut World, availability: LoadAvailabil
             availability,
         )
     });
+    foliage::handle(
+        world, screen_before, &keyboard, focused, left_down, left_pressed,
+        cursor, accessible_foliage,
+    );
     garden_survey::handle(world, &mut outcome, focused);
     let InputOutcome {
         opening,
@@ -1221,13 +1257,14 @@ fn button_color(interaction: Interaction, selected: bool, active: bool) -> Color
 fn sync_ui(
     state: Res<MenuState>,
     ux: Res<Fvr05ProductionUxStateResource>,
-    mut roots: Query<(&MenuRoot, &mut Node)>,
+    mut roots: Query<(&MenuRoot, &mut Node), Without<foliage::Thumb>>,
     mut buttons: Query<(&MenuButton, &Interaction, &mut BackgroundColor)>,
     glyphs: Res<MenuGlyphs>,
     shelf: Option<Res<field_camera::Shelf>>,
     survey: Option<Res<garden_survey::Survey>>,
     mut statuses: Query<(&mut ImageNode, &mut Visibility), (With<Status>, Without<SelectionLamp>)>,
     mut lamps: Query<(&SelectionLamp, &mut Visibility)>,
+    mut thumb: Query<&mut Node, (With<foliage::Thumb>, Without<MenuRoot>)>,
     mut accessibility: Query<
         (
             Option<&MenuPanel>,
@@ -1257,6 +1294,12 @@ fn sync_ui(
             node.set_hidden();
         }
         if let Some(button) = button {
+            if button.action == Action::Foliage {
+                let value = f64::from(ux.settings.foliage_density);
+                if node.numeric_value() != Some(value) {
+                    node.set_numeric_value(value);
+                }
+            }
             if state.busy()
                 || state.conversation_capture
                 || state.release_gate
@@ -1281,6 +1324,12 @@ fn sync_ui(
                     accesskit::Toggled::False
                 });
             }
+        }
+    }
+    for mut node in &mut thumb {
+        let left = foliage::thumb_offset(ux.settings.foliage_density);
+        if node.left != left {
+            node.left = left;
         }
     }
     for (root, mut node) in &mut roots {
@@ -1698,6 +1747,7 @@ mod tests {
                 Screen::ConfirmLoad,
                 Screen::Photos,
                 Screen::Garden,
+                Screen::Graphics,
             ] {
                 let mut app = App::new();
                 app.add_plugins(HierarchyPropagatePlugin::<ComputedUiTargetCamera>::new(
@@ -1793,14 +1843,16 @@ mod tests {
                         Screen::Photos => PHOTOS.len(),
                         Screen::Garden => GARDEN.len(),
                         Screen::Speed => 3,
-                        Screen::Settings | Screen::ConfirmLoad => 2,
+                        Screen::Settings => SETTINGS.len(),
+                        Screen::Graphics => GRAPHICS.len(),
+                        Screen::ConfirmLoad => CONFIRM_LOAD.len(),
                         Screen::Closed => 0,
                     }
                 );
                 receipts.push(serde_json::json!({"viewport":[size.x,size.y],"screen":format!("{:?}",screen),"buttons":rows}));
             }
         }
-        for screens in receipts.as_chunks::<6>().0 {
+        for screens in receipts.as_chunks::<7>().0 {
             let load = |screen: usize, action: &str| {
                 screens[screen]["buttons"]
                     .as_array()

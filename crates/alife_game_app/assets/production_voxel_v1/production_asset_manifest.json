@@ -968,6 +968,116 @@
       "size_bytes": 69400,
       "source": "generated:sanctuary-landmarks",
       "usage_category": "environment-dressing"
+    },
+    {
+      "asset_id": "starter-scatter-grasstuft",
+      "author": "Qualia art",
+      "digest": "fnv1a64:ba3d9389e77d7010",
+      "external": false,
+      "final_art": true,
+      "generated": true,
+      "generator": {
+        "config_path": "crates/alife_game_app/assets/landscape/island/review/starter_scatter/layout-v1.json",
+        "date": "2026-11-21",
+        "seed": "starter-signed-island-5-8-192",
+        "tool": "deterministic offline Qualia scatter author"
+      },
+      "license": "A-Life-Generated-Source",
+      "license_ref": "README.md",
+      "local_path": "crates/alife_game_app/assets/landscape/island/review/starter_scatter/GrassTuft.glb",
+      "placeholder": false,
+      "replacement_policy": "Keep the exact signed island L0, ordered authored instances, and source mesh validation",
+      "size_bytes": 4672,
+      "source": "generated:qualia-signed-starter-scatter",
+      "usage_category": "decorative-island-foliage"
+    },
+    {
+      "asset_id": "starter-scatter-rosette",
+      "author": "Qualia art",
+      "digest": "fnv1a64:c4b81523277724a8",
+      "external": false,
+      "final_art": true,
+      "generated": true,
+      "generator": {
+        "config_path": "crates/alife_game_app/assets/landscape/island/review/starter_scatter/layout-v1.json",
+        "date": "2026-11-21",
+        "seed": "starter-signed-island-5-8-192",
+        "tool": "deterministic offline Qualia scatter author"
+      },
+      "license": "A-Life-Generated-Source",
+      "license_ref": "README.md",
+      "local_path": "crates/alife_game_app/assets/landscape/island/review/starter_scatter/Rosette.glb",
+      "placeholder": false,
+      "replacement_policy": "Keep the exact signed island L0, ordered authored instances, and source mesh validation",
+      "size_bytes": 5404,
+      "source": "generated:qualia-signed-starter-scatter",
+      "usage_category": "decorative-island-foliage"
+    },
+    {
+      "asset_id": "starter-scatter-sedge",
+      "author": "Qualia art",
+      "digest": "fnv1a64:405ae2059c0c12ff",
+      "external": false,
+      "final_art": true,
+      "generated": true,
+      "generator": {
+        "config_path": "crates/alife_game_app/assets/landscape/island/review/starter_scatter/layout-v1.json",
+        "date": "2026-11-21",
+        "seed": "starter-signed-island-5-8-192",
+        "tool": "deterministic offline Qualia scatter author"
+      },
+      "license": "A-Life-Generated-Source",
+      "license_ref": "README.md",
+      "local_path": "crates/alife_game_app/assets/landscape/island/review/starter_scatter/Sedge.glb",
+      "placeholder": false,
+      "replacement_policy": "Keep the exact signed island L0, ordered authored instances, and source mesh validation",
+      "size_bytes": 4880,
+      "source": "generated:qualia-signed-starter-scatter",
+      "usage_category": "decorative-island-foliage"
+    },
+    {
+      "asset_id": "starter-scatter-layout-v1",
+      "author": "Qualia art",
+      "digest": "fnv1a64:4377b011de310d10",
+      "external": false,
+      "final_art": true,
+      "generated": true,
+      "generator": {
+        "config_path": "crates/alife_game_app/assets/landscape/island/review/starter_scatter/layout-v1.json",
+        "date": "2026-11-21",
+        "seed": "starter-signed-island-5-8-192",
+        "tool": "deterministic offline Qualia scatter author"
+      },
+      "license": "A-Life-Generated-Source",
+      "license_ref": "README.md",
+      "local_path": "crates/alife_game_app/assets/landscape/island/review/starter_scatter/layout-v1.json",
+      "placeholder": false,
+      "replacement_policy": "Keep the exact signed island L0, ordered authored instances, and source mesh validation",
+      "size_bytes": 49083,
+      "source": "generated:qualia-signed-starter-scatter",
+      "usage_category": "decorative-island-foliage-data"
+    },
+    {
+      "asset_id": "starter-scatter-mesh-signatures-v1",
+      "author": "Qualia art",
+      "digest": "fnv1a64:35a45a0619c99f5c",
+      "external": false,
+      "final_art": true,
+      "generated": true,
+      "generator": {
+        "config_path": "crates/alife_game_app/assets/landscape/island/review/starter_scatter/layout-v1.json",
+        "date": "2026-11-21",
+        "seed": "starter-signed-island-5-8-192",
+        "tool": "deterministic offline Qualia scatter author"
+      },
+      "license": "A-Life-Generated-Source",
+      "license_ref": "README.md",
+      "local_path": "crates/alife_game_app/assets/landscape/island/review/starter_scatter/mesh-signatures-v1.json",
+      "placeholder": false,
+      "replacement_policy": "Keep the exact signed island L0, ordered authored instances, and source mesh validation",
+      "size_bytes": 1034,
+      "source": "generated:qualia-signed-starter-scatter",
+      "usage_category": "decorative-island-foliage-data"
     }
   ],
   "pack_id": "production-voxel-v1",

@@ -88,6 +88,20 @@ impl Fvr05ProductionInspectorTab {
     }
 }
 
+pub(crate) const FOLIAGE_DEFAULT: u8 = 3;
+pub(crate) const FOLIAGE_MAX: u8 = 5;
+
+fn stock_foliage() -> u8 {
+    FOLIAGE_DEFAULT
+}
+
+fn deserialize_foliage<'de, D: serde::Deserializer<'de>>(de: D) -> Result<u8, D::Error> {
+    Ok(serde_json::Value::deserialize(de)?
+        .as_u64()
+        .filter(|&value| value <= u64::from(FOLIAGE_MAX))
+        .map_or(FOLIAGE_DEFAULT, |value| value as u8))
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Fvr05ProductionUxSettings {
     pub schema: String,
@@ -108,6 +122,9 @@ pub struct Fvr05ProductionUxSettings {
     pub show_settings: bool,
     pub show_overlays: bool,
     pub pause_on_focus_loss: bool,
+    /// Client-only decorative ground cover. Old settings preserve the stock level.
+    #[serde(default = "stock_foliage", deserialize_with = "deserialize_foliage")]
+    pub(crate) foliage_density: u8,
     pub selected_stable_id: Option<u64>,
     pub source_save_path: String,
     pub runtime_save_path: String,
@@ -167,6 +184,7 @@ impl Fvr05ProductionUxSettings {
             show_settings: false,
             show_overlays: false,
             pause_on_focus_loss: true,
+            foliage_density: FOLIAGE_DEFAULT,
             selected_stable_id: None,
             source_save_path: launch.app_launch.save_path.display().to_string(),
             runtime_save_path: runtime_save.display().to_string(),
@@ -241,6 +259,34 @@ impl Fvr05ProductionUxSettings {
             fs::create_dir_all(parent)?;
         }
         fs::write(path, self.to_json_string_pretty()?)?;
+        Ok(())
+    }
+
+    /// Persist only this client preference; a graphics adjustment is not a world
+    /// save and must not persist the transient menu pause or overwrite other keys.
+    pub(crate) fn persist_foliage(
+        &self,
+        path: &Path,
+        paused_without_menu: bool,
+    ) -> Result<(), GameAppShellError> {
+        let mut document = match fs::read_to_string(path) {
+            Ok(text) => {
+                Self::from_json_str(&text)?;
+                serde_json::from_str::<serde_json::Value>(&text)?
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                let mut seed = self.clone();
+                seed.paused = paused_without_menu;
+                seed.validate()?;
+                serde_json::to_value(seed)?
+            }
+            Err(error) => return Err(error.into()),
+        };
+        document["foliage_density"] = self.foliage_density.into();
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::write(path, serde_json::to_string_pretty(&document)?)?;
         Ok(())
     }
 
@@ -1675,6 +1721,39 @@ mod tests {
                 mode
             );
         }
+    }
+
+    #[test]
+    fn foliage_setting_roundtrips_without_recording_the_modal_pause_or_world_path() {
+        let (fixture, launch) = fvr05_test_launch();
+        let mut settings = Fvr05ProductionUxSettings::default_for_launch(
+            &launch, &fvr05_test_diagnostics(&launch), &fvr05_test_save_metadata(),
+        );
+        let mut old: serde_json::Value =
+            serde_json::from_str(&settings.to_json_string_pretty().unwrap()).unwrap();
+        old.as_object_mut().unwrap().remove("foliage_density");
+        old["extra_preference"] = serde_json::json!({"keep": true});
+        let path = fixture.root.join("foliage-test.json");
+        let old_text = old.to_string();
+        assert_eq!(Fvr05ProductionUxSettings::from_json_str(&old_text).unwrap().foliage_density,
+                   FOLIAGE_DEFAULT);
+        fs::write(&path, old_text).unwrap();
+        settings.paused = true;
+        settings.runtime_save_path = "never-written-by-settings.json".into();
+        for level in [0, FOLIAGE_MAX] {
+            settings.foliage_density = level;
+            settings.persist_foliage(&path, true).unwrap();
+            let now: serde_json::Value = serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+            assert_eq!(Fvr05ProductionUxSettings::from_json_file(&path).unwrap().foliage_density, level);
+            old["foliage_density"] = level.into();
+            assert_eq!(now, old);
+        }
+        old["foliage_density"] = serde_json::json!(-1);
+        assert_eq!(Fvr05ProductionUxSettings::from_json_str(&old.to_string()).unwrap().foliage_density,
+                   FOLIAGE_DEFAULT);
+        let fresh = fixture.root.join("foliage-new-file.json");
+        settings.persist_foliage(&fresh, false).unwrap();
+        assert!(!Fvr05ProductionUxSettings::from_json_file(fresh).unwrap().paused);
     }
 
     #[test]

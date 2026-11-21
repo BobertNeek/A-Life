@@ -474,6 +474,7 @@ fn ux() -> Fvr05ProductionUxStateResource {
     let profile = ProductionFrontendProfileId::MinimumSettings30x30;
     Fvr05ProductionUxStateResource{
         settings:Fvr05ProductionUxSettings{
+            foliage_density: crate::production_voxel_frontend::FOLIAGE_DEFAULT,
             schema:"alife.fvr05.production_ux.v1".into(),schema_version:1,
             selected_profile:profile,preferred_profile_for_next_launch:profile,
             active_inspector_tab:Fvr05ProductionInspectorTab::Creature,enabled_overlays:vec![],
@@ -1281,6 +1282,86 @@ mod accessible_input {
     }
 
     #[test]
+    fn last_drag_position_on_button_up_commits_the_visible_off_detent() {
+        let mut app = app();
+        install_cpu_ui(&mut app);
+        app.world_mut().spawn((
+            Camera2d,
+            Camera {
+                computed: bevy::camera::ComputedCameraValues {
+                    target_info: Some(bevy::camera::RenderTargetInfo {
+                        physical_size: UVec2::new(1280, 720),
+                        scale_factor: 1.0,
+                    }),
+                    ..default()
+                },
+                viewport: Some(bevy::camera::Viewport {
+                    physical_size: UVec2::new(1280, 720),
+                    ..default()
+                }),
+                ..default()
+            },
+            bevy::camera::RenderTarget::default(),
+        ));
+        {
+            let mut state = app.world_mut().resource_mut::<MenuState>();
+            state.open(false);
+            state.screen = Screen::Graphics;
+        }
+        let scratch = std::env::temp_dir().join(format!(
+            "qualia-foliage-release-{}-{}",
+            std::process::id(), std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos(),
+        ));
+        let config = scratch.join("preferences.json");
+        {
+            let mut ux = app.world_mut().resource_mut::<Fvr05ProductionUxStateResource>();
+            ux.ui_settings_path = config.clone();
+            ux.settings.source_save_path = "untouched-origin.json".into();
+            ux.settings.runtime_save_path = "untouched-runtime.json".into();
+            ux.settings.created_world_save_path = "untouched-created.json".into();
+            ux.settings.asset_manifest_path = "untouched-manifest.json".into();
+            ux.settings.validation_receipt = "private CPU fixture".into();
+        }
+        frame(&mut app, &[], false);
+        frame(&mut app, &[], false);
+        let track = app.world_mut().query::<(Entity, &Name)>().iter(app.world())
+            .find(|(_, name)| name.as_str() == "Foliage slider track")
+            .unwrap().0;
+        let center = app.world().get::<bevy::ui::UiGlobalTransform>(track).unwrap().translation;
+        let width = app.world().get::<ComputedNode>(track).unwrap().size.x;
+        assert!(width > 0.);
+        let cursor = |app: &mut App, x: f32| {
+            app.world_mut().query_filtered::<&mut Window, With<PrimaryWindow>>()
+                .single_mut(app.world_mut()).unwrap()
+                .set_cursor_position(Some(center + Vec2::X * x * width));
+        };
+        let selected = |app: &App| app.world()
+            .resource::<Fvr05ProductionUxStateResource>().settings.foliage_density;
+        cursor(&mut app, 0.4);
+        app.world_mut().resource_mut::<ButtonInput<MouseButton>>().press(MouseButton::Left);
+        frame(&mut app, &[], false);
+        assert_eq!(selected(&app), crate::production_voxel_frontend::FOLIAGE_MAX);
+        assert!(!config.exists()); // Do not write on pointer movement.
+        cursor(&mut app, -0.48);
+        {
+            // This fixture drives raw ButtonInput rather than the event-clearing plugin.
+            let mut mouse = app.world_mut().resource_mut::<ButtonInput<MouseButton>>();
+            mouse.clear_just_pressed(MouseButton::Left);
+            mouse.release(MouseButton::Left);
+            assert!(!mouse.just_pressed(MouseButton::Left) && !mouse.pressed(MouseButton::Left));
+        }
+        frame(&mut app, &[], false); // No intervening held frame sees the left edge.
+        assert_eq!(selected(&app), 0);
+        assert_eq!(Fvr05ProductionUxSettings::from_json_file(&config).unwrap().foliage_density, 0);
+        cursor(&mut app, 0.4);
+        frame(&mut app, &[], false); // No re-arm or change from the released pointer.
+        assert_eq!(selected(&app), 0);
+        fs::remove_file(&config).unwrap();
+        fs::remove_dir(scratch).unwrap();
+    }
+
+    #[test]
     fn actual_ui_focus_keeps_pointer_menu_open_and_save_functional() {
         let mut app = app();
         install_cpu_ui(&mut app);
@@ -1428,4 +1509,48 @@ mod accessible_input {
             }
         }
     }
+}
+
+#[test]
+fn graphics_adjustment_is_live_when_paused_and_a_closed_control_cannot_reapply() {
+    let mut app = input_app();
+    let scratch = std::env::temp_dir().join(format!(
+        "qualia-foliage-ui-{}-{}",
+        std::process::id(), std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos(),
+    ));
+    let config = scratch.join("preferences.json");
+    let save = scratch.join("must-not-be-written.json");
+    {
+        let mut ux = app.world_mut().resource_mut::<Fvr05ProductionUxStateResource>();
+        ux.ui_settings_path = config.clone();
+        ux.settings.source_save_path = "untouched-origin.json".into();
+        ux.settings.runtime_save_path = save.display().to_string();
+        ux.settings.created_world_save_path = "untouched-created.json".into();
+        ux.settings.asset_manifest_path = "untouched-manifest.json".into();
+        ux.settings.validation_receipt = "private CPU fixture".into();
+    }
+    app.world_mut().resource_mut::<MenuState>().open(false);
+    app.world_mut().resource_mut::<MenuState>().screen = Screen::Settings;
+    frame(&mut app, &[KeyCode::ArrowDown], false);
+    frame(&mut app, &[KeyCode::Enter], false);
+    assert_eq!(app.world().resource::<MenuState>().screen, Screen::Graphics);
+    frame(&mut app, &[KeyCode::End], false);
+    let settings = || Fvr05ProductionUxSettings::from_json_file(&config).unwrap();
+    assert_eq!(settings().foliage_density, crate::production_voxel_frontend::FOLIAGE_MAX);
+    assert!(!settings().paused);
+    frame(&mut app, &[KeyCode::Home], false);
+    assert_eq!(settings().foliage_density, 0);
+    assert!(app.world().resource::<Fvr05ProductionUxStateResource>().settings.paused);
+    assert_eq!(app.world().resource::<ReaderRuns>().0, 0);
+
+    // Withdraw the page and submit a late maximum key in the same frame.
+    frame(&mut app, &[KeyCode::Escape, KeyCode::End], false);
+    assert_eq!(app.world().resource::<MenuState>().screen, Screen::Settings);
+    assert_eq!(settings().foliage_density, 0);
+    assert_eq!(app.world().resource::<Fvr05ProductionUxStateResource>().settings.foliage_density, 0);
+    assert_eq!(app.world().resource::<ReaderRuns>().0, 0);
+    assert!(!save.exists());
+    fs::remove_file(&config).unwrap();
+    fs::remove_dir(scratch).unwrap();
 }

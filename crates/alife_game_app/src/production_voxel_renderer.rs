@@ -2111,6 +2111,7 @@ pub fn spawn_fvr03_production_voxel_scene(
             sync_fvr04_camera_follow,
             island::constrain_camera.after(sync_fvr04_camera_follow),
             island::update.after(island::constrain_camera),
+            island::scatter::sync.after(island::update),
             sync_fvr04_creature_label,
             sync_fvr05_panel_visibility,
             sync_fvr05_overlay_visibility,
