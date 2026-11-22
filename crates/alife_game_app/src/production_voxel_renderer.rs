@@ -1696,6 +1696,7 @@ fn despawn_fvr04_runtime_scene(world: &mut World) {
 
 #[cfg(feature = "gpu-runtime")]
 fn clear_production_load_focus(world: &mut World) {
+    god_hand::clear_chime_hand_on_load(world);
     if let Some(mut selection) = world.get_resource_mut::<Fvr03ProductionVoxelSelectionResource>() {
         selection.hovered = None;
         selection.selected = None;
@@ -4961,6 +4962,7 @@ fn handle_fvr03_mouse_selection(
     mut hand: ResMut<god_hand::HandInteraction>,
     interactions: bevy::prelude::Query<&bevy::prelude::Interaction>,
     #[cfg(feature = "gpu-runtime")] conversation: Option<Res<ProductionConversationLineageUiState>>,
+    #[cfg(feature = "gpu-runtime")] runtime: Option<NonSend<ProductionGpuBrainRuntimeResource>>,
 ) {
     let blocked = interactions
         .iter()
@@ -5011,8 +5013,12 @@ fn handle_fvr03_mouse_selection(
         };
         // Pick the actual elevated creature body, not the terrain tile behind
         // its face. The same ray and positions work at every orthographic zoom.
+        #[cfg(feature = "gpu-runtime")]
+        let chime = runtime.as_ref().and_then(|live| god_hand::chime_body_pick_id(live.runtime.world()));
+        #[cfg(not(feature = "gpu-runtime"))]
+        let chime = None;
         let body = frame.as_ref().and_then(|frame| {
-            pick_live_object_body(&frame.current, highland.is_some(), &surface, &ray, position)
+            pick_live_object_body_with_chime(&frame.current, highland.is_some(), &surface, &ray, position, chime)
         });
         if let Some((_, id, kind, p)) = body {
             let tile = VoxelTileCoord::new(p.x.floor() as i32, p.z.floor() as i32);
@@ -5070,6 +5076,7 @@ fn admitted_pick_sphere_entry(ray: &bevy::math::Ray3d, center: Vec3, radius: f32
     (middle - half_span).max(0.0)
 }
 
+#[cfg(test)]
 fn pick_live_object_body(
     frame: &LiveBrainPresentationFrame,
     terrain_bound: bool,
@@ -5077,22 +5084,38 @@ fn pick_live_object_body(
     ray: &bevy::math::Ray3d,
     ground_hit: Vec3,
 ) -> Option<(f64, WorldEntityId, WorldObjectKind, Vec3)> {
+    pick_live_object_body_with_chime(frame, terrain_bound, surface, ray, ground_hit, None)
+}
+
+fn pick_live_object_body_with_chime(
+    frame: &LiveBrainPresentationFrame,
+    terrain_bound: bool,
+    surface: &creature_grounding::RenderedTerrainSurface,
+    ray: &bevy::math::Ray3d,
+    ground_hit: Vec3,
+    chime: Option<WorldEntityId>,
+) -> Option<(f64, WorldEntityId, WorldObjectKind, Vec3)> {
     frame
         .objects()
         .filter(|object| {
             !object.consumed
                 && object.carried_by.is_none()
-                && matches!(
+                && (matches!(
                     object.kind,
                     WorldObjectKind::Agent
                         | WorldObjectKind::Food
                         | WorldObjectKind::Ball
                         | WorldObjectKind::Token
-                )
+                ) || (object.kind == WorldObjectKind::ActivityToy && chime == Some(object.id)))
         })
         .filter_map(|object| {
             let position = world_position_for_render(object.position, terrain_bound);
+            let chime_shape = [(0.0, object.radius)];
             let (base, samples): (Vec3, &[(f32, f32)]) = match object.kind {
+                WorldObjectKind::ActivityToy => (
+                    live_food_projection::care_object_center(object.position, terrain_bound, surface),
+                    &chime_shape,
+                ),
                 WorldObjectKind::Agent => (position, &[(0.35, 0.40), (0.90, 0.48), (1.35, 0.38)]),
                 WorldObjectKind::Food | WorldObjectKind::Ball => (
                     live_food_projection::care_object_center(
@@ -7531,6 +7554,140 @@ mod tests {
         object.position = position;
         LiveBrainPresentationFrame::try_new(Vec::new(), Tick::new(3), vec![object])
             .expect("projection fixture frame must be valid")
+    }
+
+
+    #[test]
+    fn opted_in_chime_body_uses_the_same_ranked_ray_as_foreground_bodies() {
+        // All controls below are one named test, preserving the six-case App gate.
+        signed_settled_chime_depth_control(ChimeRaySide::Near);
+        signed_settled_chime_depth_control(ChimeRaySide::Behind);
+        signed_settled_chime_depth_control(ChimeRaySide::NearButOutsideTheRay);
+        signed_raised_chime_rejects_ungrounded_fixture_intent();
+    }
+
+    #[derive(Clone, Copy)]
+    enum ChimeRaySide {
+        Near,
+        Behind,
+        NearButOutsideTheRay,
+    }
+
+    fn chime_ray_case_surface() -> (
+        alife_world::HeadlessWorld,
+        alife_world::WorldTerrain,
+        creature_grounding::RenderedTerrainSurface,
+        Vec3f,
+    ) {
+        let mut world = alife_world::HeadlessWorld::new(1643);
+        world.enable_island_for_new_game().unwrap();
+        let terrain = world.terrain().unwrap().clone();
+        let mut surface = creature_grounding::RenderedTerrainSurface::from_meshes(
+            std::iter::empty::<&Mesh>(), 1.0,
+        );
+        surface.set_surface(Some(terrain.surface().clone()));
+        let (x, z) = (80.0, 251.5);
+        let y = terrain.surface().height(x, z).unwrap();
+        (world, terrain, surface, Vec3f::new(x, y, z))
+    }
+
+    fn signed_settled_chime_depth_control(side: ChimeRaySide) {
+        let (mut world, terrain, surface, ground) = chime_ray_case_surface();
+        let chime = world.spawn_toy("player-activity-toy", ground, false).unwrap();
+        let table = live_food_projection::care_object_center(ground, true, &surface);
+        let camera = production_follow_camera_transform(
+            Fvr03ProductionVoxelCameraMode::Orbit, 9.8, table,
+        );
+        let direction = bevy::math::Dir3::new(camera.rotation * Vec3::NEG_Z).unwrap();
+        let forward = *direction;
+        let toward_eye = Vec3::new(-forward.x, 0.0, -forward.z).normalize();
+        let eye_side = if matches!(side, ChimeRaySide::Behind) { -1.0 } else { 1.0 };
+        let seat = table + toward_eye * (eye_side * 1.12);
+        let ball = world.spawn_toy("signed-depth-control-ball", Vec3f::new(seat.x, 0.0, seat.z), true)
+            .unwrap();
+        let ball_position = world.entity(ball).unwrap().position;
+        assert_eq!(ball_position.y, terrain.surface().height(seat.x, seat.z).unwrap());
+        assert_ne!(ball, chime);
+        // Keep the stock eye orientation. Translating the ray along itself
+        // gives a local orthographic segment through both actual proxy volumes.
+        let peer = live_food_projection::care_object_center(ball_position, true, &surface);
+        let through = (table + peer) * 0.5 + Vec3::Y * 0.06;
+        let origin = through - forward * 6.0;
+        let ray = bevy::math::Ray3d::new(origin, direction);
+        let hit = terrain.surface().ray_hit(
+            Vec3f::new(origin.x, origin.y, origin.z),
+            Vec3f::new(forward.x, forward.y, forward.z), 20.0,
+        ).unwrap();
+        let aim = Vec3::new(hit.x, hit.y, hit.z);
+        let miss = matches!(side, ChimeRaySide::NearButOutsideTheRay);
+        if miss {
+            // Move the same legitimate grounded Ball across, not behind, this ray.
+            let across = Vec3::new(-toward_eye.z, 0.0, toward_eye.x);
+            let sideways = seat + across * 0.82;
+            world.editor_move_object(ball, Vec3f::new(sideways.x, 0.0, sideways.z)).unwrap();
+            let p = live_food_projection::care_object_center(
+                world.entity(ball).unwrap().position, true, &surface,
+            );
+            assert!((p - origin).dot(forward) < (table - origin).dot(forward));
+        }
+        assert_eq!(god_hand::chime_body_pick_id(&world), Some(chime), "settled Chime is genuinely pickable");
+        let pick = |only, cap| {
+            let mut originals = world.object_snapshots();
+            if let Some(id) = only { originals.retain(|o| o.id == id); }
+            let frame = LiveBrainPresentationFrame::try_new(Vec::new(), world.tick(), originals).unwrap();
+            pick_live_object_body_with_chime(&frame, true, &surface, &ray, aim, cap)
+        };
+        let table_entry = pick(Some(chime), Some(chime)).unwrap().0;
+        if miss {
+            assert!(pick(Some(ball), None).is_none(), "nearer center alone is not a ray hit");
+            assert_eq!(pick(None, Some(chime)).unwrap().1, chime);
+            assert!(pick(None, None).is_none());
+        } else {
+            // Each body must independently hit the *same* ray before comparing
+            // them. Do not accidentally pass with a clipped or missing control.
+            let peer_entry = pick(Some(ball), None).unwrap().0;
+            if matches!(side, ChimeRaySide::Near) {
+                assert!(peer_entry + 0.45 < table_entry, "actual foreground entry");
+                assert_eq!(pick(None, Some(chime)).unwrap().1, ball, "normal first depth wins");
+            } else {
+                assert!(table_entry + 0.45 < peer_entry, "Ball is genuinely behind");
+                assert_eq!(pick(None, Some(chime)).unwrap().1, chime);
+            }
+            assert_eq!(pick(None, None).unwrap().1, ball, "without exact capability only Ball participates");
+        }
+    }
+
+    fn signed_raised_chime_rejects_ungrounded_fixture_intent() {
+        let (mut world, terrain, surface, ground) = chime_ray_case_surface();
+        let chime = world.spawn_toy("player-activity-toy", ground, false).unwrap();
+        world.begin_player_hold(chime).unwrap();
+        let (x, y, z) = (ground.x, ground.y, ground.z);
+        // The supplied Y is intentionally *not* a World placement. A terrain
+        // spawn grounds ordinary Ball; only the one authoritative Hand holds a body.
+        let ball = world.spawn_toy("former-false-foreground", Vec3f::new(x, y + 2.8, z), true).unwrap();
+        assert_eq!(world.entity(ball).unwrap().position, ground);
+        let lifted = world.entity(chime).unwrap().position;
+        assert!((lifted.y - y - 1.3).abs() < 0.001);
+        let ray = bevy::math::Ray3d::new(Vec3::new(x, y + 5.0, z), bevy::math::Dir3::NEG_Y);
+        let hit = terrain.surface().ray_hit(
+            Vec3f::new(x, y + 5.0, z), Vec3f::new(0.0, -1.0, 0.0), 10.0,
+        ).unwrap();
+        let aim = Vec3::new(hit.x, hit.y, hit.z);
+        let exact = god_hand::chime_body_pick_id(&world);
+        assert_eq!(exact, Some(chime));
+        let wrong = Some(WorldEntityId(ball.raw() + 33));
+        let mut chime_only = world.object_snapshots();
+        chime_only.retain(|o| o.id == chime);
+        let isolated = LiveBrainPresentationFrame::try_new(Vec::new(), world.tick(), chime_only).unwrap();
+        assert!(pick_live_object_body_with_chime(&isolated, true, &surface, &ray, aim, None).is_none());
+        assert!(pick_live_object_body_with_chime(&isolated, true, &surface, &ray, aim, wrong).is_none());
+        let real = LiveBrainPresentationFrame::try_new(Vec::new(), world.tick(), world.object_snapshots()).unwrap();
+        let pick = |cap| pick_live_object_body_with_chime(&real, true, &surface, &ray, aim, cap).unwrap();
+        let (chime_depth, raised_id, _, _) = pick(exact);
+        let (ball_depth, ground_id, _, _) = pick(None);
+        assert_eq!((raised_id, ground_id), (chime, ball));
+        assert_eq!(pick(wrong).1, ball);
+        assert!(chime_depth + 1.0 < ball_depth, "grounded Ball is actually behind the held Chime");
     }
 
     #[test]
