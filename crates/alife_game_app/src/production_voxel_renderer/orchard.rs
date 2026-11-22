@@ -1,10 +1,16 @@
 //! A ground-specific Hand tool and the world-owned stages that it reveals.
 use super::*;
 #[cfg(feature = "gpu-runtime")]
+mod court;
+#[cfg(feature = "gpu-runtime")]
 pub(super) mod fx;
+#[cfg(feature = "gpu-runtime")]
+mod wick_pot;
 #[cfg(feature = "gpu-runtime")]
 use alife_world::orchard::OrchardGesture;
 use bevy::{a11y::AccessibilityNode, prelude::*};
+#[cfg(feature = "gpu-runtime")]
+pub(super) use wick_pot::{WickPot, WickReturn};
 
 #[derive(Component)]
 pub(super) struct GardenTool;
@@ -80,6 +86,13 @@ pub(super) fn plan(
     world: &alife_world::HeadlessWorld,
     selected: Option<StableVoxelObjectRef>,
 ) -> Plan {
+    if let Some(court) =
+        soil_tile(selected).and_then(|tile| world.orchard_court().filter(|c| c.reserves(tile)))
+    {
+        // Use the existing return gesture at the actual entrance; do not
+        // redirect to the most recent unrelated plot on the island.
+        return Plan::Return(court.bed);
+    }
     if let Some((t, g)) = soil_tile(selected).and_then(|t| world.orchard_gesture(t).map(|g| (t, g)))
     {
         return Plan::Soil(t, g);
@@ -206,17 +219,47 @@ pub(super) fn sync_tool(world: &mut World, selected: Option<StableVoxelObjectRef
 }
 
 #[cfg(feature = "gpu-runtime")]
-pub(super) fn drive(
-    keyboard: &ButtonInput<KeyCode>,
+fn focus_existing_garden_return(
+    tool: bool,
+    plan: Plan,
     selection: &mut Fvr03ProductionVoxelSelectionResource,
     follow: &mut Fvr04ProductionCreatureFollowResource,
     dock: &mut care_dock::State,
-    runtime: Option<&mut crate::GpuLiveBrainRuntime>,
+) -> bool {
+    let (true, false, Plan::Return(tile)) = (tool, dock.garden_armed, plan) else {
+        return false;
+    };
+    selection.selected = Some(selected_soil(tile));
+    follow.enabled = false;
+    dock.hand_focus = Some(care_dock::HandFocus::bed(tile));
+    true
+}
+
+#[cfg(feature = "gpu-runtime")]
+pub(super) fn drive(
+    keyboard: &ButtonInput<KeyCode>,
+    hand_ground: Option<Vec3>,
+    selection: &mut Fvr03ProductionVoxelSelectionResource,
+    follow: &mut Fvr04ProductionCreatureFollowResource,
+    dock: &mut care_dock::State,
+    mut runtime: Option<&mut crate::GpuLiveBrainRuntime>,
     frame: &mut LiveBrainPresentationFrameResource,
     ux: &mut Fvr05ProductionUxStateResource,
 ) {
     let shortcut = keyboard.just_pressed(KeyCode::KeyU);
     let pointer_tool = dock.take_garden();
+    if wick_pot::drive(
+        keyboard,
+        hand_ground,
+        shortcut,
+        pointer_tool,
+        selection,
+        follow,
+        dock,
+        runtime.as_deref_mut(),
+    ) {
+        return;
+    }
     let tool = pointer_tool || shortcut;
     let mut ground = dock.garden_ground_click;
     let mut commit_marker = false;
@@ -274,10 +317,8 @@ pub(super) fn drive(
                 }
                 Err(e) => ux.last_error = Some(e.to_string()),
             }
-        } else if let (true, false, Plan::Return(tile)) = (tool, dock.garden_armed, plan) {
-            selection.selected = Some(selected_soil(tile));
-            follow.enabled = false;
-            dock.hand_focus = Some(care_dock::HandFocus::bed(tile));
+        } else if focus_existing_garden_return(tool, plan, selection, follow, dock) {
+            // Return focuses the existing bed. Normal tending needs another gesture.
         } else if let Some(tile) = aim(&mut dock.garden_armed, tool && !commit_marker, ground, soil)
         {
             match runtime.tend_player_orchard(tile) {
@@ -286,6 +327,9 @@ pub(super) fn drive(
                         dock.last_gift = Some(id);
                     }
                     dock.garden_effect = Some((tile, receipt));
+                    if receipt == alife_world::orchard::OrchardReceipt::Watching {
+                        wick_pot::observe_watch(dock, runtime.world(), tile);
+                    }
                     if matches!(
                         receipt,
                         alife_world::orchard::OrchardReceipt::Sown
@@ -346,6 +390,7 @@ mod plants {
     #[derive(Default)]
     pub(in crate::production_voxel_renderer) struct AssetsCache(
         Option<([Handle<Mesh>; 4], Handle<StandardMaterial>)>,
+        court::Art,
     );
 
     #[allow(
@@ -356,12 +401,45 @@ mod plants {
         mut commands: Commands,
         runtime: Option<NonSend<ProductionGpuBrainRuntimeResource>>,
         server: Option<Res<AssetServer>>,
-        materials: Option<ResMut<Assets<StandardMaterial>>>,
+        mut materials: Option<ResMut<Assets<StandardMaterial>>>,
         surface: Option<Res<creature_grounding::RenderedTerrainSurface>>,
+        dock: Option<Res<care_dock::State>>,
         mut cache: Local<AssetsCache>,
-        mut query: Query<(Entity, &mut Plant, &mut Mesh3d, &mut Transform)>,
+        mut pot_cache: Local<wick_pot::PotArt>,
+        live_seat: court::PreviewInput,
+        mut pots: Query<(Entity, &wick_pot::WickPiece, &mut Transform), Without<Plant>>,
+        mut rims: Query<
+            (Entity, &court::Rim, &mut Transform),
+            (Without<Plant>, Without<wick_pot::WickPiece>),
+        >,
+        mut query: Query<
+            (Entity, &mut Plant, &mut Mesh3d, &mut Transform),
+            Without<wick_pot::WickPiece>,
+        >,
     ) {
         let live = runtime.as_ref().map(|r| r.runtime.world());
+        wick_pot::sync(
+            live,
+            dock.as_deref(),
+            server.as_deref(),
+            materials.as_deref_mut(),
+            &mut pot_cache,
+            &mut commands,
+            &mut pots,
+        );
+        let settled = live.and_then(alife_world::HeadlessWorld::orchard_court);
+        let ghost = live.zip(surface.as_deref()).and_then(|(world, t)| {
+            live_seat.ghost(world, dock.as_ref().map(Res::clone), t, settled)
+        });
+        court::sync(
+            settled,
+            ghost,
+            server.as_deref(),
+            materials.as_deref_mut(),
+            &mut cache.1,
+            &mut commands,
+            &mut rims,
+        );
         let beds = live.map_or(&[][..], |w| w.ecology().orchard_beds.as_slice());
         if beds.is_empty() {
             for (id, ..) in &query {
