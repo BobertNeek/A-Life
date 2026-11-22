@@ -88,6 +88,8 @@ windows-sys = { version = "0.61.2", features = [
 
 [features]
 default = []
+# Explicit engineering/review launch; not implied by production-voxel-frontend.
+qualia-village-review = ["alife_world/qualia-village-review"]
 bevy-app = [
     "dep:accesskit",
     "dep:bevy",
