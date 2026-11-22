@@ -88,3 +88,33 @@ pub(crate) fn validate_beds(beds: &[OrchardBed]) -> Result<(), ScaffoldContractE
     }
     Ok(())
 }
+
+/// Detached review: keep ordinary stock sowing and harvest until enabled.
+pub const ORCHARD_COURT_REVIEW: bool = true;
+
+/// One ground contact on the signed terrain, not an additional object.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct OrchardCourtFoot {
+    pub ground: alife_core::Vec3f,
+    pub rise: [f32; 2],
+}
+
+/// Read-only geometry from the actual loose chime and an existing pear bed.
+/// No additional save state, movement blockers or inventory are created.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct OrchardCourt {
+    pub chime: WorldEntityId,
+    pub bed: VoxelTileCoord,
+    pub aisle: VoxelTileCoord,
+    pub landing: VoxelTileCoord,
+    pub landing_ground: alife_core::Vec3f,
+    pub axis: [i32; 2],
+    pub rims: [OrchardCourtFoot; 4],
+    pub open: bool,
+}
+
+impl OrchardCourt {
+    pub fn reserves(self, tile: VoxelTileCoord) -> bool {
+        tile == self.aisle || tile == self.landing
+    }
+}

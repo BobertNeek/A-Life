@@ -41,11 +41,15 @@ pub(super) struct HandInteraction {
     pub ground: Option<Vec3>,
     pressed: Option<(StableVoxelObjectRef, f64, Vec2)>,
     pub held: Option<WorldEntityId>,
+    #[cfg(feature = "gpu-runtime")]
+    direct_prey_aim: Option<DirectPreyAim>,
     release_until: f64,
     stroke: Option<(WorldEntityId, f64)>,
     pub position: Option<Vec3>,
     last_tile_click: Option<(VoxelTileCoord, f64)>,
     resume_follow_after_drop: bool,
+    #[cfg(any(feature = "gpu-runtime", test))]
+    reopened_chime: Option<ReopenedChimeGrip>,
 }
 const STROKE_SECONDS: f64 = 0.42;
 
@@ -109,6 +113,115 @@ fn grab_intent_target(
     ) && world?.can_begin_player_hold(id))
     .then_some(target)
 }
+#[cfg(any(feature = "gpu-runtime", test))]
+struct ReopenedChimeGrip {
+    press: Vec2,
+    moved: bool,
+}
+
+#[cfg(any(feature = "gpu-runtime", test))]
+fn focused_left_press(
+    focused: bool,
+    mouse: &ButtonInput<MouseButton>,
+    keyboard: &ButtonInput<KeyCode>,
+) -> bool {
+    focused
+        && mouse.just_pressed(MouseButton::Left)
+        && mouse.pressed(MouseButton::Left)
+        && !keyboard.just_pressed(KeyCode::Escape)
+}
+
+/// Eligibility comes from the same feature-gated World Hand authority. No
+/// generic ActivityToy is made selectable; a restored hold is not a new pickup.
+#[cfg(any(feature = "gpu-runtime", test))]
+pub(super) fn chime_body_pick_id(world: &alife_world::HeadlessWorld) -> Option<WorldEntityId> {
+    if world.player_holds_original_chime() {
+        return world.player_held_object();
+    }
+    world.entity_id("player-activity-toy")
+        .filter(|&id| {
+            world.entity(id).is_some_and(|object| object.kind == WorldObjectKind::ActivityToy)
+                && world.can_begin_player_hold(id)
+        })
+}
+
+#[cfg(any(feature = "gpu-runtime", test))]
+fn adopt_reopened_chime(
+    hand: &mut HandInteraction,
+    world: &alife_world::HeadlessWorld,
+    hovered: Option<StableVoxelObjectRef>,
+    cursor: Option<Vec2>,
+    clean_press: bool,
+) -> bool {
+    if !clean_press || hand.held.is_some() || !world.player_holds_original_chime() {
+        return false;
+    }
+    let Some(id) = world.player_held_object() else { return false; };
+    let Some(press) = cursor.filter(|p| p.is_finite()) else { return false; };
+    if !hovered.is_some_and(|hit| {
+        hit.kind == StableVoxelRefKind::Resource && hit.stable_id == Some(id)
+    }) {
+        return false;
+    }
+    // Only the App gesture attaches here. World keeps its existing ID,
+    // raised pose, last accepted support and pending release authority.
+    hand.held = Some(id);
+    hand.pressed = None;
+    hand.stroke = None;
+    hand.resume_follow_after_drop = false;
+    hand.reopened_chime = Some(ReopenedChimeGrip { press, moved: false });
+    true
+}
+
+#[cfg(any(feature = "gpu-runtime", test))]
+fn allows_held_motion(hand: &mut HandInteraction, cursor: Option<Vec2>) -> bool {
+    let Some(grip) = hand.reopened_chime.as_mut() else { return true; };
+    let Some(cursor) = cursor.filter(|p| p.is_finite()) else { return false; };
+    // A press or stationary button hold must not shift the seat toward the ray.
+    grip.moved |= cursor.distance_squared(grip.press) >= 4.0 * 4.0;
+    grip.moved
+}
+
+#[cfg(any(feature = "gpu-runtime", test))]
+fn may_release_hand(local_id: Option<WorldEntityId>, world: &alife_world::HeadlessWorld) -> bool {
+    let held = world.player_held_object();
+    held.is_some() && (!world.player_holds_original_chime() || local_id == held)
+}
+
+#[cfg(any(feature = "gpu-runtime", test))]
+fn reset_chime_hand(hand: &mut HandInteraction) {
+    hand.reopened_chime = None;
+    hand.held = None;
+    hand.pressed = None;
+    hand.resume_follow_after_drop = false;
+}
+
+#[cfg(any(feature = "gpu-runtime", test))]
+fn detach_denied_reopened_chime(hand: &mut HandInteraction) {
+    if hand.reopened_chime.is_some() {
+        // Failed release leaves the World hold alive. A later deliberate
+        // press may resume it; idle frames cannot retry or steer it.
+        reset_chime_hand(hand);
+    }
+}
+
+#[cfg(feature = "gpu-runtime")]
+pub(super) fn clear_chime_hand_on_load(world: &mut World) {
+    let restored = world
+        .get_non_send_resource::<ProductionGpuBrainRuntimeResource>()
+        .is_some_and(|runtime| runtime.runtime.world().player_holds_original_chime());
+    if let Some(mut hand) = world.get_resource_mut::<HandInteraction>() {
+        // Called only after the actual runtime/scene commit, not load staging.
+        // Identical numeric ID, pose and ray can recur across loaded worlds.
+        hand.direct_prey_aim = None;
+        if restored || hand.reopened_chime.is_some() {
+            // Even the same numeric ID from a committed reload needs a new
+            // real press. Do not reset ordinary stock carry on load.
+            reset_chime_hand(&mut hand);
+        }
+    }
+}
+
 #[derive(Component)]
 pub(super) struct HandPlayer {
     clips: Vec<AnimationNodeIndex>,
@@ -274,6 +387,63 @@ fn slide_player_hold(
 }
 
 #[cfg(any(feature = "gpu-runtime", test))]
+#[derive(Clone, Copy)]
+struct DirectPreyAim {
+    id: WorldEntityId,
+    aim: Vec3f,
+    held_pose: Vec3f,
+}
+
+#[cfg(any(feature = "gpu-runtime", test))]
+impl DirectPreyAim {
+    fn observe(
+        id: WorldEntityId,
+        aim: Vec3f,
+        offered: Option<Vec3f>,
+        held_pose: Vec3f,
+    ) -> Option<Self> {
+        // A nearby success is a carry preview, never consent to place there.
+        (offered == Some(aim)).then_some(Self { id, aim, held_pose })
+    }
+}
+
+#[cfg(any(feature = "gpu-runtime", test))]
+fn terrain_prey_hold(
+    local: Option<WorldEntityId>,
+    world: &alife_world::HeadlessWorld,
+) -> Option<(WorldEntityId, Vec3f)> {
+    let id = local?;
+    if world.terrain().is_none() || world.player_held_object() != Some(id) {
+        return None;
+    }
+    let body = world.entity(id)?;
+    (body.kind == WorldObjectKind::Food
+        && !body.consumed
+        && body.carried_by.is_none()
+        && !body.activity_hold
+        && world.autonomous_critter(id).is_some())
+        .then_some((id, body.position))
+}
+
+#[cfg(any(feature = "gpu-runtime", test))]
+fn allows_prey_pointer_setdown(
+    held: Option<(WorldEntityId, Vec3f)>,
+    prior_direct: Option<DirectPreyAim>,
+    pointer_up: bool,
+    pointer_ground: Option<Vec3f>,
+) -> bool {
+    // This gate applies only to an ordinary focused pointer gesture with
+    // matching custody. No retry on an idle frame after a refused release.
+    let Some((id, pose)) = held else {
+        return true;
+    };
+    pointer_up
+        && prior_direct.is_some_and(|direct| {
+            direct.id == id && direct.held_pose == pose && Some(direct.aim) == pointer_ground
+        })
+}
+
+#[cfg(any(feature = "gpu-runtime", test))]
 /// Live selection reference for a creature after it has been set down, so the HUD,
 /// care dock, and speech target the creature at its landing tile.
 fn dropped_creature_selection(
@@ -326,6 +496,10 @@ pub(super) fn input(
         hand.last_tile_click = None;
     }
     if mouse.just_pressed(MouseButton::Left) && window.focused {
+        #[cfg(feature = "gpu-runtime")]
+        {
+            hand.direct_prey_aim = None;
+        }
         #[cfg(feature = "gpu-runtime")]
         let grab_target = grab_intent_target(
             selection.hovered,
@@ -388,25 +562,47 @@ pub(super) fn input(
             }
         }
         if hand.held.is_some() && runtime.runtime.world().player_held_object() != hand.held {
+            hand.reopened_chime = None;
             hand.held = None;
+            hand.direct_prey_aim = None;
             hand.resume_follow_after_drop = false;
             hand.release_until = now + 0.18;
         }
         let cancel = !window.focused
             || keyboard.just_pressed(KeyCode::Escape)
             || !mouse.pressed(MouseButton::Left);
+        if !cancel {
+            adopt_reopened_chime(
+                &mut hand,
+                runtime.runtime.world(),
+                selection.hovered,
+                window.cursor_position(),
+                focused_left_press(window.focused, &mouse, &keyboard),
+            );
+        }
         if cancel {
-            if hand.held.is_some() || runtime.runtime.world().player_held_object().is_some() {
+            if may_release_hand(hand.held, runtime.runtime.world()) {
                 // A deliberate drop (button released in a focused window) keeps the creature in
                 // the player's attention, as in Black & White: the HUD, care dock, and speech stay
                 // on it at its landing tile, and the camera resumes following it.
                 let natural_drop = window.focused && !keyboard.just_pressed(KeyCode::Escape);
+                let scoped_prey = terrain_prey_hold(hand.held, runtime.runtime.world());
+                let prior_direct = hand.direct_prey_aim.take();
+                let pointer_ground = hand.ground.map(|p| Vec3f::new(p.x, p.y, p.z));
+                if natural_drop && !allows_prey_pointer_setdown(
+                    scoped_prey, prior_direct, mouse.just_released(MouseButton::Left), pointer_ground,
+                ) {
+                    // The approved nearby carry preview is not placement.
+                    hand.pressed = None;
+                    return;
+                }
                 let released = match runtime.runtime.release_player_hold() {
                     Ok(released) => released,
                     Err(error) => {
                         // The world still owns this hold. Retain local contact and follow
                         // intent so a later successful retry can finish the same gesture.
                         hand.pressed = None;
+                        detach_denied_reopened_chime(&mut hand);
                         if let Some(ux) = ux.as_deref_mut() {
                             ux.last_error = Some(error.to_string());
                             ux.last_action = "Hand release failed; hold retained".into();
@@ -418,6 +614,7 @@ pub(super) fn input(
                     }
                 };
                 hand.held = None;
+                hand.reopened_chime = None;
                 let resume_follow = std::mem::take(&mut hand.resume_follow_after_drop);
                 if let Some(ux) = ux.as_deref_mut() {
                     if ux.last_action == "Hand release failed; hold retained" {
@@ -469,16 +666,26 @@ pub(super) fn input(
             }
         }
         if hand.held.is_some() {
-            if let Some(p) = hand.ground {
+            hand.direct_prey_aim = None;
+            let ground = hand.ground;
+            if let Some(p) = ground.filter(|_| allows_held_motion(&mut hand, window.cursor_position())) {
                 let desired = Vec3f::new(p.x, p.y, p.z);
                 let terrain_bound = runtime.runtime.world().terrain().is_some();
                 let current = hand
                     .held
                     .and_then(|id| runtime.runtime.world().entity(id))
                     .map(|object| object.position);
-                let _ = slide_player_hold(desired, current, terrain_bound, |candidate| {
-                    runtime.runtime.move_player_hold(candidate).is_ok()
-                });
+                if runtime.runtime.world().player_holds_original_chime() {
+                    // Keep the native retained support when this exact
+                    // ground fails. Don't silently slide the one fixture.
+                    let _ = runtime.runtime.move_player_hold(desired);
+                } else {
+                    let offered = slide_player_hold(desired, current, terrain_bound, |candidate| {
+                        runtime.runtime.move_player_hold(candidate).is_ok()
+                    });
+                    hand.direct_prey_aim = terrain_prey_hold(hand.held, runtime.runtime.world())
+                        .and_then(|(id, pose)| DirectPreyAim::observe(id, desired, offered, pose));
+                }
             }
             if let Some(frame) = frame.as_deref_mut() {
                 frame.refresh_world_objects(runtime.runtime.world());
@@ -671,13 +878,22 @@ mod highlight_tests;
 pub(super) fn cancel_for_menu(world: &mut World) {
     if let Some(mut hand) = world.get_resource_mut::<HandInteraction>() {
         hand.pressed = None;
+        #[cfg(feature = "gpu-runtime")]
+        {
+            hand.direct_prey_aim = None;
+        }
     }
+    #[cfg(feature = "gpu-runtime")]
+    let local_hold = world.get_resource::<HandInteraction>().and_then(|hand| hand.held);
     #[cfg(feature = "gpu-runtime")]
     if let Some(mut runtime) =
         world.get_non_send_resource_mut::<ProductionGpuBrainRuntimeResource>()
     {
-        if runtime.runtime.world().player_held_object().is_some() {
+        if may_release_hand(local_hold, runtime.runtime.world()) {
             if let Err(error) = runtime.runtime.release_player_hold() {
+                if let Some(mut hand) = world.get_resource_mut::<HandInteraction>() {
+                    detach_denied_reopened_chime(&mut hand);
+                }
                 if let Some(mut ux) = world.get_resource_mut::<Fvr05ProductionUxStateResource>() {
                     ux.last_error = Some(error.to_string());
                     ux.last_action = "Hand release failed; menu remains paused".into();
@@ -698,6 +914,10 @@ pub(super) fn cancel_for_menu(world: &mut World) {
     );
     if let Some(mut hand) = world.get_resource_mut::<HandInteraction>() {
         hand.held = None;
+        #[cfg(feature = "gpu-runtime")]
+        {
+            hand.reopened_chime = None;
+        }
         hand.resume_follow_after_drop = false;
         hand.last_tile_click = None;
     }
@@ -706,6 +926,156 @@ pub(super) fn cancel_for_menu(world: &mut World) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(feature = "gpu-runtime")]
+    #[test]
+    fn committed_load_focus_clears_prey_intent_even_when_id_pose_and_aim_repeat() {
+        let terrain = alife_world::island_terrain();
+        let x = 84.0;
+        let z = 251.5;
+        let aim = Vec3f::new(x, terrain.surface().height(x, z).unwrap(), z);
+        let fixture = |seed| {
+            let mut world = alife_world::HeadlessWorld::new(seed);
+            world.enable_terrain_for_new_game(terrain.clone(), Vec3f::ZERO).unwrap();
+            let prey = world.spawn_player_food(aim, alife_world::FoodVariety::Fruit).unwrap();
+            world.enable_autonomous_critter(prey, seed, 0.04, 4.0).unwrap();
+            world.begin_player_hold(prey).unwrap();
+            let scoped = terrain_prey_hold(Some(prey), &world).unwrap();
+            (world, scoped)
+        };
+        let (previous_world, old_local) = fixture(17);
+        let (new_world, same_local) = fixture(19);
+        assert_ne!(previous_world.seed(), new_world.seed());
+        assert_eq!(old_local, same_local, "numeric ID and raised pose genuinely repeat");
+        let (id, raised) = old_local;
+        let stale = DirectPreyAim::observe(id, aim, Some(aim), raised);
+        assert!(allows_prey_pointer_setdown(Some(same_local), stale, true, Some(aim)),
+            "without committed-load invalidation the equal sample would appear current");
+
+        // Call the actual successful-load focus hook with only its local Bevy
+        // resources. This is not a runtime/GPU load or a readiness simulation.
+        let mut app_world = World::new();
+        app_world.insert_resource(HandInteraction {
+            held: Some(id),
+            direct_prey_aim: stale,
+            ..Default::default()
+        });
+        super::super::clear_production_load_focus(&mut app_world);
+        let hand = app_world.resource::<HandInteraction>();
+        assert_eq!(hand.held, Some(id), "ordinary local prey carry is not re-adopted");
+        assert!(hand.direct_prey_aim.is_none());
+        assert!(!allows_prey_pointer_setdown(
+            Some(same_local), hand.direct_prey_aim, true, Some(aim)
+        ));
+        assert_eq!(new_world.player_held_object(), Some(id));
+        assert_eq!(new_world.entity(id).unwrap().position, raised);
+    }
+
+    #[test]
+    fn reopened_chime_requires_a_new_real_press_then_drag_and_keeps_the_world_hold() {
+        use alife_world::{AssetManifest, PortableSaveFile, RuntimeConfig};
+
+        let mut original = alife_world::HeadlessWorld::new(1643);
+        original.enable_island_for_new_game().unwrap();
+        let ground = |x, z| {
+            let terrain = alife_world::island_terrain();
+            Vec3f::new(x, terrain.surface().height(x, z).unwrap(), z)
+        };
+        let first = ground(80.0, 251.5);
+        let block = ground(81.5, 251.5);
+        let ball = original.spawn_toy("player-plaything", ground(78.5, 250.0), true).unwrap();
+        let chime = original.spawn_toy("player-activity-toy", first, false).unwrap();
+        assert_eq!(chime_body_pick_id(&original), Some(chime));
+        original.begin_player_hold(chime).unwrap();
+        let raised = original.move_player_hold(block).unwrap();
+        let bed = VoxelTileCoord::new(81, 251);
+        original.tend_orchard(bed).unwrap();
+
+        let portable = PortableSaveFile::from_headless_world(
+            "chime-reopen-app-handoff",
+            &original,
+            RuntimeConfig::deterministic_default(original.seed(), alife_core::BrainScaleTier::Nano512),
+            AssetManifest::empty(),
+            vec![],
+        ).unwrap();
+        let mut saved = PortableSaveFile::from_json_str(&portable.to_json_string_pretty().unwrap())
+            .unwrap().restore_headless_world().unwrap();
+        let sig = saved.canonical_signature_digest().unwrap();
+        assert_eq!(chime_body_pick_id(&saved), Some(chime));
+        assert!(!saved.can_begin_player_hold(chime), "retargeting must not begin a second hold");
+
+        let hit = |kind, id| {
+            let tile = VoxelTileCoord::new(81, 251);
+            Some(StableVoxelObjectRef {
+                kind,
+                stable_id: Some(id),
+                chunk: VoxelChunkCoord::for_tile(16, tile),
+                tile: Some(tile),
+            })
+        };
+        let real_ref = hit(StableVoxelRefKind::Resource, chime);
+        let cursor = Some(Vec2::new(415.0, 290.0));
+        let mut hand = HandInteraction::default();
+        let mut buttons = ButtonInput::<MouseButton>::default();
+        let mut keys = ButtonInput::<KeyCode>::default();
+        assert!(!may_release_hand(hand.held, &saved), "unclaimed reopen is idle");
+        assert!(!focused_left_press(true, &buttons, &keys));
+        buttons.press(MouseButton::Left);
+        assert!(!focused_left_press(false, &buttons, &keys));
+        keys.press(KeyCode::Escape);
+        assert!(!focused_left_press(true, &buttons, &keys));
+        keys.clear_just_pressed(KeyCode::Escape);
+        let press = focused_left_press(true, &buttons, &keys);
+        assert!(press);
+        assert!(!adopt_reopened_chime(&mut hand, &saved, real_ref, None, press));
+        assert!(!adopt_reopened_chime(
+            &mut hand, &saved, hit(StableVoxelRefKind::Resource, ball), cursor, press
+        ));
+        assert!(!adopt_reopened_chime(
+            &mut hand, &saved, hit(StableVoxelRefKind::Creature, chime), cursor, press
+        ));
+        hand.held = Some(ball);
+        assert!(!may_release_hand(hand.held, &saved));
+        assert!(!adopt_reopened_chime(&mut hand, &saved, real_ref, cursor, press));
+        reset_chime_hand(&mut hand);
+        assert!(adopt_reopened_chime(&mut hand, &saved, real_ref, cursor, press));
+        assert_eq!(hand.held, Some(chime));
+        assert!(!allows_held_motion(&mut hand, cursor));
+        assert!(!allows_held_motion(&mut hand, Some(Vec2::new(417.0, 291.0))));
+        assert!(!allows_held_motion(&mut hand, None));
+        assert_eq!(saved.canonical_signature_digest().unwrap(), sig);
+        assert_eq!(saved.entity(chime).unwrap().position, raised);
+
+        buttons.release(MouseButton::Left);
+        assert!(may_release_hand(hand.held, &saved));
+        assert!(saved.release_player_hold().is_err());
+        detach_denied_reopened_chime(&mut hand);
+        assert_eq!(hand.held, None);
+        assert!(!may_release_hand(hand.held, &saved));
+        assert!(!adopt_reopened_chime(
+            &mut hand, &saved, real_ref, cursor, focused_left_press(true, &buttons, &keys)
+        ));
+        assert_eq!(saved.canonical_signature_digest().unwrap(), sig);
+
+        buttons.clear();
+        buttons.press(MouseButton::Left);
+        assert!(adopt_reopened_chime(
+            &mut hand, &saved, real_ref, cursor, focused_left_press(true, &buttons, &keys)
+        ));
+        buttons.clear_just_pressed(MouseButton::Left);
+        assert!(!focused_left_press(true, &buttons, &keys));
+        assert!(allows_held_motion(&mut hand, Some(Vec2::new(431.0, 292.0))));
+        // The production branch submits this one chosen ray to World. Do not
+        // pretend this CPU proof ran the actual window/event system.
+        saved.move_player_hold(first).unwrap();
+        assert!(may_release_hand(hand.held, &saved));
+        assert_eq!(saved.release_player_hold().unwrap(), Some(chime));
+        reset_chime_hand(&mut hand);
+        assert_eq!(saved.entity(chime).unwrap().position, first);
+        assert_eq!(saved.orchard_gesture(bed), Some(alife_world::orchard::OrchardGesture::Watch));
+        assert!(saved.last_chime_strike().is_none());
+        assert!(!may_release_hand(hand.held, &saved));
+    }
 
     #[test]
     fn stroke_makes_one_camera_relative_arc_and_settles_on_the_fur() {
@@ -1272,6 +1642,141 @@ mod tests {
         );
         assert_eq!(attempts, 1);
     }
+    #[test]
+    fn registered_prey_release_requires_a_current_same_body_direct_acceptance() {
+        let id = WorldEntityId(41);
+        let aim = Vec3f::new(10.0, 2.0, 12.0);
+        let raised = Vec3f::new(10.0, 3.3, 12.0);
+        let held = Some((id, raised));
+        let proof = DirectPreyAim::observe(id, aim, Some(aim), raised);
+        assert!(allows_prey_pointer_setdown(held, proof, true, Some(aim)));
+        // Identical sample on an idle frame cannot release a refused hold.
+        assert!(!allows_prey_pointer_setdown(held, proof, false, Some(aim)));
+        assert!(!allows_prey_pointer_setdown(held, proof, true, None));
+        let different_aim = Vec3f::new(10.1, 2.0, 12.0);
+        assert!(!allows_prey_pointer_setdown(held, proof, true, Some(different_aim)));
+        assert!(!allows_prey_pointer_setdown(
+            Some((WorldEntityId(42), raised)), proof, true, Some(aim),
+        ));
+        assert!(!allows_prey_pointer_setdown(
+            Some((id, Vec3f::new(10.0, 3.4, 12.0))), proof, true, Some(aim),
+        ));
+        let alternate = DirectPreyAim::observe(id, aim, Some(different_aim), raised);
+        assert!(!allows_prey_pointer_setdown(held, alternate, true, Some(aim)));
+        let rejected = DirectPreyAim::observe(id, aim, None, raised);
+        assert!(!allows_prey_pointer_setdown(held, rejected, true, Some(aim)));
+        // A state not covered by this guard follows the existing policy.
+        assert!(allows_prey_pointer_setdown(None, None, false, None));
+    }
+
+    #[test]
+    fn signed_registered_prey_fallback_keeps_custody_until_direct_reaim() {
+        // The cursor is only 10 cm outside the signed baked rock. Even
+        // stock World rejects it. This test requires no prior World patch.
+        const CURSOR_X: f32 = f32::from_bits(0x42932d66);
+        const START_X: f32 = f32::from_bits(0x4295_2847);
+        const Z: f32 = f32::from_bits(0x4345_e09a);
+        let terrain = alife_world::island_terrain();
+        let floor = |x| Vec3f::new(x, terrain.surface().height(x, Z).unwrap(), Z);
+        let cursor = floor(CURSOR_X);
+        let start = floor(START_X);
+        let alternate_ground = floor(CURSOR_X + 0.45);
+        assert!(!terrain.walkable(cursor.x, cursor.z));
+        assert!(terrain.walkable(alternate_ground.x, alternate_ground.z));
+        let mut world = alife_world::HeadlessWorld::new(17);
+        world.enable_terrain_for_new_game(terrain.clone(), Vec3f::ZERO).unwrap();
+        let id = world.editor_spawn_object(alife_world::WorldEditorSpawnSpec {
+            label: "signed-fallback-prey".into(),
+            kind: WorldObjectKind::Food,
+            organism_id: None,
+            position: start,
+            nutrition: 0.34,
+            hazard_pain: 0.0,
+            radius: 0.34,
+            token_id: None,
+        }).unwrap();
+        world.begin_player_hold(id).unwrap();
+        assert_eq!(terrain_prey_hold(Some(id), &world), None); // Ordinary food is stock.
+        world.release_player_hold().unwrap();
+        world.enable_autonomous_critter(id, 17, 0.040, 4.0).unwrap();
+        world.begin_player_hold(id).unwrap();
+        let tick = world.tick();
+        let before = terrain_prey_hold(Some(id), &world).unwrap().1;
+        let snapshots = world.object_snapshots();
+        let mut attempts = Vec::new();
+        let offered = slide_player_hold(cursor, Some(before), true, |point| {
+            let ok = world.move_player_hold(point).is_ok();
+            attempts.push((point, ok));
+            if !ok {
+                assert_eq!(world.object_snapshots(), snapshots);
+            }
+            ok
+        });
+        let alternate_proposal = Vec3f::new(alternate_ground.x, cursor.y, Z);
+        assert_eq!(attempts, [(cursor, false), (alternate_proposal, true)]);
+        assert_eq!(offered, Some(alternate_proposal));
+        let landed_while_held = terrain_prey_hold(Some(id), &world);
+        let pose = landed_while_held.unwrap().1;
+        let preview = DirectPreyAim::observe(id, cursor, offered, pose);
+        // These two decisions precede the one physical release call: an
+        // invalid pointer-up and its following idle refresh retain custody.
+        assert!(!allows_prey_pointer_setdown(landed_while_held, preview, true, Some(cursor)));
+        assert!(!allows_prey_pointer_setdown(landed_while_held, preview, false, Some(alternate_ground)));
+        assert_eq!(world.player_held_object(), Some(id));
+        assert_eq!(world.entity(id).unwrap().position, pose);
+        assert_eq!(world.tick(), tick);
+        // A new drag and explicit re-aim at actual open ground may release
+        // that same World ID. No substitute prey or auto-placement.
+        let direct = slide_player_hold(alternate_ground, Some(pose), true, |point| {
+            world.move_player_hold(point).is_ok()
+        });
+        let held = terrain_prey_hold(Some(id), &world);
+        let proof = DirectPreyAim::observe(id, alternate_ground, direct, held.unwrap().1);
+        assert!(allows_prey_pointer_setdown(held, proof, true, Some(alternate_ground)));
+        assert_eq!(world.release_player_hold().unwrap(), Some(id));
+        assert_eq!(world.entity(id).unwrap().position, alternate_ground);
+        assert_eq!(world.tick(), tick);
+        assert_eq!(world.object_snapshots().len(), 1);
+    }
+
+    #[test]
+    fn exact_chime_and_registered_prey_never_share_local_release_authority() {
+        let mut world = alife_world::HeadlessWorld::new(1643);
+        world.enable_island_for_new_game().unwrap();
+        let terrain = world.terrain().unwrap().clone();
+        let ground = |x, z| Vec3f::new(x, terrain.surface().height(x, z).unwrap(), z);
+        let chime = world.spawn_toy("player-activity-toy", ground(80.0, 251.5), false).unwrap();
+        let prey = world.spawn_player_food(ground(84.0, 251.5), alife_world::FoodVariety::Fruit).unwrap();
+        world.enable_autonomous_critter(prey, 17, 0.040, 4.0).unwrap();
+        let hit = |id| {
+            let tile = VoxelTileCoord::new(80, 251);
+            Some(StableVoxelObjectRef {
+                kind: StableVoxelRefKind::Resource,
+                stable_id: Some(id),
+                chunk: VoxelChunkCoord::for_tile(16, tile),
+                tile: Some(tile),
+            })
+        };
+        let cursor = Some(Vec2::new(100.0, 100.0));
+        let mut hand = HandInteraction::default();
+        world.begin_player_hold(chime).unwrap();
+        assert!(!may_release_hand(Some(prey), &world));
+        assert!(!adopt_reopened_chime(&mut hand, &world, hit(prey), cursor, true));
+        assert!(adopt_reopened_chime(&mut hand, &world, hit(chime), cursor, true));
+        assert!(terrain_prey_hold(hand.held, &world).is_none());
+        assert!(may_release_hand(hand.held, &world));
+        assert_eq!(world.release_player_hold().unwrap(), Some(chime));
+        reset_chime_hand(&mut hand);
+
+        world.begin_player_hold(prey).unwrap();
+        let pose = world.entity(prey).unwrap().position;
+        assert_eq!(chime_body_pick_id(&world), None);
+        assert!(!adopt_reopened_chime(&mut hand, &world, hit(prey), cursor, true));
+        assert_eq!(terrain_prey_hold(Some(prey), &world), Some((prey, pose)));
+        assert!(!allows_prey_pointer_setdown(Some((prey, pose)), None, true, Some(ground(84.0, 251.5))));
+        assert_eq!(world.player_held_object(), Some(prey));
+    }
+
     #[test]
     fn slide_uses_world_rejection_and_drops_at_accepted_ground() {
         let mut world = alife_world::HeadlessScenarioBuilder::new(17)

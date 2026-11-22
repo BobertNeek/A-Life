@@ -8178,6 +8178,14 @@ impl GpuLiveBrainRuntime {
         Ok(self.world.tend_orchard(tile)?)
     }
 
+    pub fn reseat_player_orchard_planter(
+        &mut self,
+        source: alife_world::orchard::OrchardBed,
+        to: alife_world::VoxelTileCoord,
+    ) -> Result<alife_world::orchard::OrchardBed, GameAppShellError> {
+        Ok(self.world.reseat_orchard_planter(source, to)?)
+    }
+
     pub fn offer_orchard_fruit(
         &mut self,
         recipient: WorldEntityId,
