@@ -12,4 +12,20 @@ serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 
+[features]
+default = []
+qualia-village-review = []
+
+[[test]]
+name = "signed_court_and_wick_joint"
+required-features = ["qualia-village-review"]
+
+[[test]]
+name = "signed_orchard_court_repeat_care"
+required-features = ["qualia-village-review"]
+
+[[test]]
+name = "signed_wick_after_crop_collection"
+required-features = ["qualia-village-review"]
+
 [dev-dependencies]

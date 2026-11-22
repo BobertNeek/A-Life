@@ -1,0 +1,543 @@
+name: Qualia combined orchard App CPU review
+
+# Review only. Do not merge this workflow or its review-enabled candidate.
+on:
+  push:
+    branches: ['qualia-ci/orchard-combined-app-watch-review']
+    paths: ['.github/workflows/qualia-orchard-combined-app-watch-review.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  app-cpu-review:
+    if: >-
+      github.repository == 'BobertNeek/A-Life' &&
+      github.ref == 'refs/heads/qualia-ci/orchard-combined-app-watch-review' &&
+      github.event.before == '8429f54f29e0569a699b3766d70e62bac2c92225' &&
+      github.run_attempt == '1' &&
+      !github.event.created && !github.event.deleted && !github.event.forced
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    env:
+      CARGO_BUILD_JOBS: '1'
+      CARGO_INCREMENTAL: '0'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
+      CARGO_PROFILE_TEST_INCREMENTAL: 'false'
+      RUST_MIN_STACK: '33554432'
+      RUST_TEST_THREADS: '1'
+    steps:
+      - name: Checkout the exact public candidate only
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 2
+          lfs: false
+          submodules: false
+
+      - name: Verify the sealed source, parent and exact code-only tree
+        run: |
+          set -euo pipefail
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          . /etc/os-release
+          test "$ID" = ubuntu
+          test "$VERSION_ID" = 26.04
+          test "$VERSION_CODENAME" = resolute
+          test "$(uname -m)" = x86_64
+          printf 'runner_image=%s runner_version=%s os=%s\n' "${ImageOS:-unreported}" "${ImageVersion:-unreported}" "$PRETTY_NAME"
+          stage="$(mktemp -d "$RUNNER_TEMP/qualia-orchard-combined.XXXXXX")"
+          export QUALIA_MODE_REVIEW_STAGE="$stage"
+          printf 'QUALIA_MODE_REVIEW_STAGE=%s\n' "$stage" >> "$GITHUB_ENV"
+          cat > "$stage/sealed-pins.json" <<'QUALIA_ACTIVATION_PINS'
+          {
+            "app_features_exact_base": [
+              "bevy-app",
+              "gpu-runtime",
+              "production-voxel-frontend",
+              "vfx-hanabi"
+            ],
+            "app_manifest": "crates/alife_game_app/Cargo.toml",
+            "cases": {
+              "review-on": [
+                "production_voxel_renderer::orchard::court::tests::signed_viewport_chime_preview_garden_return_and_late_seat_refusal"
+              ]
+            },
+            "exact_changed_public_paths": {
+              "crates/alife_game_app/Cargo.toml": {
+                "postimage": "f5f103177a5f1025a2e6606e4232af39b83e34a2",
+                "preimage": "dadf70d05041316f34c3e2108d2380f83548ed51",
+                "sha256": "e42ec7a01be8ca2970e36d9c942eca7d02d464a28ea121a7c9fb6d79c9eef3f0",
+                "status": "M"
+              },
+              "crates/alife_game_app/src/gpu_live_runtime.rs": {
+                "postimage": "483f49a9925ad38bc064481c5fc127bd2b60c33a",
+                "preimage": "cfb83a1456329b1e29c7038ef93ed7e59930dc2a",
+                "sha256": "c192bdc03b5ff30ca9db54bbe96119068a8b997b7ed1e7e82ec09cf352b20f45",
+                "status": "M"
+              },
+              "crates/alife_game_app/src/production_voxel_renderer.rs": {
+                "postimage": "ae3f657bb7af535fecc422bb2bf49e7afe7fce0a",
+                "preimage": "7196047af931138352b976dd84a77f1b45bdf47a",
+                "sha256": "4b720098a2d42c0a4f518a315d8ad2efe68fdce65362ede5a9b1c1034b74051f",
+                "status": "M"
+              },
+              "crates/alife_game_app/src/production_voxel_renderer/care_dock.rs": {
+                "postimage": "20081ba09b219eb3b314c3cb9b5d3cc8bc58827b",
+                "preimage": "3a42b22d49937d35bd14fafe1ed98f701e4e5c1d",
+                "sha256": "c43746f9c661a3b19ae5945b756d15295cdf049b0413c13b423a61b5a01f6af7",
+                "status": "M"
+              },
+              "crates/alife_game_app/src/production_voxel_renderer/god_hand.rs": {
+                "postimage": "f001fd3e52ba4ebb525dded34e04adef5199cc56",
+                "preimage": "575a261524745428295380c096b04117702a79ec",
+                "sha256": "632732db326527826bf21c86f57b4d2877686184586be69d59f748d9c8bc8170",
+                "status": "M"
+              },
+              "crates/alife_game_app/src/production_voxel_renderer/orchard.rs": {
+                "postimage": "6f9264dda65c8c3af3908281f0a486e9ff9c59b5",
+                "preimage": "ef42c5a4a144130b21657ee0b89caa5b5a47fdb7",
+                "sha256": "40c67030cd23a4352140b4d72a83e9910b71dcf272f2148beec0fede48b3b792",
+                "status": "M"
+              },
+              "crates/alife_game_app/src/production_voxel_renderer/orchard/court.rs": {
+                "postimage": "cedfa893eaf080413edb8b708a4f8ec1b0d6632a",
+                "preimage": null,
+                "sha256": "c796b13ad8a28981b7c60c30eb3bfb86db85cef87cc88eb4787d8414b4e19b8f",
+                "status": "A"
+              },
+              "crates/alife_game_app/src/production_voxel_renderer/orchard/wick_pot.rs": {
+                "postimage": "be02176561e8feeffac7e2ee5f04929abff09ced",
+                "preimage": null,
+                "sha256": "ff9ae125e1ccf9d43b30a1fbe503973c53a438a44aeb7c6f67593090d9a6ff12",
+                "status": "A"
+              },
+              "crates/alife_game_app/src/production_voxel_renderer/ux_input.rs": {
+                "postimage": "ec8d7dac0a77585bf59cfe4d74d481d08abd623e",
+                "preimage": "5b07eb8132c79b913d3340eec0c7041e4448a8af",
+                "sha256": "2556c5a8a7aea0037a3dd8cd929360aa844541d1bec372fcf2845db4be149fe5",
+                "status": "M"
+              },
+              "crates/alife_world/Cargo.toml": {
+                "postimage": "ab1348eb5e8562c7e981ee2a2891b38bdb212d03",
+                "preimage": "647aa812b568242c9aaea13f9f266fef3879e0e7",
+                "sha256": "3c79ec14cd132ba097cbbd68f3a2ebc9e09983dbf774d4f8f1bfe99837868efd",
+                "status": "M"
+              },
+              "crates/alife_world/src/headless.rs": {
+                "postimage": "020d25ae654d826b8501b653e9dfb5509823f0c9",
+                "preimage": "8531bba2e4531086471667fab72c58dcbe8aeeb9",
+                "sha256": "a33f882aaa2b2c243b3765fa9075896b703080d3dd4941841503203080f3c937",
+                "status": "M"
+              },
+              "crates/alife_world/src/headless/orchard.rs": {
+                "postimage": "9a7de6bf3cf8e32869ce139cb51ef382599a9575",
+                "preimage": "6ab5aa08212e160517bea8f827443fecf1c51536",
+                "sha256": "83eb82284d71b8fc805140f7b74e7e321e742d27691fccbfdcb8eeea0984e47d",
+                "status": "M"
+              },
+              "crates/alife_world/src/headless/player_hand.rs": {
+                "postimage": "6cd899a95d721dfea31c3c1e66e7728bfaa1458d",
+                "preimage": "e6d2f7bfc8ed95caadc50b5e1661cec9b2e0d5f0",
+                "sha256": "26e5c5b3b56d76cf0a1a362c36074a764f55c3d6a8e17736f0c10ca725f9c5e8",
+                "status": "M"
+              },
+              "crates/alife_world/src/headless/rolling_toys/tests.rs": {
+                "postimage": "a4fff431dfebff8ae02fb1ede917704d39238237",
+                "preimage": "162529d3720168d5355ece2bad3e41f3b090d869",
+                "sha256": "7dd7fcc1834468f5e74afd54e85eebfc7ecae7ec5fe654cde76f8252edfb7843",
+                "status": "M"
+              },
+              "crates/alife_world/src/orchard.rs": {
+                "postimage": "5fba47e6633599ede891b037638c4feabd30aaa4",
+                "preimage": "0ab052438107e62cf51e78c460aa6da97d088d17",
+                "sha256": "8f0be42cd90f66111e6f483c58413683c6f8f54ee2f0dd75b5556a541ac22ed8",
+                "status": "M"
+              },
+              "crates/alife_world/src/terrain.rs": {
+                "postimage": "bafbe96049e8ecbde1defdcd0e2aff5f97aa0f1e",
+                "preimage": "e9dd78d61c1463e3def00bc5580ef72f611d96d3",
+                "sha256": "0c7c1f970e898ae7393d81f4cb779abcb91ce2767646cf7d227f8de79112acc5",
+                "status": "M"
+              },
+              "crates/alife_world/tests/signed_court_and_wick_joint.rs": {
+                "postimage": "3c75e791a88a929d33dfba6935601c349fa44c9f",
+                "preimage": null,
+                "sha256": "43c87a55a257b947f5f26d98d762ce0fbebc38afac48355ee0314ccfd9b5dd76",
+                "status": "A"
+              },
+              "crates/alife_world/tests/signed_orchard_court_repeat_care.rs": {
+                "postimage": "48125635149f1284130ba03d1713785620426704",
+                "preimage": null,
+                "sha256": "ef1eff37b84663b8f1d98db21c702ac6646d8dfdea568cb92cba1d9e02bc99d9",
+                "status": "A"
+              },
+              "crates/alife_world/tests/signed_wick_after_crop_collection.rs": {
+                "postimage": "ea191b140f386f3cd4adf10a75865b8517f1bcb0",
+                "preimage": null,
+                "sha256": "226715820fdba7d8d6f784972455a9efd85ca01f6f7089a421928bac5d0a0fb5",
+                "status": "A"
+              }
+            },
+            "feature_choices": [
+              "production-voxel-frontend,qualia-village-review"
+            ],
+            "flattened_patch_sha256": "93274363182f08ab044fdcba9fa7bce546c937a04a40ea10b5c5df36048d2b4d",
+            "immutable_inputs": {
+              "Cargo.lock": {
+                "blob": "af9d91aa4c79a1c2fbb6d662bc747ec916db5bfb",
+                "sha256": "155699e9274f8890bc8c335669a62de48203ba315a33388a8f0caca71f0f7f37"
+              },
+              "crates/alife_world/assets/island-v1.bin": {
+                "blob": "6fc7715884882d4089e4efc6516f57b9027530f4",
+                "sha256": "8d0e9cf6343ffe8ea5e82bcb7ad3e4ef77eef7207042cf0274de5d91f2457c38"
+              }
+            },
+            "libudev_signed_version": "259.9-0ubuntu0.1",
+            "pinned_main": "8429f54f29e0569a699b3766d70e62bac2c92225",
+            "previous_1of1_app_official_duration_seconds": 735.654,
+            "root_stock_tree": "6681cd02672c62c080b4e84e0ce9caad90a0f7e5",
+            "runner_arch": "x86_64",
+            "runner_os_codename": "resolute",
+            "runner_os_id": "ubuntu",
+            "runner_os_version": "26.04",
+            "sig_readback_b19e_projection_only": true,
+            "source_or_job_published": false,
+            "source_successor_tree": "dc771f104e091e02e03b016df2032683f720eba4",
+            "stock_and_review_emitted_separately": false,
+            "toolchain": "1.100.0",
+            "unchanged_orchard_opt_in_production_tree": "87684901bb0e3196ee249e212c7adecdd7260fd6",
+            "world_features_optional_toggle": "qualia-village-review",
+            "world_manifest": "crates/alife_world/Cargo.toml"
+          }
+          QUALIA_ACTIVATION_PINS
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          import re
+          import shutil
+          import subprocess
+          import tempfile
+
+          def git(*a, env=None, data=None):
+              return subprocess.check_output(["git","--no-replace-objects",*a],env=env,input=data)
+
+          def word(*a, env=None):
+              return git(*a,env=env).decode().strip()
+
+          def sha(b):
+              return hashlib.sha256(b).hexdigest()
+
+          stage=Path(os.environ["QUALIA_MODE_REVIEW_STAGE"]).resolve(strict=True)
+          runner=Path(os.environ["RUNNER_TEMP"]).resolve(strict=True)
+          assert stage.parent==runner and os.environ["RUNNER_ENVIRONMENT"]=="github-hosted"
+          assert os.environ["GITHUB_REPOSITORY"]=="BobertNeek/A-Life"
+          assert os.environ["GITHUB_EVENT_NAME"]=="push" and os.environ["GITHUB_RUN_ATTEMPT"]=="1"
+          assert os.environ["GITHUB_REF"]=="refs/heads/qualia-ci/orchard-combined-app-watch-review"
+          pin_bytes=(stage/"sealed-pins.json").read_bytes()
+          assert sha(pin_bytes)=="bae3402e908e2936ac775d72c48f1bca1513606a64a1c05714161a0e9d6a275d"
+          pin=json.loads(pin_bytes)
+          base=pin["pinned_main"]
+          head=os.environ["GITHUB_SHA"]
+          assert re.fullmatch("[0-9a-f]{40}",head) and word("rev-parse","HEAD")==head
+          assert word("rev-list","--parents","-n","1","HEAD").split()==[head,base]
+          assert word("rev-parse",base+"^{tree}")==pin["root_stock_tree"]
+          assert not git("status","--porcelain","--untracked-files=all")
+          path=".github/workflows/qualia-orchard-combined-app-watch-review.yml"
+          paths=pin["exact_changed_public_paths"]
+          assert len(paths)==19
+          delta=git("diff","--name-status","--no-renames","-z",base,head).decode().split("\0")
+          assert len(delta)==2*(len(paths)+1)+1 and delta[-1]==""
+          got=dict(zip(delta[1:-1:2],delta[0:-1:2]))
+          assert got=={path:"A",**{k:v["status"] for k,v in paths.items()}}
+          for k,r in paths.items():
+              assert word("ls-tree",head,"--",k)==f'100644 blob {r["postimage"]}\t{k}'
+              if r["status"]=="A":
+                  assert r["preimage"] is None and not git("ls-tree",base,"--",k)
+              else:
+                  assert r["status"]=="M" and word("rev-parse",base+":"+k)==r["preimage"]
+              contents=Path(k).read_bytes()
+              assert sha(contents)==r["sha256"] and contents==git("show",head+":"+k)
+          for k,r in pin["immutable_inputs"].items():
+              assert word("rev-parse",head+":"+k)==word("rev-parse",base+":"+k)==r["blob"]
+              assert sha(Path(k).read_bytes())==r["sha256"]
+          workflow=word("rev-parse",head+":"+path)
+          assert word("ls-tree",head,"--",path)==f"100644 blob {workflow}\t{path}"
+          assert Path(path).read_bytes()==git("show",head+":"+path)
+          assert shutil.disk_usage(stage).free>=8*1024**3
+          with tempfile.TemporaryDirectory(dir=stage,prefix="identity-index.") as index:
+              env=dict(os.environ,GIT_INDEX_FILE=str(Path(index)/"index"),GIT_OPTIONAL_LOCKS="0")
+              git("read-tree",head,env=env)
+              git("update-index","--index-info",env=env,data=f"0 {'0'*40}\t{path}\n".encode())
+              assert word("write-tree",env=env)==pin["source_successor_tree"]
+          assert not git("status","--porcelain","--untracked-files=all")
+          print("EXACT_PUBLIC_CODE_AND_WORKFLOW",json.dumps({
+              "run":os.environ["GITHUB_RUN_ID"],"attempt":1,"head":head,
+              "sole_parent":base,"head_tree":word("rev-parse","HEAD^{tree}"),
+              "code_only_tree":pin["source_successor_tree"],"workflow_oid":workflow,
+              "workflow_sha256":sha(Path(path).read_bytes()),"source_changed_paths":len(paths),
+              "source_pins_sha256":sha(pin_bytes),
+              "unchanged_assets_lock":pin["immutable_inputs"],
+              "initial_free_bytes":shutil.disk_usage(stage).free,
+          },sort_keys=True),flush=True)
+          PY
+
+      - name: Use the exact previously observed official Rust release
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8
+        with:
+          toolchain: '1.100.0'
+
+      - name: Install the exact signed Ubuntu libudev development package
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          rustc +1.100.0 --version --verbose
+          cargo +1.100.0 --version
+          keyring=/usr/share/keyrings/ubuntu-archive-keyring.gpg
+          test -r "$keyring"
+          stage="$QUALIA_MODE_REVIEW_STAGE"
+          sources="$stage/official-ubuntu.list"
+          printf '%s\n' \
+            "deb [signed-by=$keyring] https://azure.archive.ubuntu.com/ubuntu resolute main" \
+            "deb [signed-by=$keyring] https://azure.archive.ubuntu.com/ubuntu resolute-updates main" \
+            "deb [signed-by=$keyring] https://azure.archive.ubuntu.com/ubuntu resolute-security main" > "$sources"
+          apt_flags=(-o "Dir::Etc::sourcelist=$sources" -o 'Dir::Etc::sourceparts=-'
+            -o 'Acquire::https::Timeout=20' -o 'Acquire::Retries=1' -o 'APT::Update::Error-Mode=any')
+          sudo apt-get "${apt_flags[@]}" update
+          sudo apt-get "${apt_flags[@]}" install -y --no-install-recommends 'libudev-dev=259.9-0ubuntu0.1'
+          test "$(dpkg-query -W -f='${Version}' libudev-dev:amd64)" = 259.9-0ubuntu0.1
+          test "$(dpkg-query -W -f='${Version}' libudev1:amd64)" = 259.9-0ubuntu0.1
+          dpkg-query -W libudev-dev:amd64 libudev1:amd64
+          pkg-config --exists libudev
+          pkg-config --modversion --libs libudev
+
+      - name: Build one frozen opt-in App libtest and run only the signed orchard integration
+        run: |
+          set -euo pipefail
+          unset DISPLAY WAYLAND_DISPLAY XAUTHORITY
+          export CARGO_HOME="$QUALIA_MODE_REVIEW_STAGE/cargo-home"
+          export TMPDIR="$QUALIA_MODE_REVIEW_STAGE/tmp"
+          fetch_target="$QUALIA_MODE_REVIEW_STAGE/fetch-target"
+          mkdir -m 700 "$fetch_target" "$CARGO_HOME" "$TMPDIR"
+          test ! -e "$QUALIA_MODE_REVIEW_STAGE/target"
+          CARGO_TARGET_DIR="$fetch_target" cargo +1.100.0 fetch --locked --target x86_64-unknown-linux-gnu
+          export CARGO_TARGET_DIR="$QUALIA_MODE_REVIEW_STAGE/target"
+          mkdir -m 700 "$CARGO_TARGET_DIR"
+          python3 - <<'PY'
+          """Review-only inlined body for a separately authorized single hosted job.
+
+          Requires the exact verified hosted source/apt/fetch stage. Does not set up a
+          workflow or choose or write a branch. Never execute on the local worker.
+          """
+          from hashlib import file_digest
+          import json
+          import os
+          from pathlib import Path
+          import re
+          import shutil
+          import signal
+          import subprocess
+          import sys
+          import time
+
+          GIB=1024**3
+          INNER_SECONDS=1560                 # after locked fetch; outer hosted job is 30m
+          BUILD_SOFT_MAX=1030
+          TERM_SLACK=5
+          CASE_LIMIT=20
+          PIN_SHA='bae3402e908e2936ac775d72c48f1bca1513606a64a1c05714161a0e9d6a275d'
+          REVIEW='qualia-village-review'
+
+
+          def sha(path):
+              with path.open('rb') as f:
+                  return file_digest(f,'sha256').hexdigest()
+
+
+          def canonical(path):
+              p=Path(path)
+              assert p.is_absolute() and not p.is_symlink()
+              return p.resolve(strict=True)
+
+
+          def git(*args):
+              return subprocess.check_output(['git','--no-replace-objects',*args])
+
+
+          def command(args,out,err,seconds):
+              clock=time.monotonic()
+              status=None
+              with out.open('xb') as raw, err.open('xb') as log:
+                  proc=subprocess.Popen(args,stdout=raw,stderr=log,start_new_session=True)
+                  try:
+                      status=proc.wait(timeout=seconds)
+                  except subprocess.TimeoutExpired:
+                      status=124
+                  finally:
+                      if proc.poll() is None:
+                          try:
+                              os.killpg(proc.pid,signal.SIGTERM)
+                          except ProcessLookupError:
+                              pass
+                          try:
+                              proc.wait(timeout=TERM_SLACK)
+                          except subprocess.TimeoutExpired:
+                              try:
+                                  os.killpg(proc.pid,signal.SIGKILL)
+                              except ProcessLookupError:
+                                  pass
+                              proc.wait()
+              return {'command':args,'status':status,'seconds':round(time.monotonic()-clock,3),
+                      'stdout_sha256':sha(out),'stderr_sha256':sha(err)}
+
+
+          def emit(tag,s):
+              print(tag,json.dumps(s,sort_keys=True),flush=True)
+
+
+          def main():
+              assert os.environ.get('GITHUB_ACTIONS')=='true'
+              assert os.environ.get('RUNNER_ENVIRONMENT')=='github-hosted'
+              assert os.environ.get('GITHUB_REPOSITORY')=='BobertNeek/A-Life'
+              assert os.environ.get('GITHUB_RUN_ATTEMPT')=='1'
+              for name in ('DISPLAY','WAYLAND_DISPLAY','XAUTHORITY'):
+                  os.environ.pop(name,None)
+              runner=canonical(os.environ['RUNNER_TEMP'])
+              stage=canonical(os.environ['QUALIA_MODE_REVIEW_STAGE'])
+              target=canonical(os.environ['CARGO_TARGET_DIR'])
+              cache=canonical(os.environ['CARGO_HOME'])
+              fetch=canonical(stage/'fetch-target')
+              tmp=canonical(os.environ['TMPDIR'])
+              assert stage.parent==runner and cache.parent==fetch.parent==target.parent==tmp.parent==stage
+              assert (cache,fetch,target,tmp)==tuple(stage/p for p in ('cargo-home','fetch-target','target','tmp'))
+              assert len({cache,fetch,target,tmp})==4 and not list(target.iterdir()) and not list(tmp.iterdir())
+              assert shutil.disk_usage(stage).free>=8*GIB
+              assert os.environ.get('CARGO_BUILD_JOBS')=='1'
+              assert os.environ.get('CARGO_INCREMENTAL')=='0'
+              assert os.environ.get('CARGO_PROFILE_TEST_DEBUG')=='0'
+              assert os.environ.get('CARGO_PROFILE_TEST_INCREMENTAL')=='false'
+              pins_path=stage/'sealed-pins.json'
+              assert sha(pins_path)==PIN_SHA
+              pins=json.loads(pins_path.read_bytes())
+              assert not git('status','--porcelain','--untracked-files=all')
+              head=git('rev-parse','HEAD').decode().strip()
+              assert head==os.environ['GITHUB_SHA']
+              assert git('rev-list','--parents','-n','1','HEAD').decode().split()==[head,pins['pinned_main']]
+              # The enclosing hosted identity step must have separately checked exact
+              # stripped workflow tree and branch/push policy. Here bind raw leafs again.
+              for p,val in pins['immutable_inputs'].items():
+                  assert sha(Path(p))==val['sha256']
+              for p,val in pins['exact_changed_public_paths'].items():
+                  assert sha(Path(p))==val['sha256']
+              app=Path(pins['app_manifest']).resolve(strict=True)
+              world=Path(pins['world_manifest']).resolve(strict=True)
+              want_src=(app.parent/'src/lib.rs').resolve(strict=True)
+              world_src=(world.parent/'src/lib.rs').resolve(strict=True)
+              feature_arg='production-voxel-frontend,qualia-village-review'
+              expect_app=set(pins['app_features_exact_base'])|{REVIEW}
+              case,=pins['cases']['review-on']
+              assert case=='production_voxel_renderer::orchard::court::tests::signed_viewport_chime_preview_garden_return_and_late_seat_refusal'
+              assert pins['feature_choices']==[feature_arg] and set(pins['cases'])=={'review-on'}
+              deadline=time.monotonic()+INNER_SECONDS
+              summary={'head':head,'tree':pins['source_successor_tree'],'expected_case':case,
+                       'expected_app_features':sorted(expect_app),'expected_world_features':['default',REVIEW],
+                       'actual_passes':0,'hard_job_minutes':30,'internal_after_fetch_s':INNER_SECONDS,
+                       'cpu_libtest_only_no_full_app':True,'never_retries':True}
+              fatal=None
+              try:
+                  assert deadline-time.monotonic()>BUILD_SOFT_MAX+2*TERM_SLACK+CASE_LIMIT+10
+                  args=['cargo','+1.100.0','test','--frozen','--target','x86_64-unknown-linux-gnu',
+                        '-j','1','-p','alife_game_app','--no-default-features','--features',feature_arg,
+                        '--lib','--no-run','--message-format=json-render-diagnostics']
+                  raw,err=stage/'review-on.build.jsonl',stage/'review-on.build.stderr'
+                  emit('COMPILER_COMMAND',{'args':args,'soft_seconds':BUILD_SOFT_MAX})
+                  summary['build']=command(args,raw,err,BUILD_SOFT_MAX)
+                  emit('COMPILE_RESULT',summary['build'])
+                  sys.stderr.buffer.write(err.read_bytes())
+                  sys.stderr.buffer.flush()
+                  apps=[]; worlds=[]
+                  with raw.open(encoding='utf-8') as f:
+                      for line in f:
+                          row=json.loads(line)
+                          if row.get('reason')=='compiler-message':
+                              if rendered:=row['message'].get('rendered'):
+                                  print(rendered,file=sys.stderr,flush=True,end='')
+                          if row.get('reason')!='compiler-artifact':
+                              continue
+                          manifest=Path(row['manifest_path']).resolve()
+                          dest=row['target']
+                          kind,name,code=dest['kind'],dest['name'],Path(dest['src_path']).resolve()
+                          if manifest==world and kind==['lib'] and name=='alife_world' and code==world_src:
+                              worlds.append(row)
+                          if manifest==app and kind==['lib'] and name=='alife_game_app' and code==want_src and row.get('executable'):
+                              apps.append(row)
+                  assert summary['build']['status']==0, 'No test eligible after a failed or timed-out compile'
+                  w,=worlds
+                  a,=apps
+                  assert set(w['features'])=={'default',REVIEW} and w['fresh'] is False and w['profile']['test'] is False
+                  world_path,=(Path(f).resolve(strict=True) for f in w['filenames'] if f.endswith('.rlib'))
+                  assert world_path.is_file() and world_path.is_relative_to(target)
+                  summary['world']={'features':sorted(w['features']),'relative':str(world_path.relative_to(target)),
+                                    'sha256':sha(world_path),'fresh':w['fresh']}
+                  emit('WORLD_LIB_FINGERPRINT',summary['world'])
+                  assert set(a['features'])==expect_app and a['fresh'] is False
+                  assert a['profile']['test'] is True and a['profile']['debug_assertions'] is True
+                  binary=Path(a['executable']).resolve(strict=True)
+                  assert binary.is_file() and binary.is_relative_to(target) and os.access(binary,os.X_OK)
+                  summary['artifact']={'features':sorted(a['features']),'relative':str(binary.relative_to(target)),
+                                       'sha256':sha(binary),'fresh':a['fresh']}
+                  emit('APP_LIBTEST',summary['artifact'])
+                  assert shutil.disk_usage(stage).free>=8*GIB
+                  assert sha(Path('Cargo.lock'))==pins['immutable_inputs']['Cargo.lock']['sha256']
+                  assert deadline-time.monotonic()>CASE_LIMIT+TERM_SLACK+4
+                  stdout,stderr=stage/'review-on.case-1.stdout',stage/'review-on.case-1.stderr'
+                  run=command([str(binary),case,'--exact','--test-threads=1','--format=pretty','--color=never'],
+                              stdout,stderr,CASE_LIMIT)
+                  sys.stdout.buffer.write(stdout.read_bytes())
+                  sys.stdout.buffer.flush()
+                  sys.stderr.buffer.write(stderr.read_bytes())
+                  sys.stderr.buffer.flush()
+                  out=stdout.read_text()
+                  rows=[s for s in out.splitlines() if s.startswith('test ') and ' ... ' in s]
+                  passed=(run['status']==0 and rows==[f'test {case} ... ok']
+                          and len(re.findall(r'^test result: ok\. 1 passed; 0 failed; 0 ignored; 0 measured;',out,re.M))==1)
+                  summary['case']={'case':case,'passed':passed,**run}
+                  summary['actual_passes']=int(passed)
+                  emit('EXACT_CASE_RESULT',summary['case'])
+                  assert sha(binary)==summary['artifact']['sha256'] and sha(world_path)==summary['world']['sha256']
+              except Exception as e:
+                  fatal=e
+              finally:
+                  summary['first_error']=None if fatal is None else repr(fatal)
+                  summary['passed']=summary['actual_passes']==1 and fatal is None
+                  summary['remaining_seconds']=round(deadline-time.monotonic(),3)
+                  with (stage/'orchard-combined-one-case-result.json').open('x') as f:
+                      f.write(json.dumps(summary,indent=2,sort_keys=True)+'\n')
+                  emit('FINAL_ORCHARD_COMBINED_ONE_CASE_RESULT',summary)
+              if fatal is not None:
+                  raise fatal
+              if not summary['passed']:
+                  raise SystemExit('Exact signed combined orchard case did not pass; preserve raw, no retry')
+
+          if __name__=='__main__':main()
+          PY
+
+      - name: Retain only raw compiler and named-test logs
+        if: always() && env.QUALIA_MODE_REVIEW_STAGE != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: qualia-orchard-combined-app-raw-attempt-1
+          if-no-files-found: ignore
+          retention-days: 7
+          path: |
+            ${{ env.QUALIA_MODE_REVIEW_STAGE }}/review-on.build.jsonl
+            ${{ env.QUALIA_MODE_REVIEW_STAGE }}/review-on.build.stderr
+            ${{ env.QUALIA_MODE_REVIEW_STAGE }}/review-on.case-1.stdout
+            ${{ env.QUALIA_MODE_REVIEW_STAGE }}/review-on.case-1.stderr
+            ${{ env.QUALIA_MODE_REVIEW_STAGE }}/orchard-combined-one-case-result.json

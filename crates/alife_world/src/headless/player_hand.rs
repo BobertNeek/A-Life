@@ -2,15 +2,124 @@
 use super::*;
 use serde::{Deserialize, Serialize};
 
+// Isolated source review only; no runtime setting or additional tool.
+const CHIME_PLACEMENT_REVIEW: bool = crate::orchard::ORCHARD_COURT_REVIEW;
+const ORIGINAL_CHIME: &str = "player-activity-toy";
+const CHIME_RADIUS: f32 = 0.50;
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PlayerHold {
     pub object_id: WorldEntityId,
     pub last_ground: Vec3f,
 }
 
+fn is_original_player_chime(
+    object: &WorldObject,
+    registered_id: Option<WorldEntityId>,
+) -> bool {
+    object.kind == WorldObjectKind::ActivityToy
+        && object.label == ORIGINAL_CHIME
+        && registered_id == Some(object.id)
+        && object.radius == CHIME_RADIUS
+        && object.organism_id.is_none()
+        && !object.consumed
+        && object.carried_by.is_none()
+        && !object.activity_hold
+}
+
+/// Read the same exact identity before the live label index is reconstructed.
+/// Only the opted-in named capability can enter the later terrain validator.
+pub(super) fn saved_original_player_chime(
+    object: &crate::persistence::WorldObjectSaveState,
+    objects: &[crate::persistence::WorldObjectSaveState],
+) -> bool {
+    if !CHIME_PLACEMENT_REVIEW
+        || object.kind != WorldObjectKind::ActivityToy
+        || object.label != ORIGINAL_CHIME
+    {
+        return false;
+    }
+    let mut named = objects.iter().filter(|o| o.label == ORIGINAL_CHIME);
+    let registered_id = named.next().map(|o| o.id);
+    named.next().is_none()
+        && is_original_player_chime(&WorldObject::from(object.clone()), registered_id)
+}
+
 impl HeadlessWorld {
     pub fn player_held_object(&self) -> Option<WorldEntityId> {
         self.player_hold.as_ref().map(|hold| hold.object_id)
+    }
+
+    pub(super) fn original_player_chime(&self, object: &WorldObject) -> bool {
+        is_original_player_chime(object, self.entity_id(ORIGINAL_CHIME))
+    }
+
+    /// Only the one deliberately movable chime refuses alternate App slide
+    /// spots. Other ordinary held objects keep their existing cursor slide.
+    pub fn player_holds_original_chime(&self) -> bool {
+        CHIME_PLACEMENT_REVIEW
+            && self.player_held_object().and_then(|id| self.entity(id))
+                .is_some_and(|object| self.original_player_chime(object))
+    }
+
+    fn chime_terrain_foot(&self, at: Vec3f) -> Option<Vec3f> {
+        let t = self.terrain()?;
+        let surface = t.surface();
+        let h = surface.height(at.x, at.z)?;
+        let mut limits = t.limits();
+        limits.body_radius = CHIME_RADIUS;
+        limits.max_wading_depth = 0.;
+        if !surface.walkable_with(at.x, at.z, limits) {
+            return None;
+        }
+        let r = CHIME_RADIUS;
+        let d = r * std::f32::consts::FRAC_1_SQRT_2;
+        for (dx, dz) in [(0., 0.), (r, 0.), (-r, 0.), (0., r), (0., -r),
+            (d, d), (d, -d), (-d, d), (-d, -d)] {
+            let y = surface.height(at.x + dx, at.z + dz)?;
+            if (y - h).abs() > 0.18 || surface.water_level.is_some_and(|level| y <= level + 0.035) {
+                return None;
+            }
+        }
+        Some(Vec3f::new(at.x, h, at.z))
+    }
+
+    fn chime_clear_foot(&self, id: WorldEntityId, at: Vec3f) -> Option<Vec3f> {
+        let ground = self.chime_terrain_foot(at)?;
+        // Give already planted ground the native orchard's .42m spacing,
+        // in addition to the actual table radius. Never replace any plant.
+        let overlaps_bed = self.ecology.orchard_beds.iter().any(|bed| {
+            (bed.tile.x as f32 + 0.5 - ground.x).hypot(bed.tile.z as f32 + 0.5 - ground.z)
+                < CHIME_RADIUS + 0.42
+        });
+        let occupied = self.objects.values().any(|o| {
+            o.id != id && !o.consumed && o.carried_by.is_none()
+                && (o.position.x - ground.x).hypot(o.position.z - ground.z) < CHIME_RADIUS + o.radius
+        });
+        (!overlaps_bed && !occupied).then_some(ground)
+    }
+
+    fn chime_clear_transfer(&self, id: WorldEntityId, from: Vec3f, ground: Vec3f) -> bool {
+        let Some(t) = self.terrain() else { return false; };
+        let mut limits = t.limits();
+        limits.body_radius = CHIME_RADIUS;
+        limits.max_wading_depth = 0.;
+        let surface = t.surface();
+        let Some(end) = surface.resolve_move_with(from, ground, limits) else { return false; };
+        let v = |p: [f64; 3]| Vec3f::new(p[0] as f32, p[1] as f32, p[2] as f32);
+        surface.grounded_sweep_segments(from, end).is_some_and(|pieces| pieces.into_iter().all(|p| {
+            self.objects.values().all(|o| {
+                o.id == id || o.consumed || o.carried_by.is_some()
+                    || motion_sphere_entry(v(p.start), v(p.end), o.position, CHIME_RADIUS + o.radius).is_none()
+            })
+        }))
+    }
+
+    fn can_lift_original_chime(&self, o: &WorldObject) -> bool {
+        CHIME_PLACEMENT_REVIEW && self.original_player_chime(o) && self.toy_rolls.is_empty()
+            && self.chime_clear_foot(o.id, o.position).is_some_and(|p| {
+                (p.y - o.position.y).abs() <= 0.012
+            })
     }
 
     /// Whether this object is available for the player's pending pickup gesture.
@@ -26,13 +135,13 @@ impl HeadlessWorld {
         let object = self.entity(id).ok_or(ScaffoldContractError::InvalidId)?;
         if object.consumed
             || object.carried_by.is_some()
-            || !matches!(
+            || !(matches!(
                 object.kind,
                 WorldObjectKind::Agent
                     | WorldObjectKind::Food
                     | WorldObjectKind::Ball
                     | WorldObjectKind::Token
-            )
+            ) || self.can_lift_original_chime(object))
             || object.organism_id.is_some_and(|organism| {
                 self.organism_registry
                     .get(organism)
@@ -53,6 +162,12 @@ impl HeadlessWorld {
         match self.move_player_hold_to(ground, true) {
             Ok(position) => {
                 self.toy_rolls.remove(&id.raw());
+                if self.player_holds_original_chime()
+                    && self.last_chime_strike.is_some_and(|(_, struck)| struck == id)
+                {
+                    // The real old strike belongs to its old support.
+                    self.last_chime_strike = None;
+                }
                 Ok(position)
             }
             Err(error) => {
@@ -66,17 +181,7 @@ impl HeadlessWorld {
         self.move_player_hold_to(ground, false)
     }
 
-    fn move_player_hold_to(
-        &mut self,
-        mut ground: Vec3f,
-        initial_pickup: bool,
-    ) -> Result<Vec3f, ScaffoldContractError> {
-        ground.validate()?;
-        let hold = self
-            .player_hold
-            .as_ref()
-            .ok_or(ScaffoldContractError::InvalidActionDecision)?;
-        let id = hold.object_id;
+    fn canonical_player_hold_ground(&self, mut ground: Vec3f) -> Result<Vec3f, ScaffoldContractError> {
         if let Some(terrain) = &self.terrain {
             // A release location must support the object. Moving through the air
             // may cross rocks/rivers, but dropping into them is not silently allowed.
@@ -90,9 +195,76 @@ impl HeadlessWorld {
         } else {
             ground.z = 0.0;
         }
+        Ok(ground)
+    }
+
+    /// Survey the existing Chime gesture without taking it. An unheld Chime
+    /// must be genuinely liftable and the route from its native origin must fit.
+    /// For a held Chime, only the exact aim already accepted by the World Hand
+    /// can witness release. This never provisionally accepts a different ray.
+    pub(super) fn surveyed_original_chime_ground(
+        &self,
+        id: WorldEntityId,
+        aim: Vec3f,
+    ) -> Option<Vec3f> {
+        if !CHIME_PLACEMENT_REVIEW || !self.original_player_chime(self.entity(id)?) {
+            return None;
+        }
+        aim.validate().ok()?;
+        let ground = self.canonical_player_hold_ground(aim).ok()?;
+        match &self.player_hold {
+            Some(hold) if hold.object_id == id && hold.last_ground == ground => {
+                // Recheck the same late footprint as a real release.
+                self.revalidate_original_chime_seat(id, ground, ground, false).ok()?;
+            }
+            None => {
+                let object = self.player_hold_target(id).ok()?;
+                let origin = self.canonical_player_hold_ground(object.position).ok()?;
+                // An initial lift has its own exact endpoint check; make no
+                // preview from a pose at which native pickup would fail.
+                self.revalidate_original_chime_seat(id, origin, origin, false).ok()?;
+                self.revalidate_original_chime_seat(id, origin, ground, true).ok()?;
+            }
+            _ => return None,
+        }
+        Some(ground)
+    }
+
+    fn revalidate_original_chime_seat(
+        &self,
+        id: WorldEntityId,
+        from: Vec3f,
+        ground: Vec3f,
+        check_transfer: bool,
+    ) -> Result<(), ScaffoldContractError> {
+        if self.chime_clear_foot(id, ground) != Some(ground) {
+            return Err(ScaffoldContractError::InvalidActionDecision);
+        }
+        if check_transfer && from != ground && !self.chime_clear_transfer(id, from, ground) {
+            return Err(ScaffoldContractError::InvalidId);
+        }
+        Ok(())
+    }
+
+    fn move_player_hold_to(
+        &mut self,
+        ground: Vec3f,
+        initial_pickup: bool,
+    ) -> Result<Vec3f, ScaffoldContractError> {
+        ground.validate()?;
+        let hold = self
+            .player_hold
+            .as_ref()
+            .ok_or(ScaffoldContractError::InvalidActionDecision)?;
+        let id = hold.object_id;
+        let ground = self.canonical_player_hold_ground(ground)?;
+        let chime = self.player_holds_original_chime();
+        if chime {
+            self.revalidate_original_chime_seat(id, hold.last_ground, ground, !initial_pickup)?;
+        }
         // Keep initial pickup and unchanged projected ground available for
         // recovery. Check only the destination, allowing carrying across rocks.
-        if !initial_pickup && ground != hold.last_ground {
+        if !chime && !initial_pickup && ground != hold.last_ground {
             let object = self.entity(id).ok_or(ScaffoldContractError::InvalidId)?;
             let blocked = if object.kind == WorldObjectKind::Agent {
                 // Air carrying is endpoint-only. An old save/editor overlap may
@@ -145,6 +317,13 @@ impl HeadlessWorld {
         let Some(hold) = self.player_hold.clone() else {
             return Ok(None);
         };
+        if self.player_holds_original_chime() {
+            // A living body may enter after the last approved position.
+            // Preserve the same hold: no set-down into it or onto new ground.
+            self.revalidate_original_chime_seat(
+                hold.object_id, hold.last_ground, hold.last_ground, false,
+            )?;
+        }
         if self.entity(hold.object_id).is_some() {
             self.set_player_object_position(hold.object_id, hold.last_ground)?;
         }
@@ -160,6 +339,13 @@ impl HeadlessWorld {
             .entity(hold.object_id)
             .ok_or(ScaffoldContractError::InvalidId)?;
         let ground = hold.last_ground;
+        if CHIME_PLACEMENT_REVIEW && object.kind == WorldObjectKind::ActivityToy
+            && (!self.original_player_chime(object) || self.chime_terrain_foot(ground) != Some(ground))
+        {
+            return Err(ScaffoldContractError::InvalidId);
+        }
+        // An independent occupant can refuse set-down after reopen, but
+        // does not invalidate the recorded, geometrically supported hold.
         let mut expected = ground;
         if let Some(terrain) = &self.terrain {
             if !terrain.walkable(ground.x, ground.z)
