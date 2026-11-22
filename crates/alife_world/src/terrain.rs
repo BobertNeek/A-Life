@@ -173,6 +173,12 @@ impl WorldTerrain {
     pub fn surface(&self) -> &Arc<TerrainSurface> {
         &self.surface
     }
+    /// Water-plane elevation of this terrain, when it has one. This is the
+    /// same read-only scalar as the public state snapshot, without copying
+    /// the full heightfield and obstacle arrays.
+    pub fn water_level(&self) -> Option<f32> {
+        self.surface.water_level
+    }
     pub fn limits(&self) -> LocomotionLimits {
         self.limits
     }
