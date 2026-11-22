@@ -156,6 +156,12 @@ pub(crate) struct State {
     pub(super) garden_cursor: Option<VoxelTileCoord>,
     pub(super) garden_ground_click: bool,
     #[cfg(feature = "gpu-runtime")]
+    pub(super) wick_pot: Option<super::orchard::WickPot>,
+    #[cfg(feature = "gpu-runtime")]
+    pub(super) wick_watch: Option<alife_world::orchard::OrchardBed>,
+    #[cfg(feature = "gpu-runtime")]
+    pub(super) wick_return: Option<super::orchard::WickReturn>,
+    #[cfg(feature = "gpu-runtime")]
     pub(super) hand_focus: Option<HandFocus>,
     #[cfg(feature = "gpu-runtime")]
     pub(super) framing: Option<(HandFocus, f32)>,
@@ -214,6 +220,9 @@ impl State {
             self.framing = None;
             self.garden_cursor = None;
             self.garden_effect = None;
+            self.wick_pot = None;
+            self.wick_watch = None;
+            self.wick_return = None;
         }
         self.evidence = [Evidence::None; 7];
         self.selected = None;
@@ -664,6 +673,11 @@ pub(crate) fn collect_input(world: &mut World) {
         state.garden_last_cursor = cursor;
         if blocked || click.is_some() || state.fieldglass_pending {
             state.garden_armed = false;
+            #[cfg(feature = "gpu-runtime")]
+            {
+                state.wick_pot = None;
+                state.wick_watch = None;
+            }
         }
         state.garden_ground_click = !blocked && state.garden_armed && ground_click;
 
