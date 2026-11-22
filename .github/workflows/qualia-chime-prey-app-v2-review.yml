@@ -1,0 +1,277 @@
+name: Qualia Chime and prey V2 CPU review
+
+# Review only. Do not merge this workflow or its review-enabled candidate.
+on:
+  push:
+    branches: ['qualia-ci/chime-prey-app-v2-fetch-split-review']
+    paths: ['.github/workflows/qualia-chime-prey-app-v2-review.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  app-cpu-review:
+    if: >-
+      github.repository == 'BobertNeek/A-Life' &&
+      github.ref == 'refs/heads/qualia-ci/chime-prey-app-v2-fetch-split-review' &&
+      github.event.before == '8429f54f29e0569a699b3766d70e62bac2c92225' &&
+      github.run_attempt == '1' &&
+      !github.event.created && !github.event.deleted && !github.event.forced
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    env:
+      CARGO_BUILD_JOBS: '1'
+      CARGO_INCREMENTAL: '0'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
+      CARGO_PROFILE_TEST_INCREMENTAL: 'false'
+      RUST_MIN_STACK: '33554432'
+      RUST_TEST_THREADS: '1'
+    steps:
+      - name: Checkout the exact public candidate only
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 2
+          lfs: false
+          submodules: false
+
+      - name: Verify signed public baseline and only the five sealed source postimages
+        run: |
+          set -euo pipefail
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          . /etc/os-release
+          test "$ID" = ubuntu
+          test "$VERSION_ID" = 26.04
+          test "$VERSION_CODENAME" = resolute
+          test "$(uname -m)" = x86_64
+          printf 'runner_image=%s runner_version=%s os=%s\n' "${ImageOS:-unreported}" "${ImageVersion:-unreported}" "$PRETTY_NAME"
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          import re
+          import shutil
+          import subprocess
+          import tempfile
+
+          def git(*args, env=None, data=None):
+              return subprocess.check_output(["git", "--no-replace-objects", *args], input=data, env=env)
+
+          def word(*args, env=None):
+              return git(*args, env=env).decode("ascii").strip()
+
+          base = "8429f54f29e0569a699b3766d70e62bac2c92225"
+          base_tree = "6681cd02672c62c080b4e84e0ce9caad90a0f7e5"
+          code_only_tree = "ff79562769515345e7fbedddd26fa5f3e3ff99b0"
+          workflow = ".github/workflows/qualia-chime-prey-app-v2-review.yml"
+          paths = {
+              "crates/alife_game_app/src/production_voxel_renderer.rs": ("7196047af931138352b976dd84a77f1b45bdf47a", "b1740255f65e4a455b0971aa321a7ea78be50dcf"),
+              "crates/alife_game_app/src/production_voxel_renderer/god_hand.rs": ("575a261524745428295380c096b04117702a79ec", "475930ff3e2f3997ac7c190069c92cfd373023c5"),
+              "crates/alife_world/src/headless.rs": ("8531bba2e4531086471667fab72c58dcbe8aeeb9", "020d25ae654d826b8501b653e9dfb5509823f0c9"),
+              "crates/alife_world/src/headless/player_hand.rs": ("e6d2f7bfc8ed95caadc50b5e1661cec9b2e0d5f0", "7f6d61471430295dd7c51a0eeeaf5771659d2271"),
+              "crates/alife_world/src/headless/rolling_toys/tests.rs": ("162529d3720168d5355ece2bad3e41f3b090d869", "8974db564f9e35fa5f3698d1824a029e99d61ebc"),
+          }
+          immutable = {
+              "Cargo.lock": ("af9d91aa4c79a1c2fbb6d662bc747ec916db5bfb", "155699e9274f8890bc8c335669a62de48203ba315a33388a8f0caca71f0f7f37"),
+              "crates/alife_game_app/Cargo.toml": ("dadf70d05041316f34c3e2108d2380f83548ed51", "e2bc4c9122b8bc1ffb1f9e647df34e99ea7d8905d82437329f8aac20e5089bc3"),
+              "crates/alife_world/Cargo.toml": ("647aa812b568242c9aaea13f9f266fef3879e0e7", "3946a9571697e86c53ad729a4f4b810e10bac6f02b62321bd84766db7406e51c"),
+              "crates/alife_world/assets/island-v1.bin": ("6fc7715884882d4089e4efc6516f57b9027530f4", "8d0e9cf6343ffe8ea5e82bcb7ad3e4ef77eef7207042cf0274de5d91f2457c38"),
+          }
+          head = os.environ["GITHUB_SHA"]
+          assert re.fullmatch("[0-9a-f]{40}", head)
+          assert word("rev-parse", "HEAD") == head
+          assert word("rev-list", "--parents", "-n", "1", "HEAD").split() == [head, base]
+          assert word("rev-parse", base + "^{tree}") == base_tree
+          assert not git("status", "--porcelain", "--untracked-files=all")
+          raw = git("diff", "--name-status", "--no-renames", "-z", base, head).decode().split("\0")
+          assert len(raw) == 13 and raw[-1] == ""
+          assert dict(zip(raw[1:-1:2], raw[0:-1:2])) == {workflow: "A", **{p: "M" for p in paths}}
+          hashes = {}
+          for path, (old, new) in paths.items():
+              assert word("rev-parse", base + ":" + path) == old
+              assert word("rev-parse", head + ":" + path) == new
+              assert git("ls-tree", head, "--", path).decode().strip() == f"100644 blob {new}\t{path}"
+              current = Path(path).read_bytes()
+              assert current == git("show", head + ":" + path)
+              hashes[path] = [old, new, hashlib.sha256(current).hexdigest()]
+          for path, (old, digest) in immutable.items():
+              assert word("rev-parse", base + ":" + path) == old
+              assert word("rev-parse", head + ":" + path) == old
+              assert hashlib.sha256(Path(path).read_bytes()).hexdigest() == digest
+          current = Path(workflow).read_bytes()
+          workflow_oid = word("rev-parse", head + ":" + workflow)
+          assert current == git("show", head + ":" + workflow)
+          assert git("ls-tree", head, "--", workflow).decode().strip() == f"100644 blob {workflow_oid}\t{workflow}"
+          runner_temp = Path(os.environ["RUNNER_TEMP"]).resolve(strict=True)
+          assert Path(os.environ["RUNNER_TEMP"]).is_absolute() and runner_temp.is_dir()
+          assert shutil.disk_usage(runner_temp).free >= 8 * 1024**3, "Insufficient isolated runner space"
+          with tempfile.TemporaryDirectory(dir=runner_temp, prefix="qualia-chime-index.") as td:
+              env = dict(os.environ, GIT_INDEX_FILE=str(Path(td) / "index"))
+              git("read-tree", head, env=env)
+              git("update-index", "--index-info", env=env, data=f"0 {'0' * 40}\t{workflow}\n".encode())
+              assert word("write-tree", env=env) == code_only_tree
+          assert not git("status", "--porcelain", "--untracked-files=all")
+          print(json.dumps({
+              "run_id": os.environ["GITHUB_RUN_ID"], "attempt": os.environ["GITHUB_RUN_ATTEMPT"],
+              "base": base, "base_tree": base_tree, "head": head,
+              "head_tree": word("rev-parse", "HEAD^{tree}"), "code_only_tree": code_only_tree,
+              "workflow_git": workflow_oid, "workflow_sha256": hashlib.sha256(current).hexdigest(),
+              "path_pre_post_and_sha256": hashes, "unchanged_pins": immutable,
+              "initial_free_bytes": shutil.disk_usage(runner_temp).free,
+          }, sort_keys=True), flush=True)
+          PY
+
+      - name: Use the exact previously observed official Rust release
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8
+        with:
+          toolchain: '1.100.0'
+
+      - name: Install the exact signed Ubuntu libudev development package
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          rustc +1.100.0 --version --verbose
+          cargo +1.100.0 --version
+          keyring=/usr/share/keyrings/ubuntu-archive-keyring.gpg
+          test -r "$keyring"
+          stage="$(mktemp -d "$RUNNER_TEMP/qualia-chime-review.XXXXXX")"
+          printf 'QUALIA_CHIME_REVIEW_DIR=%s\n' "$stage" >> "$GITHUB_ENV"
+          sources="$stage/official-ubuntu.list"
+          printf '%s\n' \
+            "deb [signed-by=$keyring] https://azure.archive.ubuntu.com/ubuntu resolute main" \
+            "deb [signed-by=$keyring] https://azure.archive.ubuntu.com/ubuntu resolute-updates main" \
+            "deb [signed-by=$keyring] https://azure.archive.ubuntu.com/ubuntu resolute-security main" > "$sources"
+          apt_flags=(-o "Dir::Etc::sourcelist=$sources" -o 'Dir::Etc::sourceparts=-'
+            -o 'Acquire::https::Timeout=20' -o 'Acquire::Retries=1' -o 'APT::Update::Error-Mode=any')
+          sudo apt-get "${apt_flags[@]}" update
+          sudo apt-get "${apt_flags[@]}" install -y --no-install-recommends 'libudev-dev=259.9-0ubuntu0.1'
+          test "$(dpkg-query -W -f='${Version}' libudev-dev:amd64)" = 259.9-0ubuntu0.1
+          test "$(dpkg-query -W -f='${Version}' libudev1:amd64)" = 259.9-0ubuntu0.1
+          dpkg-query -W libudev-dev:amd64 libudev1:amd64
+          pkg-config --exists libudev
+          pkg-config --modversion --libs libudev
+
+      - name: Fetch locked crates, then build one frozen test library and run six exact CPU cases
+        run: |
+          set -euo pipefail
+          unset DISPLAY WAYLAND_DISPLAY XAUTHORITY
+          export CARGO_HOME="$QUALIA_CHIME_REVIEW_DIR/cargo-home"
+          export TMPDIR="$QUALIA_CHIME_REVIEW_DIR/tmp"
+          fetch_target="$QUALIA_CHIME_REVIEW_DIR/fetch-target"
+          mkdir -m 700 "$fetch_target" "$CARGO_HOME" "$TMPDIR"
+          test ! -e "$QUALIA_CHIME_REVIEW_DIR/target"
+          CARGO_TARGET_DIR="$fetch_target" cargo +1.100.0 fetch --locked --target x86_64-unknown-linux-gnu
+          export CARGO_TARGET_DIR="$QUALIA_CHIME_REVIEW_DIR/target"
+          mkdir -m 700 "$CARGO_TARGET_DIR"
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          import re
+          import shutil
+          import subprocess
+          import sys
+          import time
+
+          def digest(path):
+              with path.open("rb") as file:
+                  return hashlib.file_digest(file, "sha256").hexdigest()
+
+          stage = Path(os.environ["QUALIA_CHIME_REVIEW_DIR"]).resolve(strict=True)
+          target = Path(os.environ["CARGO_TARGET_DIR"]).resolve(strict=True)
+          fetch_target = (stage / "fetch-target").resolve(strict=True)
+          assert target.parent == fetch_target.parent == stage and fetch_target != target
+          assert not list(target.iterdir())
+          print("FETCH_AND_COMPILE_TARGETS_DISTINCT", sorted(p.name for p in fetch_target.iterdir()),
+                "compile target empty", flush=True)
+          assert shutil.disk_usage(stage).free >= 8 * 1024**3
+          manifest = Path("crates/alife_game_app/Cargo.toml").resolve(strict=True)
+          source = (manifest.parent / "src/lib.rs").resolve(strict=True)
+          assert digest(Path("Cargo.lock")) == "155699e9274f8890bc8c335669a62de48203ba315a33388a8f0caca71f0f7f37"
+          assert not subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=all"])
+          command = [
+              "cargo", "+1.100.0", "test", "--frozen", "--target", "x86_64-unknown-linux-gnu",
+              "-j", "1", "-p", "alife_game_app", "--no-default-features",
+              "--features", "production-voxel-frontend", "--lib", "--no-run",
+              "--message-format=json-render-diagnostics",
+          ]
+          print("COMPILER_COMMAND", json.dumps(command), flush=True)
+          jsonl, errors = stage / "build.jsonl", stage / "build.stderr"
+          clock = time.monotonic()
+          with jsonl.open("wb") as stream, errors.open("wb") as log:
+              with subprocess.Popen(command, stdout=stream, stderr=subprocess.PIPE) as cargo:
+                  assert cargo.stderr is not None
+                  for line in cargo.stderr:
+                      log.write(line)
+                      sys.stderr.buffer.write(line)
+                      sys.stderr.buffer.flush()
+                  status = cargo.wait()
+          print("COMPILE_RESULT", status, f"{time.monotonic()-clock:.3f}s", digest(jsonl), digest(errors), flush=True)
+          matches = []
+          with jsonl.open(encoding="utf-8") as file:
+              for line in file:
+                  row = json.loads(line)
+                  if row.get("reason") == "compiler-message" and (rendered := row["message"].get("rendered")):
+                      print(rendered, file=sys.stderr, end="", flush=True)
+                  if row.get("reason") != "compiler-artifact":
+                      continue
+                  info = row["target"]
+                  if (Path(row["manifest_path"]).resolve() == manifest
+                      and Path(info["src_path"]).resolve() == source
+                      and info["name"] == "alife_game_app" and info["kind"] == ["lib"]
+                      and row["profile"]["test"] is True
+                      and {"production-voxel-frontend", "gpu-runtime"} <= set(row["features"])
+                      and row.get("executable")):
+                      matches.append(row)
+          if status != 0:
+              raise SystemExit(status if status > 0 else 1)
+          assert len(matches) == 1, "Expected exactly one fresh App libtest compiler artifact"
+          artifact, = matches
+          binary = Path(artifact["executable"]).resolve(strict=True)
+          assert binary.is_file() and binary.is_relative_to(target) and os.access(binary, os.X_OK)
+          assert artifact["fresh"] is False
+          print("APP_LIBTEST", digest(binary), binary.relative_to(target), json.dumps(artifact["features"]), flush=True)
+          parent = "production_voxel_renderer::"
+          hand = parent + "god_hand::tests::"
+          exact = (
+              parent + "tests::opted_in_chime_body_uses_the_same_ranked_ray_as_foreground_bodies",
+              hand + "reopened_chime_requires_a_new_real_press_then_drag_and_keeps_the_world_hold",
+              hand + "registered_prey_release_requires_a_current_same_body_direct_acceptance",
+              hand + "signed_registered_prey_fallback_keeps_custody_until_direct_reaim",
+              hand + "exact_chime_and_registered_prey_never_share_local_release_authority",
+              hand + "committed_load_focus_clears_prey_intent_even_when_id_pose_and_aim_repeat",
+          )
+          assert len(set(exact)) == 6
+          for number, name in enumerate(exact, 1):
+              clock = time.monotonic()
+              args = [str(binary), name, "--exact", "--test-threads=1", "--format=pretty", "--color=never"]
+              print("EXACT_CASE", number, name, flush=True)
+              try:
+                  result = subprocess.run(args, cwd=manifest.parent, capture_output=True, timeout=20)
+              except subprocess.TimeoutExpired as failure:
+                  sys.stdout.buffer.write(failure.stdout or b"")
+                  sys.stderr.buffer.write(failure.stderr or b"")
+                  raise SystemExit(f"{name}: timed out; no retry")
+              stdout, stderr = stage / f"case-{number}.stdout", stage / f"case-{number}.stderr"
+              stdout.write_bytes(result.stdout)
+              stderr.write_bytes(result.stderr)
+              sys.stdout.buffer.write(result.stdout)
+              sys.stdout.buffer.flush()
+              sys.stderr.buffer.write(result.stderr)
+              sys.stderr.buffer.flush()
+              out = result.stdout.decode("utf-8")
+              print("CASE_RESULT", number, result.returncode, f"{time.monotonic()-clock:.3f}s",
+                    digest(stdout), digest(stderr), flush=True)
+              tests = [line for line in out.splitlines() if line.startswith("test ") and " ... " in line]
+              if (result.returncode != 0 or tests != [f"test {name} ... ok"]
+                  or len(re.findall(r"(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;", out)) != 1):
+                  raise SystemExit(f"{name}: not exactly one real pass; no retry")
+          print("QUALIA_CHIME_PREY_APP_V2_PRE_DEVICE_CPU: six exact passes; no GPU, game, or shipping claim", flush=True)
+          PY

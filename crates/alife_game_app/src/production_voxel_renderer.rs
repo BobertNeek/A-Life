@@ -1696,6 +1696,7 @@ fn despawn_fvr04_runtime_scene(world: &mut World) {
 
 #[cfg(feature = "gpu-runtime")]
 fn clear_production_load_focus(world: &mut World) {
+    god_hand::clear_chime_hand_on_load(world);
     if let Some(mut selection) = world.get_resource_mut::<Fvr03ProductionVoxelSelectionResource>() {
         selection.hovered = None;
         selection.selected = None;
@@ -4961,6 +4962,7 @@ fn handle_fvr03_mouse_selection(
     mut hand: ResMut<god_hand::HandInteraction>,
     interactions: bevy::prelude::Query<&bevy::prelude::Interaction>,
     #[cfg(feature = "gpu-runtime")] conversation: Option<Res<ProductionConversationLineageUiState>>,
+    #[cfg(feature = "gpu-runtime")] runtime: Option<NonSend<ProductionGpuBrainRuntimeResource>>,
 ) {
     let blocked = interactions
         .iter()
@@ -5011,8 +5013,12 @@ fn handle_fvr03_mouse_selection(
         };
         // Pick the actual elevated creature body, not the terrain tile behind
         // its face. The same ray and positions work at every orthographic zoom.
+        #[cfg(feature = "gpu-runtime")]
+        let chime = runtime.as_ref().and_then(|live| god_hand::chime_body_pick_id(live.runtime.world()));
+        #[cfg(not(feature = "gpu-runtime"))]
+        let chime = None;
         let body = frame.as_ref().and_then(|frame| {
-            pick_live_object_body(&frame.current, highland.is_some(), &surface, &ray, position)
+            pick_live_object_body_with_chime(&frame.current, highland.is_some(), &surface, &ray, position, chime)
         });
         if let Some((_, id, kind, p)) = body {
             let tile = VoxelTileCoord::new(p.x.floor() as i32, p.z.floor() as i32);
@@ -5070,6 +5076,7 @@ fn admitted_pick_sphere_entry(ray: &bevy::math::Ray3d, center: Vec3, radius: f32
     (middle - half_span).max(0.0)
 }
 
+#[cfg(test)]
 fn pick_live_object_body(
     frame: &LiveBrainPresentationFrame,
     terrain_bound: bool,
@@ -5077,22 +5084,38 @@ fn pick_live_object_body(
     ray: &bevy::math::Ray3d,
     ground_hit: Vec3,
 ) -> Option<(f64, WorldEntityId, WorldObjectKind, Vec3)> {
+    pick_live_object_body_with_chime(frame, terrain_bound, surface, ray, ground_hit, None)
+}
+
+fn pick_live_object_body_with_chime(
+    frame: &LiveBrainPresentationFrame,
+    terrain_bound: bool,
+    surface: &creature_grounding::RenderedTerrainSurface,
+    ray: &bevy::math::Ray3d,
+    ground_hit: Vec3,
+    chime: Option<WorldEntityId>,
+) -> Option<(f64, WorldEntityId, WorldObjectKind, Vec3)> {
     frame
         .objects()
         .filter(|object| {
             !object.consumed
                 && object.carried_by.is_none()
-                && matches!(
+                && (matches!(
                     object.kind,
                     WorldObjectKind::Agent
                         | WorldObjectKind::Food
                         | WorldObjectKind::Ball
                         | WorldObjectKind::Token
-                )
+                ) || (object.kind == WorldObjectKind::ActivityToy && chime == Some(object.id)))
         })
         .filter_map(|object| {
             let position = world_position_for_render(object.position, terrain_bound);
+            let chime_shape = [(0.0, object.radius)];
             let (base, samples): (Vec3, &[(f32, f32)]) = match object.kind {
+                WorldObjectKind::ActivityToy => (
+                    live_food_projection::care_object_center(object.position, terrain_bound, surface),
+                    &chime_shape,
+                ),
                 WorldObjectKind::Agent => (position, &[(0.35, 0.40), (0.90, 0.48), (1.35, 0.38)]),
                 WorldObjectKind::Food | WorldObjectKind::Ball => (
                     live_food_projection::care_object_center(
@@ -7533,6 +7556,48 @@ mod tests {
             .expect("projection fixture frame must be valid")
     }
 
+
+    #[test]
+    fn opted_in_chime_body_uses_the_same_ranked_ray_as_foreground_bodies() {
+        let mut world = alife_world::HeadlessWorld::new(1643);
+        world.enable_island_for_new_game().unwrap();
+        let terrain = world.terrain().unwrap().clone();
+        let x = 80.0;
+        let z = 251.5;
+        let y = terrain.surface().height(x, z).unwrap();
+        let ground = Vec3f::new(x, y, z);
+        let chime = world.spawn_toy("player-activity-toy", ground, false).unwrap();
+        world.begin_player_hold(chime).unwrap();
+        let mut surface = creature_grounding::RenderedTerrainSurface::from_meshes(
+            std::iter::empty::<&Mesh>(), 1.0,
+        );
+        surface.set_surface(Some(terrain.surface().clone()));
+        let ray = bevy::math::Ray3d::new(Vec3::new(x, y + 5.0, z), bevy::math::Dir3::NEG_Y);
+        let surface_hit = terrain.surface().ray_hit(
+            Vec3f::new(x, y + 5.0, z), Vec3f::new(0.0, -1.0, 0.0), 10.0,
+        ).unwrap();
+        let target = Vec3::new(surface_hit.x, surface_hit.y, surface_hit.z);
+        let frame = LiveBrainPresentationFrame::try_new(
+            Vec::new(), world.tick(), world.object_snapshots(),
+        ).unwrap();
+        let pick = |frame, capability| {
+            pick_live_object_body_with_chime(frame, true, &surface, &ray, target, capability)
+                .map(|(_, id, _, _)| id)
+        };
+        let exact = god_hand::chime_body_pick_id(&world);
+        assert_eq!(exact, Some(chime));
+        assert_eq!(pick(&frame, None), None, "no broad ActivityToy selection");
+        assert_eq!(pick(&frame, exact), Some(chime));
+        assert_eq!(pick(&frame, Some(WorldEntityId(chime.raw() + 1))), None, "no stale-ID hit");
+
+        // Explicit CPU projection control: a nearer real Ball body using the
+        // stock ray and its literal radius. Not a staged production click.
+        let front = world.spawn_toy("front-test-rattle", Vec3f::new(x, y + 2.8, z), true).unwrap();
+        let occluded = LiveBrainPresentationFrame::try_new(
+            Vec::new(), world.tick(), world.object_snapshots(),
+        ).unwrap();
+        assert_eq!(pick(&occluded, exact), Some(front), "normal first depth wins");
+    }
     #[test]
     fn authoritative_projection_preserves_fractional_xz_motion_and_root_state() {
         let stable_id = WorldEntityId(41);
