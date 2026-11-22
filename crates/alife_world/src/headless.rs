@@ -4486,13 +4486,13 @@ impl HeadlessWorld {
                 .ok_or(ScaffoldContractError::InvalidId)?;
             if object.consumed
                 || object.carried_by.is_some()
-                || !matches!(
+                || (!matches!(
                     object.kind,
                     WorldObjectKind::Agent
                         | WorldObjectKind::Food
                         | WorldObjectKind::Ball
                         | WorldObjectKind::Token
-                )
+                ) && !player_hand::saved_original_player_chime(object, &state.objects))
             {
                 return Err(ScaffoldContractError::InvalidId);
             }
