@@ -147,6 +147,7 @@ dependencies = [
  "alife_training",
  "alife_world",
  "bevy",
+ "bevy_anti_alias",
  "bevy_hanabi",
  "bincode",
  "blake3",

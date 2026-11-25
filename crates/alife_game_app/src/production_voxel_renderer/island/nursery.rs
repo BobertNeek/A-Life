@@ -55,12 +55,13 @@ fn plant_margins(
             perceptual_roughness: 0.86,
             ..default()
         });
-    let mut plant = |mesh: &Handle<Mesh>, x: f32, z: f32, yaw: f32, size: f32| {
+    let mut plant = |mesh: &Handle<Mesh>, x: f32, z: f32, yaw: f32, size: f32, foot: f32| {
         let Some(y) = surface.height(x, z) else {
             return;
         };
         world.spawn((
             Name::new("Nursery groundcover"),
+            groundlight::ContactArea::new(foot * size),
             Mesh3d(mesh.clone()),
             MeshMaterial3d(material.clone()),
             Transform::from_xyz(x, y, z)
@@ -86,6 +87,7 @@ fn plant_margins(
                 250.0 + cz + reach * a.sin(),
                 a,
                 0.75 + 0.20 * (t + turn).cos(),
+                0.38,
             );
         }
     }
@@ -98,6 +100,6 @@ fn plant_margins(
         (1.6, -2.3, 1.7, 1.08),
         (2.4, -2.9, 0.1, 0.83),
     ] {
-        plant(&stones, 83.0 + x, 250.0 + z, angle, size);
+        plant(&stones, 83.0 + x, 250.0 + z, angle, size, 0.47);
     }
 }
