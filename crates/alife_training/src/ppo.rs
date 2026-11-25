@@ -26,6 +26,10 @@ pub struct PpoConfig {
     pub gae_half_life_seconds: f32,
     pub temperature: f32,
     pub value_optimizer: AdamWConfig,
+    #[serde(default)]
+    pub center_actor_advantages: bool,
+    #[serde(default)]
+    pub critic_residual_steps: Option<u32>,
 }
 
 impl Default for PpoConfig {
@@ -40,6 +44,8 @@ impl Default for PpoConfig {
             gae_half_life_seconds: 10.0,
             temperature: 1.0,
             value_optimizer: AdamWConfig::default(),
+            center_actor_advantages: false,
+            critic_residual_steps: None,
         }
     }
 }
@@ -52,6 +58,7 @@ impl PpoConfig {
     pub fn validate(self) -> Result<(), TrainingError> {
         self.value_optimizer.validate()?;
         if self.epochs == 0
+            || self.critic_residual_steps == Some(0)
             || ![
                 self.clip_ratio,
                 self.target_kl,
@@ -321,13 +328,17 @@ impl PpoBatch {
                 return Err(invalid());
             }
         }
-        Ok(Self {
+        let mut batch = Self {
             policy_version,
             transitions,
             advantages,
             returns,
             actor_advantage_centering_mean: None,
-        })
+        };
+        if config.center_actor_advantages {
+            batch.center_actor_advantages()?;
+        }
+        Ok(batch)
     }
 
     pub fn len(&self) -> usize {
@@ -424,6 +435,7 @@ pub struct PpoGpuObjective {
     rows: wgpu::Buffer,
     output: wgpu::Buffer,
     value_head: wgpu::Buffer,
+    readback: std::sync::Mutex<Option<wgpu::Buffer>>,
     bind_group_layout: wgpu::BindGroupLayout,
     bind_group: wgpu::BindGroup,
     value_forward: wgpu::ComputePipeline,
@@ -568,6 +580,7 @@ impl PpoGpuObjective {
             rows,
             output,
             value_head,
+            readback: std::sync::Mutex::new(None),
             bind_group_layout: layout,
             bind_group,
             capacity: sample_capacity,
@@ -750,17 +763,42 @@ impl PpoGpuObjective {
     /// No update occurs here. Read/validate metrics and enforce the KL gate before
     /// dispatching either the backbone optimizer or encode_value_update.
     pub fn encode_evaluate(&self, encoder: &mut wgpu::CommandEncoder) -> Result<(), TrainingError> {
-        if !self.objective_ready {
+        self.encode_evaluate_with_imitation(encoder, false)
+    }
+
+    pub fn encode_evaluate_with_imitation(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        add_imitation: bool,
+    ) -> Result<(), TrainingError> {
+        if !self.objective_ready || (add_imitation && !self.imitation_ready) {
             return Err(invalid());
         }
         self.dispatch(encoder, &self.value_forward, self.sample_count);
-        self.dispatch(encoder, &self.objective, self.sample_count);
-        self.dispatch(
-            encoder,
-            &self.value_gradients,
-            (self.feature_count + 1).div_ceil(64),
-        );
-        self.dispatch(encoder, &self.value_preflight, 1);
+        {
+            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("foundation-ppo-objective-and-value-gradients"),
+                timestamp_writes: None,
+            });
+            pass.set_bind_group(0, &self.bind_group, &[]);
+            pass.set_pipeline(&self.objective);
+            pass.dispatch_workgroups(self.sample_count.div_ceil(32), 1, 1);
+            pass.set_pipeline(&self.value_gradients);
+            pass.dispatch_workgroups((self.feature_count + 1).div_ceil(64), 1, 1);
+        }
+        if add_imitation {
+            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("foundation-ppo-preflight-and-imitation"),
+                timestamp_writes: None,
+            });
+            pass.set_bind_group(0, &self.bind_group, &[]);
+            pass.set_pipeline(&self.value_preflight);
+            pass.dispatch_workgroups(1, 1, 1);
+            pass.set_pipeline(&self.imitation_add);
+            pass.dispatch_workgroups(self.sample_count.div_ceil(32), 1, 1);
+        } else {
+            self.dispatch(encoder, &self.value_preflight, 1);
+        }
         Ok(())
     }
 
@@ -904,7 +942,7 @@ impl PpoGpuObjective {
             } else {
                 &self.imitation_replace
             },
-            self.sample_count,
+            self.sample_count.div_ceil(32),
         );
         Ok(())
     }
@@ -1062,6 +1100,8 @@ pub struct PpoTrainingState {
     pending_restore: Option<PpoValueHeadCheckpoint>,
     value_optimizer_step: u32,
     last_updated_policy_version: Option<u64>,
+    residual_pipelines: Option<CriticResidualPipelines>,
+    feature_scratch: Option<wgpu::Buffer>,
 }
 
 impl PpoTrainingState {
@@ -1072,7 +1112,61 @@ impl PpoTrainingState {
             last_updated_policy_version: checkpoint.last_updated_policy_version,
             pending_restore: Some(checkpoint),
             objective: None,
+            residual_pipelines: None,
+            feature_scratch: None,
         })
+    }
+
+    pub fn load_checkpoint_in_place(
+        &mut self,
+        session: &GpuAuthoritativeSession,
+        checkpoint: PpoValueHeadCheckpoint,
+    ) -> Result<(), TrainingError> {
+        checkpoint.validate()?;
+        if session.authority().consumer() != GpuSessionConsumerKind::Training {
+            return Err(invalid());
+        }
+        if let Some(objective) = &mut self.objective {
+            if objective.feature_count != checkpoint.feature_count {
+                return Err(invalid());
+            }
+            let (_, queue) = session.backend().offline_training_device_queue()?;
+            queue.write_buffer(
+                &objective.value_head,
+                0,
+                bytemuck::cast_slice(&checkpoint.parameters),
+            );
+            objective.sample_count = 0;
+            objective.objective_ready = false;
+            objective.imitation_ready = false;
+            self.pending_restore = None;
+        } else {
+            self.pending_restore = Some(checkpoint.clone());
+        }
+        self.value_optimizer_step = checkpoint.optimizer_step;
+        self.last_updated_policy_version = checkpoint.last_updated_policy_version;
+        Ok(())
+    }
+
+    pub fn residual_pipelines(
+        &mut self,
+        session: &GpuAuthoritativeSession,
+    ) -> Result<&CriticResidualPipelines, TrainingError> {
+        if session.authority().consumer() != GpuSessionConsumerKind::Training {
+            return Err(invalid());
+        }
+        let (device, _) = session.backend().offline_training_device_queue()?;
+        if self
+            .residual_pipelines
+            .as_ref()
+            .is_none_or(|pipelines| pipelines.device() != device)
+        {
+            self.residual_pipelines = Some(CriticResidualPipelines::new(device));
+        }
+        Ok(self
+            .residual_pipelines
+            .as_ref()
+            .expect("residual pipelines initialized"))
     }
 
     /// Call after trainer.prepare_replay, including for pre-update GPU value
@@ -1124,6 +1218,108 @@ impl PpoTrainingState {
         Ok(())
     }
 
+    /// Frozen scalar predictions directly from captured production GPU
+    /// activations, avoiding a redundant recurrent replay forward pass.
+    pub fn predict_values_from_features(
+        &mut self,
+        session: &GpuAuthoritativeSession,
+        feature_count: u32,
+        features: &[Vec<f32>],
+    ) -> Result<Vec<f32>, TrainingError> {
+        if session.authority().consumer() != GpuSessionConsumerKind::Training
+            || feature_count == 0
+            || features.is_empty()
+            || features.iter().any(|row| {
+                row.len() != feature_count as usize || row.iter().any(|value| !value.is_finite())
+            })
+        {
+            return Err(invalid());
+        }
+        if let Some(checkpoint) = &self.pending_restore {
+            checkpoint.validate()?;
+            if checkpoint.feature_count != feature_count {
+                return Err(invalid());
+            }
+        }
+        if let Some(objective) = &self.objective {
+            if objective.feature_count != feature_count {
+                return Err(invalid());
+            }
+        }
+        let (device, queue) = session.backend().offline_training_device_queue()?;
+        let row_bytes = u64::from(feature_count) * 4;
+        let max_binding = device.limits().max_storage_buffer_binding_size;
+        if row_bytes > max_binding {
+            return Err(invalid());
+        }
+        let chunk_capacity =
+            (max_binding / row_bytes).clamp(1, crate::MAX_TRAINING_SEQUENCE_TICKS as u64) as usize;
+        let max_chunk_len = features.len().min(chunk_capacity);
+        let needed_bytes = (max_chunk_len as u64) * row_bytes;
+        if self
+            .feature_scratch
+            .as_ref()
+            .is_none_or(|buf| buf.size() < needed_bytes)
+        {
+            self.feature_scratch = Some(device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("ppo-value-feature-scratch"),
+                size: needed_bytes,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            }));
+        }
+        let scratch = self
+            .feature_scratch
+            .as_ref()
+            .expect("feature scratch initialized");
+        if let Some(objective) = &mut self.objective {
+            objective.rebind_buffers(session, scratch, scratch)?;
+        } else {
+            self.objective = Some(PpoGpuObjective::new(
+                session,
+                scratch,
+                scratch,
+                feature_count,
+                crate::MAX_TRAINING_SEQUENCE_TICKS as u32,
+            )?);
+        }
+        if let Some(checkpoint) = self.pending_restore.take() {
+            queue.write_buffer(
+                &self.objective.as_ref().ok_or_else(invalid)?.value_head,
+                0,
+                bytemuck::cast_slice(&checkpoint.parameters),
+            );
+        }
+        let objective = self.objective.as_mut().ok_or_else(invalid)?;
+        let mut values = Vec::with_capacity(features.len());
+        let mut flat = Vec::with_capacity(max_chunk_len * feature_count as usize);
+        for chunk in features.chunks(chunk_capacity) {
+            flat.clear();
+            for row in chunk {
+                flat.extend_from_slice(row);
+            }
+            queue.write_buffer(scratch, 0, bytemuck::cast_slice(&flat));
+            let offsets = (0..chunk.len())
+                .map(|index| index as u32 * feature_count)
+                .collect::<Vec<_>>();
+            objective.upload_value_features(session, &offsets)?;
+            let mut encoder = new_encoder(session, "ppo-frozen-value-predictions-from-features")?;
+            objective.encode_value_predictions(&mut encoder)?;
+            let chunk_values = read_gpu_f32_with_staging(
+                session,
+                &objective.readback,
+                Some(encoder),
+                &objective.output,
+                objective.value_bytes(),
+            )?;
+            if !chunk_values.iter().all(|value| value.is_finite()) {
+                return Err(TrainingError::MalformedReadback);
+            }
+            values.extend(chunk_values);
+        }
+        Ok(values)
+    }
+
     /// Frozen scalar predictions for every captured decision state, including
     /// burn-in. To bootstrap a truncated trajectory, also capture its next state;
     /// this helper never invents that state or advances the authoritative world.
@@ -1144,9 +1340,10 @@ impl PpoTrainingState {
         let mut encoder = new_encoder(trainer.session(), "ppo-frozen-value-predictions")?;
         trainer.encode_replay_forward(&mut encoder)?;
         objective.encode_value_predictions(&mut encoder)?;
-        submit(trainer.session(), encoder)?;
-        let values = read_gpu_f32(
+        let values = read_gpu_f32_with_staging(
             trainer.session(),
+            &objective.readback,
+            Some(encoder),
             &objective.output,
             objective.value_bytes(),
         )?;
@@ -1168,8 +1365,10 @@ impl PpoTrainingState {
             return Ok(checkpoint.clone());
         }
         let objective = self.objective.as_ref().ok_or_else(invalid)?;
-        let parameters = read_gpu_f32(
+        let parameters = read_gpu_f32_with_staging(
             session,
+            &objective.readback,
+            None,
             &objective.value_head,
             0..(u64::from(objective.feature_count) + 1) * 3 * 4,
         )?;
@@ -1244,7 +1443,7 @@ pub fn train_recurrent_ppo(
 /// the changed recurrent trajectory, not an assertion of exact old-state replay.
 /// Checkpoint at cohort boundaries; an interrupted cohort needs caller rollback
 /// to its pre-update checkpoint rather than reuse of partially updated data.
-pub fn train_recurrent_ppo_cohort<F>(
+pub fn train_recurrent_ppo_cohort<F, W>(
     trainer: &mut crate::FoundationTrainer,
     state: &mut PpoTrainingState,
     window_count: usize,
@@ -1254,8 +1453,16 @@ pub fn train_recurrent_ppo_cohort<F>(
     collection_policy_version: u64,
 ) -> Result<PpoUpdateReceipt, TrainingError>
 where
-    F: FnMut(usize) -> Result<PpoTrainingWindow, TrainingError>,
+    F: FnMut(usize) -> Result<W, TrainingError>,
+    W: std::borrow::Borrow<PpoTrainingWindow>,
 {
+    let _span = tracing::debug_span!(
+        "recurrent_ppo_train",
+        window_count,
+        effective_batch_size,
+        collection_policy_version
+    )
+    .entered();
     config.validate()?;
     if window_count == 0
         || effective_batch_size == 0
@@ -1271,8 +1478,9 @@ where
     // minibatch would reject valid later windows from this same on-policy cohort.
     for index in 0..window_count {
         let window = load_window(index)?;
+        let window = window.borrow();
         let metrics =
-            evaluate_ppo_window(trainer, state, &window, config, collection_policy_version)?;
+            evaluate_ppo_window(trainer, state, window, config, collection_policy_version)?;
         if metrics
             .as_chunks::<PPO_METRIC_WORDS>()
             .0
@@ -1301,13 +1509,14 @@ where
                 let mut mean_kl = 0.0f64;
                 for (index, &sample_count) in counts.iter().enumerate().take(end).skip(start) {
                     let window = load_window(index)?;
+                    let window = window.borrow();
                     if window.batch.len() != sample_count {
                         return Err(invalid());
                     }
                     let metrics = evaluate_ppo_window(
                         trainer,
                         state,
-                        &window,
+                        window,
                         config,
                         collection_policy_version,
                     )?;
@@ -1342,9 +1551,10 @@ where
                     &mut encoder,
                     mean_kl,
                 )?;
-                submit(trainer.session(), encoder)?;
-                if read_gpu_f32(
+                if read_gpu_f32_with_staging(
                     trainer.session(),
+                    &objective.readback,
+                    Some(encoder),
                     &objective.output,
                     objective.value_preflight_bytes(),
                 )?
@@ -1505,11 +1715,7 @@ fn evaluate_ppo_window(
     }
     let mut encoder = new_encoder(trainer.session(), "ppo-replay-objective")?;
     trainer.encode_replay_forward(&mut encoder)?;
-    objective.encode_evaluate(&mut encoder)?;
-    if window.auxiliary.is_some() {
-        objective.encode_imitation(&mut encoder, true)?;
-    }
-    submit(trainer.session(), encoder)?;
+    objective.encode_evaluate_with_imitation(&mut encoder, window.auxiliary.is_some())?;
     // One blocking copy includes PPO metrics and, when present, imitation metrics.
     // Values in the intervening range are not neural state; they are head outputs.
     let range = objective.metric_bytes().start..if window.auxiliary.is_some() {
@@ -1517,7 +1723,13 @@ fn evaluate_ppo_window(
     } else {
         objective.metric_bytes().end
     };
-    let data = read_gpu_f32(trainer.session(), &objective.output, range)?;
+    let data = read_gpu_f32_with_staging(
+        trainer.session(),
+        &objective.readback,
+        Some(encoder),
+        &objective.output,
+        range,
+    )?;
     let metrics = data[..window.batch.len() * PPO_METRIC_WORDS].to_vec();
     ppo_mean_kl(&metrics)?;
     if window.auxiliary.is_some() {
@@ -1668,9 +1880,10 @@ where
                     let mut encoder = new_encoder(trainer.session(), "imitation-replay-objective")?;
                     trainer.encode_replay_forward(&mut encoder)?;
                     objective.encode_imitation(&mut encoder, false)?;
-                    submit(trainer.session(), encoder)?;
-                    let metrics = read_gpu_f32(
+                    let metrics = read_gpu_f32_with_staging(
                         trainer.session(),
+                        &objective.readback,
+                        Some(encoder),
                         &objective.output,
                         objective.imitation_metric_bytes(),
                     )?;
@@ -1751,8 +1964,10 @@ fn submit(
     Ok(())
 }
 
-fn read_gpu_f32(
+pub(super) fn read_gpu_f32_with_staging(
     session: &GpuAuthoritativeSession,
+    staging: &std::sync::Mutex<Option<wgpu::Buffer>>,
+    encoder: Option<wgpu::CommandEncoder>,
     source: &wgpu::Buffer,
     range: std::ops::Range<u64>,
 ) -> Result<Vec<f32>, TrainingError> {
@@ -1766,19 +1981,26 @@ fn read_gpu_f32(
     }
     let (device, queue) = session.backend().offline_training_device_queue()?;
     let size = range.end - range.start;
-    let readback = device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("ppo-readback"),
-        size,
-        usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-        mapped_at_creation: false,
+    let mut guard = staging.lock().map_err(|_| TrainingError::GpuSubmission)?;
+    let needs_alloc = guard.as_ref().is_none_or(|buf| buf.size() < size);
+    if needs_alloc {
+        *guard = Some(device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("ppo-readback"),
+            size,
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        }));
+    }
+    let readback = guard.as_ref().expect("ppo readback staging initialized");
+    let mut encoder = encoder.unwrap_or_else(|| {
+        device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("ppo-readback"),
+        })
     });
-    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-        label: Some("ppo-readback"),
-    });
-    encoder.copy_buffer_to_buffer(source, range.start, &readback, 0, size);
+    encoder.copy_buffer_to_buffer(source, range.start, readback, 0, size);
     let commands = encoder.finish();
     let (sender, receiver) = std::sync::mpsc::channel();
-    commands.map_buffer_on_submit(&readback, wgpu::MapMode::Read, 0..size, move |result| {
+    commands.map_buffer_on_submit(readback, wgpu::MapMode::Read, 0..size, move |result| {
         let _ = sender.send(result);
     });
     let submission = queue.submit(Some(commands));
@@ -1790,6 +2012,7 @@ fn read_gpu_f32(
         .is_err()
         || receiver.recv().ok().and_then(Result::ok).is_none()
     {
+        *guard = None;
         return Err(TrainingError::GpuSubmission);
     }
     let mapped = readback.slice(..size).get_mapped_range();
@@ -1879,6 +2102,68 @@ mod tests {
         assert_eq!(later.actor_advantage(1), Some(-6.0));
         assert_eq!(later.advantages(), &[8.0, -3.0]);
         assert_eq!(later.returns(), &[8.0, -3.0]);
+    }
+
+    #[test]
+    fn ppo_config_opt_in_knobs_preserve_defaults_and_validate() {
+        let defaults = PpoConfig::default();
+        assert!(!defaults.center_actor_advantages);
+        assert_eq!(defaults.critic_residual_steps, None);
+        defaults.validate().unwrap();
+        assert!(PpoConfig {
+            critic_residual_steps: Some(0),
+            ..defaults
+        }
+        .validate()
+        .is_err());
+        assert!(PpoConfig {
+            critic_residual_steps: Some(4),
+            center_actor_advantages: true,
+            ..defaults
+        }
+        .validate()
+        .is_ok());
+
+        let transition = PpoTransition {
+            policy_version: 7,
+            trajectory_id: 1,
+            step: 0,
+            action: PpoJointAction {
+                candidate_count: 1,
+                representative_mask: 1,
+                motor_masks: [0; 6],
+                representative: 0,
+                forced_slots: vec![Some(4)],
+                motor_candidates: [None, None, None, None, Some(0), None],
+                old_joint_log_probability: 0.0,
+                temperature: 1.0,
+            },
+            reward: 4.0,
+            old_value: 0.0,
+            next_value: 0.0,
+            elapsed_seconds: 0.05,
+            boundary: PpoBoundary::Terminated,
+        };
+        let second = PpoTransition {
+            trajectory_id: 2,
+            reward: 8.0,
+            ..transition.clone()
+        };
+        let centered = PpoBatch::from_rollout(
+            7,
+            vec![transition.clone(), second.clone()],
+            PpoConfig {
+                center_actor_advantages: true,
+                ..defaults
+            },
+        )
+        .unwrap();
+        assert_eq!(centered.actor_advantage_centering_mean(), Some(6.0));
+        assert_eq!(centered.actor_advantage(0), Some(-2.0));
+        assert_eq!(centered.actor_advantage(1), Some(2.0));
+        let uncentered = PpoBatch::from_rollout(7, vec![transition, second], defaults).unwrap();
+        assert_eq!(uncentered.actor_advantage_centering_mean(), None);
+        assert_eq!(uncentered.actor_advantage(0), Some(4.0));
     }
 
     #[test]

@@ -2,6 +2,8 @@
 //!
 //! Records the GPU scheduler's inputs and completed work for deterministic replay.
 
+use std::sync::OnceLock;
+
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -138,33 +140,25 @@ pub struct BrainActivityPolicyV1 {
 
 impl BrainActivityPolicyV1 {
     pub fn production_v1() -> Self {
-        let mut policy = Self {
-            schema_version: BRAIN_ACTIVITY_SCHEMA_VERSION,
-            policy_version: BRAIN_ACTIVITY_POLICY_VERSION,
-            cost: BrainAtpCostModel::production_v1(),
-            gpu_time_threshold_ns: [2_000_000, 4_000_000, 8_000_000],
-            queue_depth_thresholds: [1, 2, 4],
-            logical_heap_pressure_thresholds_q16: [32_768, 49_152, 58_982],
-            atp_remaining_thresholds_q16_desc: [49_152, 32_768, 16_384],
-            policy_digest: [0; 4],
-        };
-        policy.policy_digest = policy.recompute_digest();
-        policy
+        static PRODUCTION_V1: OnceLock<BrainActivityPolicyV1> = OnceLock::new();
+        *PRODUCTION_V1.get_or_init(|| {
+            let mut policy = Self {
+                schema_version: BRAIN_ACTIVITY_SCHEMA_VERSION,
+                policy_version: BRAIN_ACTIVITY_POLICY_VERSION,
+                cost: BrainAtpCostModel::production_v1(),
+                gpu_time_threshold_ns: [2_000_000, 4_000_000, 8_000_000],
+                queue_depth_thresholds: [1, 2, 4],
+                logical_heap_pressure_thresholds_q16: [32_768, 49_152, 58_982],
+                atp_remaining_thresholds_q16_desc: [49_152, 32_768, 16_384],
+                policy_digest: [0; 4],
+            };
+            policy.policy_digest = policy.recompute_digest();
+            policy
+        })
     }
 
     pub fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
-        self.cost.validate_contract()?;
-        let expected = Self::production_v1();
-        if self.schema_version != BRAIN_ACTIVITY_SCHEMA_VERSION
-            || self.policy_version != BRAIN_ACTIVITY_POLICY_VERSION
-            || self.gpu_time_threshold_ns != expected.gpu_time_threshold_ns
-            || self.queue_depth_thresholds != expected.queue_depth_thresholds
-            || self.logical_heap_pressure_thresholds_q16
-                != expected.logical_heap_pressure_thresholds_q16
-            || self.atp_remaining_thresholds_q16_desc != expected.atp_remaining_thresholds_q16_desc
-            || self.policy_digest == [0; 4]
-            || self.policy_digest != self.recompute_digest()
-        {
+        if *self != Self::production_v1() {
             return Err(ScaffoldContractError::BrainActivityPolicyMismatch);
         }
         Ok(())

@@ -56,9 +56,9 @@ pub fn controlled_n512_phenotype_at_maturation(maturation: f32) -> BrainPhenotyp
 }
 
 pub fn controlled_sensory_n512_phenotype() -> BrainPhenotype {
-    // Seed 15 is the checked-in deterministic fixture with the required
+    // Seed 27 is the deterministic fixture with the required
     // encoded two-hop sensory-to-motor path.
-    n512_phenotype_at_maturation(15, 0.35)
+    n512_phenotype_at_maturation(27, 0.35)
 }
 
 pub fn controlled_learning_n512_phenotype(modulator_sign: f32) -> BrainPhenotype {
@@ -457,6 +457,7 @@ mod hardware {
         phenotypes: [BrainPhenotype; SLOT_COUNT],
         immutable_weight_words: Vec<u32>,
         initial_mutable_state_words: Vec<u32>,
+        initial_atomic_state_words: Vec<u32>,
         transaction_generations: [u64; SLOT_COUNT],
         sample_indices: Vec<u32>,
         recurrent_sample_positions: Vec<usize>,
@@ -575,6 +576,11 @@ mod hardware {
                 MUTABLE_GUARD_PATTERN,
                 MUTABLE_GUARD_WORDS,
             ));
+            let mut initial_atomic_state_words = plan.atomic_state_words().to_vec();
+            initial_atomic_state_words.extend(std::iter::repeat_n(
+                MUTABLE_GUARD_PATTERN,
+                MUTABLE_GUARD_WORDS,
+            ));
             let manual_readback = empty_buffer(
                 &device,
                 "bounded-manual-neural-readback",
@@ -613,17 +619,23 @@ mod hardware {
                     (SLOT_COUNT * alife_gpu_backend::GPU_ACTIVE_DISPATCH_ROW_WORDS * 4) as u64,
                     false,
                 ),
-                empty_storage(&device, "frame-payload", 4096, false),
+                empty_storage(&device, "frame-payload", 16384, false),
                 initialized_storage(
                     &device,
                     "mutable-state",
                     bytemuck::cast_slice(&initial_mutable_state_words),
                     true,
                 ),
+                initialized_storage(
+                    &device,
+                    "atomic-state",
+                    bytemuck::cast_slice(&initial_atomic_state_words),
+                    true,
+                ),
                 empty_buffer(
                     &device,
                     "upload-staging",
-                    4096,
+                    16384,
                     wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST,
                 ),
                 empty_buffer(
@@ -651,6 +663,7 @@ mod hardware {
                 ],
                 immutable_weight_words,
                 initial_mutable_state_words,
+                initial_atomic_state_words,
                 transaction_generations: [1; SLOT_COUNT],
                 sample_indices,
                 recurrent_sample_positions,
@@ -670,7 +683,27 @@ mod hardware {
                 0,
                 bytemuck::cast_slice(&self.initial_mutable_state_words),
             );
+            let atomic = self.buffers.neural_buffers()[7];
+            self.queue.write_buffer(
+                atomic,
+                0,
+                bytemuck::cast_slice(&self.initial_atomic_state_words),
+            );
             self.transaction_generations = [1; SLOT_COUNT];
+        }
+
+        fn sync_effective_weights(&self) {
+            for (slot_index, slot) in self.slots.iter().enumerate() {
+                self.pipelines
+                    .refresh_effective_weights_for_test(
+                        &self.device,
+                        &self.queue,
+                        &self.buffers,
+                        slot_index as u32,
+                        slot.record().synapse_count,
+                    )
+                    .unwrap();
+            }
         }
 
         pub fn set_recurrent_genetic_weights_zeroed(&self, zeroed: bool) {
@@ -686,6 +719,7 @@ mod hardware {
                 self.queue
                     .write_buffer(weights, start as u64 * 4, bytemuck::cast_slice(&words));
             }
+            self.sync_effective_weights();
         }
 
         pub fn set_decoder_genetic_weights_zeroed(&self, zeroed: bool) {
@@ -702,6 +736,7 @@ mod hardware {
                 self.queue
                     .write_buffer(weights, start as u64 * 4, bytemuck::cast_slice(&words));
             }
+            self.sync_effective_weights();
         }
 
         pub fn set_genetic_weight_for_slot(
@@ -720,6 +755,15 @@ mod hardware {
                 u64::from(word) * 4,
                 bytemuck::bytes_of(&value.to_bits()),
             );
+            self.pipelines
+                .refresh_effective_weights_for_test(
+                    &self.device,
+                    &self.queue,
+                    &self.buffers,
+                    slot_index as u32,
+                    slot.record().synapse_count,
+                )
+                .unwrap();
         }
 
         pub fn lesion_decoder_genetic_weights(&self) -> DecoderLesionReceipt {
@@ -749,6 +793,7 @@ mod hardware {
             };
             self.queue
                 .write_buffer(weights, 0, bytemuck::cast_slice(&words));
+            self.sync_effective_weights();
         }
 
         pub fn set_decoder_genetic_weights_non_finite(&self) {
@@ -756,11 +801,12 @@ mod hardware {
             for slot in &self.slots {
                 let start = slot.word_ranges().genetic_weight_words.start as usize
                     + slot.record().recurrent_synapse_count as usize;
-                let end = slot.word_ranges().genetic_weight_words.end as usize;
+                let end = start + slot.typed_counts().decoder_weight_indices;
                 let words = vec![f32::NAN.to_bits(); end - start];
                 self.queue
                     .write_buffer(weights, start as u64 * 4, bytemuck::cast_slice(&words));
             }
+            self.sync_effective_weights();
         }
 
         pub fn zero_all_mutable_layers_and_assert_biases(&self, phenotype: &BrainPhenotype) {
@@ -802,8 +848,6 @@ mod hardware {
                     &slot.word_ranges().decoder_eligibility_bank_1_words,
                     &slot.word_ranges().encoded_input_words,
                     &slot.word_ranges().candidate_logit_words,
-                    &slot.word_ranges().diagnostic_words,
-                    &slot.word_ranges().selection_words,
                     &slot.word_ranges().pending_eligibility_words,
                     &slot.word_ranges().replay_event_words,
                     &slot.word_ranges().replay_sample_words,
@@ -816,6 +860,22 @@ mod hardware {
                 0,
                 bytemuck::cast_slice(&zero),
             );
+            let mut zero_atomic = self.initial_atomic_state_words.clone();
+            for slot in &self.slots {
+                for range in [
+                    &slot.word_ranges().diagnostic_words,
+                    &slot.word_ranges().selection_words,
+                    &slot.word_ranges().speech_payload_words,
+                ] {
+                    zero_atomic[range.start as usize..range.end as usize].fill(0);
+                }
+            }
+            self.queue.write_buffer(
+                self.buffers.neural_buffers()[7],
+                0,
+                bytemuck::cast_slice(&zero_atomic),
+            );
+            self.sync_effective_weights();
         }
 
         pub fn configure_controlled_motor_loop_and_decoder(
@@ -835,13 +895,13 @@ mod hardware {
                     assert_eq!(family.family_raw, family_raw);
                     let begin = ((family.weight_index_start
                         - upload.decoder_weight_index_word_base)
-                        / 4) as usize;
+                        / 2) as usize;
                     let end = begin + family.weight_index_count as usize;
                     upload.decoder_weight_indices[begin..end]
                         .iter()
-                        .filter(|map| map.input_lane == 0)
+                        .filter(|map| map.input_lane() == 0)
                         .find_map(|map| {
-                            let target = decoder.motor_start + map.motor_index;
+                            let target = decoder.motor_start + map.motor_index();
                             let recurrent_begin = upload.target_offsets[target as usize] as usize;
                             let recurrent_end = upload.target_offsets[target as usize + 1] as usize;
                             (recurrent_begin..recurrent_end)
@@ -892,6 +952,7 @@ mod hardware {
                     bytemuck::bytes_of(&positive),
                 );
             }
+            self.sync_effective_weights();
             map.global_synapse_id
         }
 
@@ -924,6 +985,7 @@ mod hardware {
                     );
                 }
             }
+            self.sync_effective_weights();
             global_synapse_id
         }
 
@@ -993,13 +1055,13 @@ mod hardware {
                     let family = &upload.decoder_families[family_raw as usize];
                     let map_begin = ((family.weight_index_start
                         - upload.decoder_weight_index_word_base)
-                        / 4) as usize;
+                        / 2) as usize;
                     let map_end = map_begin + family.weight_index_count as usize;
                     upload.decoder_weight_indices[map_begin..map_end]
                         .iter()
-                        .filter(|map| map.input_lane == 0)
+                        .filter(|map| map.input_lane() == 0)
                         .find_map(|map| {
-                            let motor = decoder.motor_start + map.motor_index;
+                            let motor = decoder.motor_start + map.motor_index();
                             let motor_begin = upload.target_offsets[motor as usize] as usize;
                             let motor_end = upload.target_offsets[motor as usize + 1] as usize;
                             (motor_begin..motor_end).find_map(|association_to_motor| {
@@ -1040,6 +1102,7 @@ mod hardware {
                     bytemuck::bytes_of(&2.0_f32.to_bits()),
                 );
             }
+            self.sync_effective_weights();
         }
 
         pub fn adapter_identity(&self) -> &str {
@@ -1115,23 +1178,63 @@ mod hardware {
             )
         }
 
+        fn neutral_frame_and_memory(
+            frame: &PerceptionFrame,
+            slot: &GpuBrainSlot,
+        ) -> (PerceptionFrame, GpuMemoryContextUpload) {
+            let (finalized_frame, recall) = super::empty_recall(frame);
+            let perception =
+                GpuPerceptionUpload::try_from_frame(&finalized_frame, slot, 0).unwrap();
+            let memory = GpuMemoryContextUpload::try_from_finalized(
+                &finalized_frame,
+                &recall,
+                perception.frame_binding,
+                slot,
+            )
+            .unwrap()
+            .bind_neural_receptor_effects(alife_core::NeuralReceptorEffects {
+                source_tick: finalized_frame.tick(),
+                source_chemistry_version: 1,
+                interoceptive_gain: 1.0,
+                regional_excitability: 1.0,
+                projection_gain: 1.0,
+                local_threshold_shift: 0.0,
+                attention_gain: 1.0,
+                plasticity_appetitive: 1.0,
+                plasticity_aversive: 1.0,
+                structural_growth_gate: 0.5,
+                sleep_gate: 0.5,
+                consolidation_gate: 0.5,
+            })
+            .unwrap();
+            (finalized_frame, memory)
+        }
+
         pub async fn run_slot_keep_pending(
             &mut self,
             slot_index: usize,
             frame: &PerceptionFrame,
         ) -> GpuPendingFrameResult {
+            assert!(slot_index < SLOT_COUNT);
+            let (finalized_frame, memory) =
+                Self::neutral_frame_and_memory(frame, &self.slots[slot_index]);
             let decision = activity_decision_for(
                 &self.phenotypes[slot_index],
                 &self.slots[slot_index],
-                frame,
+                &finalized_frame,
                 self.pipelines.next_dispatch_generation(),
                 0,
                 0,
                 0,
                 65_535,
             );
-            self.run_slot_keep_pending_with_decision(slot_index, frame, &decision)
-                .await
+            self.run_slot_keep_pending_with_decision(
+                slot_index,
+                &finalized_frame,
+                &decision,
+                &memory,
+            )
+            .await
         }
 
         async fn run_slot_keep_pending_with_decision(
@@ -1139,13 +1242,15 @@ mod hardware {
             slot_index: usize,
             frame: &PerceptionFrame,
             decision: &NeuralThrottleDecision,
+            memory: &GpuMemoryContextUpload,
         ) -> GpuPendingFrameResult {
             assert!(slot_index < SLOT_COUNT);
-            let entries = [GpuActiveBatchEntry::new(
+            let entries = [GpuActiveBatchEntry::with_memory(
                 frame,
                 &self.slots[slot_index],
                 &self.phenotypes[slot_index],
                 decision,
+                memory,
             )];
             let batch = self
                 .pipelines
@@ -1192,10 +1297,12 @@ mod hardware {
             logical_heap_pressure_q16: u32,
             brain_atp_fraction_q16: u32,
         ) -> (GpuFrameResult, NeuralThrottleDecision) {
+            let (finalized_frame, memory) =
+                Self::neutral_frame_and_memory(frame, &self.slots[slot_index]);
             let decision = activity_decision_for(
                 &self.phenotypes[slot_index],
                 &self.slots[slot_index],
-                frame,
+                &finalized_frame,
                 self.pipelines.next_dispatch_generation(),
                 completed_gpu_time_ns,
                 queue_depth,
@@ -1203,7 +1310,12 @@ mod hardware {
                 brain_atp_fraction_q16,
             );
             let pending = self
-                .run_slot_keep_pending_with_decision(slot_index, frame, &decision)
+                .run_slot_keep_pending_with_decision(
+                    slot_index,
+                    &finalized_frame,
+                    &decision,
+                    &memory,
+                )
                 .await;
             if pending.result.record.status == 1 {
                 self.discard_pending_for_slot(slot_index, &pending.pending);
@@ -1294,12 +1406,14 @@ mod hardware {
             &mut self,
             frames: [&PerceptionFrame; 2],
         ) -> [GpuPendingFrameResult; 2] {
+            let (frame0, memory0) = Self::neutral_frame_and_memory(frames[0], &self.slots[0]);
+            let (frame1, memory1) = Self::neutral_frame_and_memory(frames[1], &self.slots[1]);
             let dispatch_generation = self.pipelines.next_dispatch_generation();
             let decisions = [
                 activity_decision_for(
                     &self.phenotypes[0],
                     &self.slots[0],
-                    frames[0],
+                    &frame0,
                     dispatch_generation,
                     0,
                     0,
@@ -1309,7 +1423,7 @@ mod hardware {
                 activity_decision_for(
                     &self.phenotypes[1],
                     &self.slots[1],
-                    frames[1],
+                    &frame1,
                     dispatch_generation,
                     0,
                     0,
@@ -1318,17 +1432,19 @@ mod hardware {
                 ),
             ];
             let entries = [
-                GpuActiveBatchEntry::new(
-                    frames[0],
+                GpuActiveBatchEntry::with_memory(
+                    &frame0,
                     &self.slots[0],
                     &self.phenotypes[0],
                     &decisions[0],
+                    &memory0,
                 ),
-                GpuActiveBatchEntry::new(
-                    frames[1],
+                GpuActiveBatchEntry::with_memory(
+                    &frame1,
                     &self.slots[1],
                     &self.phenotypes[1],
                     &decisions[1],
+                    &memory1,
                 ),
             ];
             let batch = self
@@ -1479,6 +1595,30 @@ mod hardware {
             map_words(&self.device, &readback, word_count).await
         }
 
+        pub async fn read_all_atomic_words(&self) -> Vec<u32> {
+            let word_count = self.initial_atomic_state_words.len();
+            let readback = empty_buffer(
+                &self.device,
+                "closed-loop-full-atomic-test-readback",
+                (word_count * 4) as u64,
+                wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            );
+            let mut encoder = self
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("closed-loop-full-atomic-test-copy"),
+                });
+            encoder.copy_buffer_to_buffer(
+                self.buffers.neural_buffers()[7],
+                0,
+                &readback,
+                0,
+                (word_count * 4) as u64,
+            );
+            self.queue.submit(Some(encoder.finish()));
+            map_words(&self.device, &readback, word_count).await
+        }
+
         pub fn slot_mutable_snapshot(&self, all_words: &[u32], slot_index: usize) -> Vec<u32> {
             let ranges = self.slot_mutable_ranges(slot_index);
             let total = ranges.iter().map(std::ops::Range::len).sum();
@@ -1559,6 +1699,20 @@ mod hardware {
                     bytemuck::cast_slice(&words),
                 );
             }
+            // Anchor the seeded eligibility trace at tick 100 so `trace_has_anchor` is valid
+            // when evaluating subsequent ticks (`>= 100`).
+            let replay_anchor_state = [1_u32, 1_u32];
+            self.queue.write_buffer(
+                mutable,
+                u64::from(ranges.learning_state_words.start + 12) * 4,
+                bytemuck::cast_slice(&replay_anchor_state),
+            );
+            let anchor_tick = [100_u32, 0_u32];
+            self.queue.write_buffer(
+                mutable,
+                u64::from(ranges.replay_event_words.start + 2) * 4,
+                bytemuck::cast_slice(&anchor_tick),
+            );
         }
 
         fn slot_mutable_ranges(&self, slot_index: usize) -> Vec<std::ops::Range<u32>> {
@@ -1570,16 +1724,16 @@ mod hardware {
                 ranges.homeostasis_words.clone(),
                 ranges.lifetime_weight_words.clone(),
                 ranges.fast_weight_words.clone(),
+                ranges.effective_weight_words.clone(),
                 ranges.recurrent_eligibility_words.clone(),
                 ranges.decoder_eligibility_words.clone(),
                 ranges.lifetime_weight_bank_1_words.clone(),
                 ranges.fast_weight_bank_1_words.clone(),
+                ranges.effective_weight_bank_1_words.clone(),
                 ranges.recurrent_eligibility_bank_1_words.clone(),
                 ranges.decoder_eligibility_bank_1_words.clone(),
                 ranges.encoded_input_words.clone(),
                 ranges.candidate_logit_words.clone(),
-                ranges.diagnostic_words.clone(),
-                ranges.selection_words.clone(),
                 ranges.extension_words.clone(),
                 ranges.learning_state_words.clone(),
                 ranges.pending_eligibility_words.clone(),
@@ -1657,7 +1811,7 @@ mod hardware {
                         &self.phenotypes[0],
                         &decision,
                     )],
-                    1025,
+                    4097,
                 )
                 .unwrap_err()
         }
@@ -1678,12 +1832,16 @@ mod hardware {
             frames: [&PerceptionFrame; SLOT_COUNT],
             zero_complete_frame_payload: bool,
         ) -> BatchReadback {
+            let prepared: [(PerceptionFrame, GpuMemoryContextUpload); SLOT_COUNT] =
+                std::array::from_fn(|index| {
+                    Self::neutral_frame_and_memory(frames[index], &self.slots[index])
+                });
             let dispatch_generation = self.pipelines.next_dispatch_generation();
             let decisions: [NeuralThrottleDecision; SLOT_COUNT] = std::array::from_fn(|index| {
                 activity_decision_for(
                     &self.phenotypes[index],
                     &self.slots[index],
-                    frames[index],
+                    &prepared[index].0,
                     dispatch_generation,
                     0,
                     0,
@@ -1692,23 +1850,26 @@ mod hardware {
                 )
             });
             let entries = [
-                GpuActiveBatchEntry::new(
-                    frames[0],
+                GpuActiveBatchEntry::with_memory(
+                    &prepared[0].0,
                     &self.slots[0],
                     &self.phenotypes[0],
                     &decisions[0],
+                    &prepared[0].1,
                 ),
-                GpuActiveBatchEntry::new(
-                    frames[1],
+                GpuActiveBatchEntry::with_memory(
+                    &prepared[1].0,
                     &self.slots[1],
                     &self.phenotypes[1],
                     &decisions[1],
+                    &prepared[1].1,
                 ),
-                GpuActiveBatchEntry::new(
-                    frames[2],
+                GpuActiveBatchEntry::with_memory(
+                    &prepared[2].0,
                     &self.slots[2],
                     &self.phenotypes[2],
                     &decisions[2],
+                    &prepared[2].1,
                 ),
             ];
             let mut batch = self
@@ -1749,10 +1910,7 @@ mod hardware {
                     &batch.dispatch_header_words()[learning_start..learning_end],
                     batch.learning_headers()[row].words()
                 );
-                assert!(batch.dispatch_header_words()[learning_end
-                    ..learning_end + alife_gpu_backend::GPU_MEMORY_CONTEXT_HEADER_WORDS]
-                    .iter()
-                    .all(|word| *word == 0));
+                assert!(batch.memory_context_bindings()[row].is_some());
                 assert_eq!(header.brain_slot_index as usize, row);
             }
             assert!(batch.headers()[1].sensory_offset > batch.headers()[0].sensory_offset);
@@ -1807,7 +1965,7 @@ mod hardware {
                     }
                 }
                 encoder.copy_buffer_to_buffer(
-                    neural[6],
+                    neural[7],
                     u64::from(slot.word_ranges().diagnostic_words.start) * 4,
                     &self.manual_readback,
                     destination,

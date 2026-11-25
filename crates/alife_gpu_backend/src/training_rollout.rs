@@ -357,18 +357,14 @@ fn compose_training_source(source: &str, sampler: &str) -> String {
                 .count(),
             1
         );
-        assert_eq!(
-            source
-                .matches("  let selection = load_speech_selection(brain.selection_offset);")
-                .count(),
-            1
-        );
         source = source.replace(
             "if (header.reserved != 0u)",
             "if (header.reserved != 0u && (header.reserved & 0x80000000u) == 0u)",
         );
-        source = source.replace("  let base = brain.selection_offset;", "  if ((header.reserved & 0x80000000u) != 0u) {\n    selected_candidate = training_sample(header, brain, 0u);\n    found = selected_candidate < header.candidate_count;\n    if (found) {\n      selected_logit = load_state_f32(brain.candidate_logit_offset + selected_candidate);\n      selected_confidence = load_candidate(header.candidate_offset + selected_candidate * 8u).confidence_q16;\n    }\n  }\n  let base = brain.selection_offset;");
-        source = source.replace("  let selection = load_speech_selection(brain.selection_offset);", "  if ((header.reserved & 0x80000000u) != 0u) {\n    for (var slot=0u; slot<6u; slot++) {\n      motor_candidates[slot] = training_sample(header, brain, slot + 1u);\n      motor_found[slot] = motor_candidates[slot] < header.candidate_count;\n    }\n  }\n  let selection = load_speech_selection(brain.selection_offset);");
+        source = source.replace(
+            "  let base = brain.selection_offset;",
+            "  if ((header.reserved & 0x80000000u) != 0u) {\n    if (tid == 0u) {\n      let sampled = training_sample(header, brain, 0u);\n      wg_sel_cand[0] = sampled;\n      wg_sel_found[0] = select(0u, 1u, sampled < header.candidate_count);\n      if (sampled < header.candidate_count) {\n        wg_sel_logit[0] = load_state_f32(brain.candidate_logit_offset + sampled);\n        wg_sel_conf[0] = load_candidate(header.candidate_offset + sampled * 8u).confidence_q16;\n      }\n    } else if (tid <= 6u) {\n      let slot = tid - 1u;\n      let sampled = training_sample(header, brain, tid);\n      wg_motor_cand[slot] = sampled;\n      wg_motor_found[slot] = select(0u, 1u, sampled < header.candidate_count);\n    }\n  }\n  workgroupBarrier();\n  let base = brain.selection_offset;",
+        );
         source.push_str(&sampler.replace("\r\n", "\n"));
     }
     source

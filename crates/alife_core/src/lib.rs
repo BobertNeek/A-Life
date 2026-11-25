@@ -232,14 +232,14 @@ pub use memory::{
     CandidateMemoryRecallReceipt, FinalizedMemoryRecall, MemoryBank, MemoryBankConfig,
     MemoryBucketReceiptKey, MemoryCompactionCheckpoint, MemoryCompactionIdentity,
     MemoryCompactionPhase, MemoryCompactionReceipt, MemoryConsolidationBatch, MemoryConsolidator,
-    MemoryExpectancy, MemoryMatch, MemoryOutcomeSummary, MemoryQuery, MemoryRecallChannel,
-    MemoryRecallDegradation, MemoryRecallReceipt, MemoryRecord, MemorySidecarState,
-    MemoryUpdateKind, MemoryUpdateReceipt, PortableMemoryBankAssetV2, PortableMemoryRecordV2,
-    PreparedMemoryCompaction, PreparedMemoryRecall, RuntimeMemoryRecallCache,
-    TargetMemoryBucketReceiptKey, MEMORY_BANK_MAX_CAPACITY, MEMORY_FAMILY_SEARCH_CAP,
-    MEMORY_FEATURE_VECTOR_MAX_LEN, MEMORY_MERGE_SIMILARITY, MEMORY_MIN_SIMILARITY,
-    MEMORY_RECALL_SCHEMA_VERSION, MEMORY_RECALL_TOP_K, MEMORY_TARGET_SEARCH_CAP,
-    MEMORY_TOTAL_SEARCH_CAP, RUNTIME_MEMORY_SEARCH_CAP,
+    MemoryExpectancy, MemoryMatch, MemoryObservationUndo, MemoryOutcomeSummary, MemoryQuery,
+    MemoryRecallChannel, MemoryRecallDegradation, MemoryRecallReceipt, MemoryRecord,
+    MemorySidecarState, MemoryUpdateKind, MemoryUpdateReceipt, PortableMemoryBankAssetV2,
+    PortableMemoryRecordV2, PreparedMemoryCompaction, PreparedMemoryRecall,
+    RuntimeMemoryRecallCache, TargetMemoryBucketReceiptKey, MEMORY_BANK_MAX_CAPACITY,
+    MEMORY_FAMILY_SEARCH_CAP, MEMORY_FEATURE_VECTOR_MAX_LEN, MEMORY_MERGE_SIMILARITY,
+    MEMORY_MIN_SIMILARITY, MEMORY_RECALL_SCHEMA_VERSION, MEMORY_RECALL_TOP_K,
+    MEMORY_TARGET_SEARCH_CAP, MEMORY_TOTAL_SEARCH_CAP, RUNTIME_MEMORY_SEARCH_CAP,
 };
 pub use memory_query::{
     finalized_memory_attention_evidence, CandidateMemoryContextV1, CandidateMemoryQueryV2,
@@ -311,10 +311,11 @@ pub use phenotype::{
 pub use predictive::{
     GroundedSuccessorPredictor, JointMotorCondition, MotorChannelFactor,
     PredictionCategoryCoverage, PredictionTargetFamily, PredictionTargetReceipt,
-    SemanticStateVector, GROUNDED_PREDICTOR_ABI_VERSION, JOINT_MOTOR_CONDITION_ABI_V1,
-    JOINT_MOTOR_CONDITION_ABI_V2, JOINT_MOTOR_CONDITION_SCHEMA_VERSION, MAX_PREDICTOR_CATEGORIES,
-    MAX_SEMANTIC_STATE_VALUES, MAX_SUCCESSOR_FEATURES, PREDICTION_TARGET_SCHEMA_VERSION,
-    SEMANTIC_STATE_VECTOR_ABI_V1, SEMANTIC_STATE_VECTOR_SCHEMA_VERSION, SUCCESSOR_FEATURE_ABI_V1,
+    PredictorObserveUndo, SemanticStateVector, GROUNDED_PREDICTOR_ABI_VERSION,
+    JOINT_MOTOR_CONDITION_ABI_V1, JOINT_MOTOR_CONDITION_ABI_V2,
+    JOINT_MOTOR_CONDITION_SCHEMA_VERSION, MAX_PREDICTOR_CATEGORIES, MAX_SEMANTIC_STATE_VALUES,
+    MAX_SUCCESSOR_FEATURES, PREDICTION_TARGET_SCHEMA_VERSION, SEMANTIC_STATE_VECTOR_ABI_V1,
+    SEMANTIC_STATE_VECTOR_SCHEMA_VERSION, SUCCESSOR_FEATURE_ABI_V1,
 };
 pub use reference_brain::{
     BrainTickDiagnostics, BrainTickInput, BrainTickOutput, BrainTickStatus, CreatureActionState,

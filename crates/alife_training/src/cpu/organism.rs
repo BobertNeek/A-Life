@@ -150,6 +150,12 @@ impl CpuOrganismState {
         }
         Ok(self.checkpoint.clone())
     }
+    pub fn checkpoint_ref(&self) -> Result<&CpuOrganismCheckpoint, TrainingError> {
+        if self.pending.is_some() {
+            return Err(invalid());
+        }
+        Ok(&self.checkpoint)
+    }
     pub fn neural_state(&self) -> &TrainingInitialState {
         &self.checkpoint.neural
     }
@@ -179,11 +185,7 @@ impl CpuOrganismState {
         let tick = effects.source_tick.raw();
         let p = founder.phenotype();
         if self.pending.is_some()
-            || founder
-                .weights()
-                .iter()
-                .zip(p.synapses())
-                .any(|(w, s)| w.to_bits() != s.genetic_weight().to_bits())
+            || !founder.weights_match_genetic()
             || self.checkpoint.last_outcome_tick.is_some_and(|t| tick < t)
             || self
                 .checkpoint
@@ -211,7 +213,7 @@ impl CpuOrganismState {
         let pre = if context.microstep_count == 0 {
             self.checkpoint.inactive_activations.clone()
         } else {
-            tape.a[context.microstep_count as usize - 1].clone()
+            tape.a_step(context.microstep_count as usize - 1).to_vec()
         };
         let logits = tape.evaluation.candidate_logits[0].clone();
         let generation = self
@@ -279,9 +281,13 @@ impl CpuOrganismState {
         }
         // Slot 3 is the vocal channel in the native six-slot joint ABI.
         let vocal_selected = action.motor_candidates[3].is_some();
+        let receptor_decays: Vec<f32> = p
+            .plasticity_receptors()
+            .iter()
+            .map(|r| decay(r.eligibility_decay(), elapsed))
+            .collect();
         let mut staged = self.checkpoint.eligibility.clone();
         for (i, s) in p.synapses().iter().enumerate() {
-            let receptor = &p.plasticity_receptors()[s.receptor_index() as usize];
             let local = match s.kind() {
                 CompiledSynapseKind::Recurrent
                     if pending.context.enabled_routes[s.route_index() as usize] =>
@@ -313,7 +319,7 @@ impl CpuOrganismState {
                     })
                     .sum(),
             };
-            let next = decay(receptor.eligibility_decay(), elapsed) * staged[i] + local;
+            let next = receptor_decays[s.receptor_index() as usize] * staged[i] + local;
             finite(&[next])?;
             // Disabled recurrent routes decay without adding or clamping, as WGSL.
             staged[i] = if matches!(s.kind(), CompiledSynapseKind::Recurrent)
@@ -341,12 +347,7 @@ impl CpuOrganismState {
         parameters: &PlasticityGenomeParameters,
     ) -> Result<(), TrainingError> {
         let p = founder.phenotype();
-        if p.phenotype_hash() != self.checkpoint.phenotype_hash
-            || founder
-                .weights()
-                .iter()
-                .zip(p.synapses())
-                .any(|(w, s)| w.to_bits() != s.genetic_weight().to_bits())
+        if p.phenotype_hash() != self.checkpoint.phenotype_hash || !founder.weights_match_genetic()
         {
             return Err(invalid());
         }
@@ -381,11 +382,20 @@ impl CpuOrganismState {
         developmental.update(p, development, parameters)?;
         let words = developmental.words();
         let frame = credit.modulator().frame();
+        let elapsed = credit.outcome_tick().raw() - pending.tick;
+        let receptors_list = p.plasticity_receptors();
+        let mut receptor_factors = Vec::with_capacity(receptors_list.len());
+        let mut receptor_decays = Vec::with_capacity(receptors_list.len());
+        for r in receptors_list {
+            receptor_factors.push(r.receptor_profile().project(&frame)?);
+            receptor_decays.push(decay(r.eligibility_decay(), elapsed));
+        }
         let mut next = self.checkpoint.clone();
         next.weight_generation = next.weight_generation.checked_add(1).ok_or_else(invalid)?;
         for (i, s) in p.synapses().iter().enumerate() {
-            let r = &p.plasticity_receptors()[s.receptor_index() as usize];
-            let factor = r.receptor_profile().project(&frame)?;
+            let receptor_idx = s.receptor_index() as usize;
+            let r = &receptors_list[receptor_idx];
+            let factor = receptor_factors[receptor_idx];
             let recurrent = matches!(s.kind(), CompiledSynapseKind::Recurrent);
             let rate = |base: f32, lane: usize| {
                 if recurrent && words[0] != 0 {
@@ -395,11 +405,7 @@ impl CpuOrganismState {
                     base
                 }
             };
-            let eligibility = staged[i]
-                * decay(
-                    r.eligibility_decay(),
-                    credit.outcome_tick().raw() - pending.tick,
-                );
+            let eligibility = staged[i] * receptor_decays[receptor_idx];
             let post = next.neural.activations[s.target() as usize];
             let (min, max) = r.fast_weight_bounds();
             next.fast[i] = waking_fast_update(
@@ -461,20 +467,30 @@ impl CpuOrganismState {
         developmental.update(p, development, parameters)?;
         let words = developmental.words();
         let mut next = self.checkpoint.clone();
+        let num_receptors = p.plasticity_receptors().len();
+        let mut event_factors = vec![None::<f32>; evidence.batch.events.len() * num_receptors];
         for span in &evidence.batch.synapse_spans {
             let i = span.local_synapse_id as usize;
             let s = &p.synapses()[i];
-            let r = &p.plasticity_receptors()[s.receptor_index() as usize];
+            let receptor_idx = s.receptor_index() as usize;
+            let r = &p.plasticity_receptors()[receptor_idx];
             let mut credit = 0.;
             for sample in &evidence.batch.eligibility_samples
                 [span.sample_start as usize..(span.sample_start + span.sample_count) as usize]
             {
-                credit += f32::from(sample.eligibility_q15) / 32767.
-                    * r.receptor_profile().project(
-                        &evidence.batch.events[sample.event_index as usize]
-                            .modulator
-                            .frame(),
-                    )?;
+                let event_idx = sample.event_index as usize;
+                let slot = &mut event_factors[event_idx * num_receptors + receptor_idx];
+                let factor = match *slot {
+                    Some(v) => v,
+                    None => {
+                        let v = r
+                            .receptor_profile()
+                            .project(&evidence.batch.events[event_idx].modulator.frame())?;
+                        *slot = Some(v);
+                        v
+                    }
+                };
+                credit += f32::from(sample.eligibility_q15) / 32767. * factor;
             }
             let rate = if matches!(s.kind(), CompiledSynapseKind::Recurrent) && words[0] != 0 {
                 (r.sleep_replay_rate() * f32::from_bits(words[4 + s.route_index() as usize]))

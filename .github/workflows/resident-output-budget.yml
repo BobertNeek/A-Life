@@ -26,6 +26,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: quota-primitives
       - run: cargo test --locked -p alife_storage
       - run: cargo clippy --locked -p alife_storage --all-targets -- -D warnings
   quota-native:

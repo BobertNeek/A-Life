@@ -1,7 +1,7 @@
 //! Real-hardware acceptance for GPU replay and exactly-once sleep consolidation.
-#![cfg(feature = "gpu-tests")]
 
-mod support;
+#[allow(unused_imports)]
+use crate::support;
 
 use alife_core::{
     AlphaMask, BiochemistryState, BodyEventDelta, BrainCapacityClass, BrainGenome, Confidence,
@@ -826,5 +826,87 @@ fn replay_learning_payload_changes_behavior_within_post_wake_probe_window() {
     assert!(
         max_post_wake_delta > LOGIT_TOLERANCE,
         "GPU replay payload must causally alter the selected logit within the bounded post-wake probe window: max_delta={max_post_wake_delta}",
+    );
+}
+
+#[test]
+fn sleep_and_restore_staging_collapse_mutable_slot_readbacks_with_cache_invalidation() {
+    let (mut backend, handle, phenotype) = learned_backend(9_401);
+    let checkpoint = backend.snapshot_brain(handle, Tick::new(2_000)).unwrap();
+
+    let before_sleep = backend.mutable_slot_readback_metrics();
+    let (replay, request, staged) = stage_sleep(&mut backend, handle, 1);
+    let staging_parts = backend
+        .snapshot_completed_sleep_staging(handle, &request, &staged.staged)
+        .unwrap();
+    let after_snapshot_staging = backend.mutable_slot_readback_metrics();
+    let commit_before = after_snapshot_staging.calls;
+    let receipt = backend
+        .commit_sleep_consolidation(handle, &request, &staged.staged)
+        .unwrap();
+    let after_commit = backend.mutable_slot_readback_metrics();
+    let stage_calls = after_snapshot_staging.calls - before_sleep.calls - 1;
+    let commit_calls = after_commit.calls - commit_before;
+    assert!(
+        stage_calls + commit_calls <= 3,
+        "sleep submit+commit mutable readbacks must be <= 3, got stage={stage_calls} commit={commit_calls}",
+    );
+
+    // Restore pre-sleep checkpoint into a fresh slot and verify restore_completed_sleep_staging <= 1 readback.
+    let mut restored_backend =
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .unwrap();
+    let restored_handle = restored_backend
+        .restore_brain(
+            alife_core::OrganismId(9_401),
+            phenotype,
+            alife_gpu_backend::GpuBrainRestoreRequest::try_new(checkpoint).unwrap(),
+        )
+        .unwrap()
+        .handle;
+    let before_restore_staging = restored_backend.mutable_slot_readback_metrics();
+    let restored_staged = restored_backend
+        .restore_completed_sleep_staging(
+            restored_handle,
+            &request,
+            &replay,
+            &staged.staged,
+            staging_parts,
+        )
+        .unwrap();
+    let after_restore_staging = restored_backend.mutable_slot_readback_metrics();
+    assert_eq!(restored_staged.staged, staged.staged);
+    assert!(
+        after_restore_staging.calls - before_restore_staging.calls <= 1,
+        "restore_completed_sleep_staging mutable readbacks must be <= 1, got {}",
+        after_restore_staging.calls - before_restore_staging.calls,
+    );
+    let restored_receipt = restored_backend
+        .commit_sleep_consolidation(restored_handle, &request, &restored_staged.staged)
+        .unwrap();
+    assert_eq!(restored_receipt.output_digest, receipt.output_digest);
+    assert_eq!(
+        restored_receipt.output_generation,
+        receipt.output_generation
+    );
+    assert_eq!(
+        restored_backend
+            .read_active_lifetime_weights_for_test(restored_handle)
+            .unwrap(),
+        backend
+            .read_active_lifetime_weights_for_test(handle)
+            .unwrap()
+    );
+    assert_eq!(
+        restored_backend
+            .read_active_fast_weights_for_test(restored_handle)
+            .unwrap(),
+        backend.read_active_fast_weights_for_test(handle).unwrap()
+    );
+    assert_eq!(
+        restored_backend
+            .learning_state_snapshot_for_test(restored_handle)
+            .unwrap(),
+        backend.learning_state_snapshot_for_test(handle).unwrap()
     );
 }

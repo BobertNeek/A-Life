@@ -3,6 +3,7 @@ use std::{env, path::PathBuf, process::ExitCode};
 use alife_world::persistence::{AssetManifest, PortableSaveFile, RuntimeConfig};
 
 fn main() -> ExitCode {
+    alife_game_app::init_headless_tracing();
     match run() {
         Ok(message) => {
             println!("{message}");

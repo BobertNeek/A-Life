@@ -20,13 +20,15 @@ pub(super) fn handle_fvr05_production_ux_input(
     mut menu_state: ResMut<menu::MenuState>,
     mut dock: ResMut<care_dock::State>,
     #[cfg(feature = "gpu-runtime")] mut gpu_runtime: Option<
-        bevy::prelude::NonSendMut<crate::bevy_shell::ProductionGpuBrainRuntimeResource>,
+        bevy::prelude::ResMut<crate::bevy_shell::ProductionGpuBrainRuntimeResource>,
     >,
     #[cfg(feature = "gpu-runtime")] mut schedule: Option<
         ResMut<crate::bevy_shell::ProductionGpuBrainTickScheduleResource>,
     >,
     #[cfg(feature = "gpu-runtime")] mut load_request: ResMut<ProductionRuntimeLoadRequest>,
 ) {
+    #[cfg(feature = "gpu-runtime")]
+    let mut gpu_runtime = gpu_runtime.as_deref_mut().map(|runtime| runtime.lock_mut());
     let selected_stable_id = selection
         .selected
         .and_then(|selected| selected.stable_id.map(|stable_id| stable_id.raw()));
@@ -39,23 +41,31 @@ pub(super) fn handle_fvr05_production_ux_input(
     if let Some(schedule) = schedule.as_deref() {
         let paused = schedule.is_paused();
         let mode = schedule.run_mode();
-        ux.animation_speed = schedule.animation_speed();
+        let speed = schedule.animation_speed();
+        if ux.animation_speed.to_bits() != speed.to_bits() {
+            ux.animation_speed = speed;
+        }
+        let target_present_mode =
+            if mode == crate::ProductionRunMode::OneX && !frontend.summary.record_performance {
+                bevy::window::PresentMode::AutoVsync
+            } else {
+                bevy::window::PresentMode::Immediate
+            };
         for mut window in &mut windows {
-            window.present_mode =
-                if mode == crate::ProductionRunMode::OneX && !frontend.summary.record_performance {
-                    bevy::window::PresentMode::AutoVsync
-                } else {
-                    bevy::window::PresentMode::Immediate
-                };
+            if window.present_mode != target_present_mode {
+                window.present_mode = target_present_mode;
+            }
         }
         if ux.settings.paused != paused {
             ux.settings.paused = paused;
         }
-        ux.settings.run_mode = Some(mode);
+        if ux.settings.run_mode != Some(mode) {
+            ux.settings.run_mode = Some(mode);
+        }
     }
     #[cfg(feature = "gpu-runtime")]
     if let Some(runtime) = gpu_runtime.as_ref() {
-        let status = runtime.runtime.manual_checkpoint_status();
+        let status = runtime.manual_checkpoint_status();
         if ux.last_manual_checkpoint_status.as_ref() != Some(status) {
             let status = status.clone();
             ux.observe_gpu_runtime_save_status(&status);
@@ -65,15 +75,11 @@ pub(super) fn handle_fvr05_production_ux_input(
     #[cfg(feature = "gpu-runtime")]
     if ux.pending_food_move.is_some_and(|source| {
         !gpu_runtime.as_ref().is_some_and(|runtime| {
-            runtime
-                .runtime
-                .world()
-                .entity(source)
-                .is_some_and(|object| {
-                    object.kind == WorldObjectKind::Food
-                        && !object.consumed
-                        && object.carried_by.is_none()
-                })
+            runtime.world().entity(source).is_some_and(|object| {
+                object.kind == WorldObjectKind::Food
+                    && !object.consumed
+                    && object.carried_by.is_none()
+            })
         })
     }) {
         ux.pending_food_move = None;
@@ -85,9 +91,7 @@ pub(super) fn handle_fvr05_production_ux_input(
             menu::Action::Save => menu::save(
                 &mut ux,
                 #[cfg(feature = "gpu-runtime")]
-                gpu_runtime
-                    .as_deref_mut()
-                    .map(|runtime| &mut runtime.runtime),
+                gpu_runtime.as_deref_mut(),
             ),
             menu::Action::ConfirmLoad => {
                 #[cfg(feature = "gpu-runtime")]
@@ -95,7 +99,7 @@ pub(super) fn handle_fvr05_production_ux_input(
                     &mut menu_state,
                     &mut ux,
                     &mut load_request,
-                    gpu_runtime.as_deref().map(|runtime| &runtime.runtime),
+                    gpu_runtime.as_deref(),
                 );
                 #[cfg(not(feature = "gpu-runtime"))]
                 {
@@ -121,13 +125,7 @@ pub(super) fn handle_fvr05_production_ux_input(
             }
             menu::Action::Quit => {
                 #[cfg(feature = "gpu-runtime")]
-                menu::begin_quit(
-                    &mut menu_state,
-                    &mut ux,
-                    gpu_runtime
-                        .as_deref_mut()
-                        .map(|runtime| &mut runtime.runtime),
-                );
+                menu::begin_quit(&mut menu_state, &mut ux, gpu_runtime.as_deref_mut());
                 #[cfg(not(feature = "gpu-runtime"))]
                 {
                     ux.last_error =
@@ -194,8 +192,8 @@ pub(super) fn handle_fvr05_production_ux_input(
     }
     if !ux.debug_mode && keyboard.just_pressed(KeyCode::KeyG) {
         #[cfg(feature = "gpu-runtime")]
-        if let Some(runtime) = gpu_runtime.as_mut() {
-            choose_or_move_food(&selection, &mut runtime.runtime, &mut frame, &mut ux);
+        if let Some(runtime) = gpu_runtime.as_deref_mut() {
+            choose_or_move_food(&selection, runtime, &mut frame, &mut ux);
         } else {
             ux.last_error = Some("GPU runtime unavailable".to_string());
             ux.last_action = "Food move unavailable".to_string();
@@ -241,7 +239,7 @@ pub(super) fn handle_fvr05_production_ux_input(
                 selection.selected,
                 &mut ux,
                 #[cfg(feature = "gpu-runtime")]
-                gpu_runtime.as_deref_mut().map(|r| &mut r.runtime),
+                gpu_runtime.as_deref_mut(),
                 #[cfg(feature = "gpu-runtime")]
                 &mut frame,
             );
@@ -252,9 +250,7 @@ pub(super) fn handle_fvr05_production_ux_input(
         menu::save(
             &mut ux,
             #[cfg(feature = "gpu-runtime")]
-            gpu_runtime
-                .as_deref_mut()
-                .map(|runtime| &mut runtime.runtime),
+            gpu_runtime.as_deref_mut(),
         );
     }
     if ux.debug_mode && keyboard.just_pressed(KeyCode::KeyN) {
@@ -264,8 +260,8 @@ pub(super) fn handle_fvr05_production_ux_input(
             ux.settings.paused = schedule.is_paused();
             ux.settings.run_mode = Some(schedule.run_mode());
             ux.last_action = "Queued one production simulation step".to_string();
-        } else if let Some(runtime) = gpu_runtime.as_mut() {
-            ux.write_gpu_runtime_save(true, &mut runtime.runtime);
+        } else if let Some(runtime) = gpu_runtime.as_deref_mut() {
+            ux.write_gpu_runtime_save(true, runtime);
         } else {
             ux.write_runtime_save(true);
         }

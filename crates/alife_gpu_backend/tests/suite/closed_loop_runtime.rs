@@ -1,4 +1,5 @@
-mod support;
+#[allow(unused_imports)]
+use crate::support;
 
 use alife_core::ScaffoldContractError;
 use alife_gpu_backend::{GpuBrainHandle, GpuClosedLoopBackend, GpuRuntimeProfile};
@@ -113,6 +114,8 @@ mod hardware {
                 (ActionKind::Move, CandidateActionFamily::Avoid, {
                     let mut hazard = CandidateFeatureVector::zero();
                     hazard.0[15] = -0.8;
+                    // Grounded contact chemistry requires contact == 1.0 (PR #113).
+                    hazard.0[18] = 1.0;
                     hazard
                 }),
             ];
@@ -1771,5 +1774,76 @@ mod hardware {
             backend.remove_brain(handle_b).unwrap_err(),
             ScaffoldContractError::NeuralBackendUnavailable
         );
+    }
+
+    #[test]
+    fn per_pass_gpu_timestamp_profiling_is_opt_in_and_preserves_exact_outputs() {
+        let profile = GpuRuntimeProfile::production_v1();
+        let digest_before = profile.canonical_digest();
+        let mut baseline = GpuClosedLoopBackend::new_required(profile).unwrap();
+        let mut profiled = GpuClosedLoopBackend::new_required(profile).unwrap();
+        baseline.set_per_pass_profiling(false);
+        profiled.set_per_pass_profiling(true);
+        assert!(!baseline.per_pass_profiling_enabled());
+        assert!(profiled.per_pass_profiling_enabled());
+        assert_eq!(baseline.runtime_profile().canonical_digest(), digest_before);
+        assert_eq!(profiled.runtime_profile().canonical_digest(), digest_before);
+
+        let phenotype = n512_phenotype(77);
+        let physiology = super::support::test_physiology(77, &phenotype).unwrap();
+        let handle_base = baseline
+            .insert_brain(OrganismId(77), phenotype.clone())
+            .unwrap();
+        let handle_prof = profiled
+            .insert_brain(OrganismId(77), phenotype.clone())
+            .unwrap();
+        let frame = perception_frame_for_profile_at_tick(
+            77,
+            300,
+            SensorProfile::PrivilegedAffordanceV1,
+            true,
+            2,
+        );
+        let (_, base_tick) = super::support::tick_with_receptors(
+            &mut baseline,
+            handle_base,
+            &phenotype,
+            &physiology,
+            &frame,
+        )
+        .unwrap();
+        let (_, prof_tick) = super::support::tick_with_receptors(
+            &mut profiled,
+            handle_prof,
+            &phenotype,
+            &physiology,
+            &frame,
+        )
+        .unwrap();
+
+        assert_eq!(base_tick.selection, prof_tick.selection);
+        assert_eq!(
+            base_tick.factorized_motor_candidates,
+            prof_tick.factorized_motor_candidates
+        );
+        assert!(baseline.last_per_pass_timings().is_none());
+        let timings = profiled
+            .last_per_pass_timings()
+            .expect("per-pass timings must be recorded when enabled");
+        assert_eq!(timings.dispatch_generation, prof_tick.dispatch_generation);
+        assert_eq!(timings.class_id_raw, handle_prof.class_id().raw());
+        assert_eq!(timings.population, 1);
+        assert!(timings.recurrent_ns > 0);
+        assert!(
+            timings.encode_ns
+                + timings.recurrent_ns
+                + timings.decode_select_ns
+                + timings.eligibility_ns
+                > 0
+        );
+
+        profiled.set_per_pass_profiling(false);
+        assert!(!profiled.per_pass_profiling_enabled());
+        assert!(profiled.last_per_pass_timings().is_none());
     }
 }

@@ -34,9 +34,9 @@ use bevy::{
     input::{keyboard::KeyboardInput, ButtonState},
     prelude::{
         App, BackgroundColor, ButtonInput, ChildOf, Color, Component, DetectChanges, FlexDirection,
-        FlexWrap, GlobalZIndex, KeyCode, MessageReader, MessageWriter, Name, Node, NonSend,
-        NonSendMut, ParamSet, PositionType, Res, ResMut, Resource, Text, Text2d, TextColor,
-        TextFont, Transform, UiRect, Update, Val, Visibility, With,
+        FlexWrap, GlobalZIndex, KeyCode, MessageReader, MessageWriter, Name, Node, NonSendMut,
+        ParamSet, PositionType, Res, ResMut, Resource, Text, Text2d, TextColor, TextFont,
+        Transform, UiRect, Update, Val, Visibility, With,
     },
 };
 
@@ -209,6 +209,80 @@ impl ProductionSpeechTranslationWorker {
 }
 
 impl Drop for ProductionSpeechTranslationWorker {
+    fn drop(&mut self) {
+        if let Some(job) = self.active.take() {
+            let _ = job.handle.join();
+        }
+    }
+}
+
+struct LineageLoadCompletion {
+    generation: u64,
+    root: PathBuf,
+    refresh: bool,
+    result: Result<Vec<LineageUiRow>, String>,
+}
+
+struct ActiveLineageLoadJob {
+    generation: u64,
+    root: PathBuf,
+    refresh: bool,
+    handle: JoinHandle<Result<Vec<LineageUiRow>, String>>,
+}
+
+#[derive(Default, Resource)]
+pub(crate) struct ProductionLineageLoadWorker {
+    next_generation: u64,
+    active: Option<ActiveLineageLoadJob>,
+}
+
+impl ProductionLineageLoadWorker {
+    fn start(&mut self, root: &Path, refresh: bool) -> Result<u64, String> {
+        if let Some(job) = self.active.as_ref() {
+            if job.root == root && !refresh && !job.handle.is_finished() {
+                return Ok(job.generation);
+            }
+        }
+        self.next_generation = self.next_generation.wrapping_add(1).max(1);
+        let generation = self.next_generation;
+        let root_buf = root.to_path_buf();
+        let worker_root = root_buf.clone();
+        let handle = thread::Builder::new()
+            .name("alife-lineage-load".to_string())
+            .spawn(move || load_lineage_rows(&worker_root).map_err(|error| error.to_string()))
+            .map_err(|error| format!("could not start lineage load worker: {error}"))?;
+        self.active = Some(ActiveLineageLoadJob {
+            generation,
+            root: root_buf,
+            refresh,
+            handle,
+        });
+        Ok(generation)
+    }
+
+    fn poll(&mut self) -> Option<LineageLoadCompletion> {
+        if !self
+            .active
+            .as_ref()
+            .is_some_and(|job| job.handle.is_finished())
+        {
+            return None;
+        }
+        let job = self.active.take()?;
+        let result = match job.handle.join() {
+            Ok(result) => result,
+            Err(_) => Err("lineage load worker panicked".to_string()),
+        };
+        Some(LineageLoadCompletion {
+            generation: job.generation,
+            root: job.root,
+            refresh: job.refresh,
+            result,
+        })
+    }
+}
+
+impl Drop for ProductionLineageLoadWorker {
     fn drop(&mut self) {
         if let Some(job) = self.active.take() {
             let _ = job.handle.join();
@@ -828,6 +902,8 @@ pub struct ProductionConversationLineageUiState {
     lineage_data_filter: LineageDataFilter,
     lineage_sort: LineageSort,
     lineage_loaded: bool,
+    lineage_loading: bool,
+    lineage_load_generation: u64,
     lineage_rows: Vec<LineageUiRow>,
     lineage_cursor: usize,
     cohort: Vec<FounderSelection>,
@@ -867,6 +943,8 @@ impl ProductionConversationLineageUiState {
             lineage_data_filter: LineageDataFilter::All,
             lineage_sort: LineageSort::Overall,
             lineage_loaded: false,
+            lineage_loading: false,
+            lineage_load_generation: 0,
             lineage_rows: Vec::new(),
             lineage_cursor: 0,
             cohort: Vec::new(),
@@ -979,6 +1057,91 @@ impl ProductionConversationLineageUiState {
             }
         }
         self.lineage_loaded = true;
+        self.lineage_loading = false;
+    }
+
+    fn begin_lineage_load(
+        &mut self,
+        worker: Option<&mut ProductionLineageLoadWorker>,
+        refresh: bool,
+    ) {
+        if !refresh && (self.lineage_loaded || self.lineage_loading) {
+            return;
+        }
+        if let Some(worker) = worker {
+            match worker.start(&self.lineage_root, refresh) {
+                Ok(generation) => {
+                    self.lineage_loading = true;
+                    self.lineage_load_generation = generation;
+                    self.status = if refresh {
+                        "Refreshing Lineage Library...".to_string()
+                    } else {
+                        "Loading Lineage Library...".to_string()
+                    };
+                }
+                Err(error) => {
+                    self.lineage_loading = false;
+                    if !refresh {
+                        self.lineage_rows.clear();
+                    }
+                    self.status = if refresh {
+                        format!("Lineage refresh failed: {error}")
+                    } else {
+                        format!("Lineage Library unavailable: {error}")
+                    };
+                }
+            }
+        } else if refresh {
+            match load_lineage_rows(&self.lineage_root) {
+                Ok(rows) => {
+                    self.lineage_rows = rows;
+                    self.lineage_loaded = true;
+                    self.lineage_loading = false;
+                    self.lineage_cursor = 0;
+                    self.status = "Lineage Library refreshed".to_string();
+                }
+                Err(error) => {
+                    self.lineage_loading = false;
+                    self.status = format!("Lineage refresh failed: {error}");
+                }
+            }
+        } else {
+            self.ensure_lineage_loaded();
+        }
+    }
+
+    fn apply_lineage_load_completion(&mut self, completion: LineageLoadCompletion) {
+        if completion.generation != self.lineage_load_generation
+            || completion.root != self.lineage_root
+        {
+            return;
+        }
+        self.lineage_loading = false;
+        match completion.result {
+            Ok(rows) => {
+                let count = rows.len();
+                self.lineage_rows = rows;
+                self.lineage_loaded = true;
+                if completion.refresh {
+                    self.lineage_cursor = 0;
+                    self.status = "Lineage Library refreshed".to_string();
+                } else {
+                    let filtered_len = self.filtered_indices().len();
+                    self.lineage_cursor = self.lineage_cursor.min(filtered_len.saturating_sub(1));
+                    self.status = format!("Lineage Library: {count} current archives");
+                }
+            }
+            Err(error) => {
+                if !completion.refresh && !self.lineage_loaded {
+                    self.lineage_rows.clear();
+                }
+                self.status = if completion.refresh {
+                    format!("Lineage refresh failed: {error}")
+                } else {
+                    format!("Lineage Library unavailable: {error}")
+                };
+            }
+        }
     }
 
     fn cycle_source_filter(&mut self) {
@@ -1105,6 +1268,7 @@ pub fn install_production_conversation_lineage_ui(
     summary: &ProductionVoxelLaunchSummary,
 ) {
     app.insert_resource(ProductionConversationLineageUiState::new(summary));
+    app.init_resource::<ProductionLineageLoadWorker>();
     app.insert_non_send_resource(ProductionSpeechTranslationWorker::default());
     let layout = LineageLabLayout::for_resolution(summary.resolution.0, summary.resolution.1);
     app.insert_resource(layout);
@@ -1126,6 +1290,7 @@ pub fn install_production_conversation_lineage_ui(
         Update,
         (
             poll_speech_translation_worker,
+            poll_lineage_load_worker,
             refresh_creature_speech_receipt,
             sync_production_conversation_lineage_ui,
             adapt_speech_composer,
@@ -1964,8 +2129,9 @@ pub(crate) fn handle_production_conversation_lineage_input(
     dock: Option<Res<crate::production_voxel_renderer::care_dock::State>>,
     reset_result: Res<ProductionCuratedFounderResetResultResource>,
     mut reset_commands: MessageWriter<ProductionCuratedFounderResetCommand>,
-    mut runtime: NonSendMut<ProductionGpuBrainRuntimeResource>,
+    mut runtime: ResMut<ProductionGpuBrainRuntimeResource>,
     mut speech_worker: NonSendMut<ProductionSpeechTranslationWorker>,
+    mut lineage_worker: Option<ResMut<ProductionLineageLoadWorker>>,
     mut composer_input: ResMut<composer::InputState>,
     mut state: ResMut<ProductionConversationLineageUiState>,
 ) {
@@ -1979,13 +2145,14 @@ pub(crate) fn handle_production_conversation_lineage_input(
         return;
     }
     if state.naming.is_some() {
+        let mut runtime = runtime.lock_mut();
         naming::handle_input(
             &keyboard,
             key_messages.read(),
             pointer,
             &selection,
             &creatures,
-            &mut runtime.runtime,
+            &mut runtime,
             &mut state,
         );
         key_messages.clear();
@@ -2007,11 +2174,13 @@ pub(crate) fn handle_production_conversation_lineage_input(
         if keyboard.get_just_pressed().next().is_none() {
             return;
         }
+        let mut runtime = runtime.lock_mut();
         handle_lineage_input(
             &keyboard,
             &selection,
             &creatures,
-            &mut runtime.runtime,
+            &mut runtime,
+            lineage_worker.as_deref_mut(),
             &mut state,
             &reset_result,
             &mut reset_commands,
@@ -2024,10 +2193,12 @@ pub(crate) fn handle_production_conversation_lineage_input(
             // Only raw text after this frame's opening Enter belongs to the composer.
             append_player_speech_key_text(&mut state.input, key_messages.read(), true);
         } else if keyboard.just_pressed(KeyCode::KeyY) {
-            state.ensure_lineage_loaded();
+            state.begin_lineage_load(lineage_worker.as_deref_mut(), false);
             state.lineage_open = true;
             state.input_open = false;
-            state.status = "Lineage Library opened".to_string();
+            if !state.lineage_loading {
+                state.status = "Lineage Library opened".to_string();
+            }
         } else {
             handle_speech_setting_keys(&keyboard, &mut state);
         }
@@ -2057,10 +2228,11 @@ pub(crate) fn handle_production_conversation_lineage_input(
         || (submit_enter && keyboard.just_pressed(KeyCode::Enter)))
         && !state.input.trim().is_empty()
     {
+        let mut runtime = runtime.lock_mut();
         if let Err(error) = send_player_speech(
             &selection,
             &creatures,
-            &mut runtime.runtime,
+            &mut runtime,
             &mut speech_worker,
             &mut state,
         ) {
@@ -2349,7 +2521,7 @@ fn selected_organism(
 }
 
 fn refresh_creature_speech_receipt(
-    runtime: NonSend<ProductionGpuBrainRuntimeResource>,
+    runtime: Res<ProductionGpuBrainRuntimeResource>,
     frame: Res<LiveBrainPresentationFrameResource>,
     mut speech_worker: NonSendMut<ProductionSpeechTranslationWorker>,
     mut state: ResMut<ProductionConversationLineageUiState>,
@@ -2357,8 +2529,8 @@ fn refresh_creature_speech_receipt(
     if !frame.is_changed() {
         return;
     }
+    let runtime = runtime.lock();
     let Some(utterance) = runtime
-        .runtime
         .active_utterances()
         .into_iter()
         .filter(|utterance| utterance.source_kind == UtteranceSourceKind::Creature)
@@ -2398,7 +2570,7 @@ fn refresh_creature_speech_receipt(
         let context = SpeechTranslationJobContext::Creature {
             utterance_id: utterance.utterance_id,
             speaker_id: utterance.speaker_id,
-            runtime_identity: match SpeechRuntimeIdentity::capture(&runtime.runtime) {
+            runtime_identity: match SpeechRuntimeIdentity::capture(&runtime) {
                 Ok(identity) => identity,
                 Err(error) => {
                     state.status = format!("Creature speech authority unavailable: {error}");
@@ -2440,7 +2612,7 @@ fn refresh_creature_speech_receipt(
 }
 
 fn poll_speech_translation_worker(
-    mut runtime: NonSendMut<ProductionGpuBrainRuntimeResource>,
+    mut runtime: ResMut<ProductionGpuBrainRuntimeResource>,
     mut speech_worker: NonSendMut<ProductionSpeechTranslationWorker>,
     mut state: ResMut<ProductionConversationLineageUiState>,
 ) {
@@ -2448,7 +2620,8 @@ fn poll_speech_translation_worker(
         return;
     };
     let SpeechTranslationJobCompletion { context, result } = completion;
-    if !context.runtime_identity().still_matches(&runtime.runtime) {
+    let mut runtime = runtime.lock_mut();
+    if !context.runtime_identity().still_matches(&runtime) {
         if matches!(context, SpeechTranslationJobContext::Player { .. }) {
             state.input_cue = SpeechInputCue::Unavailable;
         }
@@ -2465,7 +2638,7 @@ fn poll_speech_translation_worker(
             Ok((receipt, warning)),
         ) => {
             if let Err(error) = complete_player_speech(
-                &mut runtime.runtime,
+                &mut runtime,
                 &mut state,
                 addressee,
                 source_position,
@@ -2486,7 +2659,6 @@ fn poll_speech_translation_worker(
             Ok((receipt, warning)),
         ) => {
             if !runtime
-                .runtime
                 .active_utterances()
                 .iter()
                 .any(|utterance| utterance.utterance_id == utterance_id)
@@ -2508,6 +2680,15 @@ fn poll_speech_translation_worker(
         (SpeechTranslationJobContext::Creature { .. }, Err(error)) => {
             state.status = format!("Creature SLM translation failed: {error}");
         }
+    }
+}
+
+fn poll_lineage_load_worker(
+    mut worker: ResMut<ProductionLineageLoadWorker>,
+    mut state: ResMut<ProductionConversationLineageUiState>,
+) {
+    if let Some(completion) = worker.poll() {
+        state.apply_lineage_load_completion(completion);
     }
 }
 
@@ -2544,11 +2725,16 @@ fn translate_speech_assisted_with_fallback(
     }
 }
 
+#[allow(
+    clippy::too_many_arguments,
+    reason = "Lineage input handler receives independent ECS resources and worker handle."
+)]
 fn handle_lineage_input(
     keyboard: &ButtonInput<KeyCode>,
     selection: &Fvr03ProductionVoxelSelectionResource,
     creatures: &Fvr04ProductionCreatureSceneResource,
     runtime: &mut crate::GpuLiveBrainRuntime,
+    lineage_worker: Option<&mut ProductionLineageLoadWorker>,
     state: &mut ProductionConversationLineageUiState,
     reset_result: &ProductionCuratedFounderResetResultResource,
     reset_commands: &mut MessageWriter<ProductionCuratedFounderResetCommand>,
@@ -2615,15 +2801,7 @@ fn handle_lineage_input(
         state.cohort.pop();
     }
     if keyboard.just_pressed(KeyCode::KeyR) {
-        match load_lineage_rows(&state.lineage_root) {
-            Ok(rows) => {
-                state.lineage_rows = rows;
-                state.lineage_loaded = true;
-                state.lineage_cursor = 0;
-                state.status = "Lineage Library refreshed".to_string();
-            }
-            Err(error) => state.status = format!("Lineage refresh failed: {error}"),
-        }
+        state.begin_lineage_load(lineage_worker, true);
     }
     if keyboard.just_pressed(KeyCode::KeyT) {
         if let Some(command) = retry_command_if_available(&reset_result.outcome) {
@@ -2890,29 +3068,59 @@ pub(crate) fn speech_entry_text(state: &ProductionConversationLineageUiState) ->
         None => format!("{}|", state.input),
     }
 }
-pub(crate) fn speech_composer_height(
-    world: &bevy::prelude::World,
-    size: bevy::prelude::Vec2,
-) -> Option<f32> {
-    composer::composer_height(world, size)
-}
-
-pub(crate) fn speech_composer_bottom(world: &bevy::prelude::World) -> f32 {
-    if world
-        .get_resource::<Fvr05ProductionUxStateResource>()
-        .is_some_and(|u| u.last_error.is_some())
-    {
+pub(crate) fn speech_composer_bottom_for(has_error: bool) -> f32 {
+    if has_error {
         108.0
     } else {
         92.0
     }
+}
+
+pub(crate) fn speech_composer_height_for(
+    state: &ProductionConversationLineageUiState,
+    size: bevy::prelude::Vec2,
+    has_error: bool,
+) -> Option<f32> {
+    if !state.input_open {
+        return None;
+    }
+    let width = (size.x - 32.0).clamp(0.0, 640.0);
+    let columns = ((width - 26.0) / 18.0).floor().max(1.0) as usize;
+    let char_count = match state
+        .naming
+        .as_ref()
+        .map(|draft| &draft.preedit)
+        .filter(|text| !text.is_empty())
+    {
+        Some(preedit) => state.input.chars().count() + preedit.chars().count() + 1,
+        None => speech_entry_text(state).chars().count(),
+    };
+    let lines = char_count.max(1).div_ceil(columns);
+    let bottom = speech_composer_bottom_for(has_error);
+    Some(
+        (80.0 + lines as f32 * 18.0 * 1.3)
+            .max(120.0)
+            .ceil()
+            .min((size.y - bottom - 12.0).max(0.0)),
+    )
+}
+
+pub(crate) fn speech_composer_bottom(world: &bevy::prelude::World) -> f32 {
+    speech_composer_bottom_for(
+        world
+            .get_resource::<Fvr05ProductionUxStateResource>()
+            .is_some_and(|u| u.last_error.is_some()),
+    )
 }
 /// Keep controls fixed while the clipped draft follows its end caret.
 pub(crate) fn adapt_speech_composer(world: &mut bevy::prelude::World) {
     composer::adapt(world);
 }
 
-#[allow(clippy::type_complexity)]
+#[allow(
+    clippy::type_complexity,
+    reason = "Bevy ParamSet separates four disjoint speech and bubble queries."
+)]
 fn sync_production_conversation_lineage_ui(
     state: Res<ProductionConversationLineageUiState>,
     scene: Res<Fvr03ProductionVoxelSceneResource>,
@@ -3113,7 +3321,7 @@ fn sync_production_lineage_laboratory_ui(
     selection: Res<Fvr03ProductionVoxelSelectionResource>,
     creatures: Res<Fvr04ProductionCreatureSceneResource>,
     reset_result: Res<ProductionCuratedFounderResetResultResource>,
-    runtime: NonSend<ProductionGpuBrainRuntimeResource>,
+    runtime: Res<ProductionGpuBrainRuntimeResource>,
     mut roots: bevy::prelude::Query<
         &mut Visibility,
         (
@@ -3154,7 +3362,8 @@ fn sync_production_lineage_laboratory_ui(
         0
     };
     let selected = state.current_row();
-    let world = runtime.runtime.world();
+    let runtime = runtime.lock();
+    let world = runtime.world();
     let reset_status = curated_founder_reset_status(&reset_result.outcome);
     let live_selected = selected_organism(&selection, &creatures);
     let habitat_view = live_selected
@@ -3178,7 +3387,11 @@ fn sync_production_lineage_laboratory_ui(
                 format!("Sort by [O]\n{}", state.lineage_sort.label())
             }
             LineageLabTextRole::ListTitle => {
-                format!("CREATURE ARCHIVES  /  {} shown", filtered.len())
+                if state.lineage_loading && state.lineage_rows.is_empty() {
+                    "CREATURE ARCHIVES  /  Loading...".to_string()
+                } else {
+                    format!("CREATURE ARCHIVES  /  {} shown", filtered.len())
+                }
             }
             LineageLabTextRole::ListHeader => {
                 "CREATURE      RUN          SURVIVAL   PROBLEM   LANGUAGE   CHECKPOINT".to_string()

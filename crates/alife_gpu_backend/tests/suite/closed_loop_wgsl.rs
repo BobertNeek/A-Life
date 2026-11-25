@@ -1,10 +1,11 @@
 //! WGSL sensory encoding, recurrent dynamics and layout checks.
 
 #[cfg(feature = "gpu-tests")]
-#[path = "closed_loop_wgsl/hardware.rs"]
+#[path = "../closed_loop_wgsl/hardware.rs"]
 mod hardware;
 #[cfg(feature = "gpu-tests")]
-mod support;
+#[allow(unused_imports)]
+use crate::support;
 
 use std::collections::BTreeMap;
 
@@ -253,9 +254,9 @@ fn learning_state_schema_matches_the_wgsl_validation_contract() {
 }
 
 #[test]
-fn naga_reflection_matches_the_exact_seven_heap_bindings_and_access_modes() {
+fn naga_reflection_matches_the_exact_eight_heap_bindings_and_access_modes() {
     let expected_manifest = GpuClassBucketBuffers::neural_binding_manifest();
-    assert_eq!(expected_manifest.len(), 7);
+    assert_eq!(expected_manifest.len(), 8);
     for source in [
         CLOSED_LOOP_CLEAR_DIAGNOSTICS_WGSL,
         CLOSED_LOOP_DECODE_WGSL,
@@ -278,7 +279,7 @@ fn naga_reflection_matches_the_exact_seven_heap_bindings_and_access_modes() {
                 .insert((binding.group, binding.binding), access)
                 .is_none());
         }
-        assert_eq!(reflected.len(), 7);
+        assert_eq!(reflected.len(), 8);
         for expected in expected_manifest {
             let reflected_access = reflected
                 .get(&(expected.group, expected.binding))
@@ -296,7 +297,8 @@ fn naga_reflection_matches_the_exact_seven_heap_bindings_and_access_modes() {
 }
 
 #[test]
-fn mutable_heap_is_atomic_u32_while_dispatch_headers_remain_read_only() {
+fn mutable_heap_is_non_atomic_u32_and_atomic_heap_is_atomic_u32_while_dispatch_headers_remain_read_only(
+) {
     for source in [
         CLOSED_LOOP_CLEAR_DIAGNOSTICS_WGSL,
         CLOSED_LOOP_DECODE_WGSL,
@@ -319,8 +321,27 @@ fn mutable_heap_is_atomic_u32_while_dispatch_headers_remain_read_only() {
         let TypeInner::Array { base, .. } = &module.types[mutable.ty].inner else {
             panic!("mutable heap must be a runtime array")
         };
+        let TypeInner::Scalar(scalar) = &module.types[*base].inner else {
+            panic!("mutable heap elements must be non-atomic scalar u32")
+        };
+        assert_eq!(scalar.kind, ScalarKind::Uint);
+        assert_eq!(scalar.width, 4);
+
+        let (_, atomic_heap) = module
+            .global_variables
+            .iter()
+            .find(|(_, global)| {
+                global
+                    .binding
+                    .as_ref()
+                    .is_some_and(|binding| binding.group == 0 && binding.binding == 7)
+            })
+            .unwrap();
+        let TypeInner::Array { base, .. } = &module.types[atomic_heap.ty].inner else {
+            panic!("atomic heap must be a runtime array")
+        };
         let TypeInner::Atomic(scalar) = &module.types[*base].inner else {
-            panic!("mutable heap elements must be atomic")
+            panic!("atomic heap elements must be atomic")
         };
         assert_eq!(scalar.kind, ScalarKind::Uint);
         assert_eq!(scalar.width, 4);
@@ -402,6 +423,7 @@ fn recurrent_shader_has_reachable_graph_weight_and_state_access() {
         );
     }
     assert!(effects.writes.contains_key(&(0, 6)));
+    assert!(effects.writes.contains_key(&(0, 7)));
     assert!(effects.atomics > 0);
 }
 
@@ -434,8 +456,9 @@ fn neural_heap_binding_manifest_has_expected_roles_and_minimum_sizes() {
         manifest[6].role,
         GpuClassBucketBufferRole::MutableStateWords
     );
+    assert_eq!(manifest[7].role, GpuClassBucketBufferRole::AtomicStateWords);
     assert_eq!(
         manifest.map(|entry| entry.minimum_binding_size_bytes),
-        [144, 32, 4, 4, 4, 4, 4]
+        [144, 32, 4, 4, 4, 4, 4, 4]
     );
 }

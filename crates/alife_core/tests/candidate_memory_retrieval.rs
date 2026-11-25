@@ -2593,3 +2593,76 @@ fn retained_context_encoding_preserves_populated_audited_and_cached_runtime_fram
         assert_eq!(serde_json::to_value(&bank).unwrap(), bank_before);
     }
 }
+
+#[test]
+fn memory_sidecar_undo_restores_insert_merge_evict_and_ignore_identically() {
+    use alife_core::MemoryUpdateKind;
+
+    let config = MemoryBankConfig::new(2, 64, 2, 0.72, Confidence::new(0.0).unwrap()).unwrap();
+    let mut sidecar = grounded_sidecar(config);
+    let _cached_before = *sidecar.compaction_checkpoint();
+
+    // 1. Insert rollback
+    let before_insert = sidecar.clone();
+    let p1 = sequenced_patch(1, 1, 71, 0.4, -0.6, 0.5);
+    let (r1, u1) = sidecar.observe_sealed_patch_with_undo(&p1).unwrap();
+    assert!(matches!(r1.kind, MemoryUpdateKind::Inserted { .. }));
+    assert_ne!(sidecar, before_insert);
+    sidecar.undo_observation(u1);
+    assert_eq!(sidecar, before_insert);
+    assert_eq!(
+        sidecar.export_active_bank().unwrap(),
+        before_insert.export_active_bank().unwrap()
+    );
+
+    // Apply p1 for real, then test Merge rollback (runtime variant)
+    sidecar.observe_sealed_patch_runtime(&p1).unwrap();
+    let _ = *sidecar.compaction_checkpoint();
+    let before_merge = sidecar.clone();
+    let p2_merge = sequenced_patch(2, 2, 71, 0.41, -0.55, 0.45);
+    let (r2, u2) = sidecar
+        .observe_sealed_patch_runtime_with_undo(&p2_merge)
+        .unwrap();
+    assert!(matches!(r2.kind, MemoryUpdateKind::Merged { .. }));
+    sidecar.undo_observation(u2);
+    assert_eq!(sidecar, before_merge);
+    assert_eq!(
+        sidecar.export_active_bank().unwrap(),
+        before_merge.export_active_bank().unwrap()
+    );
+
+    // Fill second slot with high-salience entry, then test EvictAndInsert rollback
+    let p2_other = sequenced_patch_for_object(2, 2, slot(0, 81, 0.8, [0.9, 0.1, 0.1]), 0.9, 0.0);
+    let r2_other = sidecar.observe_sealed_patch(&p2_other).unwrap();
+    assert!(matches!(r2_other.kind, MemoryUpdateKind::Inserted { .. }));
+    let before_evict = sidecar.clone();
+    let p3_evict = sequenced_patch_for_object(3, 3, slot(0, 91, 0.5, [0.1, 0.9, 0.2]), 0.95, 0.0);
+    let (r3, u3) = sidecar.observe_sealed_patch_with_undo(&p3_evict).unwrap();
+    assert!(matches!(r3.kind, MemoryUpdateKind::Evicted { .. }));
+    sidecar.undo_observation(u3);
+    assert_eq!(sidecar, before_evict);
+    assert_eq!(
+        sidecar.export_active_bank().unwrap(),
+        before_evict.export_active_bank().unwrap()
+    );
+
+    // Ignore rollback (low-information movement after approach already present)
+    let mut approach_sidecar = grounded_sidecar(
+        MemoryBankConfig::new(4, 64, 2, 0.72, Confidence::new(0.0).unwrap()).unwrap(),
+    );
+    let first_approach = routine_movement_patch(approach_sidecar.bank(), 1);
+    approach_sidecar
+        .observe_sealed_patch(&first_approach)
+        .unwrap();
+    let before_ignore = approach_sidecar.clone();
+    let low_info = routine_movement_patch(approach_sidecar.bank(), 2);
+    let (r_ign, u_ign) = approach_sidecar
+        .observe_sealed_patch_with_undo(&low_info)
+        .unwrap();
+    assert!(matches!(
+        r_ign.kind,
+        MemoryUpdateKind::IgnoredLowInformation
+    ));
+    approach_sidecar.undo_observation(u_ign);
+    assert_eq!(approach_sidecar, before_ignore);
+}

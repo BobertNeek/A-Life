@@ -74,6 +74,50 @@ import compare_cpu_care_rounds
                     self.assertRaisesRegex(ValueError, 'pinned scheduling/admission helpers changed'):
                 cpu.verify_source(plan)
 
+    def test_file_hash_cache_skips_rehash_when_unchanged_and_rehashes_on_change_or_force(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary) / 'pinned.bin'
+            target.write_bytes(b'initial-binary-payload')
+            cache = care_host.FileHashCache()
+            calls = []
+            real_sha256 = care_host.sha256
+
+            def counted(path):
+                calls.append(Path(path))
+                return real_sha256(path)
+
+            with patch.object(care_host, 'sha256', side_effect=counted):
+                first = cache.sha256(target)
+                second = cache.sha256(target)
+                self.assertEqual(first, second)
+                self.assertEqual(len(calls), 1)
+                forced = cache.sha256(target, force=True)
+                self.assertEqual(forced, first)
+                self.assertEqual(len(calls), 2)
+                target.write_bytes(b'tampered-binary-payload!')
+                third = cache.sha256(target)
+                self.assertNotEqual(third, first)
+                self.assertEqual(len(calls), 3)
+
+    def test_run_child_calls_full_guard_at_start_and_exit_and_cached_guard_during_poll(self):
+        process = Mock()
+        process.poll.side_effect = [None, None, 0]
+        process.returncode = 0
+        events = []
+
+        def guard():
+            events.append('poll')
+
+        guard.full = lambda: events.append('full')
+        deadline = dt.datetime.now(care_host.UTC) + dt.timedelta(minutes=1)
+        with tempfile.TemporaryDirectory() as temporary, \
+                patch.object(care_host.subprocess, 'Popen', return_value=process), \
+                patch.object(care_host.time, 'sleep'), \
+                patch.object(care_host, 'stop_owned'):
+            care_host.run_child(['not-executed'], Path(temporary) / 'child',
+                                deadline, guard, {})
+        self.assertEqual(events, ['full', 'poll', 'poll', 'full'])
+
 
 if __name__ == '__main__':
     unittest.main()

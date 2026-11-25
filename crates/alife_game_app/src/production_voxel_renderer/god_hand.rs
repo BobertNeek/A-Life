@@ -164,9 +164,7 @@ pub(super) fn input(
     mut hand: ResMut<HandInteraction>,
     selection: Res<Fvr03ProductionVoxelSelectionResource>,
     mut follow: ResMut<Fvr04ProductionCreatureFollowResource>,
-    #[cfg(feature = "gpu-runtime")] mut runtime: Option<
-        NonSendMut<ProductionGpuBrainRuntimeResource>,
-    >,
+    #[cfg(feature = "gpu-runtime")] mut runtime: Option<ResMut<ProductionGpuBrainRuntimeResource>>,
     mut frame: Option<ResMut<LiveBrainPresentationFrameResource>>,
     terrain: Option<Res<creature_grounding::SelectedTerrain>>,
     #[cfg(feature = "gpu-runtime")] surface: Res<creature_grounding::RenderedTerrainSurface>,
@@ -179,12 +177,14 @@ pub(super) fn input(
     let Ok(window) = windows.single() else {
         return;
     };
+    #[cfg(feature = "gpu-runtime")]
+    let mut runtime = runtime.as_deref_mut().map(|runtime| runtime.lock_mut());
     let now = time.elapsed_secs_f64();
     if mouse.just_pressed(MouseButton::Left) && window.focused {
         #[cfg(feature = "gpu-runtime")]
         let grab_target = grab_intent_target(
             selection.hovered,
-            runtime.as_deref().map(|runtime| runtime.runtime.world()),
+            runtime.as_deref().map(|runtime| runtime.world()),
         );
         #[cfg(not(feature = "gpu-runtime"))]
         let grab_target = None::<StableVoxelObjectRef>;
@@ -207,7 +207,7 @@ pub(super) fn input(
     }
     #[cfg(feature = "gpu-runtime")]
     if let Some(runtime) = runtime.as_deref_mut() {
-        if hand.held.is_some() && runtime.runtime.world().player_held_object() != hand.held {
+        if hand.held.is_some() && runtime.world().player_held_object() != hand.held {
             hand.held = None;
             hand.release_until = now + 0.18;
         }
@@ -215,11 +215,10 @@ pub(super) fn input(
             || keyboard.just_pressed(KeyCode::Escape)
             || !mouse.pressed(MouseButton::Left);
         if cancel {
-            if hand.held.take().is_some() || runtime.runtime.world().player_held_object().is_some()
-            {
-                let _ = runtime.runtime.release_player_hold();
+            if hand.held.take().is_some() || runtime.world().player_held_object().is_some() {
+                let _ = runtime.release_player_hold();
                 if let Some(frame) = frame.as_deref_mut() {
-                    frame.refresh_world_objects(runtime.runtime.world());
+                    frame.refresh_world_objects(runtime.world());
                 }
                 hand.release_until = now + 0.18;
             }
@@ -232,7 +231,7 @@ pub(super) fn input(
                         StableVoxelRefKind::Creature | StableVoxelRefKind::Resource
                     )
                 }) {
-                    if runtime.runtime.begin_player_hold(id).is_ok() {
+                    if runtime.begin_player_hold(id).is_ok() {
                         hand.held = Some(id);
                         follow.enabled = false;
                     }
@@ -243,22 +242,22 @@ pub(super) fn input(
         if hand.held.is_some() {
             if let Some(p) = hand.ground {
                 let ground = Vec3f::new(p.x, p.y, p.z);
-                let _ = runtime.runtime.move_player_hold(ground);
+                let _ = runtime.move_player_hold(ground);
             }
             if let Some(frame) = frame.as_deref_mut() {
-                frame.refresh_world_objects(runtime.runtime.world());
+                frame.refresh_world_objects(runtime.world());
             }
         }
         // Pending Grab and Carry contact the same canonical creature/object.
         if let Some(id) = contact_id(&hand) {
-            hand.position = runtime.runtime.world().entity(id).map(|object| {
+            hand.position = runtime.world().entity(id).map(|object| {
                 let scale = creatures
                     .iter()
                     .find(|(visual, _)| visual.stable_id == id)
                     .map_or(Vec3::ONE, |(_, transform)| transform.scale);
                 object_contact_position(
                     object,
-                    runtime.runtime.world().terrain().is_some(),
+                    runtime.world().terrain().is_some(),
                     &surface,
                     scale,
                 )
@@ -329,24 +328,59 @@ pub(super) fn animate(
         _ => 10.0,
     };
     for (mut transform, mut visibility) in &mut hands {
-        *visibility = if visible {
+        visibility.set_if_neq(if visible {
             Visibility::Visible
         } else {
             Visibility::Hidden
-        };
+        });
         if let Some(contact) = hand.position {
-            *transform = pose_transform(camera.rotation, contact, extent, state);
+            let next = pose_transform(camera.rotation, contact, extent, state);
+            if *transform != next {
+                *transform = next;
+            }
         }
     }
     if let Ok((_, mut cursor)) = windows.single_mut() {
-        cursor.visible = !visible;
+        if cursor.visible == visible {
+            cursor.visible = !visible;
+        }
     }
+}
+
+#[derive(bevy::ecs::system::SystemParam)]
+#[allow(
+    clippy::type_complexity,
+    reason = "Combines highlight change-detection queries and removal readers below Bevy's 16-param tuple limit."
+)]
+pub(super) struct HighlightDirtiness<'w, 's> {
+    changed_roots: Query<
+        'w,
+        's,
+        (),
+        Or<(
+            Added<ProductionCreatureAssemblyRoot>,
+            Changed<ProductionCreatureAssemblyRoot>,
+        )>,
+    >,
+    changed_objects: Query<
+        'w,
+        's,
+        (),
+        Or<(
+            Added<live_food_projection::LiveCareObject>,
+            Changed<live_food_projection::LiveCareObject>,
+        )>,
+    >,
+    removed_roots: RemovedComponents<'w, 's, ProductionCreatureAssemblyRoot>,
+    removed_objects: RemovedComponents<'w, 's, live_food_projection::LiveCareObject>,
+    removed_child_of: RemovedComponents<'w, 's, ChildOf>,
+    removed_materials: RemovedComponents<'w, 's, MeshMaterial3d<StandardMaterial>>,
 }
 
 #[allow(
     clippy::too_many_arguments,
     clippy::type_complexity,
-    reason = "Bevy injects independent ECS system parameters."
+    reason = "Bevy injects independent ECS system parameters and change-detection filters."
 )]
 pub(super) fn highlight(
     mut commands: Commands,
@@ -354,24 +388,65 @@ pub(super) fn highlight(
     children: Query<&Children>,
     roots: Query<(Entity, &ProductionCreatureAssemblyRoot)>,
     objects: Query<(Entity, &live_food_projection::LiveCareObject)>,
-    mut meshes: Query<
-        (
-            Entity,
-            &mut MeshMaterial3d<StandardMaterial>,
-            Option<&SelectedTint>,
-        ),
-        Without<live_sleep_feedback::SleepBubble>,
-    >,
+    mut dirty: HighlightDirtiness,
+    mut mesh_set: bevy::ecs::system::ParamSet<(
+        Query<
+            (),
+            Or<(
+                Added<ChildOf>,
+                Changed<ChildOf>,
+                Added<MeshMaterial3d<StandardMaterial>>,
+                Changed<MeshMaterial3d<StandardMaterial>>,
+            )>,
+        >,
+        Query<
+            (
+                Entity,
+                &mut MeshMaterial3d<StandardMaterial>,
+                Option<&SelectedTint>,
+            ),
+            Without<live_sleep_feedback::SleepBubble>,
+        >,
+    )>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    mut markers: Query<&mut Visibility, With<Fvr03ProductionVoxelSelectionMarker>>,
+    mut markers: Query<
+        &mut Visibility,
+        (
+            With<Fvr03ProductionVoxelSelectionMarker>,
+            Or<(
+                Added<Fvr03ProductionVoxelSelectionMarker>,
+                Changed<Visibility>,
+            )>,
+        ),
+    >,
     tinted: Query<Entity, With<SelectedTint>>,
+    mut pending_missing_material: Local<bool>,
 ) {
     for mut v in &mut markers {
-        if *v != Visibility::Hidden {
-            *v = Visibility::Hidden;
-        }
+        v.set_if_neq(Visibility::Hidden);
+    }
+    let has_removed_roots = dirty.removed_roots.read().count() > 0;
+    let has_removed_objects = dirty.removed_objects.read().count() > 0;
+    let has_removed_child_of = dirty.removed_child_of.read().count() > 0;
+    let has_removed_materials = dirty.removed_materials.read().count() > 0;
+    let needs_reconcile = selection.is_changed()
+        || !dirty.changed_roots.is_empty()
+        || has_removed_roots
+        || !dirty.changed_objects.is_empty()
+        || has_removed_objects
+        || !mesh_set.p0().is_empty()
+        || has_removed_child_of
+        || has_removed_materials
+        || (*pending_missing_material && materials.is_changed());
+    if !needs_reconcile {
+        return;
     }
     let selected = selection.selected.and_then(|s| s.stable_id);
+    if selected.is_none() && tinted.is_empty() {
+        *pending_missing_material = false;
+        return;
+    }
+    let mut meshes = mesh_set.p1();
     let target = roots
         .iter()
         .find(|(_, r)| Some(r.stable_id) == selected)
@@ -382,15 +457,15 @@ pub(super) fn highlight(
                 .find(|(_, o)| Some(o.0) == selected)
                 .map(|(e, _)| e)
         });
-    // Resolve the current hierarchy every frame so late glTF meshes, reparenting
-    // and replacement roots need no separate invalidation cache. Unrelated
-    // terrain and prop materials are never visited by this presentation pass.
-    let descendants: BTreeSet<_> = target
-        .into_iter()
-        .flat_map(|root| std::iter::once(root).chain(children.iter_descendants(root)))
-        .collect();
+    let mut descendants = Vec::new();
+    if let Some(root) = target {
+        descendants.push(root);
+        descendants.extend(children.iter_descendants(root));
+        descendants.sort_unstable();
+        descendants.dedup();
+    }
     for entity in &tinted {
-        if !descendants.contains(&entity) {
+        if descendants.binary_search(&entity).is_err() {
             if let Ok((_, mut handle, Some(tint))) = meshes.get_mut(entity) {
                 if handle.0 != tint.original {
                     handle.0 = tint.original.clone();
@@ -398,6 +473,7 @@ pub(super) fn highlight(
             }
         }
     }
+    *pending_missing_material = false;
     for entity in descendants {
         let Ok((_, mut handle, tint)) = meshes.get_mut(entity) else {
             continue;
@@ -416,6 +492,8 @@ pub(super) fn highlight(
                 original,
                 highlighted,
             });
+        } else {
+            *pending_missing_material = true;
         }
     }
 }
@@ -430,11 +508,11 @@ pub(super) fn cancel_for_menu(world: &mut World) {
         hand.pressed = None;
     }
     #[cfg(feature = "gpu-runtime")]
-    if let Some(mut runtime) =
-        world.get_non_send_resource_mut::<ProductionGpuBrainRuntimeResource>()
-    {
-        if runtime.runtime.world().player_held_object().is_some() {
-            if let Err(error) = runtime.runtime.release_player_hold() {
+    if let Some(mut runtime) = world.get_resource_mut::<ProductionGpuBrainRuntimeResource>() {
+        let mut runtime = runtime.lock_mut();
+        if runtime.world().player_held_object().is_some() {
+            if let Err(error) = runtime.release_player_hold() {
+                drop(runtime);
                 if let Some(mut ux) = world.get_resource_mut::<Fvr05ProductionUxStateResource>() {
                     ux.last_error = Some(error.to_string());
                     ux.last_action = "Hand release failed; menu remains paused".into();
@@ -446,10 +524,8 @@ pub(super) fn cancel_for_menu(world: &mut World) {
     #[cfg(feature = "gpu-runtime")]
     world.resource_scope(
         |world, mut frame: Mut<LiveBrainPresentationFrameResource>| {
-            if let Some(runtime) =
-                world.get_non_send_resource::<ProductionGpuBrainRuntimeResource>()
-            {
-                frame.refresh_world_objects(runtime.runtime.world());
+            if let Some(runtime) = world.get_resource::<ProductionGpuBrainRuntimeResource>() {
+                frame.refresh_world_objects(runtime.lock().world());
             }
         },
     );

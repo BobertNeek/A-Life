@@ -10,7 +10,7 @@ fn legacy_synchronize_resident_from_record(
     world_tick: Tick,
 ) -> Result<(), ScaffoldContractError> {
     let admission = record.authoritative_admission_at(world_tick)?;
-    if resident.genome != admission.phenotype.brain_genome {
+    if *resident.genome != admission.phenotype.brain_genome {
         return Err(ScaffoldContractError::BrainOwnershipMismatch);
     }
     resident.homeostasis = admission.biochemistry.homeostasis;
@@ -123,7 +123,9 @@ fn borrowed_sync_preserves_stale_tick_and_genome_mismatch_errors() {
         compare_one(record, &residents, Tick(1)),
         Err(ScaffoldContractError::NonMonotonicTick)
     );
-    residents.get_mut(&1).unwrap().genome.id.0 ^= 1;
+    std::sync::Arc::make_mut(&mut residents.get_mut(&1).unwrap().genome)
+        .id
+        .0 ^= 1;
     assert_eq!(
         compare_one(record, &residents, world.tick()),
         Err(ScaffoldContractError::BrainOwnershipMismatch)
@@ -161,7 +163,9 @@ fn borrowed_sync_preserves_population_missing_record_and_partial_progress_order(
     let (mut world, mut residents) = fixture();
     world.try_advance_tick().unwrap();
     // The first row advances before the second row fails, exactly as before.
-    residents.get_mut(&2).unwrap().genome.id.0 ^= 1;
+    std::sync::Arc::make_mut(&mut residents.get_mut(&2).unwrap().genome)
+        .id
+        .0 ^= 1;
     assert_eq!(
         compare_population(&world, &residents, world.tick()),
         Err(ScaffoldContractError::BrainOwnershipMismatch)
@@ -214,7 +218,9 @@ fn borrowed_sync_preserves_cold_immutable_validation_before_tick_and_genome_erro
     // The source fields have no mutation API. Corrupt the restored source and
     // keep its original recorded subsystem digest, as a malformed save might.
     wire["genome"]["id"] = serde_json::json!(0);
-    residents.get_mut(&1).unwrap().genome.id.0 ^= 1;
+    std::sync::Arc::make_mut(&mut residents.get_mut(&1).unwrap().genome)
+        .id
+        .0 ^= 1;
     assert_eq!(
         compare_cold_wire(wire, &residents[&1], Tick(1)),
         Err(ScaffoldContractError::BrainOwnershipMismatch),
@@ -228,7 +234,9 @@ fn borrowed_sync_preserves_dynamic_validation_before_tick_and_genome_errors() {
     let record = world.organism_registry().get(OrganismId(1)).unwrap();
     let mut wire = serde_json::to_value(record).unwrap();
     wire["cognitive_energy_debit"] = serde_json::json!(-1.0);
-    residents.get_mut(&1).unwrap().genome.id.0 ^= 1;
+    std::sync::Arc::make_mut(&mut residents.get_mut(&1).unwrap().genome)
+        .id
+        .0 ^= 1;
     assert_eq!(
         compare_cold_wire(wire, &residents[&1], Tick(1)),
         Err(ScaffoldContractError::ScalarOutOfRange),

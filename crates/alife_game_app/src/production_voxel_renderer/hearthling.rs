@@ -80,6 +80,7 @@ fn confirmed_ingestion_tick(
     .then_some(summary.world_tick_after.raw())
 }
 
+#[cfg(test)]
 fn emitted_utterance_id(
     utterances: &[alife_world::AudibleUtterance],
     organism: OrganismId,
@@ -506,7 +507,7 @@ pub(super) fn animate(
     time: Res<Time>,
     ux: Res<Fvr05ProductionUxStateResource>,
     frame: Option<Res<LiveBrainPresentationFrameResource>>,
-    #[cfg(feature = "gpu-runtime")] runtime: Option<NonSend<ProductionGpuBrainRuntimeResource>>,
+    #[cfg(feature = "gpu-runtime")] runtime: Option<Res<ProductionGpuBrainRuntimeResource>>,
     mut players: Query<(&mut AnimationPlayer, &mut HearthlingPlayer)>,
     mut transforms: Query<(
         &mut Transform,
@@ -521,32 +522,76 @@ pub(super) fn animate(
     let utterances = if new_frame {
         runtime
             .as_ref()
-            .map_or_else(Vec::new, |runtime| runtime.runtime.active_utterances())
+            .map_or_else(Vec::new, |runtime| runtime.lock().active_utterances())
     } else {
         Vec::new()
     };
     #[cfg(not(feature = "gpu-runtime"))]
     let utterances = Vec::new();
+    let (ingestion_by_organism, utterance_by_speaker) =
+        if let Some(frame) = frame.as_ref().filter(|_| new_frame) {
+            let tick = frame.current.authoritative_world_tick.raw();
+            let mut ingestions: BTreeMap<u64, u64> = BTreeMap::new();
+            for summary in &frame.current.tick_summaries {
+                if let Some(ingestion_tick) =
+                    confirmed_ingestion_tick(summary, summary.organism_id, tick)
+                {
+                    ingestions
+                        .entry(summary.organism_id.raw())
+                        .and_modify(|best| *best = (*best).max(ingestion_tick))
+                        .or_insert(ingestion_tick);
+                }
+            }
+            let mut emitted: BTreeMap<u64, u64> = BTreeMap::new();
+            for utterance in &utterances {
+                if utterance.source_kind == alife_core::UtteranceSourceKind::Creature
+                    && utterance.emitted_tick.raw() <= tick
+                    && utterance.expires_after_tick.raw() >= tick
+                    && !utterance.tokens.is_empty()
+                {
+                    if let Some(speaker_id) = utterance.speaker_id {
+                        let id = utterance.utterance_id.raw();
+                        emitted
+                            .entry(speaker_id.raw())
+                            .and_modify(|best| *best = (*best).max(id))
+                            .or_insert(id);
+                    }
+                }
+            }
+            (Some(ingestions), Some(emitted))
+        } else {
+            (None, None)
+        };
     for (mut transform, mut visual, marker) in &mut transforms {
-        visual
-            .feedback
-            .advance(time.delta_secs(), ux.settings.paused);
-        if new_frame {
-            if let Some(frame) = frame.as_ref().filter(|frame| {
+        if !ux.settings.paused
+            && (visual.feedback.ingestion_remaining > 0.0 || visual.feedback.speech_remaining > 0.0)
+        {
+            visual.feedback.advance(time.delta_secs(), false);
+        }
+        if new_frame
+            && frame.as_ref().is_some_and(|frame| {
                 frame.current.organism(marker.stable_id).is_some_and(|row| {
                     row.organism_id == marker.organism_id && row.lifecycle.is_alive()
                 })
+            })
+        {
+            let ingestion = ingestion_by_organism
+                .as_ref()
+                .and_then(|map| map.get(&marker.organism_id.raw()).copied());
+            let utterance = utterance_by_speaker
+                .as_ref()
+                .and_then(|map| map.get(&marker.organism_id.raw()).copied());
+            if ingestion.is_some_and(|tick| {
+                visual
+                    .feedback
+                    .last_ingestion_tick
+                    .is_none_or(|last| tick > last)
+            }) || utterance.is_some_and(|id| {
+                visual
+                    .feedback
+                    .last_utterance_id
+                    .is_none_or(|last| id > last)
             }) {
-                let tick = frame.current.authoritative_world_tick.raw();
-                let ingestion = frame
-                    .current
-                    .tick_summaries
-                    .iter()
-                    .filter_map(|summary| {
-                        confirmed_ingestion_tick(summary, marker.organism_id, tick)
-                    })
-                    .max();
-                let utterance = emitted_utterance_id(&utterances, marker.organism_id, tick);
                 visual.feedback.observe(ingestion, utterance);
             }
         }
@@ -554,31 +599,37 @@ pub(super) fn animate(
         // Only the display transform is smoothed, never the organism position.
         let target = marker.base_translation;
         let blend = 1.0 - (-30.0 * time.delta_secs().min(0.1)).exp();
-        if !ux.settings.paused {
-            transform.translation.x =
+        let (next_x, next_z) = if !ux.settings.paused {
+            let mut x =
                 visual.previous_position.x + (target.x - visual.previous_position.x) * blend;
-            transform.translation.z =
+            let mut z =
                 visual.previous_position.z + (target.z - visual.previous_position.z) * blend;
-            if Vec2::new(
-                target.x - transform.translation.x,
-                target.z - transform.translation.z,
-            )
-            .length_squared()
-                < 0.000001
-            {
-                transform.translation.x = target.x;
-                transform.translation.z = target.z;
+            if Vec2::new(target.x - x, target.z - z).length_squared() < 0.000001 {
+                x = target.x;
+                z = target.z;
             }
+            (x, z)
+        } else {
+            (transform.translation.x, transform.translation.z)
+        };
+        if transform.translation.x != next_x || transform.translation.z != next_z {
+            transform.translation.x = next_x;
+            transform.translation.z = next_z;
         }
         let delta = transform.translation - visual.previous_position;
-        visual.previous_position = transform.translation;
+        if visual.previous_position != transform.translation {
+            visual.previous_position = transform.translation;
+        }
         let distance = Vec2::new(delta.x, delta.z).length();
-        visual.moved = !ux.settings.paused
+        let next_moved = !ux.settings.paused
             && distance > f32::EPSILON
             && !hand
                 .as_ref()
                 .is_some_and(|h| h.held == Some(marker.stable_id));
-        if visual.moved {
+        if visual.moved != next_moved {
+            visual.moved = next_moved;
+        }
+        if next_moved {
             visual.walk_seconds = advance_walk(
                 distance,
                 transform.scale.z.abs().max(f32::EPSILON),
@@ -587,7 +638,10 @@ pub(super) fn animate(
         }
         // Turning in place is a real action too. Heading must never be
         // inferred from displacement, which can be blocked or sideways.
-        transform.rotation = body_rotation(marker.body_yaw);
+        let next_rotation = body_rotation(marker.body_yaw);
+        if transform.rotation != next_rotation {
+            transform.rotation = next_rotation;
+        }
     }
     for (mut player, mut model) in &mut players {
         let Ok((_, visual, marker)) = transforms.get(model.root) else {
@@ -624,15 +678,28 @@ pub(super) fn animate(
         } else {
             ux.animation_speed
         };
-        for (_, active) in player.playing_animations_mut() {
-            if next == 1 {
-                // Seeking prevents clock time, frame rate, and simulation speed
-                // from advancing the feet a second time after world movement.
-                active
-                    .set_speed(0.0)
-                    .set_seek_time(WALK_CLIP_START + visual.walk_seconds);
-            } else {
-                active.set_speed(speed);
+        let needs_animation_update = if next == 1 {
+            let target_seek = WALK_CLIP_START + visual.walk_seconds;
+            player.playing_animations().any(|(_, active)| {
+                active.speed().to_bits() != 0.0_f32.to_bits()
+                    || active.seek_time().to_bits() != target_seek.to_bits()
+            })
+        } else {
+            player
+                .playing_animations()
+                .any(|(_, active)| active.speed().to_bits() != speed.to_bits())
+        };
+        if needs_animation_update {
+            for (_, active) in player.playing_animations_mut() {
+                if next == 1 {
+                    // Seeking prevents clock time, frame rate, and simulation speed
+                    // from advancing the feet a second time after world movement.
+                    active
+                        .set_speed(0.0)
+                        .set_seek_time(WALK_CLIP_START + visual.walk_seconds);
+                } else {
+                    active.set_speed(speed);
+                }
             }
         }
     }

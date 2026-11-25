@@ -1,8 +1,6 @@
 use super::candidate_index::has_category_cues;
 use super::*;
 
-use std::collections::BTreeSet;
-
 pub(super) fn candidate_record_from_patch(
     memory_id: MemoryId,
     patch: &ExperiencePatch,
@@ -193,12 +191,13 @@ pub(super) fn recall_target_channel_with_budget(
     );
     let mut eligible = ids.0;
     let mut searched = u32::try_from(ids.1.len()).unwrap_or(u32::MAX);
+    let query_sim = TargetQueryPrepared::new(query.features());
     let mut matches = ids
         .1
         .into_iter()
         .filter_map(|id| {
             let record = store.records.get(&id.raw())?;
-            let score = target_similarity(query.features(), &record.query_features);
+            let score = query_sim.similarity(&record.query_features);
             (score >= MEMORY_MIN_SIMILARITY).then_some((id, score))
         })
         .collect::<Vec<_>>();
@@ -255,7 +254,7 @@ pub(super) fn recall_target_channel_with_budget(
         {
             searched += 1;
             let record = &store.records[&id.raw()];
-            let score = target_similarity(query.features(), &record.query_features);
+            let score = query_sim.similarity(&record.query_features);
             if score >= MEMORY_MIN_SIMILARITY
                 && equivalent_category_cues(query.features(), &record.query_features)
             {
@@ -310,12 +309,13 @@ pub(super) fn recall_family_channel_with_budget(
     );
     let mut eligible = ids.0;
     let mut searched = u32::try_from(ids.1.len()).unwrap_or(u32::MAX);
+    let query_sim = FamilyQueryPrepared::new(query.features());
     let mut matches = ids
         .1
         .into_iter()
         .filter_map(|id| {
             let record = store.records.get(&id.raw())?;
-            let score = family_similarity(query.features(), &record.query_features);
+            let score = query_sim.similarity(&record.query_features);
             (score >= MEMORY_MIN_SIMILARITY).then_some((id, score))
         })
         .collect::<Vec<_>>();
@@ -333,7 +333,7 @@ pub(super) fn recall_family_channel_with_budget(
         {
             searched += 1;
             let record = &store.records[&id.raw()];
-            let score = family_similarity(query.features(), &record.query_features);
+            let score = query_sim.similarity(&record.query_features);
             if score >= MEMORY_MIN_SIMILARITY
                 && equivalent_category_cues(query.features(), &record.query_features)
             {
@@ -365,29 +365,14 @@ fn collect_shortlist<'a, K: Ord>(
     query_bins: [i8; CANDIDATE_FEATURE_COUNT],
     cap: usize,
 ) -> (u32, Vec<MemoryId>) {
-    if cap <= RUNTIME_MEMORY_SEARCH_CAP {
-        // Namespace lists already prefer retained salient/recent records. The
-        // runtime accepts that order instead of allocating a tree and sorting
-        // every neighbor's union for an exact global shortlist.
-        let mut selected = Vec::with_capacity(cap);
-        let mut eligible = 0_u32;
-        for key in keys {
-            if let Some(ids) = lookup(key) {
-                eligible = eligible.saturating_add(ids.len() as u32);
-                for id in ids.iter().take(cap) {
-                    if selected.len() == cap {
-                        break;
-                    }
-                    if !selected.contains(id) {
-                        selected.push(*id);
-                    }
-                }
-            }
-        }
-        return (eligible, selected);
+    if cap == 0 {
+        let eligible = keys.iter().filter_map(&lookup).fold(0_u32, |acc, ids| {
+            acc.saturating_add(u32::try_from(ids.len()).unwrap_or(u32::MAX))
+        });
+        return (eligible, Vec::new());
     }
-    let mut unique = BTreeSet::new();
     let mut eligible = 0_u32;
+    let mut candidates: Vec<(u32, u64)> = Vec::with_capacity(keys.len().min(4).saturating_mul(cap));
     for key in keys {
         if let Some(ids) = lookup(key) {
             // A tracked-object query reads one ranked namespace. Untracked
@@ -395,17 +380,32 @@ fn collect_shortlist<'a, K: Ord>(
             // records, but read at most one search cap from each bucket before
             // applying the global similarity cap.
             eligible = eligible.saturating_add(u32::try_from(ids.len()).unwrap_or(u32::MAX));
-            unique.extend(ids.iter().take(cap).map(|id| id.raw()));
+            for id in ids.iter().take(cap) {
+                let distance = store.records.get(&id.raw()).map_or(u32::MAX, |record| {
+                    candidate_index::target_bin_distance_from_features(
+                        query_bins,
+                        &record.query_features,
+                    )
+                });
+                candidates.push((distance, id.raw()));
+            }
         }
     }
-    let mut ids = unique.into_iter().map(MemoryId).collect::<Vec<_>>();
-    ids.sort_by_key(|id| {
-        let distance = store.records.get(&id.raw()).map_or(u32::MAX, |record| {
-            target_bin_distance(query_bins, record.identity().exact_target_bins)
-        });
-        (distance, id.raw())
-    });
-    ids.truncate(cap);
+    if keys.len() > 1 && candidates.len() > 1 {
+        candidates.sort_unstable();
+        candidates.dedup();
+        candidates.truncate(cap);
+    } else if candidates.len() > cap {
+        candidates.select_nth_unstable(cap - 1);
+        candidates.truncate(cap);
+        candidates.sort_unstable();
+    } else {
+        candidates.sort_unstable();
+    }
+    let ids = candidates
+        .into_iter()
+        .map(|(_, raw)| MemoryId(raw))
+        .collect();
     (eligible, ids)
 }
 
@@ -459,46 +459,111 @@ fn neighbor_target_bins(
     unique
 }
 
-fn target_bin_distance(
-    left: [i8; CANDIDATE_FEATURE_COUNT],
-    right: [i8; CANDIDATE_FEATURE_COUNT],
-) -> u32 {
-    left.into_iter()
-        .zip(right)
-        .map(|(left, right)| u32::from(left.abs_diff(right)))
-        .sum()
+#[derive(Clone, Copy)]
+struct SegmentQueryNorm {
+    norm_sq: f32,
+    norm_sqrt: f32,
+}
+
+impl SegmentQueryNorm {
+    fn new(query: &[f32], range: std::ops::Range<usize>) -> Self {
+        let mut norm_sq = 0.0_f32;
+        for index in range {
+            norm_sq += query[index] * query[index];
+        }
+        Self {
+            norm_sq,
+            norm_sqrt: norm_sq.sqrt(),
+        }
+    }
+}
+
+struct FamilyQueryPrepared<'a> {
+    query: &'a [f32],
+    seg0: SegmentQueryNorm,
+    seg1: SegmentQueryNorm,
+    seg2: SegmentQueryNorm,
+    seg3: SegmentQueryNorm,
+    seg4: SegmentQueryNorm,
+}
+
+impl<'a> FamilyQueryPrepared<'a> {
+    fn new(query: &'a [f32]) -> Self {
+        Self {
+            query,
+            seg0: SegmentQueryNorm::new(query, 0..40),
+            seg1: SegmentQueryNorm::new(query, 40..49),
+            seg2: SegmentQueryNorm::new(query, 49..57),
+            seg3: SegmentQueryNorm::new(query, 57..81),
+            seg4: SegmentQueryNorm::new(query, 81..83),
+        }
+    }
+
+    fn similarity(&self, record: &[f32]) -> f32 {
+        0.30 * cosine_segment_precomputed(self.query, self.seg0, record, 0..40)
+            + 0.10 * cosine_segment_precomputed(self.query, self.seg1, record, 40..49)
+            + 0.20 * cosine_segment_precomputed(self.query, self.seg2, record, 49..57)
+            + 0.35 * cosine_segment_precomputed(self.query, self.seg3, record, 57..81)
+            + 0.05 * cosine_segment_precomputed(self.query, self.seg4, record, 81..83)
+    }
+}
+
+struct TargetQueryPrepared<'a> {
+    query: &'a [f32],
+    seg0: SegmentQueryNorm,
+    seg3: SegmentQueryNorm,
+    seg4: SegmentQueryNorm,
+}
+
+impl<'a> TargetQueryPrepared<'a> {
+    fn new(query: &'a [f32]) -> Self {
+        Self {
+            query,
+            seg0: SegmentQueryNorm::new(query, 0..40),
+            seg3: SegmentQueryNorm::new(query, 57..81),
+            seg4: SegmentQueryNorm::new(query, 81..83),
+        }
+    }
+
+    fn similarity(&self, record: &[f32]) -> f32 {
+        0.45 * cosine_segment_precomputed(self.query, self.seg0, record, 0..40)
+            + 0.50 * cosine_segment_precomputed(self.query, self.seg3, record, 57..81)
+            + 0.05 * cosine_segment_precomputed(self.query, self.seg4, record, 81..83)
+    }
 }
 
 pub(super) fn family_similarity(query: &[f32], record: &[f32]) -> f32 {
-    0.30 * cosine_segment(query, record, 0..40)
-        + 0.10 * cosine_segment(query, record, 40..49)
-        + 0.20 * cosine_segment(query, record, 49..57)
-        + 0.35 * cosine_segment(query, record, 57..81)
-        + 0.05 * cosine_segment(query, record, 81..83)
+    FamilyQueryPrepared::new(query).similarity(record)
 }
 
-fn target_similarity(query: &[f32], record: &[f32]) -> f32 {
-    0.45 * cosine_segment(query, record, 0..40)
-        + 0.50 * cosine_segment(query, record, 57..81)
-        + 0.05 * cosine_segment(query, record, 81..83)
+fn cosine_segment_precomputed(
+    query: &[f32],
+    query_norm: SegmentQueryNorm,
+    record: &[f32],
+    range: std::ops::Range<usize>,
+) -> f32 {
+    let mut dot = 0.0_f32;
+    let mut record_norm = 0.0_f32;
+    for index in range {
+        dot += query[index] * record[index];
+        record_norm += record[index] * record[index];
+    }
+    if query_norm.norm_sq == 0.0 && record_norm == 0.0 {
+        1.0
+    } else if query_norm.norm_sq == 0.0 || record_norm == 0.0 {
+        0.0
+    } else {
+        (dot / (query_norm.norm_sqrt * record_norm.sqrt())).clamp(-1.0, 1.0)
+    }
 }
 
 fn cosine_segment(query: &[f32], record: &[f32], range: std::ops::Range<usize>) -> f32 {
-    let mut dot = 0.0;
-    let mut query_norm = 0.0;
-    let mut record_norm = 0.0;
-    for index in range {
-        dot += query[index] * record[index];
-        query_norm += query[index] * query[index];
-        record_norm += record[index] * record[index];
-    }
-    if query_norm == 0.0 && record_norm == 0.0 {
-        1.0
-    } else if query_norm == 0.0 || record_norm == 0.0 {
-        0.0
-    } else {
-        (dot / (query_norm.sqrt() * record_norm.sqrt())).clamp(-1.0, 1.0)
-    }
+    cosine_segment_precomputed(
+        query,
+        SegmentQueryNorm::new(query, range.clone()),
+        record,
+        range,
+    )
 }
 
 fn sort_and_truncate_matches(matches: &mut Vec<(MemoryId, f32)>) {

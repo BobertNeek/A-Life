@@ -1,7 +1,7 @@
 //! CPU reference arithmetic and shader checks for bounded game exploration.
 //! GPU behavior is covered separately.
 
-#[path = "support/exploration_reference.rs"]
+#[path = "../support/exploration_reference.rs"]
 mod reference;
 
 use alife_gpu_backend::CLOSED_LOOP_DECODE_WGSL;
@@ -42,9 +42,9 @@ fn production_decode_validates_entry_points_and_bindings() {
     assert_eq!(
         entries,
         [
-            ("decode_candidates", [32, 1, 1]),
-            ("decode_speech_payload", [1, 1, 1]),
-            ("select_candidate", [1, 1, 1]),
+            ("decode_candidates", [64, 1, 1]),
+            ("decode_speech_payload", [32, 1, 1]),
+            ("select_candidate", [32, 1, 1]),
         ]
     );
     let mut bindings: Vec<_> = module
@@ -60,7 +60,7 @@ fn production_decode_validates_entry_points_and_bindings() {
     bindings.sort_unstable();
     assert_eq!(
         bindings,
-        (0..7).map(|binding| (0, binding)).collect::<Vec<_>>()
+        (0..8).map(|binding| (0, binding)).collect::<Vec<_>>()
     );
 }
 

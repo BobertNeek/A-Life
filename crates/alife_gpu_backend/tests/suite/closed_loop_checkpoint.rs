@@ -1,7 +1,7 @@
 //! Real-hardware exact checkpoint/restore acceptance for the GPU-authoritative brain.
-#![cfg(feature = "gpu-tests")]
 
-mod support;
+#[allow(unused_imports)]
+use crate::support;
 
 use alife_core::{
     AlphaMask, BiochemistryState, BodyEventDelta, BrainCapacityClass, BrainGenome, Confidence,

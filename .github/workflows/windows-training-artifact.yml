@@ -91,6 +91,9 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: windows-serial-care-round
       - name: Comparison admission across Windows path aliases
         run: python -B -m unittest discover -s scripts -p test_compare_cpu_care_rounds.py -v
       - name: Rooted and canonical output admission before filesystem mutation
@@ -109,6 +112,9 @@ jobs:
         uses: actions/checkout@v4
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: windows-training-build
       - name: Training shader composition across line endings
         run: cargo test --locked -p alife_gpu_backend --features training-rollout --lib training_rollout::tests
       - name: Collect-only durable publication CPU contracts

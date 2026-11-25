@@ -34,20 +34,16 @@ pub fn cognitive_memory_context_for_recall(
     Ok(context)
 }
 
-pub fn cognitive_context_for_recall(
-    organism_id: OrganismId,
-    sequence_id: ExperienceSequenceId,
-    recall: &PreparedMemoryRecall,
+pub fn topology_concepts_and_gaps(
     topology: &TopologySidecar,
-) -> Result<CognitiveContextFrame, ScaffoldContractError> {
-    let mut context = cognitive_memory_context_for_recall(organism_id, sequence_id, recall)?;
+) -> Result<(CognitiveConceptView, CognitiveGapView), ScaffoldContractError> {
     let mut concepts = topology.map().concepts().iter().collect::<Vec<_>>();
     concepts.sort_by(|left, right| {
         (right.salience.raw() * right.confidence.raw())
             .total_cmp(&(left.salience.raw() * left.confidence.raw()))
             .then_with(|| left.id.raw().cmp(&right.id.raw()))
     });
-    context.concept.active_concepts = concepts
+    let active_concepts = concepts
         .into_iter()
         .take(MAX_ACTIVE_CONCEPTS)
         .map(|concept| {
@@ -58,7 +54,11 @@ pub fn cognitive_context_for_recall(
             })
         })
         .collect::<Result<Vec<_>, ScaffoldContractError>>()?;
-    context.concept.topology_digest = topology.diagnostics().canonical_digest;
+    let concept_view = CognitiveConceptView {
+        active_concepts,
+        topology_digest: topology.diagnostics().canonical_digest,
+    };
+    concept_view.validate_contract()?;
 
     let mut gaps = topology.map().curiosity_biases();
     gaps.sort_by(|left, right| {
@@ -68,12 +68,12 @@ pub fn cognitive_context_for_recall(
             .total_cmp(&left.salience.raw())
             .then_with(|| left.gap_id.raw().cmp(&right.gap_id.raw()))
     });
-    context.gap.gap_voltage = NormalizedScalar::new(
+    let gap_voltage = NormalizedScalar::new(
         gaps.iter()
             .map(|gap| gap.salience.raw())
             .fold(0.0, f32::max),
     )?;
-    context.gap.active_gaps = gaps
+    let active_gaps = gaps
         .into_iter()
         .take(MAX_ACTIVE_GAPS)
         .map(|gap| {
@@ -84,6 +84,24 @@ pub fn cognitive_context_for_recall(
             })
         })
         .collect::<Result<Vec<_>, ScaffoldContractError>>()?;
+    let gap_view = CognitiveGapView {
+        active_gaps,
+        gap_voltage,
+    };
+    gap_view.validate_contract()?;
+    Ok((concept_view, gap_view))
+}
+
+pub fn cognitive_context_for_recall(
+    organism_id: OrganismId,
+    sequence_id: ExperienceSequenceId,
+    recall: &PreparedMemoryRecall,
+    topology: &TopologySidecar,
+) -> Result<CognitiveContextFrame, ScaffoldContractError> {
+    let mut context = cognitive_memory_context_for_recall(organism_id, sequence_id, recall)?;
+    let (concept, gap) = topology_concepts_and_gaps(topology)?;
+    context.concept = concept;
+    context.gap = gap;
     context.validate_contract()?;
     Ok(context)
 }
@@ -199,6 +217,76 @@ pub fn route_focal_candidates(
         draft.profile_provenance(),
         draft.grounded_object_slots().to_vec(),
     )
+}
+
+fn route_focal_candidates_with_novelty(
+    draft: &PerceptionFrameDraft,
+    attention: &AttentionFrame,
+    novelty: f32,
+) -> Result<(PerceptionFrameDraft, bool), ScaffoldContractError> {
+    attention.validate_contract()?;
+    let novelty_scalar = NormalizedScalar::new(novelty)?;
+    let novelty_changed =
+        novelty_scalar.raw().to_bits() != draft.sensory().channels.novelty_signal.raw().to_bits();
+
+    let focal_slot = match attention.focal_targets.first().copied() {
+        Some(alife_core::StableFocusIdentity::TrackedObject(focal_id)) => draft
+            .grounded_object_slots()
+            .iter()
+            .position(|slot| slot.tracked_object_id == focal_id)
+            .and_then(|index| u16::try_from(index).ok()),
+        _ => None,
+    };
+
+    let reordered_candidates = focal_slot.and_then(|focal_slot| {
+        let mut candidates = draft.candidates().to_vec();
+        candidates.sort_by_key(|candidate| {
+            (
+                !matches!(
+                    candidate.observation,
+                    CandidateObservationRef::ObjectSlot(slot) if slot == focal_slot
+                ),
+                candidate.candidate_index,
+            )
+        });
+        let order_changed = candidates
+            .iter()
+            .enumerate()
+            .any(|(index, candidate)| usize::from(candidate.candidate_index) != index);
+        order_changed.then_some(candidates)
+    });
+
+    if reordered_candidates.is_none() && !novelty_changed {
+        return Ok((draft.clone(), false));
+    }
+
+    let candidates = match reordered_candidates {
+        Some(mut candidates) => {
+            for (index, candidate) in candidates.iter_mut().enumerate() {
+                candidate.candidate_index = u16::try_from(index)
+                    .map_err(|_| ScaffoldContractError::InvalidActionCandidate)?;
+            }
+            candidates
+        }
+        None => draft.candidates().to_vec(),
+    };
+    let mut sensory = draft.sensory().clone();
+    if novelty_changed {
+        sensory.channels.novelty_signal = novelty_scalar;
+    }
+
+    let routed = PerceptionFrameDraft::new(
+        draft.organism_id(),
+        draft.tick(),
+        draft.sensor_profile(),
+        sensory,
+        draft.body(),
+        *draft.homeostasis(),
+        candidates,
+        draft.profile_provenance(),
+        draft.grounded_object_slots().to_vec(),
+    )?;
+    Ok((routed, novelty_changed))
 }
 
 pub fn cognitive_context_with_attention(
@@ -339,8 +427,28 @@ pub fn cognitive_projection_for_draft(
     predictor: &GroundedSuccessorPredictor,
     topology_evidence: &ObjectTopologyEvidence,
 ) -> Result<alife_core::cognitive_context::CognitiveProjectionFrame, ScaffoldContractError> {
+    cognitive_projection_for_draft_inner(
+        draft,
+        recall,
+        sequence_id,
+        predictor,
+        topology_evidence,
+        true,
+    )
+}
+
+fn cognitive_projection_for_draft_inner(
+    draft: &PerceptionFrameDraft,
+    recall: &PreparedMemoryRecall,
+    sequence_id: ExperienceSequenceId,
+    predictor: &GroundedSuccessorPredictor,
+    topology_evidence: &ObjectTopologyEvidence,
+    validate_recall: bool,
+) -> Result<alife_core::cognitive_context::CognitiveProjectionFrame, ScaffoldContractError> {
     draft.validate_contract()?;
-    recall.validate_for_draft(draft)?;
+    if validate_recall {
+        recall.validate_for_draft(draft)?;
+    }
     sequence_id.validate()?;
     let source_state = grounded_semantic_state_from_draft(draft)?;
     let source_digest = draft.base_digest().0;
@@ -350,6 +458,7 @@ pub fn cognitive_projection_for_draft(
     }
 
     let forecast_available = predictor.has_acquired_state();
+    let prediction_baseline = predictor.prepare_baseline(&source_state)?;
     let mut object_priors = BTreeMap::<TrackedObjectId, NormalizedScalar>::new();
     let mut candidates = Vec::with_capacity(draft.candidates().len());
     for (index, candidate) in draft.candidates().iter().enumerate() {
@@ -384,7 +493,7 @@ pub fn cognitive_projection_for_draft(
                 false,
             )?;
         let motor_condition = JointMotorCondition::from_bundle(&hypothetical_bundle)?;
-        let mut prediction = predictor.predict(&source_state, &motor_condition)?;
+        let mut prediction = prediction_baseline.predict_for_motor(&motor_condition)?;
         prediction.source_digest = source_digest;
         candidates.push(alife_core::cognitive_context::CognitiveCandidateInput {
             candidate_index: expected_index,
@@ -576,6 +685,17 @@ pub struct CanonicalPreparationInput {
     pub neural_receptors: NeuralReceptorFrame,
     pub receptor_effects: NeuralReceptorEffects,
 }
+
+#[derive(Debug, Clone, Copy)]
+pub struct CanonicalPreparationInputRef<'a> {
+    pub draft: &'a PerceptionFrameDraft,
+    pub sequence_id: ExperienceSequenceId,
+    pub homeostasis: HomeostaticSnapshot,
+    pub hysteresis: HysteresisState,
+    pub policy: AttentionSelectionPolicy,
+    pub neural_receptors: &'a NeuralReceptorFrame,
+    pub receptor_effects: NeuralReceptorEffects,
+}
 #[derive(Debug, PartialEq)]
 pub struct CanonicalPreparedFrame {
     pub frame: PerceptionFrame,
@@ -648,7 +768,27 @@ pub fn prepare_canonical_frame(
     predictor: &GroundedSuccessorPredictor,
     measure: bool,
 ) -> CanonicalPreparationOutcome {
-    let draft = &input.draft;
+    let borrowed = CanonicalPreparationInputRef {
+        draft: &input.draft,
+        sequence_id: input.sequence_id,
+        homeostasis: input.homeostasis,
+        hysteresis: input.hysteresis,
+        policy: input.policy,
+        neural_receptors: &input.neural_receptors,
+        receptor_effects: input.receptor_effects,
+    };
+    prepare_canonical_frame_borrowed(&borrowed, memory, topology, predictor, measure)
+}
+
+/// Borrowed preparation path avoiding `PerceptionFrameDraft` and `NeuralReceptorFrame` clones.
+pub fn prepare_canonical_frame_borrowed(
+    input: &CanonicalPreparationInputRef<'_>,
+    memory: &MemorySidecarState,
+    topology: &TopologySidecar,
+    predictor: &GroundedSuccessorPredictor,
+    measure: bool,
+) -> CanonicalPreparationOutcome {
+    let draft = input.draft;
     let receptor_effects = input.receptor_effects;
     let tick_before = draft.tick();
     let mut preparation_stage = "baseline recall";
@@ -673,17 +813,11 @@ pub fn prepare_canonical_frame(
         let prepared_recall = memory.recall_frame(draft)?;
         let baseline_recall_ns = leaf_started.map_or(0, elapsed_ns);
         let leaf_started = measure.then(std::time::Instant::now);
-        let baseline_context = cognitive_context_for_recall(
-            input.draft.organism_id(),
-            sequence_id,
-            &prepared_recall,
-            topology,
-        )?;
+        let (baseline_concept, baseline_gap) = topology_concepts_and_gaps(topology)?;
         let baseline_context_ns = leaf_started.map_or(0, elapsed_ns);
         preparation_stage = "baseline attention evidence";
         let leaf_started = measure.then(std::time::Instant::now);
-        let baseline_prepared = prepared_recall.with_cognitive_context(baseline_context.clone())?;
-        let memory_evidence = baseline_prepared.attention_evidence_for_draft(draft)?;
+        let memory_evidence = prepared_recall.attention_evidence()?;
         if measure {
             timing.baseline_recall_wall_ns = baseline_recall_ns;
             timing.baseline_context_wall_ns = baseline_context_ns;
@@ -715,7 +849,7 @@ pub fn prepare_canonical_frame(
             if let alife_core::StableFocusIdentity::TrackedObject(id) = summary.identity {
                 summary.salience.novelty = NormalizedScalar::new(
                     1.0 - memory.bank().object_familiarity(
-                        input.draft.organism_id(),
+                        draft.organism_id(),
                         id,
                         memory.profile(),
                     ),
@@ -723,7 +857,7 @@ pub fn prepare_canonical_frame(
             }
         }
         let attention = select_focal_targets(
-            input.draft.organism_id(),
+            draft.organism_id(),
             sequence_id,
             tick_before,
             &peripheral_summaries,
@@ -732,37 +866,36 @@ pub fn prepare_canonical_frame(
         )?;
         hysteresis = Some(attention.hysteresis);
         preparation_stage = "focal routing";
-        let routed_draft = route_focal_candidates(draft, &attention)?;
         let novelty = selected_focal_novelty(&attention);
-        let routed_draft = routed_draft.with_remembered_novelty(novelty)?;
+        let (routed_draft, novelty_changed) =
+            route_focal_candidates_with_novelty(draft, &attention, novelty)?;
         timing.attention_context_wall_ns = timing
             .attention_context_wall_ns
             .saturating_add(attention_context_started.map_or(0, elapsed_ns));
         let topology_concept_started = measure.then(std::time::Instant::now);
         preparation_stage = "routed recall";
         let leaf_started = measure.then(std::time::Instant::now);
-        let routed_recall = memory.recall_frame(&routed_draft)?;
+        let routed_recall =
+            memory.recall_routed_from_baseline(&routed_draft, &prepared_recall, novelty_changed)?;
         let routed_recall_ns = leaf_started.map_or(0, elapsed_ns);
         let leaf_started = measure.then(std::time::Instant::now);
-        let mut cognitive_context = cognitive_memory_context_for_recall(
-            input.draft.organism_id(),
-            sequence_id,
-            &routed_recall,
-        )?;
+        let mut cognitive_context =
+            cognitive_memory_context_for_recall(draft.organism_id(), sequence_id, &routed_recall)?;
         // Topology is immutable during preparation. Focal routing changes
         // candidate recall, while the sorted concepts and gaps remain identical.
-        cognitive_context.concept = baseline_context.concept;
-        cognitive_context.gap = baseline_context.gap;
+        cognitive_context.concept = baseline_concept;
+        cognitive_context.gap = baseline_gap;
         let cognitive_context = cognitive_context_with_attention(cognitive_context, attention)?;
         let routed_context_ns = leaf_started.map_or(0, elapsed_ns);
         preparation_stage = "cognitive projection";
         let leaf_started = measure.then(std::time::Instant::now);
-        let cognitive_projection = cognitive_projection_for_draft(
+        let cognitive_projection = cognitive_projection_for_draft_inner(
             &routed_draft,
             &routed_recall,
             sequence_id,
             predictor,
             &topology_evidence,
+            false,
         )?;
         let cognitive_context =
             cognitive_context_with_projection(cognitive_context, cognitive_projection)?;

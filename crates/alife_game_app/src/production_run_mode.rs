@@ -56,7 +56,7 @@ pub(crate) fn run_headless_max_runtime(
     let initial_tick = runtime.world().tick();
     let mut action_trace =
         crate::gpu_live_runtime::headless_trace::HeadlessActionTrace::from_environment();
-    while !duration.is_some_and(|limit| started.elapsed() >= limit) && !stop_path.exists() {
+    while duration.is_none_or(|limit| started.elapsed() < limit) && !stop_path.exists() {
         match runtime.tick_outcome()? {
             GpuLiveTickOutcome::Progressed(summaries) => {
                 if let Some(trace) = action_trace.as_mut() {

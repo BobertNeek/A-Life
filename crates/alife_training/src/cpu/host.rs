@@ -33,6 +33,13 @@ pub enum CpuHostError {
     #[error("CPU episode preparation: {0}")]
     Preparation(String),
 }
+#[derive(Clone, Copy)]
+struct CachedSealedDigests {
+    sampling_seed: u32,
+    sampling_counter: u32,
+    brain_digest: [u64; 4],
+    memory_digest: [u64; 4],
+}
 #[derive(Clone)]
 struct Resident {
     neural: CpuOrganismState,
@@ -46,6 +53,7 @@ struct Resident {
     next_sequence: u64,
     replay: Vec<CpuReplayEvent>,
     language_grounding: LanguageGroundingLedger,
+    cached_sealed: Option<CachedSealedDigests>,
 }
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 struct CpuReplayEvent {
@@ -117,13 +125,6 @@ pub struct CpuCanonicalStep {
     pub sleeping_organisms: usize,
     pub sleep_consolidations: usize,
 }
-fn weight_digest(founder: &CpuFoundationTrainer) -> Result<[u64; 4], ScaffoldContractError> {
-    let mut d = CanonicalDigestBuilder::new(b"ALIFE-CPU-FOUNDER-WEIGHTS-V1");
-    for &w in founder.weights() {
-        d.write_f32(w)?;
-    }
-    Ok(d.finish256())
-}
 fn profile_identity(p: &BrainPhenotype) -> SensorProfileIdentity {
     SensorProfileIdentity {
         profile_id: p.sensor_profile().into(),
@@ -132,9 +133,22 @@ fn profile_identity(p: &BrainPhenotype) -> SensorProfileIdentity {
     }
 }
 fn json_digest<T: serde::Serialize>(domain: &[u8], v: &T) -> Result<[u64; 4], CpuHostError> {
-    let mut d = CanonicalDigestBuilder::new(domain);
-    d.write_bytes(&serde_json::to_vec(v)?);
-    Ok(d.finish256())
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update((domain.len() as u64).to_le_bytes());
+    hasher.update(domain);
+    serde_json::to_writer(&mut hasher, v)?;
+    let bytes: [u8; 32] = hasher.finalize().into();
+    let mut words = [
+        u64::from_le_bytes(bytes[0..8].try_into().unwrap()),
+        u64::from_le_bytes(bytes[8..16].try_into().unwrap()),
+        u64::from_le_bytes(bytes[16..24].try_into().unwrap()),
+        u64::from_le_bytes(bytes[24..32].try_into().unwrap()),
+    ];
+    if words == [0; 4] {
+        words[0] = 1;
+    }
+    Ok(words)
 }
 impl CpuCanonicalHost {
     /// Fresh cohort only. Resuming an existing individual requires from_checkpoint;
@@ -202,6 +216,7 @@ impl CpuCanonicalHost {
                     next_sequence: 1,
                     replay: Vec::new(),
                     language_grounding: LanguageGroundingLedger::default(),
+                    cached_sealed: None,
                 },
             );
         }
@@ -214,7 +229,7 @@ impl CpuCanonicalHost {
             world,
             creatures,
             phenotype_hash: p.phenotype_hash(),
-            founder_weight_digest: weight_digest(founder)?,
+            founder_weight_digest: founder.weight_digest(),
             residents,
             sampling_seed,
             sampling_counter: 0,
@@ -283,28 +298,40 @@ impl CpuCanonicalHost {
     ) -> Result<Vec<(PerceptionFrameDraft, ExperienceSequenceId)>, CpuHostError> {
         self.validate_founder(founder)?;
         let tick = self.world.tick();
-        let mut perception_world = self.world.clone();
+        let saved_tracked = self
+            .residents
+            .keys()
+            .map(|&id| self.world.tracked_objects().save_state(OrganismId(id)))
+            .collect::<Result<Vec<_>, _>>()?;
         let mut result = Vec::new();
-        for (&raw, resident) in &self.residents {
-            let id = OrganismId(raw);
-            let record = self
-                .world
-                .organism_registry()
-                .get(id)
-                .ok_or(CpuHostError::State("semantic-prior learner missing"))?;
-            if record.lifecycle().is_alive() && resident.sleep.state().phase == SleepPhase::Awake {
-                let homeostasis = record.biochemistry().homeostasis;
-                result.push((
-                    perception_world.perception_frame_draft(
-                        id,
-                        tick,
-                        founder.phenotype().sensor_profile(),
-                        homeostasis,
-                    )?,
-                    ExperienceSequenceId(resident.next_sequence),
-                ));
+        let loop_result: Result<(), CpuHostError> = (|| {
+            for (&raw, resident) in &self.residents {
+                let id = OrganismId(raw);
+                let record = self
+                    .world
+                    .organism_registry()
+                    .get(id)
+                    .ok_or(CpuHostError::State("semantic-prior learner missing"))?;
+                if record.lifecycle().is_alive()
+                    && resident.sleep.state().phase == SleepPhase::Awake
+                {
+                    let homeostasis = record.biochemistry().homeostasis;
+                    result.push((
+                        self.world.perception_frame_draft(
+                            id,
+                            tick,
+                            founder.phenotype().sensor_profile(),
+                            homeostasis,
+                        )?,
+                        ExperienceSequenceId(resident.next_sequence),
+                    ));
+                }
             }
-        }
+            Ok(())
+        })();
+        let restore_result = self.world.restore_tracked_object_states(saved_tracked);
+        loop_result?;
+        restore_result?;
         Ok(result)
     }
     pub fn world(&self) -> &HeadlessWorld {
@@ -328,7 +355,7 @@ impl CpuCanonicalHost {
     }
     fn validate_founder(&self, founder: &CpuFoundationTrainer) -> Result<(), CpuHostError> {
         if self.phenotype_hash != founder.phenotype().phenotype_hash()
-            || self.founder_weight_digest != weight_digest(founder)?
+            || self.founder_weight_digest != founder.weight_digest()
         {
             return Err(CpuHostError::State("living collector policy changed: export/recompile a fresh cohort or explicitly rebase a simulator branch"));
         }
@@ -343,6 +370,7 @@ impl CpuCanonicalHost {
             .residents
             .get_mut(&id.raw())
             .ok_or(CpuHostError::State("unknown recovery organism"))?;
+        r.cached_sealed = None;
         r.sleep
             .force_sleep(tick, alife_core::SleepTrigger::RecoveryProtocol)?;
         let state = r.sleep.state();
@@ -522,7 +550,7 @@ impl CpuCanonicalHost {
             {
                 return Err(CpuHostError::State("neural topology checkpoint mismatch"));
             }
-            let resident = Resident {
+            let mut resident = Resident {
                 v11: GpuV11CausalState::restore(r.neural_topology)?,
                 neural: CpuOrganismState::from_checkpoint(p, r.neural)?,
                 activity: r.activity,
@@ -539,10 +567,11 @@ impl CpuCanonicalHost {
                 next_sequence: r.next_sequence,
                 replay: r.replay,
                 language_grounding: r.language_grounding,
+                cached_sealed: None,
             };
             validate_resident_authority(
                 record,
-                &resident,
+                &mut resident,
                 checkpoint.sampling_seed,
                 checkpoint.sampling_counter,
             )?;
@@ -572,7 +601,7 @@ impl CpuCanonicalHost {
         Ok(host)
     }
     fn seal_all_residents(&mut self) -> Result<(), CpuHostError> {
-        for (&raw, r) in &self.residents {
+        for (&raw, r) in &mut self.residents {
             let mut record = self
                 .world
                 .organism_registry()
@@ -581,10 +610,18 @@ impl CpuCanonicalHost {
                 .ok_or(CpuHostError::State(
                     "missing organism at CPU sealed boundary",
                 ))?;
+            let (brain_digest, memory_digest) =
+                resident_digest_and_memory(r, self.sampling_seed, self.sampling_counter)?;
+            r.cached_sealed = Some(CachedSealedDigests {
+                sampling_seed: self.sampling_seed,
+                sampling_counter: self.sampling_counter,
+                brain_digest,
+                memory_digest,
+            });
             record.seal_cognitive_subsystems(
                 record.biochemistry().tick,
-                resident_digest(r, self.sampling_seed, self.sampling_counter)?,
-                r.memory.export_active_bank()?.active_bank_digest,
+                brain_digest,
+                memory_digest,
             )?;
             self.world.replace_organism_record_exact(record)?;
         }
@@ -613,7 +650,7 @@ impl CpuCanonicalHost {
         ) -> Result<PerceptionFrameDraft, ScaffoldContractError>,
     ) -> Result<CpuCanonicalStep, CpuHostError> {
         self.validate_founder(founder)?;
-        for (&raw, r) in &self.residents {
+        for (&raw, r) in &mut self.residents {
             let record = self
                 .world
                 .organism_registry()
@@ -641,7 +678,6 @@ impl CpuCanonicalHost {
         let mut sleeping = 0;
         let mut consolidations = 0;
         let mut body_events = BTreeMap::new();
-        let mut perception_world = self.world.clone();
         let ids = self
             .world
             .organism_registry()
@@ -649,6 +685,7 @@ impl CpuCanonicalHost {
             .filter(|r| r.lifecycle().is_alive())
             .map(|r| r.organism_id())
             .collect::<Vec<_>>();
+        let mut perception_world = (ids.len() > 1).then(|| self.world.clone());
         for id in ids {
             let mut record = self
                 .world
@@ -660,6 +697,7 @@ impl CpuCanonicalHost {
                 .residents
                 .get_mut(&id.raw())
                 .ok_or(CpuHostError::State("new organism requires brain admission"))?;
+            r.cached_sealed = None;
             let phase_before = r.sleep.state().phase;
             if r.activity
                 .last_world_tick
@@ -672,7 +710,7 @@ impl CpuCanonicalHost {
                 (f64::from(record.biochemistry().homeostasis.drives.brain_atp)
                     * f64::from(BRAIN_ATP_Q16_MAX))
                 .floor() as u32;
-            let neural_boundary = r.neural.checkpoint()?;
+            let neural_boundary = r.neural.checkpoint_ref()?;
             let activity_anchor = CpuActivityAnchor {
                 organism_id: id,
                 tick,
@@ -768,8 +806,8 @@ impl CpuCanonicalHost {
                     record.phenotype().brain_genome.plasticity_parameters(),
                 )?;
                 r.replay.clear();
-                let checkpoint = r.neural.checkpoint()?;
-                let digest = json_digest(b"ALIFE-CPU-SLEEP-OUTPUT-V1", &checkpoint)?;
+                let checkpoint = r.neural.checkpoint_ref()?;
+                let digest = json_digest(b"ALIFE-CPU-SLEEP-OUTPUT-V1", checkpoint)?;
                 let mut state = r.sleep.state();
                 state.consolidation = ConsolidationState::Committed {
                     cycle_id: state.active_cycle_id,
@@ -804,16 +842,17 @@ impl CpuCanonicalHost {
             let receptors = record
                 .biochemistry()
                 .neural_receptor_frame(record.phenotype())?;
-            let effects = NeuralReceptorEffects::from_frame(
-                &receptors,
-                &NeuralReceptorPhenotype::compile(p)?,
-            )?;
-            let draft = perception_world.perception_frame_draft(
-                id,
-                tick,
-                p.sensor_profile(),
-                record.biochemistry().homeostasis,
-            )?;
+            let effects =
+                NeuralReceptorEffects::from_frame(&receptors, founder.receptor_phenotype())?;
+            let draft = perception_world
+                .as_mut()
+                .unwrap_or(&mut self.world)
+                .perception_frame_draft(
+                    id,
+                    tick,
+                    p.sensor_profile(),
+                    record.biochemistry().homeostasis,
+                )?;
             let ordinary = draft.clone().with_semantic_context(None)?;
             let draft = prepare(draft, sequence)?;
             if draft.clone().with_semantic_context(None)? != ordinary {
@@ -1001,30 +1040,30 @@ impl CpuCanonicalHost {
             neural_emissions.extend(recall.recognized_social_emission());
             let emissions =
                 NeuralEmissionFrame::new(tick, output.dispatch_generation, neural_emissions)?;
-            let object_novelty = bundle
-                .channels
-                .iter()
-                .filter_map(|c| c.target.and_then(|t| t.entity))
-                .filter_map(|entity| {
-                    let key = perception_world
-                        .entity(entity)?
-                        .tracking_provenance
-                        .canonical_key();
-                    let tracked = perception_world
-                        .tracked_objects()
-                        .records_for(id)?
-                        .find(|r| r.tracking_key == key)?;
-                    pre_context
-                        .peripheral
-                        .summaries
-                        .iter()
-                        .find(|s| {
-                            s.identity
-                                == StableFocusIdentity::TrackedObject(tracked.tracked_object_id)
-                        })
-                        .map(|s| (entity, s.salience.novelty.raw()))
-                })
-                .collect::<Vec<_>>();
+            let object_novelty = {
+                let pw: &HeadlessWorld = perception_world.as_ref().unwrap_or(&self.world);
+                bundle
+                    .channels
+                    .iter()
+                    .filter_map(|c| c.target.and_then(|t| t.entity))
+                    .filter_map(|entity| {
+                        let key = pw.entity(entity)?.tracking_provenance.canonical_key();
+                        let tracked = pw
+                            .tracked_objects()
+                            .records_for(id)?
+                            .find(|r| r.tracking_key == key)?;
+                        pre_context
+                            .peripheral
+                            .summaries
+                            .iter()
+                            .find(|s| {
+                                s.identity
+                                    == StableFocusIdentity::TrackedObject(tracked.tracked_object_id)
+                            })
+                            .map(|s| (entity, s.salience.novelty.raw()))
+                    })
+                    .collect::<Vec<_>>()
+            };
             let receipt = self
                 .world
                 .apply_registered_motor_bundle_with_perceived_novelty_in_staged_tick(
@@ -1159,7 +1198,7 @@ impl CpuCanonicalHost {
                 return Err(CpuHostError::State("sealed topology observation rejected"));
             }
             r.topology.advance_lifecycle(receipt.outcome_tick)?;
-            let checkpoint = r.neural.checkpoint()?;
+            let checkpoint = r.neural.checkpoint_ref()?;
             let credit = OutcomeCreditPacket::from_sealed_patch(&patch)?
                 .with_biochemical_receptors(&credit_receptors)?;
             let selected = patch.decision().neural_evidence()?;
@@ -1194,11 +1233,6 @@ impl CpuCanonicalHost {
             if r.replay.len() > p.replay_capture_plan().event_capacity() as usize {
                 r.replay.remove(0);
             }
-            after.seal_cognitive_subsystems(
-                receipt.outcome_tick,
-                json_digest(b"ALIFE-CPU-NEURAL-STATE-V1", &checkpoint)?,
-                r.memory.export_active_bank()?.active_bank_digest,
-            )?;
             let parameters = after.phenotype().brain_genome.plasticity_parameters();
             let profile = parameters
                 .action_candidate_credit_profile()
@@ -1223,16 +1257,18 @@ impl CpuCanonicalHost {
         }
         // The batch uses one pre-action scene. Commit the identities actually
         // observed there along with its decisions; priming stays read-only.
-        let tracked_objects = self
-            .residents
-            .keys()
-            .map(|&id| {
-                perception_world
-                    .tracked_objects()
-                    .save_state(OrganismId(id))
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        self.world.restore_tracked_object_states(tracked_objects)?;
+        if let Some(perception_world) = perception_world {
+            let tracked_objects = self
+                .residents
+                .keys()
+                .map(|&id| {
+                    perception_world
+                        .tracked_objects()
+                        .save_state(OrganismId(id))
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            self.world.restore_tracked_object_states(tracked_objects)?;
+        }
         let tick_after = self
             .world
             .try_advance_tick_with_body_events_in_staged_tick(&body_events)?;
@@ -1321,7 +1357,15 @@ pub(super) fn validate_record_founder(
             .ok_or(CpuHostError::State(
                 "canonical organism lacks inherited candidate asset",
             ))?;
-    if inherited.encode_canonical()? != founder.source_foundation.encode_canonical()? {
+    if inherited.digest() != founder.source_foundation.digest()
+        || inherited.manifest() != founder.source_foundation.manifest()
+        || inherited.weights().len() != founder.source_foundation.weights().len()
+        || inherited
+            .weights()
+            .iter()
+            .zip(founder.source_foundation.weights())
+            .any(|(a, b)| a.to_bits() != b.to_bits())
+    {
         return Err(CpuHostError::State(
             "organism inherited foundation differs from CPU founder",
         ));
@@ -1329,15 +1373,17 @@ pub(super) fn validate_record_founder(
     Ok(())
 }
 
-fn resident_digest(
+fn resident_digest_and_memory(
     r: &Resident,
     sampling_seed: u32,
     sampling_counter: u32,
-) -> Result<[u64; 4], CpuHostError> {
-    json_digest(
+) -> Result<([u64; 4], [u64; 4]), CpuHostError> {
+    let active_bank = r.memory.export_active_bank()?;
+    let memory_digest = active_bank.active_bank_digest;
+    let brain_digest = json_digest(
         b"ALIFE-CPU-CANONICAL-PRIVATE-STATE-V1",
         &(
-            r.neural.checkpoint()?,
+            r.neural.checkpoint_ref()?,
             r.v11.checkpoint(),
             &r.predictor,
             &r.activity,
@@ -1349,22 +1395,37 @@ fn resident_digest(
             r.topology.export_portable()?,
             *r.memory.compaction_checkpoint(),
             r.memory.export_staged_bank()?,
-            r.memory.export_active_bank()?,
+            active_bank,
             sampling_seed,
             sampling_counter,
         ),
-    )
+    )?;
+    Ok((brain_digest, memory_digest))
 }
 fn validate_resident_authority(
     record: &alife_world::WorldOrganismRecord,
-    r: &Resident,
+    r: &mut Resident,
     sampling_seed: u32,
     sampling_counter: u32,
 ) -> Result<(), CpuHostError> {
-    if record.state_graph().brain.content_digest
-        != resident_digest(r, sampling_seed, sampling_counter)?
-        || record.state_graph().memory.content_digest
-            != r.memory.export_active_bank()?.active_bank_digest
+    let (brain_digest, memory_digest) = match r.cached_sealed {
+        Some(c) if c.sampling_seed == sampling_seed && c.sampling_counter == sampling_counter => {
+            (c.brain_digest, c.memory_digest)
+        }
+        _ => {
+            let (brain_digest, memory_digest) =
+                resident_digest_and_memory(r, sampling_seed, sampling_counter)?;
+            r.cached_sealed = Some(CachedSealedDigests {
+                sampling_seed,
+                sampling_counter,
+                brain_digest,
+                memory_digest,
+            });
+            (brain_digest, memory_digest)
+        }
+    };
+    if record.state_graph().brain.content_digest != brain_digest
+        || record.state_graph().memory.content_digest != memory_digest
     {
         return Err(CpuHostError::State(
             "canonical organism authority differs from private CPU state",

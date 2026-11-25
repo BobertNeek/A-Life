@@ -1,6 +1,8 @@
 //! Read original GPU scores from one immutable replay row. No neural execution.
 use alife_core::{FoundationWeightAsset, Validate};
-use alife_game_app::{FoundationCycleReceipt, FoundationReplayRecord, FoundationReplayRecordRef};
+use alife_game_app::{
+    FoundationCycleReceipt, FoundationReplayRecordReader, FoundationReplayRecordRef,
+};
 use std::{error::Error, io::Read, path::Path};
 
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
@@ -43,20 +45,8 @@ fn inspect(directory: &Path, row: usize) -> Result<serde_json::Value> {
     if reference.record_index != row as u64 || reference.encoded_bytes > 268_435_456 {
         return Err("replay reference identity or size is invalid".into());
     }
-    let bytes = read_bounded(
-        &directory.join("replay").join(reference.file_name()),
-        reference.encoded_bytes,
-    )?;
-    if bytes.len() as u64 != reference.encoded_bytes
-        || blake3::hash(&bytes).as_bytes() != &reference.digest
-    {
-        return Err("replay record digest mismatch".into());
-    }
-    let decoder = zstd::stream::read::Decoder::new(std::io::Cursor::new(bytes))?;
-    let record: FoundationReplayRecord = bincode::serde::decode_from_std_read(
-        &mut decoder.take(268_435_457),
-        bincode::config::standard().with_limit::<268435456>(),
-    )?;
+    let mut reader = FoundationReplayRecordReader::open(&directory.join("replay"), Some(&refs))?;
+    let record = reader.read_record(Some(reference), None)?;
     let asset = FoundationWeightAsset::decode_canonical(&read_bounded(
         &directory.join("initial.alife-foundation"),
         33_554_432,

@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 import shutil
 import signal
+import stat
 import subprocess
 import sys
 import time
@@ -32,6 +33,75 @@ def sha256(path):
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def file_stat_stamp(path):
+    info = Path(path).lstat()
+    if not stat.S_ISREG(info.st_mode):
+        raise ValueError(f"regular nonsymlink file required: {path}")
+    return (info.st_mtime_ns, info.st_size, info.st_ino, info.st_dev)
+
+
+class FileHashCache:
+    """Cache SHA-256 digests keyed by resolved path and stat metadata."""
+
+    def __init__(self):
+        self._entries = {}
+
+    def sha256(self, path, *, force=False):
+        target = Path(path)
+        resolved = str(target.resolve())
+        stamp = file_stat_stamp(target)
+        if not force:
+            cached = self._entries.get(resolved)
+            if cached is not None and cached[0] == stamp:
+                return cached[1]
+        digest = sha256(target)
+        self._entries[resolved] = (stamp, digest)
+        return digest
+
+    def clear(self):
+        self._entries.clear()
+
+
+def git_checkout_stamp(root):
+    """Best-effort metadata stamp for git HEAD/index/Cargo.lock to avoid redundant polls."""
+    root = Path(root)
+    dot_git = root / ".git"
+    try:
+        dot_info = dot_git.lstat()
+        stamps = [("dot_git", dot_info.st_mtime_ns, dot_info.st_size, dot_info.st_ino, dot_info.st_dev)]
+        if stat.S_ISDIR(dot_info.st_mode):
+            git_dir = dot_git
+            common_dir = dot_git
+        elif stat.S_ISREG(dot_info.st_mode):
+            line = dot_git.read_text(encoding="utf-8").splitlines()[0].strip()
+            if not line.startswith("gitdir:"):
+                return None
+            raw_dir = Path(line[7:].strip())
+            git_dir = raw_dir if raw_dir.is_absolute() else (root / raw_dir).resolve()
+            common_file = git_dir / "commondir"
+            if common_file.is_file():
+                common_raw = Path(common_file.read_text(encoding="utf-8").strip())
+                common_dir = common_raw if common_raw.is_absolute() else (git_dir / common_raw).resolve()
+            else:
+                common_dir = git_dir
+        else:
+            return None
+        head_path = git_dir / "HEAD"
+        head_text = head_path.read_text(encoding="utf-8").strip()
+        tracked = [head_path, git_dir / "index", common_dir / "packed-refs", root / "Cargo.lock"]
+        if head_text.startswith("ref: "):
+            tracked.append(common_dir / head_text[5:].strip())
+        for path in tracked:
+            if path.exists():
+                info = path.lstat()
+                stamps.append((str(path), info.st_mtime_ns, info.st_size, info.st_ino, info.st_dev))
+            else:
+                stamps.append((str(path), None))
+        return (head_text, tuple(stamps))
+    except (OSError, IndexError, UnicodeDecodeError):
+        return None
 
 def write_json(path, value):
     temporary = Path(str(path) + ".tmp")
@@ -163,7 +233,8 @@ def stop_owned(process):
     process.wait(timeout=10)
 
 def run_child(argv, log, deadline, guard, environment, on_started=None):
-    guard()
+    full_guard = getattr(guard, "full", guard)
+    full_guard()
     if dt.datetime.now(UTC) >= deadline:
         raise TimeoutError("command budget exhausted before launch")
     kwargs = {"creationflags": subprocess.CREATE_NO_WINDOW | subprocess.BELOW_NORMAL_PRIORITY_CLASS | subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == "nt" else {"start_new_session": True}
@@ -177,6 +248,7 @@ def run_child(argv, log, deadline, guard, environment, on_started=None):
                     raise TimeoutError("owned command exceeded its wall-time/cutoff budget")
                 guard()
                 time.sleep(.5)
+            full_guard()
             if process.returncode:
                 raise RuntimeError(f"child exit {process.returncode}; see {log}.*.log")
         finally:

@@ -62,6 +62,9 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: group50-source
       - name: Check group50 CLI
         run: cargo check --locked -p alife_game_app --features foundation-training --lib --bin train_n2048_group50
       - name: Cohort replay durability and corruption CPU contracts
@@ -73,13 +76,13 @@ jobs:
       - name: Batched readback packet order and bounds CPU contracts
         run: cargo test --locked -p alife_gpu_backend --features training-rollout --lib closed_loop_runtime::training_capture
       - name: Compile fifty-row differential fixture without GPU execution
-        run: cargo test --locked -p alife_gpu_backend --features training-rollout,gpu-tests --test training_capture_batch --no-run
+        run: cargo test --locked -p alife_gpu_backend --features training-rollout,gpu-tests --test closed_loop_suite --no-run
       - name: Compile native group50 fixture without GPU execution
         run: cargo test --locked -p alife_game_app --features foundation-training,gpu-tests --test group50_gpu --no-run
       - name: Strict game training source Clippy
         run: cargo clippy --locked -p alife_game_app --features foundation-training,gpu-tests --lib --bin train_n2048_group50 --test group50_gpu -- -D warnings
       - name: Strict GPU capture fixture source Clippy
-        run: cargo clippy --locked -p alife_gpu_backend --features training-rollout,gpu-tests --lib --test training_capture_batch -- -D warnings
+        run: cargo clippy --locked -p alife_gpu_backend --features training-rollout,gpu-tests --lib --test closed_loop_suite -- -D warnings
       - name: Formatting and architecture boundaries
         run: |
           cargo fmt --all -- --check

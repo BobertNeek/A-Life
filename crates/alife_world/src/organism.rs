@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 const ORGANISM_REGISTRY_SIGNATURE_ENCODING_VERSION: u16 = 1;
+const PENDING_BODY_BIOCHEMISTRY_DIGEST: [u64; 4] = [0x5045_4E44_494E_4731; 4];
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum FoundationComparisonProjection {
@@ -310,16 +311,8 @@ fn biochemistry_exact_eq(a: &BiochemistryState, b: &BiochemistryState) -> bool {
 }
 
 mod arc_serde {
-    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+    use serde::{Deserialize, Deserializer};
     use std::sync::Arc;
-
-    pub fn serialize<S, T>(value: &Arc<T>, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-        T: Serialize,
-    {
-        value.as_ref().serialize(serializer)
-    }
 
     pub fn deserialize<'de, D, T>(deserializer: D) -> Result<Arc<T>, D::Error>
     where
@@ -330,7 +323,15 @@ mod arc_serde {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+fn is_zero_cognitive_work_ref(value: &&CognitiveWorkReceipt) -> bool {
+    is_zero_cognitive_work(value)
+}
+
+fn is_zero_energy_debit_ref(value: &&f32) -> bool {
+    is_zero_energy_debit(value)
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct WorldOrganismRecord {
     organism_id: OrganismId,
     world_entity_id: WorldEntityId,
@@ -342,6 +343,12 @@ pub struct WorldOrganismRecord {
     genetic_validation: GeneticValidationCache,
     biochemistry: BiochemistryState,
     state_graph: OrganismSubsystemStateGraph,
+    #[serde(skip)]
+    body_digest_pending: bool,
+    #[serde(skip)]
+    pending_biochemistry: Option<BiochemistryState>,
+    #[serde(skip)]
+    resolved_state_graph: OnceLock<OrganismSubsystemStateGraph>,
     embodiment: EmbodimentState,
     birth_tick: Tick,
     lifecycle: OrganismLifecycle,
@@ -358,6 +365,76 @@ pub struct WorldOrganismRecord {
     cognitive_work: CognitiveWorkReceipt,
     #[serde(default, skip_serializing_if = "is_zero_energy_debit")]
     cognitive_energy_debit: f32,
+}
+
+impl PartialEq for WorldOrganismRecord {
+    fn eq(&self, other: &Self) -> bool {
+        self.organism_id == other.organism_id
+            && self.world_entity_id == other.world_entity_id
+            && self.genome == other.genome
+            && self.phenotype == other.phenotype
+            && self.biochemistry == other.biochemistry
+            && self.state_graph() == other.state_graph()
+            && self.embodiment == other.embodiment
+            && self.birth_tick == other.birth_tick
+            && self.lifecycle == other.lifecycle
+            && self.sleep_phase == other.sleep_phase
+            && self.sleep_phase_tick == other.sleep_phase_tick
+            && self.sleep_cycle_id == other.sleep_cycle_id
+            && self.sleep_work_units == other.sleep_work_units
+            && self.archive == other.archive
+            && self.cognitive_work == other.cognitive_work
+            && self.cognitive_energy_debit == other.cognitive_energy_debit
+    }
+}
+
+impl Serialize for WorldOrganismRecord {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        #[derive(Serialize)]
+        struct WorldOrganismRecordRef<'a> {
+            organism_id: OrganismId,
+            world_entity_id: WorldEntityId,
+            genome: &'a CreatureGenome,
+            phenotype: &'a CreaturePhenotype,
+            biochemistry: &'a BiochemistryState,
+            state_graph: &'a OrganismSubsystemStateGraph,
+            embodiment: &'a EmbodimentState,
+            birth_tick: Tick,
+            lifecycle: OrganismLifecycle,
+            sleep_phase: SleepPhase,
+            sleep_phase_tick: Tick,
+            sleep_cycle_id: u64,
+            sleep_work_units: u64,
+            archive: &'a OrganismArchiveIdentity,
+            #[serde(skip_serializing_if = "is_zero_cognitive_work_ref")]
+            cognitive_work: &'a CognitiveWorkReceipt,
+            #[serde(skip_serializing_if = "is_zero_energy_debit_ref")]
+            cognitive_energy_debit: &'a f32,
+        }
+
+        WorldOrganismRecordRef {
+            organism_id: self.organism_id,
+            world_entity_id: self.world_entity_id,
+            genome: &self.genome,
+            phenotype: &self.phenotype,
+            biochemistry: &self.biochemistry,
+            state_graph: self.state_graph(),
+            embodiment: &self.embodiment,
+            birth_tick: self.birth_tick,
+            lifecycle: self.lifecycle,
+            sleep_phase: self.sleep_phase,
+            sleep_phase_tick: self.sleep_phase_tick,
+            sleep_cycle_id: self.sleep_cycle_id,
+            sleep_work_units: self.sleep_work_units,
+            archive: &self.archive,
+            cognitive_work: &self.cognitive_work,
+            cognitive_energy_debit: &self.cognitive_energy_debit,
+        }
+        .serialize(serializer)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -383,16 +460,33 @@ impl WorldOrganismRecord {
         &self.genome
     }
 
+    pub fn genome_arc(&self) -> std::sync::Arc<CreatureGenome> {
+        std::sync::Arc::clone(&self.genome)
+    }
+
     pub fn phenotype(&self) -> &CreaturePhenotype {
         &self.phenotype
+    }
+
+    pub fn phenotype_arc(&self) -> std::sync::Arc<CreaturePhenotype> {
+        std::sync::Arc::clone(&self.phenotype)
     }
 
     pub fn biochemistry(&self) -> &BiochemistryState {
         &self.biochemistry
     }
 
-    pub const fn state_graph(&self) -> &OrganismSubsystemStateGraph {
-        &self.state_graph
+    pub fn state_graph(&self) -> &OrganismSubsystemStateGraph {
+        if !self.body_digest_pending {
+            return &self.state_graph;
+        }
+        self.resolved_state_graph.get_or_init(|| {
+            let mut resolved = self.state_graph.clone();
+            if let Ok(digest) = body_biochemistry_digest(&self.biochemistry) {
+                resolved.body_biochemistry.content_digest = digest;
+            }
+            resolved
+        })
     }
 
     pub const fn embodiment(&self) -> &EmbodimentState {
@@ -548,6 +642,9 @@ impl WorldOrganismRecord {
                 },
             },
             embodiment,
+            body_digest_pending: false,
+            pending_biochemistry: None,
+            resolved_state_graph: OnceLock::new(),
             birth_tick,
             lifecycle: OrganismLifecycle::Alive,
             sleep_phase: SleepPhase::Awake,
@@ -585,13 +682,26 @@ impl WorldOrganismRecord {
             Some(digest) => *digest,
             None => genetics_development_digest(&self.genome, &self.phenotype)?,
         };
-        let biochemistry_digest = match self.genetic_validation.biochemistry.get() {
-            Some((cached_state, digest))
-                if biochemistry_exact_eq(cached_state, &self.biochemistry) =>
+        let biochemistry_digest = if self.body_digest_pending {
+            let Some(pending) = self.pending_biochemistry.as_ref() else {
+                return Err(ScaffoldContractError::BrainOwnershipMismatch);
+            };
+            if !biochemistry_exact_eq(pending, &self.biochemistry)
+                || self.state_graph.body_biochemistry.content_digest
+                    != PENDING_BODY_BIOCHEMISTRY_DIGEST
             {
-                *digest
+                return Err(ScaffoldContractError::BrainOwnershipMismatch);
             }
-            _ => body_biochemistry_digest(&self.biochemistry)?,
+            PENDING_BODY_BIOCHEMISTRY_DIGEST
+        } else {
+            match self.genetic_validation.biochemistry.get() {
+                Some((cached_state, digest))
+                    if biochemistry_exact_eq(cached_state, &self.biochemistry) =>
+                {
+                    *digest
+                }
+                _ => body_biochemistry_digest(&self.biochemistry)?,
+            }
         };
         let current_embodiment_digest = match self.genetic_validation.embodiment.get() {
             Some((cached_state, digest)) if cached_state == &self.embodiment => *digest,
@@ -640,7 +750,7 @@ impl WorldOrganismRecord {
         }
 
         self.biochemistry.validate_against(&self.phenotype)?;
-        if self.genetic_validation.biochemistry.get().is_none() {
+        if !self.body_digest_pending && self.genetic_validation.biochemistry.get().is_none() {
             let _ = self
                 .genetic_validation
                 .biochemistry
@@ -721,6 +831,8 @@ impl WorldOrganismRecord {
                 .exp2();
         let original_biochemistry = self.biochemistry;
         let original_state_graph = self.state_graph.clone();
+        let original_body_digest_pending = self.body_digest_pending;
+        let original_pending_biochemistry = self.pending_biochemistry;
         let original_work = self.cognitive_work;
         let original_debit = self.cognitive_energy_debit;
 
@@ -741,6 +853,9 @@ impl WorldOrganismRecord {
                 self.biochemistry = original_biochemistry;
                 self.genetic_validation.biochemistry = OnceLock::new();
                 self.state_graph = original_state_graph;
+                self.body_digest_pending = original_body_digest_pending;
+                self.pending_biochemistry = original_pending_biochemistry;
+                self.resolved_state_graph = OnceLock::new();
                 self.cognitive_work = original_work;
                 self.cognitive_energy_debit = original_debit;
                 Err(error.into())
@@ -758,6 +873,8 @@ impl WorldOrganismRecord {
         }
         let original_biochemistry = self.biochemistry;
         let original_state_graph = self.state_graph.clone();
+        let original_body_digest_pending = self.body_digest_pending;
+        let original_pending_biochemistry = self.pending_biochemistry;
         self.validate_contract()?;
         let next_age = self.age_at(next_tick)?;
         let result = (|| -> Result<(), ScaffoldContractError> {
@@ -771,6 +888,9 @@ impl WorldOrganismRecord {
             self.biochemistry = original_biochemistry;
             self.genetic_validation.biochemistry = OnceLock::new();
             self.state_graph = original_state_graph;
+            self.body_digest_pending = original_body_digest_pending;
+            self.pending_biochemistry = original_pending_biochemistry;
+            self.resolved_state_graph = OnceLock::new();
             return Err(error.into());
         }
         Ok(())
@@ -791,6 +911,8 @@ impl WorldOrganismRecord {
         self.validate_contract()?;
         let original_biochemistry = self.biochemistry;
         let original_state_graph = self.state_graph.clone();
+        let original_body_digest_pending = self.body_digest_pending;
+        let original_pending_biochemistry = self.pending_biochemistry;
         let result = (|| -> Result<(), ScaffoldContractError> {
             self.biochemistry = self.biochemistry.with_prediction_residual_pulse(
                 source_sequence_id,
@@ -805,6 +927,9 @@ impl WorldOrganismRecord {
             self.biochemistry = original_biochemistry;
             self.genetic_validation.biochemistry = OnceLock::new();
             self.state_graph = original_state_graph;
+            self.body_digest_pending = original_body_digest_pending;
+            self.pending_biochemistry = original_pending_biochemistry;
+            self.resolved_state_graph = OnceLock::new();
             return Err(error.into());
         }
         Ok(())
@@ -821,6 +946,8 @@ impl WorldOrganismRecord {
         }
         let original_biochemistry = self.biochemistry;
         let original_state_graph = self.state_graph.clone();
+        let original_body_digest_pending = self.body_digest_pending;
+        let original_pending_biochemistry = self.pending_biochemistry;
         self.validate_contract()?;
         let next_age = self.age_at(next_tick)?;
         let result = (|| -> Result<(), ScaffoldContractError> {
@@ -838,14 +965,15 @@ impl WorldOrganismRecord {
             self.biochemistry = original_biochemistry;
             self.genetic_validation.biochemistry = OnceLock::new();
             self.state_graph = original_state_graph;
+            self.body_digest_pending = original_body_digest_pending;
+            self.pending_biochemistry = original_pending_biochemistry;
+            self.resolved_state_graph = OnceLock::new();
             return Err(error.into());
         }
         Ok(())
     }
 
     fn advance_body_state_ref(&mut self) -> Result<(), ScaffoldContractError> {
-        let content_digest = body_biochemistry_digest(&self.biochemistry)?;
-        self.genetic_validation.biochemistry = OnceLock::from((self.biochemistry, content_digest));
         self.state_graph.transaction_revision = self
             .state_graph
             .transaction_revision
@@ -857,7 +985,37 @@ impl WorldOrganismRecord {
             .checked_add(1)
             .ok_or(ScaffoldContractError::InvalidId)?;
         state.causal_tick = self.biochemistry.tick;
-        state.content_digest = content_digest;
+        state.content_digest = PENDING_BODY_BIOCHEMISTRY_DIGEST;
+        self.body_digest_pending = true;
+        self.pending_biochemistry = Some(self.biochemistry);
+        self.genetic_validation.biochemistry = OnceLock::new();
+        self.resolved_state_graph = OnceLock::new();
+        Ok(())
+    }
+
+    fn flush_body_biochemistry_digest(&mut self) -> Result<(), ScaffoldContractError> {
+        if self.body_digest_pending {
+            if !self
+                .pending_biochemistry
+                .as_ref()
+                .is_some_and(|pending| biochemistry_exact_eq(pending, &self.biochemistry))
+                || self.state_graph.body_biochemistry.content_digest
+                    != PENDING_BODY_BIOCHEMISTRY_DIGEST
+            {
+                return Err(ScaffoldContractError::BrainOwnershipMismatch);
+            }
+            let content_digest = if let Some(resolved) = self.resolved_state_graph.get() {
+                resolved.body_biochemistry.content_digest
+            } else {
+                body_biochemistry_digest(&self.biochemistry)?
+            };
+            self.state_graph.body_biochemistry.content_digest = content_digest;
+            self.genetic_validation.biochemistry =
+                OnceLock::from((self.biochemistry, content_digest));
+            self.body_digest_pending = false;
+            self.pending_biochemistry = None;
+            self.resolved_state_graph = OnceLock::new();
+        }
         Ok(())
     }
 
@@ -906,6 +1064,7 @@ impl WorldOrganismRecord {
         {
             return Err(ScaffoldContractError::BrainOwnershipMismatch);
         }
+        self.flush_body_biochemistry_digest()?;
         let original_embodiment = self.embodiment.clone();
         let original_graph = self.state_graph.clone();
         let result = (|| {
@@ -942,6 +1101,7 @@ impl WorldOrganismRecord {
         if tick != self.biochemistry.tick || brain_digest == [0; 4] || memory_digest == [0; 4] {
             return Err(ScaffoldContractError::BrainOwnershipMismatch);
         }
+        self.flush_body_biochemistry_digest()?;
         let original = self.state_graph.clone();
         let result = (|| {
             self.state_graph.transaction_revision = self
@@ -1008,6 +1168,7 @@ impl WorldOrganismRecord {
         {
             return Err(ScaffoldContractError::NonMonotonicTick);
         }
+        self.flush_body_biochemistry_digest()?;
         let original = (
             self.sleep_phase,
             self.sleep_phase_tick,
@@ -1052,6 +1213,7 @@ impl WorldOrganismRecord {
         {
             return Err(OrganismRegistryError::InvalidDeathTick(self.organism_id));
         }
+        self.flush_body_biochemistry_digest()?;
         let original_lifecycle = self.lifecycle;
         let original_graph = self.state_graph.clone();
         self.lifecycle = OrganismLifecycle::Dead { death_tick };
@@ -1086,6 +1248,7 @@ impl WorldOrganismRecord {
                 self.organism_id,
             ));
         }
+        self.flush_body_biochemistry_digest()?;
         let original_archive = self.archive;
         let original_graph = self.state_graph.clone();
         self.archive.birth_manifest_digest = Some(digest);
@@ -1130,6 +1293,7 @@ impl WorldOrganismRecord {
                 self.organism_id,
             ));
         }
+        self.flush_body_biochemistry_digest()?;
         let original_archive = self.archive;
         let original_graph = self.state_graph.clone();
         self.archive.life_manifest_digest = Some(digest);
@@ -1263,12 +1427,17 @@ impl WorldOrganismRegistry {
         record.validate_contract()?;
         let original_biochemistry = record.biochemistry;
         let original_state_graph = record.state_graph.clone();
+        let original_body_digest_pending = record.body_digest_pending;
+        let original_pending_biochemistry = record.pending_biochemistry;
         let result = mutate(&mut record.biochemistry);
         match result {
             Err(error) => {
                 record.biochemistry = original_biochemistry;
                 record.genetic_validation.biochemistry = OnceLock::new();
                 record.state_graph = original_state_graph;
+                record.body_digest_pending = original_body_digest_pending;
+                record.pending_biochemistry = original_pending_biochemistry;
+                record.resolved_state_graph = OnceLock::new();
                 Err(error)
             }
             Ok(value) => {
@@ -1277,6 +1446,9 @@ impl WorldOrganismRegistry {
                     record.biochemistry = original_biochemistry;
                     record.genetic_validation.biochemistry = OnceLock::new();
                     record.state_graph = original_state_graph;
+                    record.body_digest_pending = original_body_digest_pending;
+                    record.pending_biochemistry = original_pending_biochemistry;
+                    record.resolved_state_graph = OnceLock::new();
                     return Err(OrganismRegistryError::InvalidRecord(
                         ScaffoldContractError::NonMonotonicTick,
                     ));
@@ -1288,6 +1460,9 @@ impl WorldOrganismRegistry {
                     record.biochemistry = original_biochemistry;
                     record.genetic_validation.biochemistry = OnceLock::new();
                     record.state_graph = original_state_graph;
+                    record.body_digest_pending = original_body_digest_pending;
+                    record.pending_biochemistry = original_pending_biochemistry;
+                    record.resolved_state_graph = OnceLock::new();
                     Err(error.into())
                 } else {
                     Ok(value)
@@ -2101,5 +2276,90 @@ mod tests {
             .replace_embodiment_state(before.embodiment.clone())
             .is_err());
         assert_eq!(record, before);
+    }
+
+    #[test]
+    fn coalesced_biochemistry_digest_matches_canonical_wire_and_guards_tampering() {
+        let genome = CreatureGenome::early_mammal_founder(
+            0xE10_3210,
+            FoundationGeneticIdentity::new(10, 1, 7, BrainCapacityClass::N512_ID).unwrap(),
+        )
+        .unwrap();
+        let phenotype = genome.express().unwrap();
+        let mut record = WorldOrganismRecord::newborn(
+            OrganismId(4),
+            WorldEntityId(104),
+            genome,
+            phenotype,
+            Tick::ZERO,
+        )
+        .unwrap();
+        record
+            .advance_biology(Tick(1), BodyEventDelta::zero())
+            .unwrap();
+        assert!(record.body_digest_pending);
+        record
+            .account_cognitive_work(
+                CognitiveWorkReceipt::zero(),
+                CognitiveWorkCostPolicy::default(),
+            )
+            .unwrap();
+        record
+            .stage_prediction_residual_pulse(alife_core::ExperienceSequenceId(1), 1, 0.25, 0.75)
+            .unwrap();
+        assert!(record.body_digest_pending);
+
+        // Tampering with biochemistry directly while digest is pending must still fail validation.
+        let mut tampered_bio = record.clone();
+        tampered_bio.biochemistry.body.energy = 0.01;
+        assert_eq!(
+            tampered_bio.validate_contract(),
+            Err(ScaffoldContractError::BrainOwnershipMismatch)
+        );
+
+        // Tampering with pending digest sentinel must fail validation.
+        let mut tampered_digest = record.clone();
+        tampered_digest.state_graph.body_biochemistry.content_digest[0] ^= 1;
+        assert_eq!(
+            tampered_digest.validate_contract(),
+            Err(ScaffoldContractError::BrainOwnershipMismatch)
+        );
+
+        // Failed cognitive debit while pending must roll back cleanly.
+        let mut failed_debit = record.clone();
+        let mut invalid_receipt = CognitiveWorkReceipt::zero();
+        invalid_receipt.neural_updates = u64::MAX;
+        assert!(failed_debit
+            .account_cognitive_work(
+                invalid_receipt,
+                CognitiveWorkCostPolicy {
+                    energy_per_work_unit: 1.0,
+                    ..CognitiveWorkCostPolicy::default()
+                },
+            )
+            .is_err());
+        assert_eq!(failed_debit, record);
+
+        record.validate_contract().unwrap();
+        let expected_digest = body_biochemistry_digest(record.biochemistry()).unwrap();
+        assert_eq!(
+            record.state_graph().body_biochemistry.content_digest,
+            expected_digest
+        );
+        let wire = serde_json::to_vec(&record).unwrap();
+        let restored: WorldOrganismRecord = serde_json::from_slice(&wire).unwrap();
+        restored.validate_contract().unwrap();
+        assert_eq!(restored, record);
+        assert_eq!(serde_json::to_vec(&restored).unwrap(), wire);
+
+        // Seal flushes pending digest and keeps exact match.
+        record
+            .seal_cognitive_subsystems(Tick(1), [1; 4], [2; 4])
+            .unwrap();
+        assert!(!record.body_digest_pending);
+        assert_eq!(
+            record.state_graph().body_biochemistry.content_digest,
+            expected_digest
+        );
     }
 }

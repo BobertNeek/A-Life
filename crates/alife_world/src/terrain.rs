@@ -61,7 +61,47 @@ pub struct WorldTerrain {
     limits: LocomotionLimits,
 }
 
+struct Fnv1aWriter(u64);
+
+impl std::io::Write for Fnv1aWriter {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        for &byte in buf {
+            self.0 = (self.0 ^ u64::from(byte)).wrapping_mul(0x100000001b3);
+        }
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
 impl TerrainSurface {
+    pub(crate) fn matches_data_bits(&self, data: &TerrainData) -> bool {
+        self.width == data.width
+            && self.depth == data.depth
+            && self.origin_x.to_bits() == data.origin_x.to_bits()
+            && self.origin_z.to_bits() == data.origin_z.to_bits()
+            && self.spacing.to_bits() == data.spacing.to_bits()
+            && match (self.water_level, data.water_level) {
+                (Some(a), Some(b)) => a.to_bits() == b.to_bits(),
+                (None, None) => true,
+                _ => false,
+            }
+            && self.heights.len() == data.heights.len()
+            && self
+                .heights
+                .iter()
+                .zip(&data.heights)
+                .all(|(a, b)| a.to_bits() == b.to_bits())
+            && self.obstacles.len() == data.obstacles.len()
+            && self.obstacles.iter().zip(&data.obstacles).all(|(a, b)| {
+                a.iter()
+                    .zip(b.iter())
+                    .all(|(x, y)| x.to_bits() == y.to_bits())
+            })
+    }
+
     pub fn from_data(data: TerrainData) -> Result<Self, ScaffoldContractError> {
         let invalid = || ScaffoldContractError::InvalidId;
         let count = data.width.checked_mul(data.depth).ok_or_else(invalid)?;
@@ -84,10 +124,9 @@ impl TerrainSurface {
         {
             return Err(invalid());
         }
-        let bytes = serde_json::to_vec(&data).map_err(|_| invalid())?;
-        let digest = bytes.iter().fold(0xcbf29ce484222325u64, |h, b| {
-            (h ^ u64::from(*b)).wrapping_mul(0x100000001b3)
-        });
+        let mut hasher = Fnv1aWriter(0xcbf29ce484222325u64);
+        serde_json::to_writer(&mut hasher, &data).map_err(|_| invalid())?;
+        let digest = hasher.0;
         let mut cells: HashMap<(i32, i32), Vec<usize>> = HashMap::new();
         for (i, b) in data.obstacles.iter().enumerate() {
             let (x0, x1, z0, z1) = (
@@ -161,6 +200,15 @@ impl WorldTerrain {
         };
         binding.validate()?;
         let state = state.ok_or(ScaffoldContractError::InvalidId)?;
+        state.locomotion.validate()?;
+        let island = crate::island_terrain();
+        if binding == island.binding() && island.surface().matches_data_bits(&state.data) {
+            return Ok(Some(Self {
+                surface: Arc::clone(island.surface()),
+                binding,
+                limits: state.locomotion,
+            }));
+        }
         let result = Self::new(state.data.clone(), state.locomotion)?;
         if result.binding != binding {
             return Err(ScaffoldContractError::InvalidId);
@@ -333,5 +381,51 @@ mod tests {
             assert!(WorldTerrain::new(broken, Default::default()).is_err());
         }
         assert!(WorldTerrain::restore(Some(world.binding()), None).is_err());
+    }
+    #[test]
+    fn streaming_fnv1a_matches_vec_digest_and_restore_fast_path_checks_sign_bits() {
+        let island = crate::island_terrain();
+        let state = island.state();
+        let bytes = serde_json::to_vec(&state.data).unwrap();
+        let expected_digest = bytes.iter().fold(0xcbf29ce484222325u64, |h, b| {
+            (h ^ u64::from(*b)).wrapping_mul(0x100000001b3)
+        });
+        assert_eq!(island.binding().digest, expected_digest);
+
+        let restored = WorldTerrain::restore(Some(island.binding()), Some(&state))
+            .unwrap()
+            .unwrap();
+        assert!(Arc::ptr_eq(restored.surface(), island.surface()));
+
+        // Custom locomotion limits still reuse the cached island surface Arc.
+        let custom_state = TerrainState {
+            locomotion: LocomotionLimits {
+                body_radius: 0.3,
+                ..state.locomotion
+            },
+            ..state.clone()
+        };
+        let restored_custom = WorldTerrain::restore(Some(island.binding()), Some(&custom_state))
+            .unwrap()
+            .unwrap();
+        assert!(Arc::ptr_eq(restored_custom.surface(), island.surface()));
+        assert_eq!(restored_custom.limits().body_radius, 0.3);
+
+        // -0.0 in water_level or heights must not match +0.0 via fast-path and must fail binding check
+        // (since JSON encodes -0.0 differently from 0.0).
+        let mut neg_zero_water = state.clone();
+        neg_zero_water.data.water_level = Some(-0.0);
+        assert!(WorldTerrain::restore(Some(island.binding()), Some(&neg_zero_water)).is_err());
+
+        let mut neg_zero_height = state;
+        if let Some(pos_zero_idx) = neg_zero_height
+            .data
+            .heights
+            .iter()
+            .position(|h| h.to_bits() == 0.0_f32.to_bits())
+        {
+            neg_zero_height.data.heights[pos_zero_idx] = -0.0;
+            assert!(WorldTerrain::restore(Some(island.binding()), Some(&neg_zero_height)).is_err());
+        }
     }
 }

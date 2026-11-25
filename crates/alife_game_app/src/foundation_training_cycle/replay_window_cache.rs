@@ -1,63 +1,51 @@
 //! Policy-local immutable replay snapshots; allocation admission is never cached.
-use super::{FoundationReplayBudget, PpoTrainingWindow, ScaffoldContractError};
+use super::{FoundationReplayBudget, PpoTrainingWindow};
 use alife_training::TrainingError;
 use std::mem::size_of;
+use std::sync::Arc;
 
-const MAX_WINDOWS: usize = 8;
 const MAX_CHARGED_BYTES: u64 = 512 * 1024 * 1024;
 
+struct CacheEntry {
+    window: Arc<PpoTrainingWindow>,
+    charge: u64,
+    stamp: u64,
+}
+
 pub(super) struct PpoWindowSnapshotCache {
-    windows: Vec<Option<(PpoTrainingWindow, u64)>>,
+    windows: Vec<Option<CacheEntry>>,
     charged_bytes: u64,
     byte_limit: u64,
+    next_stamp: u64,
 }
 
 impl PpoWindowSnapshotCache {
     pub(super) fn new(window_count: usize) -> Self {
         Self {
-            windows: vec![
-                None;
-                if window_count <= MAX_WINDOWS {
-                    window_count
-                } else {
-                    0
-                }
-            ],
+            windows: (0..window_count).map(|_| None).collect(),
             charged_bytes: 0,
             byte_limit: MAX_CHARGED_BYTES,
+            next_stamp: 0,
         }
     }
 
     pub(super) fn get(
-        &self,
+        &mut self,
         index: usize,
-        budget: FoundationReplayBudget,
-    ) -> Result<Option<PpoTrainingWindow>, TrainingError> {
-        self.get_with_admission(index, |charge| {
-            budget.check_additional(charge).map_err(|error| {
-                eprintln!("PPO replay snapshot clone exceeds measured host allowance: {error}");
-                TrainingError::from(ScaffoldContractError::InvalidDecisionEvidence)
-            })
-        })
-    }
-
-    fn get_with_admission(
-        &self,
-        index: usize,
-        admit: impl FnOnce(u64) -> Result<(), TrainingError>,
-    ) -> Result<Option<PpoTrainingWindow>, TrainingError> {
-        let Some(Some((window, charge))) = self.windows.get(index) else {
+        _budget: FoundationReplayBudget,
+    ) -> Result<Option<Arc<PpoTrainingWindow>>, TrainingError> {
+        let Some(Some(entry)) = self.windows.get_mut(index) else {
             return Ok(None);
         };
-        // A hit skips storage, not the guard on allocating a fresh owned copy.
-        admit(*charge)?;
-        Ok(Some(window.clone()))
+        entry.stamp = self.next_stamp;
+        self.next_stamp = self.next_stamp.saturating_add(1);
+        Ok(Some(Arc::clone(&entry.window)))
     }
 
     pub(super) fn retain(
         &mut self,
         index: usize,
-        window: &PpoTrainingWindow,
+        window: &Arc<PpoTrainingWindow>,
         budget: FoundationReplayBudget,
     ) {
         self.retain_with_admission(index, window, |charge| {
@@ -68,31 +56,49 @@ impl PpoWindowSnapshotCache {
     fn retain_with_admission(
         &mut self,
         index: usize,
-        window: &PpoTrainingWindow,
+        window: &Arc<PpoTrainingWindow>,
         admit: impl FnOnce(u64) -> bool,
     ) -> bool {
-        let Some(slot) = self.windows.get_mut(index) else {
+        if index >= self.windows.len() {
             return false;
-        };
+        }
         let Some(charge) = window_clone_charge(window) else {
             return false;
         };
-        let old_charge = slot.as_ref().map_or(0, |(_, charge)| *charge);
-        let Some(next_charge) = self
-            .charged_bytes
-            .checked_sub(old_charge)
-            .and_then(|bytes| bytes.checked_add(charge))
-            .filter(|bytes| *bytes <= self.byte_limit)
-        else {
+        if charge > self.byte_limit {
             return false;
-        };
-        // Retention is optional. Do not fail already-admitted uncached work if
-        // there is insufficient headroom for this additional owned copy.
+        }
+        // Retention is optional. Do not fail or evict already-retained entries
+        // if there is insufficient host headroom for this entry.
         if !admit(charge) {
             return false;
         }
-        *slot = Some((window.clone(), charge));
-        self.charged_bytes = next_charge;
+        if let Some(old) = self.windows[index].take() {
+            self.charged_bytes -= old.charge;
+        }
+        while self.charged_bytes + charge > self.byte_limit {
+            let Some(victim) = self
+                .windows
+                .iter()
+                .enumerate()
+                .filter_map(|(i, slot)| slot.as_ref().map(|entry| (i, entry.stamp)))
+                .min_by_key(|(_, stamp)| *stamp)
+                .map(|(i, _)| i)
+            else {
+                break;
+            };
+            if let Some(evicted) = self.windows[victim].take() {
+                self.charged_bytes -= evicted.charge;
+            }
+        }
+        let stamp = self.next_stamp;
+        self.next_stamp = self.next_stamp.saturating_add(1);
+        self.windows[index] = Some(CacheEntry {
+            window: Arc::clone(window),
+            charge,
+            stamp,
+        });
+        self.charged_bytes += charge;
         true
     }
 }
@@ -196,8 +202,8 @@ mod tests {
     }
 
     #[test]
-    fn ppo_snapshot_cache_admits_before_clone_and_skips_optional_retention() {
-        let original = window();
+    fn ppo_snapshot_cache_admits_before_retain_and_skips_optional_retention() {
+        let original = Arc::new(window());
         let charge = window_clone_charge(&original).unwrap();
         let mut cache = PpoWindowSnapshotCache::new(1);
         assert!(!cache.retain_with_admission(0, &original, |bytes| {
@@ -206,57 +212,71 @@ mod tests {
         }));
         assert_eq!(cache.charged_bytes, 0);
         assert!(cache
-            .get_with_admission(0, |_| panic!("empty cache"))
+            .get(0, FoundationReplayBudget::default())
             .unwrap()
             .is_none());
         assert!(cache.retain_with_admission(0, &original, |_| true));
-        assert!(cache
-            .get_with_admission(0, |bytes| {
-                assert_eq!(bytes, charge);
-                Err(ScaffoldContractError::InvalidDecisionEvidence.into())
-            })
-            .is_err());
         assert_eq!(cache.charged_bytes, charge);
-        let mut copy = cache.get_with_admission(0, |_| Ok(())).unwrap().unwrap();
+        let hit = cache
+            .get(0, FoundationReplayBudget::default())
+            .unwrap()
+            .unwrap();
+        assert!(Arc::ptr_eq(&hit, &original));
         let wire = |window: &PpoTrainingWindow| {
             bincode::serde::encode_to_vec(&window.sequence, bincode::config::standard()).unwrap()
         };
-        assert_eq!(wire(&copy), wire(&original));
-        assert_eq!(copy.batch, original.batch);
+        assert_eq!(wire(&hit), wire(&original));
+        assert_eq!(hit.batch, original.batch);
         assert_eq!(
-            copy.batch.transitions()[0].reward.to_bits(),
+            hit.batch.transitions()[0].reward.to_bits(),
             (-0.0_f32).to_bits()
-        );
-        copy.sequence.initial.activations[0] = 9.0;
-        assert_eq!(
-            wire(&cache.get_with_admission(0, |_| Ok(())).unwrap().unwrap()),
-            wire(&original)
         );
     }
 
     #[test]
-    fn ppo_snapshot_cache_bounds_slots_and_total_clone_charge() {
-        let original = window();
+    fn ppo_snapshot_cache_bounds_slots_and_evicts_lru_over_byte_limit() {
+        let original = Arc::new(window());
         let charge = window_clone_charge(&original).unwrap();
-        let mut cache = PpoWindowSnapshotCache::new(MAX_WINDOWS);
-        for index in 0..MAX_WINDOWS {
+        // More than 8 windows remains enabled (no <= 8 cliff).
+        let window_count = 12usize;
+        let mut cache = PpoWindowSnapshotCache::new(window_count);
+        for index in 0..window_count {
             assert!(cache.retain_with_admission(index, &original, |_| true));
         }
-        assert_eq!(cache.charged_bytes, charge * MAX_WINDOWS as u64);
-        assert!(!cache.retain_with_admission(MAX_WINDOWS, &original, |_| panic!("outside slots")));
-        let mut disabled = PpoWindowSnapshotCache::new(MAX_WINDOWS + 1);
-        assert!(!disabled.retain_with_admission(0, &original, |_| panic!("disabled cache")));
-        let mut bounded = PpoWindowSnapshotCache::new(2);
-        bounded.byte_limit = charge;
+        assert_eq!(cache.charged_bytes, charge * window_count as u64);
+        assert!(!cache.retain_with_admission(window_count, &original, |_| panic!("outside slots")));
+
+        // Byte-bounded LRU evicts least recently used entries.
+        let mut bounded = PpoWindowSnapshotCache::new(3);
+        bounded.byte_limit = charge * 2;
         assert!(bounded.retain_with_admission(0, &original, |_| true));
+        assert!(bounded.retain_with_admission(1, &original, |_| true));
+        // Touch 0 so 1 becomes the LRU victim.
+        assert!(bounded
+            .get(0, FoundationReplayBudget::default())
+            .unwrap()
+            .is_some());
+        assert!(bounded.retain_with_admission(2, &original, |_| true));
+        assert_eq!(bounded.charged_bytes, charge * 2);
+        assert!(bounded
+            .get(0, FoundationReplayBudget::default())
+            .unwrap()
+            .is_some());
+        assert!(bounded
+            .get(1, FoundationReplayBudget::default())
+            .unwrap()
+            .is_none());
+        assert!(bounded
+            .get(2, FoundationReplayBudget::default())
+            .unwrap()
+            .is_some());
+        // Replacing an existing entry does not double-charge.
+        assert!(bounded.retain_with_admission(0, &original, |_| true));
+        assert_eq!(bounded.charged_bytes, charge * 2);
+        // Oversized single entry is never retained and leaves existing cache intact.
+        bounded.byte_limit = charge - 1;
         assert!(
-            !bounded.retain_with_admission(1, &original, |_| panic!("byte cap before admission"))
-        );
-        assert_eq!(bounded.charged_bytes, charge);
-        assert!(bounded.retain_with_admission(0, &original, |_| true));
-        assert_eq!(
-            bounded.charged_bytes, charge,
-            "replacement does not double charge"
+            !bounded.retain_with_admission(0, &original, |_| panic!("byte cap before admission"))
         );
         assert_eq!(PpoWindowSnapshotCache::new(1).byte_limit, 512 * 1024 * 1024);
     }

@@ -138,7 +138,7 @@ pub(super) fn collect_input(world: &mut World) {
 fn open_selected(world: &mut World, keyboard: bool) {
     let selection = world.resource::<Fvr03ProductionVoxelSelectionResource>();
     let creatures = world.resource::<Fvr04ProductionCreatureSceneResource>();
-    let Some(runtime) = world.get_non_send_resource::<ProductionGpuBrainRuntimeResource>() else {
+    let Some(runtime) = world.get_resource::<ProductionGpuBrainRuntimeResource>() else {
         return;
     };
     let Some(stable_id) = selection
@@ -151,32 +151,34 @@ fn open_selected(world: &mut World, keyboard: bool) {
     let Some(organism_id) = selected_organism(selection, creatures) else {
         return;
     };
-    let Some(object) = runtime.runtime.world().entity(stable_id).filter(|o| {
-        o.kind == WorldObjectKind::Agent && o.organism_id == Some(organism_id) && !o.consumed
-    }) else {
-        return;
-    };
-    if !runtime
-        .runtime
-        .world()
-        .organism_registry()
-        .get(organism_id)
-        .is_some_and(|r| r.world_entity_id() == stable_id && r.lifecycle().is_alive())
-    {
-        return;
-    }
-    let Ok(runtime_identity) = SpeechRuntimeIdentity::capture(&runtime.runtime) else {
-        return;
-    };
-    let draft = Draft {
-        stable_id,
-        organism_id,
-        original_name: object.label.clone(),
-        runtime_identity,
-        opening: Some(keyboard),
-        preedit: String::new(),
-        pending_input: None,
-        error: None,
+    let draft = {
+        let runtime = runtime.lock();
+        let Some(object) = runtime.world().entity(stable_id).filter(|o| {
+            o.kind == WorldObjectKind::Agent && o.organism_id == Some(organism_id) && !o.consumed
+        }) else {
+            return;
+        };
+        if !runtime
+            .world()
+            .organism_registry()
+            .get(organism_id)
+            .is_some_and(|r| r.world_entity_id() == stable_id && r.lifecycle().is_alive())
+        {
+            return;
+        }
+        let Ok(runtime_identity) = SpeechRuntimeIdentity::capture(&runtime) else {
+            return;
+        };
+        Draft {
+            stable_id,
+            organism_id,
+            original_name: object.label.clone(),
+            runtime_identity,
+            opening: Some(keyboard),
+            preedit: String::new(),
+            pending_input: None,
+            error: None,
+        }
     };
     open(
         &mut world.resource_mut::<ProductionConversationLineageUiState>(),
@@ -208,35 +210,30 @@ pub(super) fn sync_ime_window(world: &mut World) {
                 window.ime_enabled = enabled;
             }
         }
-        let next = target.map(|entity| {
-            (
-                entity,
-                world
-                    .get::<bevy::prelude::Window>(entity)
-                    .unwrap()
-                    .ime_enabled,
-            )
+        let next = target.and_then(|entity| {
+            world
+                .get::<bevy::prelude::Window>(entity)
+                .map(|window| (entity, window.ime_enabled))
         });
         world.resource_mut::<OpenInput>().ime_window = next;
     }
     if let Some(entity) = target {
-        world
-            .get_mut::<bevy::prelude::Window>(entity)
-            .unwrap()
-            .ime_enabled = true;
+        if let Some(mut window) = world.get_mut::<bevy::prelude::Window>(entity) {
+            window.ime_enabled = true;
+        }
     } else if world
         .resource::<ProductionConversationLineageUiState>()
         .naming
         .as_ref()
         .is_some_and(|draft| !draft.preedit.is_empty())
     {
-        world
+        if let Some(draft) = world
             .resource_mut::<ProductionConversationLineageUiState>()
             .naming
             .as_mut()
-            .expect("checked above")
-            .preedit
-            .clear();
+        {
+            draft.preedit.clear();
+        }
     }
 }
 
@@ -306,16 +303,18 @@ fn ime_event_window(ime: &Ime) -> Entity {
 }
 
 fn apply_ime(state: &mut ProductionConversationLineageUiState, ime: Ime) {
+    let Some(draft) = state.naming.as_mut() else {
+        return;
+    };
     match ime {
         Ime::Preedit { value, .. } => {
-            state.naming.as_mut().unwrap().preedit = value
+            draft.preedit = value
                 .chars()
                 .filter(|c| !c.is_control())
                 .take(MAX_TYPED_CHARS)
                 .collect();
         }
         Ime::Commit { value, .. } => {
-            let draft = state.naming.as_mut().unwrap();
             draft.preedit.clear();
             draft.error = None;
             let remaining = MAX_TYPED_CHARS.saturating_sub(state.input.chars().count());
@@ -324,7 +323,7 @@ fn apply_ime(state: &mut ProductionConversationLineageUiState, ime: Ime) {
                 .extend(value.chars().filter(|c| !c.is_control()).take(remaining));
             state.input_help_open = false;
         }
-        Ime::Disabled { .. } => state.naming.as_mut().unwrap().preedit.clear(),
+        Ime::Disabled { .. } => draft.preedit.clear(),
         Ime::Enabled { .. } => {}
     }
 }
@@ -383,7 +382,9 @@ pub(super) fn handle_input<'a>(
     runtime: &mut crate::GpuLiveBrainRuntime,
     state: &mut ProductionConversationLineageUiState,
 ) {
-    let draft = state.naming.as_ref().unwrap();
+    let Some(draft) = state.naming.as_ref() else {
+        return;
+    };
     if !draft.runtime_identity.still_matches(runtime)
         || !target_matches(
             draft,
@@ -397,7 +398,10 @@ pub(super) fn handle_input<'a>(
     }
     let submit = edit(state, keyboard, messages, pointer);
     if submit {
-        let id = state.naming.as_ref().unwrap().stable_id;
+        let Some(id) = state.naming.as_ref().map(|draft| draft.stable_id) else {
+            cancel(state);
+            return;
+        };
         let result = runtime.rename_player_creature(id, &state.input);
         complete(state, result);
     }
@@ -413,20 +417,27 @@ fn edit<'a>(
         cancel(state);
         return false;
     }
+    if state.naming.is_none() {
+        cancel(state);
+        return false;
+    }
     if keyboard.just_pressed(KeyCode::F1) || pointer == Some(composer::Control::Help) {
         state.input_help_open = !state.input_help_open;
     }
-    let opening = state.naming.as_mut().unwrap().opening.take();
-    let events = state
-        .naming
-        .as_mut()
-        .unwrap()
-        .pending_input
-        .take()
+    let Some((opening, pending_input, preedit_non_empty)) = state.naming.as_mut().map(|draft| {
+        (
+            draft.opening.take(),
+            draft.pending_input.take(),
+            !draft.preedit.is_empty(),
+        )
+    }) else {
+        return false;
+    };
+    let events = pending_input
         .unwrap_or_else(|| messages.cloned().map(WindowEvent::KeyboardInput).collect());
     // Only confirmation is frame-gated: Commit may precede the Enter that chose
     // its candidate. Ordinary characters/backspace still replay in source order.
-    let ime_confirmation = !state.naming.as_ref().unwrap().preedit.is_empty()
+    let ime_confirmation = preedit_non_empty
         || events.iter().any(|event| {
             matches!(
                 event,
@@ -463,7 +474,11 @@ fn edit<'a>(
             // Winit owns composition text deduplication. Ignore raw editing
             // only while preedit is active; preserve all ordinary post-commit
             // edits, even when they share this update with the commit.
-            if !state.naming.as_ref().unwrap().preedit.is_empty() {
+            if state
+                .naming
+                .as_ref()
+                .is_none_or(|draft| !draft.preedit.is_empty())
+            {
                 continue;
             }
             if message.key_code == KeyCode::Enter {
@@ -483,7 +498,9 @@ fn edit<'a>(
         submit
     };
     if before != state.input {
-        state.naming.as_mut().unwrap().error = None;
+        if let Some(draft) = state.naming.as_mut() {
+            draft.error = None;
+        }
         state.input_help_open = false;
     }
     opening.is_none() && !ime_confirmation && (submit || pointer == Some(composer::Control::Send))
@@ -513,7 +530,9 @@ fn complete(
                     return;
                 }
             };
-            state.naming.as_mut().unwrap().error = Some(message);
+            if let Some(draft) = state.naming.as_mut() {
+                draft.error = Some(message);
+            }
             state.status = message.into();
         }
     }

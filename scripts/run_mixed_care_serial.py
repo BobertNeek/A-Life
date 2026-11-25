@@ -691,16 +691,23 @@ def execute(plan, *, resume=False, cutoff=None):
         if seed_admission(plan)["policy"] == "known-exclusions":
             reconcile_prior_runs(doc, ledger["runs"][:-1], check_payloads=retained_count(plan) is None)
 
-        def guard():
+        hash_cache = host.FileHashCache()
+
+        def _run_guard(*, force=False):
             require(not (output / "STOP").exists(), "owner STOP requested interruption")
             for path, digest in plan["binary_sha256"].items():
-                require(host.sha256(path) == digest, "pinned executable changed")
+                require(hash_cache.sha256(path, force=force) == digest, "pinned executable changed")
             require(dt.datetime.now(host.UTC) < cutoff, "schedule cutoff reached")
             resources = host.resource_snapshot(output)
             require(resources["disk_free_bytes"] >= plan["min_disk_gib"] * 2**30 and
                     resources["available_memory_bytes"] is not None and
                     resources["available_memory_bytes"] >= plan["min_memory_gib"] * 2**30, "resource reserve reached")
             require(os.name != "nt" or resources["idle_seconds"] >= plan["idle_seconds"], "interactive PC use resumed")
+
+        def guard():
+            _run_guard(force=False)
+
+        guard.full = lambda: _run_guard(force=True)
 
         # Rebuild the chain and validate surviving accepted seals before dispatch.
         inspection_options = {"on_started": active.append, "guard": guard, "cutoff": cutoff}
@@ -713,7 +720,7 @@ def execute(plan, *, resume=False, cutoff=None):
         old = source_receipt(plan)
         if keep is None or not accepted:
             unchanged(previous, previous_hashes)
-            guard()
+            guard.full()
             actual, previous_report, _ = inspect(previous, Path(plan["inspector"]), **inspection_options)
             require(actual == old, "saved source receipt changed")
         slot = 0
@@ -767,7 +774,7 @@ def execute(plan, *, resume=False, cutoff=None):
             index = len(run["attempts"])
             seed = plan["seed_range"][0] + index
             require(seed <= plan["seed_range"][1], "reserved seeds exhausted; reconcile into a new explicit allocation")
-            guard()
+            guard.full()
             host.assert_lane_idle()
             expected = plan["source_sha256"]
             # The most recent attempt can be abandoned; use the actual accepted predecessor.
@@ -791,7 +798,7 @@ def execute(plan, *, resume=False, cutoff=None):
             active.clear()
             host.run_child(argv, output / f"attempt-{index:05d}", deadline, guard,
                            host.prior_environment(), on_started=active.append)
-            guard()
+            guard.full()
             unchanged(previous, expected)
             receipt, hashes = validate_cycle(directory, previous, row, seed, Path(plan["inspector"]),
                                              **inspection_options)

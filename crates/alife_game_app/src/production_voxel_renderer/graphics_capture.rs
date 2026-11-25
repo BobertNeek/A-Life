@@ -96,7 +96,7 @@ pub(super) fn capture_player_view(
     surface: Res<creature_grounding::RenderedTerrainSurface>,
     highlands: Option<Res<creature_grounding::SelectedTerrain>>,
     frame: Option<Res<LiveBrainPresentationFrameResource>>,
-    #[cfg(feature = "gpu-runtime")] runtime: Option<NonSend<ProductionGpuBrainRuntimeResource>>,
+    #[cfg(feature = "gpu-runtime")] runtime: Option<Res<ProductionGpuBrainRuntimeResource>>,
     meshes: Res<Assets<Mesh>>,
     visible_meshes: Query<(&Mesh3d, &ViewVisibility)>,
     view: CaptureView,
@@ -138,7 +138,7 @@ pub(super) fn capture_player_view(
         {
             runtime
                 .as_ref()
-                .map_or_else(Vec::new, |r| r.runtime.active_utterances())
+                .map_or_else(Vec::new, |r| r.lock().active_utterances())
         }
         #[cfg(not(feature = "gpu-runtime"))]
         {

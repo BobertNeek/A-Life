@@ -614,9 +614,12 @@ impl GpuLiveBrainRuntime {
                     // tick-T authority. Only after that durable success may
                     // later compact edges bind the now-promoted resident host
                     // metadata. This performs no mutable-buffer readback.
-                    for (organism_id_raw, authority) in current_authorities {
-                        self.sleep_journal_neural_authorities
-                            .insert(organism_id_raw, authority);
+                    if !current_authorities.is_empty() {
+                        let authorities =
+                            std::sync::Arc::make_mut(&mut self.sleep_journal_neural_authorities);
+                        for (organism_id_raw, authority) in current_authorities {
+                            authorities.insert(organism_id_raw, authority);
+                        }
                     }
                     self.performance_metrics.sleep_compact_journal_organisms = self
                         .performance_metrics
@@ -663,7 +666,9 @@ impl GpuLiveBrainRuntime {
                     );
                 self.exact_checkpoint_work = ExactPopulationCheckpointRuntimeWorkV1::Idle;
                 if !self.pending_sleep_journal_entries.is_empty() {
-                    let pending = std::mem::take(&mut self.pending_sleep_journal_entries);
+                    let pending = std::mem::take(std::sync::Arc::make_mut(
+                        &mut self.pending_sleep_journal_entries,
+                    ));
                     self.start_sleep_journal_publication(pending)?;
                 }
                 if follow_up {

@@ -6,7 +6,7 @@ use std::{
     path::{Path, PathBuf},
     sync::{
         atomic::{AtomicU64, Ordering},
-        Mutex,
+        Arc, Mutex,
     },
     time::Instant,
 };
@@ -27,7 +27,6 @@ static AUTHORITY_TEST_FAILURE_STAGE: AtomicU64 = AtomicU64::new(0);
 pub const GPU_SLEEP_TRANSACTION_JOURNAL_SCHEMA_VERSION: u16 = 2;
 pub const GPU_SLEEP_TRANSACTION_JOURNAL_MAX_ENTRIES: usize = 4096;
 const SLEEP_JOURNAL_DIGEST_DOMAIN: &[u8] = b"alife.gpu.sleep-transaction-journal.v2";
-const GPU_CHECKPOINT_AUTHORITY_FIELD: &str = "gpu_checkpoint_authority";
 const GPU_CHECKPOINT_AUTHORITY_SCHEMA: &str = "alife.gpu-checkpoint-authority";
 const GPU_CHECKPOINT_AUTHORITY_SCHEMA_VERSION: u16 = 1;
 const GPU_CHECKPOINT_AUTHORITY_DIGEST_DOMAIN: &[u8] = b"alife.gpu-checkpoint-authority.v1";
@@ -671,9 +670,24 @@ impl GpuCheckpointAuthorityPointerV1 {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct GpuLoadedSaveManifest {
-    pub save: PortableSaveFile,
+    pub save: Arc<PortableSaveFile>,
     pub digest: GpuSaveManifestDigest,
     authority: GpuCheckpointAuthoritySource,
+}
+
+#[derive(Deserialize)]
+struct AuthorityPointerLookup {
+    #[serde(default, deserialize_with = "deserialize_present_authority_pointer")]
+    gpu_checkpoint_authority: Option<GpuCheckpointAuthorityPointerV1>,
+}
+
+fn deserialize_present_authority_pointer<'de, D>(
+    deserializer: D,
+) -> Result<Option<GpuCheckpointAuthorityPointerV1>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    GpuCheckpointAuthorityPointerV1::deserialize(deserializer).map(Some)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -697,7 +711,7 @@ impl GpuCheckpointAuthoritySource {
 
 impl GpuLoadedSaveManifest {
     pub fn exact_save_anchor_digest(&self) -> Result<PortableAssetDigest, ScaffoldContractError> {
-        let bytes = serde_json::to_vec_pretty(&self.save)
+        let bytes = serde_json::to_vec_pretty(self.save.as_ref())
             .map_err(|_| ScaffoldContractError::ConsolidationGenerationMismatch)?;
         Ok(PortableAssetDigest::for_bytes(&bytes))
     }
@@ -774,12 +788,9 @@ impl GpuDurableSaveManifest {
 
     pub fn load(&self) -> Result<GpuLoadedSaveManifest, GameAppShellError> {
         let bytes = fs::read(&self.save_path)?;
-        let value: serde_json::Value = serde_json::from_slice(&bytes)?;
-        let authority = value
-            .get(GPU_CHECKPOINT_AUTHORITY_FIELD)
-            .cloned()
-            .map(serde_json::from_value::<GpuCheckpointAuthorityPointerV1>)
-            .transpose()?;
+        let AuthorityPointerLookup {
+            gpu_checkpoint_authority: authority,
+        } = serde_json::from_slice(&bytes)?;
         let (save, digest, authority) = match authority {
             Some(pointer) => {
                 pointer.validate()?;
@@ -816,7 +827,7 @@ impl GpuDurableSaveManifest {
             }
         };
         Ok(GpuLoadedSaveManifest {
-            save,
+            save: Arc::new(save),
             digest,
             authority,
         })
@@ -826,12 +837,9 @@ impl GpuDurableSaveManifest {
         &self,
     ) -> Result<(GpuSaveManifestDigest, GpuCheckpointAuthoritySource), GameAppShellError> {
         let bytes = fs::read(&self.save_path)?;
-        let value: serde_json::Value = serde_json::from_slice(&bytes)?;
-        let pointer = value
-            .get(GPU_CHECKPOINT_AUTHORITY_FIELD)
-            .cloned()
-            .map(serde_json::from_value::<GpuCheckpointAuthorityPointerV1>)
-            .transpose()?;
+        let AuthorityPointerLookup {
+            gpu_checkpoint_authority: pointer,
+        } = serde_json::from_slice(&bytes)?;
         match pointer {
             Some(pointer) => {
                 pointer.validate()?;
@@ -973,6 +981,11 @@ impl GpuDurableSaveManifest {
         journal: &GpuSleepTransactionJournalV2,
         measure: bool,
     ) -> Result<GpuSleepJournalPublicationReceipt, GameAppShellError> {
+        let _span = tracing::debug_span!(
+            "durable_manifest_cas",
+            world_tick = base.save.world.tick.raw()
+        )
+        .entered();
         let mut timing = GpuSleepJournalPublicationTiming::default();
         let started = measure.then(Instant::now);
         journal.validate()?;
@@ -1001,6 +1014,11 @@ impl GpuDurableSaveManifest {
         let (actual_digest, actual_authority) = self.load_current_manifest_identity()?;
         record_elapsed_ns(&mut timing.cas_base_reload_wall_ns, started);
         if actual_digest != base.digest || actual_authority != base.authority {
+            tracing::warn!(
+                expected = base.digest.as_str(),
+                actual = actual_digest.as_str(),
+                "durable checkpoint CAS manifest conflict"
+            );
             return Err(GameAppShellError::GpuCheckpointManifestConflict {
                 expected: base.digest.as_str().to_string(),
                 actual: actual_digest.as_str().to_string(),
@@ -1106,7 +1124,7 @@ impl GpuDurableSaveManifest {
             None => 1,
         };
         let started = measure.then(Instant::now);
-        let save_bytes = serde_json::to_vec_pretty(&base.save)?;
+        let save_bytes = serde_json::to_vec_pretty(base.save.as_ref())?;
         let save_digest = PortableAssetDigest::for_bytes(&save_bytes);
         let save_file_name = authority_save_file_name(&self.save_path, generation, &save_digest)?;
         record_elapsed_ns(&mut timing.save_encode_wall_ns, started);
@@ -1155,7 +1173,7 @@ impl GpuDurableSaveManifest {
 
     fn commit_authority_pointer(
         &self,
-        compatibility_save: &PortableSaveFile,
+        compatibility_save: &Arc<PortableSaveFile>,
         pointer: &GpuCheckpointAuthorityPointerV1,
     ) -> Result<GpuLoadedSaveManifest, GameAppShellError> {
         self.commit_authority_pointer_profiled(
@@ -1168,7 +1186,7 @@ impl GpuDurableSaveManifest {
 
     fn commit_authority_pointer_profiled(
         &self,
-        compatibility_save: &PortableSaveFile,
+        compatibility_save: &Arc<PortableSaveFile>,
         pointer: &GpuCheckpointAuthorityPointerV1,
         measure: bool,
         timing: &mut GpuSleepJournalPublicationTiming,
@@ -1176,7 +1194,7 @@ impl GpuDurableSaveManifest {
         let started = measure.then(Instant::now);
         pointer.validate()?;
         let prepared_save = self.read_authority_save(pointer)?;
-        if prepared_save != *compatibility_save
+        if prepared_save != **compatibility_save
             || pointer.asset_manifest_identity != asset_manifest_identity(&prepared_save)?
         {
             return Err(GameAppShellError::InvalidProductionFrontend {
@@ -1241,7 +1259,7 @@ impl GpuDurableSaveManifest {
 
     fn commit_prevalidated_authority_pointer_profiled(
         &self,
-        compatibility_save: &PortableSaveFile,
+        compatibility_save: &Arc<PortableSaveFile>,
         pointer: &GpuCheckpointAuthorityPointerV1,
         measure: bool,
         timing: &mut GpuSleepJournalPublicationTiming,
@@ -1254,7 +1272,7 @@ impl GpuDurableSaveManifest {
         };
         maybe_fail_authority_stage(AUTHORITY_STAGE_POINTER_COMMIT)?;
         let started = measure.then(Instant::now);
-        let encoded = encode_authoritative_save(compatibility_save, pointer)?;
+        let encoded = encode_authoritative_save(compatibility_save.as_ref(), pointer)?;
         record_elapsed_ns(&mut timing.manifest_encode_wall_ns, started);
         let started = measure.then(Instant::now);
         write_atomic_manifest(&self.save_path, &encoded)?;
@@ -1265,7 +1283,7 @@ impl GpuDurableSaveManifest {
                 self.load()
             } else {
                 Ok(GpuLoadedSaveManifest {
-                    save: compatibility_save.clone(),
+                    save: Arc::clone(compatibility_save),
                     digest: GpuSaveManifestDigest::for_authority(
                         pointer.save.digest.clone(),
                         pointer.authority_digest,
@@ -1368,6 +1386,11 @@ impl GpuDurableSaveManifest {
         asset_root: impl AsRef<Path>,
         replacement: &PortableSaveFile,
     ) -> Result<GpuLoadedSaveManifest, GameAppShellError> {
+        let _span = tracing::debug_span!(
+            "durable_manifest_publish_snapshot",
+            save_tick = replacement.world.tick.raw()
+        )
+        .entered();
         let asset_root = fs::canonicalize(asset_root)?;
         let requested = save_path.as_ref();
         let requested = if requested.is_absolute() {
@@ -1409,14 +1432,15 @@ impl GpuDurableSaveManifest {
         } else {
             GpuCheckpointAuthoritySource::LegacyDirectV1
         };
+        let replacement_arc = Arc::new(replacement.clone());
         let replacement_base = GpuLoadedSaveManifest {
-            save: replacement.clone(),
+            save: Arc::clone(&replacement_arc),
             digest: replacement_content_digest,
             authority: prior,
         };
         let journal = GpuSleepTransactionJournalV2::empty(&replacement_base)?;
         let pointer = durable.prepare_authority_generation(&replacement_base, &journal)?;
-        let committed = durable.commit_authority_pointer(replacement, &pointer)?;
+        let committed = durable.commit_authority_pointer(&replacement_arc, &pointer)?;
         drop(_guard);
 
         let durable = Self {
@@ -1425,7 +1449,7 @@ impl GpuDurableSaveManifest {
             asset_root,
         };
         let published = committed;
-        if published.save != *replacement {
+        if *published.save != *replacement {
             return Err(GameAppShellError::InvalidProductionFrontend {
                 message: "atomic GPU checkpoint publication changed the replacement save"
                     .to_string(),
@@ -1477,15 +1501,16 @@ impl GpuDurableSaveManifest {
                 actual: pre_replace.digest.as_str().to_string(),
             });
         }
+        let replacement_arc = Arc::new(replacement.clone());
         let replacement_base = GpuLoadedSaveManifest {
-            save: replacement.clone(),
+            save: Arc::clone(&replacement_arc),
             digest: replacement_content_digest,
             authority: pre_replace.authority,
         };
         let reset_journal = GpuSleepTransactionJournalV2::empty(&replacement_base)?;
         let pointer = self.prepare_authority_generation(&replacement_base, &reset_journal)?;
-        let published = self.commit_authority_pointer(replacement, &pointer)?;
-        if published.save != *replacement
+        let published = self.commit_authority_pointer(&replacement_arc, &pointer)?;
+        if *published.save != *replacement
             || published.authority.generation() != Some(&pointer)
             || self.load_sleep_transaction_journal(&published)? != reset_journal
         {
@@ -1569,18 +1594,16 @@ fn encode_authoritative_save(
     pointer: &GpuCheckpointAuthorityPointerV1,
 ) -> Result<Vec<u8>, GameAppShellError> {
     pointer.validate()?;
-    let mut value = serde_json::to_value(save)?;
-    let object =
-        value
-            .as_object_mut()
-            .ok_or_else(|| GameAppShellError::InvalidProductionFrontend {
-                message: "GPU checkpoint save must encode as a JSON object".to_string(),
-            })?;
-    object.insert(
-        GPU_CHECKPOINT_AUTHORITY_FIELD.to_string(),
-        serde_json::to_value(pointer)?,
-    );
-    Ok(serde_json::to_vec_pretty(&value)?)
+    #[derive(Serialize)]
+    struct AuthoritativeSaveEnvelope<'a> {
+        #[serde(flatten)]
+        save: &'a PortableSaveFile,
+        gpu_checkpoint_authority: &'a GpuCheckpointAuthorityPointerV1,
+    }
+    Ok(serde_json::to_vec_pretty(&AuthoritativeSaveEnvelope {
+        save,
+        gpu_checkpoint_authority: pointer,
+    })?)
 }
 
 fn write_immutable_authority_artifact(path: &Path, bytes: &[u8]) -> Result<(), GameAppShellError> {
@@ -1674,44 +1697,8 @@ fn commit_prepared_manifest(temporary: &Path, save_path: &Path) -> std::io::Resu
     sync_parent_directory(parent)
 }
 
-#[cfg(windows)]
 fn atomic_replace(source: &Path, destination: &Path) -> std::io::Result<()> {
-    use std::os::windows::ffi::OsStrExt;
-    use windows_sys::Win32::Storage::FileSystem::{
-        MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
-    };
-
-    alife_storage::replace_with(source, destination, || {
-        let source = source
-            .as_os_str()
-            .encode_wide()
-            .chain(std::iter::once(0))
-            .collect::<Vec<_>>();
-        let destination = destination
-            .as_os_str()
-            .encode_wide()
-            .chain(std::iter::once(0))
-            .collect::<Vec<_>>();
-        // SAFETY: both pointers reference live, NUL-terminated UTF-16 buffers for
-        // the duration of the call, and both paths are on the same directory tree.
-        let moved = unsafe {
-            MoveFileExW(
-                source.as_ptr(),
-                destination.as_ptr(),
-                MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
-            )
-        };
-        if moved == 0 {
-            Err(std::io::Error::last_os_error())
-        } else {
-            Ok(())
-        }
-    })
-}
-
-#[cfg(not(windows))]
-fn atomic_replace(source: &Path, destination: &Path) -> std::io::Result<()> {
-    alife_storage::rename(source, destination)
+    alife_storage::atomic_replace_file(source, destination)
 }
 
 #[cfg(unix)]
@@ -1771,7 +1758,7 @@ mod tests {
         assert!(GpuDurableSaveManifest::publish_snapshot(&path, &assets, &changed).is_err());
         assert_eq!(fs::read(&path).unwrap(), original);
         assert_eq!(
-            GpuDurableSaveManifest::open_loaded(&path, &assets)
+            *GpuDurableSaveManifest::open_loaded(&path, &assets)
                 .unwrap()
                 .1
                 .save,
@@ -2239,7 +2226,7 @@ mod tests {
         let durable = GpuDurableSaveManifest::open(&save_path, &root).unwrap();
         let loaded = durable.load().unwrap();
         let old_pointer_bytes = fs::read(&save_path).unwrap();
-        let mut replacement = loaded.save.clone();
+        let mut replacement = (*loaded.save).clone();
         replacement.save_id = "authority-stage-replacement".to_string();
 
         for stage in [
@@ -2277,6 +2264,50 @@ mod tests {
             .unwrap()
             .entries
             .is_empty());
+
+        alife_storage::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn authoritative_save_envelope_roundtrips_and_shares_arc_on_journal_reuse() {
+        let root = std::env::temp_dir().join(format!(
+            "alife-gpu-envelope-arc-reuse-{}",
+            std::process::id()
+        ));
+        if root.exists() {
+            alife_storage::remove_dir_all(&root).unwrap();
+        }
+        fs::create_dir_all(&root).unwrap();
+        let save_path = root.join("current.json");
+        let base = current_authority_save("envelope-roundtrip-base");
+        GpuDurableSaveManifest::publish_snapshot(&save_path, &root, &base).unwrap();
+
+        let (durable, loaded) = GpuDurableSaveManifest::open_loaded(&save_path, &root).unwrap();
+        assert_eq!(*loaded.save, base);
+        let pointer = loaded.authority.generation().unwrap();
+        let encoded = encode_authoritative_save(loaded.save.as_ref(), pointer).unwrap();
+        let parsed_save =
+            PortableSaveFile::from_json_str(std::str::from_utf8(&encoded).unwrap()).unwrap();
+        assert_eq!(parsed_save, base);
+
+        let journal = GpuSleepTransactionJournalV2::empty(&loaded).unwrap();
+        let receipt = durable
+            .publish_sleep_transaction_journal_profiled(&loaded, &journal, false)
+            .unwrap();
+        assert!(Arc::ptr_eq(&loaded.save, &receipt.published.save));
+
+        let null_authority_path = root.join("null-authority.json");
+        let mut null_value = serde_json::to_value(&base).unwrap();
+        null_value.as_object_mut().unwrap().insert(
+            "gpu_checkpoint_authority".to_string(),
+            serde_json::Value::Null,
+        );
+        fs::write(
+            &null_authority_path,
+            serde_json::to_vec_pretty(&null_value).unwrap(),
+        )
+        .unwrap();
+        assert!(GpuDurableSaveManifest::open(&null_authority_path, &root).is_err());
 
         alife_storage::remove_dir_all(root).unwrap();
     }

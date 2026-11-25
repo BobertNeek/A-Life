@@ -333,3 +333,79 @@ fn descendant_symlink_cannot_escape_scope() {
     assert!(write(f.0.join("alias/escaped"), b"12345").is_err());
     assert!(!outside.0.join("escaped").exists());
 }
+
+#[test]
+fn atomic_replace_file_creates_absent_and_overwrites_existing_destination() {
+    let f = Fixture::new();
+    let src_new = f.0.join("staged-create");
+    let dst = f.0.join("target.bin");
+    fs::write(&src_new, b"initial-payload").unwrap();
+
+    atomic_replace_file(&src_new, &dst).unwrap();
+    assert!(!src_new.exists());
+    assert_eq!(fs::read(&dst).unwrap(), b"initial-payload");
+
+    let src_overwrite = f.0.join("staged-overwrite");
+    fs::write(&src_overwrite, b"updated-payload").unwrap();
+
+    atomic_replace_file(&src_overwrite, &dst).unwrap();
+    assert!(!src_overwrite.exists());
+    assert_eq!(fs::read(&dst).unwrap(), b"updated-payload");
+}
+
+#[test]
+fn atomic_replace_file_respects_output_budget_accounting() {
+    let f = Fixture::new();
+    let budget = OutputBudget::register(&f.0, 16).unwrap();
+    let original = f.0.join("current.bin");
+    let staged = f.0.join("next.bin");
+    write(&original, b"olddata").unwrap();
+    write(&staged, b"newdata!").unwrap();
+    assert_eq!(budget.usage().unwrap().used, 15);
+
+    atomic_replace_file(&staged, &original).unwrap();
+    assert!(!staged.exists());
+    assert_eq!(fs::read(&original).unwrap(), b"newdata!");
+    assert_eq!(budget.usage().unwrap().used, 8);
+}
+
+#[test]
+fn atomic_publish_new_file_publishes_when_absent_and_rejects_existing_destination() {
+    let f = Fixture::new();
+    let src_first = f.0.join("pending-1");
+    let dst = f.0.join("sealed.bin");
+    fs::write(&src_first, b"first-sealed").unwrap();
+
+    atomic_publish_new_file(&src_first, &dst).unwrap();
+    assert!(!src_first.exists());
+    assert_eq!(fs::read(&dst).unwrap(), b"first-sealed");
+
+    let src_second = f.0.join("pending-2");
+    fs::write(&src_second, b"second-attempt").unwrap();
+
+    let err = atomic_publish_new_file(&src_second, &dst).unwrap_err();
+    assert_eq!(err.kind(), io::ErrorKind::AlreadyExists);
+    assert_eq!(fs::read(&dst).unwrap(), b"first-sealed");
+    assert_eq!(fs::read(&src_second).unwrap(), b"second-attempt");
+}
+
+#[test]
+fn atomic_publish_new_file_respects_output_budget_and_preserves_existing_on_conflict() {
+    let f = Fixture::new();
+    let budget = OutputBudget::register(&f.0, 24).unwrap();
+    let pending_a = f.0.join("pending-a");
+    let pending_b = f.0.join("pending-b");
+    let sealed = f.0.join("sealed.bin");
+    write(&pending_a, b"alpha").unwrap();
+    atomic_publish_new_file(&pending_a, &sealed).unwrap();
+    assert!(!pending_a.exists());
+    assert_eq!(fs::read(&sealed).unwrap(), b"alpha");
+    assert_eq!(budget.usage().unwrap().used, 5);
+
+    write(&pending_b, b"bravo").unwrap();
+    let err = atomic_publish_new_file(&pending_b, &sealed).unwrap_err();
+    assert_eq!(err.kind(), io::ErrorKind::AlreadyExists);
+    assert_eq!(fs::read(&sealed).unwrap(), b"alpha");
+    assert_eq!(fs::read(&pending_b).unwrap(), b"bravo");
+    assert_eq!(budget.usage().unwrap().used, 10);
+}

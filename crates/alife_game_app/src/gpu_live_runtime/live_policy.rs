@@ -276,8 +276,9 @@ impl GpuLiveBrainRuntime {
             .expect("prevalidated resident");
         resident.phenotype = std::sync::Arc::new(transition.next_phenotype().clone());
         resident.compiler_inputs = std::sync::Arc::new(transition.next_inputs().clone());
-        self.live_policy_exact_base_required = true;
         resident.neural_receptors = receptors;
+        self.live_policy_exact_base_required = true;
+        self.invalidate_pipelined_next_prep();
         self.handles.insert(organism_id.raw(), receipt.handle);
         if self
             .sleep_journal_neural_authorities
@@ -292,7 +293,7 @@ impl GpuLiveBrainRuntime {
                         return Err(error.into());
                     }
                 };
-            self.sleep_journal_neural_authorities
+            std::sync::Arc::make_mut(&mut self.sleep_journal_neural_authorities)
                 .insert(organism_id.raw(), authority);
         }
         // Sampling seed/counter/temperature and every living sidecar remain as-is.
@@ -737,7 +738,7 @@ mod tests {
             .backend
             .build_sleep_replay_batch(old_handle)
             .unwrap();
-        let original_sleep = runtime.residents[&organism.raw()].sleep_scheduler.clone();
+        let original_sleep = runtime.residents[&organism.raw()].sleep_scheduler;
         let original_sleep_state = original_sleep.state();
         let next_cycle = original_sleep_state
             .last_consolidated_cycle_id
@@ -787,8 +788,7 @@ mod tests {
             .sleep_scheduler = original_sleep;
         let authority =
             capture_sleep_journal_neural_authority(&mut runtime.backend, old_handle).unwrap();
-        runtime
-            .sleep_journal_neural_authorities
+        std::sync::Arc::make_mut(&mut runtime.sleep_journal_neural_authorities)
             .insert(organism.raw(), authority);
         let activity_before = runtime.backend.snapshot_activity_state(old_handle).unwrap();
         assert!(

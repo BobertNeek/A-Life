@@ -48,6 +48,7 @@ fn run(args: Vec<String>) -> Result<(), String> {
         }
         #[cfg(feature = "gpu-runtime")]
         {
+            alife_game_app::init_headless_tracing();
             let parsed = parse_gpu_acceptance(rest)?;
             let receipt = alife_game_app::run_and_write_gpu_closed_loop_acceptance(
                 parsed.options,
@@ -86,6 +87,7 @@ fn run(args: Vec<String>) -> Result<(), String> {
         }
         #[cfg(feature = "gpu-tests")]
         {
+            alife_game_app::init_headless_tracing();
             let parsed = parse_gpu_closed_loop_soak(rest)?;
             let receipt =
                 alife_game_app::run_and_write_gpu_closed_loop_soak(parsed.options, &parsed.output)
@@ -123,6 +125,7 @@ fn run(args: Vec<String>) -> Result<(), String> {
         }
         #[cfg(feature = "gpu-runtime")]
         {
+            alife_game_app::init_headless_tracing();
             let (slice_raw, input) = parse_gpu_evidence_validation(rest)?;
             let evidence = alife_game_app::validate_gpu_evidence_file(slice_raw, &input)
                 .map_err(|error| error.to_string())?;
@@ -155,6 +158,7 @@ fn run(args: Vec<String>) -> Result<(), String> {
                 help()
             ));
         }
+        alife_game_app::init_headless_tracing();
         println!("{}", production_asset_validation_receipt()?);
         return Ok(());
     }
@@ -170,6 +174,7 @@ fn run(args: Vec<String>) -> Result<(), String> {
     }
     let launch = parse_launch(rest)?;
     let summary = if launch.dry_run {
+        alife_game_app::init_headless_tracing();
         run_production_voxel_frontend_dry_run(&launch).map_err(|error| error.to_string())?
     } else {
         run_graphical(&launch)?

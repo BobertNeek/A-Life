@@ -490,7 +490,7 @@ fn current_checkpoint_migration_relocates_without_any_legacy_dependencies() {
     )
     .unwrap();
     assert_eq!(
-        serde_json::to_string(&loaded.save).unwrap(),
+        serde_json::to_string(loaded.save.as_ref()).unwrap(),
         current.life.as_ref().unwrap().world_json
     );
     assert_eq!(

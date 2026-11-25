@@ -384,11 +384,7 @@ impl RoundInputs {
                 return Err(invalid("round collector commit bytes changed").into());
             }
             let shard = read_cpu_collector_output(directory)?;
-            if collector_output::fingerprint(&commit, false)?.sha256
-                != member.collector_commit_sha256
-                || shard.assignment != member.assignment
-                || shard.snapshot != plan.snapshot
-            {
+            if shard.assignment != member.assignment || shard.snapshot != plan.snapshot {
                 return Err(
                     invalid("round shard assignment or frozen snapshot differs from plan").into(),
                 );
@@ -396,13 +392,6 @@ impl RoundInputs {
             shards.push(shard);
         }
         Ok(shards)
-    }
-    fn verify(&self, plan: &CpuCooperativeRoundPlanV1) -> Result<()> {
-        // Revalidate all private/source artifacts too, not just the shard seals.
-        for shard in self.load_shards(plan)? {
-            drop(shard);
-        }
-        Ok(())
     }
 }
 
@@ -526,10 +515,8 @@ pub fn run_cpu_cooperative_round(
         return Err(invalid("round optimizer budget would overflow retained integer steps").into());
     }
     let window_trajectories = cohort.window_trajectories().to_vec();
-    inputs.verify(plan)?;
     fs::create_dir_all(&output)?;
     if let Some(result) = round_output::recover_round_result(&output, plan)? {
-        inputs.verify(plan)?;
         return Ok(result);
     }
     let update = cohort.train(
@@ -573,8 +560,6 @@ pub fn run_cpu_cooperative_round(
     };
     result.payload_sha256 = result.digest()?;
     result.validate()?;
-    inputs.verify(plan)?;
     let result = round_output::publish_round_result(&output, &result)?;
-    inputs.verify(plan)?;
     Ok(result)
 }

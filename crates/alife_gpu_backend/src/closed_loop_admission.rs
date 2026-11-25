@@ -451,6 +451,7 @@ pub enum GpuAllocationEventKind {
     AdmitFromRetainedSlot = 2,
     ReleaseToRetainedSlot = 3,
     ReleaseAndDropEmptyChunk = 4,
+    ReplaceRetainedCohort = 5,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -523,10 +524,20 @@ impl GpuAllocationEventReceipt {
                     && self.physical_allocated_after_bytes < self.physical_allocated_before_bytes
                     && self.physical_unused_after_bytes <= self.physical_unused_before_bytes
             }
+            value if value == GpuAllocationEventKind::ReplaceRetainedCohort as u16 => {
+                self.logical_committed_after_bytes > 0
+                    && self.physical_allocated_after_bytes == self.physical_allocated_before_bytes
+                    && self
+                        .logical_committed_after_bytes
+                        .checked_add(self.physical_unused_after_bytes)
+                        == self
+                            .logical_committed_before_bytes
+                            .checked_add(self.physical_unused_before_bytes)
+            }
             _ => false,
         };
         if self.schema_version != ADMISSION_SCHEMA_VERSION
-            || !(1..=4).contains(&self.event_kind_raw)
+            || !(1..=5).contains(&self.event_kind_raw)
             || self.handle_generation == 0
             || !transition_is_valid
             || self.event_digest != self.recompute_digest()
@@ -632,5 +643,149 @@ impl GpuAdmissionReceipt {
             return Err(ScaffoldContractError::NeuralBackendUnavailable);
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_budget(profile: GpuRuntimeProfile) -> GpuRuntimeBudget {
+        let capacity = BrainCapacityClass::n512();
+        let execution = capacity.execution();
+        GpuRuntimeBudget {
+            schema_version: ADMISSION_SCHEMA_VERSION,
+            profile_id: profile.profile_id,
+            gpu_layout_version: execution.gpu_layout_version(),
+            required_limits_schema_version: execution.required_limits_schema_version(),
+            logical_neural_heap_budget_bytes: profile.logical_neural_heap_budget_bytes,
+            physical_allocation_ceiling_bytes: profile.physical_allocation_ceiling_bytes,
+            max_hot_brains: profile.max_hot_brains,
+            max_in_flight_batches: profile.max_in_flight_batches,
+            growth_chunk_slots: profile.growth_chunk_slots,
+            storage_alignment_bytes: execution.storage_offset_alignment_bytes(),
+            uniform_alignment_bytes: execution.uniform_offset_alignment_bytes(),
+            copy_buffer_alignment_bytes: execution.copy_buffer_alignment_bytes(),
+            copy_bytes_per_row_alignment: execution.copy_bytes_per_row_alignment(),
+            max_buffer_size: execution.required_max_buffer_size(),
+            max_storage_buffer_binding_size: execution.required_max_storage_buffer_binding_size(),
+            max_bind_groups: execution.required_max_bind_groups(),
+            max_bindings_per_bind_group: execution.required_max_bindings_per_bind_group(),
+            max_storage_buffers_per_shader_stage: execution
+                .required_max_storage_buffers_per_shader_stage(),
+            max_uniform_buffers_per_shader_stage: execution
+                .required_max_uniform_buffers_per_shader_stage(),
+            max_dynamic_storage_buffers_per_pipeline_layout: execution
+                .required_max_dynamic_storage_buffers_per_pipeline_layout(),
+            max_dynamic_uniform_buffers_per_pipeline_layout: execution
+                .required_max_dynamic_uniform_buffers_per_pipeline_layout(),
+            max_compute_workgroup_storage_size: execution
+                .required_max_compute_workgroup_storage_size(),
+            max_compute_workgroup_size_x: execution.required_max_compute_workgroup_size_x(),
+            max_compute_workgroup_size_y: execution.required_max_compute_workgroup_size_y(),
+            max_compute_workgroup_size_z: execution.required_max_compute_workgroup_size_z(),
+            max_compute_invocations_per_workgroup: execution
+                .required_max_compute_invocations_per_workgroup(),
+            max_compute_workgroups_per_dimension: execution
+                .required_max_compute_workgroups_per_dimension(),
+            required_feature_mask_words: execution.required_feature_mask_words(),
+            required_feature_mask: execution.required_feature_mask(),
+            available_feature_mask: execution.required_feature_mask(),
+            profile_digest: profile.canonical_digest().unwrap(),
+            adapter_limits_digest: [1; 4],
+        }
+    }
+
+    fn receipt_with(
+        logical: u64,
+        unused: u64,
+        physical: u64,
+        live_brains: u32,
+        generation: u64,
+    ) -> GpuAdmissionReceipt {
+        let profile = GpuRuntimeProfile {
+            schema_version: 1,
+            profile_id: 1,
+            logical_neural_heap_budget_bytes: 1024,
+            physical_allocation_ceiling_bytes: 1024,
+            max_hot_brains: 64,
+            max_in_flight_batches: 4,
+            growth_chunk_slots: 32,
+            retain_empty_chunks: 1,
+            reserved: [0; 7],
+        };
+        let mut receipt = GpuAdmissionReceipt::empty(test_budget(profile));
+        receipt.logical_committed_bytes = logical;
+        receipt.logical_available_bytes = 1024 - logical;
+        receipt.physical_allocated_bytes = physical;
+        receipt.physical_unused_retained_bytes = unused;
+        receipt.peak_logical_committed_bytes = logical;
+        receipt.peak_physical_allocated_bytes = physical;
+        receipt.live_brains = live_brains;
+        receipt.allocation_generation = generation;
+        receipt
+    }
+
+    #[test]
+    fn replace_retained_cohort_validates_shrink_equal_growth_and_rejects_violations() {
+        let before = receipt_with(300, 100, 400, 30, 1);
+
+        // Shrinking (30 -> 2), equal-size (30 -> 30), and growing (30 -> 35) transitions all
+        // conserve logical + unused bytes at constant physical allocation.
+        for (logical_after, unused_after, live_after) in
+            [(20, 380, 2), (300, 100, 30), (350, 50, 35)]
+        {
+            let after = receipt_with(logical_after, unused_after, 400, live_after, 2);
+            let event = GpuAllocationEventReceipt::new(
+                GpuAllocationEventKind::ReplaceRetainedCohort,
+                BrainCapacityClass::N512_ID.raw(),
+                0,
+                1,
+                &before,
+                &after,
+            )
+            .unwrap();
+            event.validate_contract().unwrap();
+            assert!(event.reconciles_after(&after));
+        }
+
+        // Zero committed bytes must reject.
+        let zero_after = receipt_with(0, 400, 400, 0, 2);
+        let zero_event = GpuAllocationEventReceipt::new(
+            GpuAllocationEventKind::ReplaceRetainedCohort,
+            BrainCapacityClass::N512_ID.raw(),
+            0,
+            1,
+            &before,
+            &zero_after,
+        )
+        .unwrap();
+        assert!(zero_event.validate_contract().is_err());
+
+        // Physical allocation drift must reject.
+        let drift_after = receipt_with(200, 200, 464, 20, 2);
+        let drift_event = GpuAllocationEventReceipt::new(
+            GpuAllocationEventKind::ReplaceRetainedCohort,
+            BrainCapacityClass::N512_ID.raw(),
+            0,
+            1,
+            &before,
+            &drift_after,
+        )
+        .unwrap();
+        assert!(drift_event.validate_contract().is_err());
+
+        // Logical + unused conservation mismatch must reject even at constant physical bytes.
+        let mismatch_after = receipt_with(200, 196, 400, 20, 2);
+        let mismatch_event = GpuAllocationEventReceipt::new(
+            GpuAllocationEventKind::ReplaceRetainedCohort,
+            BrainCapacityClass::N512_ID.raw(),
+            0,
+            1,
+            &before,
+            &mismatch_after,
+        )
+        .unwrap();
+        assert!(mismatch_event.validate_contract().is_err());
     }
 }

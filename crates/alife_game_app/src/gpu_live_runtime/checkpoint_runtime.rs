@@ -236,7 +236,7 @@ impl GpuLiveBrainRuntime {
                 message: "GPU runtime has no durable save boundary".to_string(),
             });
         };
-        let base = durability.published.save.clone();
+        let base = (*durability.published.save).clone();
         let store = durability.store.clone();
         let result = self
             .capture_checkpointed_save(base, &store)
@@ -287,7 +287,7 @@ impl GpuLiveBrainRuntime {
     ) -> Result<(), GameAppShellError> {
         let (durable_manifest, published) =
             GpuDurableSaveManifest::open_loaded(save_path.as_ref(), asset_root.as_ref())?;
-        if published.save != *expected {
+        if *published.save != *expected {
             return Err(GameAppShellError::InvalidProductionFrontend {
                 message: "rebound GPU checkpoint boundary differs from the exact save".to_string(),
             });
@@ -382,13 +382,15 @@ impl GpuLiveBrainRuntime {
                     memory: self
                         .memories
                         .get(&raw)
-                        .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?,
+                        .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+                        .as_ref(),
                     topology: self
                         .topologies
                         .get(&raw)
-                        .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?,
+                        .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+                        .as_ref(),
                     tracked_objects: self.world.tracked_objects().save_state(organism_id)?,
-                    language_grounding: &resident.language_grounding,
+                    language_grounding: resident.language_grounding.as_ref(),
                     life_statistics: &resident.life_statistics,
                     legacy_nano512_compatibility_receipt: resident
                         .legacy_nano512_compatibility_receipt
@@ -480,18 +482,18 @@ impl GpuLiveBrainRuntime {
                 phenotype: (*resident.phenotype).clone(),
                 compiler_inputs: (*resident.compiler_inputs).clone(),
                 sleep: resident.sleep_scheduler.state(),
-                memory: self
+                memory: (**self
                     .memories
                     .get(&raw)
-                    .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
-                    .clone(),
-                topology: self
+                    .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?)
+                .clone(),
+                topology: (**self
                     .topologies
                     .get(&raw)
-                    .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
-                    .clone(),
+                    .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?)
+                .clone(),
                 tracked_objects: self.world.tracked_objects().save_state(organism_id)?,
-                language_grounding: resident.language_grounding.clone(),
+                language_grounding: (*resident.language_grounding).clone(),
                 life_statistics: resident.life_statistics.clone(),
                 legacy_nano512_compatibility_receipt: resident
                     .legacy_nano512_compatibility_receipt
@@ -518,7 +520,7 @@ impl GpuLiveBrainRuntime {
             checkpoint_tick,
             replacement,
             brains,
-            restored_replay_patches: self.restored_replay_patches.clone(),
+            restored_replay_patches: (*self.restored_replay_patches).clone(),
             sealed_patches: self.sealed_patches.clone(),
             last_sealed_patches: self.last_sealed_patches.clone(),
         })
@@ -576,7 +578,7 @@ impl GpuLiveBrainRuntime {
         if self.sleep_journal_publication_worker.is_some() || self.checkpoint_durability.is_none() {
             let capacity = self.sleep_journal_pending_capacity()?;
             append_bounded_sleep_journal_entries(
-                &mut self.pending_sleep_journal_entries,
+                std::sync::Arc::make_mut(&mut self.pending_sleep_journal_entries),
                 entries,
                 capacity,
             )?;
@@ -666,7 +668,9 @@ impl GpuLiveBrainRuntime {
             SleepJournalPublicationWorkerPollV1::Ready(final_result) => {
                 self.admit_sleep_journal_publication(final_result)?;
                 if !self.pending_sleep_journal_entries.is_empty() {
-                    let pending = std::mem::take(&mut self.pending_sleep_journal_entries);
+                    let pending = std::mem::take(std::sync::Arc::make_mut(
+                        &mut self.pending_sleep_journal_entries,
+                    ));
                     self.start_sleep_journal_publication(pending)?;
                 } else {
                     self.resume_exact_checkpoint_after_sleep_journal_drain()?;
@@ -812,7 +816,9 @@ impl GpuLiveBrainRuntime {
             if self.checkpoint_durability.is_none() {
                 return Err(ScaffoldContractError::MissingPhaseData.into());
             }
-            let pending = std::mem::take(&mut self.pending_sleep_journal_entries);
+            let pending = std::mem::take(std::sync::Arc::make_mut(
+                &mut self.pending_sleep_journal_entries,
+            ));
             self.start_sleep_journal_publication(pending)?;
         }
     }
@@ -852,12 +858,12 @@ impl GpuLiveBrainRuntime {
             .exact_checkpoint_transactions_started
             .saturating_add(1);
         let result = (|| {
-            let base = self
+            let base = (*self
                 .checkpoint_durability
                 .as_ref()
                 .ok_or(ScaffoldContractError::MissingPhaseData)?
                 .published
-                .save
+                .save)
                 .clone();
             let host = self.freeze_exact_population_host_snapshot(base)?;
             let capacity =
@@ -890,7 +896,9 @@ impl GpuLiveBrainRuntime {
             // Ordinary journal transitions remain queued until that epoch is
             // durably installed, so the prior compact cache is no longer a
             // valid source for later edges.
-            self.sleep_journal_neural_authorities.clear();
+            if !self.sleep_journal_neural_authorities.is_empty() {
+                std::sync::Arc::make_mut(&mut self.sleep_journal_neural_authorities).clear();
+            }
             self.exact_checkpoint_work = ExactPopulationCheckpointRuntimeWorkV1::Capture {
                 transaction_id,
                 expected_base_digest,
@@ -900,8 +908,11 @@ impl GpuLiveBrainRuntime {
             };
             // Only an adopted capture owns these edges. A portable export does not.
             // An older active capture returns above and leaves its later edges queued.
-            for raw in captured_recovery_edges {
-                self.pending_recovery_sleep_edges.remove(&raw);
+            if !captured_recovery_edges.is_empty() {
+                let edges = std::sync::Arc::make_mut(&mut self.pending_recovery_sleep_edges);
+                for raw in captured_recovery_edges {
+                    edges.remove(&raw);
+                }
             }
             Ok::<_, GameAppShellError>(())
         })();
@@ -931,15 +942,18 @@ impl GpuLiveBrainRuntime {
             .collect::<Vec<_>>();
         let capacity = self.sleep_journal_pending_capacity()?;
         append_bounded_sleep_journal_entries(
-            &mut self.pending_exact_sleep_journal_entries,
+            std::sync::Arc::make_mut(&mut self.pending_exact_sleep_journal_entries),
             entries,
             capacity,
         )?;
         self.post_irreversible_gpu_commit_fail_stop_armed = true;
         // The exact queue owns admitted edges even if later tick work fails.
         // Failed append leaves both owners unchanged.
-        for raw in admitted_recovery_edges {
-            self.pending_recovery_sleep_edges.remove(&raw);
+        if !admitted_recovery_edges.is_empty() {
+            let edges = std::sync::Arc::make_mut(&mut self.pending_recovery_sleep_edges);
+            for raw in admitted_recovery_edges {
+                edges.remove(&raw);
+            }
         }
         Ok(())
     }
@@ -948,7 +962,7 @@ impl GpuLiveBrainRuntime {
         &mut self,
         permit: &DurableCompletedCheckpointPermitV1,
     ) -> Result<ExactCheckpointJournalWritesV1, GameAppShellError> {
-        let entries = self.pending_exact_sleep_journal_entries.clone();
+        let entries = (*self.pending_exact_sleep_journal_entries).clone();
         let mut captured_targets = BTreeMap::new();
         let mut follow_up_required = false;
         for entry in &entries {
@@ -978,7 +992,9 @@ impl GpuLiveBrainRuntime {
                 permit.published().digest.as_str().to_string(),
             )?;
         }
-        self.pending_exact_sleep_journal_entries.clear();
+        if !self.pending_exact_sleep_journal_entries.is_empty() {
+            std::sync::Arc::make_mut(&mut self.pending_exact_sleep_journal_entries).clear();
+        }
         Ok((Vec::new(), Vec::new()))
     }
 
@@ -1025,7 +1041,8 @@ impl GpuLiveBrainRuntime {
         let store = durability.store.clone();
         let readback_before = self.backend.mutable_slot_readback_metrics();
         let capture_started = Instant::now();
-        let replacement = self.capture_checkpointed_save(durability.published.save.clone(), &store);
+        let replacement =
+            self.capture_checkpointed_save((*durability.published.save).clone(), &store);
         let readback_after = self.backend.mutable_slot_readback_metrics();
         self.performance_metrics.sleep_checkpoint_capture_calls = self
             .performance_metrics

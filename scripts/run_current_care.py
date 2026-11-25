@@ -77,8 +77,10 @@ def checkout_context():
     require(Path.cwd().resolve() == root, 'run from the admitted source checkout')
     require(not subprocess.check_output(['git', 'status', '--porcelain'], text=True).strip(),
             'run requires a clean source checkout')
-    return {'head': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
-            'tree': subprocess.check_output(['git', 'rev-parse', 'HEAD^{tree}'], text=True).strip(),
+    revs = subprocess.check_output(['git', 'rev-parse', 'HEAD', 'HEAD^{tree}'], text=True).splitlines()
+    require(len(revs) == 2, 'unexpected git rev-parse output')
+    return {'head': revs[0].strip(),
+            'tree': revs[1].strip(),
             'cargo_lock_sha256': host.sha256(root / 'Cargo.lock')}
 
 
@@ -165,20 +167,32 @@ def migrate(root, source, history, lane, binary, policy):
         report = owned_tool(store, state, '--import-current', source, run / 'seeds.json', candidate)
         state['candidate_sha256'] = checkpoints.digest(candidate)
         checkpoints.write_json(run / 'run.json', state)
-        published = store.publish(candidate, None)
+        published = store.publish(candidate, None, candidate_digest=state['candidate_sha256'])
         state['reconciled_current'] = published
         checkpoints.write_json(run / 'run.json', state)
         store.remove_run(published)
         return report
 
 
-def pinned(state):
+def pinned(state, *, hash_cache=None, checkout_cache=None, force=False):
+    sha256_fn = (lambda p: hash_cache.sha256(p, force=force)) if hash_cache is not None else host.sha256
     for name, digest in state['executables'].items():
-        require(host.sha256(name) == digest, 'pinned executable changed; no dispatch or cleanup')
+        require(sha256_fn(name) == digest, 'pinned executable changed; no dispatch or cleanup')
     for name, digest in state['helpers'].items():
-        require(host.sha256(Path(__file__).parent / name) == digest, 'run helper changed; reconcile with its original revision')
+        require(sha256_fn(Path(__file__).parent / name) == digest, 'run helper changed; reconcile with its original revision')
     require(prior_environment() == state['prior_environment'], 'semantic-prior environment changed')
-    require(checkout_context() == state['checkout'], 'admitted source revision changed')
+    if checkout_cache is None:
+        context = checkout_context()
+    else:
+        root = Path(__file__).resolve().parent.parent
+        stamp = host.git_checkout_stamp(root)
+        if not force and stamp is not None and checkout_cache.get('stamp') == stamp and 'value' in checkout_cache:
+            context = checkout_cache['value']
+        else:
+            context = checkout_context()
+            checkout_cache['stamp'] = stamp
+            checkout_cache['value'] = context
+    require(context == state['checkout'], 'admitted source revision changed')
 
 
 def save(store, state):
@@ -377,9 +391,10 @@ def reconcile(store, *, abandon_unsealed=False):
     candidate = new_candidate(run)
     report = owned_tool(store, state, '--advance-current', store.current, episode, candidate)
     require(report['seed'] == attempt['seed'], 'candidate seed differs from reserved attempt')
-    attempt['publication'] = {'before': actual, 'after': checkpoints.digest(candidate)}
+    after = checkpoints.digest(candidate)
+    attempt['publication'] = {'before': actual, 'after': after}
     save(store, state)
-    store.publish(candidate, actual)
+    store.publish(candidate, actual, candidate_digest=after)
     state['cursor'] += 1
     clean_attempt(store, state)
     return state
@@ -431,19 +446,26 @@ def start(store, args):
 def execute(store, state):
     run = store.root / checkpoints.RUN
     cutoff = host.cutoff_time(state['cutoff'])
+    hash_cache = host.FileHashCache()
+    checkout_cache = {}
 
-    def guard():
+    def _run_guard(*, force=False):
         require(not (run / 'STOP').exists(), 'owner STOP requested interruption')
         require(dt.datetime.now(host.UTC) < cutoff, 'schedule cutoff reached')
-        pinned(state)
+        pinned(state, hash_cache=hash_cache, checkout_cache=checkout_cache, force=force)
         resources = host.resource_snapshot(store.root)
         require(resources['disk_free_bytes'] >= state['min_disk_gib'] * 2**30 and
                 resources['available_memory_bytes'] is not None and
                 resources['available_memory_bytes'] >= state['min_memory_gib'] * 2**30, 'resource reserve reached')
         require(os.name != 'nt' or resources['idle_seconds'] >= state['idle_seconds'], 'interactive PC use resumed')
 
+    def guard():
+        _run_guard(force=False)
+
+    guard.full = lambda: _run_guard(force=True)
+
     while state['cursor'] < len(state['rows']):
-        guard()
+        guard.full()
         host.assert_lane_idle()
         seed = state['next_seed']
         require(seed <= state['last_seed'], 'reserved seeds exhausted; reconcile before a new allocation')
@@ -460,7 +482,7 @@ def execute(store, state):
         state['next_seed'] += 1
         state['worker'] = None
         save(store, state)
-        store.publish(consumed, before)  # Durable cursor advance precedes any native world work.
+        store.publish(consumed, before, candidate_digest=after)  # Durable cursor advance precedes any native world work.
         state['worker'] = {'pid': None, 'stopped': False}
         save(store, state)  # Unknown launch outcomes fail closed after a crash.
         row = state['rows'][state['cursor']]

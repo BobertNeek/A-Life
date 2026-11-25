@@ -28,6 +28,9 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: cpu-serial-care-round
       - name: Serial real-care rounds, founder continuation and heldout comparison
         run: cargo test --locked -p alife_game_app --features cpu-training --test cpu_care_round -- --nocapture
   cooperative-round:
@@ -46,6 +49,9 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: cpu-cooperative-round
       - name: Bounded central round, optimizer continuity and publication recovery
         run: cargo test --locked -p alife_training --features cpu-backend --test cpu_cooperative_round -- --nocapture
   native-cpu:
@@ -65,6 +71,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: cpu-native
       - name: Check formatting
         run: cargo fmt --all --check
       - name: Run CPU kernels and native continuation contracts without an ICD

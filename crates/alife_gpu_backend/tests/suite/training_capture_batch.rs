@@ -1,6 +1,6 @@
 //! Real-GPU batch-versus-single state-capture checks.
-#![cfg(all(feature = "training-rollout", feature = "gpu-tests"))]
-mod support;
+#[allow(unused_imports)]
+use crate::support;
 use alife_core::{OrganismId, SensorProfile, Tick};
 use alife_gpu_backend::training_rollout::GpuTrainingStateSnapshot;
 use alife_gpu_backend::{
@@ -327,4 +327,203 @@ fn fifty_row_pre_post_capture_matches_single_and_preserves_private_order() {
     }
     assert_eq!(backend.training_capture_metrics().batch_captures, 6);
     assert_eq!(backend.training_capture_metrics().captured_rows, 300);
+}
+
+fn assert_handles_match_modulo_instance(left: GpuBrainHandle, right: GpuBrainHandle) {
+    assert_eq!(left.class_id(), right.class_id());
+    assert_eq!(left.slot(), right.slot());
+    assert_eq!(left.generation(), right.generation());
+    assert_eq!(left.organism_id(), right.organism_id());
+    assert_eq!(left.phenotype_hash(), right.phenotype_hash());
+}
+
+fn assert_captures_match_modulo_instance(
+    left: &[GpuTrainingStateSnapshot],
+    right: &[GpuTrainingStateSnapshot],
+) {
+    assert_eq!(left.len(), right.len());
+    for (a, b) in left.iter().zip(right) {
+        assert_handles_match_modulo_instance(a.handle, b.handle);
+        assert_eq!(a.brain_slot.record(), b.brain_slot.record());
+        assert_eq!(a.brain_slot.identity(), b.brain_slot.identity());
+        assert_eq!(a.brain_slot.typed_counts(), b.brain_slot.typed_counts());
+        assert_eq!(a.brain_slot.word_ranges(), b.brain_slot.word_ranges());
+        assert_eq!(
+            a.brain_slot.decoder_input_stride(),
+            b.brain_slot.decoder_input_stride()
+        );
+        assert_eq!(
+            a.brain_slot.brain_slot_index(),
+            b.brain_slot.brain_slot_index()
+        );
+        let mut a_norm = a.clone();
+        a_norm.handle = b.handle;
+        a_norm.brain_slot = b.brain_slot.clone();
+        assert_eq!(a_norm, *b);
+    }
+}
+
+fn assert_ticks_match_modulo_instance_and_timing(
+    left: &[alife_gpu_backend::GpuClosedLoopTick],
+    right: &[alife_gpu_backend::GpuClosedLoopTick],
+) {
+    assert_eq!(left.len(), right.len());
+    for (a, b) in left.iter().zip(right) {
+        assert_handles_match_modulo_instance(a.handle, b.handle);
+        assert_ne!(a.hardware_receipt_generation, 0);
+        assert_ne!(b.hardware_receipt_generation, 0);
+        // Compare all deterministic pressure/throttle fields while allowing wall-clock
+        // GPU timestamp jitter across separate backend instances.
+        let mut a_pressure = a.pressure;
+        a_pressure.completed_gpu_time_ns = b.pressure.completed_gpu_time_ns;
+        a_pressure.sample_digest = b.pressure.sample_digest;
+        assert_eq!(a_pressure, b.pressure);
+        let mut a_norm = a.clone();
+        a_norm.handle = b.handle;
+        a_norm.hardware_receipt_generation = b.hardware_receipt_generation;
+        a_norm.pressure = b.pressure;
+        a_norm.throttle.pressure = b.throttle.pressure;
+        a_norm.throttle.pressure_digest = b.throttle.pressure_digest;
+        a_norm.throttle.decision_digest = b.throttle.decision_digest;
+        assert_eq!(a_norm, *b);
+    }
+}
+
+#[test]
+#[ignore = "requires GPU hardware"]
+fn tick_memory_batch_training_with_captures_matches_capture_training_states() {
+    let mut fused = GpuClosedLoopBackend::new_required(GpuRuntimeProfile::production_v1()).unwrap();
+    let mut reference =
+        GpuClosedLoopBackend::new_required(GpuRuntimeProfile::production_v1()).unwrap();
+    let phenotypes = (1..=6).map(support::n512_phenotype).collect::<Vec<_>>();
+    let fused_handles = phenotypes
+        .iter()
+        .enumerate()
+        .map(|(i, p)| {
+            fused
+                .insert_brain(OrganismId(i as u64 + 1), p.clone())
+                .unwrap()
+        })
+        .collect::<Vec<_>>();
+    let ref_handles = phenotypes
+        .iter()
+        .enumerate()
+        .map(|(i, p)| {
+            reference
+                .insert_brain(OrganismId(i as u64 + 1), p.clone())
+                .unwrap()
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(fused_handles.len(), ref_handles.len());
+    for (fused_handle, ref_handle) in fused_handles.iter().zip(&ref_handles) {
+        assert_handles_match_modulo_instance(*fused_handle, *ref_handle);
+    }
+
+    for round in 0..2 {
+        let tick = Tick::new(42 + round);
+        let fused_requests = fused_handles.iter().map(|h| (*h, tick)).collect::<Vec<_>>();
+        let ref_requests = ref_handles.iter().map(|h| (*h, tick)).collect::<Vec<_>>();
+        let pre_explicit = fused.capture_training_states(&fused_requests).unwrap();
+        let ref_pre = reference.capture_training_states(&ref_requests).unwrap();
+        assert_captures_match_modulo_instance(&pre_explicit, &ref_pre);
+
+        let mut frames = Vec::new();
+        let mut fused_uploads = Vec::new();
+        let mut ref_uploads = Vec::new();
+        for (i, phenotype) in phenotypes.iter().enumerate() {
+            let frame = support::perception_frame_for_profile_at_tick(
+                i as u64 + 1,
+                tick.raw(),
+                SensorProfile::PrivilegedAffordanceV1,
+                i % 2 == 0,
+                2,
+            );
+            let (frame, recall) = support::try_empty_recall(&frame).unwrap();
+            let f_up = fused
+                .prepare_memory_context_upload(fused_handles[i], &frame, &recall)
+                .unwrap();
+            let r_up = reference
+                .prepare_memory_context_upload(ref_handles[i], &frame, &recall)
+                .unwrap();
+            let physiology = support::test_physiology(i as u64 + 1, phenotype).unwrap();
+            fused_uploads.push(
+                support::bind_chemistry_receptor_effects(f_up, phenotype, &physiology, tick)
+                    .unwrap(),
+            );
+            ref_uploads.push(
+                support::bind_chemistry_receptor_effects(r_up, phenotype, &physiology, tick)
+                    .unwrap(),
+            );
+            frames.push(frame);
+        }
+        let fused_inputs = fused_handles
+            .iter()
+            .zip(&frames)
+            .zip(&fused_uploads)
+            .map(|((h, f), u)| GpuClosedLoopMemoryTickInput::try_new(*h, f, u).unwrap())
+            .collect();
+        let ref_inputs = ref_handles
+            .iter()
+            .zip(&frames)
+            .zip(&ref_uploads)
+            .map(|((h, f), u)| GpuClosedLoopMemoryTickInput::try_new(*h, f, u).unwrap())
+            .collect();
+        let fused_batch = GpuClosedLoopMemoryBatchInput::try_new(fused_inputs).unwrap();
+        let ref_batch = GpuClosedLoopMemoryBatchInput::try_new(ref_inputs).unwrap();
+        let sampling = (0..6)
+            .map(|i| GpuTrainingSamplingConfig {
+                seed: 29,
+                counter: round as u32 * 6 + i,
+                temperature: 1.0,
+                demonstrator: None,
+            })
+            .collect::<Vec<_>>();
+
+        let (fused_ticks, fused_pre, fused_post) = fused
+            .tick_memory_batch_training_with_captures(&fused_batch, &sampling)
+            .unwrap();
+        let ref_ticks = reference
+            .tick_memory_batch_training(&ref_batch, &sampling)
+            .unwrap();
+        let post_explicit = fused.capture_training_states(&fused_requests).unwrap();
+        let ref_post = reference.capture_training_states(&ref_requests).unwrap();
+
+        assert_ticks_match_modulo_instance_and_timing(&fused_ticks, &ref_ticks);
+        assert_eq!(fused_pre, pre_explicit);
+        assert_eq!(fused_post, post_explicit);
+        assert_captures_match_modulo_instance(&fused_post, &ref_post);
+        assert!(fused_pre
+            .iter()
+            .zip(&fused_post)
+            .any(|(a, b)| a.mutable_words != b.mutable_words));
+
+        let fused_discards = fused_handles
+            .iter()
+            .zip(&fused_ticks)
+            .map(|(h, t)| (*h, t.pending_eligibility.identity()))
+            .collect::<Vec<_>>();
+        let ref_discards = ref_handles
+            .iter()
+            .zip(&ref_ticks)
+            .map(|(h, t)| (*h, t.pending_eligibility.identity()))
+            .collect::<Vec<_>>();
+        let f_rec = fused
+            .discard_pending_eligibility_batch(&fused_discards)
+            .unwrap();
+        let r_rec = reference
+            .discard_pending_eligibility_batch(&ref_discards)
+            .unwrap();
+        assert_eq!(f_rec.len(), r_rec.len());
+        for (a, b) in f_rec.iter().zip(&r_rec) {
+            assert_eq!(a.identity, b.identity);
+            assert_eq!(
+                a.discarded_staging_generation,
+                b.discarded_staging_generation
+            );
+            assert_ne!(a.hardware_receipt_generation, 0);
+            assert_ne!(b.hardware_receipt_generation, 0);
+            assert_ne!(a.receipt_digest, [0; 4]);
+            assert_ne!(b.receipt_digest, [0; 4]);
+        }
+    }
 }

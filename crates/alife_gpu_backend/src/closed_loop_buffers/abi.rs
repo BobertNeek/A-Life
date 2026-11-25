@@ -12,7 +12,7 @@ pub const GPU_SPEECH_PAYLOAD_RECORD_BYTES: usize = 16;
 /// adapter for orientation and species-specific channels.
 pub const GPU_MOTOR_CHANNEL_SLOT_COUNT: usize = 6;
 /// Exact number of storage-buffer bindings shared by every production neural pass.
-pub const GPU_CLOSED_LOOP_STORAGE_BINDINGS: u32 = 7;
+pub const GPU_CLOSED_LOOP_STORAGE_BINDINGS: u32 = 8;
 /// Exact executable ordering/layout ABI understood by the current closed-loop shaders.
 pub const GPU_CLOSED_LOOP_LAYOUT_VERSION: u32 = 4;
 pub const GPU_SLEEP_PARAMETER_SCHEMA_VERSION: u32 = 1;
@@ -215,12 +215,41 @@ gpu_record!(GpuDecoderFamilyRecord {
     reserved0: u32,
     reserved1: u32
 });
-gpu_record!(GpuDecoderWeightIndexRecord {
-    global_synapse_id: u32,
-    input_lane: u32,
-    motor_index: u32,
-    reserved0: u32
-});
+#[repr(C, align(8))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Pod, Zeroable)]
+pub struct GpuDecoderWeightIndexRecord {
+    pub global_synapse_id: u32,
+    pub packed_lane_motor: u32,
+}
+
+impl GpuDecoderWeightIndexRecord {
+    pub const fn new(global_synapse_id: u32, input_lane: u16, motor_index: u16) -> Self {
+        Self {
+            global_synapse_id,
+            packed_lane_motor: (input_lane as u32) | ((motor_index as u32) << 16),
+        }
+    }
+
+    pub const fn input_lane(self) -> u32 {
+        self.packed_lane_motor & 0xffff
+    }
+
+    pub const fn motor_index(self) -> u32 {
+        self.packed_lane_motor >> 16
+    }
+
+    pub fn from_words(words: &[u32]) -> Result<Self, GpuClosedLoopError> {
+        let expected = std::mem::size_of::<Self>() / 4;
+        if words.len() != expected {
+            return Err(GpuClosedLoopError::MalformedUpload);
+        }
+        Ok(bytemuck::pod_read_unaligned(bytemuck::cast_slice(words)))
+    }
+
+    pub fn words(&self) -> &[u32] {
+        bytemuck::cast_slice(std::slice::from_ref(self))
+    }
+}
 gpu_record!(GpuBrainSlotExtensionRecord {
     schema_version: u32,
     projection_count: u32,
@@ -431,9 +460,18 @@ pub const fn unpack_replay_eligibility_sample(word: u32) -> (u16, i16) {
 
 impl GpuBrainSlotRecord {
     pub fn validate_slice_a(&self) -> Result<(), GpuClosedLoopError> {
+        let decoder_count = self
+            .synapse_count
+            .checked_sub(self.recurrent_synapse_count)
+            .ok_or(GpuClosedLoopError::MalformedUpload)?;
+        let speech_start_valid = self.reserved[1] == u32::MAX
+            || self.reserved[1]
+                .checked_add(1024)
+                .is_some_and(|end| end <= decoder_count);
         if self.schema_version != GPU_CLOSED_LOOP_LAYOUT_VERSION
             || !valid_joint_motor_mode(self.reserved[0])
-            || self.reserved[1..] != [0; 2]
+            || !speech_start_valid
+            || self.reserved[2] <= self.fast_weight_offset
             || self.extension_record_offset == GPU_NO_EXTENSION_SENTINEL
             || self.slot_generation == 0
             || self.microstep_count == 0

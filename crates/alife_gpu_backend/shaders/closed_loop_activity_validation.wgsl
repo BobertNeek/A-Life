@@ -121,6 +121,6 @@ fn validate_scheduled_work(
 fn activity_contract_prevalidated(header:GpuPerceptionHeader) -> bool {
   if (header.brain_slot_index >= arrayLength(&brain_slots)) { return false; }
   let brain = brain_slots[header.brain_slot_index];
-  return (atomicLoad(&mutable_state_words[brain.diagnostic_offset + 2u])
+  return (atomicLoad(&atomic_state_words[brain.diagnostic_offset + 2u])
       & CONTRACT_INVALID_DIAGNOSTIC_BIT) == 0u;
 }

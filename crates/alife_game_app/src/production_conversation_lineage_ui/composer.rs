@@ -471,12 +471,6 @@ fn entry_text(state: &ProductionConversationLineageUiState) -> String {
         speech_entry_text(state)
     }
 }
-pub(crate) fn composer_height(world: &World, size: Vec2) -> Option<f32> {
-    let state = world.get_resource::<ProductionConversationLineageUiState>()?;
-    state
-        .input_open
-        .then(|| height(state, size, speech_composer_bottom(world)))
-}
 pub(crate) fn adapt(world: &mut World) {
     naming::sync_ime_window(world);
     if !world

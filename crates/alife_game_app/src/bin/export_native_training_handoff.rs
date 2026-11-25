@@ -22,6 +22,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("{usage}");
         return Ok(());
     }
+    alife_game_app::init_headless_tracing();
     let report = match args
         .iter()
         .map(String::as_str)

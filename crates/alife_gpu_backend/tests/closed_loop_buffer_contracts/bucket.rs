@@ -3,7 +3,8 @@ use std::ops::Range;
 use alife_core::{BrainCapacityClass, MAX_ACTION_CANDIDATES};
 use alife_gpu_backend::{
     GpuClassBucketPlan, GpuClosedLoopError, GpuDecoderFamilyRecord, GpuDecoderPlanRecord,
-    GpuEncoderPlanRecord, GPU_JOINT_SELECTION_V1_MARKER, GPU_NO_EXTENSION_SENTINEL,
+    GpuEncoderPlanRecord, GpuPhenotypeUpload, GPU_JOINT_SELECTION_V1_MARKER,
+    GPU_NO_EXTENSION_SENTINEL,
 };
 
 use super::support::{compile, ranges_are_disjoint};
@@ -69,7 +70,7 @@ fn slot_receipts_separate_typed_counts_from_checked_word_heap_ranges() {
     );
     assert_eq!(
         ranges.decoder_weight_index_words.len(),
-        counts.decoder_weight_indices * 4
+        counts.decoder_weight_indices * 2
     );
     assert_pairwise_disjoint(&plan_ranges(ranges));
 
@@ -163,7 +164,7 @@ fn packed_plan_records_relocate_every_nested_offset_to_shared_word_bases() {
         let family = GpuDecoderFamilyRecord::from_words(&words[start..start + 8]).unwrap();
         assert_eq!(
             family.weight_index_start,
-            ranges.decoder_weight_index_words.start + local_weight_cursor * 4
+            ranges.decoder_weight_index_words.start + local_weight_cursor * 2
         );
         assert_eq!(family.weight_index_count, family.decoder_synapse_count);
         local_weight_cursor += family.decoder_synapse_count;
@@ -192,17 +193,21 @@ fn every_slice_a_mutable_pool_has_the_exact_word_length_and_offset() {
     assert_eq!(ranges.homeostasis_words.len(), neuron_count * 2);
     assert_eq!(ranges.lifetime_weight_words.len(), total);
     assert_eq!(ranges.fast_weight_words.len(), total);
+    assert_eq!(ranges.effective_weight_words.len(), total);
+    assert_eq!(ranges.effective_weight_bank_1_words.len(), total);
     assert_eq!(ranges.recurrent_eligibility_words.len(), recurrent);
     assert_eq!(ranges.decoder_eligibility_words.len(), decoder);
     assert_eq!(ranges.encoded_input_words.len(), neuron_count);
     assert_eq!(ranges.candidate_logit_words.len(), MAX_ACTION_CANDIDATES);
     assert_eq!(ranges.diagnostic_words.len(), 4);
     assert_eq!(ranges.selection_words.len(), 16);
+    assert_eq!(ranges.speech_payload_words.len(), 4);
     assert_eq!(
         (ranges.diagnostic_words.len() + ranges.selection_words.len()) * 4,
         80
     );
     assert_pairwise_disjoint(&mutable_ranges(ranges));
+    assert_pairwise_disjoint(&atomic_ranges(ranges));
 
     let record = slot.record();
     assert_eq!(record.activation_a_offset, ranges.activation_a_words.start);
@@ -254,10 +259,16 @@ fn two_slots_cover_pairwise_disjoint_ranges_in_each_shared_heap() {
                 .unwrap(),
             vec![alife_core::MotorChannel::Locomotion],
         );
-        // The first former reserved lane carries the tagged locomotion mask.
+        let upload = GpuPhenotypeUpload::try_from(phenotype).unwrap();
+        // The first former reserved lane carries the tagged locomotion mask,
+        // and the second carries the contiguous SpeechPayload decoder start.
         assert_eq!(
             slot.record().reserved,
-            [GPU_JOINT_SELECTION_V1_MARKER | 1, 0, 0]
+            [
+                GPU_JOINT_SELECTION_V1_MARKER | 1,
+                upload.speech_synapse_start,
+                slot.word_ranges().effective_weight_words.start
+            ]
         );
     }
     assert_eq!(
@@ -295,6 +306,10 @@ fn two_slots_cover_pairwise_disjoint_ranges_in_each_shared_heap() {
     mutable.extend(mutable_ranges(right.word_ranges()));
     assert_pairwise_disjoint(&mutable);
     assert_exact_heap_coverage(&mutable, bucket.mutable_state_words().len());
+    let mut atomic = atomic_ranges(left.word_ranges());
+    atomic.extend(atomic_ranges(right.word_ranges()));
+    assert_pairwise_disjoint(&atomic);
+    assert_exact_heap_coverage(&atomic, bucket.atomic_state_words().len());
     bucket.validate().unwrap();
 }
 
@@ -431,23 +446,30 @@ fn mutable_ranges(ranges: &alife_gpu_backend::GpuSlotWordRanges) -> Vec<Range<u3
         ranges.homeostasis_words.clone(),
         ranges.lifetime_weight_words.clone(),
         ranges.fast_weight_words.clone(),
+        ranges.effective_weight_words.clone(),
         ranges.recurrent_eligibility_words.clone(),
         ranges.decoder_eligibility_words.clone(),
         ranges.lifetime_weight_bank_1_words.clone(),
         ranges.fast_weight_bank_1_words.clone(),
+        ranges.effective_weight_bank_1_words.clone(),
         ranges.recurrent_eligibility_bank_1_words.clone(),
         ranges.decoder_eligibility_bank_1_words.clone(),
         ranges.encoded_input_words.clone(),
         ranges.candidate_logit_words.clone(),
-        ranges.diagnostic_words.clone(),
-        ranges.selection_words.clone(),
-        ranges.speech_payload_words.clone(),
         ranges.extension_words.clone(),
         ranges.learning_state_words.clone(),
         ranges.pending_eligibility_words.clone(),
         ranges.replay_event_words.clone(),
         ranges.replay_sample_words.clone(),
         ranges.replay_span_words.clone(),
+    ]
+}
+
+fn atomic_ranges(ranges: &alife_gpu_backend::GpuSlotWordRanges) -> Vec<Range<u32>> {
+    vec![
+        ranges.diagnostic_words.clone(),
+        ranges.selection_words.clone(),
+        ranges.speech_payload_words.clone(),
     ]
 }
 

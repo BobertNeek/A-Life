@@ -256,7 +256,7 @@ fn create_canonical_new_game_runtime_inner(
         exact_save.validate_with_asset_root(&asset_root)?;
         let staged_exact =
             GpuDurableSaveManifest::publish_snapshot(&staging_path, &asset_root, &exact_save)?;
-        if staged_exact.save != exact_save {
+        if *staged_exact.save != exact_save {
             return Err(invalid_launch(
                 "canonical New Game staging reload differs from the exact checkpoint",
             ));
@@ -266,7 +266,7 @@ fn create_canonical_new_game_runtime_inner(
         final_created = true;
         runtime.rebind_durable_checkpoint_boundary(&final_save_path, &asset_root, &exact_save)?;
         let (_, final_loaded) = GpuDurableSaveManifest::open_loaded(&final_save_path, &asset_root)?;
-        if final_loaded.save != exact_save {
+        if *final_loaded.save != exact_save {
             return Err(invalid_launch(
                 "canonical New Game final reload differs from the exact checkpoint",
             ));
@@ -279,7 +279,7 @@ fn create_canonical_new_game_runtime_inner(
 
         Ok(CanonicalNewGameLaunchResult {
             runtime,
-            exact_save: final_loaded.save,
+            exact_save: (*final_loaded.save).clone(),
             save_path: final_save_path.clone(),
             asset_root: asset_root.clone(),
             receipt: staged.receipt,

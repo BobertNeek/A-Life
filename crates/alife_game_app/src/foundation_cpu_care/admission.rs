@@ -412,12 +412,25 @@ fn collection_binding(attempt: &Value) -> Result<(CpuCollectorAssignmentV1, [u8;
     Ok((assignment, plan, temperature))
 }
 
+pub(super) struct ValidatedCollectedAttempt {
+    pub snapshot: CpuCollectionSnapshotV1,
+    pub commit_sha256: [u8; 32],
+}
+
 fn validate_collection_output(attempt: &Value, output: &Path) -> Result<Value> {
+    validate_collection_output_with_details(attempt, output).map(|(receipt, _)| receipt)
+}
+
+fn validate_collection_output_with_details(
+    attempt: &Value,
+    output: &Path,
+) -> Result<(Value, ValidatedCollectedAttempt)> {
     let (assignment, plan, temperature) = collection_binding(attempt)?;
     if has_seal(output, "cpu-cycle.json")? {
         return Err("CPU care output mixes trained and collected receipt domains".into());
     }
     let shard = read_cpu_collector_output(output)?;
+    let snapshot = shard.snapshot.clone();
     let (commit_bytes, _) = read_native_cpu_care_evidence(&output.join(CPU_COLLECTOR_COMMIT_FILE))?;
     let (_, metadata) = read_native_cpu_care_evidence(&output.join("collection-metadata.json"))?;
     let (_, episode) = read_native_cpu_care_evidence(&output.join("care-episode.json"))?;
@@ -621,14 +634,22 @@ fn validate_collection_output(attempt: &Value, output: &Path) -> Result<Value> {
     if fs::read(output.join(CPU_COLLECTOR_COMMIT_FILE))? != commit_bytes {
         return Err("CPU collector commit changed during reservation validation".into());
     }
-    Ok(
-        json!({"collector_commit_sha256":sha(&commit_bytes),"shard_payload_sha256":shard_payload_sha256,
+    let commit_digest = Sha256::digest(&commit_bytes);
+    let commit_hex = format!("{commit_digest:x}");
+    let commit_sha256: [u8; 32] = commit_digest.into();
+    let receipt = json!({"collector_commit_sha256":commit_hex,"shard_payload_sha256":shard_payload_sha256,
         "plan_sha256":plan,"source_sha256":attempt["source_sha256"],"source_policy_version":source_version,
         "collection_policy_version":version,"seed":assignment.world_seed,"lesson":assignment.lesson,
         "training_rows":dose,"captured_rows":dose+1,"bootstrap_rows":1,
         "offline_actor_optimizer_updates":0,"offline_value_optimizer_updates":0,
-        "actor_optimizer_step":imported.optimizer_step,"value_optimizer_step":imported_value.optimizer_step}),
-    )
+        "actor_optimizer_step":imported.optimizer_step,"value_optimizer_step":imported_value.optimizer_step});
+    Ok((
+        receipt,
+        ValidatedCollectedAttempt {
+            snapshot,
+            commit_sha256,
+        },
+    ))
 }
 
 /// Read-only reuse of the consumed reservation; this does not seed-admit again.
@@ -637,7 +658,7 @@ pub(super) fn validate_collected_attempt(
     output: &Path,
     assignment: &CpuCollectorAssignmentV1,
     plan_sha256: [u8; 32],
-) -> Result<Value> {
+) -> Result<ValidatedCollectedAttempt> {
     let lane = lane.canonicalize()?;
     if output.is_symlink() {
         return Err("collected CPU output must not be a symlink".into());
@@ -656,11 +677,11 @@ pub(super) fn validate_collected_attempt(
     if &bound_assignment != assignment || bound_plan != plan_sha256 {
         return Err("collected CPU reservation differs from requested assignment/plan".into());
     }
-    let receipt = validate_collection_output(attempt, &output)?;
+    let (receipt, validated) = validate_collection_output_with_details(attempt, &output)?;
     if receipt != attempt["result"] {
         return Err("collected CPU receipt differs from durable reservation result".into());
     }
-    Ok(receipt)
+    Ok(validated)
 }
 
 pub(super) fn collection_attempts(lane: &Path) -> Result<Vec<Value>> {

@@ -19,6 +19,25 @@ BEFORE = "2026-11-10T23:59:59.999999+00:00"
 AFTER = "2026-11-11T00:00:00+00:00"
 
 
+def _resolve_bash():
+    if os.name != "nt":
+        return "bash"
+    candidates = [
+        os.environ.get("GIT_BASH", "").strip().strip('"'),
+        r"C:\Program Files\Git\usr\bin\bash.exe",
+        r"C:\Program Files\Git\bin\bash.exe",
+        r"C:\Program Files (x86)\Git\usr\bin\bash.exe",
+        r"C:\Program Files (x86)\Git\bin\bash.exe",
+    ]
+    for candidate in candidates:
+        if candidate and Path(candidate).is_file():
+            return candidate
+    return "bash"
+
+
+BASH = _resolve_bash()
+
+
 def steps():
     """Extract this workflow's literal blocks, without a YAML package dependency."""
     result = {}
@@ -49,7 +68,7 @@ def counter(file):
     return n
 
 if name == "python3":
-    assert len(args) == 1 and args[0] == str(root / "jules-creation-gate.py"), args
+    assert len(args) == 1 and Path(args[0]).resolve() == (root / "jules-creation-gate.py").resolve(), args
     stamp = json.loads(os.environ["TEST_TIMES"])
     index = counter("clock-count")
     current = datetime.datetime.fromisoformat(stamp[min(index, len(stamp) - 1)])
@@ -73,9 +92,9 @@ elif name == "gh":
         print("base-sha")
     elif args == ["api", "repos/fixture/repo/commits/codex/fixture", "-q", ".sha"]:
         print("head-sha")
-    elif args == ["pr", "comment", "12", "--repo", "fixture/repo", "-F", str(root / "review.md")]:
+    elif args[:6] == ["pr", "comment", "12", "--repo", "fixture/repo", "-F"] and len(args) == 7 and Path(args[6]).resolve() == (root / "review.md").resolve():
         (root / "posted.md").write_text((root / "review.md").read_text())
-    elif args == ["api", "--method", "POST", "repos/fixture/repo/commits/head-sha/comments", "-F", "body=@" + str(root / "review.md")]:
+    elif args[:5] == ["api", "--method", "POST", "repos/fixture/repo/commits/head-sha/comments", "-F"] and len(args) == 6 and args[5].startswith("body=@") and Path(args[5][6:]).resolve() == (root / "review.md").resolve():
         (root / "posted.md").write_text((root / "review.md").read_text())
     else:
         raise AssertionError((name, args))
@@ -123,17 +142,23 @@ class Run:
         self.temp = tempfile.TemporaryDirectory(prefix="alife-jules-retirement-")
         self.root = Path(self.temp.name)
         (self.root / "bin").mkdir()
-        stub = "#!" + sys.executable + "\n" + STUB
+        stub = "#!" + Path(sys.executable).as_posix() + "\n" + STUB
         for name in ("python3", "curl", "gh", "sleep"):
             file = self.root / "bin" / name
-            file.write_text(stub)
+            file.write_text(stub, encoding="utf-8", newline="\n")
             file.chmod(0o755)
+        path_entries = [str(self.root / "bin"), os.environ["PATH"]]
+        if os.name == "nt":
+            bash_dir = Path(BASH).parent
+            usr_bin = bash_dir if bash_dir.parent.name == "usr" else bash_dir.parent / "usr" / "bin"
+            if usr_bin.is_dir():
+                path_entries.append(str(usr_bin))
         self.env = {
-            "PATH": str(self.root / "bin") + os.pathsep + os.environ["PATH"],
-            "RUNNER_TEMP": str(self.root), "TEST_ROOT": str(self.root),
+            "PATH": os.pathsep.join(path_entries),
+            "RUNNER_TEMP": self.root.as_posix(), "TEST_ROOT": str(self.root),
             "TEST_TIMES": json.dumps(times or [BEFORE]), "TEST_MODE": mode,
             "TEST_STATES": json.dumps(states or ["COMPLETED"]),
-            "GITHUB_STEP_SUMMARY": str(self.root / "summary.md"),
+            "GITHUB_STEP_SUMMARY": (self.root / "summary.md").as_posix(),
             "REPO": "fixture/repo", "EVENT_NAME": event,
             "PR_REF": "codex/fixture", "PR_SHA": "head-sha", "PR_BASE": "base-sha",
             "PR_NUMBER": "12", "INPUT_BRANCH": "codex/fixture", "PUSH_REF": "codex/fixture",
@@ -149,13 +174,14 @@ class Run:
 
     def execute(self, name, extras=None):
         script = steps()[name][1]
-        script = script.replace("/tmp/jules-activities.jsonl", str(self.root / "activities.jsonl"))
-        script = script.replace("/tmp/review.md", str(self.root / "review.md"))
+        script = script.replace("/tmp/jules-activities.jsonl", (self.root / "activities.jsonl").as_posix())
+        script = script.replace("/tmp/review.md", (self.root / "review.md").as_posix())
         output = self.root / (str(len(self.codes)) + ".output")
-        env = dict(self.env, GITHUB_OUTPUT=str(output))
+        env = dict(self.env, GITHUB_OUTPUT=output.as_posix())
         env.update(extras or {})
-        result = subprocess.run(["bash", "-c", script], env=env, cwd=self.root,
-                                capture_output=True, text=True, timeout=15)
+        result = subprocess.run([BASH, "-c", script], env=env, cwd=self.root,
+                                capture_output=True, text=True,
+                                timeout=60 if os.name == "nt" else 15)
         self.codes[name] = result.returncode
         self.logs[name] = result.stdout + result.stderr
         values = {}
@@ -314,7 +340,7 @@ class JulesRetirementTests(unittest.TestCase):
         self.assertIn("if: steps.jules.outputs.session_name != ''", parsed["Wait for review to complete"][0])
         self.assertIn("if: always() && steps.retirement.outputs.creation_allowed == 'true' && steps.jules.outputs.creation_allowed != 'false'", parsed["Post review comment"][0])
         for name, (_, script) in parsed.items():
-            self.assertEqual(subprocess.run(["bash", "-n"], input=script, text=True,
+            self.assertEqual(subprocess.run([BASH, "-n"], input=script, text=True,
                                             capture_output=True).returncode, 0, name)
         for name in ("Wait for review to complete", "Post review comment"):
             self.assertNotIn("jules-creation-gate.py", parsed[name][1])

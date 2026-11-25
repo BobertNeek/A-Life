@@ -33,8 +33,11 @@ impl HeadlessWorld {
         target: WorldEntityId,
     ) -> bool {
         let mut held = self
-            .objects
-            .values()
+            .carried_by_organism
+            .get(&organism.raw())
+            .into_iter()
+            .flatten()
+            .filter_map(|id| self.objects.get(id))
             .filter(|object| !object.consumed && object.carried_by == Some(organism));
         let Some(object) = held.next() else {
             return true;
@@ -86,8 +89,11 @@ impl HeadlessWorld {
             && object
                 .carried_by
                 .is_none_or(|owner| owner == command.organism_id)
-            && self
-                .physical_contact_reachable(self.objects[&agent.raw()].position, object.position)
+            && self.physical_contact_reachable(
+                self.objects[&agent.raw()].position,
+                object.position,
+                None,
+            )
             && (!mobile
                 || (self.grasp_target_is_reachable(command.organism_id, agent, target)
                     && (already_held || object.hazard_pain == 0.0)));
@@ -95,9 +101,15 @@ impl HeadlessWorld {
             return self.hand_preparation_failure(command, target).map(Some);
         }
         let (held, multiple_held) = {
-            let mut held = self.objects.values().filter(|object| {
-                !object.consumed && object.carried_by == Some(command.organism_id)
-            });
+            let mut held = self
+                .carried_by_organism
+                .get(&command.organism_id.raw())
+                .into_iter()
+                .flatten()
+                .filter_map(|id| self.objects.get(id))
+                .filter(|object| {
+                    !object.consumed && object.carried_by == Some(command.organism_id)
+                });
             (held.next().map(|object| object.id), held.next().is_some())
         };
         if multiple_held {
@@ -107,15 +119,21 @@ impl HeadlessWorld {
             let Some(position) = self.activity_placement(command.organism_id, held) else {
                 return self.hand_preparation_failure(command, target).map(Some);
             };
-            let previous = self.objects[&held.raw()].position;
-            let object = self
-                .objects
-                .get_mut(&held.raw())
-                .expect("held object exists");
-            object.position = position;
-            object.carried_by = None;
-            object.activity_hold = false;
-            object.grounded_physical.velocity = subtract(position, previous);
+            let (previous, old_oversized) = {
+                let object = &self.objects[&held.raw()];
+                (object.position, Self::is_oversized_spatial(object))
+            };
+            {
+                let object = self
+                    .objects
+                    .get_mut(&held.raw())
+                    .expect("held object exists");
+                object.position = position;
+                object.activity_hold = false;
+                object.grounded_physical.velocity = subtract(position, previous);
+            }
+            self.set_object_carried_by(held, None);
+            self.update_object_spatial_cell(held, previous, old_oversized);
             let mut result = self.finish_action(
                 command,
                 true,
@@ -204,8 +222,8 @@ impl HeadlessWorld {
             if distance(agent.position, position) > EAT_RADIUS
                 || (position.x - agent.position.x).hypot(position.z - agent.position.z)
                     < body_radius + object.radius
-                || !self.solid_segment_clear(agent.position, position)
-                || !self.solid_segment_clear(object.position, position)
+                || !self.solid_segment_clear(agent.position, position, None)
+                || !self.solid_segment_clear(object.position, position, None)
             {
                 continue;
             }
@@ -213,40 +231,51 @@ impl HeadlessWorld {
             let length = distance(position, object.position);
             if length > f32::EPSILON
                 && self.terrain.as_ref().is_some_and(|terrain| {
-                    terrain.surface().obstacles.iter().any(|bounds| {
-                        let expanded = [
-                            bounds[0] - object.radius,
-                            bounds[1] - object.radius,
-                            bounds[2] + object.radius,
-                            bounds[3] + object.radius,
-                            bounds[4],
-                            bounds[5],
-                        ];
-                        sight_box_hit(
+                    terrain
+                        .surface()
+                        .obstacle_ray_hit(
                             object.position,
                             scale(travel, length.recip()),
-                            expanded,
                             length,
+                            object.radius,
                         )
                         .is_some()
-                    })
                 })
             {
                 continue;
             }
-            let clear = self.objects.values().all(|other| {
-                if other.id == held || other.id == agent.id || other.consumed {
-                    return true;
-                }
-                if other.kind == WorldObjectKind::Obstacle {
-                    distance(
-                        other.position,
-                        closest_point_on_segment(other.position, object.position, position),
-                    ) > other.radius.max(HEADLESS_CONTACT_RADIUS) + object.radius
-                } else {
-                    distance(other.position, position) > other.radius + object.radius
-                }
-            });
+            let min_pos = Vec3f::new(
+                object.position.x.min(position.x),
+                object.position.y.min(position.y),
+                object.position.z.min(position.z),
+            );
+            let max_pos = Vec3f::new(
+                object.position.x.max(position.x),
+                object.position.y.max(position.y),
+                object.position.z.max(position.z),
+            );
+            let mut clear = true;
+            self.for_each_spatial_candidate(
+                min_pos,
+                max_pos,
+                SPATIAL_NORMAL_MAX_RADIUS + object.radius,
+                |other| {
+                    if !clear || other.id == held || other.id == agent.id || other.consumed {
+                        return;
+                    }
+                    let ok = if other.kind == WorldObjectKind::Obstacle {
+                        distance(
+                            other.position,
+                            closest_point_on_segment(other.position, object.position, position),
+                        ) > other.radius.max(HEADLESS_CONTACT_RADIUS) + object.radius
+                    } else {
+                        distance(other.position, position) > other.radius + object.radius
+                    };
+                    if !ok {
+                        clear = false;
+                    }
+                },
+            );
             if clear {
                 return Some(position);
             }
@@ -455,10 +484,12 @@ mod tests {
                 .apply_command(&command(HeadlessActionIds::PLAY, ball))
                 .unwrap();
             match case {
-                "reach" => world.objects.get_mut(&food.raw()).unwrap().position.x = 4.0,
-                "other_owner" => {
-                    world.objects.get_mut(&food.raw()).unwrap().carried_by = Some(OrganismId(2))
+                "reach" => {
+                    let mut pos = world.entity(food).unwrap().position;
+                    pos.x = 4.0;
+                    world.set_object_position_for_test(food, pos);
                 }
+                "other_owner" => world.set_object_carried_by_for_test(food, Some(OrganismId(2))),
                 "player" => {
                     world.begin_player_hold(food).unwrap();
                 }

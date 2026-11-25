@@ -9,12 +9,15 @@ repository.workspace = true
 alife_core.workspace = true
 alife_game_app = { path = "../alife_game_app", default-features = false, features = ["gpu-runtime"] }
 alife_gpu_backend = { path = "../alife_gpu_backend" }
+alife_storage.workspace = true
 alife_world = { path = "../alife_world" }
 blake3.workspace = true
 image = { version = "0.25.10", default-features = false, features = ["png"] }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
 
 [features]
 default = []
@@ -24,5 +27,5 @@ gpu-tests = ["alife_game_app/gpu-tests", "alife_gpu_backend/gpu-tests"]
 alife_gpu_backend = { path = "../alife_gpu_backend", features = ["test-support"] }
 tempfile = "3.23.0"
 
-[target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61.2", features = ["Win32_Storage_FileSystem"] }
+[lints]
+workspace = true

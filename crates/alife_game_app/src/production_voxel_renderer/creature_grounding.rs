@@ -123,7 +123,10 @@ pub(super) fn ground_creatures(
                 let contact = root.translation + root.rotation * Vec3::new(x, 0.0, 0.0);
                 surface = surface.max(surface_mesh.height(contact).unwrap_or(surface));
             }
-            root.translation.y = surface + 0.025;
+            let next_y = surface + 0.025;
+            if root.translation.y != next_y {
+                root.translation.y = next_y;
+            }
             continue;
         }
         for child in children.iter() {
@@ -140,7 +143,7 @@ pub(super) fn ground_creatures(
                 }
             }
         }
-        root.translation.y = if lowest.is_finite() {
+        let next_y = if lowest.is_finite() {
             surface + 0.04 - lowest
         } else {
             grounded_root_height(
@@ -151,5 +154,8 @@ pub(super) fn ground_creatures(
                 bevy::math::Mat3::from_quat(root.rotation).to_cols_array(),
             )
         };
+        if root.translation.y != next_y {
+            root.translation.y = next_y;
+        }
     }
 }

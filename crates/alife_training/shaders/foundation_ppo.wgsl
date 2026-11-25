@@ -12,7 +12,7 @@ fn h(i:u32) -> u32 { return header.words[i / 4u][i % 4u]; }
 fn hf(i:u32) -> f32 { return bitcast<f32>(h(i)); }
 fn r(row:u32, i:u32) -> u32 { return rows[row * 64u + i]; }
 fn rf(row:u32, i:u32) -> f32 { return bitcast<f32>(r(row, i)); }
-fn finite(x:f32) -> bool { return x == x && abs(x) <= 3.402823466e+38; }
+fn finite(x:f32) -> bool { return (bitcast<u32>(x) & 0x7f800000u) != 0x7f800000u; }
 fn metric_base(row:u32) -> u32 { return h(2u) * 32u + row * 8u; }
 fn value_base() -> u32 { return h(2u) * 40u; }
 fn put(i:u32, x:f32) { output[i] = bitcast<u32>(x); }
@@ -66,18 +66,34 @@ fn masked_categorical(row:u32, mask:u32) -> MaskedCategorical {
   return distribution;
 }
 
-@compute @workgroup_size(1)
-fn ppo_value_forward(@builtin(global_invocation_id) gid:vec3<u32>) {
-  let row = gid.x;
+var<workgroup> ppo_value_partial: array<f32, 64>;
+@compute @workgroup_size(64)
+fn ppo_value_forward(
+  @builtin(workgroup_id) wid:vec3<u32>,
+  @builtin(local_invocation_index) lane:u32,
+) {
+  let row = wid.x;
   if (row >= h(0u)) { return; }
-  var value = head_get(h(1u)); // final coordinate is bias
-  for (var feature = 0u; feature < h(1u); feature++) {
-    value += head_get(feature) * bitcast<f32>(features[r(row, 52u) + feature]);
+  let feature_base = r(row, 52u);
+  let feature_count = h(1u);
+  var sum = 0.0;
+  for (var feature = lane; feature < feature_count; feature += 64u) {
+    sum += head_get(feature) * bitcast<f32>(features[feature_base + feature]);
   }
-  put(value_base() + row, value);
+  ppo_value_partial[lane] = sum;
+  workgroupBarrier();
+  for (var stride = 32u; stride > 0u; stride /= 2u) {
+    if (lane < stride) {
+      ppo_value_partial[lane] += ppo_value_partial[lane + stride];
+    }
+    workgroupBarrier();
+  }
+  if (lane == 0u) {
+    put(value_base() + row, head_get(feature_count) + ppo_value_partial[0]);
+  }
 }
 
-@compute @workgroup_size(1)
+@compute @workgroup_size(32)
 fn ppo_objective(@builtin(global_invocation_id) gid:vec3<u32>) {
   let row = gid.x;
   if (row >= h(0u)) { return; }
@@ -192,51 +208,94 @@ fn ppo_value_gradients(@builtin(global_invocation_id) gid:vec3<u32>) {
   head_put(width * 3u + coordinate, gradient);
 }
 
-fn value_update_scale() -> f32 {
-  var mean_kl = 0.0;
-  for (var row = 0u; row < h(0u); row++) {
-    if (output_get(metric_base(row) + 7u) != 1.0) { return -1.0; }
-    mean_kl += output_get(metric_base(row) + 1u) / f32(h(0u));
+var<workgroup> ppo_reduce_f32: array<f32, 64>;
+var<workgroup> ppo_reduce_u32: array<u32, 64>;
+
+fn value_update_scale_wg(lane:u32) -> f32 {
+  var kl_sum = 0.0;
+  var bad = 0u;
+  let sample_count = h(0u);
+  for (var row = lane; row < sample_count; row += 64u) {
+    if (output_get(metric_base(row) + 7u) != 1.0) {
+      bad = 1u;
+    } else {
+      kl_sum += output_get(metric_base(row) + 1u) / f32(sample_count);
+    }
   }
-  if (h(17u) != 0u) { mean_kl=hf(18u); }
-  if (!finite(mean_kl) || mean_kl > hf(14u) || h(3u) == 0u) { return -1.0; }
+  ppo_reduce_f32[lane] = kl_sum;
+  ppo_reduce_u32[lane] = bad;
+  workgroupBarrier();
+  for (var stride = 32u; stride > 0u; stride /= 2u) {
+    if (lane < stride) {
+      ppo_reduce_f32[lane] += ppo_reduce_f32[lane + stride];
+      ppo_reduce_u32[lane] |= ppo_reduce_u32[lane + stride];
+    }
+    workgroupBarrier();
+  }
+  var mean_kl = ppo_reduce_f32[0];
+  if (h(17u) != 0u) { mean_kl = hf(18u); }
+  if (ppo_reduce_u32[0] != 0u || !finite(mean_kl) || mean_kl > hf(14u) || h(3u) == 0u) {
+    return -1.0;
+  }
   let width = h(1u) + 1u;
   var squared_norm = 0.0;
-  for (var coordinate = 0u; coordinate < width; coordinate++) {
+  var grad_bad = 0u;
+  for (var coordinate = lane; coordinate < width; coordinate += 64u) {
     let gradient = head_get(width * 3u + coordinate);
-    if (!finite(gradient)) { return -1.0; }
+    if (!finite(gradient)) { grad_bad = 1u; }
     squared_norm += gradient * gradient;
   }
-  if (!finite(squared_norm)) { return -1.0; }
-  return min(1.0, hf(13u) / max(sqrt(squared_norm), 1.0e-12));
+  ppo_reduce_f32[lane] = squared_norm;
+  ppo_reduce_u32[lane] = grad_bad;
+  workgroupBarrier();
+  for (var stride = 32u; stride > 0u; stride /= 2u) {
+    if (lane < stride) {
+      ppo_reduce_f32[lane] += ppo_reduce_f32[lane + stride];
+      ppo_reduce_u32[lane] |= ppo_reduce_u32[lane + stride];
+    }
+    workgroupBarrier();
+  }
+  let total_norm = ppo_reduce_f32[0];
+  if (ppo_reduce_u32[0] != 0u || !finite(total_norm)) { return -1.0; }
+  return min(1.0, hf(13u) / max(sqrt(total_norm), 1.0e-12));
 }
 
-@compute @workgroup_size(1)
-fn ppo_value_preflight() {
-  put(h(2u) * 41u, 0.0);
-  if (hf(6u) == 0.0) { put(h(2u) * 41u, 1.0); return; }
-  let scale = value_update_scale();
+@compute @workgroup_size(64)
+fn ppo_value_preflight(@builtin(local_invocation_index) lane:u32) {
+  if (lane == 0u) { put(h(2u) * 41u, 0.0); }
+  if (hf(6u) == 0.0) {
+    if (lane == 0u) { put(h(2u) * 41u, 1.0); }
+    return;
+  }
+  let scale = value_update_scale_wg(lane);
   if (scale < 0.0) { return; }
   let width = h(1u) + 1u;
   let correction1 = 1.0 - pow(hf(9u), f32(h(3u)));
   let correction2 = 1.0 - pow(hf(10u), f32(h(3u)));
   // Validate the complete head before mutating any parameter or Adam moment.
-  for (var coordinate = 0u; coordinate < width; coordinate++) {
+  var bad = 0u;
+  for (var coordinate = lane; coordinate < width; coordinate += 64u) {
     let next = value_adam_coordinate(coordinate, width, scale, correction1, correction2);
-    if (!finite(next.x) || !finite(next.y) || !finite(next.z)) { return; }
+    if (!finite(next.x) || !finite(next.y) || !finite(next.z)) { bad = 1u; }
   }
-  put(h(2u) * 41u, 1.0);
+  ppo_reduce_u32[lane] = bad;
+  workgroupBarrier();
+  for (var stride = 32u; stride > 0u; stride /= 2u) {
+    if (lane < stride) { ppo_reduce_u32[lane] |= ppo_reduce_u32[lane + stride]; }
+    workgroupBarrier();
+  }
+  if (lane == 0u && ppo_reduce_u32[0] == 0u) { put(h(2u) * 41u, 1.0); }
 }
 
-@compute @workgroup_size(1)
-fn ppo_value_update() {
+@compute @workgroup_size(64)
+fn ppo_value_update(@builtin(local_invocation_index) lane:u32) {
   if (output_get(h(2u) * 41u) != 1.0 || hf(6u) == 0.0) { return; }
-  let scale = value_update_scale();
+  let scale = value_update_scale_wg(lane);
   if (scale < 0.0) { return; }
   let width = h(1u) + 1u;
   let correction1 = 1.0 - pow(hf(9u), f32(h(3u)));
   let correction2 = 1.0 - pow(hf(10u), f32(h(3u)));
-  for (var coordinate = 0u; coordinate < width; coordinate++) {
+  for (var coordinate = lane; coordinate < width; coordinate += 64u) {
     let next = value_adam_coordinate(coordinate, width, scale, correction1, correction2);
     head_put(width + coordinate, next.y);
     head_put(width * 2u + coordinate, next.z);
@@ -344,11 +403,11 @@ fn imitation_objective(row:u32, add:bool) {
   put(metrics+3u,1.0);
 }
 
-@compute @workgroup_size(1)
+@compute @workgroup_size(32)
 fn imitation_replace(@builtin(global_invocation_id) gid:vec3<u32>) {
   if (gid.x<h(0u)) { imitation_objective(gid.x,false); }
 }
-@compute @workgroup_size(1)
+@compute @workgroup_size(32)
 fn imitation_add(@builtin(global_invocation_id) gid:vec3<u32>) {
   if (gid.x<h(0u)) { imitation_objective(gid.x,true); }
 }

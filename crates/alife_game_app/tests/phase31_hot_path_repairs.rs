@@ -1581,7 +1581,7 @@ fn phase31_one_sleep_cycle_has_one_exact_capture_and_journaled_promotion() {
         })
         .collect::<Vec<_>>();
     let durable = GpuDurableSaveManifest::open(&save_path, &asset_root).unwrap();
-    let mut external = durable.load().unwrap().save;
+    let mut external = (*durable.load().unwrap().save).clone();
     let recovery_staging = runtime.new_staging_like_live().unwrap();
     external.save_id = "phase31-valid-external-completed-base".to_string();
     GpuDurableSaveManifest::publish_snapshot(&save_path, &asset_root, &external).unwrap();
@@ -1935,7 +1935,7 @@ fn phase31_hot_path_completed_sleep_batch_is_atomic_and_keeps_exact_snapshot_bou
     let _durable_completed = drive_to_durable_completed(&mut runtime, &organisms);
 
     let durable = GpuDurableSaveManifest::open(&save_path, &asset_root).unwrap();
-    let mut external_replacement = durable.load().unwrap().save;
+    let mut external_replacement = (*durable.load().unwrap().save).clone();
     external_replacement.save_id = "phase31-external-valid-cas-replacement".to_string();
     GpuDurableSaveManifest::publish_snapshot(&save_path, &asset_root, &external_replacement)
         .unwrap();

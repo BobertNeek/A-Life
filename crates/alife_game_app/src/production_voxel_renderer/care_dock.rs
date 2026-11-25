@@ -94,15 +94,15 @@ impl State {
     }
 }
 #[derive(Component)]
-struct DockRoot;
+pub(super) struct DockRoot;
 #[derive(Component)]
-struct Glyph(Action);
+pub(super) struct Glyph(Action);
 #[derive(Component)]
-struct Marker(Action);
+pub(super) struct Marker(Action);
 #[derive(Component)]
-struct ErrorMarker;
+pub(super) struct ErrorMarker;
 #[derive(Resource)]
-struct Icons(BTreeMap<&'static str, Handle<Image>>);
+pub(super) struct Icons(BTreeMap<&'static str, Handle<Image>>);
 
 const HEIGHT: f32 = 72.0;
 const BOTTOM: f32 = 12.0;
@@ -505,30 +505,49 @@ pub(super) fn dispatch(
 
 /// Bottom controls retain priority over readouts in short viewports. The
 /// composer budget conservatively includes its preserved typed-text wrapping.
-pub(super) fn occupied_top(world: &mut World, size: Vec2) -> f32 {
+pub(super) fn occupied_top_from_parts<'a>(
+    size: Vec2,
+    has_error: bool,
+    #[cfg(feature = "gpu-runtime")] conversation: Option<
+        &crate::ProductionConversationLineageUiState,
+    >,
+    strips: impl IntoIterator<
+        Item = (
+            &'a Text,
+            &'a TextFont,
+            &'a Node,
+            &'a Visibility,
+            Option<&'a ComputedNode>,
+        ),
+    >,
+) -> f32 {
     let mut top = size.y - BOTTOM - HEIGHT;
-    if world
-        .get_resource::<Fvr05ProductionUxStateResource>()
-        .is_some_and(|u| u.last_error.is_some())
-    {
+    if has_error {
         top -= 16.0;
     }
     #[cfg(feature = "gpu-runtime")]
-    if let Some(height) =
-        crate::production_conversation_lineage_ui::speech_composer_height(world, size)
-    {
-        let bottom = crate::production_conversation_lineage_ui::speech_composer_bottom(world);
+    if let Some(height) = conversation.and_then(|state| {
+        crate::production_conversation_lineage_ui::speech_composer_height_for(
+            state, size, has_error,
+        )
+    }) {
+        let bottom =
+            crate::production_conversation_lineage_ui::speech_composer_bottom_for(has_error);
         top = top.min((size.y - bottom - height).max(0.0));
     }
-    for (text, font, node, visibility, computed) in world
-        .query_filtered::<(&Text, &TextFont, &Node, &Visibility, Option<&ComputedNode>), With<V0PlayerControlStrip>>()
-        .iter(world)
-    {
+    for (text, font, node, visibility, computed) in strips {
         if *visibility == Visibility::Hidden {
             continue;
         }
-        let max_width = match node.max_width { Val::Percent(p) => size.x * p / 100.0, Val::Px(p) => p, _ => size.x - 32.0 };
-        let padding = [node.padding.left, node.padding.right].iter().map(|v|if let Val::Px(p)=v {*p} else {0.0}).sum::<f32>();
+        let max_width = match node.max_width {
+            Val::Percent(p) => size.x * p / 100.0,
+            Val::Px(p) => p,
+            _ => size.x - 32.0,
+        };
+        let padding = [node.padding.left, node.padding.right]
+            .iter()
+            .map(|v| if let Val::Px(p) = v { *p } else { 0.0 })
+            .sum::<f32>();
         let width = (max_width - padding).max(font.font_size);
         let columns = (width / font.font_size).floor().max(1.0) as usize;
         let lines = text
@@ -536,7 +555,8 @@ pub(super) fn occupied_top(world: &mut World, size: Vec2) -> f32 {
             .split('\n')
             .map(|l| l.chars().count().max(1).div_ceil(columns))
             .sum::<usize>();
-        let height = (lines as f32 * font.font_size * 1.3 + 20.0).max(computed.map_or(0.0, |n|n.size().y));
+        let height =
+            (lines as f32 * font.font_size * 1.3 + 20.0).max(computed.map_or(0.0, |n| n.size().y));
         let bottom = match node.bottom {
             Val::Px(p) => p,
             _ => 92.0,
@@ -545,56 +565,211 @@ pub(super) fn occupied_top(world: &mut World, size: Vec2) -> f32 {
     }
     top
 }
-pub(super) fn sync(world: &mut World) {
-    let selected = world
-        .resource::<Fvr03ProductionVoxelSelectionResource>()
-        .selected;
-    world.resource_mut::<State>().observe_selection(selected);
-    let ux = world.resource::<Fvr05ProductionUxStateResource>();
+
+#[cfg(test)]
+pub(super) fn occupied_top(world: &mut World, size: Vec2) -> f32 {
+    let has_error = world
+        .get_resource::<Fvr05ProductionUxStateResource>()
+        .is_some_and(|u| u.last_error.is_some());
+    #[cfg(feature = "gpu-runtime")]
+    let conversation = world
+        .get_resource::<crate::ProductionConversationLineageUiState>()
+        .cloned();
+    let mut strips_query = world.query_filtered::<(
+        &Text,
+        &TextFont,
+        &Node,
+        &Visibility,
+        Option<&ComputedNode>,
+    ), With<V0PlayerControlStrip>>();
+    occupied_top_from_parts(
+        size,
+        has_error,
+        #[cfg(feature = "gpu-runtime")]
+        conversation.as_ref(),
+        strips_query.iter(world),
+    )
+}
+
+#[derive(bevy::ecs::system::SystemParam)]
+#[allow(
+    clippy::type_complexity,
+    reason = "Bundles disjoint care dock feedback queries cleanly for sync and tests."
+)]
+pub(super) struct FeedbackQueries<'w, 's> {
+    icons: Option<Res<'w, Icons>>,
+    markers: Query<
+        'w,
+        's,
+        (
+            &'static Marker,
+            &'static mut ImageNode,
+            &'static mut Visibility,
+        ),
+        (
+            Without<DockRoot>,
+            Without<Glyph>,
+            Without<Action>,
+            Without<ErrorMarker>,
+        ),
+    >,
+    glyphs: Query<
+        'w,
+        's,
+        (&'static Glyph, &'static mut ImageNode),
+        (
+            Without<DockRoot>,
+            Without<Marker>,
+            Without<Action>,
+            Without<ErrorMarker>,
+        ),
+    >,
+    actions: Query<
+        'w,
+        's,
+        (&'static Interaction, &'static mut BorderColor),
+        (
+            With<Action>,
+            Without<DockRoot>,
+            Without<Marker>,
+            Without<Glyph>,
+            Without<ErrorMarker>,
+        ),
+    >,
+    error_markers: Query<
+        'w,
+        's,
+        &'static mut Visibility,
+        (
+            With<ErrorMarker>,
+            Without<DockRoot>,
+            Without<Marker>,
+            Without<Glyph>,
+            Without<Action>,
+        ),
+    >,
+}
+
+impl FeedbackQueries<'_, '_> {
+    fn apply(&mut self, availability: [bool; 5], evidence: [Evidence; 5], error: bool) {
+        let handles = self.icons.as_deref().map(|icons| &icons.0);
+        for (marker, mut image, mut visible) in &mut self.markers {
+            let cue = match evidence[marker.0.index()] {
+                Evidence::Rejected => Some("failed"),
+                Evidence::Unavailable => Some("unavailable"),
+                _ if !availability[marker.0.index()] => Some("unavailable"),
+                Evidence::Queued => Some("pending"),
+                Evidence::Placed(_) => Some("placement"),
+                Evidence::None => None,
+            };
+            if let Some(handle) = cue.and_then(|cue| handles.and_then(|map| map.get(cue))) {
+                if image.image != *handle {
+                    image.image = handle.clone();
+                }
+            }
+            visible.set_if_neq(if cue.is_some() {
+                Visibility::Inherited
+            } else {
+                Visibility::Hidden
+            });
+        }
+        for (glyph, mut image) in &mut self.glyphs {
+            let next_color = if availability[glyph.0.index()] {
+                Color::WHITE
+            } else {
+                Color::srgba(0.62, 0.66, 0.66, 1.0)
+            };
+            if image.color != next_color {
+                image.color = next_color;
+            }
+        }
+        for (interaction, mut border) in &mut self.actions {
+            let next_border = bevel(*interaction != Interaction::Pressed);
+            if *border != next_border {
+                *border = next_border;
+            }
+        }
+        let error_visible = if error {
+            Visibility::Inherited
+        } else {
+            Visibility::Hidden
+        };
+        for mut visible in &mut self.error_markers {
+            visible.set_if_neq(error_visible);
+        }
+    }
+}
+
+#[allow(
+    clippy::too_many_arguments,
+    clippy::type_complexity,
+    reason = "Bevy injects independent ECS system parameters and disjoint dock queries."
+)]
+pub(super) fn sync(
+    selection: Res<Fvr03ProductionVoxelSelectionResource>,
+    mut state: ResMut<State>,
+    ux: Res<Fvr05ProductionUxStateResource>,
+    windows: Query<&Window, With<PrimaryWindow>>,
+    #[cfg(feature = "gpu-runtime")] runtime: Option<Res<ProductionGpuBrainRuntimeResource>>,
+    #[cfg(feature = "gpu-runtime")] conversation: Option<
+        Res<crate::ProductionConversationLineageUiState>,
+    >,
+    mut dock_roots: Query<
+        (&mut Node, &mut Visibility),
+        (
+            With<DockRoot>,
+            Without<Marker>,
+            Without<Glyph>,
+            Without<Action>,
+            Without<ErrorMarker>,
+        ),
+    >,
+    mut feedback: FeedbackQueries,
+) {
+    let selected = selection.selected;
+    if state.selected != selected {
+        state.observe_selection(selected);
+    }
     let debug = ux.debug_mode;
     let error = ux.last_error.is_some();
-    let size = world
-        .query_filtered::<&Window, With<PrimaryWindow>>()
-        .iter(world)
-        .next()
-        .map_or(Vec2::new(1280.0, 720.0), |w| {
-            Vec2::new(w.width(), w.height())
-        });
-    for (mut node, mut visible) in world
-        .query_filtered::<(&mut Node, &mut Visibility), With<DockRoot>>()
-        .iter_mut(world)
-    {
-        node.left = Val::Px(((size.x - WIDTH) / 2.0).max(0.0));
-        *visible = if debug {
-            Visibility::Hidden
-        } else {
-            Visibility::Inherited
-        };
+    let size = windows.iter().next().map_or(Vec2::new(1280.0, 720.0), |w| {
+        Vec2::new(w.width(), w.height())
+    });
+    let next_left = Val::Px(((size.x - WIDTH) / 2.0).max(0.0));
+    let dock_visible = if debug {
+        Visibility::Hidden
+    } else {
+        Visibility::Inherited
+    };
+    for (mut node, mut visible) in &mut dock_roots {
+        if node.left != next_left {
+            node.left = next_left;
+        }
+        visible.set_if_neq(dock_visible);
     }
     #[cfg(feature = "gpu-runtime")]
-    let availability = world
-        .get_non_send_resource::<ProductionGpuBrainRuntimeResource>()
+    let availability = runtime
+        .as_ref()
         .map(|r| {
+            let r = r.lock();
             [
                 food_tile(selected).is_some(),
-                care_target(r.runtime.world(), selected).is_some(),
-                care_target(r.runtime.world(), selected).is_some()
-                    && !r
-                        .runtime
-                        .world()
+                care_target(r.world(), selected).is_some(),
+                care_target(r.world(), selected).is_some()
+                    && r.world()
                         .entity_id("player-plaything")
-                        .and_then(|id| r.runtime.world().entity(id))
-                        .is_some_and(|o| o.carried_by.is_some()),
-                care_target(r.runtime.world(), selected).is_some(),
-                world.contains_resource::<ProductionConversationLineageUiState>(),
+                        .and_then(|id| r.world().entity(id))
+                        .is_none_or(|o| o.carried_by.is_none()),
+                care_target(r.world(), selected).is_some(),
+                conversation.is_some(),
             ]
         })
         .unwrap_or([false; 5]);
     #[cfg(not(feature = "gpu-runtime"))]
     let availability = [false; 5];
-    let mut evidence = world.resource::<State>().evidence;
+    let mut evidence = state.evidence;
     #[cfg(feature = "gpu-runtime")]
-    if let Some(conversation) = world.get_resource::<ProductionConversationLineageUiState>() {
+    if let Some(conversation) = conversation.as_deref() {
         use crate::production_conversation_lineage_ui::SpeechInputCue;
         evidence[Action::Speech.index()] = match conversation.speech_input_cue() {
             SpeechInputCue::Pending => Evidence::Queued,
@@ -603,59 +778,21 @@ pub(super) fn sync(world: &mut World) {
             SpeechInputCue::None => evidence[Action::Speech.index()],
         };
     }
-    apply_feedback(world, availability, evidence, error);
+    feedback.apply(availability, evidence, error);
 }
+
+#[cfg(test)]
 fn apply_feedback(
     world: &mut World,
     availability: [bool; 5],
     evidence: [Evidence; 5],
     error: bool,
 ) {
-    let handles = world.resource::<Icons>().0.clone();
-    for (marker, mut image, mut visible) in world
-        .query::<(&Marker, &mut ImageNode, &mut Visibility)>()
-        .iter_mut(world)
-    {
-        let cue = match evidence[marker.0.index()] {
-            Evidence::Rejected => Some("failed"),
-            Evidence::Unavailable => Some("unavailable"),
-            _ if !availability[marker.0.index()] => Some("unavailable"),
-            Evidence::Queued => Some("pending"),
-            Evidence::Placed(_) => Some("placement"),
-            Evidence::None => None,
-        };
-        if let Some(cue) = cue {
-            image.image = handles[cue].clone();
-        }
-        *visible = if cue.is_some() {
-            Visibility::Inherited
-        } else {
-            Visibility::Hidden
-        };
-    }
-    for (glyph, mut image) in world.query::<(&Glyph, &mut ImageNode)>().iter_mut(world) {
-        image.color = if availability[glyph.0.index()] {
-            Color::WHITE
-        } else {
-            Color::srgba(0.62, 0.66, 0.66, 1.0)
-        };
-    }
-    for (interaction, mut border) in world
-        .query_filtered::<(&Interaction, &mut BorderColor), With<Action>>()
-        .iter_mut(world)
-    {
-        *border = bevel(*interaction != Interaction::Pressed);
-    }
-    for mut visible in world
-        .query_filtered::<&mut Visibility, With<ErrorMarker>>()
-        .iter_mut(world)
-    {
-        *visible = if error {
-            Visibility::Inherited
-        } else {
-            Visibility::Hidden
-        };
-    }
+    let mut state: bevy::ecs::system::SystemState<FeedbackQueries> =
+        bevy::ecs::system::SystemState::new(world);
+    let mut feedback = state.get_mut(world);
+    feedback.apply(availability, evidence, error);
+    state.apply(world);
 }
 
 #[cfg(test)]

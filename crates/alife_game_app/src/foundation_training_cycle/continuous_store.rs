@@ -361,7 +361,7 @@ fn abort_initialization(store: &Path) -> Result<serde_json::Value> {
         if store.join(".run").exists() {
             return Err("uncommitted continuous initialization cannot own a run".into());
         }
-        if !bytes.is_empty() && !(bytes.starts_with(INIT) || INIT.starts_with(&bytes)) {
+        if !(bytes.is_empty() || bytes.starts_with(INIT) || INIT.starts_with(&bytes)) {
             return Err("unknown continuous initialization prefix".into());
         }
         let current = store.join("current.alife-checkpoint");

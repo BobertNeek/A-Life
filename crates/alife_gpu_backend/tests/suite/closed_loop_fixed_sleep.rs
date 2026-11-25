@@ -5,9 +5,9 @@ use alife_core::{
     Tick,
 };
 
-const ABI: &str = include_str!("../shaders/closed_loop_abi.wgsl");
-const CONSOLIDATE: &str = include_str!("../shaders/closed_loop_consolidate.wgsl");
-const REPLAY: &str = include_str!("../shaders/closed_loop_replay_learning.wgsl");
+const ABI: &str = include_str!("../../shaders/closed_loop_abi.wgsl");
+const CONSOLIDATE: &str = include_str!("../../shaders/closed_loop_consolidate.wgsl");
+const REPLAY: &str = include_str!("../../shaders/closed_loop_replay_learning.wgsl");
 
 fn compile(genome: &BrainGenome, capacity: &BrainCapacityClass) -> BrainPhenotype {
     let state = DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(0.35).unwrap());

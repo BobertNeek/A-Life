@@ -20,6 +20,7 @@ impl Drop for BenchmarkStagingDirectory {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    alife_game_app::init_headless_tracing();
     let args = std::env::args().skip(1).collect::<Vec<_>>();
     if let Some(path) = value_after(&args, "--write-canonical-targets") {
         atomic_write_json(Path::new(path), &canonical_performance_targets_v1())?;
@@ -72,6 +73,12 @@ fn run_private_single_row(args: &[String]) -> Result<(), Box<dyn std::error::Err
             "private benchmark row is not in the target matrix",
         ))?;
     let row = run_single_benchmark_row(target)?;
+    tracing::debug!(
+        class_id = class_id_raw,
+        sensor_profile_id = sensor_profile_id_raw,
+        population,
+        "completed private benchmark row"
+    );
     atomic_write_json(
         Path::new(required_single_value(args, "--row-output")?),
         &row,
@@ -268,42 +275,8 @@ fn atomic_write_json<T: serde::Serialize>(
     Ok(())
 }
 
-#[cfg(not(windows))]
 fn atomic_replace(temp: &Path, path: &Path) -> std::io::Result<()> {
-    fs::rename(temp, path)
-}
-
-#[cfg(windows)]
-fn atomic_replace(temp: &Path, path: &Path) -> std::io::Result<()> {
-    use std::os::windows::ffi::OsStrExt;
-    use windows_sys::Win32::Storage::FileSystem::{
-        MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
-    };
-
-    let temp_wide = temp
-        .as_os_str()
-        .encode_wide()
-        .chain(std::iter::once(0))
-        .collect::<Vec<_>>();
-    let path_wide = path
-        .as_os_str()
-        .encode_wide()
-        .chain(std::iter::once(0))
-        .collect::<Vec<_>>();
-    // SAFETY: both paths are owned, NUL-terminated UTF-16 buffers that remain
-    // alive for the duration of the Win32 call. No raw handle is retained.
-    let replaced = unsafe {
-        MoveFileExW(
-            temp_wide.as_ptr(),
-            path_wide.as_ptr(),
-            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
-        )
-    };
-    if replaced == 0 {
-        Err(std::io::Error::last_os_error())
-    } else {
-        Ok(())
-    }
+    alife_storage::atomic_replace_file(temp, path)
 }
 
 fn parse_class(value: &str) -> Result<u16, GpuBenchmarkError> {

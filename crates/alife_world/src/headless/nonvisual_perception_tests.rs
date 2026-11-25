@@ -187,9 +187,13 @@ fn indexed_nonvisual_far_oversized_contact_and_temperature_are_retained() {
         Vec3f::new(16.0, 0.0, 0.0),
         [0.0; 2],
     );
-    let object = world.objects.get_mut(&far.raw()).unwrap();
-    object.radius = 16.0;
-    object.grounded_physical.surface_temperature = 0.8;
+    world.set_object_radius_for_test(far, 16.0);
+    world
+        .objects
+        .get_mut(&far.raw())
+        .unwrap()
+        .grounded_physical
+        .surface_temperature = 0.8;
     let index = world.build_perception_batch_index().unwrap();
     assert!(world
         .indexed_nonvisual_objects(world.agent_for(OBSERVER).unwrap(), &index)
@@ -217,7 +221,7 @@ fn indexed_nonvisual_far_possession_and_duplicate_membership_are_retained_once()
         [0.1, -0.1],
     );
     for id in [far, local] {
-        world.objects.get_mut(&id.raw()).unwrap().carried_by = Some(OBSERVER);
+        world.set_object_carried_by_for_test(id, Some(OBSERVER));
     }
     let index = world.build_perception_batch_index().unwrap();
     let candidates = world
@@ -256,10 +260,9 @@ fn indexed_nonvisual_self_and_consumed_fields_preserve_sparse_query() {
         Vec3f::new(0.2, 0.0, 0.0),
         [f32::NAN, f32::INFINITY],
     );
-    let object = world.objects.get_mut(&consumed.raw()).unwrap();
-    object.consumed = true;
-    object.radius = f32::INFINITY;
-    object.carried_by = Some(OBSERVER);
+    world.objects.get_mut(&consumed.raw()).unwrap().consumed = true;
+    world.set_object_radius_for_test(consumed, f32::INFINITY);
+    world.set_object_carried_by_for_test(consumed, Some(OBSERVER));
     let index = world.build_perception_batch_index().unwrap();
     assert!(!index.nonvisual_requires_full_scan);
     assert!(world
@@ -332,17 +335,15 @@ fn indexed_nonvisual_rebuilt_batch_tracks_position_radius_and_owner_mutations() 
         before.sensory().channels.smell_chemistry,
         moved.sensory().channels.smell_chemistry
     );
-    let target = world.objects.get_mut(&target.raw()).unwrap();
-    target.position = Vec3f::new(10_000.0, 0.0, 0.0);
-    target.carried_by = Some(OBSERVER);
+    world.set_object_position_for_test(target, Vec3f::new(10_000.0, 0.0, 0.0));
+    world.set_object_carried_by_for_test(target, Some(OBSERVER));
     let (owned, _, indexed) = assert_packet_matches(&world);
     assert_eq!(indexed, 1);
     assert_eq!(owned.sensory().channels.tactile_contact[2], 1.0);
     let target = world.entity_id("moved").unwrap();
-    let object = world.objects.get_mut(&target.raw()).unwrap();
-    object.position = Vec3f::new(16.0, 0.0, 0.0);
-    object.radius = 16.0;
-    object.carried_by = None;
+    world.set_object_position_for_test(target, Vec3f::new(16.0, 0.0, 0.0));
+    world.set_object_radius_for_test(target, 16.0);
+    world.set_object_carried_by_for_test(target, None);
     let (resized, _, indexed) = assert_packet_matches(&world);
     assert_eq!(indexed, 1);
     assert_eq!(resized.sensory().channels.tactile_contact[0], 1.0);
@@ -362,7 +363,7 @@ fn indexed_nonvisual_huge_radius_and_small_world_choose_bounded_full_scan() {
     assert_eq!(indexed, canonical);
     let mut huge = sparse_world(Vec3f::ZERO, 128);
     let id = insert_food(&mut huge, "huge", Vec3f::new(1.0e18, 0.0, 0.0), [0.0; 2]);
-    huge.objects.get_mut(&id.raw()).unwrap().radius = 1.0e20;
+    huge.set_object_radius_for_test(id, 1.0e20);
     let index = huge.build_perception_batch_index().unwrap();
     assert!(huge
         .indexed_nonvisual_objects(huge.agent_for(OBSERVER).unwrap(), &index)
@@ -415,7 +416,7 @@ fn indexed_nonvisual_nonfinite_edges_preserve_canonical_error_or_float_bits() {
     for radius in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
         let mut world = sparse_world(Vec3f::ZERO, 128);
         let id = world.entity_id("remote-0").unwrap();
-        world.objects.get_mut(&id.raw()).unwrap().radius = radius;
+        world.set_object_radius_for_test(id, radius);
         let index = world.build_perception_batch_index().unwrap();
         assert!(index.nonvisual_requires_full_scan);
         assert_packet_matches(&world);
@@ -428,7 +429,9 @@ fn indexed_nonvisual_nonfinite_edges_preserve_canonical_error_or_float_bits() {
         .indexed_nonvisual_objects(world.agent_for(OBSERVER).unwrap(), &index)
         .unwrap()
         .is_none());
-    world.objects.get_mut(&id.raw()).unwrap().position.x = f32::INFINITY;
+    let mut pos = world.entity(id).unwrap().position;
+    pos.x = f32::INFINITY;
+    world.set_object_position_for_test(id, pos);
     assert!(world.build_perception_batch_index().is_err());
 }
 
@@ -482,7 +485,7 @@ fn indexed_nonvisual_work_counts_stay_local_when_remote_world_grows() {
             Vec3f::new(10_000.0, 0.0, 0.0),
             [0.1, -0.1],
         );
-        world.objects.get_mut(&far.raw()).unwrap().carried_by = Some(OBSERVER);
+        world.set_object_carried_by_for_test(far, Some(OBSERVER));
         let (_, canonical, indexed) = assert_packet_matches(&world);
         assert_eq!(canonical, remote_count + 2);
         assert_eq!(indexed, 2);
@@ -499,9 +502,8 @@ fn indexed_nonvisual_small_world_skips_only_unused_metadata_until_seventeen_obje
         Vec3f::new(10_000.0, 0.0, 0.0),
         [0.1, -0.1],
     );
-    let object = world.objects.get_mut(&carried.raw()).unwrap();
-    object.carried_by = Some(OBSERVER);
-    object.radius = 9.0;
+    world.set_object_carried_by_for_test(carried, Some(OBSERVER));
+    world.set_object_radius_for_test(carried, 9.0);
     let index = world.build_perception_batch_index().unwrap();
     assert_eq!(index.object_count, 16);
     assert!(index.nonvisual_requires_full_scan);
@@ -630,7 +632,7 @@ fn indexed_nonvisual_far_carried_union_obeys_the_same_raw_budget() {
         let mut world = sparse_world(Vec3f::ZERO, 256);
         for number in 0..carried_count {
             let id = world.entity_id(&format!("remote-{number}")).unwrap();
-            world.objects.get_mut(&id.raw()).unwrap().carried_by = Some(OBSERVER);
+            world.set_object_carried_by_for_test(id, Some(OBSERVER));
         }
         let index = world.build_perception_batch_index().unwrap();
         let candidates = world
@@ -658,7 +660,7 @@ fn indexed_nonvisual_duplicate_membership_can_only_choose_an_earlier_full_scan()
                 Vec3f::new(0.2, 0.0, 0.1),
                 [0.01, -0.02],
             );
-            world.objects.get_mut(&id.raw()).unwrap().carried_by = Some(OBSERVER);
+            world.set_object_carried_by_for_test(id, Some(OBSERVER));
         }
         let index = world.build_perception_batch_index().unwrap();
         let candidates = world
@@ -1028,9 +1030,9 @@ fn indexed_nonvisual_unsupported_same_tick_source_reuse_requires_rebuild() {
             "position" => world
                 .editor_move_object(target, Vec3f::new(-0.4, 0.0, 0.0))
                 .unwrap(),
-            "radius" => world.objects.get_mut(&target.raw()).unwrap().radius = 100.0,
+            "radius" => world.set_object_radius_for_test(target, 100.0),
             "ownership" => {
-                world.objects.get_mut(&target.raw()).unwrap().carried_by = Some(OBSERVER);
+                world.set_object_carried_by_for_test(target, Some(OBSERVER));
             }
             _ => unreachable!(),
         }
@@ -1147,9 +1149,8 @@ fn indexed_nonvisual_own_cell_raw_budget_keeps_consumed_members_and_packet_parit
             ));
         }
         let last = last.unwrap();
-        let consumed = world.objects.get_mut(&last.raw()).unwrap();
-        consumed.consumed = true;
-        consumed.carried_by = Some(OBSERVER);
+        world.objects.get_mut(&last.raw()).unwrap().consumed = true;
+        world.set_object_carried_by_for_test(last, Some(OBSERVER));
         let index = world.build_perception_batch_index().unwrap();
         let observer = world.agent_for(OBSERVER).unwrap();
         assert_eq!(index.object_count, object_count);
@@ -1167,7 +1168,7 @@ fn indexed_nonvisual_own_cell_raw_budget_keeps_consumed_members_and_packet_parit
 
         // Rebuild after moving the consumed member: below the same raw budget,
         // the sparse path remains available and returns canonical ID order.
-        world.objects.get_mut(&last.raw()).unwrap().position = Vec3f::new(20_000.0, 0.0, 0.0);
+        world.set_object_position_for_test(last, Vec3f::new(20_000.0, 0.0, 0.0));
         let index = world.build_perception_batch_index().unwrap();
         let candidates = world
             .indexed_nonvisual_objects(world.agent_for(OBSERVER).unwrap(), &index)
@@ -1189,6 +1190,7 @@ fn indexed_nonvisual_dense_own_cell_never_bypasses_snapshot_validation() {
     for object in world.objects.values_mut() {
         object.position = Vec3f::ZERO;
     }
+    world.rebuild_indexes_from_objects();
     let index = world.build_perception_batch_index().unwrap();
     let observer = world.agent_for(OBSERVER).unwrap();
     assert!(world

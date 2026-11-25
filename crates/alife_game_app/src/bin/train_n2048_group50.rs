@@ -8,6 +8,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("{usage}");
         return Ok(());
     }
+    alife_game_app::init_headless_tracing();
     if first == "--validate-source" {
         let source = PathBuf::from(args.next().ok_or(usage)?);
         if args.next().is_some() {

@@ -97,12 +97,12 @@ fn capture(runtime: &mut GpuLiveBrainRuntime, kind: CaptureKind) -> PortableSave
         runtime.poll_persistence_for_shutdown().unwrap();
         thread::sleep(Duration::from_millis(1));
     }
-    let save = runtime
+    let save = (*runtime
         .checkpoint_durability
         .as_ref()
         .unwrap()
         .published
-        .save
+        .save)
         .clone();
     assert_eq!(save.world.tick, tick);
     save
@@ -147,7 +147,7 @@ fn restore_retained(
     marker: &AssetManifestEntry,
 ) {
     let (manifest, loaded) = GpuDurableSaveManifest::open_loaded(path, asset_root).unwrap();
-    assert_eq!(&loaded.save, expected);
+    assert_eq!(loaded.save.as_ref(), expected);
     assert!(loaded.save.assets.entries.contains(marker));
     loaded.save.validate_with_asset_root(asset_root).unwrap();
     let restored = GpuLiveBrainRuntime::restore_loaded_save(
@@ -402,7 +402,7 @@ fn readiness_resume_preserves_external_actors_toys_and_private_prior() {
         .unwrap();
     let (manifest, loaded) =
         GpuDurableSaveManifest::open_loaded(root.join("live.json"), root.join("assets")).unwrap();
-    assert_eq!(loaded.save, saved);
+    assert_eq!(*loaded.save, saved);
     let mut restored = GpuLiveBrainRuntime::restore_loaded_save(
         runtime.new_staging_like_live().unwrap(),
         manifest,

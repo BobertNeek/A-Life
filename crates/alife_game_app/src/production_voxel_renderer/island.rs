@@ -8,9 +8,12 @@ use bevy::{
 
 #[derive(Resource)]
 pub(super) struct IslandActive;
-fn placements() -> Vec<Prop> {
-    serde_json::from_str(include_str!("../../assets/landscape/island/props.json"))
-        .expect("validated island prop placements")
+fn placements() -> &'static [Prop] {
+    static PLACEMENTS: std::sync::OnceLock<Vec<Prop>> = std::sync::OnceLock::new();
+    PLACEMENTS.get_or_init(|| {
+        serde_json::from_str(include_str!("../../assets/landscape/island/props.json"))
+            .expect("validated island prop placements")
+    })
 }
 pub(super) fn has_baked_art(terrain: Option<&alife_world::WorldTerrain>) -> bool {
     terrain.is_some_and(|terrain| terrain.binding() == alife_world::island_terrain().binding())
@@ -251,7 +254,8 @@ pub(super) fn focus_on_surface(camera: &Transform, surface: &alife_world::Terrai
 }
 #[allow(
     clippy::too_many_arguments,
-    reason = "Bevy injects independent ECS system parameters."
+    clippy::type_complexity,
+    reason = "Bevy injects independent ECS system parameters and ParamSet prop queries."
 )]
 pub(super) fn update(
     mut commands: Commands,
@@ -260,7 +264,21 @@ pub(super) fn update(
     gltfs: Option<Res<Assets<Gltf>>>,
     gltf_meshes: Option<Res<Assets<GltfMesh>>>,
     mut chunks: Query<(&mut Mesh3d, &mut TerrainLod), Without<PropRange>>,
-    mut props: Query<(&mut Mesh3d, &mut Visibility, &mut PropRange), Without<TerrainLod>>,
+    mut props: ParamSet<(
+        Query<(&mut Mesh3d, &mut Visibility, &mut PropRange), Without<TerrainLod>>,
+        Query<
+            (&mut Mesh3d, &mut Visibility, &mut PropRange),
+            (
+                Without<TerrainLod>,
+                Or<(
+                    Added<PropRange>,
+                    Changed<PropRange>,
+                    Changed<Visibility>,
+                    Changed<Mesh3d>,
+                )>,
+            ),
+        >,
+    )>,
     cameras: Query<(&Transform, &Projection), With<Fvr03ProductionVoxelCamera>>,
     creatures: Query<&Transform, With<ProductionCreatureAssemblyRoot>>,
     mut suns: Query<(
@@ -269,6 +287,8 @@ pub(super) fn update(
         &TerrainSun,
     )>,
     mut shadow_configs: Local<ShadowConfigCache>,
+    mut last_prop_view: Local<Option<([u32; 3], u32)>>,
+    mut pending_prop_reconcile: Local<bool>,
 ) {
     let Some(mut assets) = assets else {
         return;
@@ -293,12 +313,28 @@ pub(super) fn update(
             for x in 0..nx {
                 let mesh_for = |level| {
                     let name = format!("Island_{x}_{z}_L{level}");
-                    gltf_meshes
-                        .get(&terrain.named_meshes[name.as_str()])
-                        .expect("approved chunk")
+                    terrain
+                        .named_meshes
+                        .get(name.as_str())
+                        .and_then(|handle| gltf_meshes.get(handle))
                 };
-                let levels =
-                    std::array::from_fn(|level| mesh_for(level).primitives[0].mesh.clone());
+                let (Some(l0), Some(l1), Some(l2)) = (mesh_for(0), mesh_for(1), mesh_for(2)) else {
+                    warn!("Island chunk mesh {x}/{z} missing; skipping chunk");
+                    continue;
+                };
+                let (Some(p0), Some(p1), Some(p2)) = (
+                    l0.primitives.first(),
+                    l1.primitives.first(),
+                    l2.primitives.first(),
+                ) else {
+                    warn!("Island chunk primitive {x}/{z} missing; skipping chunk");
+                    continue;
+                };
+                let levels = [p0.mesh.clone(), p1.mesh.clone(), p2.mesh.clone()];
+                let material = p0.material.clone().unwrap_or_else(|| {
+                    warn!("Island chunk {x}/{z} L0 missing material; using default material");
+                    Handle::default()
+                });
                 let cx = surface.origin_x
                     + (x * 32 + 16).min(surface.width - 1) as f32 * surface.spacing;
                 let cz = surface.origin_z
@@ -307,7 +343,7 @@ pub(super) fn update(
                 commands.spawn((
                     Name::new(format!("Island chunk {x}/{z}")),
                     Mesh3d(levels[0].clone()),
-                    MeshMaterial3d(mesh_for(0).primitives[0].material.clone().unwrap()),
+                    MeshMaterial3d(material),
                     Transform::default(),
                     TerrainLod {
                         meshes: levels,
@@ -318,9 +354,28 @@ pub(super) fn update(
                 ));
             }
         }
-        let mut shared_prop_material = None;
+        let mut shared_prop_material: Option<Handle<StandardMaterial>> = None;
         for p in placements() {
-            let gltf = gltfs.get(&assets.props[&p.kind]).unwrap();
+            let Some(gltf) = assets.props.get(&p.kind).and_then(|h| gltfs.get(h)) else {
+                warn!("Island prop glTF '{}' missing; skipping placement", p.kind);
+                continue;
+            };
+            let prop_primitive = |level: usize| {
+                let name = format!("{}_L{level}", p.kind);
+                gltf.named_meshes
+                    .get(name.as_str())
+                    .and_then(|handle| gltf_meshes.get(handle))
+                    .and_then(|mesh| mesh.primitives.first())
+            };
+            let (Some(p0), Some(p1), Some(p2)) =
+                (prop_primitive(0), prop_primitive(1), prop_primitive(2))
+            else {
+                warn!(
+                    "Island prop LOD mesh for '{}' missing; skipping placement",
+                    p.kind
+                );
+                continue;
+            };
             let position = grounded_prop_position(&p.kind, p.position, surface);
             let tree = matches!(p.kind.as_str(), "Broadleaf" | "Conifer" | "Sapling");
             let small = matches!(p.kind.as_str(), "Grass" | "Fern" | "Flowers");
@@ -331,21 +386,19 @@ pub(super) fn update(
             } else {
                 SOLID_PROP_DRAW_DISTANCE
             };
-            let primitive = &gltf_meshes
-                .get(&gltf.named_meshes[format!("{}_L0", p.kind).as_str()])
-                .unwrap()
-                .primitives[0];
-            let levels = std::array::from_fn(|level| {
-                gltf_meshes
-                    .get(&gltf.named_meshes[format!("{}_L{level}", p.kind).as_str()])
-                    .unwrap()
-                    .primitives[0]
-                    .mesh
-                    .clone()
-            });
-            let material = shared_prop_material
-                .get_or_insert_with(|| primitive.material.clone().unwrap())
-                .clone();
+            let levels = [p0.mesh.clone(), p1.mesh.clone(), p2.mesh.clone()];
+            let material = if let Some(material) = &shared_prop_material {
+                material.clone()
+            } else if let Some(material) = p0.material.clone() {
+                shared_prop_material = Some(material.clone());
+                material
+            } else {
+                warn!(
+                    "Island prop '{}' L0 missing material; using default material",
+                    p.kind
+                );
+                Handle::default()
+            };
             let mut entity = commands.spawn((
                 Name::new(format!("Island {}", p.kind)),
                 Mesh3d(levels[0].clone()),
@@ -371,6 +424,9 @@ pub(super) fn update(
         assets.spawned = true;
     }
     if time.elapsed_secs_f64() < assets.next_update {
+        if !props.p1().is_empty() {
+            *pending_prop_reconcile = true;
+        }
         return;
     }
     assets.next_update = time.elapsed_secs_f64() + 0.2;
@@ -416,7 +472,13 @@ pub(super) fn update(
             lod.current = target;
         }
     }
-    for (mut mesh, mut visibility, mut prop) in &mut props {
+    let view_bits = (
+        [focus.x.to_bits(), focus.y.to_bits(), focus.z.to_bits()],
+        height.to_bits(),
+    );
+    let reconcile_prop = |mut mesh: Mut<'_, Mesh3d>,
+                          mut visibility: Mut<'_, Visibility>,
+                          mut prop: Mut<'_, PropRange>| {
         let distance = Vec2::new(prop.position.x - focus.x, prop.position.z - focus.z).length();
         let (next_visibility, target) = prop_view_state(prop.tree, prop.distance, distance, height);
         visibility.set_if_neq(next_visibility);
@@ -424,20 +486,50 @@ pub(super) fn update(
             mesh.0 = prop.meshes[target].clone();
             prop.current = target;
         }
+    };
+    if *last_prop_view != Some(view_bits) || *pending_prop_reconcile {
+        *last_prop_view = Some(view_bits);
+        *pending_prop_reconcile = false;
+        for (mesh, visibility, prop) in &mut props.p0() {
+            reconcile_prop(mesh, visibility, prop);
+        }
+    } else {
+        for (mesh, visibility, prop) in &mut props.p1() {
+            reconcile_prop(mesh, visibility, prop);
+        }
     }
 }
 
 #[cfg(test)]
 #[path = "island_update_tests.rs"]
 mod update_tests;
+
+#[allow(
+    clippy::type_complexity,
+    reason = "Bevy ParamSet separates full-terrain-change camera pass from incremental camera pass."
+)]
 pub(super) fn constrain_camera(
     active: Option<Res<creature_grounding::SelectedTerrain>>,
-    mut cameras: Query<(&mut Transform, &mut Projection), With<Fvr03ProductionVoxelCamera>>,
+    mut cameras: ParamSet<(
+        Query<(&mut Transform, &mut Projection), With<Fvr03ProductionVoxelCamera>>,
+        Query<
+            (&mut Transform, &mut Projection),
+            (
+                With<Fvr03ProductionVoxelCamera>,
+                Or<(
+                    Added<Fvr03ProductionVoxelCamera>,
+                    Changed<Transform>,
+                    Changed<Projection>,
+                )>,
+            ),
+        >,
+    )>,
 ) {
     let Some(active) = active else {
         return;
     };
-    for (mut camera, mut projection) in &mut cameras {
+    let surface = active.0.surface();
+    let constrain_one = |mut camera: Mut<'_, Transform>, mut projection: Mut<'_, Projection>| {
         let height = view_height(&projection);
         if matches!(
             &*projection,
@@ -448,7 +540,6 @@ pub(super) fn constrain_camera(
                 p.far = 10000.0;
             }
         }
-        let surface = active.0.surface();
         // Keep the original clamp math on a copy, so equal results do not dirty
         // the ECS transform. Bit equality also preserves signed-zero and NaN outputs.
         let mut constrained = *camera;
@@ -457,6 +548,15 @@ pub(super) fn constrain_camera(
             != camera.translation.to_array().map(f32::to_bits)
         {
             camera.translation = constrained.translation;
+        }
+    };
+    if active.is_changed() {
+        for (camera, projection) in &mut cameras.p0() {
+            constrain_one(camera, projection);
+        }
+    } else {
+        for (camera, projection) in &mut cameras.p1() {
+            constrain_one(camera, projection);
         }
     }
 }

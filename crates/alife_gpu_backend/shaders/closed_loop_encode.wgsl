@@ -4,7 +4,7 @@ const MEMORY_HEADER_ROW_OFFSET:u32 = 292u;
 const INVALID_LANE:u32 = 0xffffffffu;
 
 fn finite_receptor_value(value:f32) -> bool {
-  return value == value && abs(value) <= 3.402823466e+38;
+  return (bitcast<u32>(value) & 0x7f800000u) != 0x7f800000u;
 }
 
 fn resolve_encoder_source_lane(encoder:GpuEncoderPlanRecord, assignment:GpuEncoderAssignmentRecord) -> u32 {
@@ -22,36 +22,66 @@ fn resolve_encoder_source_lane(encoder:GpuEncoderPlanRecord, assignment:GpuEncod
   return INVALID_LANE;
 }
 
+var<workgroup> wg_enc_header: GpuPerceptionHeader;
+var<workgroup> wg_enc_receptors: GpuNeuralReceptorEffectsRecord;
+var<workgroup> wg_enc_brain: GpuBrainSlotRecord;
+var<workgroup> wg_enc_encoder: GpuEncoderPlanRecord;
+var<workgroup> wg_enc_decoder_stride: u32;
+var<workgroup> wg_enc_valid: u32;
+
 @compute @workgroup_size(64)
-fn encode_perception(@builtin(global_invocation_id) gid:vec3<u32>) {
-  let row_base = gid.y * ACTIVE_DISPATCH_ROW_WORDS;
-  let header = load_perception_header(row_base);
-  if (!activity_contract_prevalidated(header)) { return; }
-  let memory = load_memory_context_header(row_base + MEMORY_HEADER_ROW_OFFSET);
-  if (memory.neural_receptor_effects_offset == 0u) { return; }
-  let receptors = load_neural_receptor_effects(memory.neural_receptor_effects_offset);
-  if (receptors.schema_version != 1u
-      || receptors.source_chemistry_version == 0u
-      || receptors.tick_lo != header.tick_lo
-      || receptors.tick_hi != header.tick_hi
-      || any(receptors.reserved != vec2<u32>(0u))
-      || !finite_receptor_value(receptors.interoceptive_gain)
-      || !finite_receptor_value(receptors.regional_excitability)
-      || !finite_receptor_value(receptors.attention_gain)
-      || !finite_receptor_value(receptors.structural_growth_gate)
-      || !finite_receptor_value(receptors.sleep_gate)
-      || !finite_receptor_value(receptors.consolidation_gate)) { return; }
-  let brain = brain_slots[header.brain_slot_index];
-  if (brain.slot_generation != header.slot_generation) { return; }
+fn encode_perception(
+  @builtin(global_invocation_id) gid:vec3<u32>,
+  @builtin(local_invocation_id) lid:vec3<u32>,
+) {
+  if (lid.x == 0u) {
+    wg_enc_valid = 0u;
+    let row_base = gid.y * ACTIVE_DISPATCH_ROW_WORDS;
+    let header = load_perception_header(row_base);
+    if (activity_contract_prevalidated(header)) {
+      let memory = load_memory_context_header(row_base + MEMORY_HEADER_ROW_OFFSET);
+      if (memory.neural_receptor_effects_offset != 0u) {
+        let receptors = load_neural_receptor_effects(memory.neural_receptor_effects_offset);
+        if (receptors.schema_version == 1u
+            && receptors.source_chemistry_version != 0u
+            && receptors.tick_lo == header.tick_lo
+            && receptors.tick_hi == header.tick_hi
+            && all(receptors.reserved == vec2<u32>(0u))
+            && finite_receptor_value(receptors.interoceptive_gain)
+            && finite_receptor_value(receptors.regional_excitability)
+            && finite_receptor_value(receptors.attention_gain)
+            && finite_receptor_value(receptors.structural_growth_gate)
+            && finite_receptor_value(receptors.sleep_gate)
+            && finite_receptor_value(receptors.consolidation_gate)) {
+          let brain = brain_slots[header.brain_slot_index];
+          if (brain.slot_generation == header.slot_generation) {
+            wg_enc_header = header;
+            wg_enc_receptors = receptors;
+            wg_enc_brain = brain;
+            wg_enc_encoder = load_encoder_plan(brain.encoder_plan_offset);
+            wg_enc_decoder_stride = load_decoder_plan(brain.decoder_plan_offset).flattened_input_lane_count;
+            wg_enc_valid = 1u;
+          }
+        }
+      }
+    }
+  }
+  workgroupBarrier();
+  if (wg_enc_valid == 0u) { return; }
+
+  let header = wg_enc_header;
+  let receptors = wg_enc_receptors;
+  let brain = wg_enc_brain;
   let index = gid.x;
   if (index >= brain.neuron_count) { return; }
 
-  let encoder = load_encoder_plan(brain.encoder_plan_offset);
+  let encoder = wg_enc_encoder;
+  let decoder_stride = wg_enc_decoder_stride;
   let begin = immutable_plan_words[encoder.target_offsets_offset + index];
   let end = immutable_plan_words[encoder.target_offsets_offset + index + 1u];
   if (begin > end || end > encoder.assignment_count) {
     atomicOr(
-      &mutable_state_words[brain.diagnostic_offset + 2u],
+      &atomic_state_words[brain.diagnostic_offset + 2u],
       CONTRACT_INVALID_DIAGNOSTIC_BIT
     );
     store_state_f32(brain.encoded_input_offset + index, 0.0);
@@ -62,7 +92,7 @@ fn encode_perception(@builtin(global_invocation_id) gid:vec3<u32>) {
     let assignment = load_encoder_assignment(encoder.assignment_offset + cursor * 8u);
     if (assignment.target_neuron != index) {
       atomicOr(
-        &mutable_state_words[brain.diagnostic_offset + 2u],
+        &atomic_state_words[brain.diagnostic_offset + 2u],
         CONTRACT_INVALID_DIAGNOSTIC_BIT
       );
       store_state_f32(brain.encoded_input_offset + index, 0.0);
@@ -71,13 +101,12 @@ fn encode_perception(@builtin(global_invocation_id) gid:vec3<u32>) {
     var source_lane = resolve_encoder_source_lane(encoder, assignment);
     if ((assignment.source_group_raw == 4u || assignment.source_group_raw == 5u)
         && assignment.source_index < 128u) {
-      let decoder = load_decoder_plan(brain.decoder_plan_offset);
-      source_lane = 77u + header.candidate_count * (decoder.flattened_input_lane_count + 4u)
+      source_lane = 77u + header.candidate_count * (decoder_stride + 4u)
         + (assignment.source_group_raw - 4u) * 128u + assignment.source_index;
     }
     if (source_lane == INVALID_LANE) {
       atomicOr(
-        &mutable_state_words[brain.diagnostic_offset + 2u],
+        &atomic_state_words[brain.diagnostic_offset + 2u],
         CONTRACT_INVALID_DIAGNOSTIC_BIT
       );
       store_state_f32(brain.encoded_input_offset + index, 0.0);

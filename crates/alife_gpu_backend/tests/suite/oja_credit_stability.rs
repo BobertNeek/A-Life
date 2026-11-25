@@ -7,7 +7,7 @@ use alife_core::{
 use alife_gpu_backend::CLOSED_LOOP_PLASTICITY_WGSL;
 use std::collections::BTreeMap;
 
-#[path = "oja_credit_stability/causal_kernels.rs"]
+#[path = "../oja_credit_stability/causal_kernels.rs"]
 mod causal_kernels;
 
 fn production_delta() -> &'static str {

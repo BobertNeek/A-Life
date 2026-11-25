@@ -254,6 +254,275 @@ mod tests {
         s.heights = vec![1.0, 15.0, 1.0, 15.0];
         assert!(!s.walkable(1.0, 1.0));
     }
+
+    fn reference_ray_hit(
+        surface: &TerrainSurface,
+        origin: Vec3f,
+        direction: Vec3f,
+        max_distance: f32,
+    ) -> Option<Vec3f> {
+        if origin.validate().is_err()
+            || direction.validate().is_err()
+            || !max_distance.is_finite()
+            || max_distance <= 0.0
+        {
+            return None;
+        }
+        let mut enter: f32 = 0.0;
+        let mut exit = max_distance;
+        let max_x = surface.origin_x + (surface.width - 1) as f32 * surface.spacing;
+        let max_z = surface.origin_z + (surface.depth - 1) as f32 * surface.spacing;
+        for (o, d, lo, hi) in [
+            (origin.x, direction.x, surface.origin_x, max_x),
+            (origin.z, direction.z, surface.origin_z, max_z),
+        ] {
+            if d == 0.0 {
+                if o < lo || o > hi {
+                    return None;
+                }
+            } else {
+                let a = (lo - o) / d;
+                let b = (hi - o) / d;
+                enter = enter.max(a.min(b));
+                exit = exit.min(a.max(b));
+            }
+        }
+        if exit < enter {
+            return None;
+        }
+        let point = |t: f32| {
+            Vec3f::new(
+                (origin.x + direction.x * t).clamp(surface.origin_x, max_x),
+                origin.y + direction.y * t,
+                (origin.z + direction.z * t).clamp(surface.origin_z, max_z),
+            )
+        };
+        let mut cuts = vec![enter, exit];
+        for (o, d, first, count) in [
+            (
+                origin.x - surface.origin_x,
+                direction.x,
+                1.0,
+                surface.width - 2,
+            ),
+            (
+                origin.z - surface.origin_z,
+                direction.z,
+                1.0,
+                surface.depth - 2,
+            ),
+            (
+                (origin.x - surface.origin_x) - (origin.z - surface.origin_z),
+                direction.x - direction.z,
+                -((surface.depth - 2) as f32),
+                surface.width + surface.depth - 3,
+            ),
+        ] {
+            if d == 0.0 {
+                continue;
+            }
+            for i in 0..count {
+                let t = ((first + i as f32) * surface.spacing - o) / d;
+                if t > enter && t < exit {
+                    cuts.push(t);
+                }
+            }
+        }
+        cuts.sort_by(f32::total_cmp);
+        cuts.dedup();
+        let mut previous = None;
+        for t in cuts {
+            let p = point(t);
+            p.validate().ok()?;
+            let u =
+                ((p.x - surface.origin_x) / surface.spacing).clamp(0.0, (surface.width - 1) as f32);
+            let v =
+                ((p.z - surface.origin_z) / surface.spacing).clamp(0.0, (surface.depth - 1) as f32);
+            let h = surface.sample_grid(u, v).0;
+            let gap = f64::from(p.y) - f64::from(h);
+            if gap <= 0.0 {
+                if let Some((before, above)) = previous {
+                    return Some(point(
+                        before + (t - before) * (above / (above - gap)) as f32,
+                    ));
+                }
+                return Some(Vec3f::new(p.x, h, p.z));
+            }
+            previous = Some((t, gap));
+        }
+        None
+    }
+
+    #[test]
+    fn dda_ray_hit_matches_reference_cuts_on_grid_corners_diagonals_and_island() {
+        let island = crate::island_terrain();
+        let surface = island.surface();
+        let mut seed = 0xDEAD_BEEF_CAFE_0001_u64;
+        let mut next_f32 = |lo: f32, hi: f32| {
+            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+            let unit = ((seed >> 40) as f32) / ((1u32 << 24) as f32);
+            lo + (hi - lo) * unit
+        };
+        let mut rays = vec![
+            // Exact grid line & diagonal & corner cases
+            (
+                Vec3f::new(80.0, 200.0, 250.0),
+                Vec3f::new(1.0, -0.2, 1.0),
+                400.0,
+            ),
+            (
+                Vec3f::new(80.0, 200.0, 250.0),
+                Vec3f::new(-1.0, -0.2, -1.0),
+                400.0,
+            ),
+            (
+                Vec3f::new(80.0, 200.0, 250.0),
+                Vec3f::new(1.0, -0.1, 0.0),
+                400.0,
+            ),
+            (
+                Vec3f::new(80.0, 200.0, 250.0),
+                Vec3f::new(0.0, -0.1, -1.0),
+                400.0,
+            ),
+            (
+                Vec3f::new(-1000.0, 500.0, -1000.0),
+                Vec3f::new(1.0, -0.3, 1.0),
+                3000.0,
+            ),
+            (
+                Vec3f::new(80.0, 300.0, 250.0),
+                Vec3f::new(0.0, -1.0, 0.0),
+                500.0,
+            ),
+        ];
+        for _ in 0..400 {
+            let ox = next_f32(-900.0, 900.0);
+            let oy = next_f32(-20.0, 400.0);
+            let oz = next_f32(-900.0, 900.0);
+            let dx = next_f32(-1.0, 1.0);
+            let dy = next_f32(-1.0, 0.2);
+            let dz = next_f32(-1.0, 1.0);
+            let len = (dx * dx + dy * dy + dz * dz).sqrt().max(0.001);
+            rays.push((
+                Vec3f::new(ox, oy, oz),
+                Vec3f::new(dx / len, dy / len, dz / len),
+                next_f32(1.0, 1500.0),
+            ));
+        }
+        for (origin, direction, max_dist) in rays {
+            let actual = surface.ray_hit(origin, direction, max_dist);
+            let expected = reference_ray_hit(surface, origin, direction, max_dist);
+            assert_eq!(
+                actual.map(|v| [v.x.to_bits(), v.y.to_bits(), v.z.to_bits()]),
+                expected.map(|v| [v.x.to_bits(), v.y.to_bits(), v.z.to_bits()]),
+                "ray_hit mismatch for origin={origin:?}, dir={direction:?}, max={max_dist}"
+            );
+        }
+    }
+
+    #[test]
+    fn obstacle_ray_hit_matches_linear_scan_with_and_without_padding() {
+        let island = crate::island_terrain();
+        let surface = island.surface();
+        let reference = |origin: Vec3f, direction: Vec3f, max_range: f32, padding: f32| {
+            let mut nearest = max_range;
+            let mut found = false;
+            for b in &surface.obstacles {
+                let bounds = if padding == 0.0 {
+                    *b
+                } else {
+                    [
+                        b[0] - padding,
+                        b[1] - padding,
+                        b[2] + padding,
+                        b[3] + padding,
+                        b[4],
+                        b[5],
+                    ]
+                };
+                if let Some(hit) = sight_box_hit(origin, direction, bounds, nearest) {
+                    nearest = nearest.min(hit);
+                    found = true;
+                }
+            }
+            found.then_some(nearest)
+        };
+
+        let mut seed = 0xCAFE_BABE_1234_5678_u64;
+        let mut next_f32 = |lo: f32, hi: f32| {
+            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+            let unit = ((seed >> 40) as f32) / ((1u32 << 24) as f32);
+            lo + (hi - lo) * unit
+        };
+        let mut probes = Vec::new();
+        for b in surface.obstacles.iter().take(40) {
+            let cx = (b[0] + b[2]) * 0.5;
+            let cy = (b[4] + b[5]) * 0.5;
+            let cz = (b[1] + b[3]) * 0.5;
+            // Point / vertical ray inside obstacle
+            probes.push((Vec3f::new(cx, cy, cz), Vec3f::ZERO, 0.0, 0.0));
+            probes.push((
+                Vec3f::new(b[0] - 0.1, cy, cz),
+                Vec3f::new(0.0, 1.0, 0.0),
+                1.0,
+                0.25,
+            ));
+            // Rays toward obstacle from nearby and far
+            probes.push((
+                Vec3f::new(cx - 25.0, cy, cz - 25.0),
+                Vec3f::new(0.70710677, 0.0, 0.70710677),
+                50.0,
+                0.0,
+            ));
+            probes.push((
+                Vec3f::new(cx - 1.2, cy, cz),
+                Vec3f::new(1.0, 0.0, 0.0),
+                1.5,
+                0.35,
+            ));
+            probes.push((
+                Vec3f::new(cx - 25.0, cy, cz - 15.0),
+                Vec3f::new(0.8, 0.0, 0.6),
+                50.0,
+                0.5,
+            ));
+        }
+        for _ in 0..300 {
+            let ox = next_f32(-300.0, 300.0);
+            let oy = next_f32(-5.0, 80.0);
+            let oz = next_f32(-300.0, 300.0);
+            let dx = next_f32(-1.0, 1.0);
+            let dy = next_f32(-0.3, 0.3);
+            let dz = next_f32(-1.0, 1.0);
+            let len = (dx * dx + dy * dy + dz * dz).sqrt().max(0.001);
+            let padding = if next_f32(0.0, 1.0) < 0.5 {
+                0.0
+            } else {
+                next_f32(0.05, 1.5)
+            };
+            let range = if padding > 0.0 && next_f32(0.0, 1.0) < 0.5 {
+                1.5
+            } else {
+                next_f32(1.0, 120.0)
+            };
+            probes.push((
+                Vec3f::new(ox, oy, oz),
+                Vec3f::new(dx / len, dy / len, dz / len),
+                range,
+                padding,
+            ));
+        }
+        for (origin, dir, range, padding) in probes {
+            let actual = surface.obstacle_ray_hit(origin, dir, range, padding);
+            let expected = reference(origin, dir, range, padding);
+            assert_eq!(
+                actual.map(f32::to_bits),
+                expected.map(f32::to_bits),
+                "obstacle_ray_hit mismatch for origin={origin:?}, dir={dir:?}, range={range}, padding={padding}"
+            );
+        }
+    }
 }
 
 impl TerrainBinding {
@@ -264,6 +533,36 @@ impl TerrainBinding {
         }
         Ok(())
     }
+}
+
+pub(crate) fn sight_box_hit(
+    origin: Vec3f,
+    direction: Vec3f,
+    bounds: [f32; 6],
+    max_range: f32,
+) -> Option<f32> {
+    let mut entry = 0.0_f32;
+    let mut exit = max_range;
+    for (position, velocity, minimum, maximum) in [
+        (origin.x, direction.x, bounds[0], bounds[2]),
+        (origin.y, direction.y, bounds[4], bounds[5]),
+        (origin.z, direction.z, bounds[1], bounds[3]),
+    ] {
+        if velocity.abs() <= f32::EPSILON {
+            if position < minimum || position > maximum {
+                return None;
+            }
+        } else {
+            let near = (minimum - position) / velocity;
+            let far = (maximum - position) / velocity;
+            entry = entry.max(near.min(far));
+            exit = exit.min(near.max(far));
+            if entry > exit {
+                return None;
+            }
+        }
+    }
+    Some(entry)
 }
 
 #[derive(Debug, Clone)]
@@ -425,50 +724,311 @@ impl TerrainSurface {
                 (origin.z + direction.z * t).clamp(self.origin_z, max_z),
             )
         };
-        // The height gap is linear between grid edges and triangle diagonals.
-        // Sampling every such boundary cannot jump over a narrow ridge.
-        let mut cuts = vec![enter, exit];
-        for (o, d, first, count) in [
-            (origin.x - self.origin_x, direction.x, 1.0, self.width - 2),
-            (origin.z - self.origin_z, direction.z, 1.0, self.depth - 2),
-            (
-                (origin.x - self.origin_x) - (origin.z - self.origin_z),
-                direction.x - direction.z,
-                -((self.depth - 2) as f32),
-                self.width + self.depth - 3,
-            ),
-        ] {
-            if d == 0.0 {
-                continue;
-            }
-            for i in 0..count {
-                let t = ((first + i as f32) * self.spacing - o) / d;
-                if t > enter && t < exit {
-                    cuts.push(t);
-                }
-            }
-        }
-        cuts.sort_by(f32::total_cmp);
-        cuts.dedup();
         let mut previous = None;
-        for t in cuts {
+        let eval = |t: f32, previous: &mut Option<(f32, f64)>| -> Result<Option<Vec3f>, ()> {
             let p = point(t);
-            p.validate().ok()?;
+            if p.validate().is_err() {
+                return Err(());
+            }
             // Slab-boundary rounding must not reject a valid clipped endpoint.
             let u = ((p.x - self.origin_x) / self.spacing).clamp(0.0, (self.width - 1) as f32);
             let v = ((p.z - self.origin_z) / self.spacing).clamp(0.0, (self.depth - 1) as f32);
             let h = self.sample_grid(u, v).0;
             let gap = f64::from(p.y) - f64::from(h);
             if gap <= 0.0 {
-                if let Some((before, above)) = previous {
-                    return Some(point(
+                if let Some((before, above)) = *previous {
+                    return Ok(Some(point(
                         before + (t - before) * (above / (above - gap)) as f32,
-                    ));
+                    )));
                 }
-                return Some(Vec3f::new(p.x, h, p.z));
+                return Ok(Some(Vec3f::new(p.x, h, p.z)));
             }
-            previous = Some((t, gap));
+            *previous = Some((t, gap));
+            Ok(None)
+        };
+
+        if let Some(hit) = eval(enter, &mut previous).ok()? {
+            return Some(hit);
+        }
+        if exit == enter {
+            return None;
+        }
+
+        // Zero-allocation 2D grid DDA across cells and triangle diagonals U - V = i - j.
+        let p_enter = point(enter);
+        let u_enter =
+            ((p_enter.x - self.origin_x) / self.spacing).clamp(0.0, (self.width - 1) as f32);
+        let v_enter =
+            ((p_enter.z - self.origin_z) / self.spacing).clamp(0.0, (self.depth - 1) as f32);
+        let mut i = if direction.x < 0.0 && u_enter == u_enter.floor() && u_enter > 0.0 {
+            (u_enter as usize - 1).min(self.width - 2)
+        } else {
+            (u_enter.floor() as usize).min(self.width - 2)
+        };
+        let mut j = if direction.z < 0.0 && v_enter == v_enter.floor() && v_enter > 0.0 {
+            (v_enter as usize - 1).min(self.depth - 2)
+        } else {
+            (v_enter.floor() as usize).min(self.depth - 2)
+        };
+
+        let ox = origin.x - self.origin_x;
+        let oz = origin.z - self.origin_z;
+        let od = ox - oz;
+        let dd = direction.x - direction.z;
+        let mut last_t = enter;
+
+        for _ in 0..(self.width + self.depth + 2) {
+            let t_x = if direction.x > 0.0 && i < self.width - 2 {
+                ((i + 1) as f32 * self.spacing - ox) / direction.x
+            } else if direction.x < 0.0 && i >= 1 {
+                (i as f32 * self.spacing - ox) / direction.x
+            } else {
+                f32::INFINITY
+            };
+            let t_z = if direction.z > 0.0 && j < self.depth - 2 {
+                ((j + 1) as f32 * self.spacing - oz) / direction.z
+            } else if direction.z < 0.0 && j >= 1 {
+                (j as f32 * self.spacing - oz) / direction.z
+            } else {
+                f32::INFINITY
+            };
+            let t_cell_exit = t_x.min(t_z);
+            let t_step = t_cell_exit.min(exit);
+
+            if dd != 0.0 {
+                let diag = (i as isize - j as isize) as f32;
+                let t_diag = (diag * self.spacing - od) / dd;
+                if t_diag > last_t && t_diag < t_step {
+                    if let Some(hit) = eval(t_diag, &mut previous).ok()? {
+                        return Some(hit);
+                    }
+                    last_t = t_diag;
+                }
+            }
+
+            if t_step > last_t {
+                if let Some(hit) = eval(t_step, &mut previous).ok()? {
+                    return Some(hit);
+                }
+                last_t = t_step;
+            }
+
+            if t_cell_exit >= exit {
+                break;
+            }
+            if t_x <= t_cell_exit {
+                if direction.x > 0.0 {
+                    if i + 1 > self.width - 2 {
+                        break;
+                    }
+                    i += 1;
+                } else {
+                    if i == 0 {
+                        break;
+                    }
+                    i -= 1;
+                }
+            }
+            if t_z <= t_cell_exit {
+                if direction.z > 0.0 {
+                    if j + 1 > self.depth - 2 {
+                        break;
+                    }
+                    j += 1;
+                } else {
+                    if j == 0 {
+                        break;
+                    }
+                    j -= 1;
+                }
+            }
+        }
+        if last_t < exit {
+            if let Some(hit) = eval(exit, &mut previous).ok()? {
+                return Some(hit);
+            }
         }
         None
+    }
+
+    /// Cell-bounded 2D DDA obstacle raycast over `TerrainSurface::cells`.
+    /// When `padding > 0.0`, obstacle X/Z bounds are expanded by `padding`
+    /// identically to `local_clearance_ranges` and `activity_placement`.
+    pub(crate) fn obstacle_ray_hit(
+        &self,
+        origin: Vec3f,
+        direction: Vec3f,
+        max_range: f32,
+        padding: f32,
+    ) -> Option<f32> {
+        if self.obstacles.is_empty()
+            || self.cells.is_empty()
+            || origin.validate().is_err()
+            || direction.validate().is_err()
+            || !max_range.is_finite()
+            || max_range < 0.0
+            || !padding.is_finite()
+            || padding < 0.0
+        {
+            return None;
+        }
+
+        let eps_x = direction.x.abs() <= f32::EPSILON;
+        let eps_z = direction.z.abs() <= f32::EPSILON;
+        let mut nearest = max_range;
+        let mut found = false;
+
+        let test_cell = |cx: i32, cz: i32, nearest: &mut f32, found: &mut bool| {
+            let Some(rows) = self.cells.get(&(cx, cz)) else {
+                return;
+            };
+            for &idx in rows {
+                let b = self.obstacles[idx];
+                let bounds = if padding == 0.0 {
+                    b
+                } else {
+                    [
+                        b[0] - padding,
+                        b[1] - padding,
+                        b[2] + padding,
+                        b[3] + padding,
+                        b[4],
+                        b[5],
+                    ]
+                };
+                if let Some(hit) = sight_box_hit(origin, direction, bounds, *nearest) {
+                    *nearest = (*nearest).min(hit);
+                    *found = true;
+                }
+            }
+        };
+
+        let pad_margin = if padding == 0.0 {
+            0.0_f64
+        } else {
+            f64::from(padding) * (1.0 + 8.0 * f64::from(f32::EPSILON)) + 1e-5
+        };
+        let cell_f64 = f64::from(CELL);
+
+        if eps_x && eps_z {
+            let x0 = ((f64::from(origin.x) - pad_margin) / cell_f64).floor() as i32;
+            let x1 = ((f64::from(origin.x) + pad_margin) / cell_f64).floor() as i32;
+            let z0 = ((f64::from(origin.z) - pad_margin) / cell_f64).floor() as i32;
+            let z1 = ((f64::from(origin.z) + pad_margin) / cell_f64).floor() as i32;
+            for cz in z0..=z1 {
+                for cx in x0..=x1 {
+                    test_cell(cx, cz, &mut nearest, &mut found);
+                }
+            }
+            return found.then_some(nearest);
+        }
+
+        let end_x = f64::from(origin.x) + f64::from(direction.x) * f64::from(max_range);
+        let end_z = f64::from(origin.z) + f64::from(direction.z) * f64::from(max_range);
+        let min_x = f64::from(origin.x).min(end_x) - pad_margin;
+        let max_x = f64::from(origin.x).max(end_x) + pad_margin;
+        let min_z = f64::from(origin.z).min(end_z) - pad_margin;
+        let max_z = f64::from(origin.z).max(end_z) + pad_margin;
+        let x0 = (min_x / cell_f64).floor() as i32;
+        let x1 = (max_x / cell_f64).floor() as i32;
+        let z0 = (min_z / cell_f64).floor() as i32;
+        let z1 = (max_z / cell_f64).floor() as i32;
+        let span_x = i64::from(x1) - i64::from(x0) + 1;
+        let span_z = i64::from(z1) - i64::from(z0) + 1;
+
+        if span_x.saturating_mul(span_z) <= 16 {
+            for cz in z0..=z1 {
+                for cx in x0..=x1 {
+                    test_cell(cx, cz, &mut nearest, &mut found);
+                }
+            }
+            return found.then_some(nearest);
+        }
+
+        // 2D Amanatides-Woo DDA over CELL = 10.0.
+        let mut cx = (f64::from(origin.x) / cell_f64).floor() as i32;
+        let mut cz = (f64::from(origin.z) / cell_f64).floor() as i32;
+        let (step_x, mut t_max_x, t_delta_x) = if eps_x {
+            (0, f64::INFINITY, f64::INFINITY)
+        } else {
+            let dx = f64::from(direction.x);
+            let step = if dx > 0.0 { 1 } else { -1 };
+            let next_boundary = if step > 0 {
+                f64::from(cx + 1) * cell_f64
+            } else {
+                f64::from(cx) * cell_f64
+            };
+            (
+                step,
+                ((next_boundary - f64::from(origin.x)) / dx).max(0.0),
+                cell_f64 / dx.abs(),
+            )
+        };
+        let (step_z, mut t_max_z, t_delta_z) = if eps_z {
+            (0, f64::INFINITY, f64::INFINITY)
+        } else {
+            let dz = f64::from(direction.z);
+            let step = if dz > 0.0 { 1 } else { -1 };
+            let next_boundary = if step > 0 {
+                f64::from(cz + 1) * cell_f64
+            } else {
+                f64::from(cz) * cell_f64
+            };
+            (
+                step,
+                ((next_boundary - f64::from(origin.z)) / dz).max(0.0),
+                cell_f64 / dz.abs(),
+            )
+        };
+
+        let pad_cells = if padding == 0.0 {
+            0
+        } else {
+            ((f64::from(padding) + 1e-5) / cell_f64).ceil() as i32
+        };
+        let pad_t_margin = if padding == 0.0 {
+            1e-4
+        } else {
+            let max_inv = [direction.x.abs(), direction.z.abs()]
+                .into_iter()
+                .filter(|v| *v > f32::EPSILON)
+                .map(|v| 1.0 / f64::from(v))
+                .fold(0.0_f64, f64::max);
+            f64::from(padding) * max_inv + 1e-3
+        };
+
+        let mut t_enter = 0.0_f64;
+        loop {
+            if t_enter > f64::from(nearest) + pad_t_margin {
+                break;
+            }
+            if pad_cells == 0 {
+                test_cell(cx, cz, &mut nearest, &mut found);
+            } else {
+                for pz in (cz - pad_cells).max(z0)..=(cz + pad_cells).min(z1) {
+                    for px in (cx - pad_cells).max(x0)..=(cx + pad_cells).min(x1) {
+                        test_cell(px, pz, &mut nearest, &mut found);
+                    }
+                }
+            }
+            if step_x != 0 && t_max_x <= t_max_z {
+                t_enter = t_max_x;
+                cx += step_x;
+                t_max_x += t_delta_x;
+                if cx < x0 || cx > x1 {
+                    break;
+                }
+            } else if step_z != 0 {
+                t_enter = t_max_z;
+                cz += step_z;
+                t_max_z += t_delta_z;
+                if cz < z0 || cz > z1 {
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+        found.then_some(nearest)
     }
 }

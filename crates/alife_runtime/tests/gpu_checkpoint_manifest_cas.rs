@@ -107,7 +107,7 @@ fn save_manifest_compare_and_swap_is_atomic_idempotent_and_conflict_typed() {
     let durable = GpuDurableSaveManifest::open(root.join("tiny_save.json"), &root).unwrap();
     let loaded = durable.load().unwrap();
     assert_eq!(loaded.authority_generation(), None);
-    let mut replacement = loaded.save.clone();
+    let mut replacement = (*loaded.save).clone();
     replacement.save_id = "gpu-cas-replacement".to_string();
 
     let first = durable
@@ -118,7 +118,7 @@ fn save_manifest_compare_and_swap_is_atomic_idempotent_and_conflict_typed() {
         other => panic!("first CAS must replace, got {other:?}"),
     };
     let published = durable.load().unwrap();
-    assert_eq!(published.save, replacement);
+    assert_eq!(*published.save, replacement);
     assert_eq!(published.authority_generation(), Some(1));
 
     assert_eq!(
@@ -154,7 +154,7 @@ fn manual_checkpoint_publish_atomically_creates_a_new_portable_save() {
 
     let published = GpuDurableSaveManifest::publish_snapshot(&target, &root, &replacement).unwrap();
 
-    assert_eq!(published.save, replacement);
+    assert_eq!(*published.save, replacement);
     assert_eq!(
         GpuDurableSaveManifest::open(&target, &root)
             .unwrap()
@@ -188,7 +188,7 @@ fn exact_save_and_reset_journal_have_one_authority_commit_point() {
     GpuDurableSaveManifest::publish_snapshot(&save_path, &root, &current_save("base")).unwrap();
     let durable = GpuDurableSaveManifest::open(&save_path, &root).unwrap();
     let loaded = durable.load().unwrap();
-    let mut replacement = loaded.save.clone();
+    let mut replacement = (*loaded.save).clone();
     replacement.save_id = "generation-backed-replacement".to_string();
 
     // A legacy sidecar destination that cannot be replaced models the old
@@ -209,7 +209,7 @@ fn exact_save_and_reset_journal_have_one_authority_commit_point() {
         .compare_and_swap(&loaded.digest, &replacement)
         .unwrap();
     let published = durable.load().unwrap();
-    assert_eq!(published.save, replacement);
+    assert_eq!(*published.save, replacement);
     let reset = durable.load_sleep_transaction_journal(&published).unwrap();
     assert!(reset.entries.is_empty());
     assert_eq!(
@@ -335,9 +335,9 @@ fn authority_generations_keep_the_previous_exact_pair_reopenable() {
         .unwrap()
         .load()
         .unwrap();
-    assert_eq!(reopened_old.save, base);
+    assert_eq!(*reopened_old.save, base);
     assert_eq!(reopened_old.authority_generation(), Some(1));
-    assert_eq!(durable.load().unwrap().save, replacement);
+    assert_eq!(*durable.load().unwrap().save, replacement);
 
     fs::remove_dir_all(root).unwrap();
 }
@@ -452,7 +452,7 @@ fn pre_pointer_artifact_failure_leaves_old_authority_bytes_unchanged() {
     let durable = GpuDurableSaveManifest::open(&save_path, &root).unwrap();
     let loaded = durable.load().unwrap();
     let old_pointer_bytes = fs::read(&save_path).unwrap();
-    let mut replacement = loaded.save.clone();
+    let mut replacement = (*loaded.save).clone();
     replacement.save_id = "authority-precommit-replacement".to_string();
     let save_bytes = serde_json::to_vec_pretty(&replacement).unwrap();
     let digest = PortableAssetDigest::for_bytes(&save_bytes);

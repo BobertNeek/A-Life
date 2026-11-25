@@ -675,7 +675,10 @@ fn leaf_measurement_accumulation_and_deltas_saturate() {
 fn worker_policy_bounds_workers_after_serial_hint_capture() {
     for rows in [8, 16, 50, 1_000] {
         for available in [2, 4, 64] {
-            assert_eq!(preparation_worker_count(rows, available), 2);
+            assert_eq!(
+                preparation_worker_count(rows, available),
+                available.min(rows)
+            );
         }
     }
     for rows in 0..8 {
@@ -1694,4 +1697,97 @@ fn preparation_is_read_only_and_existing_learning_guard_rejects_second_commit() 
         Err(ScaffoldContractError::LearningReplayRejected)
     );
     assert_eq!(guard, committed);
+}
+
+#[test]
+fn multi_worker_pool_matches_serial_and_legacy_across_more_than_two_workers() {
+    let fixtures: Vec<_> = (1..=11)
+        .map(|owner| OwnerFixture::new(owner, owner % 2 == 1))
+        .collect();
+    let before: Vec<_> = fixtures.iter().map(OwnerFixture::snapshot).collect();
+    let slots = canonical_slots(fixtures.len());
+    let jobs: Vec<_> = fixtures
+        .iter()
+        .zip(&slots)
+        .map(|(owner, slot)| owner.job(slot))
+        .collect();
+    let serial = prepare_cpu_rows(&jobs, 1, false).unwrap();
+    for workers in [3, 4, 8, 11] {
+        let parallel = prepare_cpu_rows(&jobs, workers, false).unwrap();
+        assert_eq!(parallel.len(), jobs.len());
+        for ((job, actual), expected) in jobs.iter().zip(&parallel).zip(&serial) {
+            assert_same_trace(actual, expected);
+            assert_same_trace(actual, &legacy_serial_reference(job));
+        }
+    }
+    assert_eq!(
+        fixtures
+            .iter()
+            .map(OwnerFixture::snapshot)
+            .collect::<Vec<_>>(),
+        before
+    );
+}
+
+#[test]
+fn persistent_pool_reuses_workers_after_panic_and_joins_cleanly_on_drop() {
+    let fixtures: Vec<_> = (1..=8)
+        .map(|owner| OwnerFixture::new(owner * 3, true))
+        .collect();
+    let slots = canonical_slots(fixtures.len());
+    let jobs: Vec<_> = fixtures
+        .iter()
+        .zip(&slots)
+        .map(|(owner, slot)| owner.job(slot))
+        .collect();
+    let expected = prepare_cpu_rows(&jobs, 1, false).unwrap();
+
+    let pool = CpuPreparationPool::new();
+    let first = pool
+        .prepare_rows(&jobs, 4, false, &PreparationFaults::default())
+        .unwrap();
+    assert_eq!(pool.worker_count(), 3);
+    for (actual, exp) in first.iter().zip(&expected) {
+        assert_same_trace(actual, exp);
+    }
+
+    // Inject panics on both caller chunk (row 0) and worker chunk (row 5).
+    for panic_row in [0, 5] {
+        let mut faults = visits(jobs.len());
+        faults.panic_row = Some(panic_row);
+        let err = pool.prepare_rows(&jobs, 4, false, &faults);
+        assert!(matches!(
+            err,
+            Err(ScaffoldContractError::InvalidDecisionEvidence)
+        ));
+        assert_eq!(faults.visits[panic_row].load(Ordering::Relaxed), 1);
+        let panicking_chunk = (panic_row / 2) * 2..(panic_row / 2) * 2 + 2;
+        for index in 0..jobs.len() {
+            let count = faults.visits[index].load(Ordering::Relaxed);
+            if !panicking_chunk.contains(&index) {
+                assert_eq!(
+                    count, 1,
+                    "healthy chunk row {index} must complete before join"
+                );
+            } else {
+                assert!(
+                    count <= 1,
+                    "panicking chunk row {index} must be visited at most once"
+                );
+            }
+        }
+    }
+
+    // Same pool and same 3 persistent workers must remain healthy on subsequent batches.
+    assert_eq!(pool.worker_count(), 3);
+    let after_faults = visits(jobs.len());
+    let recovered = pool.prepare_rows(&jobs, 4, false, &after_faults).unwrap();
+    assert_once(&after_faults);
+    assert_eq!(pool.worker_count(), 3);
+    for (actual, exp) in recovered.iter().zip(&expected) {
+        assert_same_trace(actual, exp);
+    }
+
+    // Dropping the pool joins all persistent worker threads cleanly.
+    drop(pool);
 }

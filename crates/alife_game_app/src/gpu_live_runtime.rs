@@ -77,7 +77,9 @@ use std::{
 
 use alife_archive::{GeneticArchiveInput, LifeArchiveInput, LineageLibrary, LineageLibraryConfig};
 use alife_core::cognitive_work::{CognitiveWorkCostPolicy, CognitiveWorkCounters};
-use alife_core::predictive::{GroundedSuccessorPredictor, SuccessorPrediction};
+use alife_core::predictive::{
+    GroundedSuccessorPredictor, PredictorObserveUndo, SuccessorPrediction,
+};
 use alife_core::sleep::{SleepReplayEvidence, SleepWorkReceipt};
 use alife_core::{
     factorized_motor_bundle_for_candidates, select_focal_targets, ArchiveCheckpointRetention,
@@ -91,17 +93,17 @@ use alife_core::{
     FoundationCompatibilityFamilyId, FoundationGeneticIdentity, FoundationId, FoundationVersion,
     FoundationWeightApplication, FoundationWeightAsset, HomeostaticParameters, HomeostaticSnapshot,
     JointMotorCondition, LanguageGroundingLedger, LegacyNano512CompatibilityReceipt, LineageId,
-    MemoryBankConfig, MemoryCompactionCheckpoint, MemoryCompactionReceipt, MemoryRecallReceipt,
-    MemorySidecarState, MemoryUpdateReceipt, MotorCommandBundle, N512FounderFoundationProjection,
-    NeuralActionSelection, NeuralEmission, NeuralEmissionClass, NeuralEmissionFrame,
-    NeuralReceptorEffects, NeuralReceptorFrame, NormalizedScalar, OrganismId, PassiveLifeEvent,
-    PassiveLifeStatistics, PerceptionFrame, PerceptionFrameDraft, PhenotypeCompiler,
-    PhenotypeCompilerInputs, PostActionOutcome, PreActionSnapshot, PredictionTargetReceipt,
-    PreparedMemoryRecall, ScaffoldContractError, SensorProfile, SensorProfileIdentity,
-    SensoryAbiVersion, SignedValence, SleepConsolidationConfig, SleepConsolidator, SleepPhase,
-    SleepState, SleepTransition, Tick, TopologicalMapConfig, TopologyObservationReceipt,
-    TopologySidecar, UtteranceSourceKind, Validate, Vec3f, WorldEntityId,
-    LEGACY_NANO512_V1_COORDINATE_SEED, MAX_ACTIVE_CONCEPTS, MAX_ACTIVE_GAPS,
+    MemoryBankConfig, MemoryCompactionCheckpoint, MemoryCompactionReceipt, MemoryObservationUndo,
+    MemoryRecallReceipt, MemorySidecarState, MemoryUpdateReceipt, MotorCommandBundle,
+    N512FounderFoundationProjection, NeuralActionSelection, NeuralEmission, NeuralEmissionClass,
+    NeuralEmissionFrame, NeuralReceptorEffects, NeuralReceptorFrame, NormalizedScalar, OrganismId,
+    PassiveLifeEvent, PassiveLifeStatistics, PerceptionFrame, PerceptionFrameDraft,
+    PhenotypeCompiler, PhenotypeCompilerInputs, PostActionOutcome, PreActionSnapshot,
+    PredictionTargetReceipt, PreparedMemoryRecall, ScaffoldContractError, SensorProfile,
+    SensorProfileIdentity, SensoryAbiVersion, SignedValence, SleepConsolidationConfig,
+    SleepConsolidator, SleepPhase, SleepState, SleepTransition, Tick, TopologicalMapConfig,
+    TopologyObservationReceipt, TopologySidecar, UtteranceSourceKind, Validate, Vec3f,
+    WorldEntityId, LEGACY_NANO512_V1_COORDINATE_SEED, MAX_ACTIVE_CONCEPTS, MAX_ACTIVE_GAPS,
 };
 #[cfg(test)]
 use alife_core::{
@@ -173,6 +175,14 @@ mod resident_arc_serde {
     {
         value.as_ref().serialize(serializer)
     }
+
+    pub fn serialize_option<S, T>(value: &Option<Arc<T>>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+        T: Serialize,
+    {
+        value.as_deref().serialize(serializer)
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -187,26 +197,131 @@ struct ResidentCognition {
     #[serde(serialize_with = "resident_arc_serde::serialize")]
     compiler_inputs: std::sync::Arc<PhenotypeCompilerInputs>,
     legacy_nano512_compatibility_receipt: Option<LegacyNano512CompatibilityReceipt>,
-    genome: BrainGenome,
+    #[serde(serialize_with = "resident_arc_serde::serialize")]
+    genome: std::sync::Arc<BrainGenome>,
     development: DevelopmentState,
     homeostasis: HomeostaticSnapshot,
     sleep_scheduler: GpuSleepScheduler,
     next_sequence: u64,
-    language_grounding: LanguageGroundingLedger,
+    #[serde(serialize_with = "resident_arc_serde::serialize")]
+    language_grounding: std::sync::Arc<LanguageGroundingLedger>,
     life_statistics: PassiveLifeStatistics,
     attention_hysteresis: alife_core::HysteresisState,
     predictor: GroundedSuccessorPredictor,
-    last_cognitive_context: Option<CognitiveContextFrame>,
-    last_selected_motor_bundle: Option<MotorCommandBundle>,
+    #[serde(serialize_with = "resident_arc_serde::serialize_option")]
+    last_cognitive_context: Option<std::sync::Arc<CognitiveContextFrame>>,
+    #[serde(serialize_with = "resident_arc_serde::serialize_option")]
+    last_selected_motor_bundle: Option<std::sync::Arc<MotorCommandBundle>>,
     last_cognitive_work: CognitiveWorkReceipt,
     last_sleep_work: Option<SleepWorkReceipt>,
-    last_structural_edit_receipts: Vec<alife_core::StructuralEditBatch>,
-    last_sleep_report: Option<alife_core::SleepConsolidationReport>,
+    #[serde(serialize_with = "resident_arc_serde::serialize")]
+    last_structural_edit_receipts: std::sync::Arc<Vec<alife_core::StructuralEditBatch>>,
+    #[serde(serialize_with = "resident_arc_serde::serialize_option")]
+    last_sleep_report: Option<std::sync::Arc<alife_core::SleepConsolidationReport>>,
+}
+
+struct ResidentCognitionBackup {
+    approximate_cache: std::sync::Arc<approximate_cognition::ApproximateCognitionCache>,
+    phenotype: std::sync::Arc<alife_core::BrainPhenotype>,
+    neural_receptors: ResidentNeuralReceptors,
+    compiler_inputs: std::sync::Arc<PhenotypeCompilerInputs>,
+    legacy_nano512_compatibility_receipt: Option<LegacyNano512CompatibilityReceipt>,
+    genome: std::sync::Arc<BrainGenome>,
+    development: DevelopmentState,
+    homeostasis: HomeostaticSnapshot,
+    sleep_scheduler: GpuSleepScheduler,
+    next_sequence: u64,
+    language_grounding: std::sync::Arc<LanguageGroundingLedger>,
+    life_statistics: PassiveLifeStatistics,
+    attention_hysteresis: alife_core::HysteresisState,
+    last_cognitive_context: Option<std::sync::Arc<CognitiveContextFrame>>,
+    last_selected_motor_bundle: Option<std::sync::Arc<MotorCommandBundle>>,
+    last_cognitive_work: CognitiveWorkReceipt,
+    last_sleep_work: Option<SleepWorkReceipt>,
+    last_structural_edit_receipts: std::sync::Arc<Vec<alife_core::StructuralEditBatch>>,
+    last_sleep_report: Option<std::sync::Arc<alife_core::SleepConsolidationReport>>,
+}
+
+impl ResidentCognition {
+    fn backup_without_predictor(&self) -> ResidentCognitionBackup {
+        ResidentCognitionBackup {
+            approximate_cache: std::sync::Arc::clone(&self.approximate_cache),
+            phenotype: std::sync::Arc::clone(&self.phenotype),
+            neural_receptors: self.neural_receptors,
+            compiler_inputs: std::sync::Arc::clone(&self.compiler_inputs),
+            legacy_nano512_compatibility_receipt: self.legacy_nano512_compatibility_receipt.clone(),
+            genome: std::sync::Arc::clone(&self.genome),
+            development: self.development.clone(),
+            homeostasis: self.homeostasis,
+            sleep_scheduler: self.sleep_scheduler,
+            next_sequence: self.next_sequence,
+            language_grounding: std::sync::Arc::clone(&self.language_grounding),
+            life_statistics: self.life_statistics.clone(),
+            attention_hysteresis: self.attention_hysteresis,
+            last_cognitive_context: self
+                .last_cognitive_context
+                .as_ref()
+                .map(std::sync::Arc::clone),
+            last_selected_motor_bundle: self
+                .last_selected_motor_bundle
+                .as_ref()
+                .map(std::sync::Arc::clone),
+            last_cognitive_work: self.last_cognitive_work,
+            last_sleep_work: self.last_sleep_work.clone(),
+            last_structural_edit_receipts: std::sync::Arc::clone(
+                &self.last_structural_edit_receipts,
+            ),
+            last_sleep_report: self.last_sleep_report.as_ref().map(std::sync::Arc::clone),
+        }
+    }
+}
+
+impl ResidentCognitionBackup {
+    fn restore(self, predictor: GroundedSuccessorPredictor) -> ResidentCognition {
+        ResidentCognition {
+            approximate_cache: self.approximate_cache,
+            phenotype: self.phenotype,
+            neural_receptors: self.neural_receptors,
+            compiler_inputs: self.compiler_inputs,
+            legacy_nano512_compatibility_receipt: self.legacy_nano512_compatibility_receipt,
+            genome: self.genome,
+            development: self.development,
+            homeostasis: self.homeostasis,
+            sleep_scheduler: self.sleep_scheduler,
+            next_sequence: self.next_sequence,
+            language_grounding: self.language_grounding,
+            life_statistics: self.life_statistics,
+            attention_hysteresis: self.attention_hysteresis,
+            predictor,
+            last_cognitive_context: self.last_cognitive_context,
+            last_selected_motor_bundle: self.last_selected_motor_bundle,
+            last_cognitive_work: self.last_cognitive_work,
+            last_sleep_work: self.last_sleep_work,
+            last_structural_edit_receipts: self.last_structural_edit_receipts,
+            last_sleep_report: self.last_sleep_report,
+        }
+    }
+}
+
+enum StagedPredictorUndo {
+    Observe(u64, PredictorObserveUndo),
+    FullSnapshot(u64, Option<GroundedSuccessorPredictor>),
+}
+
+#[allow(clippy::large_enum_variant)]
+enum StagedMemoryUndo {
+    Observe(u64, MemoryObservationUndo),
+    Replace(u64, Option<std::sync::Arc<MemorySidecarState>>),
+}
+
+enum StagedResidentsBackup {
+    FullClone(BTreeMap<u64, ResidentCognition>),
+    WithoutPredictor(BTreeMap<u64, ResidentCognitionBackup>),
 }
 
 struct StagedLiveAuthority {
-    world: HeadlessWorld,
-    residents: BTreeMap<u64, ResidentCognition>,
+    world_backup: HeadlessWorld,
+    residents_backup: StagedResidentsBackup,
 }
 
 #[derive(Debug, Default)]
@@ -373,21 +488,19 @@ fn restore_staged_sealed_patches(
 // Cognitive sidecars share the enclosing world/resident transaction. Persistence
 // workers cannot be rolled back: after acceptance their queues retain ownership.
 struct StagedSleepAuthority {
-    memories: BTreeMap<u64, MemorySidecarState>,
-    topologies: BTreeMap<u64, TopologySidecar>,
-    restored_replay_patches: Vec<ExperiencePatch>,
+    topologies: BTreeMap<u64, std::sync::Arc<TopologySidecar>>,
+    restored_replay_patches: std::sync::Arc<Vec<ExperiencePatch>>,
     sealed_patches_len: usize,
-    last_sealed_patches: Vec<ExperiencePatch>,
     sealed_patch_count: usize,
-    retained_learning: BTreeMap<u64, RetainedLearningRecovery>,
-    sleep_journal_neural_authorities: BTreeMap<u64, SleepJournalNeuralAuthority>,
+    retained_learning: std::sync::Arc<BTreeMap<u64, RetainedLearningRecovery>>,
+    sleep_journal_neural_authorities: std::sync::Arc<BTreeMap<u64, SleepJournalNeuralAuthority>>,
     // Learned global heads may advance between periodic exact snapshots. Before
     // a sleep journal can bind a request to those heads, establish a new exact
     // private epoch; do not reuse the older packet's phenotype identity.
     live_policy_exact_base_required: bool,
-    pending_recovery_sleep_edges: BTreeMap<u64, PendingRecoverySleepEdge>,
-    pending_exact_sleep_journal_entries: Vec<GpuSleepTransactionJournalEntryV2>,
-    pending_sleep_journal_entries: Vec<GpuSleepTransactionJournalEntryV2>,
+    pending_recovery_sleep_edges: std::sync::Arc<BTreeMap<u64, PendingRecoverySleepEdge>>,
+    pending_exact_sleep_journal_entries: std::sync::Arc<Vec<GpuSleepTransactionJournalEntryV2>>,
+    pending_sleep_journal_entries: std::sync::Arc<Vec<GpuSleepTransactionJournalEntryV2>>,
     exact_checkpoint_waiting_for_sleep_journal: bool,
 }
 
@@ -397,28 +510,55 @@ impl StagedSleepAuthority {
         runtime.staged_sealed_patches_rollback = StagedSealedPatchesRollback::Clean {
             original_len: sealed_patches_len,
         };
+        runtime.staged_memory_undos = Some(Vec::new());
+        runtime.staged_last_sealed_patches_backup = Some(None);
         Self {
-            memories: runtime.memories.clone(),
             topologies: runtime.topologies.clone(),
-            restored_replay_patches: runtime.restored_replay_patches.clone(),
+            restored_replay_patches: std::sync::Arc::clone(&runtime.restored_replay_patches),
             sealed_patches_len,
-            last_sealed_patches: runtime.last_sealed_patches.clone(),
             sealed_patch_count: runtime.sealed_patch_count,
-            retained_learning: runtime.retained_learning.clone(),
-            sleep_journal_neural_authorities: runtime.sleep_journal_neural_authorities.clone(),
+            retained_learning: std::sync::Arc::clone(&runtime.retained_learning),
+            sleep_journal_neural_authorities: std::sync::Arc::clone(
+                &runtime.sleep_journal_neural_authorities,
+            ),
             live_policy_exact_base_required: runtime.live_policy_exact_base_required,
-            pending_recovery_sleep_edges: runtime.pending_recovery_sleep_edges.clone(),
-            pending_exact_sleep_journal_entries: runtime
-                .pending_exact_sleep_journal_entries
-                .clone(),
-            pending_sleep_journal_entries: runtime.pending_sleep_journal_entries.clone(),
+            pending_recovery_sleep_edges: std::sync::Arc::clone(
+                &runtime.pending_recovery_sleep_edges,
+            ),
+            pending_exact_sleep_journal_entries: std::sync::Arc::clone(
+                &runtime.pending_exact_sleep_journal_entries,
+            ),
+            pending_sleep_journal_entries: std::sync::Arc::clone(
+                &runtime.pending_sleep_journal_entries,
+            ),
             exact_checkpoint_waiting_for_sleep_journal: runtime
                 .exact_checkpoint_waiting_for_sleep_journal,
         }
     }
 
     fn restore(self, runtime: &mut GpuLiveBrainRuntime) {
-        runtime.memories = self.memories;
+        tracing::warn!("rolling back live GPU runtime state after failed tick");
+        for op in runtime
+            .staged_memory_undos
+            .take()
+            .unwrap_or_default()
+            .into_iter()
+            .rev()
+        {
+            match op {
+                StagedMemoryUndo::Observe(raw, undo) => {
+                    if let Some(memory) = runtime.memories.get_mut(&raw) {
+                        std::sync::Arc::make_mut(memory).undo_observation(undo);
+                    }
+                }
+                StagedMemoryUndo::Replace(raw, Some(previous)) => {
+                    runtime.memories.insert(raw, previous);
+                }
+                StagedMemoryUndo::Replace(raw, None) => {
+                    runtime.memories.remove(&raw);
+                }
+            }
+        }
         runtime.topologies = self.topologies;
         runtime.restored_replay_patches = self.restored_replay_patches;
         restore_staged_sealed_patches(
@@ -426,7 +566,9 @@ impl StagedSleepAuthority {
             &mut runtime.sealed_patches,
             self.sealed_patches_len,
         );
-        runtime.last_sealed_patches = self.last_sealed_patches;
+        if let Some(Some(previous)) = runtime.staged_last_sealed_patches_backup.take() {
+            runtime.last_sealed_patches = previous;
+        }
         runtime.sealed_patch_count = self.sealed_patch_count;
         runtime.retained_learning = self.retained_learning;
         if !runtime.post_irreversible_gpu_commit_fail_stop_armed {
@@ -450,16 +592,26 @@ struct RollbackCloneSample {
 }
 
 impl StagedLiveAuthority {
-    fn begin(
-        world: &mut HeadlessWorld,
-        residents: &mut BTreeMap<u64, ResidentCognition>,
+    fn begin<O: LiveAuthorityOwner>(
+        owner: &mut O,
         measure_wall_time: bool,
     ) -> (Self, RollbackCloneSample) {
+        let uses_predictor_undo = owner.begin_staged_predictor_undo();
+        let (world, residents) = owner.world_and_residents();
         let world_started = measure_wall_time.then(Instant::now);
-        let staged_world = world.clone();
+        let world_backup = world.clone_for_staged_tick();
         let world_wall_ns = world_started.map_or(0, elapsed_ns);
         let residents_started = measure_wall_time.then(Instant::now);
-        let staged_residents = residents.clone();
+        let residents_backup = if uses_predictor_undo {
+            StagedResidentsBackup::WithoutPredictor(
+                residents
+                    .iter()
+                    .map(|(&raw, resident)| (raw, resident.backup_without_predictor()))
+                    .collect(),
+            )
+        } else {
+            StagedResidentsBackup::FullClone(residents.clone())
+        };
         let residents_wall_ns = residents_started.map_or(0, elapsed_ns);
         let sample = RollbackCloneSample {
             world_wall_ns,
@@ -469,38 +621,67 @@ impl StagedLiveAuthority {
         };
         (
             Self {
-                world: staged_world,
-                residents: staged_residents,
-            }
-            .install(world, residents),
+                world_backup,
+                residents_backup,
+            },
             sample,
         )
     }
 
-    fn install(
+    fn finish<O: LiveAuthorityOwner, T, E>(
         self,
-        world: &mut HeadlessWorld,
-        residents: &mut BTreeMap<u64, ResidentCognition>,
-    ) -> Self {
-        Self {
-            world: std::mem::replace(world, self.world),
-            residents: std::mem::replace(residents, self.residents),
-        }
-    }
-
-    fn finish<T, E>(
-        self,
-        world: &mut HeadlessWorld,
-        residents: &mut BTreeMap<u64, ResidentCognition>,
+        owner: &mut O,
         result: Result<T, E>,
     ) -> Result<T, E> {
-        let candidate = self.install(world, residents);
         match result {
             Ok(value) => {
-                let _previous = candidate.install(world, residents);
+                let _ = owner.finish_staged_predictor_undo(true);
+                let (world, _) = owner.world_and_residents();
+                world.commit_staged_tick();
                 Ok(value)
             }
-            Err(error) => Err(error),
+            Err(error) => {
+                let predictor_undos = owner.finish_staged_predictor_undo(false);
+                let (world, residents) = owner.world_and_residents();
+                world.rollback_staged_tick(self.world_backup);
+                match self.residents_backup {
+                    StagedResidentsBackup::FullClone(backup) => {
+                        *residents = backup;
+                    }
+                    StagedResidentsBackup::WithoutPredictor(backup_map) => {
+                        let mut predictors: BTreeMap<u64, GroundedSuccessorPredictor> =
+                            std::mem::take(residents)
+                                .into_iter()
+                                .map(|(raw, resident)| (raw, resident.predictor))
+                                .collect();
+                        for op in predictor_undos.into_iter().rev() {
+                            match op {
+                                StagedPredictorUndo::Observe(raw, undo) => {
+                                    if let Some(predictor) = predictors.get_mut(&raw) {
+                                        predictor.undo_observe(undo);
+                                    }
+                                }
+                                StagedPredictorUndo::FullSnapshot(raw, Some(previous)) => {
+                                    predictors.insert(raw, previous);
+                                }
+                                StagedPredictorUndo::FullSnapshot(raw, None) => {
+                                    predictors.remove(&raw);
+                                }
+                            }
+                        }
+                        *residents = backup_map
+                            .into_iter()
+                            .map(|(raw, backup)| {
+                                let predictor = predictors
+                                    .remove(&raw)
+                                    .expect("staged predictor undo invariant");
+                                (raw, backup.restore(predictor))
+                            })
+                            .collect();
+                    }
+                }
+                Err(error)
+            }
         }
     }
 }
@@ -509,6 +690,14 @@ trait LiveAuthorityOwner {
     fn world_and_residents(
         &mut self,
     ) -> (&mut HeadlessWorld, &mut BTreeMap<u64, ResidentCognition>);
+
+    fn begin_staged_predictor_undo(&mut self) -> bool {
+        false
+    }
+
+    fn finish_staged_predictor_undo(&mut self, _committed: bool) -> Vec<StagedPredictorUndo> {
+        Vec::new()
+    }
 }
 
 fn tick_with_sleep_progress_inner<O, T, E>(
@@ -519,13 +708,9 @@ fn tick_with_sleep_progress_inner<O, T, E>(
 where
     O: LiveAuthorityOwner,
 {
-    let (staged, clone_sample) = {
-        let (world, residents) = owner.world_and_residents();
-        StagedLiveAuthority::begin(world, residents, measure_clone_wall_time)
-    };
+    let (staged, clone_sample) = StagedLiveAuthority::begin(owner, measure_clone_wall_time);
     let result = staged_tick(owner);
-    let (world, residents) = owner.world_and_residents();
-    (staged.finish(world, residents, result), clone_sample)
+    (staged.finish(owner, result), clone_sample)
 }
 
 #[derive(Debug, Clone)]
@@ -789,7 +974,7 @@ fn synchronize_resident_from_record(
         return Err(ScaffoldContractError::NonMonotonicTick);
     }
     let age = record.age_at(world_tick)?;
-    if resident.genome != record.phenotype().brain_genome {
+    if *resident.genome != record.phenotype().brain_genome {
         return Err(ScaffoldContractError::BrainOwnershipMismatch);
     }
     resident.homeostasis = record.biochemistry().homeostasis;
@@ -967,12 +1152,12 @@ impl ResidentAuthorityPlan {
             phenotype: std::sync::Arc::new(self.phenotype),
             compiler_inputs: std::sync::Arc::new(self.compiler_inputs),
             legacy_nano512_compatibility_receipt: self.legacy_nano512_compatibility_receipt,
-            genome: self.genome,
+            genome: std::sync::Arc::new(self.genome),
             development: self.development,
             homeostasis: self.biochemistry.homeostasis,
             sleep_scheduler: GpuSleepScheduler::new(sleep_config)?,
             next_sequence: 1,
-            language_grounding: LanguageGroundingLedger::default(),
+            language_grounding: std::sync::Arc::new(LanguageGroundingLedger::default()),
             life_statistics: PassiveLifeStatistics::new(self.organism_id, self.world_tick)?,
             attention_hysteresis: alife_core::HysteresisState::default(),
             predictor,
@@ -981,7 +1166,7 @@ impl ResidentAuthorityPlan {
             last_selected_motor_bundle: None,
             last_cognitive_work: CognitiveWorkReceipt::zero(),
             last_sleep_work: None,
-            last_structural_edit_receipts: Vec::new(),
+            last_structural_edit_receipts: std::sync::Arc::new(Vec::new()),
             last_sleep_report: None,
         })
     }
@@ -1188,6 +1373,7 @@ struct ExactCognitiveHostSnapshotV1 {
 }
 
 #[derive(Default)]
+#[allow(clippy::large_enum_variant)]
 enum ExactPopulationCheckpointRuntimeWorkV1 {
     #[default]
     Idle,
@@ -1657,8 +1843,10 @@ fn configure_persistence_worker_priority() {
         GetCurrentThread, SetThreadPriority, THREAD_PRIORITY_LOWEST,
     };
 
-    // Persistence is durable background work. Prefer the render/update thread
-    // when both are runnable without skipping or delaying any transaction.
+    // SAFETY: `GetCurrentThread` returns a valid pseudo-handle for the calling thread
+    // and `THREAD_PRIORITY_LOWEST` is a valid Win32 thread priority constant.
+    // Persistence is durable background work: prefer the render/update thread when
+    // both are runnable without skipping or delaying any transaction.
     unsafe {
         let _ = SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_LOWEST);
     }
@@ -2161,7 +2349,7 @@ impl GpuLiveCheckpointDurability {
         self.durable_manifest
             .compare_and_swap(&self.published.digest, &replacement)?;
         let published = self.durable_manifest.load()?;
-        if published.save != replacement {
+        if *published.save != replacement {
             return Err(GameAppShellError::InvalidProductionFrontend {
                 message: "published GPU checkpoint save differs from its validated replacement"
                     .to_string(),
@@ -2213,9 +2401,11 @@ struct AuthoritativeGpuSleepDriver<'a> {
 }
 
 struct AuthoritativeSleepContext<'a> {
-    memory: &'a mut MemorySidecarState,
+    memory: &'a mut std::sync::Arc<MemorySidecarState>,
+    memory_undos: &'a mut Option<Vec<StagedMemoryUndo>>,
     predictor: &'a mut GroundedSuccessorPredictor,
-    topology: &'a mut TopologySidecar,
+    predictor_undos: &'a mut Option<Vec<StagedPredictorUndo>>,
+    topology: &'a mut std::sync::Arc<TopologySidecar>,
     restored_replay_patches: &'a [ExperiencePatch],
     sealed_patches: &'a [ExperiencePatch],
     last_sealed_patches: &'a [ExperiencePatch],
@@ -2326,13 +2516,13 @@ fn run_authoritative_sleep_transaction_with_evidence(
     evidence: &SleepReplayEvidence,
 ) -> Result<SleepWorkReceipt, ScaffoldContractError> {
     let consolidator = SleepConsolidator::new(sleep_config)?;
-    context.memory.run_bounded_sleep_transaction(
+    std::sync::Arc::make_mut(context.memory).run_bounded_sleep_transaction(
         &consolidator,
         homeostasis,
         tick,
         evidence,
         context.predictor,
-        context.topology,
+        std::sync::Arc::make_mut(context.topology),
     )
 }
 
@@ -2457,6 +2647,19 @@ impl GpuSleepConsolidationDriver for AuthoritativeGpuSleepDriver<'_> {
                 context.last_sealed_patches,
             ),
         }?;
+        let raw = organism_id.raw();
+        if let Some(undos) = context.memory_undos.as_mut() {
+            undos.push(StagedMemoryUndo::Replace(
+                raw,
+                Some(std::sync::Arc::clone(context.memory)),
+            ));
+        }
+        if let Some(undos) = context.predictor_undos.as_mut() {
+            undos.push(StagedPredictorUndo::FullSnapshot(
+                raw,
+                Some(context.predictor.clone()),
+            ));
+        }
         let receipt = run_authoritative_sleep_transaction_with_evidence(
             homeostasis,
             tick,
@@ -3574,13 +3777,17 @@ impl CuratedFounderResetRuntimePort for GpuLiveBrainRuntime {
         &mut self,
         intent: LiveAgentResetIntent,
     ) -> CuratedFounderResetRuntimeResult {
+        self.invalidate_pipelined_next_prep();
         self.attempt_live_agent_reset(intent)
             .map(|result| CuratedFounderResetRuntimeEvidence::from_attempt(&result))
+            .map_err(|error| *error)
     }
 
     fn dispatch_retry(&mut self) -> CuratedFounderResetRuntimeResult {
+        self.invalidate_pipelined_next_prep();
         self.retry_curated_founder_reset()
             .map(|result| CuratedFounderResetRuntimeEvidence::from_attempt(&result))
+            .map_err(|error| *error)
     }
 }
 
@@ -3696,15 +3903,15 @@ pub struct GpuLiveBrainRuntime {
     handles: BTreeMap<u64, GpuBrainHandle>,
     residents: BTreeMap<u64, ResidentCognition>,
     appearances: CreatureAppearanceCache,
-    memories: BTreeMap<u64, MemorySidecarState>,
-    topologies: BTreeMap<u64, TopologySidecar>,
-    sleep_journal_neural_authorities: BTreeMap<u64, SleepJournalNeuralAuthority>,
+    memories: BTreeMap<u64, std::sync::Arc<MemorySidecarState>>,
+    topologies: BTreeMap<u64, std::sync::Arc<TopologySidecar>>,
+    sleep_journal_neural_authorities: std::sync::Arc<BTreeMap<u64, SleepJournalNeuralAuthority>>,
     live_policy_exact_base_required: bool,
     // Process-local transitions made before the staged tick observes the scheduler.
-    pending_recovery_sleep_edges: BTreeMap<u64, PendingRecoverySleepEdge>,
-    pending_exact_sleep_journal_entries: Vec<GpuSleepTransactionJournalEntryV2>,
+    pending_recovery_sleep_edges: std::sync::Arc<BTreeMap<u64, PendingRecoverySleepEdge>>,
+    pending_exact_sleep_journal_entries: std::sync::Arc<Vec<GpuSleepTransactionJournalEntryV2>>,
     sleep_journal_publication_worker: Option<SleepJournalPublicationWorkerOwnerV1>,
-    pending_sleep_journal_entries: Vec<GpuSleepTransactionJournalEntryV2>,
+    pending_sleep_journal_entries: std::sync::Arc<Vec<GpuSleepTransactionJournalEntryV2>>,
     #[cfg(all(test, feature = "gpu-tests"))]
     sleep_journal_capacity_override: Option<usize>,
     #[cfg(all(test, feature = "gpu-tests"))]
@@ -3715,7 +3922,7 @@ pub struct GpuLiveBrainRuntime {
     exact_checkpoint_waiting_for_sleep_journal: bool,
     manual_checkpoint_waiting_for_sleep_journal: Option<PathBuf>,
     post_irreversible_gpu_commit_fail_stop_armed: bool,
-    retained_learning: BTreeMap<u64, RetainedLearningRecovery>,
+    retained_learning: std::sync::Arc<BTreeMap<u64, RetainedLearningRecovery>>,
     world: HeadlessWorld,
     deterministic_seed: u64,
     brain_class: BrainScaleTier,
@@ -3725,8 +3932,11 @@ pub struct GpuLiveBrainRuntime {
     schedule_sleep: bool,
     sealed_patches: Vec<ExperiencePatch>,
     staged_sealed_patches_rollback: StagedSealedPatchesRollback,
+    staged_predictor_undos: Option<Vec<StagedPredictorUndo>>,
+    staged_memory_undos: Option<Vec<StagedMemoryUndo>>,
+    staged_last_sealed_patches_backup: Option<Option<Vec<ExperiencePatch>>>,
     sealed_patch_count: usize,
-    restored_replay_patches: Vec<ExperiencePatch>,
+    restored_replay_patches: std::sync::Arc<Vec<ExperiencePatch>>,
     last_sealed_patches: Vec<ExperiencePatch>,
     observe_sidecars: bool,
     retain_sealed_patch_history: bool,
@@ -3774,6 +3984,37 @@ pub struct GpuLiveBrainRuntime {
     retirement_backend_removal_count: usize,
     #[cfg(any(test, feature = "gpu-tests"))]
     forced_late_advance_failure: bool,
+    world_mutation_epoch: u64,
+    pipelined_next_prep: Option<PipelinedNextTickPrep>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct PipelinedOrganismKey {
+    handle: GpuBrainHandle,
+    world_entity_id: WorldEntityId,
+    homeostasis: HomeostaticSnapshot,
+    neural_receptors: NeuralReceptorFrame,
+    embodiment_revision: u64,
+    sequence_id: ExperienceSequenceId,
+    hysteresis: alife_core::HysteresisState,
+    memory_binding: [u64; 4],
+    topology_digest: [u64; 4],
+}
+
+struct PipelinedOrganismPrep {
+    key: PipelinedOrganismKey,
+    captured: cpu_preparation::CapturedLivePreparation,
+    outcome: cpu_preparation::CpuPreparationOutcome,
+}
+
+struct PipelinedNextTickPrep {
+    target_tick: Tick,
+    world_mutation_epoch: u64,
+    sensor_profile: SensorProfile,
+    audited_cognition: bool,
+    grounded_perception_wall_ns: u64,
+    next_tracked_objects: alife_world::TrackedObjectRegistry,
+    organisms: BTreeMap<u64, PipelinedOrganismPrep>,
 }
 
 pub const PLAYER_RESOURCE_PLACEMENT_SCHEMA_VERSION: u16 = 1;
@@ -3858,6 +4099,21 @@ impl LiveAuthorityOwner for GpuLiveBrainRuntime {
     ) -> (&mut HeadlessWorld, &mut BTreeMap<u64, ResidentCognition>) {
         (&mut self.world, &mut self.residents)
     }
+
+    fn begin_staged_predictor_undo(&mut self) -> bool {
+        self.staged_predictor_undos = Some(Vec::new());
+        true
+    }
+
+    fn finish_staged_predictor_undo(&mut self, committed: bool) -> Vec<StagedPredictorUndo> {
+        let undos = self.staged_predictor_undos.take().unwrap_or_default();
+        if committed {
+            Vec::new()
+        } else {
+            self.invalidate_pipelined_next_prep();
+            undos
+        }
+    }
 }
 
 #[cfg(feature = "bevy-app")]
@@ -3890,7 +4146,6 @@ fn curated_founder_gpu_residency_state(
 }
 
 #[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
-#[allow(clippy::result_large_err)]
 fn attempt_curated_founder_reset_with_owned_authorities(
     checkpoint_durability: &mut Option<GpuLiveCheckpointDurability>,
     lineage_library: &mut Option<LineageLibrary>,
@@ -3899,7 +4154,7 @@ fn attempt_curated_founder_reset_with_owned_authorities(
     retained_operation: &mut Option<CuratedFounderDurableOperation>,
     retained_plan: &mut Option<CuratedFounderGpuResidencyPlan>,
     request: Option<CuratedFounderResetRequest>,
-) -> Result<CuratedFounderResetAttempt, CuratedFounderResetRuntimeError> {
+) -> Result<CuratedFounderResetAttempt, Box<CuratedFounderResetRuntimeError>> {
     attempt_curated_founder_reset_with_owned_authorities_and_refresh(
         checkpoint_durability,
         lineage_library,
@@ -3913,7 +4168,6 @@ fn attempt_curated_founder_reset_with_owned_authorities(
 }
 
 #[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
-#[allow(clippy::result_large_err)]
 // Keep the separately owned world, persistence, archive, and retry authorities explicit.
 #[allow(clippy::too_many_arguments)]
 fn attempt_curated_founder_reset_with_owned_authorities_and_refresh(
@@ -3925,28 +4179,37 @@ fn attempt_curated_founder_reset_with_owned_authorities_and_refresh(
     retained_plan: &mut Option<CuratedFounderGpuResidencyPlan>,
     request: Option<CuratedFounderResetRequest>,
     refresh_published: CuratedFounderDurableRefresh,
-) -> Result<CuratedFounderResetAttempt, CuratedFounderResetRuntimeError> {
+) -> Result<CuratedFounderResetAttempt, Box<CuratedFounderResetRuntimeError>> {
     if checkpoint_durability.is_none() {
-        return Err(CuratedFounderResetRuntimeError::MissingDurability);
+        return Err(Box::new(CuratedFounderResetRuntimeError::MissingDurability));
     }
     if lineage_library.is_none() {
-        return Err(CuratedFounderResetRuntimeError::MissingLineageArchive);
+        return Err(Box::new(
+            CuratedFounderResetRuntimeError::MissingLineageArchive,
+        ));
     }
     if retained_operation.is_some() && request.is_some() {
-        return Err(CuratedFounderResetRuntimeError::RetainedOperationPending);
+        return Err(Box::new(
+            CuratedFounderResetRuntimeError::RetainedOperationPending,
+        ));
     }
     if retained_plan.is_some() && request.is_some() {
-        return Err(CuratedFounderResetRuntimeError::RetainedResidencyPlanPending);
+        return Err(Box::new(
+            CuratedFounderResetRuntimeError::RetainedResidencyPlanPending,
+        ));
     }
 
     let (operation, operation_was_retained) = match retained_operation.take() {
         Some(operation) => (operation, true),
         None => {
-            let request = request.ok_or(CuratedFounderResetRuntimeError::NoRetainedOperation)?;
-            let archive_run_id =
-                lineage_run_id.ok_or(CuratedFounderResetRuntimeError::MissingLineageRunId)?;
-            let plan = plan_curated_founder_reset(&request)?;
-            let bundle = materialize_curated_founder_bundle(&plan)?;
+            let request = request
+                .ok_or_else(|| Box::new(CuratedFounderResetRuntimeError::NoRetainedOperation))?;
+            let archive_run_id = lineage_run_id
+                .ok_or_else(|| Box::new(CuratedFounderResetRuntimeError::MissingLineageRunId))?;
+            let plan = plan_curated_founder_reset(&request)
+                .map_err(|error| Box::new(CuratedFounderResetRuntimeError::from(error)))?;
+            let bundle = materialize_curated_founder_bundle(&plan)
+                .map_err(|error| Box::new(CuratedFounderResetRuntimeError::from(error)))?;
             let durability = checkpoint_durability
                 .as_ref()
                 .expect("durability presence was checked above");
@@ -3960,7 +4223,8 @@ fn attempt_curated_founder_reset_with_owned_authorities_and_refresh(
                 world,
                 lineage_library,
                 archive_run_id,
-            )?;
+            )
+            .map_err(|error| Box::new(CuratedFounderResetRuntimeError::from(error)))?;
             (operation, false)
         }
     };
@@ -3978,7 +4242,7 @@ fn attempt_curated_founder_reset_with_owned_authorities_and_refresh(
                 if operation_was_retained {
                     *retained_operation = Some(operation);
                 }
-                return Err(error.into());
+                return Err(Box::new(error.into()));
             }
         }
     };
@@ -3999,13 +4263,13 @@ fn attempt_curated_founder_reset_with_owned_authorities_and_refresh(
                 publication,
                 gpu_residency: curated_founder_gpu_residency_state(retained_plan),
             };
-            return Err(CuratedFounderResetRuntimeError::DurableRefresh {
+            return Err(Box::new(CuratedFounderResetRuntimeError::DurableRefresh {
                 evidence: CuratedFounderResetRuntimeEvidence::from_attempt(&result),
                 error: GameAppShellError::InvalidProductionFrontend {
                     message: "curated founder success omitted its verified final save digest"
                         .to_string(),
                 },
-            });
+            }));
         }
     };
 
@@ -4014,7 +4278,9 @@ fn attempt_curated_founder_reset_with_owned_authorities_and_refresh(
     if let Some(existing_plan) = retained_plan.as_ref() {
         if existing_plan.fingerprint != next_plan.fingerprint {
             *retained_operation = Some(operation);
-            return Err(CuratedFounderResetRuntimeError::ResidencyPlanMismatch);
+            return Err(Box::new(
+                CuratedFounderResetRuntimeError::ResidencyPlanMismatch,
+            ));
         }
     } else {
         *retained_plan = Some(next_plan);
@@ -4034,10 +4300,10 @@ fn attempt_curated_founder_reset_with_owned_authorities_and_refresh(
             publication,
             gpu_residency: CuratedFounderGpuResidencyState::Unknown,
         };
-        return Err(CuratedFounderResetRuntimeError::DurableRefresh {
+        return Err(Box::new(CuratedFounderResetRuntimeError::DurableRefresh {
             evidence: CuratedFounderResetRuntimeEvidence::from_attempt(&result),
             error,
-        });
+        }));
     }
 
     let plan = retained_plan
@@ -4215,7 +4481,7 @@ fn archive_birth_into_library(
         let archived_genome = lineage_library.load_brain_genome(&manifest)?;
         if manifest.life.is_some()
             || manifest.previous_manifest_digest.is_some()
-            || archived_genome != resident.genome
+            || archived_genome != *resident.genome
             || genetic.source_run_id != source_run_id
             || genetic.organism_id != organism_id
             || genetic.genome_id != resident.genome.id
@@ -4427,9 +4693,11 @@ enum WorldMutationRollback {
     EnclosingStagedTick,
 }
 
+#[allow(clippy::too_many_arguments)]
 fn seal_prepared_selection_core(
     world: &mut HeadlessWorld,
     residents: &mut BTreeMap<u64, ResidentCognition>,
+    predictor_undos: Option<&mut Vec<StagedPredictorUndo>>,
     sealed_patch_count: usize,
     cognitive_work_cost_policy: CognitiveWorkCostPolicy,
     schedule_sleep: bool,
@@ -4490,10 +4758,7 @@ fn seal_prepared_selection_core(
         .filter_map(|c| c.target.and_then(|t| t.entity))
         .filter_map(|entity| {
             let key = world.entity(entity)?.tracking_provenance.canonical_key();
-            let tracked = world
-                .tracked_objects()
-                .records_for(organism_id)?
-                .find(|r| r.tracking_key == key)?;
+            let tracked = world.tracked_objects().record_by_key(organism_id, key)?;
             pre_action_context
                 .peripheral
                 .summaries
@@ -4562,11 +4827,22 @@ fn seal_prepared_selection_core(
         motor_condition,
         target_state,
     )?;
-    let prediction_update = match frozen_prediction {
-        Some(forecast) => resident
-            .predictor
-            .observe_frozen(&prediction_target, &forecast)?,
-        None => resident.predictor.observe(&prediction_target)?,
+    let prediction_update = if let Some(undos) = predictor_undos {
+        let (update, undo) = match frozen_prediction {
+            Some(forecast) => resident
+                .predictor
+                .observe_frozen_with_undo(&prediction_target, &forecast)?,
+            None => resident.predictor.observe_with_undo(&prediction_target)?,
+        };
+        undos.push(StagedPredictorUndo::Observe(organism_id.raw(), undo));
+        update
+    } else {
+        match frozen_prediction {
+            Some(forecast) => resident
+                .predictor
+                .observe_frozen(&prediction_target, &forecast)?,
+            None => resident.predictor.observe(&prediction_target)?,
+        }
     };
     let grounded_prediction_error = apply_prediction_evidence(
         &mut cognitive_context,
@@ -4581,8 +4857,8 @@ fn seal_prepared_selection_core(
         &v11_work,
         prediction_update.error.len() as u64,
     )?;
-    resident.last_cognitive_context = Some(cognitive_context.clone());
-    resident.last_selected_motor_bundle = Some(motor_bundle.clone());
+    resident.last_cognitive_context = Some(std::sync::Arc::new(cognitive_context));
+    resident.last_selected_motor_bundle = Some(std::sync::Arc::new(motor_bundle.clone()));
     resident.last_cognitive_work = cognitive_work;
     let combined_prediction_error = grounded_prediction_error;
     apply_cognitive_work_cost(
@@ -4645,7 +4921,7 @@ fn seal_prepared_selection_core(
         cognitive_work,
         pre_action_context,
     )?;
-    resident.language_grounding.observe_sealed(&patch)?;
+    std::sync::Arc::make_mut(&mut resident.language_grounding).observe_sealed(&patch)?;
     resident.next_sequence = resident
         .next_sequence
         .checked_add(1)
@@ -4733,23 +5009,28 @@ impl GpuLiveBrainRuntime {
         manifest.validate_with_root(&launch.asset_root)?;
         let (durable_manifest, loaded_save) =
             GpuDurableSaveManifest::open_loaded(&launch.save_path, &launch.asset_root)?;
-        let save = loaded_save.save.clone();
-        save.validate_with_asset_root(&launch.asset_root)?;
-        if launch.brain_policy != alife_core::PolicyBackend::NeuralClosedLoopGpu
-            || config.brain_policy.policy != alife_core::PolicyBackend::NeuralClosedLoopGpu
-            || save.config.brain_policy.policy != alife_core::PolicyBackend::NeuralClosedLoopGpu
-            || config.deterministic_seed != save.deterministic_seed
+        let deterministic_seed = loaded_save.save.deterministic_seed;
+        let brain_class = loaded_save.save.config.brain_class;
         {
-            return Err(GameAppShellError::InvalidGraphicalLaunch {
-                message: "GPU neural runtime requires matching persisted neural policy and seed",
-            });
+            let save = loaded_save.save.as_ref();
+            save.validate_with_asset_root(&launch.asset_root)?;
+            if launch.brain_policy != alife_core::PolicyBackend::NeuralClosedLoopGpu
+                || config.brain_policy.policy != alife_core::PolicyBackend::NeuralClosedLoopGpu
+                || save.config.brain_policy.policy != alife_core::PolicyBackend::NeuralClosedLoopGpu
+                || config.deterministic_seed != deterministic_seed
+            {
+                return Err(GameAppShellError::InvalidGraphicalLaunch {
+                    message:
+                        "GPU neural runtime requires matching persisted neural policy and seed",
+                });
+            }
         }
         Self::restore_loaded_save(
             backend,
             durable_manifest,
             loaded_save,
-            save.deterministic_seed,
-            save.config.brain_class,
+            deterministic_seed,
+            brain_class,
         )
     }
 
@@ -5057,35 +5338,41 @@ impl GpuLiveBrainRuntime {
         });
 
         let candidate = staged?;
+        let next_epoch = self.world_mutation_epoch.wrapping_add(1);
         let lineage_library = self.lineage_library.take();
         let _old_runtime = std::mem::replace(self, candidate);
         self.lineage_library = lineage_library;
+        self.world_mutation_epoch = next_epoch;
+        self.pipelined_next_prep = None;
         Ok(())
     }
 
     #[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
-    #[allow(clippy::result_large_err)]
     fn build_live_agent_reset_request(
         &self,
         intent: LiveAgentResetIntent,
-    ) -> Result<CuratedFounderResetRequest, CuratedFounderResetRuntimeError> {
+    ) -> Result<CuratedFounderResetRequest, Box<CuratedFounderResetRuntimeError>> {
         let durability = self
             .checkpoint_durability
             .as_ref()
-            .ok_or(CuratedFounderResetRuntimeError::MissingDurability)?;
+            .ok_or_else(|| Box::new(CuratedFounderResetRuntimeError::MissingDurability))?;
         let source_run_identity = self
             .lineage_run_id
             .clone()
-            .ok_or(CuratedFounderResetRuntimeError::MissingLineageRunId)?;
+            .ok_or_else(|| Box::new(CuratedFounderResetRuntimeError::MissingLineageRunId))?;
         let target_population = u32::try_from(intent.final_agents.len()).map_err(|_| {
-            CuratedFounderResetRuntimeError::Plan(CuratedFounderResetError::AgentCountMismatch {
-                expected: u32::MAX,
-                actual: intent.final_agents.len(),
-            })
+            Box::new(CuratedFounderResetRuntimeError::Plan(
+                CuratedFounderResetError::AgentCountMismatch {
+                    expected: u32::MAX,
+                    actual: intent.final_agents.len(),
+                },
+            ))
         })?;
         let foundation_asset = FoundationWeightAsset::builtin_nano512_v1(self.sensor_profile)
             .map_err(|_| {
-                CuratedFounderResetRuntimeError::Plan(CuratedFounderResetError::FoundationMismatch)
+                Box::new(CuratedFounderResetRuntimeError::Plan(
+                    CuratedFounderResetError::FoundationMismatch,
+                ))
             })?;
         let foundation_manifest = foundation_asset.manifest();
         let foundation = FoundationGeneticIdentity::new(
@@ -5095,7 +5382,9 @@ impl GpuLiveBrainRuntime {
             BrainCapacityClass::N512_ID,
         )
         .map_err(|_| {
-            CuratedFounderResetRuntimeError::Plan(CuratedFounderResetError::FoundationMismatch)
+            Box::new(CuratedFounderResetRuntimeError::Plan(
+                CuratedFounderResetError::FoundationMismatch,
+            ))
         })?;
         let save = &durability.published.save;
         Ok(CuratedFounderResetRequest {
@@ -5115,21 +5404,19 @@ impl GpuLiveBrainRuntime {
     }
 
     #[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
-    #[allow(clippy::result_large_err)]
     pub(crate) fn attempt_live_agent_reset(
         &mut self,
         intent: LiveAgentResetIntent,
-    ) -> Result<CuratedFounderResetAttempt, CuratedFounderResetRuntimeError> {
+    ) -> Result<CuratedFounderResetAttempt, Box<CuratedFounderResetRuntimeError>> {
         let request = self.build_live_agent_reset_request(intent)?;
         self.attempt_curated_founder_reset(request)
     }
 
     #[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
-    #[allow(clippy::result_large_err)]
     pub(crate) fn attempt_curated_founder_reset(
         &mut self,
         request: CuratedFounderResetRequest,
-    ) -> Result<CuratedFounderResetAttempt, CuratedFounderResetRuntimeError> {
+    ) -> Result<CuratedFounderResetAttempt, Box<CuratedFounderResetRuntimeError>> {
         let result = attempt_curated_founder_reset_with_owned_authorities(
             &mut self.checkpoint_durability,
             &mut self.lineage_library,
@@ -5153,10 +5440,9 @@ impl GpuLiveBrainRuntime {
     }
 
     #[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
-    #[allow(clippy::result_large_err)]
     pub(crate) fn retry_curated_founder_reset(
         &mut self,
-    ) -> Result<CuratedFounderResetAttempt, CuratedFounderResetRuntimeError> {
+    ) -> Result<CuratedFounderResetAttempt, Box<CuratedFounderResetRuntimeError>> {
         let result = attempt_curated_founder_reset_with_owned_authorities(
             &mut self.checkpoint_durability,
             &mut self.lineage_library,
@@ -5181,20 +5467,21 @@ impl GpuLiveBrainRuntime {
 
     /// Publishes prepared resident and sidecar maps after GPU residency completes.
     #[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
-    #[allow(clippy::result_large_err)]
     pub(crate) fn commit_retained_curated_founder_gpu_residency(
         &mut self,
         publication: Option<&CuratedFounderResetAttempt>,
-    ) -> Result<GpuCuratedResidencyReceipt, CuratedFounderResetRuntimeError> {
+    ) -> Result<GpuCuratedResidencyReceipt, Box<CuratedFounderResetRuntimeError>> {
         let plan = self
             .retained_curated_founder_gpu_residency_plan
             .as_ref()
-            .ok_or(CuratedFounderResetRuntimeError::NoRetainedOperation)?
+            .ok_or_else(|| Box::new(CuratedFounderResetRuntimeError::NoRetainedOperation))?
             .clone();
         if !matches!(plan.state, CuratedFounderGpuResidencyState::Pending)
             || curated_founder_gpu_residency_plan_fingerprint(&plan) != plan.fingerprint
         {
-            return Err(CuratedFounderResetRuntimeError::ResidencyPlanMismatch);
+            return Err(Box::new(
+                CuratedFounderResetRuntimeError::ResidencyPlanMismatch,
+            ));
         }
 
         let mut candidate_residents = BTreeMap::new();
@@ -5202,9 +5489,9 @@ impl GpuLiveBrainRuntime {
         if let Some(durability) = &self.checkpoint_durability {
             candidate_appearances
                 .seed_saved(&durability.published.save.creatures)
-                .map_err(
-                    |error| CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { error },
-                )?;
+                .map_err(|error| {
+                    Box::new(CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { error })
+                })?;
         }
         let mut candidate_memories = BTreeMap::new();
         let mut candidate_topologies = BTreeMap::new();
@@ -5221,75 +5508,83 @@ impl GpuLiveBrainRuntime {
                 .world
                 .organism_registry()
                 .get(entry.organism_id)
-                .ok_or(CuratedFounderResetRuntimeError::GpuResidencyPreSubmit {
-                    error: ScaffoldContractError::BrainOwnershipMismatch,
+                .ok_or_else(|| {
+                    Box::new(CuratedFounderResetRuntimeError::GpuResidencyPreSubmit {
+                        error: ScaffoldContractError::BrainOwnershipMismatch,
+                    })
                 })?;
             candidate_appearances.admit(record).map_err(|error| {
-                CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { error }
+                Box::new(CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { error })
             })?;
             entry.projection.validate().map_err(|error| {
-                CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { error }
+                Box::new(CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { error })
             })?;
             if entry.projection.sensor_profile() != self.sensor_profile {
-                return Err(CuratedFounderResetRuntimeError::GpuResidencyPreSubmit {
-                    error: ScaffoldContractError::SensorProfileMismatch,
-                });
+                return Err(Box::new(
+                    CuratedFounderResetRuntimeError::GpuResidencyPreSubmit {
+                        error: ScaffoldContractError::SensorProfileMismatch,
+                    },
+                ));
             }
             let phenotype = entry.projection.compiled_phenotype().clone();
             let capacity = BrainCapacityClass::production_for_id(phenotype.brain_class_id())
-                .map_err(
-                    |error| CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { error },
-                )?;
+                .map_err(|error| {
+                    Box::new(CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { error })
+                })?;
             let compiler_inputs = entry.projection.compiler_inputs().map_err(|error| {
-                CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { error }
+                Box::new(CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { error })
             })?;
             let verified = PhenotypeCompiler::compile_validated(&compiler_inputs, &capacity)
-                .map_err(
-                    |error| CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { error },
-                )?;
+                .map_err(|error| {
+                    Box::new(CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { error })
+                })?;
             if verified != phenotype
                 || verified.phenotype_hash() != entry.projection.receipt().phenotype_hash()
                 || phenotype.foundation_abi().foundation_payload_digest()
                     != Some(entry.projection.foundation_asset_digest())
             {
-                return Err(CuratedFounderResetRuntimeError::GpuResidencyPreSubmit {
-                    error: ScaffoldContractError::PhenotypeCompile,
-                });
+                return Err(Box::new(
+                    CuratedFounderResetRuntimeError::GpuResidencyPreSubmit {
+                        error: ScaffoldContractError::PhenotypeCompile,
+                    },
+                ));
             }
             let resident = ResidentCognition {
                 neural_receptors: ResidentNeuralReceptors::compile(&phenotype).map_err(
-                    |error| CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { error },
+                    |error| {
+                        Box::new(CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { error })
+                    },
                 )?,
                 phenotype: std::sync::Arc::new(phenotype.clone()),
-                genome: entry.projection.source_brain_genome().clone(),
+                genome: std::sync::Arc::new(entry.projection.source_brain_genome().clone()),
                 development: entry.projection.runtime_development_state().clone(),
                 compiler_inputs: std::sync::Arc::new(compiler_inputs),
                 legacy_nano512_compatibility_receipt: None,
                 homeostasis: HomeostaticSnapshot::baseline(plan.world_tick),
                 sleep_scheduler: GpuSleepScheduler::new(
                     sleep_consolidation_config_for(&phenotype).map_err(|error| {
-                        CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { error }
+                        Box::new(CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { error })
                     })?,
                 )
                 .map_err(|error| {
-                    CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { error }
+                    Box::new(CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { error })
                 })?,
                 next_sequence: 1,
-                language_grounding: LanguageGroundingLedger::default(),
+                language_grounding: std::sync::Arc::new(LanguageGroundingLedger::default()),
                 life_statistics: PassiveLifeStatistics::new(entry.organism_id, plan.world_tick)
-                    .map_err(
-                        |error| CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { error },
-                    )?,
+                    .map_err(|error| {
+                        Box::new(CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { error })
+                    })?,
                 attention_hysteresis: alife_core::HysteresisState::default(),
                 predictor: predictor_for_phenotype(&phenotype).map_err(|error| {
-                    CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { error }
+                    Box::new(CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { error })
                 })?,
                 approximate_cache: Default::default(),
                 last_cognitive_context: None,
                 last_selected_motor_bundle: None,
                 last_cognitive_work: CognitiveWorkReceipt::zero(),
                 last_sleep_work: None,
-                last_structural_edit_receipts: Vec::new(),
+                last_structural_edit_receipts: std::sync::Arc::new(Vec::new()),
                 last_sleep_report: None,
             };
             let raw = entry.organism_id.raw();
@@ -5298,27 +5593,37 @@ impl GpuLiveBrainRuntime {
                     .insert(raw, entry.archive_birth_manifest_digest)
                     .is_some()
             {
-                return Err(CuratedFounderResetRuntimeError::GpuResidencyPreSubmit {
-                    error: ScaffoldContractError::BrainOwnershipMismatch,
-                });
+                return Err(Box::new(
+                    CuratedFounderResetRuntimeError::GpuResidencyPreSubmit {
+                        error: ScaffoldContractError::BrainOwnershipMismatch,
+                    },
+                ));
             }
             candidate_handle_keys.push(raw);
             candidate_memories.insert(
                 raw,
-                Self::new_memory_sidecar(entry.organism_id, self.sensor_profile).map_err(
-                    |error| CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { error },
-                )?,
+                std::sync::Arc::new(
+                    Self::new_memory_sidecar(entry.organism_id, self.sensor_profile).map_err(
+                        |error| {
+                            Box::new(CuratedFounderResetRuntimeError::GpuResidencyPreSubmit {
+                                error,
+                            })
+                        },
+                    )?,
+                ),
             );
             candidate_topologies.insert(
                 raw,
-                TopologySidecar::new_profiled(
-                    entry.organism_id,
-                    profile_identity,
-                    TopologicalMapConfig::default(),
-                )
-                .map_err(|error| {
-                    CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { error }
-                })?,
+                std::sync::Arc::new(
+                    TopologySidecar::new_profiled(
+                        entry.organism_id,
+                        profile_identity,
+                        TopologicalMapConfig::default(),
+                    )
+                    .map_err(|error| {
+                        Box::new(CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { error })
+                    })?,
+                ),
             );
             ordered_entries.push(GpuCuratedResidencyEntry {
                 organism_id: entry.organism_id,
@@ -5340,16 +5645,20 @@ impl GpuLiveBrainRuntime {
         let receipt = match outcome {
             GpuCuratedResidencyOutcome::Committed(receipt) => receipt,
             GpuCuratedResidencyOutcome::PreSubmitFailure { error, .. } => {
-                return Err(CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { error });
+                return Err(Box::new(
+                    CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { error },
+                ));
             }
             GpuCuratedResidencyOutcome::Unknown { error, .. } => {
                 if let Some(plan) = self.retained_curated_founder_gpu_residency_plan.as_mut() {
                     plan.state = CuratedFounderGpuResidencyState::Unknown;
                 }
-                return Err(CuratedFounderResetRuntimeError::GpuResidencyUnknown {
-                    evidence: publication.map(CuratedFounderResetRuntimeEvidence::from_attempt),
-                    error,
-                });
+                return Err(Box::new(
+                    CuratedFounderResetRuntimeError::GpuResidencyUnknown {
+                        evidence: publication.map(CuratedFounderResetRuntimeEvidence::from_attempt),
+                        error,
+                    },
+                ));
             }
         };
         let candidate_handles = candidate_handle_keys
@@ -5366,7 +5675,9 @@ impl GpuLiveBrainRuntime {
         self.appearances = candidate_appearances;
         self.memories = candidate_memories;
         self.topologies = candidate_topologies;
-        self.retained_learning.clear();
+        if !self.retained_learning.is_empty() {
+            std::sync::Arc::make_mut(&mut self.retained_learning).clear();
+        }
         self.archive_birth_manifests = candidate_archive_birth_manifests;
         if let Some(plan) = self.retained_curated_founder_gpu_residency_plan.as_mut() {
             plan.state = CuratedFounderGpuResidencyState::Committed;
@@ -5375,11 +5686,10 @@ impl GpuLiveBrainRuntime {
     }
 
     #[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
-    #[allow(clippy::result_large_err)]
     fn note_curated_founder_durable_checkpoint(
         &mut self,
         result: &CuratedFounderResetAttempt,
-    ) -> Result<(), CuratedFounderResetRuntimeError> {
+    ) -> Result<(), Box<CuratedFounderResetRuntimeError>> {
         if !matches!(
             result.publication_status(),
             CuratedFounderPublicationStatus::Published
@@ -5390,7 +5700,7 @@ impl GpuLiveBrainRuntime {
         let durability = self
             .checkpoint_durability
             .as_ref()
-            .ok_or(CuratedFounderResetRuntimeError::MissingDurability)?;
+            .ok_or_else(|| Box::new(CuratedFounderResetRuntimeError::MissingDurability))?;
         let durable_reference = match durability.durable_reference() {
             Ok(reference) => reference,
             Err(error) => {
@@ -5400,12 +5710,12 @@ impl GpuLiveBrainRuntime {
                 }
                 let mut evidence = CuratedFounderResetRuntimeEvidence::from_attempt(result);
                 evidence.gpu_residency = CuratedFounderGpuResidencyState::Unknown;
-                return Err(
+                return Err(Box::new(
                     CuratedFounderResetRuntimeError::DurableCheckpointNotification {
                         evidence,
                         error,
                     },
-                );
+                ));
             }
         };
         if let Err(error) = self.backend.note_durable_checkpoint(durable_reference) {
@@ -5415,12 +5725,12 @@ impl GpuLiveBrainRuntime {
             }
             let mut evidence = CuratedFounderResetRuntimeEvidence::from_attempt(result);
             evidence.gpu_residency = CuratedFounderGpuResidencyState::Unknown;
-            return Err(
+            return Err(Box::new(
                 CuratedFounderResetRuntimeError::DurableCheckpointNotification {
                     evidence,
                     error: error.into(),
                 },
-            );
+            ));
         }
         Ok(())
     }
@@ -5528,6 +5838,20 @@ impl GpuLiveBrainRuntime {
         .map_err(|error| invalid(&error.to_string()))?;
         let bundle = materialize_curated_founder_bundle(&founder_plan)
             .map_err(|error| invalid(&error.to_string()))?;
+        let curated_world_records = bundle
+            .entries
+            .iter()
+            .map(|entry| {
+                WorldOrganismRecord::newborn(
+                    entry.plan_entry.organism_id,
+                    entry.plan_entry.world_entity_id,
+                    entry.genome.clone(),
+                    entry.phenotype.clone(),
+                    runtime.world.tick(),
+                )
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| invalid(&error.to_string()))?;
         let mut plan = CuratedFounderGpuResidencyPlan {
             state: CuratedFounderGpuResidencyState::Pending,
             final_save_digest: format!("test-save-digest:{}", save.save_id),
@@ -5597,6 +5921,9 @@ impl GpuLiveBrainRuntime {
         runtime.retained_curated_founder_gpu_residency_plan = Some(invalid_plan);
         record_rejection(&runtime)?;
 
+        for record in curated_world_records {
+            runtime.world.replace_organism_record_exact(record)?;
+        }
         runtime.retained_curated_founder_gpu_residency_plan = Some(plan);
         let receipt = runtime
             .commit_retained_curated_founder_gpu_residency(None)
@@ -5983,12 +6310,12 @@ impl GpuLiveBrainRuntime {
             appearances: CreatureAppearanceCache::default(),
             memories: BTreeMap::new(),
             topologies: BTreeMap::new(),
-            sleep_journal_neural_authorities: BTreeMap::new(),
+            sleep_journal_neural_authorities: std::sync::Arc::new(BTreeMap::new()),
             live_policy_exact_base_required: false,
-            pending_recovery_sleep_edges: BTreeMap::new(),
-            pending_exact_sleep_journal_entries: Vec::new(),
+            pending_recovery_sleep_edges: std::sync::Arc::new(BTreeMap::new()),
+            pending_exact_sleep_journal_entries: std::sync::Arc::new(Vec::new()),
             sleep_journal_publication_worker: None,
-            pending_sleep_journal_entries: Vec::new(),
+            pending_sleep_journal_entries: std::sync::Arc::new(Vec::new()),
             sleep_journal_capacity: SleepJournalCapacity::default(),
             #[cfg(all(test, feature = "gpu-tests"))]
             sleep_journal_capacity_override: None,
@@ -5999,7 +6326,7 @@ impl GpuLiveBrainRuntime {
             exact_checkpoint_waiting_for_sleep_journal: false,
             manual_checkpoint_waiting_for_sleep_journal: None,
             post_irreversible_gpu_commit_fail_stop_armed: false,
-            retained_learning: BTreeMap::new(),
+            retained_learning: std::sync::Arc::new(BTreeMap::new()),
             world,
             deterministic_seed,
             brain_class,
@@ -6009,8 +6336,11 @@ impl GpuLiveBrainRuntime {
             schedule_sleep: options.schedule_sleep,
             sealed_patches: Vec::new(),
             staged_sealed_patches_rollback: StagedSealedPatchesRollback::Inactive,
+            staged_predictor_undos: None,
+            staged_memory_undos: None,
+            staged_last_sealed_patches_backup: None,
             sealed_patch_count: 0,
-            restored_replay_patches: Vec::new(),
+            restored_replay_patches: std::sync::Arc::new(Vec::new()),
             last_sealed_patches: Vec::new(),
             observe_sidecars: options.observe_sidecars,
             retain_sealed_patch_history: options.retain_sealed_patch_history,
@@ -6057,8 +6387,25 @@ impl GpuLiveBrainRuntime {
             retirement_backend_removal_count: 0,
             #[cfg(any(test, feature = "gpu-tests"))]
             forced_late_advance_failure: false,
+            world_mutation_epoch: 0,
+            pipelined_next_prep: None,
         };
         Ok(runtime)
+    }
+
+    pub(crate) fn invalidate_pipelined_next_prep(&mut self) {
+        self.world_mutation_epoch = self.world_mutation_epoch.wrapping_add(1);
+        self.pipelined_next_prep = None;
+    }
+
+    #[cfg(all(test, feature = "gpu-tests"))]
+    pub(crate) fn has_pipelined_next_prep_for_test(&self) -> bool {
+        self.pipelined_next_prep.is_some()
+    }
+
+    #[cfg(all(test, feature = "gpu-tests"))]
+    pub(crate) fn world_mutation_epoch_for_test(&self) -> u64 {
+        self.world_mutation_epoch
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -6345,7 +6692,7 @@ impl GpuLiveBrainRuntime {
                         neural_receptors: ResidentNeuralReceptors::compile(&authority.phenotype)?,
                         approximate_cache: Default::default(),
                         phenotype: std::sync::Arc::new(authority.phenotype.clone()),
-                        genome: authority.genome.clone(),
+                        genome: std::sync::Arc::new(authority.genome.clone()),
                         development: authority.development.clone(),
                         compiler_inputs: std::sync::Arc::new(authority.compiler_inputs.clone()),
                         legacy_nano512_compatibility_receipt: authority
@@ -6354,16 +6701,19 @@ impl GpuLiveBrainRuntime {
                         homeostasis: authority.biochemistry.homeostasis,
                         sleep_scheduler,
                         next_sequence,
-                        language_grounding: restored.language_grounding,
+                        language_grounding: std::sync::Arc::new(restored.language_grounding),
                         life_statistics,
                         attention_hysteresis,
                         predictor,
-                        last_cognitive_context,
-                        last_selected_motor_bundle,
+                        last_cognitive_context: last_cognitive_context.map(std::sync::Arc::new),
+                        last_selected_motor_bundle: last_selected_motor_bundle
+                            .map(std::sync::Arc::new),
                         last_cognitive_work,
                         last_sleep_work,
-                        last_structural_edit_receipts,
-                        last_sleep_report,
+                        last_structural_edit_receipts: std::sync::Arc::new(
+                            last_structural_edit_receipts,
+                        ),
+                        last_sleep_report: last_sleep_report.map(std::sync::Arc::new),
                     };
                     Ok((
                         resident,
@@ -6403,15 +6753,18 @@ impl GpuLiveBrainRuntime {
                 };
                 runtime.handles.insert(raw, handle);
                 runtime.residents.insert(raw, resident);
-                runtime.memories.insert(raw, memory);
-                runtime.topologies.insert(raw, topology);
-                runtime.restored_replay_patches.extend(replay_patches);
+                runtime.memories.insert(raw, std::sync::Arc::new(memory));
+                runtime
+                    .topologies
+                    .insert(raw, std::sync::Arc::new(topology));
+                std::sync::Arc::make_mut(&mut runtime.restored_replay_patches)
+                    .extend(replay_patches);
                 tracked_object_states.push(tracked_objects);
                 if let Some(discard) = discarded_eligibility {
                     runtime.last_eligibility_discard_receipts.push(discard);
                 }
                 if let Some(recovery) = retained_learning {
-                    runtime.retained_learning.insert(raw, recovery);
+                    std::sync::Arc::make_mut(&mut runtime.retained_learning).insert(raw, recovery);
                 }
             } else {
                 let (_, resident) =
@@ -6427,8 +6780,10 @@ impl GpuLiveBrainRuntime {
                     .insert_brain(organism_id, (*resident.phenotype).clone())?;
                 runtime.handles.insert(raw, handle);
                 runtime.residents.insert(raw, resident);
-                runtime.memories.insert(raw, memory);
-                runtime.topologies.insert(raw, topology);
+                runtime.memories.insert(raw, std::sync::Arc::new(memory));
+                runtime
+                    .topologies
+                    .insert(raw, std::sync::Arc::new(topology));
             }
         }
         if let Err(error) = runtime
@@ -6541,10 +6896,10 @@ impl GpuLiveBrainRuntime {
             &replay_patches,
             GpuBrainSidecarCapture {
                 sensor_profile: memory.profile(),
-                memory,
-                topology,
+                memory: memory.as_ref(),
+                topology: topology.as_ref(),
                 tracked_objects: self.world.tracked_objects().save_state(organism_id)?,
-                language_grounding: &resident.language_grounding,
+                language_grounding: resident.language_grounding.as_ref(),
                 life_statistics: &resident.life_statistics,
                 legacy_nano512_compatibility_receipt: resident
                     .legacy_nano512_compatibility_receipt
@@ -6609,20 +6964,19 @@ impl GpuLiveBrainRuntime {
         resident: &ResidentCognition,
         checkpoint_tick: Tick,
     ) -> Result<ExactCognitiveHostSnapshotV1, GameAppShellError> {
-        let mut cognitive_context =
-            resident
-                .last_cognitive_context
-                .clone()
-                .unwrap_or(CognitiveContextFrame::empty(
-                    organism_id,
-                    ExperienceSequenceId(resident.next_sequence.max(1)),
-                    checkpoint_tick,
-                )?);
+        let mut cognitive_context = match resident.last_cognitive_context.as_deref() {
+            Some(context) => context.clone(),
+            None => CognitiveContextFrame::empty(
+                organism_id,
+                ExperienceSequenceId(resident.next_sequence.max(1)),
+                checkpoint_tick,
+            )?,
+        };
         cognitive_context.world_tick = checkpoint_tick;
         cognitive_context.attention.world_tick = checkpoint_tick;
         cognitive_context.validate_contract()?;
 
-        let mut selected_motor_bundle = resident.last_selected_motor_bundle.clone();
+        let mut selected_motor_bundle = resident.last_selected_motor_bundle.as_deref().cloned();
         if let Some(bundle) = &mut selected_motor_bundle {
             bundle.tick = checkpoint_tick;
             bundle.validate_contract()?;
@@ -6637,8 +6991,8 @@ impl GpuLiveBrainRuntime {
             cognitive_work: resident.last_cognitive_work,
             sleep_state: resident.sleep_scheduler.state(),
             last_sleep_work: resident.last_sleep_work.clone(),
-            structural_edit_receipts: resident.last_structural_edit_receipts.clone(),
-            last_sleep_report: resident.last_sleep_report.clone(),
+            structural_edit_receipts: (*resident.last_structural_edit_receipts).clone(),
+            last_sleep_report: resident.last_sleep_report.as_deref().cloned(),
             private_semantic_prior: None,
             private_training_sampling: None,
         })
@@ -6707,6 +7061,7 @@ impl GpuLiveBrainRuntime {
         child_organism_id: OrganismId,
         conception_seed: u64,
     ) -> Result<(), GameAppShellError> {
+        self.invalidate_pipelined_next_prep();
         let invalid_receipt =
             |message: String| GameAppShellError::InvalidProductionFrontend { message };
         let expected = self
@@ -6790,7 +7145,7 @@ impl GpuLiveBrainRuntime {
                 .handles
                 .get(&organism_id.raw())
                 .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-            if resident.genome != admission.phenotype.brain_genome
+            if *resident.genome != admission.phenotype.brain_genome
                 || handle.organism_id() != organism_id
                 || handle.phenotype_hash() != resident.phenotype.phenotype_hash()
             {
@@ -6871,9 +7226,42 @@ impl GpuLiveBrainRuntime {
             child_organism_id,
         )?;
 
+        candidate_world.adopt_staged_transaction_from(&mut self.world);
         self.world = candidate_world;
         self.reconcile_population()?;
         Ok(())
+    }
+
+    pub(super) fn retain_last_sealed_patches_for_live_handles(&mut self) {
+        if self
+            .last_sealed_patches
+            .iter()
+            .any(|patch| !self.handles.contains_key(&patch.header().organism_id.raw()))
+        {
+            if matches!(self.staged_last_sealed_patches_backup, Some(None)) {
+                self.staged_last_sealed_patches_backup =
+                    Some(Some(self.last_sealed_patches.clone()));
+            }
+            self.last_sealed_patches
+                .retain(|patch| self.handles.contains_key(&patch.header().organism_id.raw()));
+        }
+    }
+
+    fn remove_resident_cognition_and_sidecars(&mut self, raw: u64) {
+        if let Some(removed) = self.residents.remove(&raw) {
+            if let Some(undos) = self.staged_predictor_undos.as_mut() {
+                undos.push(StagedPredictorUndo::FullSnapshot(
+                    raw,
+                    Some(removed.predictor),
+                ));
+            }
+        }
+        if let Some(removed_memory) = self.memories.remove(&raw) {
+            if let Some(undos) = self.staged_memory_undos.as_mut() {
+                undos.push(StagedMemoryUndo::Replace(raw, Some(removed_memory)));
+            }
+        }
+        self.topologies.remove(&raw);
     }
 
     pub fn reconcile_population(&mut self) -> Result<(), GameAppShellError> {
@@ -6908,9 +7296,7 @@ impl GpuLiveBrainRuntime {
                 .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
             self.backend.remove_brain(handle)?;
             self.handles.remove(&raw);
-            self.residents.remove(&raw);
-            self.memories.remove(&raw);
-            self.topologies.remove(&raw);
+            self.remove_resident_cognition_and_sidecars(raw);
         }
 
         for raw in live_ids {
@@ -6965,20 +7351,30 @@ impl GpuLiveBrainRuntime {
                 self.backend.remove_brain(handle)?;
                 return Err(ScaffoldContractError::BrainOwnershipMismatch.into());
             }
+            candidate_world.adopt_staged_transaction_from(&mut self.world);
             self.world = candidate_world;
             if let Some(digest) = birth_manifest_digest {
                 self.archive_birth_manifests.insert(raw, digest);
             }
             self.handles.insert(raw, handle);
+            if let Some(undos) = self.staged_predictor_undos.as_mut() {
+                let previous = self
+                    .residents
+                    .get(&raw)
+                    .map(|existing| existing.predictor.clone());
+                undos.push(StagedPredictorUndo::FullSnapshot(raw, previous));
+            }
             self.residents.insert(raw, resident);
-            self.memories.insert(raw, memory);
-            self.topologies.insert(raw, topology);
+            let previous_memory = self.memories.insert(raw, std::sync::Arc::new(memory));
+            if let Some(undos) = self.staged_memory_undos.as_mut() {
+                undos.push(StagedMemoryUndo::Replace(raw, previous_memory));
+            }
+            self.topologies.insert(raw, std::sync::Arc::new(topology));
         }
         if !self.retain_sealed_patch_history {
             self.retain_bounded_replay_patches(&[]);
         }
-        self.last_sealed_patches
-            .retain(|patch| self.handles.contains_key(&patch.header().organism_id.raw()));
+        self.retain_last_sealed_patches_for_live_handles();
         let resident_set_after = self.handles.keys().copied().collect::<BTreeSet<_>>();
         // Every resident was admitted above. Retirements can precede this call,
         // so compare cache size rather than only the before/after resident sets.
@@ -6987,6 +7383,7 @@ impl GpuLiveBrainRuntime {
         }
         self.sleep_journal_capacity.admit_population(population)?;
         if resident_set_after != resident_set_before {
+            self.invalidate_pipelined_next_prep();
             if let Err(error) = self.request_exact_population_checkpoint() {
                 self.backend
                     .fail_stop(GpuSessionFailStopCause::CheckpointRestoreFailed);
@@ -7025,6 +7422,7 @@ impl GpuLiveBrainRuntime {
         organism_id: OrganismId,
         death_reason: &str,
     ) -> Result<ArchiveRetirementReceipt, GameAppShellError> {
+        self.invalidate_pipelined_next_prep();
         organism_id.validate()?;
         if death_reason.trim().is_empty() || death_reason.chars().count() > 160 {
             return Err(ScaffoldContractError::InvalidId.into());
@@ -7135,30 +7533,45 @@ impl GpuLiveBrainRuntime {
             self.backend.remove_brain(handle)?;
             self.handles.remove(&raw);
         }
-        self.residents.remove(&raw);
-        self.memories.remove(&raw);
+        self.remove_resident_cognition_and_sidecars(raw);
         self.training_sampling_resume.remove(&raw);
-        self.topologies.remove(&raw);
-        self.retained_learning.remove(&raw);
-        self.pending_recovery_sleep_edges.remove(&raw);
+        if self.retained_learning.contains_key(&raw) {
+            std::sync::Arc::make_mut(&mut self.retained_learning).remove(&raw);
+        }
+        if self.pending_recovery_sleep_edges.contains_key(&raw) {
+            std::sync::Arc::make_mut(&mut self.pending_recovery_sleep_edges).remove(&raw);
+        }
         let (final_record, _) = self.world.retire_dead_organism(organism_id)?;
         #[cfg(feature = "foundation-training")]
         self.last_foundation_terminal_biology
             .insert(raw, *final_record.biochemistry());
         // Archive completion supersedes unpublished live sleep transitions.
         // Workers already publishing an older checkpoint retain their inputs.
-        self.pending_sleep_journal_entries
-            .retain(|entry| entry.organism_id != organism_id);
-        self.pending_exact_sleep_journal_entries
-            .retain(|entry| entry.organism_id != organism_id);
-        self.sleep_journal_neural_authorities.remove(&raw);
+        if self
+            .pending_sleep_journal_entries
+            .iter()
+            .any(|entry| entry.organism_id == organism_id)
+        {
+            std::sync::Arc::make_mut(&mut self.pending_sleep_journal_entries)
+                .retain(|entry| entry.organism_id != organism_id);
+        }
+        if self
+            .pending_exact_sleep_journal_entries
+            .iter()
+            .any(|entry| entry.organism_id == organism_id)
+        {
+            std::sync::Arc::make_mut(&mut self.pending_exact_sleep_journal_entries)
+                .retain(|entry| entry.organism_id != organism_id);
+        }
+        if self.sleep_journal_neural_authorities.contains_key(&raw) {
+            std::sync::Arc::make_mut(&mut self.sleep_journal_neural_authorities).remove(&raw);
+        }
         self.presentation_retirements
             .insert(final_record.world_entity_id().raw());
         if !self.retain_sealed_patch_history {
             self.retain_bounded_replay_patches(&[]);
         }
-        self.last_sealed_patches
-            .retain(|patch| self.handles.contains_key(&patch.header().organism_id.raw()));
+        self.retain_last_sealed_patches_for_live_handles();
         Ok(receipt)
     }
 
@@ -7284,7 +7697,7 @@ impl GpuLiveBrainRuntime {
         let mut memory = self
             .memories
             .get(&organism_id.raw())
-            .cloned()
+            .map(|memory| (**memory).clone())
             .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
         let max_records_after = u32::try_from(memory.bank().capacity())
             .map_err(|_| ScaffoldContractError::InvalidMemoryQuery)?;
@@ -7341,7 +7754,7 @@ impl GpuLiveBrainRuntime {
         match result {
             Ok(receipt) => {
                 self.post_irreversible_gpu_commit_fail_stop_armed = true;
-                self.retained_learning.remove(&raw);
+                std::sync::Arc::make_mut(&mut self.retained_learning).remove(&raw);
                 self.last_learning_receipts.push(receipt);
                 if !self.retain_sealed_patch_history {
                     self.retain_bounded_replay_patches(std::slice::from_ref(&recovery_patch));
@@ -7364,8 +7777,10 @@ impl GpuLiveBrainRuntime {
     ) -> Result<bool, GameAppShellError> {
         let raw = organism_id.raw();
         let attempts = {
-            let recovery = self
-                .retained_learning
+            if !self.retained_learning.contains_key(&raw) {
+                return Err(ScaffoldContractError::LearningEvidenceMismatch.into());
+            }
+            let recovery = std::sync::Arc::make_mut(&mut self.retained_learning)
                 .get_mut(&raw)
                 .ok_or(ScaffoldContractError::LearningEvidenceMismatch)?;
             recovery.attempts = recovery.attempts.saturating_add(1);
@@ -7467,6 +7882,11 @@ impl GpuLiveBrainRuntime {
     }
 
     pub fn tick_outcome(&mut self) -> Result<GpuLiveTickOutcome, GameAppShellError> {
+        let _span = tracing::debug_span!(
+            "live_runtime_tick",
+            tick_calls = self.performance_metrics.tick_calls
+        )
+        .entered();
         let started = Instant::now();
         let result =
             self.tick_with_sleep_progress_outcome(|backend, handle, organism_id, state, intent| {
@@ -7481,6 +7901,9 @@ impl GpuLiveBrainRuntime {
                 };
                 driver.progress(organism_id, state, intent)
             });
+        if let Err(error) = &result {
+            tracing::warn!(%error, "live GPU runtime tick failed");
+        }
         self.performance_metrics.tick_calls = self.performance_metrics.tick_calls.saturating_add(1);
         self.performance_metrics.tick_wall_ns = self
             .performance_metrics
@@ -7571,6 +7994,7 @@ impl GpuLiveBrainRuntime {
         organism_id: OrganismId,
         tick: Tick,
     ) -> Result<SleepTransition, GameAppShellError> {
+        self.invalidate_pipelined_next_prep();
         let resident = self
             .residents
             .get_mut(&organism_id.raw())
@@ -7582,11 +8006,12 @@ impl GpuLiveBrainRuntime {
             });
         }
         let transition = resident.sleep_scheduler.force_recovery_sleep(tick)?;
-        self.pending_recovery_sleep_edges
+        let after = resident.sleep_scheduler.state();
+        std::sync::Arc::make_mut(&mut self.pending_recovery_sleep_edges)
             .entry(organism_id.raw())
             .or_insert(PendingRecoverySleepEdge {
                 source,
-                target: resident.sleep_scheduler.state(),
+                target: after,
             });
         Ok(transition)
     }
@@ -7688,6 +8113,8 @@ impl GpuLiveBrainRuntime {
             staged_sleep.restore(self);
         } else {
             self.staged_sealed_patches_rollback = StagedSealedPatchesRollback::Inactive;
+            self.staged_memory_undos = None;
+            self.staged_last_sealed_patches_backup = None;
         }
         self.performance_metrics.rollback_clone_calls = self
             .performance_metrics
@@ -7988,6 +8415,7 @@ impl GpuLiveBrainRuntime {
         id: WorldEntityId,
         name: &str,
     ) -> Result<(), alife_world::RenameAgentError> {
+        self.invalidate_pipelined_next_prep();
         rename_player_creature_in_world(&mut self.world, id, name)
     }
 
@@ -7997,6 +8425,7 @@ impl GpuLiveBrainRuntime {
         &mut self,
         position: Vec3f,
     ) -> Result<PlayerResourcePlacementReceipt, GameAppShellError> {
+        self.invalidate_pipelined_next_prep();
         place_food_in_world(&mut self.world, position)
     }
 
@@ -8006,18 +8435,22 @@ impl GpuLiveBrainRuntime {
         source: WorldEntityId,
         position: Vec3f,
     ) -> Result<Vec3f, GameAppShellError> {
+        self.invalidate_pipelined_next_prep();
         move_food_in_world(&mut self.world, source, position)
     }
 
     pub fn begin_player_hold(&mut self, source: WorldEntityId) -> Result<Vec3f, GameAppShellError> {
+        self.invalidate_pipelined_next_prep();
         Ok(self.world.begin_player_hold(source)?)
     }
 
     pub fn move_player_hold(&mut self, ground: Vec3f) -> Result<Vec3f, GameAppShellError> {
+        self.invalidate_pipelined_next_prep();
         Ok(self.world.move_player_hold(ground)?)
     }
 
     pub fn release_player_hold(&mut self) -> Result<Option<WorldEntityId>, GameAppShellError> {
+        self.invalidate_pipelined_next_prep();
         Ok(self.world.release_player_hold()?)
     }
 
@@ -8027,6 +8460,7 @@ impl GpuLiveBrainRuntime {
         source: Vec3f,
         praise: bool,
     ) -> Result<(), GameAppShellError> {
+        self.invalidate_pipelined_next_prep();
         self.world.queue_player_care(organism, source, praise)?;
         Ok(())
     }
@@ -8037,6 +8471,7 @@ impl GpuLiveBrainRuntime {
         &mut self,
         organism: OrganismId,
     ) -> Result<WorldEntityId, GameAppShellError> {
+        self.invalidate_pipelined_next_prep();
         let object = self
             .world
             .organism_registry()
@@ -8110,6 +8545,7 @@ impl GpuLiveBrainRuntime {
         &mut self,
         receipt: HabitatPermissionReceipt,
     ) -> Result<Vec<LiveBrainTickSummary>, GameAppShellError> {
+        self.invalidate_pipelined_next_prep();
         let expected = self
             .authorize_structured_education(receipt.organism_id, receipt.habitat_id, receipt.actor)
             .map_err(|error| GameAppShellError::InvalidProductionFrontend {
@@ -8172,6 +8608,7 @@ impl GpuLiveBrainRuntime {
         &mut self,
         authority: alife_world::HabitatAuthority,
     ) -> Result<(), alife_world::HabitatAuthorityError> {
+        self.invalidate_pipelined_next_prep();
         self.world.replace_habitat_authority(authority)
     }
 
@@ -8181,6 +8618,7 @@ impl GpuLiveBrainRuntime {
         source_position: Vec3f,
         tokens: Vec<alife_core::LanguageTokenId>,
     ) -> Result<alife_world::AudibleUtterance, GameAppShellError> {
+        self.invalidate_pipelined_next_prep();
         Ok(self
             .world
             .emit_player_tokens(addressee, source_position, tokens)?)
@@ -9012,6 +9450,7 @@ impl GpuLiveBrainRuntime {
         let sealed = seal_prepared_selection_core(
             &mut self.world,
             &mut self.residents,
+            self.staged_predictor_undos.as_mut(),
             self.sealed_patch_count,
             self.cognitive_work_cost_policy,
             self.schedule_sleep,
@@ -9070,6 +9509,7 @@ impl GpuLiveBrainRuntime {
         &mut self,
         mut sealed: Vec<SealedLiveSelection>,
     ) -> Result<Vec<LiveBrainTickSummary>, GameAppShellError> {
+        self.pipelined_next_prep = None;
         if sealed.is_empty() {
             return Ok(Vec::new());
         }
@@ -9086,11 +9526,11 @@ impl GpuLiveBrainRuntime {
                 )
             })
             .collect::<Vec<_>>();
-        let learning_started = Instant::now();
+        let submit_started = Instant::now();
         // Developmental binding is part of the fallible learning attempt:
         // failures must retain eligibility and still reach both post-seal
         // sidecars, just like a rejected GPU learning dispatch.
-        let learning_result = sealed
+        let pending_learning = sealed
             .iter()
             .try_for_each(|selection| {
                 self.bind_learning_development(
@@ -9098,7 +9538,36 @@ impl GpuLiveBrainRuntime {
                     selection.patch.outcome().outcome_tick,
                 )
             })
-            .and_then(|()| self.backend.apply_sealed_outcome_batch(&learning_batch));
+            .and_then(|()| self.backend.submit_sealed_outcome_batch(&learning_batch));
+        let submit_wall_ns = elapsed_ns(submit_started);
+
+        // Overlap CPU sidecar observation and next-tick CPU preparation with
+        // the in-flight GPU fast-plasticity submission before polling device completion.
+        let (memory_updates, topology_updates) = if self.observe_sidecars {
+            let memory_started = Instant::now();
+            let memory_updates = self.observe_sealed_memory(&sealed);
+            self.performance_metrics.sidecar_memory_wall_ns = self
+                .performance_metrics
+                .sidecar_memory_wall_ns
+                .saturating_add(elapsed_ns(memory_started));
+            let topology_started = Instant::now();
+            let topology_updates = self.observe_sealed_topology(&sealed);
+            self.performance_metrics.sidecar_topology_wall_ns = self
+                .performance_metrics
+                .sidecar_topology_wall_ns
+                .saturating_add(elapsed_ns(topology_started));
+            (memory_updates, topology_updates)
+        } else {
+            (vec![false; sealed.len()], vec![false; sealed.len()])
+        };
+        if pending_learning.is_ok() {
+            self.try_pipeline_next_tick_cpu_preparation(&sealed);
+        }
+
+        let complete_started = Instant::now();
+        let learning_result = pending_learning
+            .and_then(|pending| self.backend.complete_sealed_outcome_batch(pending));
+        let complete_wall_ns = elapsed_ns(complete_started);
         self.performance_metrics.learning_batches =
             self.performance_metrics.learning_batches.saturating_add(1);
         self.performance_metrics.learning_rows = self
@@ -9108,28 +9577,28 @@ impl GpuLiveBrainRuntime {
         self.performance_metrics.learning_transaction_wall_ns = self
             .performance_metrics
             .learning_transaction_wall_ns
-            .saturating_add(
-                u64::try_from(learning_started.elapsed().as_nanos()).unwrap_or(u64::MAX),
-            );
+            .saturating_add(submit_wall_ns.saturating_add(complete_wall_ns));
         let learning = match learning_result {
             Ok(receipts) if receipts.len() == sealed.len() => {
                 self.post_irreversible_gpu_commit_fail_stop_armed = true;
                 Some(receipts)
             }
             Ok(_) => {
+                self.pipelined_next_prep = None;
                 self.post_irreversible_gpu_commit_fail_stop_armed = true;
                 self.backend
                     .fail_stop(GpuSessionFailStopCause::CheckpointRestoreFailed);
                 return Err(ScaffoldContractError::LearningEvidenceMismatch.into());
             }
             Err(error) => {
+                self.pipelined_next_prep = None;
                 let error_code = RetainedLearningErrorCode::from_error(&error);
                 for selection in &sealed {
                     let organism_id = selection.handle.organism_id();
                     let retained_for_recovery =
                         !self.retained_learning.contains_key(&organism_id.raw());
                     if retained_for_recovery {
-                        self.retained_learning.insert(
+                        std::sync::Arc::make_mut(&mut self.retained_learning).insert(
                             organism_id.raw(),
                             RetainedLearningRecovery {
                                 handle: selection.handle,
@@ -9175,24 +9644,6 @@ impl GpuLiveBrainRuntime {
                 .learning_readback_bytes
                 .saturating_add(u64::try_from(learning_readback).unwrap_or(u64::MAX));
         }
-
-        let (memory_updates, topology_updates) = if self.observe_sidecars {
-            let memory_started = Instant::now();
-            let memory_updates = self.observe_sealed_memory(&sealed);
-            self.performance_metrics.sidecar_memory_wall_ns = self
-                .performance_metrics
-                .sidecar_memory_wall_ns
-                .saturating_add(elapsed_ns(memory_started));
-            let topology_started = Instant::now();
-            let topology_updates = self.observe_sealed_topology(&sealed);
-            self.performance_metrics.sidecar_topology_wall_ns = self
-                .performance_metrics
-                .sidecar_topology_wall_ns
-                .saturating_add(elapsed_ns(topology_started));
-            (memory_updates, topology_updates)
-        } else {
-            (vec![false; sealed.len()], vec![false; sealed.len()])
-        };
 
         let cognitive_authority_seal_started = Instant::now();
         let mut authority_receipts = Vec::with_capacity(sealed.len());
@@ -9312,23 +9763,65 @@ impl GpuLiveBrainRuntime {
         } else if learning_committed {
             self.retain_bounded_replay_patches(&committed_patches);
         }
-        let mut last_patch_index_by_organism = self
-            .last_sealed_patches
-            .iter()
-            .enumerate()
-            .map(|(index, patch)| (patch.header().organism_id.raw(), index))
-            .collect::<BTreeMap<_, _>>();
-        for patch in committed_patches {
-            let organism_id = patch.header().organism_id;
-            if let Some(index) = last_patch_index_by_organism
-                .get(&organism_id.raw())
-                .copied()
-            {
-                self.last_sealed_patches[index] = patch;
-            } else {
-                last_patch_index_by_organism
-                    .insert(organism_id.raw(), self.last_sealed_patches.len());
-                self.last_sealed_patches.push(patch);
+        if matches!(self.staged_last_sealed_patches_backup, Some(None)) {
+            let previous = std::mem::take(&mut self.last_sealed_patches);
+            self.staged_last_sealed_patches_backup = Some(Some(previous));
+            let previous_ref = self
+                .staged_last_sealed_patches_backup
+                .as_ref()
+                .and_then(|inner| inner.as_ref())
+                .expect("previous last_sealed_patches just stored");
+            let mut committed_by_organism = BTreeMap::<u64, usize>::new();
+            let mut committed_slots: Vec<Option<ExperiencePatch>> =
+                committed_patches.into_iter().map(Some).collect();
+            for slot_idx in 0..committed_slots.len() {
+                let organism_raw = committed_slots[slot_idx]
+                    .as_ref()
+                    .expect("initial committed slot")
+                    .header()
+                    .organism_id
+                    .raw();
+                if let Some(prev_idx) = committed_by_organism.insert(organism_raw, slot_idx) {
+                    committed_slots[prev_idx] = None;
+                }
+            }
+            let mut next_patches =
+                Vec::with_capacity(previous_ref.len().saturating_add(committed_slots.len()));
+            for patch in previous_ref {
+                let organism_raw = patch.header().organism_id.raw();
+                if let Some(&slot_idx) = committed_by_organism.get(&organism_raw) {
+                    if let Some(committed) = committed_slots[slot_idx].take() {
+                        next_patches.push(committed);
+                    } else {
+                        next_patches.push(patch.clone());
+                    }
+                } else {
+                    next_patches.push(patch.clone());
+                }
+            }
+            for patch in committed_slots.into_iter().flatten() {
+                next_patches.push(patch);
+            }
+            self.last_sealed_patches = next_patches;
+        } else {
+            let mut last_patch_index_by_organism = self
+                .last_sealed_patches
+                .iter()
+                .enumerate()
+                .map(|(index, patch)| (patch.header().organism_id.raw(), index))
+                .collect::<BTreeMap<_, _>>();
+            for patch in committed_patches {
+                let organism_id = patch.header().organism_id;
+                if let Some(index) = last_patch_index_by_organism
+                    .get(&organism_id.raw())
+                    .copied()
+                {
+                    self.last_sealed_patches[index] = patch;
+                } else {
+                    last_patch_index_by_organism
+                        .insert(organism_id.raw(), self.last_sealed_patches.len());
+                    self.last_sealed_patches.push(patch);
+                }
             }
         }
         if curated_first_tick_succeeded {
@@ -9337,22 +9830,206 @@ impl GpuLiveBrainRuntime {
         Ok(summaries)
     }
 
+    fn try_pipeline_next_tick_cpu_preparation(&mut self, sealed: &[SealedLiveSelection]) {
+        self.pipelined_next_prep = None;
+        if self.curated_first_tick_pending
+            || (self.semantic_prior.is_some()
+                && self.sensor_profile == SensorProfile::GroundedTerrainVisionV1)
+            || sealed.is_empty()
+            || sealed.len() != self.handles.len()
+        {
+            return;
+        }
+        let target_tick = sealed[0].patch.outcome().outcome_tick;
+        if !sealed
+            .iter()
+            .all(|s| s.patch.outcome().outcome_tick == target_tick)
+            || !self
+                .world
+                .can_speculate_perception_at_next_tick(target_tick)
+        {
+            return;
+        }
+        let audited_cognition = self.uses_audited_cognition();
+        let sensor_profile = self.sensor_profile;
+        let measure = self.performance_measurement_enabled;
+        let world_mutation_epoch = self.world_mutation_epoch;
+        let handles_snapshot = self
+            .handles
+            .iter()
+            .map(|(&raw, &handle)| (raw, handle))
+            .collect::<Vec<_>>();
+        let world = &mut self.world;
+        let residents = &mut self.residents;
+        let memories = &self.memories;
+        let topologies = &self.topologies;
+
+        let speculative = world.with_speculative_next_tick_tracked_objects(target_tick, |world| {
+            let perception_index = world.build_perception_batch_index()?;
+            let mut grounded_perception_wall_ns = 0_u64;
+            let mut keys = Vec::with_capacity(handles_snapshot.len());
+            let mut captured_rows = Vec::with_capacity(handles_snapshot.len());
+            for (raw, handle) in &handles_snapshot {
+                let grounded_started = measure.then(Instant::now);
+                let organism = world
+                    .organism_registry()
+                    .get(OrganismId(*raw))
+                    .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+                if !organism.lifecycle().is_alive() || organism.biochemistry().tick != target_tick {
+                    return Err(ScaffoldContractError::InvalidDecisionEvidence);
+                }
+                let world_entity_id = organism.world_entity_id();
+                let homeostasis = organism.biochemistry().homeostasis;
+                let embodiment_revision = organism.state_graph().embodiment.revision;
+                let neural_receptors = organism
+                    .biochemistry()
+                    .neural_receptor_frame(organism.phenotype())?;
+                if neural_receptors.source_tick != target_tick {
+                    return Err(ScaffoldContractError::InvalidDecisionEvidence);
+                }
+                let resident = residents
+                    .get_mut(raw)
+                    .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+                if resident.sleep_scheduler.state().phase != SleepPhase::Awake {
+                    return Err(ScaffoldContractError::InvalidDecisionEvidence);
+                }
+                let receptor_effects = resident
+                    .neural_receptors
+                    .effects_for(&resident.phenotype, &neural_receptors)?;
+                let sequence_id = ExperienceSequenceId(resident.next_sequence);
+                let hysteresis = resident.attention_hysteresis;
+                let policy = attention_selection_policy_for(&resident.phenotype);
+                let approximate_cache =
+                    (!audited_cognition).then(|| resident.approximate_cache.clone());
+                let memory_binding = memories
+                    .get(raw)
+                    .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+                    .runtime_generation_binding();
+                let topology_digest = topologies
+                    .get(raw)
+                    .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+                    .diagnostics()
+                    .canonical_digest;
+                let draft = world.perception_frame_draft_indexed(
+                    OrganismId(*raw),
+                    target_tick,
+                    sensor_profile,
+                    homeostasis,
+                    &perception_index,
+                )?;
+                grounded_perception_wall_ns = grounded_perception_wall_ns
+                    .saturating_add(grounded_started.map_or(0, elapsed_ns));
+                keys.push((
+                    *raw,
+                    PipelinedOrganismKey {
+                        handle: *handle,
+                        world_entity_id,
+                        homeostasis,
+                        neural_receptors: neural_receptors.clone(),
+                        embodiment_revision,
+                        sequence_id,
+                        hysteresis,
+                        memory_binding,
+                        topology_digest,
+                    },
+                ));
+                captured_rows.push(cpu_preparation::CapturedLivePreparation {
+                    handle: *handle,
+                    world_entity_id,
+                    input: cpu_preparation::CapturedCpuPreparation {
+                        approximate_cache,
+                        draft,
+                        sequence_id,
+                        homeostasis,
+                        hysteresis,
+                        policy,
+                        neural_receptors,
+                        receptor_effects,
+                    },
+                });
+            }
+            Ok((keys, captured_rows, grounded_perception_wall_ns))
+        });
+        let Ok(((keys, captured_rows, grounded_perception_wall_ns), next_tracked_objects)) =
+            speculative
+        else {
+            return;
+        };
+        let workers = cpu_preparation::preparation_worker_count(
+            captured_rows.len(),
+            std::thread::available_parallelism().map_or(1, usize::from),
+        );
+        let Ok(outcomes) = self.prepare_captured_cpu_rows(&captured_rows, workers, measure) else {
+            return;
+        };
+        if outcomes.len() != captured_rows.len() || outcomes.iter().any(|o| o.result.is_err()) {
+            return;
+        }
+        let mut organisms = BTreeMap::new();
+        for (((raw, key), captured), outcome) in keys.into_iter().zip(captured_rows).zip(outcomes) {
+            organisms.insert(
+                raw,
+                PipelinedOrganismPrep {
+                    key,
+                    captured,
+                    outcome,
+                },
+            );
+        }
+        self.pipelined_next_prep = Some(PipelinedNextTickPrep {
+            target_tick,
+            world_mutation_epoch,
+            sensor_profile,
+            audited_cognition,
+            grounded_perception_wall_ns,
+            next_tracked_objects,
+            organisms,
+        });
+    }
+
     fn observe_sealed_memory(&mut self, sealed: &[SealedLiveSelection]) -> Vec<bool> {
         let audited = self.uses_audited_cognition();
         let mut memory_updates = Vec::with_capacity(sealed.len());
         for selection in sealed {
             let organism_id = selection.handle.organism_id();
+            let raw = organism_id.raw();
             if !audited && approximate_cognition::important_outcome(selection.patch.outcome()) {
-                if let Some(resident) = self.residents.get_mut(&organism_id.raw()) {
+                if let Some(resident) = self.residents.get_mut(&raw) {
                     std::sync::Arc::make_mut(&mut resident.approximate_cache).force_refresh = true;
                 }
             }
-            let observation = match self.memories.get_mut(&organism_id.raw()) {
-                Some(memory) => {
-                    if audited {
-                        memory.observe_sealed_patch(&selection.patch)
+            let observation = match self.memories.get_mut(&raw) {
+                Some(entry) => {
+                    if let Some(undos) = self.staged_memory_undos.as_mut() {
+                        if let Some(memory) = std::sync::Arc::get_mut(entry) {
+                            let res = if audited {
+                                memory.observe_sealed_patch_with_undo(&selection.patch)
+                            } else {
+                                memory.observe_sealed_patch_runtime_with_undo(&selection.patch)
+                            };
+                            res.map(|(receipt, undo)| {
+                                undos.push(StagedMemoryUndo::Observe(raw, undo));
+                                receipt
+                            })
+                        } else {
+                            let prior = std::sync::Arc::clone(entry);
+                            let res = if audited {
+                                std::sync::Arc::make_mut(entry)
+                                    .observe_sealed_patch(&selection.patch)
+                            } else {
+                                std::sync::Arc::make_mut(entry)
+                                    .observe_sealed_patch_runtime(&selection.patch)
+                            };
+                            if res.is_ok() {
+                                undos.push(StagedMemoryUndo::Replace(raw, Some(prior)));
+                            }
+                            res
+                        }
+                    } else if audited {
+                        std::sync::Arc::make_mut(entry).observe_sealed_patch(&selection.patch)
                     } else {
-                        memory.observe_sealed_patch_runtime(&selection.patch)
+                        std::sync::Arc::make_mut(entry)
+                            .observe_sealed_patch_runtime(&selection.patch)
                     }
                 }
                 None => Err(ScaffoldContractError::BrainOwnershipMismatch),
@@ -9398,7 +10075,8 @@ impl GpuLiveBrainRuntime {
                     Some(selection.patch.outcome().outcome_tick);
             }
             let disposition = match self.topologies.get_mut(&organism_id.raw()) {
-                Some(sidecar) if sidecar.organism_id() == organism_id => {
+                Some(entry) if entry.organism_id() == organism_id => {
+                    let sidecar = std::sync::Arc::make_mut(entry);
                     let observe_started = self.performance_measurement_enabled.then(Instant::now);
                     let receipt = sidecar.observe_sealed_patch(&selection.patch);
                     if let Some(started) = observe_started {
@@ -9430,8 +10108,11 @@ impl GpuLiveBrainRuntime {
         &mut self,
         pending: &[(GpuBrainHandle, PendingEligibilityIdentity)],
     ) {
-        for (handle, identity) in pending {
-            match self.backend.discard_pending_eligibility(*handle, identity) {
+        let outcomes = self
+            .backend
+            .discard_pending_eligibility_batch_isolated(pending);
+        for ((handle, identity), outcome) in pending.iter().zip(outcomes) {
+            match outcome {
                 Ok(receipt) => self.last_eligibility_discard_receipts.push(receipt),
                 Err(error) => self
                     .last_pre_seal_discard_failures
@@ -9480,6 +10161,7 @@ impl GpuLiveBrainRuntime {
         organism_id: OrganismId,
         homeostasis: HomeostaticSnapshot,
     ) -> Result<(), ScaffoldContractError> {
+        self.invalidate_pipelined_next_prep();
         homeostasis.validate_contract()?;
         if homeostasis.tick != self.world.tick() {
             return Err(ScaffoldContractError::NonMonotonicTick);
@@ -9501,6 +10183,7 @@ impl GpuLiveBrainRuntime {
     /// mutate candidates or outcomes during an active neural transaction.
     #[cfg(feature = "gpu-tests")]
     pub(crate) fn evidence_world_mut(&mut self) -> &mut HeadlessWorld {
+        self.invalidate_pipelined_next_prep();
         &mut self.world
     }
 
@@ -9509,7 +10192,9 @@ impl GpuLiveBrainRuntime {
         &self,
         organism_id: OrganismId,
     ) -> Option<&MemorySidecarState> {
-        self.memories.get(&organism_id.raw())
+        self.memories
+            .get(&organism_id.raw())
+            .map(std::sync::Arc::as_ref)
     }
 
     #[cfg(feature = "gpu-tests")]
@@ -9517,7 +10202,9 @@ impl GpuLiveBrainRuntime {
         &self,
         organism_id: OrganismId,
     ) -> Option<&TopologySidecar> {
-        self.topologies.get(&organism_id.raw())
+        self.topologies
+            .get(&organism_id.raw())
+            .map(std::sync::Arc::as_ref)
     }
 
     #[cfg(feature = "gpu-tests")]
@@ -9553,6 +10240,7 @@ impl GpuLiveBrainRuntime {
         organism_id: OrganismId,
         brain_atp_q16: u32,
     ) -> Result<(), ScaffoldContractError> {
+        self.invalidate_pipelined_next_prep();
         let handle = self.evidence_handle(organism_id)?;
         self.backend
             .set_brain_atp_q16_for_test(handle, brain_atp_q16)
@@ -9827,6 +10515,7 @@ impl GpuLiveBrainRuntime {
 
     #[cfg(any(all(test, feature = "gpu-tests"), feature = "foundation-training"))]
     pub(crate) fn world_mut(&mut self) -> &mut HeadlessWorld {
+        self.invalidate_pipelined_next_prep();
         &mut self.world
     }
 
@@ -11164,8 +11853,8 @@ mod tests {
             .clone();
         let birth_resident = runtime.residents.get(&organism_id.raw()).unwrap();
         assert_eq!(
-            birth_resident.genome,
-            birth_record.phenotype().brain_genome.clone()
+            *birth_resident.genome,
+            birth_record.phenotype().brain_genome
         );
         assert_ne!(
             birth_resident.compiler_inputs.genome(),
@@ -11246,8 +11935,8 @@ mod tests {
             organism_id
         );
         assert_eq!(
-            restored_resident.genome,
-            restored_record.phenotype().brain_genome.clone()
+            *restored_resident.genome,
+            restored_record.phenotype().brain_genome
         );
         assert_eq!(restored_resident.phenotype, source_phenotype);
         assert_eq!(
@@ -11759,7 +12448,7 @@ mod tests {
                         phenotype: std::sync::Arc::new(phenotype),
                         compiler_inputs: std::sync::Arc::new(compiler_inputs),
                         legacy_nano512_compatibility_receipt: Some(receipt),
-                        genome,
+                        genome: std::sync::Arc::new(genome),
                         development,
                         homeostasis: HomeostaticSnapshot::baseline(world_tick),
                         sleep_scheduler: GpuSleepScheduler::new(
@@ -11767,7 +12456,7 @@ mod tests {
                         )
                         .unwrap(),
                         next_sequence: 1,
-                        language_grounding: LanguageGroundingLedger::default(),
+                        language_grounding: std::sync::Arc::new(LanguageGroundingLedger::default()),
                         life_statistics: PassiveLifeStatistics::new(OrganismId(raw), world_tick)
                             .unwrap(),
                         attention_hysteresis: alife_core::HysteresisState::default(),
@@ -11777,7 +12466,7 @@ mod tests {
                         last_selected_motor_bundle: None,
                         last_cognitive_work: CognitiveWorkReceipt::zero(),
                         last_sleep_work: None,
-                        last_structural_edit_receipts: Vec::new(),
+                        last_structural_edit_receipts: std::sync::Arc::new(Vec::new()),
                         last_sleep_report: None,
                     },
                 )
@@ -11896,7 +12585,7 @@ mod tests {
         );
 
         let changed_save_path = fixture.durable_root.join("changed-save.json");
-        let mut changed_save = fixture.durability.published.save.clone();
+        let mut changed_save = (*fixture.durability.published.save).clone();
         changed_save.save_id = "save-archive-attachment-changed".to_string();
         GpuDurableSaveManifest::publish_snapshot(
             &changed_save_path,
@@ -11923,7 +12612,8 @@ mod tests {
         assert_ne!(changed.lineage_run_id, Some(first_run_id.clone()));
 
         let mut malformed_residents = fixture.residents.clone();
-        malformed_residents.values_mut().next().unwrap().genome.id = GenomeId(0);
+        std::sync::Arc::make_mut(&mut malformed_residents.values_mut().next().unwrap().genome).id =
+            GenomeId(0);
         let failed_root = fixture.archive_root.join("failed-backfill");
         let mut failed = archive_attachment_test_carrier(&fixture, None);
         failed.residents = malformed_residents;
@@ -11942,12 +12632,11 @@ mod tests {
         ));
     }
 
-    #[allow(clippy::result_large_err)]
     fn run_curated_runtime_authority(
         fixture: &mut CuratedRuntimeAuthorityFixture,
         retained_operation: &mut Option<CuratedFounderDurableOperation>,
         request: Option<CuratedFounderResetRequest>,
-    ) -> Result<CuratedFounderResetAttempt, CuratedFounderResetRuntimeError> {
+    ) -> Result<CuratedFounderResetAttempt, Box<CuratedFounderResetRuntimeError>> {
         let archive_run_id = fixture.archive_run_id.clone();
         let mut retained_plan = None;
         attempt_curated_founder_reset_with_owned_authorities(
@@ -11961,13 +12650,12 @@ mod tests {
         )
     }
 
-    #[allow(clippy::result_large_err)]
     fn run_curated_runtime_authority_with_plan(
         fixture: &mut CuratedRuntimeAuthorityFixture,
         retained_operation: &mut Option<CuratedFounderDurableOperation>,
         retained_plan: &mut Option<CuratedFounderGpuResidencyPlan>,
         request: Option<CuratedFounderResetRequest>,
-    ) -> Result<CuratedFounderResetAttempt, CuratedFounderResetRuntimeError> {
+    ) -> Result<CuratedFounderResetAttempt, Box<CuratedFounderResetRuntimeError>> {
         let archive_run_id = fixture.archive_run_id.clone();
         attempt_curated_founder_reset_with_owned_authorities(
             &mut fixture.durability,
@@ -11980,13 +12668,12 @@ mod tests {
         )
     }
 
-    #[allow(clippy::result_large_err)]
     fn run_curated_runtime_authority_with_refresh_failure(
         fixture: &mut CuratedRuntimeAuthorityFixture,
         retained_operation: &mut Option<CuratedFounderDurableOperation>,
         retained_plan: &mut Option<CuratedFounderGpuResidencyPlan>,
         request: Option<CuratedFounderResetRequest>,
-    ) -> Result<CuratedFounderResetAttempt, CuratedFounderResetRuntimeError> {
+    ) -> Result<CuratedFounderResetAttempt, Box<CuratedFounderResetRuntimeError>> {
         let archive_run_id = fixture.archive_run_id.clone();
         attempt_curated_founder_reset_with_owned_authorities_and_refresh(
             &mut fixture.durability,
@@ -12082,7 +12769,7 @@ mod tests {
         )
         .unwrap_err();
         assert!(matches!(
-            error,
+            *error,
             CuratedFounderResetRuntimeError::MissingDurability
         ));
         assert!(retained_operation.is_none());
@@ -12107,7 +12794,7 @@ mod tests {
         )
         .unwrap_err();
         assert!(matches!(
-            error,
+            *error,
             CuratedFounderResetRuntimeError::MissingLineageArchive
         ));
         assert!(retained_operation.is_none());
@@ -12232,7 +12919,7 @@ mod tests {
         let precommit =
             run_curated_runtime_authority(&mut fixture, &mut retained_operation, None).unwrap_err();
         assert!(matches!(
-            precommit,
+            *precommit,
             CuratedFounderResetRuntimeError::PreCommit(CuratedFounderStagingError::Mismatch {
                 field: "apply world tick"
             })
@@ -12519,7 +13206,7 @@ mod tests {
         )
         .unwrap_err();
         assert!(matches!(
-            precommit,
+            *precommit,
             CuratedFounderResetRuntimeError::PreCommit(CuratedFounderStagingError::Mismatch {
                 field: "apply world tick"
             })
@@ -12573,7 +13260,7 @@ mod tests {
         )
         .unwrap_err();
         assert!(matches!(
-            pending_attempt,
+            *pending_attempt,
             CuratedFounderResetRuntimeError::RetainedResidencyPlanPending
         ));
         assert!(retained_operation.is_none());
@@ -12635,7 +13322,7 @@ mod tests {
             None,
         )
         .unwrap_err();
-        let projected_refresh_failure = project_curated_founder_reset_runtime_error(refresh_error);
+        let projected_refresh_failure = project_curated_founder_reset_runtime_error(*refresh_error);
         assert!(matches!(
             projected_refresh_failure,
             CuratedFounderResetDispatchResult::Unknown {
@@ -12668,7 +13355,7 @@ mod tests {
         )
         .unwrap_err();
         assert!(matches!(
-            retry_error,
+            *retry_error,
             CuratedFounderResetRuntimeError::NoRetainedOperation
         ));
         assert!(refresh_operation.is_none());
@@ -12685,7 +13372,7 @@ mod tests {
         )
         .unwrap_err();
         assert!(matches!(
-            new_attempt_error,
+            *new_attempt_error,
             CuratedFounderResetRuntimeError::RetainedResidencyPlanPending
         ));
         assert!(refresh_operation.is_none());
@@ -13420,13 +14107,13 @@ mod tests {
                 phenotype: std::sync::Arc::new(phenotype.clone()),
                 compiler_inputs: std::sync::Arc::new(compiler_inputs),
                 legacy_nano512_compatibility_receipt: None,
-                genome: genome.clone(),
+                genome: std::sync::Arc::new(genome.clone()),
                 development: development.clone(),
                 homeostasis: biology_before.homeostasis,
                 sleep_scheduler: GpuSleepScheduler::new(SleepConsolidationConfig::reference())
                     .unwrap(),
                 next_sequence: 1,
-                language_grounding: LanguageGroundingLedger::default(),
+                language_grounding: std::sync::Arc::new(LanguageGroundingLedger::default()),
                 life_statistics: PassiveLifeStatistics::new(organism_id, current_tick).unwrap(),
                 attention_hysteresis: alife_core::HysteresisState::default(),
                 predictor: GroundedSuccessorPredictor::default(),
@@ -13435,7 +14122,7 @@ mod tests {
                 last_selected_motor_bundle: None,
                 last_cognitive_work: CognitiveWorkReceipt::zero(),
                 last_sleep_work: None,
-                last_structural_edit_receipts: Vec::new(),
+                last_structural_edit_receipts: std::sync::Arc::new(Vec::new()),
                 last_sleep_report: None,
             },
         )]);
@@ -13555,6 +14242,7 @@ mod tests {
             seal_prepared_selection_core(
                 &mut owner.world,
                 &mut owner.residents,
+                None,
                 0,
                 CognitiveWorkCostPolicy {
                     enabled: true,
@@ -13631,7 +14319,7 @@ mod tests {
         assert_ne!(
             residents[&organism_id.raw()]
                 .last_cognitive_context
-                .as_ref(),
+                .as_deref(),
             Some(&expected_pre_action_context)
         );
         let measured = sealed.patch.outcome().measured_physiology.unwrap();

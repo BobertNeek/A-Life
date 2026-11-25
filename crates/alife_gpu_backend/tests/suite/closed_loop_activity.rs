@@ -1,9 +1,10 @@
 //! GPU work accounting, throttling and exact replay tests.
 
-mod support;
-#[path = "closed_loop_activity/work_receipt_tests.rs"]
+#[allow(unused_imports)]
+use crate::support;
+#[path = "../closed_loop_activity/work_receipt_tests.rs"]
 mod work_receipt_tests;
-#[path = "closed_loop_activity/work_scan_reference.rs"]
+#[path = "../closed_loop_activity/work_scan_reference.rs"]
 mod work_scan_reference;
 
 use alife_core::{

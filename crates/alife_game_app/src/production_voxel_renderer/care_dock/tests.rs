@@ -5,6 +5,7 @@ use alife_world::{HeadlessScenarioBuilder, HeadlessWorld, WorldOrganismRecord};
 use bevy::app::{HierarchyPropagatePlugin, PostUpdate, PropagateSet};
 use bevy::camera::{ComputedCameraValues, RenderTargetInfo, Viewport};
 use bevy::ecs::message::Messages;
+use bevy::ecs::system::RunSystemOnce;
 use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::ui::update::propagate_ui_target_cameras;
 use bevy::ui::{
@@ -166,7 +167,7 @@ pub(crate) fn layout_app(size: Vec2) -> App {
             selected: None,
         });
     spawn(app.world_mut());
-    sync(app.world_mut());
+    app.world_mut().run_system_once(sync).unwrap();
     app
 }
 #[derive(Clone, Copy, Debug)]
@@ -1206,7 +1207,7 @@ fn dock_uses_its_layer_and_is_hidden_only_in_debug() {
         app.world_mut()
             .resource_mut::<Fvr05ProductionUxStateResource>()
             .debug_mode = debug;
-        sync(app.world_mut());
+        app.world_mut().run_system_once(sync).unwrap();
         assert_eq!(visible(app.world(), root), !debug);
     }
 }
@@ -1302,7 +1303,7 @@ fn composer_fixtures() -> Vec<Value> {
                     .resource_mut::<Fvr05ProductionUxStateResource>()
                     .last_error = Some("Synthetic world rejection".into());
             }
-            sync(app.world_mut());
+            app.world_mut().run_system_once(sync).unwrap();
             spawn_speech_entry(app.world_mut());
             let bounds = app
                 .world_mut()

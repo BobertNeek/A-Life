@@ -1,6 +1,6 @@
 //! Full sampled residual updates on frozen production GPU features. The caller
 //! owns campaign/PPO accounting; this kernel never updates the actor or world.
-use super::{invalid, read_gpu_f32, PpoValueHeadCheckpoint};
+use super::{invalid, read_gpu_f32_with_staging, PpoValueHeadCheckpoint};
 use crate::{AdamWConfig, TrainingError};
 use alife_runtime::{GpuAuthoritativeSession, GpuSessionConsumerKind};
 use wgpu::util::DeviceExt;
@@ -16,12 +16,78 @@ pub struct CriticResidualRow {
     pub discount: f32,
 }
 
+#[derive(Clone)]
+pub struct CriticResidualPipelines {
+    device: wgpu::Device,
+    layout: wgpu::BindGroupLayout,
+    predict: wgpu::ComputePipeline,
+    gradient: wgpu::ComputePipeline,
+    update: wgpu::ComputePipeline,
+}
+
+impl CriticResidualPipelines {
+    pub fn new(device: &wgpu::Device) -> Self {
+        let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("critic-residual-layout"),
+            entries: &(0..5)
+                .map(|binding| wgpu::BindGroupLayoutEntry {
+                    binding,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: if binding == 0 {
+                            wgpu::BufferBindingType::Uniform
+                        } else {
+                            wgpu::BufferBindingType::Storage {
+                                read_only: binding < 3,
+                            }
+                        },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                })
+                .collect::<Vec<_>>(),
+        });
+        let pl = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("critic-residual-pipelines"),
+            bind_group_layouts: &[Some(&layout)],
+            immediate_size: 0,
+        });
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("critic-full-Bellman-residual"),
+            source: wgpu::ShaderSource::Wgsl(CRITIC_RESIDUAL_WGSL.into()),
+        });
+        let pipeline = |entry| {
+            device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: Some(entry),
+                layout: Some(&pl),
+                module: &shader,
+                entry_point: Some(entry),
+                compilation_options: Default::default(),
+                cache: None,
+            })
+        };
+        Self {
+            device: device.clone(),
+            layout,
+            predict: pipeline("predict"),
+            gradient: pipeline("gradient"),
+            update: pipeline("update"),
+        }
+    }
+
+    pub fn device(&self) -> &wgpu::Device {
+        &self.device
+    }
+}
+
 pub struct FrozenCriticResidualExperiment {
     features: wgpu::Buffer,
     rows: wgpu::Buffer,
     head: wgpu::Buffer,
     header: wgpu::Buffer,
     output: wgpu::Buffer,
+    readback: std::sync::Mutex<Option<wgpu::Buffer>>,
     bind: wgpu::BindGroup,
     layout: wgpu::BindGroupLayout,
     predict: wgpu::ComputePipeline,
@@ -42,12 +108,31 @@ impl FrozenCriticResidualExperiment {
         rows: &[CriticResidualRow],
         fit_rows: usize,
     ) -> Result<Self, TrainingError> {
+        if session.authority().consumer() != GpuSessionConsumerKind::Training {
+            return Err(invalid());
+        }
+        let (device, _) = session.backend().offline_training_device_queue()?;
+        let pipelines = CriticResidualPipelines::new(device);
+        Self::new_with_pipelines(session, checkpoint, features, rows, fit_rows, &pipelines)
+    }
+
+    pub fn new_with_pipelines(
+        session: &GpuAuthoritativeSession,
+        checkpoint: &PpoValueHeadCheckpoint,
+        features: &[Vec<f32>],
+        rows: &[CriticResidualRow],
+        fit_rows: usize,
+        pipelines: &CriticResidualPipelines,
+    ) -> Result<Self, TrainingError> {
         checkpoint.validate()?;
         if session.authority().consumer() != GpuSessionConsumerKind::Training {
             return Err(invalid());
         }
         validate_batch(checkpoint.feature_count, features, rows, fit_rows)?;
         let (device, _) = session.backend().offline_training_device_queue()?;
+        if pipelines.device != *device {
+            return Err(invalid());
+        }
         let storage = wgpu::BufferUsages::STORAGE;
         let make = |label, bytes: &[u8], usage| {
             device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -84,30 +169,9 @@ impl FrozenCriticResidualExperiment {
             &vec![0; rows.len() * 16],
             storage | wgpu::BufferUsages::COPY_SRC,
         );
-        let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("critic-residual-layout"),
-            entries: &(0..5)
-                .map(|binding| wgpu::BindGroupLayoutEntry {
-                    binding,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: if binding == 0 {
-                            wgpu::BufferBindingType::Uniform
-                        } else {
-                            wgpu::BufferBindingType::Storage {
-                                read_only: binding < 3,
-                            }
-                        },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                })
-                .collect::<Vec<_>>(),
-        });
         let bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("critic-residual-bind"),
-            layout: &layout,
+            layout: &pipelines.layout,
             entries: &[&header, &features, &rows_buffer, &head, &output]
                 .iter()
                 .enumerate()
@@ -117,34 +181,16 @@ impl FrozenCriticResidualExperiment {
                 })
                 .collect::<Vec<_>>(),
         });
-        let pl = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("critic-residual-pipelines"),
-            bind_group_layouts: &[Some(&layout)],
-            immediate_size: 0,
-        });
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("critic-full-Bellman-residual"),
-            source: wgpu::ShaderSource::Wgsl(CRITIC_RESIDUAL_WGSL.into()),
-        });
-        let pipeline = |entry| {
-            device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                label: Some(entry),
-                layout: Some(&pl),
-                module: &shader,
-                entry_point: Some(entry),
-                compilation_options: Default::default(),
-                cache: None,
-            })
-        };
         Ok(Self {
-            predict: pipeline("predict"),
-            gradient: pipeline("gradient"),
-            update: pipeline("update"),
+            predict: pipelines.predict.clone(),
+            gradient: pipelines.gradient.clone(),
+            update: pipelines.update.clone(),
             head,
             header,
             output,
+            readback: std::sync::Mutex::new(None),
             bind,
-            layout,
+            layout: pipelines.layout.clone(),
             features,
             rows: rows_buffer,
             feature_count: checkpoint.feature_count,
@@ -298,18 +344,24 @@ impl FrozenCriticResidualExperiment {
     ) -> Result<(), TrainingError> {
         let next = self.step.checked_add(1).ok_or_else(invalid)?;
         self.upload(session, config, next, coefficient)?;
-        let (device, queue) = session.backend().offline_training_device_queue()?;
+        let (device, _) = session.backend().offline_training_device_queue()?;
         let mut encoder = device.create_command_encoder(&Default::default());
-        self.dispatch(&mut encoder, &self.predict, self.row_count.div_ceil(64));
+        self.dispatch(&mut encoder, &self.predict, self.row_count);
         self.dispatch(
             &mut encoder,
             &self.gradient,
             (self.feature_count + 1).div_ceil(64),
         );
         self.dispatch(&mut encoder, &self.update, 1);
-        queue.submit(Some(encoder.finish()));
         let flag = u64::from(self.feature_count + 1) * 16;
-        if read_gpu_f32(session, &self.head, flag..flag + 4)?.as_slice() != [1.0] {
+        let result = read_gpu_f32_with_staging(
+            session,
+            &self.readback,
+            Some(encoder),
+            &self.head,
+            flag..flag + 4,
+        )?;
+        if result.as_slice() != [1.0] {
             return Err(TrainingError::MalformedReadback);
         }
         self.step = next;
@@ -321,11 +373,16 @@ impl FrozenCriticResidualExperiment {
         session: &GpuAuthoritativeSession,
     ) -> Result<Vec<[f32; 4]>, TrainingError> {
         self.upload(session, AdamWConfig::default(), self.step.max(1), 1.0)?;
-        let (device, queue) = session.backend().offline_training_device_queue()?;
+        let (device, _) = session.backend().offline_training_device_queue()?;
         let mut encoder = device.create_command_encoder(&Default::default());
-        self.dispatch(&mut encoder, &self.predict, self.row_count.div_ceil(64));
-        queue.submit(Some(encoder.finish()));
-        let words = read_gpu_f32(session, &self.output, 0..u64::from(self.row_count) * 16)?;
+        self.dispatch(&mut encoder, &self.predict, self.row_count);
+        let words = read_gpu_f32_with_staging(
+            session,
+            &self.readback,
+            Some(encoder),
+            &self.output,
+            0..u64::from(self.row_count) * 16,
+        )?;
         if words.iter().any(|v| !v.is_finite()) {
             return Err(TrainingError::MalformedReadback);
         }
@@ -337,18 +394,19 @@ impl FrozenCriticResidualExperiment {
         session: &GpuAuthoritativeSession,
     ) -> Result<Vec<f32>, TrainingError> {
         self.upload(session, AdamWConfig::default(), self.step.max(1), 1.0)?;
-        let (device, queue) = session.backend().offline_training_device_queue()?;
+        let (device, _) = session.backend().offline_training_device_queue()?;
         let mut encoder = device.create_command_encoder(&Default::default());
-        self.dispatch(&mut encoder, &self.predict, self.row_count.div_ceil(64));
+        self.dispatch(&mut encoder, &self.predict, self.row_count);
         self.dispatch(
             &mut encoder,
             &self.gradient,
             (self.feature_count + 1).div_ceil(64),
         );
-        queue.submit(Some(encoder.finish()));
         let start = u64::from(self.feature_count + 1) * 12;
-        read_gpu_f32(
+        read_gpu_f32_with_staging(
             session,
+            &self.readback,
+            Some(encoder),
             &self.head,
             start..start + u64::from(self.feature_count + 1) * 4,
         )
@@ -362,8 +420,10 @@ impl FrozenCriticResidualExperiment {
             feature_count: self.feature_count,
             optimizer_step: self.step,
             last_updated_policy_version: self.last_policy,
-            parameters: read_gpu_f32(
+            parameters: read_gpu_f32_with_staging(
                 session,
+                &self.readback,
+                None,
                 &self.head,
                 0..u64::from(self.feature_count + 1) * 12,
             )?,

@@ -71,7 +71,7 @@ pub(super) fn capture(source: &Path) -> Result<CurrentLifeCheckpointV1> {
     let (durable, loaded) = GpuDurableSaveManifest::open_loaded(&save_path, &root)?;
     let journal = durable.load_sleep_transaction_journal(&loaded)?;
     let mut snapshot = CurrentLifeCheckpointV1 {
-        world_json: serde_json::to_string(&loaded.save)?,
+        world_json: serde_json::to_string(loaded.save.as_ref())?,
         sleep_journal_json: serde_json::to_string(&journal)?,
         assets_base64: Default::default(),
     };
@@ -118,7 +118,7 @@ fn materialize(snapshot: &CurrentLifeCheckpointV1, root: &Path) -> Result<()> {
         &snapshot.sleep_journal_json,
     )?;
     let (durable, loaded) = GpuDurableSaveManifest::open_loaded(root.join("world.json"), &assets)?;
-    if loaded.save != save
+    if *loaded.save != save
         || serde_json::to_string(&durable.load_sleep_transaction_journal(&loaded)?)?
             != snapshot.sleep_journal_json
     {
@@ -155,7 +155,12 @@ fn real_directory(path: &Path) -> Result<bool> {
     }
     Ok(metadata.is_dir() && !metadata.file_type().is_symlink())
 }
+#[cfg(test)]
 pub(super) fn workspace_at(root: &Path) -> Result<Temporary> {
+    let lease = acquire_validation_lease(root)?;
+    prepare_work_dir(root, lease)
+}
+fn acquire_validation_lease(root: &Path) -> Result<fs::File> {
     #[cfg(unix)]
     let created = {
         use std::os::unix::fs::DirBuilderExt;
@@ -211,6 +216,9 @@ pub(super) fn workspace_at(root: &Path) -> Result<Temporary> {
     } else if marker != expected || entries.iter().any(|name| name != "lease" && name != "work") {
         return Err("unknown private validation workspace contents; refusing cleanup".into());
     }
+    Ok(lease)
+}
+fn prepare_work_dir(root: &Path, lease: fs::File) -> Result<Temporary> {
     let path = root.join("work");
     if path.exists() || path.is_symlink() {
         if !real_directory(&path)? {
@@ -257,7 +265,7 @@ pub(super) fn validate(snapshot: &CurrentLifeCheckpointV1) -> Result<()> {
         .with(|value| value.borrow().clone())
         .unwrap_or_else(std::env::temp_dir)
         .join("alife-current-private-validation-v1");
-    let temporary = workspace_at(&root)?;
+    let lease = acquire_validation_lease(&root)?;
     let (digest, materialized_bytes) = snapshot_digest_and_materialized_bytes(snapshot);
     let cache = VALIDATED_SNAPSHOTS.get_or_init(|| Mutex::new(VecDeque::with_capacity(8)));
     let is_cached = cache
@@ -266,7 +274,8 @@ pub(super) fn validate(snapshot: &CurrentLifeCheckpointV1) -> Result<()> {
         .is_some_and(|guard| guard.iter().any(|d| *d == digest));
     if is_cached {
         if let Some(bytes) = materialized_bytes {
-            match alife_storage::budget_for(&temporary.path)? {
+            let work = root.join("work");
+            match alife_storage::budget_for(&work)? {
                 None => return Ok(()),
                 Some(budget) => {
                     let _reservation = budget.reserve(bytes)?;
@@ -278,6 +287,7 @@ pub(super) fn validate(snapshot: &CurrentLifeCheckpointV1) -> Result<()> {
             }
         }
     }
+    let temporary = prepare_work_dir(&root, lease)?;
     materialize(snapshot, &temporary.path)?;
     if let Ok(mut guard) = cache.lock() {
         if !guard.iter().any(|d| *d == digest) {

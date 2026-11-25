@@ -312,50 +312,18 @@ fn sync_directory_ancestry(_: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
-#[cfg(unix)]
 fn publish_new(pending: &Path, sealed: &Path) -> std::io::Result<()> {
-    // Exclusive publication cannot overwrite any accepted or foreign bundle.
-    alife_storage::hard_link(pending, sealed)?;
-    alife_storage::remove_file(pending)?;
-    File::open(
-        sealed
-            .parent()
-            .ok_or_else(|| std::io::Error::other("cohort parent missing"))?,
-    )?
-    .sync_all()
-}
-
-#[cfg(windows)]
-fn publish_new(pending: &Path, sealed: &Path) -> std::io::Result<()> {
-    use std::os::windows::ffi::OsStrExt;
-    use windows_sys::Win32::Storage::FileSystem::{MoveFileExW, MOVEFILE_WRITE_THROUGH};
-    alife_storage::replace_with(pending, sealed, || {
-        let pending = pending
-            .as_os_str()
-            .encode_wide()
-            .chain(Some(0))
-            .collect::<Vec<_>>();
-        let sealed = sealed
-            .as_os_str()
-            .encode_wide()
-            .chain(Some(0))
-            .collect::<Vec<_>>();
-        // SAFETY: same-directory paths own live NUL-terminated UTF-16 buffers. Omitting
-        // REPLACE_EXISTING preserves exclusive ownership; WRITE_THROUGH seals rename.
-        if unsafe { MoveFileExW(pending.as_ptr(), sealed.as_ptr(), MOVEFILE_WRITE_THROUGH) } == 0 {
-            Err(std::io::Error::last_os_error())
-        } else {
-            Ok(())
-        }
-    })
-}
-
-#[cfg(not(any(unix, windows)))]
-fn publish_new(_: &Path, _: &Path) -> std::io::Result<()> {
-    Err(std::io::Error::new(
-        std::io::ErrorKind::Unsupported,
-        "durable cohort publication unsupported",
-    ))
+    alife_storage::atomic_publish_new_file(pending, sealed)?;
+    #[cfg(unix)]
+    {
+        File::open(
+            sealed
+                .parent()
+                .ok_or_else(|| std::io::Error::other("cohort parent missing"))?,
+        )?
+        .sync_all()?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]

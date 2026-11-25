@@ -71,7 +71,17 @@ fn args() -> Result<Args> {
         fixture,
     })
 }
+fn init_headless_tracing() {
+    let filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("warn"));
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .with_writer(std::io::stderr)
+        .try_init();
+}
+
 fn main() -> Result<()> {
+    init_headless_tracing();
     let receipt = run_cpu_continuation(args()?, &mut DefaultCpuEpisode)?;
     println!("{}", serde_json::to_string(&receipt)?);
     Ok(())

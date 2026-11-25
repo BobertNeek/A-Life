@@ -21,14 +21,30 @@ serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
 smallvec = "1.15.1"
 thiserror = "2.0.18"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 wgpu = "29.0.3"
 rusqlite = { version = "0.37.0", features = ["bundled"] }
 zstd = "0.13.3"
 
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "warn"
+
+[workspace.lints.clippy]
+dbg_macro = "deny"
+todo = "deny"
+undocumented_unsafe_blocks = "deny"
+
+[profile.dev.package."*"]
+opt-level = 2
+
 # Real-hardware brain acceptance runs execute tens of thousands of neural,
 # memory, topology, and evidence operations. Keep debug assertions enabled but
-# optimize only the local hot-path crates so the exact workspace test gates
+# optimize dependencies and local hot-path crates so workspace test gates
 # remain practical on Windows.
+[profile.test.package."*"]
+opt-level = 2
+
 [profile.test.package.alife_core]
 opt-level = 2
 
@@ -39,6 +55,9 @@ opt-level = 2
 opt-level = 2
 
 [profile.test.package.alife_runtime]
+opt-level = 2
+
+[profile.test.package.alife_training]
 opt-level = 2
 
 [profile.test.package.alife_game_app]
@@ -56,3 +75,13 @@ debug = 0
 
 [profile.dev.package.alife_game_app]
 debug = 0
+
+[profile.release]
+lto = "thin"
+codegen-units = 4
+
+[profile.dist]
+inherits = "release"
+lto = "fat"
+codegen-units = 1
+strip = "symbols"

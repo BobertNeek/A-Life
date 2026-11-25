@@ -1,15 +1,20 @@
-#![cfg(feature = "gpu-tests")]
-
-mod support;
+#[allow(unused_imports)]
+use crate::support;
 
 use alife_core::sleep::SleepReplayEvidence;
 use alife_core::{
-    BrainCapacityClass, CandidateActionFamily, CoactivationEvidence, CompiledSynapseKind,
-    DendriticBranch, DendriticBranchSet, DendriticInputRef, OrganismId, SensorProfile,
-    StructuralPlasticityConfig, StructuralPlasticityState,
+    BiochemistryState, BodyEventDelta, BrainCapacityClass, BrainGenome, CandidateActionFamily,
+    CoactivationEvidence, CognitiveContextFrame, CompiledSynapseKind, Confidence, DecisionSnapshot,
+    DendriticBranch, DendriticBranchSet, DendriticInputRef, DevelopmentState, ExperiencePatch,
+    ExperienceSequenceId, JointMotorCondition, JointPhysicalOutcome, MeasuredPhysiologyTransition,
+    NeuralActionSelection, NormalizedScalar, OrganismId, PhysicalActionOutcome,
+    PhysicalContactKind, PostActionOutcome, PreActionSnapshot, PredictionTargetReceipt,
+    SemanticStateVector, SensorProfile, SignedValence, StructuralPlasticityConfig,
+    StructuralPlasticityState, Tick, Vec3f,
 };
 use alife_gpu_backend::{
-    GpuClosedLoopBackend, GpuClosedLoopTick, GpuRuntimeProfile, GpuV11MutableStateProbe,
+    GpuBrainHandle, GpuClosedLoopBackend, GpuClosedLoopTick, GpuRuntimeProfile,
+    GpuV11MutableStateProbe,
 };
 
 fn discard(
@@ -19,6 +24,127 @@ fn discard(
     backend
         .discard_pending_eligibility(tick.handle, tick.pending_eligibility.identity())
         .map(|_| ())
+}
+
+fn seal_anchor_outcome(
+    backend: &mut GpuClosedLoopBackend,
+    handle: GpuBrainHandle,
+    phenotype: &alife_core::BrainPhenotype,
+    physiology: &alife_core::CreaturePhenotype,
+    frame: &alife_core::PerceptionFrame,
+    tick: &GpuClosedLoopTick,
+) -> Result<PredictionTargetReceipt, alife_core::ScaffoldContractError> {
+    let sequence_id = ExperienceSequenceId(1);
+    let genome = BrainGenome::scaffold(27, BrainCapacityClass::n512().id());
+    let development =
+        DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(0.35).unwrap());
+    let selection = NeuralActionSelection {
+        candidate_index: tick.selection.candidate_index,
+        logit: tick.selection.logit,
+        confidence: tick.selection.confidence,
+        active_tiles: tick.selection.active_tiles,
+        active_synapses: tick.selection.active_synapses,
+    };
+    let command = frame.candidates()[usize::from(selection.candidate_index)].to_command(
+        handle.organism_id(),
+        Confidence::new(selection.confidence.raw()).unwrap(),
+    )?;
+    let selected_action_id = command.action_id;
+    let prompted = frame
+        .sensory()
+        .language_context
+        .heard_tokens
+        .iter()
+        .flatten()
+        .any(|token| token.source_kind == alife_core::UtteranceSourceKind::Player);
+    let bundle = alife_core::factorized_motor_bundle_for_candidates(
+        handle.organism_id(),
+        sequence_id,
+        frame.tick(),
+        frame,
+        tick.factorized_motor_candidates,
+        &phenotype
+            .candidate_decoder()
+            .factorized_motor_channels(phenotype)?,
+        &command,
+        selection.candidate_index,
+        tick.speech_payload.as_ref(),
+        prompted,
+    )?;
+    let pre_action = PreActionSnapshot::from_neural_frame(
+        sequence_id,
+        handle.class_id(),
+        handle.phenotype_hash(),
+        genome.id,
+        genome.schema_version,
+        development,
+        frame.clone(),
+    )?;
+    let decision = DecisionSnapshot::from_neural_selection(
+        sequence_id,
+        handle.phenotype_hash(),
+        tick.dispatch_generation,
+        tick.active_activation_side,
+        frame,
+        selection,
+        command,
+    )?;
+    let before = BiochemistryState::new(physiology, frame.tick())?;
+    let receptors = before.neural_receptor_frame(physiology)?;
+    let outcome_tick = Tick::new(frame.tick().raw() + 1);
+    let after = before.advance(
+        outcome_tick,
+        BodyEventDelta {
+            nutrition: 1.0,
+            ..BodyEventDelta::zero()
+        },
+        physiology,
+    )?;
+    let measured = MeasuredPhysiologyTransition::new(before, after)?;
+    let physical = PhysicalActionOutcome {
+        contact: PhysicalContactKind::None,
+        target_entity: None,
+        displacement: Vec3f::ZERO,
+        collision_normal: None,
+        energy_cost: NormalizedScalar::ZERO,
+    };
+    let work = alife_core::CognitiveWorkReceipt::zero();
+    let outcome = PostActionOutcome::new(
+        handle.organism_id(),
+        sequence_id,
+        outcome_tick,
+        true,
+        physical,
+        measured.homeostatic_delta,
+        SignedValence::ZERO,
+        NormalizedScalar::ZERO,
+        NormalizedScalar::new(measured.aversive_harm())?,
+        measured.energy_delta,
+        NormalizedScalar::ZERO,
+    )?
+    .with_measured_physiology(measured)?
+    .with_v11_joint(JointPhysicalOutcome::new(physical, Vec::new())?, work)?;
+    let target = PredictionTargetReceipt::for_successor(
+        handle.organism_id(),
+        sequence_id,
+        selected_action_id,
+        frame.tick(),
+        frame.frame_digest().0,
+        SemanticStateVector::new(vec![0.5, 0.25])?,
+        JointMotorCondition::from_bundle(&bundle)?,
+        SemanticStateVector::new(vec![0.4, 0.3])?,
+    )?;
+    let patch = ExperiencePatch::new_v11_with_decision(
+        pre_action,
+        decision,
+        bundle,
+        outcome,
+        target.clone(),
+        work,
+        CognitiveContextFrame::empty(handle.organism_id(), sequence_id, frame.tick())?,
+    )?;
+    backend.apply_sealed_outcome(handle, &patch, &receptors)?;
+    Ok(target)
 }
 
 #[test]
@@ -198,9 +324,17 @@ fn normal_tick_joins_dendrites_growth_pruning_and_bounded_work(
         branch_frames[1].candidates()[branch_ticks[1].selection.candidate_index as usize].family,
         CandidateActionFamily::Inspect
     );
-    for tick in &branch_ticks {
-        discard(&mut backend, tick)?;
-    }
+    discard(&mut backend, &branch_ticks[0])?;
+    discard(&mut backend, &branch_ticks[1])?;
+    seal_anchor_outcome(
+        &mut backend,
+        growth_subject,
+        &phenotype,
+        &physiology,
+        &branch_frames[2],
+        &branch_ticks[2],
+    )?;
+    discard(&mut backend, &branch_ticks[3])?;
 
     for handle in [growth_subject, prune_subject] {
         let mut checkpoint = backend.checkpoint_v11(handle)?;
@@ -318,6 +452,17 @@ fn normal_tick_joins_dendrites_growth_pruning_and_bounded_work(
         )?,
         learned_state
     );
+    // `prune_subject` still has zero committed replay events (`trace_has_anchor == false`),
+    // so clear the synthetic non-zero decoder eligibility probe before the next GPU tick.
+    backend.seed_v11_mutable_state_for_test(
+        prune_subject,
+        inspect_decoder_local,
+        structural_target,
+        GpuV11MutableStateProbe {
+            decoder_eligibility_banks: [0, 0],
+            ..learned_state
+        },
+    )?;
     let replay = backend.build_sleep_replay_batch(prune_subject)?;
     let evidence = SleepReplayEvidence::new(replay, Vec::new())?;
     backend.apply_v11_sleep_structural_phase(prune_subject, &evidence)?;

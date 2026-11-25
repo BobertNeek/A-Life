@@ -141,42 +141,7 @@ fn sync_directory(path: &Path) -> Result<()> {
     Ok(())
 }
 fn replace(from: &Path, to: &Path) -> Result<()> {
-    #[cfg(windows)]
-    {
-        use std::os::windows::ffi::OsStrExt;
-        use windows_sys::Win32::Storage::FileSystem::{
-            MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
-        };
-        let a = from
-            .as_os_str()
-            .encode_wide()
-            .chain(Some(0))
-            .collect::<Vec<_>>();
-        let b = to
-            .as_os_str()
-            .encode_wide()
-            .chain(Some(0))
-            .collect::<Vec<_>>();
-        alife_storage::replace_with(from, to, || {
-            // Same owned directory; files were flushed first. This is filesystem
-            // publication only, never desktop input or application control.
-            if unsafe {
-                MoveFileExW(
-                    a.as_ptr(),
-                    b.as_ptr(),
-                    MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
-                )
-            } == 0
-            {
-                return Err(std::io::Error::last_os_error());
-            }
-            Ok(())
-        })?;
-    }
-    #[cfg(not(windows))]
-    {
-        alife_storage::rename(from, to)?;
-    }
+    alife_storage::atomic_replace_file(from, to)?;
     sync_directory(to.parent().ok_or("resident publication lacks parent")?)
 }
 fn write_new(path: &Path, bytes: &[u8]) -> Result<()> {

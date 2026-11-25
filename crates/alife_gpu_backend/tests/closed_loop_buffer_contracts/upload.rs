@@ -262,7 +262,7 @@ fn upload_is_an_exact_projection_encoder_dynamics_and_decoder_translation() {
         assert_eq!(gpu.decoder_synapse_count, source.decoder_synapse_count());
         assert_eq!(
             gpu.weight_index_start,
-            upload.decoder_weight_index_word_base + decoder_local_cursor * 4
+            upload.decoder_weight_index_word_base + decoder_local_cursor * 2
         );
         assert_eq!(gpu.weight_index_count, source.decoder_synapse_count());
         assert_eq!(gpu.reserved0 & 0xffff, source.innate_drive_mask());
@@ -410,9 +410,8 @@ fn recurrent_and_decoder_views_are_a_disjoint_complete_global_partition() {
         for (global_id, (row, coordinate)) in expected_candidate_decoders.iter().enumerate() {
             let gpu = &upload.decoder_weight_indices[global_id];
             assert_eq!(gpu.global_synapse_id, recurrent + global_id as u32);
-            assert_eq!(gpu.input_lane, u32::from(coordinate.input_lane()));
-            assert_eq!(gpu.motor_index, u32::from(coordinate.motor_index()));
-            assert_eq!(gpu.reserved0, 0);
+            assert_eq!(gpu.input_lane(), u32::from(coordinate.input_lane()));
+            assert_eq!(gpu.motor_index(), u32::from(coordinate.motor_index()));
             assert_eq!(
                 upload.genetic_weights[gpu.global_synapse_id as usize].to_bits(),
                 row.genetic_weight().to_bits()
@@ -464,10 +463,6 @@ fn upload_preserves_identity_and_zeroed_reserved_lanes() {
         .decoder_families
         .iter()
         .all(|row| row.reserved0 >> 26 == 0));
-    assert!(upload
-        .decoder_weight_indices
-        .iter()
-        .all(|row| row.reserved0 == 0));
     assert_eq!(upload.extension_record_offset, GPU_NO_EXTENSION_SENTINEL);
 }
 
@@ -514,8 +509,12 @@ fn phenotype_upload_validation_rejects_every_task4_corruption_category() {
     assert!(provenance_range.validate_against(&phenotype).is_err());
 
     let mut reserved = valid.clone();
-    reserved.decoder_weight_indices[0].reserved0 = 1;
+    reserved.route_metadata[0].reserved0 = 1;
     assert!(reserved.validate_against(&phenotype).is_err());
+
+    let mut decoder_coord = valid.clone();
+    decoder_coord.decoder_weight_indices[0].packed_lane_motor ^= 1;
+    assert!(decoder_coord.validate_against(&phenotype).is_err());
 
     let mut innate_mask = valid.clone();
     innate_mask.decoder_families[0].reserved0 ^= 1;

@@ -27,6 +27,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: native-texture-decode
       - name: Install Linux controller build dependency
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libudev-dev
@@ -53,6 +56,9 @@ jobs:
         uses: actions/checkout@v4
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: island-output-changes
       - name: Install Linux controller build dependency
         run: sudo apt-get update && sudo apt-get install -y libudev-dev
       - name: Run island output change-tick and invalidation CPU tests
@@ -87,6 +93,9 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: training-continuity
       - name: Check training CLI
         run: cargo check --locked -p alife_game_app --features foundation-training --bin train_n2048_care
       - name: Strict foundation-training Clippy
@@ -138,6 +147,9 @@ jobs:
         uses: actions/checkout@v4
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: training-output-preservation
       - name: Check training CLI
         run: cargo check --locked -p alife_game_app --features foundation-training --bin train_n2048_care
       - name: Care targeting inspection CPU tests
@@ -160,6 +172,9 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: rust-workspace
 
       - name: Format
         run: cargo fmt --all -- --check
@@ -178,3 +193,17 @@ jobs:
       - name: Core boundaries
         if: ${{ !cancelled() && steps.check.outcome == 'success' }}
         run: bash scripts/check_core_boundaries.sh
+
+  python-scripts:
+    name: Python harness unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run Python unit tests
+        run: python -B -m unittest discover -s scripts -p "test_*.py" -v

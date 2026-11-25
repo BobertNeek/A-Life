@@ -40,6 +40,8 @@ fn every_active_synapse_has_separate_double_banked_mutable_learning_layers() {
     assert_eq!(ranges.lifetime_weight_bank_1_words.len(), synapses);
     assert_eq!(ranges.fast_weight_words.len(), synapses);
     assert_eq!(ranges.fast_weight_bank_1_words.len(), synapses);
+    assert_eq!(ranges.effective_weight_words.len(), synapses);
+    assert_eq!(ranges.effective_weight_bank_1_words.len(), synapses);
     assert_eq!(ranges.recurrent_eligibility_words.len(), recurrent);
     assert_eq!(ranges.recurrent_eligibility_bank_1_words.len(), recurrent);
     assert_eq!(ranges.decoder_eligibility_words.len(), decoder);
@@ -52,12 +54,29 @@ fn every_active_synapse_has_separate_double_banked_mutable_learning_layers() {
         ranges.fast_weight_words.start,
         ranges.fast_weight_bank_1_words.start
     );
-    assert!(
-        plan.mutable_state_words()[ranges.lifetime_weight_words.start as usize
-            ..ranges.fast_weight_bank_1_words.end as usize]
-            .iter()
-            .all(|word| *word == 0)
-    );
+    for zero_range in [
+        &ranges.lifetime_weight_words,
+        &ranges.fast_weight_words,
+        &ranges.lifetime_weight_bank_1_words,
+        &ranges.fast_weight_bank_1_words,
+    ] {
+        assert!(
+            plan.mutable_state_words()[zero_range.start as usize..zero_range.end as usize]
+                .iter()
+                .all(|word| *word == 0)
+        );
+    }
+    let genetic_bits = &plan.immutable_weight_words()
+        [ranges.genetic_weight_words.start as usize..ranges.genetic_weight_words.end as usize];
+    for eff_range in [
+        &ranges.effective_weight_words,
+        &ranges.effective_weight_bank_1_words,
+    ] {
+        assert_eq!(
+            &plan.mutable_state_words()[eff_range.start as usize..eff_range.end as usize],
+            genetic_bits
+        );
+    }
     assert_ne!(
         slot.record().extension_record_offset,
         GPU_NO_EXTENSION_SENTINEL

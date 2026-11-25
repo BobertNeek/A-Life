@@ -57,7 +57,7 @@ alife_archive = { path = "../alife_archive", optional = true }
 alife_gpu_backend = { path = "../alife_gpu_backend", optional = true }
 alife_runtime = { path = "../alife_runtime", optional = true }
 alife_school = { path = "../alife_school" }
-alife_semantic = { path = "../alife_semantic", features = ["fake-semantic-provider", "local-llamacpp"] }
+alife_semantic = { path = "../alife_semantic", features = ["local-llamacpp"] }
 alife_training = { path = "../alife_training", optional = true }
 alife_world = { path = "../alife_world" }
 blake3.workspace = true
@@ -70,13 +70,13 @@ serde.workspace = true
 serde_json.workspace = true
 sha2 = { version = "=0.10.9", optional = true }
 thiserror.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
 zstd.workspace = true
-wgpu = { version = "=27.0.1", optional = true }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61.2", features = [
     "Win32_Foundation",
-    "Win32_Storage_FileSystem",
     "Win32_System_ProcessStatus",
     "Win32_System_Threading",
 ] }
@@ -107,7 +107,6 @@ bevy-app = [
     "bevy/ui_picking",
     # Keep zstd-compressed KTX2/tonemapping support on the existing C backend.
     "bevy/zstd_c",
-    "dep:wgpu",
 ]
 gpu-runtime = ["dep:alife_archive", "dep:alife_gpu_backend", "dep:alife_runtime"]
 foundation-training = ["gpu-runtime", "dep:alife_training", "alife_training/receipt-lineage", "alife_runtime/training-rollout", "dep:sha2", "dep:bytemuck"]
@@ -124,3 +123,6 @@ production-voxel-frontend = [
     "gpu-runtime",
     "vfx-hanabi",
 ]
+
+[lints]
+workspace = true

@@ -150,9 +150,12 @@ impl HeadlessWorld {
         {
             return Ok(());
         }
+        let old_pos = object.position;
+        let old_oversized = Self::is_oversized_spatial(object);
         let organism = object.organism_id;
         object.position = position;
         object.grounded_physical.velocity = Vec3f::ZERO;
+        self.update_object_spatial_cell(id, old_pos, old_oversized);
         if let Some(organism) = organism {
             self.sync_carried_pose(organism)?;
         }
@@ -276,9 +279,8 @@ mod tests {
         let food = world.entity_id("food").unwrap();
         world.objects.get_mut(&food.raw()).unwrap().consumed = true;
         assert!(!world.can_begin_player_hold(food));
-        let object = world.objects.get_mut(&food.raw()).unwrap();
-        object.consumed = false;
-        object.carried_by = Some(OrganismId(1));
+        world.objects.get_mut(&food.raw()).unwrap().consumed = false;
+        world.set_object_carried_by_for_test(food, Some(OrganismId(1)));
         assert!(!world.can_begin_player_hold(food));
         assert_eq!(world.player_held_object(), None);
     }

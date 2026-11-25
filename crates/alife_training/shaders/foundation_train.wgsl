@@ -72,7 +72,7 @@ fn store_output_f32(index:u32, value:f32) {
 }
 
 fn finite(value:f32) -> bool {
-  return value == value && abs(value) <= 3.402823466e+38;
+  return (bitcast<u32>(value) & 0x7f800000u) != 0x7f800000u;
 }
 
 fn route_fires(cadence_raw:u32, step:u32) -> bool {
@@ -278,49 +278,66 @@ fn forward_candidate_logits(@builtin(global_invocation_id) gid:vec3<u32>) {
   store_output_f32(h(28u) + output_index, logit + clamp(memory, -limit, limit) + clamp(cognitive, -limit, limit));
 }
 
-@compute @workgroup_size(1)
-fn forward_speech_logits(@builtin(global_invocation_id) gid:vec3<u32>) {
-  let tick = gid.x;
+var<workgroup> speech_prev_tanh:array<f32,32>;
+var<workgroup> speech_logit_partial:array<f32,32>;
+@compute @workgroup_size(32)
+fn forward_speech_logits(
+  @builtin(workgroup_id) wid:vec3<u32>,
+  @builtin(local_invocation_index) lane:u32,
+) {
+  let tick = wid.x;
   if (tick >= h(5u)) { return; }
+  let final_state = (tick + 1u) * h(4u) * h(1u);
   if (h(52u) == 1u) {
-    if (gid.y != 0u) { return; }
+    if (wid.y != 0u) { return; }
+    let output = lane;
+    let begin = meta_words[h(11u) + output];
+    let end = meta_words[h(11u) + output + 1u];
     for (var step=0u; step<6u; step++) {
-      for (var output=0u; output<32u; output++) {
-        var logit = 0.0;
-      let final_state = (tick + 1u) * h(4u) * h(1u);
-      for (var cursor=meta_words[h(11u)+output]; cursor<meta_words[h(11u)+output+1u]; cursor++) {
+      var logit = 0.0;
+      for (var cursor=begin; cursor<end; cursor++) {
         let synapse=meta_words[h(11u)+33u+cursor];
         if (synapse_word(synapse, 2u) == SYNAPSE_DECODER
             && synapse_word(synapse, 4u) == DECODER_SPEECH_PAYLOAD
             && synapse_word(synapse, 1u) == h(37u) + output) {
-          let lane = synapse_word(synapse, 0u) - (h(37u) - 32u);
+          let src_lane = synapse_word(synapse, 0u) - (h(37u) - 32u);
           var input = load_state_f32(h(22u) + final_state + synapse_word(synapse, 0u));
-          if (step>0u && lane>=18u) { input=tanh(load_output_f32(h(40u)+(tick*6u+step-1u)*32u+lane)); }
+          if (step>0u && src_lane>=18u) { input=speech_prev_tanh[src_lane]; }
           logit += input * effective_weight(tick, synapse);
         }
       }
-        store_output_f32(h(40u)+(tick*6u+step)*32u+output, logit);
-      }
+      store_output_f32(h(40u)+(tick*6u+step)*32u+output, logit);
+      speech_prev_tanh[output] = tanh(logit);
+      workgroupBarrier();
     }
     return;
   }
   if (candidate_word(tick, 28u) == 0u) {
-    store_output_f32(h(40u) + tick, 0.0);
+    if (lane == 0u) { store_output_f32(h(40u) + tick, 0.0); }
     return;
   }
   let output_index = candidate_word(tick, 29u);
   let target_neuron = h(37u) + output_index;
-  let final_state = (tick + 1u) * h(4u) * h(1u);
+  let begin = meta_words[h(11u) + output_index];
+  let end = meta_words[h(11u) + output_index + 1u];
   var logit = 0.0;
-  for (var synapse = 0u; synapse < h(2u); synapse++) {
-    if (synapse_word(synapse, 2u) != SYNAPSE_DECODER
-        || synapse_word(synapse, 4u) != DECODER_SPEECH_PAYLOAD
-        || synapse_word(synapse, 1u) != target_neuron) { continue; }
-    let source = synapse_word(synapse, 0u);
-    logit += load_state_f32(h(22u) + final_state + source)
-      * effective_weight(tick, synapse);
+  for (var cursor = begin + lane; cursor < end; cursor += 32u) {
+    let synapse = meta_words[h(11u) + 33u + cursor];
+    if (synapse_word(synapse, 2u) == SYNAPSE_DECODER
+        && synapse_word(synapse, 4u) == DECODER_SPEECH_PAYLOAD
+        && synapse_word(synapse, 1u) == target_neuron) {
+      let source = synapse_word(synapse, 0u);
+      logit += load_state_f32(h(22u) + final_state + source)
+        * effective_weight(tick, synapse);
+    }
   }
-  store_output_f32(h(40u) + tick, logit);
+  speech_logit_partial[lane] = logit;
+  workgroupBarrier();
+  for (var stride = 16u; stride > 0u; stride /= 2u) {
+    if (lane < stride) { speech_logit_partial[lane] += speech_logit_partial[lane + stride]; }
+    workgroupBarrier();
+  }
+  if (lane == 0u) { store_output_f32(h(40u) + tick, speech_logit_partial[0]); }
 }
 
 var<workgroup> loss_partial:array<f32,64>;
@@ -394,43 +411,62 @@ fn seed_candidate_activation_gradients(@builtin(global_invocation_id) gid:vec3<u
   store_gradient_f32(index, load_gradient_f32(index) + gradient);
 }
 
+var<workgroup> speech_future:array<f32,32>;
+var<workgroup> speech_initial:array<f32,32>;
+var<workgroup> speech_deltas:array<f32,32>;
+var<workgroup> speech_work:array<f32,1024>;
 @compute @workgroup_size(64)
-fn seed_speech_activation_gradients(@builtin(global_invocation_id) gid:vec3<u32>) {
+fn seed_speech_activation_gradients(
+  @builtin(global_invocation_id) gid:vec3<u32>,
+  @builtin(workgroup_id) wid:vec3<u32>,
+  @builtin(local_invocation_index) lid:u32,
+) {
   let neuron = gid.x;
   let tick = gid.y;
   if (h(52u) == 1u) {
-    if (neuron != 0u || tick >= h(5u)) { return; }
-    var future:array<f32,32>;
-    var initial:array<f32,32>;
+    if (tick >= h(5u) || wid.x != 0u) { return; }
+    if (lid < 32u) {
+      speech_future[lid] = 0.0;
+      speech_initial[lid] = 0.0;
+    }
+    workgroupBarrier();
     for (var reverse=0u; reverse<6u; reverse++) {
       let step=5u-reverse;
-      var deltas:array<f32,32>;
-      for (var output=0u; output<32u; output++) {
+      if (lid < 32u) {
+        let output = lid;
         let label=h(63u)+tick*384u+step*64u+output*2u;
         let raw=load_output_f32(h(40u)+(tick*6u+step)*32u+output);
         let weight=bitcast<f32>(training_words[label+1u]);
-        let activation=tanh(raw);
-        deltas[output]=2.0*weight*(raw-bitcast<f32>(training_words[label]));
-        if (output>=18u) { deltas[output]+=future[output]*(1.0-activation*activation); }
-        store_gradient_f32(h(60u)+h(2u)+(tick*6u+step)*32u+output,deltas[output]);
+        let act=tanh(raw);
+        var d=2.0*weight*(raw-bitcast<f32>(training_words[label]));
+        if (output>=18u) { d+=speech_future[output]*(1.0-act*act); }
+        speech_deltas[output]=d;
+        store_gradient_f32(h(60u)+h(2u)+(tick*6u+step)*32u+output,d);
+        for (var k=0u; k<32u; k++) { speech_work[output*32u+k]=0.0; }
       }
-      var input_gradient:array<f32,32>;
-      for (var lane=0u;lane<32u;lane++) {input_gradient[lane]=0.0;}
-      for (var output=0u; output<32u; output++) {
+      workgroupBarrier();
+      if (lid < 32u) {
+        let output = lid;
+        let d = speech_deltas[output];
         for (var cursor=meta_words[h(11u)+output]; cursor<meta_words[h(11u)+output+1u]; cursor++) {
           let synapse=meta_words[h(11u)+33u+cursor];
-          let lane=synapse_word(synapse,0u)-(h(37u)-32u);
-          input_gradient[lane]+=deltas[output]*effective_weight(tick,synapse);
+          let src_lane=synapse_word(synapse,0u)-(h(37u)-32u);
+          speech_work[output*32u+src_lane]+=d*effective_weight(tick,synapse);
         }
       }
-      for (var lane=0u; lane<32u; lane++) {
-        if (step==0u || lane<18u) { initial[lane]+=input_gradient[lane]; }
-        future[lane]=input_gradient[lane];
+      workgroupBarrier();
+      if (lid < 32u) {
+        let lane = lid;
+        var ig = 0.0;
+        for (var output=0u; output<32u; output++) { ig += speech_work[output*32u+lane]; }
+        if (step==0u || lane<18u) { speech_initial[lane]+=ig; }
+        speech_future[lane]=ig;
       }
+      workgroupBarrier();
     }
-    for (var lane=0u; lane<32u; lane++) {
-      let at=h(24u)+(tick+1u)*h(4u)*h(1u)+h(37u)-32u+lane;
-      store_gradient_f32(at,load_gradient_f32(at)+initial[lane]);
+    if (lid < 32u) {
+      let at=h(24u)+(tick+1u)*h(4u)*h(1u)+h(37u)-32u+lid;
+      store_gradient_f32(at,load_gradient_f32(at)+speech_initial[lid]);
     }
     return;
   }
@@ -481,7 +517,7 @@ fn backward_local(@builtin(global_invocation_id) gid:vec3<u32>) {
   let homeostatic_gain = bitcast<f32>(meta_words[dynamics + 3u]);
   let metabolic_decay = bitcast<f32>(meta_words[dynamics + 4u]);
   var activation_gradient = load_gradient_f32(h(24u) + current_state + neuron);
-  if (h(8u) + 1u == h(4u)) {
+  if (h(41u) == 0u && h(8u) + 1u == h(4u)) {
     let target_weight = load_training_f32(h(20u) + tick * neurons + neuron);
     if (target_weight > 0.0) {
       let expected = load_training_f32(h(19u) + tick * neurons + neuron);
@@ -637,16 +673,32 @@ fn speech_weight_gradients(@builtin(global_invocation_id) gid:vec3<u32>) {
   store_gradient_f32(h(27u) + synapse, gradient);
 }
 
-var<workgroup> norm_partial:array<f32,64>;
-@compute @workgroup_size(64)
-fn reduce_gradient_norm(@builtin(local_invocation_index) lane:u32) {
+var<workgroup> norm_wg_partial:array<f32,256>;
+@compute @workgroup_size(256)
+fn reduce_gradient_norm_partials(
+  @builtin(global_invocation_id) gid:vec3<u32>,
+  @builtin(local_invocation_index) lane:u32,
+  @builtin(workgroup_id) wid:vec3<u32>,
+) {
   var squared = 0.0;
-  for (var synapse = lane; synapse < h(2u); synapse += 64u) {
+  for (var synapse = gid.x; synapse < h(2u); synapse += 64u * 256u) {
     if (trainable_mask[synapse] == 0u) { continue; }
     let gradient = load_gradient_f32(h(27u) + synapse);
     squared += gradient * gradient;
   }
-  norm_partial[lane] = squared;
+  norm_wg_partial[lane] = squared;
+  workgroupBarrier();
+  for (var stride = 128u; stride > 0u; stride /= 2u) {
+    if (lane < stride) { norm_wg_partial[lane] += norm_wg_partial[lane + stride]; }
+    workgroupBarrier();
+  }
+  if (lane == 0u) { store_output_f32(h(29u) + 4u + wid.x, norm_wg_partial[0]); }
+}
+
+var<workgroup> norm_partial:array<f32,64>;
+@compute @workgroup_size(64)
+fn reduce_gradient_norm(@builtin(local_invocation_index) lane:u32) {
+  norm_partial[lane] = load_output_f32(h(29u) + 4u + lane);
   workgroupBarrier();
   for (var stride = 32u; stride > 0u; stride /= 2u) {
     if (lane < stride) { norm_partial[lane] += norm_partial[lane + stride]; }
@@ -683,17 +735,34 @@ fn adam_proposal(synapse:u32) -> vec3<f32> {
   return vec3<f32>(next_weight, next_m, next_v);
 }
 
-var<workgroup> adam_invalid:array<u32,64>;
-@compute @workgroup_size(64)
-fn validate_accumulation(@builtin(local_invocation_index) lane:u32) {
+var<workgroup> invalid_wg_partial:array<u32,256>;
+@compute @workgroup_size(256)
+fn validate_accumulation_partials(
+  @builtin(global_invocation_id) gid:vec3<u32>,
+  @builtin(local_invocation_index) lane:u32,
+  @builtin(workgroup_id) wid:vec3<u32>,
+) {
   var invalid = 0u;
-  if (!finite(load_output_f32(h(29u) + 2u))) { invalid = 1u; }
-  for (var synapse = lane; synapse < h(2u); synapse += 64u) {
+  for (var synapse = gid.x; synapse < h(2u); synapse += 64u * 256u) {
     if (trainable_mask[synapse] == 0u) { continue; }
     let next = load_gradient_f32(h(60u) + synapse)
       + bitcast<f32>(h(61u)) * load_gradient_f32(h(27u) + synapse);
     if (!finite(next)) { invalid = 1u; }
   }
+  invalid_wg_partial[lane] = invalid;
+  workgroupBarrier();
+  for (var stride = 128u; stride > 0u; stride /= 2u) {
+    if (lane < stride) { invalid_wg_partial[lane] |= invalid_wg_partial[lane + stride]; }
+    workgroupBarrier();
+  }
+  if (lane == 0u) { output_words[h(29u) + 4u + wid.x] = invalid_wg_partial[0]; }
+}
+
+var<workgroup> adam_invalid:array<u32,64>;
+@compute @workgroup_size(64)
+fn validate_accumulation(@builtin(local_invocation_index) lane:u32) {
+  var invalid = output_words[h(29u) + 4u + lane];
+  if (!finite(load_output_f32(h(29u) + 2u))) { invalid = 1u; }
   adam_invalid[lane] = invalid;
   workgroupBarrier();
   for (var stride = 32u; stride > 0u; stride /= 2u) {
@@ -711,16 +780,32 @@ fn accumulate_weight_gradients(@builtin(global_invocation_id) gid:vec3<u32>) {
     + bitcast<f32>(h(61u)) * load_gradient_f32(h(27u) + synapse));
 }
 
-@compute @workgroup_size(64)
-fn validate_adamw(@builtin(local_invocation_index) lane:u32) {
+@compute @workgroup_size(256)
+fn validate_adamw_partials(
+  @builtin(global_invocation_id) gid:vec3<u32>,
+  @builtin(local_invocation_index) lane:u32,
+  @builtin(workgroup_id) wid:vec3<u32>,
+) {
   var invalid = 0u;
-  if (!finite(load_output_f32(h(29u) + 2u))) { invalid = 1u; }
-  for (var synapse = lane; synapse < h(2u); synapse += 64u) {
+  for (var synapse = gid.x; synapse < h(2u); synapse += 64u * 256u) {
     if (trainable_mask[synapse] == 0u) { continue; }
     if (optimizer_words[h(62u) + synapse] == 0xffffffffu) { invalid = 1u; }
     let next = adam_proposal(synapse);
     if (!finite(next.x) || !finite(next.y) || !finite(next.z)) { invalid = 1u; }
   }
+  invalid_wg_partial[lane] = invalid;
+  workgroupBarrier();
+  for (var stride = 128u; stride > 0u; stride /= 2u) {
+    if (lane < stride) { invalid_wg_partial[lane] |= invalid_wg_partial[lane + stride]; }
+    workgroupBarrier();
+  }
+  if (lane == 0u) { output_words[h(29u) + 4u + wid.x] = invalid_wg_partial[0]; }
+}
+
+@compute @workgroup_size(64)
+fn validate_adamw(@builtin(local_invocation_index) lane:u32) {
+  var invalid = output_words[h(29u) + 4u + lane];
+  if (!finite(load_output_f32(h(29u) + 2u))) { invalid = 1u; }
   adam_invalid[lane] = invalid;
   workgroupBarrier();
   for (var stride = 32u; stride > 0u; stride /= 2u) {

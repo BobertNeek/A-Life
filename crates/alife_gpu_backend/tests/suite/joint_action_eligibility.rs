@@ -1,10 +1,9 @@
-#![cfg(feature = "gpu-tests")]
-
+#[allow(unused_imports)]
+use crate::support;
 use alife_core::{
     ActionId, ActionKind, CandidateActionFamily, DecoderHeadKind, PerceptionFrame, SensorProfile,
 };
 use alife_gpu_backend::GpuPhenotypeUpload;
-mod support;
 
 #[test]
 fn joint_non_global_executed_locomotion_accumulates_eligibility() {
@@ -18,6 +17,10 @@ fn joint_non_global_executed_locomotion_accumulates_eligibility() {
             true,
             2,
         );
+        let mut sensory = original.sensory().clone();
+        // Zero novelty so bounded game exploration does not perturb a zero-weight tie
+        // away from candidate 0 (global Inspect) while locomotion channel 0 selects candidate 1.
+        sensory.channels.novelty_signal = alife_core::NormalizedScalar::ZERO;
         let mut candidates = original.candidates().to_vec();
         candidates[1].kind = ActionKind::Move;
         candidates[1].family = CandidateActionFamily::Avoid;
@@ -26,7 +29,7 @@ fn joint_non_global_executed_locomotion_accumulates_eligibility() {
             original.organism_id(),
             original.tick(),
             original.sensor_profile(),
-            original.sensory().clone(),
+            sensory,
             original.body(),
             *original.homeostasis(),
             candidates,
@@ -42,10 +45,11 @@ fn joint_non_global_executed_locomotion_accumulates_eligibility() {
             "global Inspect must be distinct from executed locomotion"
         );
         let words = gpu.read_all_mutable_words().await;
+        let atomic_words = gpu.read_all_atomic_words().await;
         eprintln!("adapter={}", pending.result.adapter_identity);
         let slot = gpu.slot_for_test(0);
         assert_eq!(
-            words[slot.word_ranges().speech_payload_words.start as usize + 2] & 0xff,
+            atomic_words[slot.word_ranges().speech_payload_words.start as usize + 2] & 0xff,
             2,
             "GPU must select candidate 1 for the enabled locomotion channel"
         );

@@ -92,10 +92,12 @@ impl PackedLayout {
 
 type ReplayShape = (usize, alife_core::DendriticBranchSet);
 
-fn replay_shapes_equal(previous: &ReplayShape, next: &ReplayShape) -> bool {
-    let (previous_branches, next_branches) = (previous.1.branches(), next.1.branches());
-    previous.0 == next.0
-        && previous_branches.len() == next_branches.len()
+fn dendritic_branches_equal(
+    previous: &alife_core::DendriticBranchSet,
+    next: &alife_core::DendriticBranchSet,
+) -> bool {
+    let (previous_branches, next_branches) = (previous.branches(), next.branches());
+    previous_branches.len() == next_branches.len()
         && previous_branches.iter().zip(next_branches).all(|(a, b)| {
             a.target == b.target
                 && a.threshold.to_bits() == b.threshold.to_bits()
@@ -106,6 +108,10 @@ fn replay_shapes_equal(previous: &ReplayShape, next: &ReplayShape) -> bool {
                     .zip(&b.inputs)
                     .all(|(a, b)| a.source == b.source && a.weight.to_bits() == b.weight.to_bits())
         })
+}
+
+fn replay_shapes_equal(previous: &ReplayShape, next: &ReplayShape) -> bool {
+    previous.0 == next.0 && dendritic_branches_equal(&previous.1, &next.1)
 }
 
 #[derive(Clone)]
@@ -123,8 +129,11 @@ struct TrainerPipelines {
     recurrent_gradients: wgpu::ComputePipeline,
     candidate_gradients: wgpu::ComputePipeline,
     speech_gradients: wgpu::ComputePipeline,
+    gradient_norm_partials: wgpu::ComputePipeline,
     gradient_norm: wgpu::ComputePipeline,
+    validate_adamw_partials: wgpu::ComputePipeline,
     validate_adamw: wgpu::ComputePipeline,
+    validate_accumulation_partials: wgpu::ComputePipeline,
     validate_accumulation: wgpu::ComputePipeline,
     accumulate: wgpu::ComputePipeline,
     adamw: wgpu::ComputePipeline,
@@ -141,10 +150,14 @@ struct TrainerGpuState {
     outputs: wgpu::Buffer,
     mask: wgpu::Buffer,
     readback: wgpu::Buffer,
+    staging_readback: std::sync::Mutex<Option<wgpu::Buffer>>,
     bind_group: wgpu::BindGroup,
     step_bind_groups: Vec<wgpu::BindGroup>,
     pipelines: TrainerPipelines,
     layout: PackedLayout,
+    capacity_ticks: u32,
+    capacity_meta_words: usize,
+    last_meta_dendrites: Option<alife_core::DendriticBranchSet>,
 }
 
 /// Owns offline optimizer state beside, but never inside, the shared runtime.
@@ -383,6 +396,10 @@ impl FoundationTrainer {
         sequence.validate_for(&self.phenotype)?;
         self.replay_speech_active = false;
         let shape = (sequence.ticks.len(), sequence.initial.dendrites.clone());
+        let next_step = self
+            .optimizer_step
+            .checked_add(1)
+            .ok_or(ScaffoldContractError::PhenotypeCompile)?;
         if self
             .replay_shape
             .as_ref()
@@ -393,18 +410,33 @@ impl FoundationTrainer {
                 .refresh_replay_parameters(sequence, self.phenotype.microstep_count());
             let words =
                 pack_replay_sequence(sequence, self.gpu.layout, self.phenotype.neuron_count());
-            let headers = build_step_headers(
-                &self.phenotype,
-                self.gpu.layout,
-                self.config,
-                self.optimizer_step
-                    .checked_add(1)
-                    .ok_or(ScaffoldContractError::PhenotypeCompile)?,
-            )?;
+            let headers =
+                build_step_headers(&self.phenotype, self.gpu.layout, self.config, next_step)?;
             let (_, queue) = self.session.backend().offline_training_device_queue()?;
             queue.write_buffer(&self.gpu.training, 0, bytemuck::cast_slice(&words));
             queue.write_buffer(&self.gpu.step_headers, 0, bytemuck::cast_slice(&headers));
             return Ok(());
+        }
+        if self.gpu.layout.replay && sequence.ticks.len() as u32 <= self.gpu.capacity_ticks {
+            let (meta, layout) = pack_metadata_and_layout(&self.phenotype, Some(sequence))?;
+            if meta.len() <= self.gpu.capacity_meta_words {
+                let (_, queue) = self.session.backend().offline_training_device_queue()?;
+                let dendrites_unchanged =
+                    self.gpu.last_meta_dendrites.as_ref().is_some_and(|prev| {
+                        dendritic_branches_equal(prev, &sequence.initial.dendrites)
+                    });
+                if !dendrites_unchanged {
+                    queue.write_buffer(&self.gpu._meta, 0, bytemuck::cast_slice(&meta));
+                    self.gpu.last_meta_dendrites = Some(sequence.initial.dendrites.clone());
+                }
+                self.gpu.layout = layout;
+                let words = pack_replay_sequence(sequence, layout, self.phenotype.neuron_count());
+                let headers = build_step_headers(&self.phenotype, layout, self.config, next_step)?;
+                queue.write_buffer(&self.gpu.training, 0, bytemuck::cast_slice(&words));
+                queue.write_buffer(&self.gpu.step_headers, 0, bytemuck::cast_slice(&headers));
+                self.replay_shape = Some(shape);
+                return Ok(());
+            }
         }
         let (device, queue) = self.session.backend().offline_training_device_queue()?;
         let zeros = vec![0.0; self.phenotype.synapses().len()];
@@ -417,14 +449,7 @@ impl FoundationTrainer {
             Some(&self.gpu.pipelines),
         )?;
         let words = pack_replay_sequence(sequence, next.layout, self.phenotype.neuron_count());
-        let headers = build_step_headers(
-            &self.phenotype,
-            next.layout,
-            self.config,
-            self.optimizer_step
-                .checked_add(1)
-                .ok_or(ScaffoldContractError::PhenotypeCompile)?,
-        )?;
+        let headers = build_step_headers(&self.phenotype, next.layout, self.config, next_step)?;
         queue.write_buffer(&next.training, 0, bytemuck::cast_slice(&words));
         queue.write_buffer(&next.step_headers, 0, bytemuck::cast_slice(&headers));
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -713,38 +738,35 @@ impl FoundationTrainer {
                 encoder,
                 &self.gpu.pipelines.seed_speech,
                 &self.gpu.bind_group,
-                groups,
+                1,
                 self.gpu.layout.ticks,
                 "replay-speech-adjoints",
             );
         }
         self.record_backward(encoder, self.gpu.layout.ticks * steps, groups);
-        dispatch(
-            encoder,
-            &self.gpu.pipelines.recurrent_gradients,
-            &self.gpu.bind_group,
-            weight_groups,
-            1,
-            "replay-recurrent-gradients",
-        );
-        dispatch(
-            encoder,
-            &self.gpu.pipelines.candidate_gradients,
-            &self.gpu.bind_group,
-            weight_groups,
-            1,
-            "replay-decoder-gradients",
-        );
-        if self.replay_speech_active {
-            dispatch(
-                encoder,
-                &self.gpu.pipelines.speech_gradients,
-                &self.gpu.bind_group,
-                weight_groups,
-                1,
-                "replay-speech-gradients",
-            );
+        {
+            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("replay-weight-gradients"),
+                timestamp_writes: None,
+            });
+            pass.set_bind_group(0, &self.gpu.bind_group, &[]);
+            pass.set_pipeline(&self.gpu.pipelines.recurrent_gradients);
+            pass.dispatch_workgroups(weight_groups.max(1), 1, 1);
+            pass.set_pipeline(&self.gpu.pipelines.candidate_gradients);
+            pass.dispatch_workgroups(weight_groups.max(1), 1, 1);
+            if self.replay_speech_active {
+                pass.set_pipeline(&self.gpu.pipelines.speech_gradients);
+                pass.dispatch_workgroups(weight_groups.max(1), 1, 1);
+            }
         }
+        dispatch(
+            encoder,
+            &self.gpu.pipelines.gradient_norm_partials,
+            &self.gpu.bind_group,
+            64,
+            1,
+            "replay-gradient-norm-partials",
+        );
         dispatch(
             encoder,
             &self.gpu.pipelines.gradient_norm,
@@ -872,10 +894,18 @@ impl FoundationTrainer {
             .checked_add(1)
             .ok_or(ScaffoldContractError::PhenotypeCompile)?;
         let headers = build_step_headers(&self.phenotype, self.gpu.layout, self.config, next_step)?;
-        let (device, queue) = self.session.backend().offline_training_device_queue()?;
+        let (_, queue) = self.session.backend().offline_training_device_queue()?;
         queue.write_buffer(&self.gpu.step_headers, 0, bytemuck::cast_slice(&headers));
         self.encode_replay_gradients(&mut encoder, adjoints, adjoint_offset)?;
         let weight_groups = (self.phenotype.synapses().len() as u32).div_ceil(WORKGROUP_SIZE);
+        dispatch(
+            &mut encoder,
+            &self.gpu.pipelines.validate_adamw_partials,
+            &self.gpu.bind_group,
+            64,
+            1,
+            "validate-adamw-partials",
+        );
         dispatch(
             &mut encoder,
             &self.gpu.pipelines.validate_adamw,
@@ -892,14 +922,8 @@ impl FoundationTrainer {
             1,
             "replay-adamw",
         );
-        let submission = queue.submit(Some(encoder.finish()));
-        device
-            .poll(wgpu::PollType::Wait {
-                submission_index: Some(submission),
-                timeout: None,
-            })
-            .map_err(|_| TrainingError::GpuSubmission)?;
-        let update = self.read_float_buffer(
+        let update = self.submit_and_read_small_readback(
+            encoder,
             &self.gpu.outputs,
             u64::from(self.gpu.layout.metrics + 2) * 4,
             2,
@@ -993,6 +1017,14 @@ impl FoundationTrainer {
         );
         dispatch(
             &mut encoder,
+            &self.gpu.pipelines.validate_accumulation_partials,
+            &self.gpu.bind_group,
+            64,
+            1,
+            "validate-gradient-accumulation-partials",
+        );
+        dispatch(
+            &mut encoder,
             &self.gpu.pipelines.validate_accumulation,
             &self.gpu.bind_group,
             1,
@@ -1014,9 +1046,12 @@ impl FoundationTrainer {
             0,
             bytes,
         );
-        queue.submit(Some(encoder.finish()));
-        let receipt =
-            self.read_float_buffer(&self.gpu.outputs, u64::from(layout.metrics + 2) * 4, 2)?;
+        let receipt = self.submit_and_read_small_readback(
+            encoder,
+            &self.gpu.outputs,
+            u64::from(layout.metrics + 2) * 4,
+            2,
+        )?;
         if receipt[0] < 0.0 || receipt[1] != 1.0 {
             return Err(TrainingError::MalformedReadback);
         }
@@ -1052,11 +1087,27 @@ impl FoundationTrainer {
         );
         dispatch(
             &mut encoder,
+            &self.gpu.pipelines.gradient_norm_partials,
+            &self.gpu.bind_group,
+            64,
+            1,
+            "batch-gradient-norm-partials",
+        );
+        dispatch(
+            &mut encoder,
             &self.gpu.pipelines.gradient_norm,
             &self.gpu.bind_group,
             1,
             1,
             "batch-gradient-norm",
+        );
+        dispatch(
+            &mut encoder,
+            &self.gpu.pipelines.validate_adamw_partials,
+            &self.gpu.bind_group,
+            64,
+            1,
+            "validate-batch-adamw-partials",
         );
         dispatch(
             &mut encoder,
@@ -1074,8 +1125,8 @@ impl FoundationTrainer {
             1,
             "batch-adamw",
         );
-        queue.submit(Some(encoder.finish()));
-        let receipt = self.read_float_buffer(
+        let receipt = self.submit_and_read_small_readback(
+            encoder,
             &self.gpu.outputs,
             u64::from(self.gpu.layout.metrics + 2) * 4,
             2,
@@ -1120,6 +1171,7 @@ impl FoundationTrainer {
         sequence: &TrainingSequence32,
         measure_loss_after: bool,
     ) -> Result<TrainingStepStatistics, TrainingError> {
+        let _span = tracing::debug_span!("foundation_train_step", measure_loss_after).entered();
         self.validate_objective_mask(false)?;
         if self.accumulation.is_some() || self.gpu.layout.replay {
             return Err(ScaffoldContractError::PhenotypeCompile.into());
@@ -1159,25 +1211,20 @@ impl FoundationTrainer {
         encoder.clear_buffer(&self.gpu.gradients, 0, None);
         encoder.clear_buffer(&self.gpu.outputs, 0, None);
         self.record_forward(&mut encoder, total_steps, neuron_groups);
-        if has_candidate {
-            dispatch(
-                &mut encoder,
-                &self.gpu.pipelines.candidate_forward,
-                &self.gpu.bind_group,
-                1,
-                TRAINING_SEQUENCE_TICKS as u32,
-                "foundation-trainer-candidate-forward",
-            );
-        }
-        if has_speech {
-            dispatch(
-                &mut encoder,
-                &self.gpu.pipelines.speech_forward,
-                &self.gpu.bind_group,
-                TRAINING_SEQUENCE_TICKS as u32,
-                1,
-                "foundation-trainer-speech-forward",
-            );
+        if has_candidate || has_speech {
+            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("foundation-trainer-decoder-forward"),
+                timestamp_writes: None,
+            });
+            pass.set_bind_group(0, &self.gpu.bind_group, &[]);
+            if has_candidate {
+                pass.set_pipeline(&self.gpu.pipelines.candidate_forward);
+                pass.dispatch_workgroups(1, TRAINING_SEQUENCE_TICKS as u32, 1);
+            }
+            if has_speech {
+                pass.set_pipeline(&self.gpu.pipelines.speech_forward);
+                pass.dispatch_workgroups(TRAINING_SEQUENCE_TICKS as u32, 1, 1);
+            }
         }
         dispatch(
             &mut encoder,
@@ -1215,34 +1262,31 @@ impl FoundationTrainer {
             );
         }
         self.record_backward(&mut encoder, total_steps, neuron_groups);
+        {
+            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("foundation-trainer-weight-gradients"),
+                timestamp_writes: None,
+            });
+            pass.set_bind_group(0, &self.gpu.bind_group, &[]);
+            pass.set_pipeline(&self.gpu.pipelines.recurrent_gradients);
+            pass.dispatch_workgroups(synapse_groups.max(1), 1, 1);
+            if has_candidate {
+                pass.set_pipeline(&self.gpu.pipelines.candidate_gradients);
+                pass.dispatch_workgroups(synapse_groups.max(1), 1, 1);
+            }
+            if has_speech {
+                pass.set_pipeline(&self.gpu.pipelines.speech_gradients);
+                pass.dispatch_workgroups(synapse_groups.max(1), 1, 1);
+            }
+        }
         dispatch(
             &mut encoder,
-            &self.gpu.pipelines.recurrent_gradients,
+            &self.gpu.pipelines.gradient_norm_partials,
             &self.gpu.bind_group,
-            synapse_groups,
+            64,
             1,
-            "foundation-trainer-recurrent-weight-gradients",
+            "foundation-trainer-gradient-norm-partials",
         );
-        if has_candidate {
-            dispatch(
-                &mut encoder,
-                &self.gpu.pipelines.candidate_gradients,
-                &self.gpu.bind_group,
-                synapse_groups,
-                1,
-                "foundation-trainer-candidate-weight-gradients",
-            );
-        }
-        if has_speech {
-            dispatch(
-                &mut encoder,
-                &self.gpu.pipelines.speech_gradients,
-                &self.gpu.bind_group,
-                synapse_groups,
-                1,
-                "foundation-trainer-speech-weight-gradients",
-            );
-        }
         dispatch(
             &mut encoder,
             &self.gpu.pipelines.gradient_norm,
@@ -1257,6 +1301,14 @@ impl FoundationTrainer {
             &self.gpu.readback,
             8,
             4,
+        );
+        dispatch(
+            &mut encoder,
+            &self.gpu.pipelines.validate_adamw_partials,
+            &self.gpu.bind_group,
+            64,
+            1,
+            "validate-adamw-partials",
         );
         dispatch(
             &mut encoder,
@@ -1286,25 +1338,20 @@ impl FoundationTrainer {
             encoder.clear_buffer(&self.gpu.state, 0, None);
             encoder.clear_buffer(&self.gpu.outputs, 0, None);
             self.record_forward(&mut encoder, total_steps, neuron_groups);
-            if has_candidate {
-                dispatch(
-                    &mut encoder,
-                    &self.gpu.pipelines.candidate_forward,
-                    &self.gpu.bind_group,
-                    1,
-                    TRAINING_SEQUENCE_TICKS as u32,
-                    "foundation-trainer-candidate-forward-after",
-                );
-            }
-            if has_speech {
-                dispatch(
-                    &mut encoder,
-                    &self.gpu.pipelines.speech_forward,
-                    &self.gpu.bind_group,
-                    TRAINING_SEQUENCE_TICKS as u32,
-                    1,
-                    "foundation-trainer-speech-forward-after",
-                );
+            if has_candidate || has_speech {
+                let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                    label: Some("foundation-trainer-decoder-forward-after"),
+                    timestamp_writes: None,
+                });
+                pass.set_bind_group(0, &self.gpu.bind_group, &[]);
+                if has_candidate {
+                    pass.set_pipeline(&self.gpu.pipelines.candidate_forward);
+                    pass.dispatch_workgroups(1, TRAINING_SEQUENCE_TICKS as u32, 1);
+                }
+                if has_speech {
+                    pass.set_pipeline(&self.gpu.pipelines.speech_forward);
+                    pass.dispatch_workgroups(TRAINING_SEQUENCE_TICKS as u32, 1, 1);
+                }
             }
             dispatch(
                 &mut encoder,
@@ -1404,74 +1451,43 @@ impl FoundationTrainer {
             u32::from(self.phenotype.microstep_count()) * TRAINING_SEQUENCE_TICKS as u32;
         let neuron_groups = self.phenotype.neuron_count().div_ceil(WORKGROUP_SIZE);
         let readback_bytes = ((TRAINING_SEQUENCE_TICKS * 2 + 1) * 4) as u64;
-        let staging = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("foundation-trainer-evaluation-readback"),
-            size: readback_bytes,
-            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-            mapped_at_creation: false,
-        });
-        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("foundation-trainer-evaluation"),
-        });
-        encoder.clear_buffer(&self.gpu.state, 0, None);
-        encoder.clear_buffer(&self.gpu.outputs, 0, None);
-        self.record_forward(&mut encoder, total_steps, neuron_groups);
-        dispatch(
-            &mut encoder,
-            &self.gpu.pipelines.candidate_forward,
-            &self.gpu.bind_group,
-            1,
-            TRAINING_SEQUENCE_TICKS as u32,
-            "foundation-trainer-evaluation-candidate-forward",
-        );
-        dispatch(
-            &mut encoder,
-            &self.gpu.pipelines.speech_forward,
-            &self.gpu.bind_group,
-            TRAINING_SEQUENCE_TICKS as u32,
-            1,
-            "foundation-trainer-evaluation-speech-forward",
-        );
-        dispatch(
-            &mut encoder,
-            &self.gpu.pipelines.loss,
-            &self.gpu.bind_group,
-            1,
-            1,
-            "foundation-trainer-evaluation-loss",
-        );
-        encoder.copy_buffer_to_buffer(
-            &self.gpu.outputs,
-            u64::from(self.gpu.layout.candidate_logits) * 4,
-            &staging,
-            0,
+        let values = self.gpu.read_with_staging(
+            device,
+            queue,
             readback_bytes,
-        );
-        let command_buffer = encoder.finish();
-        let (sender, receiver) = mpsc::channel();
-        command_buffer.map_buffer_on_submit(
-            &staging,
-            wgpu::MapMode::Read,
-            0..readback_bytes,
-            move |result| {
-                let _ = sender.send(result);
+            |encoder, staging| {
+                encoder.clear_buffer(&self.gpu.state, 0, None);
+                encoder.clear_buffer(&self.gpu.outputs, 0, None);
+                self.record_forward(encoder, total_steps, neuron_groups);
+                {
+                    let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                        label: Some("foundation-trainer-evaluation-decoder-forward"),
+                        timestamp_writes: None,
+                    });
+                    pass.set_bind_group(0, &self.gpu.bind_group, &[]);
+                    pass.set_pipeline(&self.gpu.pipelines.candidate_forward);
+                    pass.dispatch_workgroups(1, TRAINING_SEQUENCE_TICKS as u32, 1);
+                    pass.set_pipeline(&self.gpu.pipelines.speech_forward);
+                    pass.dispatch_workgroups(TRAINING_SEQUENCE_TICKS as u32, 1, 1);
+                }
+                dispatch(
+                    encoder,
+                    &self.gpu.pipelines.loss,
+                    &self.gpu.bind_group,
+                    1,
+                    1,
+                    "foundation-trainer-evaluation-loss",
+                );
+                encoder.copy_buffer_to_buffer(
+                    &self.gpu.outputs,
+                    u64::from(self.gpu.layout.candidate_logits) * 4,
+                    staging,
+                    0,
+                    readback_bytes,
+                );
             },
-        );
-        let submission = queue.submit(Some(command_buffer));
-        if device
-            .poll(wgpu::PollType::Wait {
-                submission_index: Some(submission),
-                timeout: None,
-            })
-            .is_err()
-            || receiver.recv().ok().and_then(Result::ok).is_none()
-        {
-            return Err(TrainingError::GpuSubmission);
-        }
-        let mapped = staging.slice(..readback_bytes).get_mapped_range();
-        let values = bytemuck::cast_slice::<u8, f32>(&mapped).to_vec();
-        drop(mapped);
-        staging.unmap();
+            |mapped| Ok(bytemuck::cast_slice::<u8, f32>(mapped).to_vec()),
+        )?;
         let (candidate_logits, remainder) = values.split_at(TRAINING_SEQUENCE_TICKS);
         let (speech_logits, metric) = remainder.split_at(TRAINING_SEQUENCE_TICKS);
         let Some(mean_loss) = metric.first().copied() else {
@@ -1542,49 +1558,22 @@ impl FoundationTrainer {
         layout.validate_source_sizes(self.gpu.weights.size(), self.gpu._optimizer.size())?;
         // Capture this boundary's actual device buffers in one submission. No
         // bytes are retained across training, replay shape changes, or rebind.
-        let staging = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("foundation-trainer-checkpoint-readback"),
-            size: layout.total_bytes,
-            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-            mapped_at_creation: false,
-        });
-        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("foundation-trainer-checkpoint-export"),
-        });
-        encoder.copy_buffer_to_buffer(&self.gpu.weights, 0, &staging, 0, layout.lane_bytes);
-        encoder.copy_buffer_to_buffer(
-            &self.gpu._optimizer,
-            0,
-            &staging,
-            layout.lane_bytes,
-            layout.optimizer_bytes,
-        );
-        let command_buffer = encoder.finish();
-        let (sender, receiver) = mpsc::channel();
-        command_buffer.map_buffer_on_submit(
-            &staging,
-            wgpu::MapMode::Read,
-            0..layout.total_bytes,
-            move |result| {
-                let _ = sender.send(result);
+        self.gpu.read_with_staging(
+            device,
+            queue,
+            layout.total_bytes,
+            |encoder, staging| {
+                encoder.copy_buffer_to_buffer(&self.gpu.weights, 0, staging, 0, layout.lane_bytes);
+                encoder.copy_buffer_to_buffer(
+                    &self.gpu._optimizer,
+                    0,
+                    staging,
+                    layout.lane_bytes,
+                    layout.optimizer_bytes,
+                );
             },
-        );
-        let submission = queue.submit(Some(command_buffer));
-        if device
-            .poll(wgpu::PollType::Wait {
-                submission_index: Some(submission),
-                timeout: None,
-            })
-            .is_err()
-            || receiver.recv().ok().and_then(Result::ok).is_none()
-        {
-            return Err(TrainingError::GpuSubmission);
-        }
-        let mapped = staging.slice(..layout.total_bytes).get_mapped_range();
-        let state = layout.decode(&mapped);
-        drop(mapped);
-        staging.unmap();
-        state
+            |mapped| layout.decode(mapped),
+        )
     }
 
     pub fn restore_checkpoint(
@@ -1628,6 +1617,50 @@ impl FoundationTrainer {
         Ok(())
     }
 
+    fn submit_and_read_small_readback(
+        &self,
+        mut encoder: wgpu::CommandEncoder,
+        source: &wgpu::Buffer,
+        offset: u64,
+        count: usize,
+    ) -> Result<Vec<f32>, TrainingError> {
+        let bytes = (count * 4) as u64;
+        if bytes > READBACK_BYTES || !offset.is_multiple_of(4) || offset + bytes > source.size() {
+            return Err(TrainingError::MalformedReadback);
+        }
+        encoder.copy_buffer_to_buffer(source, offset, &self.gpu.readback, 0, bytes);
+        let (device, queue) = self.session.backend().offline_training_device_queue()?;
+        let command_buffer = encoder.finish();
+        let (sender, receiver) = mpsc::channel();
+        command_buffer.map_buffer_on_submit(
+            &self.gpu.readback,
+            wgpu::MapMode::Read,
+            0..bytes,
+            move |result| {
+                let _ = sender.send(result);
+            },
+        );
+        let submission = queue.submit(Some(command_buffer));
+        if device
+            .poll(wgpu::PollType::Wait {
+                submission_index: Some(submission),
+                timeout: None,
+            })
+            .is_err()
+            || receiver.recv().ok().and_then(Result::ok).is_none()
+        {
+            return Err(TrainingError::GpuSubmission);
+        }
+        let mapped = self.gpu.readback.slice(..bytes).get_mapped_range();
+        let values = bytemuck::cast_slice::<u8, f32>(&mapped).to_vec();
+        drop(mapped);
+        self.gpu.readback.unmap();
+        if values.len() != count || values.iter().any(|v| !v.is_finite()) {
+            return Err(TrainingError::MalformedReadback);
+        }
+        Ok(values)
+    }
+
     fn read_float_buffer(
         &self,
         buffer: &wgpu::Buffer,
@@ -1653,41 +1686,15 @@ impl FoundationTrainer {
     ) -> Result<Vec<u32>, TrainingError> {
         let (device, queue) = self.session.backend().offline_training_device_queue()?;
         let bytes = (count * 4) as u64;
-        let staging = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("foundation-trainer-weight-readback"),
-            size: bytes,
-            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-            mapped_at_creation: false,
-        });
-        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("foundation-trainer-weight-export"),
-        });
-        encoder.copy_buffer_to_buffer(buffer, offset, &staging, 0, bytes);
-        let command_buffer = encoder.finish();
-        let (sender, receiver) = mpsc::channel();
-        command_buffer.map_buffer_on_submit(
-            &staging,
-            wgpu::MapMode::Read,
-            0..bytes,
-            move |result| {
-                let _ = sender.send(result);
+        let weights = self.gpu.read_with_staging(
+            device,
+            queue,
+            bytes,
+            |encoder, staging| {
+                encoder.copy_buffer_to_buffer(buffer, offset, staging, 0, bytes);
             },
-        );
-        let submission = queue.submit(Some(command_buffer));
-        if device
-            .poll(wgpu::PollType::Wait {
-                submission_index: Some(submission),
-                timeout: None,
-            })
-            .is_err()
-            || receiver.recv().ok().and_then(Result::ok).is_none()
-        {
-            return Err(TrainingError::GpuSubmission);
-        }
-        let mapped = staging.slice(..bytes).get_mapped_range();
-        let weights = bytemuck::cast_slice::<u8, u32>(&mapped).to_vec();
-        drop(mapped);
-        staging.unmap();
+            |mapped| Ok(bytemuck::cast_slice::<u8, u32>(mapped).to_vec()),
+        )?;
         if weights.len() != count {
             return Err(TrainingError::MalformedReadback);
         }
@@ -1788,7 +1795,7 @@ impl TrainerGpuState {
             device,
             "foundation-trainer-meta",
             &meta,
-            wgpu::BufferUsages::STORAGE,
+            wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         );
         let weights = buffer_init(
             device,
@@ -1947,8 +1954,26 @@ impl TrainerGpuState {
                     &shader,
                     "speech_weight_gradients",
                 ),
+                gradient_norm_partials: pipeline(
+                    device,
+                    &pipeline_layout,
+                    &shader,
+                    "reduce_gradient_norm_partials",
+                ),
                 gradient_norm: pipeline(device, &pipeline_layout, &shader, "reduce_gradient_norm"),
+                validate_adamw_partials: pipeline(
+                    device,
+                    &pipeline_layout,
+                    &shader,
+                    "validate_adamw_partials",
+                ),
                 validate_adamw: pipeline(device, &pipeline_layout, &shader, "validate_adamw"),
+                validate_accumulation_partials: pipeline(
+                    device,
+                    &pipeline_layout,
+                    &shader,
+                    "validate_accumulation_partials",
+                ),
                 validate_accumulation: pipeline(
                     device,
                     &pipeline_layout,
@@ -1975,11 +2000,70 @@ impl TrainerGpuState {
             outputs,
             mask: mask_buffer,
             readback,
+            staging_readback: std::sync::Mutex::new(None),
             bind_group,
             step_bind_groups,
             pipelines,
             layout,
+            capacity_ticks: layout.ticks,
+            capacity_meta_words: meta.len(),
+            last_meta_dendrites: replay.map(|r| r.initial.dendrites.clone()),
         })
+    }
+
+    fn read_with_staging<R>(
+        &self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        bytes: u64,
+        record: impl FnOnce(&mut wgpu::CommandEncoder, &wgpu::Buffer),
+        decode: impl FnOnce(&[u8]) -> Result<R, TrainingError>,
+    ) -> Result<R, TrainingError> {
+        let mut guard = self
+            .staging_readback
+            .lock()
+            .map_err(|_| TrainingError::GpuSubmission)?;
+        let needs_alloc = guard.as_ref().is_none_or(|buf| buf.size() < bytes);
+        if needs_alloc {
+            *guard = Some(device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("foundation-trainer-staging-readback"),
+                size: bytes.max(4),
+                usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+                mapped_at_creation: false,
+            }));
+        }
+        let staging = guard.as_ref().expect("staging buffer initialized");
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("foundation-trainer-staging-export"),
+        });
+        record(&mut encoder, staging);
+        let command_buffer = encoder.finish();
+        let (sender, receiver) = mpsc::channel();
+        command_buffer.map_buffer_on_submit(
+            staging,
+            wgpu::MapMode::Read,
+            0..bytes,
+            move |result| {
+                let _ = sender.send(result);
+            },
+        );
+        let submission = queue.submit(Some(command_buffer));
+        if device
+            .poll(wgpu::PollType::Wait {
+                submission_index: Some(submission),
+                timeout: None,
+            })
+            .is_err()
+            || receiver.recv().ok().and_then(Result::ok).is_none()
+        {
+            *guard = None;
+            return Err(TrainingError::GpuSubmission);
+        }
+        let mapped = staging.slice(..bytes).get_mapped_range();
+        let result = decode(&mapped);
+        drop(mapped);
+        staging.unmap();
+        result
     }
 }
 
@@ -2216,12 +2300,22 @@ fn pack_metadata_and_layout(
         .checked_mul(neurons)
         .ok_or(ScaffoldContractError::PhenotypeCompile)?;
     let inputs = 0;
-    let targets = as_u32(ticks * neurons)?;
-    let target_weights = as_u32(ticks * neurons * 2)?;
-    let candidate_records = as_u32(ticks * neurons * 3)?;
-    let base_training_words = ticks
-        .checked_mul(neurons * 3 + CANDIDATE_RECORD_WORDS as u64 * candidate_capacity)
-        .ok_or(ScaffoldContractError::PhenotypeCompile)?;
+    let (targets, target_weights, candidate_records, base_training_words) = if replay.is_some() {
+        let candidate_records = as_u32(ticks * neurons)?;
+        let base_training_words = ticks
+            .checked_mul(neurons + CANDIDATE_RECORD_WORDS as u64 * candidate_capacity)
+            .ok_or(ScaffoldContractError::PhenotypeCompile)?;
+        (0, 0, candidate_records, base_training_words)
+    } else {
+        (
+            as_u32(ticks * neurons)?,
+            as_u32(ticks * neurons * 2)?,
+            as_u32(ticks * neurons * 3)?,
+            ticks
+                .checked_mul(neurons * 3 + CANDIDATE_RECORD_WORDS as u64 * candidate_capacity)
+                .ok_or(ScaffoldContractError::PhenotypeCompile)?,
+        )
+    };
     let activations = 0;
     let metabolic = as_u32(state_count)?;
     let activity_ema = as_u32(state_count * 2)?;
@@ -2242,7 +2336,7 @@ fn pack_metadata_and_layout(
     let speech_logits = as_u32(ticks * candidate_capacity)?;
     let metrics =
         as_u32(ticks * candidate_capacity + ticks * if replay.is_some() { 192 } else { 1 })?;
-    let memory_raw = metrics + 4;
+    let memory_raw = metrics + 68;
     let cognitive_raw = memory_raw + as_u32(ticks * candidate_capacity)?;
     let output_words = u64::from(cognitive_raw) + ticks * candidate_capacity;
     let context = as_u32(base_training_words)?;
@@ -2402,7 +2496,7 @@ fn pack_replay_sequence(
     layout: PackedLayout,
     neurons: u32,
 ) -> Vec<u32> {
-    let mut words = vec![0; layout.training_words as usize];
+    let mut words = vec![0; layout.replay_speech_targets as usize];
     for (tick_index, tick) in sequence.ticks.iter().enumerate() {
         let input = layout.inputs as usize + tick_index * neurons as usize;
         for (slot, value) in words[input..input + neurons as usize]
@@ -2823,8 +2917,11 @@ mod tests {
             "recurrent_weight_gradients",
             "candidate_weight_gradients",
             "speech_weight_gradients",
+            "reduce_gradient_norm_partials",
             "reduce_gradient_norm",
+            "validate_adamw_partials",
             "validate_adamw",
+            "validate_accumulation_partials",
             "validate_accumulation",
             "accumulate_weight_gradients",
             "apply_adamw",

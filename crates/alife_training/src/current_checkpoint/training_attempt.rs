@@ -243,10 +243,10 @@ impl CurrentTrainingCheckpointV1 {
         if attempt_nonce == 0
             || attempt_nonce == self.seed
             || (self.seeds.contains(attempt_nonce)
-                && !self
+                && self
                     .seeds
                     .pending_range
-                    .is_some_and(|[a, _]| a == attempt_nonce))
+                    .is_none_or(|[a, _]| a != attempt_nonce))
             || self
                 .seeds
                 .pending_range

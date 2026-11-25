@@ -4,7 +4,7 @@
 //! resource regrowth/spawn policies, hazard pressure, and compact ecology
 //! metrics.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 use alife_core::{NormalizedScalar, ScaffoldContractError, Tick, Vec3f, WorldEntityId};
 
@@ -435,19 +435,15 @@ impl EcologyState {
         self.metrics.clone()
     }
 
-    pub(crate) fn rebuild_metrics(&mut self, object_kinds: &BTreeMap<u64, (bool, bool)>) {
-        self.metrics.active_resources = object_kinds
-            .values()
-            .filter(|(is_food, consumed)| *is_food && !*consumed)
-            .count();
-        self.metrics.consumed_resources = object_kinds
-            .values()
-            .filter(|(is_food, consumed)| *is_food && *consumed)
-            .count();
-        self.metrics.active_hazards = object_kinds
-            .values()
-            .filter(|(is_food, consumed)| !*is_food && !*consumed)
-            .count();
+    pub(crate) fn set_metrics_counts(
+        &mut self,
+        active_resources: usize,
+        consumed_resources: usize,
+        active_hazards: usize,
+    ) {
+        self.metrics.active_resources = active_resources;
+        self.metrics.consumed_resources = consumed_resources;
+        self.metrics.active_hazards = active_hazards;
         self.metrics.zones = self.zones.len();
     }
 

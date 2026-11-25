@@ -640,7 +640,7 @@ fn run_owned(
     phase.complete();
     let phase = progress.begin("initial_snapshot_publish");
     let published = GpuDurableSaveManifest::publish_snapshot(&save_path, &asset_root, &exact)?;
-    if published.save != exact {
+    if *published.save != exact {
         return Err("group exact initial save changed".into());
     }
     phase.complete();
@@ -936,7 +936,18 @@ fn run_owned(
             life.directory.join("manifest.json"),
             serde_json::to_vec(&life.references)?,
         )?;
-        let mut values = Vec::new();
+        let values = value.predict_values_from_features(
+            trainer.session(),
+            phenotype.neuron_count(),
+            &life.features,
+        )?;
+        if critic_checkpoint.is_none() {
+            let restored = value.checkpoint(trainer.session())?;
+            if restored != old_value {
+                return Err("group value/Adam changed before any training".into());
+            }
+            critic_checkpoint = Some(restored);
+        }
         let mut actions = Vec::new();
         let mut previous_after = None;
         for span in spans(0, &life.references, life.references.len(), 128) {
@@ -947,14 +958,6 @@ fn run_owned(
             let replay = load(&life, span, &source, &phenotype, budget, limits)?;
             peak_replay_bytes =
                 peak_replay_bytes.max(replay_peak_bytes(&phenotype, &replay.sequence)?);
-            values.extend(value.predict_values(&mut trainer, &replay.sequence)?);
-            if critic_checkpoint.is_none() {
-                let restored = value.checkpoint(trainer.session())?;
-                if restored != old_value {
-                    return Err("group value/Adam changed before any training".into());
-                }
-                critic_checkpoint = Some(restored);
-            }
             for (offset, (behavior, patch)) in
                 replay.behavior.iter().zip(&replay.patches).enumerate()
             {
@@ -1165,6 +1168,7 @@ fn run_owned(
     phase.complete();
     let phase = progress.begin("critic_update");
     let mut critic_checkpoint = critic_checkpoint.ok_or("group lacks restored value head")?;
+    let critic_pipelines = value.residual_pipelines(trainer.session())?.clone();
     // The accepted critic objective uses frozen actual production next features.
     // One central value checkpoint/Adam history traverses all lives, including
     // failures, in bounded windows; no bootstrap ever points to another life.
@@ -1174,39 +1178,80 @@ fn run_owned(
         .max(u32::from(update.actor_optimizer_step > actor_age));
     let critic_total_updates =
         batches.iter().map(|b| b.len().div_ceil(256)).sum::<usize>() * critic_epochs as usize;
+    let life_rows = life_vec
+        .iter()
+        .zip(&batches)
+        .map(|(life, batch)| {
+            critic_residual::residual_rows(
+                batch.transitions(),
+                life.features.len(),
+                config.discount_half_life_seconds,
+            )
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let mut residual: Option<alife_training::FrozenCriticResidualExperiment> = None;
     for epoch in 0..critic_epochs {
-        for (life, batch) in life_vec.iter().zip(&batches) {
+        for ((life, batch), rows) in life_vec.iter().zip(&batches).zip(&life_rows) {
             for start in (0..batch.len()).step_by(256) {
                 let end = (start + 256).min(batch.len());
                 let transitions = &batch.transitions()[start..end];
                 let feature_end = (end
                     + usize::from(transitions.last().unwrap().boundary != PpoBoundary::Terminated))
                 .min(life.features.len());
-                progress.counts("critic_update", serde_json::json!({
+                let local_rows = rows[start..end]
+                    .iter()
+                    .map(|row| alife_training::CriticResidualRow {
+                        current: row.current - start as u32,
+                        next: row.next - start as u32,
+                        reward: row.reward,
+                        discount: row.discount,
+                    })
+                    .collect::<Vec<_>>();
+                let current_step = critic_checkpoint.optimizer_step + critic_updates as u32;
+                progress.counts(
+                    "critic_update",
+                    serde_json::json!({
                     "completed_updates":critic_updates,"total_updates":critic_total_updates,
                     "active_organism_id":life.id.raw(),"epoch_index":epoch,
-                    "loss_row_start":start,"value_optimizer_step":critic_checkpoint.optimizer_step}));
+                    "loss_row_start":start,"value_optimizer_step":current_step}),
+                );
                 let critic_phase = progress.begin(format!(
                     "critic_window_update organism={} epoch={epoch} start={start}",
                     life.id.raw()
                 ));
-                let (next, _) = critic_residual::train(
+                let experiment = match &mut residual {
+                    Some(experiment) => {
+                        experiment.replace_batch(
+                            trainer.session(),
+                            &life.features[start..feature_end],
+                            &local_rows,
+                            local_rows.len(),
+                        )?;
+                        experiment
+                    }
+                    slot @ None => slot.insert(
+                        alife_training::FrozenCriticResidualExperiment::new_with_pipelines(
+                            trainer.session(),
+                            &critic_checkpoint,
+                            &life.features[start..feature_end],
+                            &local_rows,
+                            local_rows.len(),
+                            &critic_pipelines,
+                        )?,
+                    ),
+                };
+                experiment.step_with_coefficient(
                     trainer.session(),
-                    critic_checkpoint,
-                    &life.features[start..feature_end],
-                    transitions,
-                    config,
-                    1,
-                    policy_version,
+                    config.value_optimizer,
+                    config.value_coefficient,
                 )?;
-                critic_checkpoint = next;
                 critic_updates += 1;
                 critic_phase.complete();
                 progress.counts(
                     "critic_update",
                     serde_json::json!({
                     "completed_updates":critic_updates,"total_updates":critic_total_updates,
-                    "value_optimizer_step":critic_checkpoint.optimizer_step}),
+                    "value_optimizer_step":critic_checkpoint.optimizer_step + critic_updates as u32}),
                 );
             }
         }
@@ -1214,6 +1259,10 @@ fn run_owned(
     if update.actor_optimizer_step == actor_age || critic_updates == 0 {
         return Err("group completed without accepted actor/value updates".into());
     }
+    critic_checkpoint = residual
+        .ok_or("group completed without residual critic state")?
+        .checkpoint(trainer.session())?;
+    critic_checkpoint.last_updated_policy_version = Some(policy_version);
     phase.complete();
     let update_seconds = update_started.elapsed().as_secs_f64();
     let phase = progress.begin("candidate_export");

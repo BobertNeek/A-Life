@@ -52,6 +52,9 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: rehearsal-source
       - name: World branches, policy identity and sequence masks
         run: cargo test --locked -p alife_training --lib rehearsal
       - name: Exact source ancestry, package integrity and budget boundaries

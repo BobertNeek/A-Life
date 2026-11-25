@@ -1,5 +1,7 @@
 //! Read-only, evidence-backed world projections for presentation consumers.
 
+use std::sync::Arc;
+
 use alife_core::{
     ActionId, ActionKind, BiochemistryState, BodyState, CreatureGenome, CreaturePhenotype,
     LanguageTokenId, NormalizedScalar, OrganismId, PhysicalContactKind, ReferenceActionFailure,
@@ -64,8 +66,8 @@ pub struct WorldOrganismPresentationRow {
     pub organism_id: OrganismId,
     pub world_entity_id: WorldEntityId,
     pub object: WorldObject,
-    pub genome: CreatureGenome,
-    pub phenotype: CreaturePhenotype,
+    pub genome: Arc<CreatureGenome>,
+    pub phenotype: Arc<CreaturePhenotype>,
     pub biochemistry: BiochemistryState,
     pub body: BodyState,
     pub birth_tick: Tick,
@@ -110,8 +112,8 @@ impl HeadlessWorld {
                     organism_id: record.organism_id(),
                     world_entity_id: record.world_entity_id(),
                     object,
-                    genome: record.genome().clone(),
-                    phenotype: record.phenotype().clone(),
+                    genome: record.genome_arc(),
+                    phenotype: record.phenotype_arc(),
                     biochemistry,
                     body: biochemistry.body,
                     birth_tick: record.birth_tick(),

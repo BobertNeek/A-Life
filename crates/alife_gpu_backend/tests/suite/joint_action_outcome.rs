@@ -1,7 +1,7 @@
 //! Transaction validation with real GPU decisions and explicit outcome fixtures.
-#![cfg(feature = "gpu-tests")]
 
-mod support;
+#[allow(unused_imports)]
+use crate::support;
 
 use alife_core::*;
 use alife_gpu_backend::{

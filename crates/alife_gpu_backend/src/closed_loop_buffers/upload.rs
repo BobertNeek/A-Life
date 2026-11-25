@@ -46,6 +46,7 @@ pub struct GpuPhenotypeUpload {
     pub genetic_weights: Vec<f32>,
     pub alpha: Vec<f32>,
     pub decoder_weight_index_word_base: u32,
+    pub speech_synapse_start: u32,
     pub extension_record_offset: u32,
 }
 
@@ -235,27 +236,103 @@ impl GpuPhenotypeUpload {
         }
         let decoder_weight_indices = candidate_decoders
             .iter()
-            .map(|(canonical_id, _, c)| GpuDecoderWeightIndexRecord {
-                global_synapse_id: canonical_to_local[*canonical_id],
-                input_lane: c.input_lane() as u32,
-                motor_index: c.motor_index() as u32,
-                reserved0: 0,
+            .map(|(canonical_id, _, c)| {
+                GpuDecoderWeightIndexRecord::new(
+                    canonical_to_local[*canonical_id],
+                    c.input_lane(),
+                    c.motor_index(),
+                )
             })
             .collect::<Vec<_>>();
         let memory_weight_indices = memory_decoders
             .iter()
             .map(|(canonical_id, _, _)| canonical_to_local[*canonical_id])
             .collect::<Vec<_>>();
-        let memory_channel_plans = phenotype
+        let speech_count = all_decoders
+            .iter()
+            .filter(|(_, _, coordinate)| {
+                coordinate.head() == alife_core::DecoderHeadKind::SpeechPayload
+            })
+            .count();
+        let speech_synapse_start = if speech_count == 0 {
+            u32::MAX
+        } else {
+            if speech_count != 1024 {
+                return Err(GpuClosedLoopError::MalformedUpload);
+            }
+            let start = all_decoders
+                .iter()
+                .position(|(_, _, coordinate)| {
+                    coordinate.head() == alife_core::DecoderHeadKind::SpeechPayload
+                })
+                .ok_or(GpuClosedLoopError::MalformedUpload)?;
+            let motor_start = phenotype.candidate_decoder().motor_start();
+            let source_start = motor_start + 128;
+            let target_start = motor_start + 160;
+            for (offset, (_, row, coordinate)) in all_decoders
+                .get(start..start + 1024)
+                .ok_or(GpuClosedLoopError::MalformedUpload)?
+                .iter()
+                .enumerate()
+            {
+                let lane = (offset / 32) as u32;
+                let out = (offset % 32) as u32;
+                if coordinate.head() != alife_core::DecoderHeadKind::SpeechPayload
+                    || u32::from(coordinate.input_lane()) != lane
+                    || row.source() != source_start + lane
+                    || row.target() != target_start + out
+                {
+                    return Err(GpuClosedLoopError::MalformedUpload);
+                }
+            }
+            u32::try_from(start).map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?
+        };
+        let mut memory_channel_plans = phenotype
             .candidate_decoder()
             .memory_channel()
             .map(GpuMemoryChannelPlan::try_from)
             .transpose()?
             .into_iter()
             .collect::<Vec<_>>();
-        match memory_channel_plans.as_slice() {
-            [] if memory_weight_indices.is_empty() => {}
+        let cognitive_count = all_decoders
+            .iter()
+            .filter(|(_, _, coordinate)| {
+                coordinate.head() == alife_core::DecoderHeadKind::CognitiveContext
+            })
+            .count();
+        let cognitive_start = if cognitive_count == 0 {
+            0_u32
+        } else {
+            if cognitive_count != 8 * 18 {
+                return Err(GpuClosedLoopError::MalformedUpload);
+            }
+            let start = all_decoders
+                .iter()
+                .position(|(_, _, coordinate)| {
+                    coordinate.head() == alife_core::DecoderHeadKind::CognitiveContext
+                })
+                .ok_or(GpuClosedLoopError::MalformedUpload)?;
+            for (offset, (_, _, coordinate)) in all_decoders
+                .get(start..start + cognitive_count)
+                .ok_or(GpuClosedLoopError::MalformedUpload)?
+                .iter()
+                .enumerate()
+            {
+                if coordinate.head() != alife_core::DecoderHeadKind::CognitiveContext
+                    || usize::from(coordinate.family().raw()) != offset / 18
+                    || usize::from(coordinate.input_lane()) != 36 + offset % 18
+                {
+                    return Err(GpuClosedLoopError::MalformedUpload);
+                }
+            }
+            u32::try_from(start).map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?
+        };
+        let cognitive_count_u32 =
+            u32::try_from(cognitive_count).map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
+        match memory_channel_plans.as_mut_slice() {
+            [] if memory_weight_indices.is_empty() && cognitive_count == 0 => {}
             [plan] if plan.memory_decoder_synapse_count as usize == memory_weight_indices.len() => {
+                plan.reserved = [cognitive_start, cognitive_count_u32];
             }
             _ => return Err(GpuClosedLoopError::MalformedUpload),
         }
@@ -479,7 +556,7 @@ impl GpuPhenotypeUpload {
                 bias_bits: row.bias().to_bits(),
                 decoder_synapse_start: recurrent_count + local,
                 decoder_synapse_count: row.decoder_synapse_count(),
-                weight_index_start: decoder_weight_index_word_base + local * 4,
+                weight_index_start: decoder_weight_index_word_base + local * 2,
                 weight_index_count: row.decoder_synapse_count(),
                 // The two existing family words carry gene-compiled innate
                 // drive salience; no second selector or world score is added.
@@ -549,6 +626,7 @@ impl GpuPhenotypeUpload {
             #[cfg(feature = "training-rollout")]
             canonical_to_local_synapse: canonical_to_local,
             decoder_weight_index_word_base,
+            speech_synapse_start,
             extension_record_offset: GPU_NO_EXTENSION_SENTINEL,
         })
     }

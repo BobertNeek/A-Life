@@ -2,6 +2,7 @@
 use alife_game_app::{run_cpu_care, CpuCareRequest, FoundationTeacherLesson};
 use std::{collections::BTreeMap, path::PathBuf};
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    alife_game_app::init_headless_tracing();
     // Cooperative predecessors validate full round proofs. Use the same bounded
     // offline stack as the round CLI on Windows' smaller executable main stack.
     #[cfg(windows)]

@@ -22,7 +22,7 @@ pub use selector_exploration::{
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::num::NonZeroU64;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use alife_core::{
     ActionId, ActionTarget, Blake3Digest, BrainActivityPolicyV1, BrainCapacityClass, BrainClassId,
@@ -54,10 +54,17 @@ use crate::{
     GpuFixedClassArenaPlan, GpuFixedSlotRanges, GpuLearningReceipt, GpuLiveTopologyCheckpointV1,
     GpuMemoryContextDispatchReceipt, GpuMemoryContextUpload, GpuOutcomeCreditRecord,
     GpuPendingEligibilityRecord, GpuPerceptionUpload, GpuPreparedActiveBatch, GpuRuntimeBudget,
-    GpuRuntimeProfile, GpuSelectorLogitCapture, GpuTimestampQueryResources, GpuV11CausalState,
-    GpuV11Checkpoint, GpuV11WorkReceipt, GpuValidatedClassBatch, PendingEligibilityDiscardReceipt,
+    GpuRuntimeProfile, GpuSelectorLogitCapture, GpuV11CausalState, GpuV11Checkpoint,
+    GpuV11WorkReceipt, GpuValidatedClassBatch, PendingEligibilityDiscardReceipt,
     PendingEligibilityIdentity, PendingEligibilityReceipt, GPU_CLOSED_LOOP_LAYOUT_VERSION,
 };
+
+#[cfg(feature = "training-rollout")]
+pub type GpuTrainingTickCaptures = (
+    Vec<crate::GpuClosedLoopTick>,
+    Vec<crate::training_rollout::GpuTrainingStateSnapshot>,
+    Vec<crate::training_rollout::GpuTrainingStateSnapshot>,
+);
 
 pub const GPU_HARDWARE_RECEIPT_SCHEMA_VERSION: u16 = 1;
 
@@ -85,6 +92,13 @@ static NEXT_BACKEND_INSTANCE_ID: AtomicU64 = AtomicU64::new(1);
 static NEXT_HARDWARE_RECEIPT_GENERATION: AtomicU64 = AtomicU64::new(1);
 const GPU_TIMESTAMP_QUERY_COUNT: u32 = 2;
 const GPU_TIMESTAMP_READBACK_BYTES: u64 = 16;
+const GPU_PER_PASS_TIMESTAMP_QUERY_COUNT: u32 = 8;
+const GPU_PER_PASS_TIMESTAMP_READBACK_BYTES: u64 = 64;
+
+fn env_per_pass_profiling_enabled() -> bool {
+    std::env::var_os("ALIFE_GPU_PASS_PROFILING")
+        .is_some_and(|val| !val.is_empty() && val != "0" && val != "false" && val != "FALSE")
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct ExactGpuTimestampPeriod {
@@ -147,6 +161,13 @@ impl ExactGpuTimestampPeriod {
             .ok_or(ScaffoldContractError::GpuTimestampQueryUnavailable)
     }
 
+    fn elapsed_ns_nonnegative(self, begin: u64, end: u64) -> Result<u64, ScaffoldContractError> {
+        if end == begin {
+            return Ok(0);
+        }
+        self.elapsed_ns(begin, end)
+    }
+
     fn period_ns_q24(self) -> Result<u64, ScaffoldContractError> {
         let exponent = i32::from(self.binary_exponent) + 24;
         let scaled = u128::from(self.significand);
@@ -193,17 +214,17 @@ impl GpuTimestampResources {
         let query_set = device.create_query_set(&wgpu::QuerySetDescriptor {
             label: Some("closed-loop-runtime-timestamps"),
             ty: wgpu::QueryType::Timestamp,
-            count: GPU_TIMESTAMP_QUERY_COUNT,
+            count: GPU_PER_PASS_TIMESTAMP_QUERY_COUNT,
         });
         let resolve_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("closed-loop-runtime-timestamp-resolve"),
-            size: GPU_TIMESTAMP_READBACK_BYTES,
+            size: GPU_PER_PASS_TIMESTAMP_READBACK_BYTES,
             usage: wgpu::BufferUsages::QUERY_RESOLVE | wgpu::BufferUsages::COPY_SRC,
             mapped_at_creation: false,
         });
         let readback_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("closed-loop-runtime-timestamp-readback"),
-            size: GPU_TIMESTAMP_READBACK_BYTES,
+            size: GPU_PER_PASS_TIMESTAMP_READBACK_BYTES,
             usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
             mapped_at_creation: false,
         });
@@ -216,26 +237,62 @@ impl GpuTimestampResources {
     }
 
     fn read_delta_and_elapsed_ns(&self) -> Result<(u64, u64), ScaffoldContractError> {
-        let mapped = self
-            .readback_buffer
-            .slice(..GPU_TIMESTAMP_READBACK_BYTES)
-            .get_mapped_range();
-        let bytes: &[u8] = &mapped;
-        let begin = u64::from_le_bytes(
-            bytes[0..8]
-                .try_into()
-                .map_err(|_| ScaffoldContractError::GpuTimestampQueryUnavailable)?,
-        );
-        let end = u64::from_le_bytes(
-            bytes[8..16]
-                .try_into()
-                .map_err(|_| ScaffoldContractError::GpuTimestampQueryUnavailable)?,
-        );
-        drop(mapped);
+        let (delta, elapsed, _) = self.read_delta_elapsed_and_per_pass_ns(false)?;
+        Ok((delta, elapsed))
+    }
+
+    fn read_delta_elapsed_and_per_pass_ns(
+        &self,
+        per_pass: bool,
+    ) -> Result<(u64, u64, Option<[u64; 4]>), ScaffoldContractError> {
+        let (query_count, map_bytes) = if per_pass {
+            (
+                GPU_PER_PASS_TIMESTAMP_QUERY_COUNT as usize,
+                GPU_PER_PASS_TIMESTAMP_READBACK_BYTES,
+            )
+        } else {
+            (
+                GPU_TIMESTAMP_QUERY_COUNT as usize,
+                GPU_TIMESTAMP_READBACK_BYTES,
+            )
+        };
+        let mut raw = [0_u64; GPU_PER_PASS_TIMESTAMP_QUERY_COUNT as usize];
+        let read_result = {
+            let mapped = self.readback_buffer.slice(..map_bytes).get_mapped_range();
+            let bytes: &[u8] = &mapped;
+            let mut result = Ok(());
+            for (idx, slot) in raw.iter_mut().take(query_count).enumerate() {
+                let start = idx * 8;
+                match bytes[start..start + 8].try_into() {
+                    Ok(chunk) => *slot = u64::from_le_bytes(chunk),
+                    Err(_) => {
+                        result = Err(ScaffoldContractError::GpuTimestampQueryUnavailable);
+                        break;
+                    }
+                }
+            }
+            result
+        };
         self.readback_buffer.unmap();
+        read_result?;
+        let (begin, end, stages) = if per_pass {
+            (
+                raw[0],
+                raw[7],
+                Some([
+                    self.period.elapsed_ns_nonnegative(raw[0], raw[1])?,
+                    self.period.elapsed_ns_nonnegative(raw[2], raw[3])?,
+                    self.period.elapsed_ns_nonnegative(raw[4], raw[5])?,
+                    self.period.elapsed_ns_nonnegative(raw[6], raw[7])?,
+                ]),
+            )
+        } else {
+            (raw[0], raw[1], None)
+        };
         Ok((
             self.period.delta_ticks(begin, end)?,
             self.period.elapsed_ns(begin, end)?,
+            stages,
         ))
     }
 
@@ -1151,6 +1208,18 @@ pub struct GpuNeuralTimingSample {
     pub timestamp_period_ns_q24: u64,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GpuPerPassTimings {
+    pub dispatch_generation: u64,
+    pub class_id_raw: u16,
+    pub population: u32,
+    pub encode_ns: u64,
+    pub recurrent_ns: u64,
+    pub decode_select_ns: u64,
+    pub eligibility_ns: u64,
+    pub plasticity_ns: u64,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct PendingInferenceTiming {
     dispatch_generation: u64,
@@ -1546,6 +1615,30 @@ struct GpuBrainSlotOwnership {
     sensor_profile: SensorProfile,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) struct PreparedSleepSlotKey {
+    pub(crate) mutable_epoch: u64,
+    pub(crate) active_weight_bank: u8,
+    pub(crate) active_weight_generation: u64,
+    pub(crate) active_eligibility_bank: u8,
+    pub(crate) active_eligibility_generation: u64,
+    pub(crate) inactive_eligibility_generation: u64,
+    pub(crate) replay_journal_generation: u64,
+    pub(crate) replay_journal_cursor: u32,
+    pub(crate) replay_journal_event_count: u32,
+    pub(crate) transaction_generation: u64,
+    pub(crate) logical_dispatch_generation: u64,
+    pub(crate) activity_sequence_cursor: u64,
+    pub(crate) brain_atp_q16: u32,
+    pub(crate) pending_has_eligibility: bool,
+}
+
+#[derive(Clone)]
+pub(crate) struct PreparedSleepSlotWords {
+    pub(crate) key: PreparedSleepSlotKey,
+    pub(crate) words: Arc<[u32]>,
+}
+
 pub(crate) struct ResidentBrainSlot {
     pub(crate) developmental_plasticity: crate::GpuDevelopmentalPlasticity,
     ownership: GpuBrainSlotOwnership,
@@ -1574,6 +1667,8 @@ pub(crate) struct ResidentBrainSlot {
     pub(crate) learning_sequence_guard: LearningSequenceGuard,
     pub(crate) pending_eligibility: Option<PendingEligibilityReceipt>,
     pub(crate) pending_eligibility_record: Option<GpuPendingEligibilityRecord>,
+    pub(crate) mutable_epoch: u64,
+    pub(crate) cached_mutable_words: std::sync::Mutex<Option<PreparedSleepSlotWords>>,
 }
 
 pub(crate) struct ResidentActivity {
@@ -1587,6 +1682,55 @@ impl ResidentBrainSlot {
             let pressure = activity.throttle.pressure;
             (pressure.dispatch_generation, pressure.frame_digest)
         })
+    }
+
+    pub(crate) fn mutable_cache_key(&self) -> PreparedSleepSlotKey {
+        PreparedSleepSlotKey {
+            mutable_epoch: self.mutable_epoch,
+            active_weight_bank: self.active_weight_bank,
+            active_weight_generation: self.active_weight_generation,
+            active_eligibility_bank: self.active_eligibility_bank,
+            active_eligibility_generation: self.active_eligibility_generation,
+            inactive_eligibility_generation: self.inactive_eligibility_generation,
+            replay_journal_generation: self.replay_journal_generation,
+            replay_journal_cursor: self.replay_journal_cursor,
+            replay_journal_event_count: self.replay_journal_event_count,
+            transaction_generation: self.transaction_generation,
+            logical_dispatch_generation: self.logical_dispatch_generation,
+            activity_sequence_cursor: self.activity_sequence_cursor,
+            brain_atp_q16: self.brain_atp_q16,
+            pending_has_eligibility: self.pending_eligibility.is_some()
+                || self.pending_eligibility_record.is_some(),
+        }
+    }
+
+    pub(crate) fn invalidate_mutable_cache(&mut self) {
+        self.mutable_epoch = self.mutable_epoch.wrapping_add(1);
+        *self
+            .cached_mutable_words
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
+    }
+
+    pub(crate) fn cached_mutable_words(&self) -> Option<Arc<[u32]>> {
+        let expected_key = self.mutable_cache_key();
+        let guard = self
+            .cached_mutable_words
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        guard
+            .as_ref()
+            .filter(|entry| entry.key == expected_key)
+            .map(|entry| Arc::clone(&entry.words))
+    }
+
+    pub(crate) fn install_cached_mutable_words(&self, words: Arc<[u32]>) {
+        let key = self.mutable_cache_key();
+        *self
+            .cached_mutable_words
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) =
+            Some(PreparedSleepSlotWords { key, words });
     }
 }
 
@@ -1633,10 +1777,28 @@ struct PreparedLearningApply {
     commit_token: LearningCommitToken,
 }
 
+/// In-flight fast plasticity GPU batch submitted by
+/// [`GpuClosedLoopBackend::submit_sealed_outcome_batch`].
+pub struct PendingPlasticityBatch {
+    class_id: u16,
+    chunk_count: usize,
+    prepared: Vec<PreparedLearningApply>,
+    prepared_chunks: Vec<(
+        usize,
+        usize,
+        Vec<usize>,
+        crate::closed_loop_pipeline::PreparedFastPlasticityChunk,
+    )>,
+    map_receivers: Vec<std::sync::mpsc::Receiver<Result<(), wgpu::BufferAsyncError>>>,
+    timestamp_receiver: std::sync::mpsc::Receiver<Result<(), wgpu::BufferAsyncError>>,
+    submission: wgpu::SubmissionIndex,
+}
+
 pub(crate) struct ClassBucketRuntime {
     pub(crate) plan: GpuFixedClassArenaPlan,
     pub(crate) buffers: GpuFixedClassArenaBuffers,
     pub(crate) pipelines: GpuClosedLoopPipelines,
+    pub(crate) selector_readback: Option<wgpu::Buffer>,
     pub(crate) slots: Vec<Option<ResidentBrainSlot>>,
     pub(crate) generations: Vec<u32>,
     pub(crate) retired: BTreeSet<u32>,
@@ -1662,11 +1824,41 @@ impl ClassBucketRuntime {
             plan,
             buffers,
             pipelines,
+            selector_readback: None,
             slots: (0..slot_count).map(|_| None).collect(),
             generations: vec![0; slot_count],
             retired: BTreeSet::new(),
             free_slots,
         })
+    }
+
+    pub(crate) fn ensure_selector_readback(
+        &mut self,
+        device: &wgpu::Device,
+        required_bytes: u64,
+    ) -> &wgpu::Buffer {
+        let needs_alloc = self
+            .selector_readback
+            .as_ref()
+            .is_none_or(|buffer| buffer.size() < required_bytes);
+        if needs_alloc {
+            let max_buffer_size = device.limits().max_buffer_size;
+            let capacity = required_bytes
+                .checked_next_power_of_two()
+                .unwrap_or(required_bytes)
+                .max(4096)
+                .min(max_buffer_size)
+                .max(required_bytes);
+            self.selector_readback = Some(device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("closed-loop-selector-diagnostic-readback"),
+                size: capacity,
+                usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+                mapped_at_creation: false,
+            }));
+        }
+        self.selector_readback
+            .as_ref()
+            .expect("allocated selector readback buffer")
     }
 
     pub(crate) fn contains(&self, handle: GpuBrainHandle) -> bool {
@@ -2012,7 +2204,7 @@ struct PreparedClassDispatch {
     batch: Option<GpuActiveBatchUpload>,
     recorded: bool,
     map_ticket: Option<GpuCompactMapTicket>,
-    selector_readback: Option<wgpu::Buffer>,
+    has_selector_readback: bool,
     selector_map_ticket: Option<GpuCompactMapTicket>,
     selector_captures: Option<Vec<GpuSelectorLogitCapture>>,
     validated: Option<GpuValidatedClassBatch>,
@@ -2203,7 +2395,7 @@ fn selector_diagnostic_family_binding_offsets(
     let weight_index_start = decoder_weight_indices_offset
         .checked_add(
             local_decoder_synapse_start
-                .checked_mul(4)
+                .checked_mul(2)
                 .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?,
         )
         .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
@@ -2625,6 +2817,8 @@ pub struct GpuClosedLoopBackend {
     last_compact_readback_bytes: usize,
     pending_inference_timing: Option<PendingInferenceTiming>,
     completed_neural_timing: Option<GpuNeuralTimingSample>,
+    pub(crate) per_pass_profiling_enabled: bool,
+    pub(crate) last_per_pass_timings: Option<GpuPerPassTimings>,
     pub(crate) mutable_slot_readback_counters: GpuMutableSlotReadbackCounters,
     pub(crate) exact_population_capture_metrics: crate::GpuExactPopulationCaptureMetricsV1,
     pub(crate) next_exact_population_capture_generation: u64,
@@ -2632,10 +2826,13 @@ pub struct GpuClosedLoopBackend {
     pub(crate) next_sleep_job_id: u64,
     pub(crate) sleep_jobs: BTreeMap<u64, crate::GpuSleepJobState>,
     pub(crate) committed_sleep: BTreeMap<(u16, u32, u32, u64), crate::GpuSleepConsolidationReceipt>,
+    pub(crate) readback_scratch: Mutex<Option<wgpu::Buffer>>,
     #[cfg(feature = "training-rollout")]
     training_capture_metrics: GpuTrainingCaptureMetrics,
     #[cfg(feature = "training-rollout")]
     training_structural_cache: BTreeMap<(u16, u32, u32, u64), TrainingStructuralCache>,
+    #[cfg(feature = "training-rollout")]
+    pub(crate) training_capture_readback: Option<wgpu::Buffer>,
 }
 
 #[cfg(feature = "training-rollout")]
@@ -2743,6 +2940,16 @@ impl GpuClosedLoopBackend {
             GpuTimestampResources::new(&required.device, &required.queue)?;
         let kernels =
             GpuClosedLoopKernelSet::new(&required.device).map_err(map_gpu_contract_error)?;
+        let per_pass_profiling_enabled = env_per_pass_profiling_enabled();
+        tracing::info!(
+            backend_instance_id = backend_instance_id.get(),
+            backend_api = required.hardware.backend_api.as_str(),
+            adapter_name = required.hardware.adapter_name.as_str(),
+            vendor_id = required.hardware.vendor_id,
+            device_id = required.hardware.device_id,
+            per_pass_profiling = per_pass_profiling_enabled,
+            "initialized GPU closed-loop backend"
+        );
         Ok(Self {
             backend_instance_id,
             hardware: required.hardware,
@@ -2776,6 +2983,8 @@ impl GpuClosedLoopBackend {
             last_compact_readback_bytes: 0,
             pending_inference_timing: None,
             completed_neural_timing: None,
+            per_pass_profiling_enabled,
+            last_per_pass_timings: None,
             mutable_slot_readback_counters: GpuMutableSlotReadbackCounters::default(),
             exact_population_capture_metrics: crate::GpuExactPopulationCaptureMetricsV1::default(),
             next_exact_population_capture_generation: 1,
@@ -2783,10 +2992,13 @@ impl GpuClosedLoopBackend {
             next_sleep_job_id: 1,
             sleep_jobs: BTreeMap::new(),
             committed_sleep: BTreeMap::new(),
+            readback_scratch: Mutex::new(None),
             #[cfg(feature = "training-rollout")]
             training_capture_metrics: GpuTrainingCaptureMetrics::default(),
             #[cfg(feature = "training-rollout")]
             training_structural_cache: BTreeMap::new(),
+            #[cfg(feature = "training-rollout")]
+            training_capture_readback: None,
         })
     }
 
@@ -2837,6 +3049,8 @@ impl GpuClosedLoopBackend {
             last_compact_readback_bytes: 0,
             pending_inference_timing: None,
             completed_neural_timing: None,
+            per_pass_profiling_enabled: self.per_pass_profiling_enabled,
+            last_per_pass_timings: None,
             mutable_slot_readback_counters: GpuMutableSlotReadbackCounters::default(),
             exact_population_capture_metrics: crate::GpuExactPopulationCaptureMetricsV1::default(),
             next_exact_population_capture_generation: 1,
@@ -2844,10 +3058,13 @@ impl GpuClosedLoopBackend {
             next_sleep_job_id: plan.next_sleep_job_id,
             sleep_jobs: BTreeMap::new(),
             committed_sleep: BTreeMap::new(),
+            readback_scratch: Mutex::new(None),
             #[cfg(feature = "training-rollout")]
             training_capture_metrics: GpuTrainingCaptureMetrics::default(),
             #[cfg(feature = "training-rollout")]
             training_structural_cache: BTreeMap::new(),
+            #[cfg(feature = "training-rollout")]
+            training_capture_readback: None,
         })
     }
 
@@ -2925,6 +3142,21 @@ impl GpuClosedLoopBackend {
 
     pub fn take_completed_neural_timing_sample(&mut self) -> Option<GpuNeuralTimingSample> {
         self.completed_neural_timing.take()
+    }
+
+    pub const fn per_pass_profiling_enabled(&self) -> bool {
+        self.per_pass_profiling_enabled
+    }
+
+    pub fn set_per_pass_profiling(&mut self, enabled: bool) {
+        self.per_pass_profiling_enabled = enabled;
+        if !enabled {
+            self.last_per_pass_timings = None;
+        }
+    }
+
+    pub const fn last_per_pass_timings(&self) -> Option<GpuPerPassTimings> {
+        self.last_per_pass_timings
     }
 
     pub fn mutable_slot_readback_metrics(&self) -> GpuMutableSlotReadbackMetrics {
@@ -3079,7 +3311,9 @@ impl GpuClosedLoopBackend {
         bucket
             .buffers
             .seed_v11_mutable_probe(&self.queue, &upload, decoder_local, neuron, probe)
-            .map_err(map_gpu_contract_error)
+            .map_err(map_gpu_contract_error)?;
+        pool.resident_mut(handle)?.invalidate_mutable_cache();
+        Ok(())
     }
 
     /// Runs bounded sparse structural plasticity from the live sleep replay.
@@ -3227,6 +3461,7 @@ impl GpuClosedLoopBackend {
         resident.brain_slot = upload.brain_slot().clone();
         resident.ranges = upload.ranges().clone();
         resident.v11 = next;
+        resident.invalidate_mutable_cache();
         Ok(())
     }
 
@@ -3286,6 +3521,7 @@ impl GpuClosedLoopBackend {
         resident.brain_slot = upload.brain_slot().clone();
         resident.ranges = upload.ranges().clone();
         resident.v11 = next;
+        resident.invalidate_mutable_cache();
         Ok(work)
     }
 
@@ -3417,6 +3653,7 @@ impl GpuClosedLoopBackend {
         resident.brain_slot = upload.brain_slot().clone();
         resident.ranges = upload.ranges().clone();
         resident.v11 = next;
+        resident.invalidate_mutable_cache();
         Ok(())
     }
 
@@ -3485,6 +3722,7 @@ impl GpuClosedLoopBackend {
         resident.brain_slot = upload.brain_slot().clone();
         resident.ranges = upload.ranges().clone();
         resident.v11 = next;
+        resident.invalidate_mutable_cache();
         Ok(())
     }
 
@@ -4145,27 +4383,93 @@ impl GpuClosedLoopBackend {
         &mut self,
         batch: &[(GpuBrainHandle, &ExperiencePatch, &NeuralReceptorFrame)],
     ) -> Result<Vec<GpuLearningReceipt>, ScaffoldContractError> {
-        self.apply_sealed_outcome_batch_internal(batch)
+        let pending = self.submit_sealed_outcome_batch(batch)?;
+        self.complete_sealed_outcome_batch(pending)
     }
 
-    fn apply_sealed_outcome_batch_internal(
+    /// Validates and submits fast plasticity without waiting for the device.
+    /// Host slot authority is unchanged until
+    /// [`Self::complete_sealed_outcome_batch`]. The returned batch must be
+    /// completed or aborted before any other neural submission.
+    pub fn submit_sealed_outcome_batch(
         &mut self,
         batch: &[(GpuBrainHandle, &ExperiencePatch, &NeuralReceptorFrame)],
-    ) -> Result<Vec<GpuLearningReceipt>, ScaffoldContractError> {
+    ) -> Result<PendingPlasticityBatch, ScaffoldContractError> {
+        let _span =
+            tracing::debug_span!("gpu_fast_plasticity_submit", batch_len = batch.len()).entered();
         let mut published = false;
-        let result = self.apply_sealed_outcome_batch_inner(batch, &mut published);
+        let result = self.submit_sealed_outcome_batch_inner(batch, &mut published);
         if result.is_err() && published {
+            #[cfg(feature = "training-rollout")]
+            if let Some(readback) = self.training_capture_readback.as_ref() {
+                readback.unmap();
+            }
             self.mark_device_lost();
             return Err(ScaffoldContractError::NeuralBackendUnavailable);
         }
         result
     }
 
-    fn apply_sealed_outcome_batch_inner(
+    /// Waits for a submitted plasticity batch, validates every GPU commit
+    /// record, and only then publishes the new host slot generations.
+    pub fn complete_sealed_outcome_batch(
+        &mut self,
+        pending: PendingPlasticityBatch,
+    ) -> Result<Vec<GpuLearningReceipt>, ScaffoldContractError> {
+        let _span = tracing::debug_span!(
+            "gpu_fast_plasticity_complete",
+            class_id = pending.class_id,
+            chunks = pending.prepared_chunks.len()
+        )
+        .entered();
+        let mut published = false;
+        let result = self.complete_sealed_outcome_batch_inner(pending, &mut published);
+        if result.is_err() && published {
+            #[cfg(feature = "training-rollout")]
+            if let Some(readback) = self.training_capture_readback.as_ref() {
+                readback.unmap();
+            }
+            self.mark_device_lost();
+            return Err(ScaffoldContractError::NeuralBackendUnavailable);
+        }
+        result
+    }
+
+    /// Abandons a submitted plasticity batch. The device may already have
+    /// written commit records that the host never adopted, so host and GPU
+    /// authority can no longer be proven equal: drain the mappings, release
+    /// every staging buffer, and fail-stop.
+    pub fn abort_pending_plasticity_batch(&mut self, pending: PendingPlasticityBatch) {
+        let _ = self.device.poll(wgpu::PollType::Wait {
+            submission_index: Some(pending.submission),
+            timeout: None,
+        });
+        for receiver in &pending.map_receivers {
+            let _ = receiver.try_recv();
+        }
+        let _ = pending.timestamp_receiver.try_recv();
+        for (chunk_index, _, _, _) in &pending.prepared_chunks {
+            if let Some(bucket) = self
+                .class_buckets
+                .get(&pending.class_id)
+                .and_then(|pool| pool.chunks.get(*chunk_index))
+            {
+                bucket.buffers.compact_readback().unmap();
+            }
+        }
+        self.plasticity_timestamp_resources.readback_buffer.unmap();
+        #[cfg(feature = "training-rollout")]
+        if let Some(readback) = self.training_capture_readback.as_ref() {
+            readback.unmap();
+        }
+        self.mark_device_lost();
+    }
+
+    fn submit_sealed_outcome_batch_inner(
         &mut self,
         batch: &[(GpuBrainHandle, &ExperiencePatch, &NeuralReceptorFrame)],
         published: &mut bool,
-    ) -> Result<Vec<GpuLearningReceipt>, ScaffoldContractError> {
+    ) -> Result<PendingPlasticityBatch, ScaffoldContractError> {
         self.last_apply_fast_plasticity_failure = None;
         self.ensure_ready()?;
         if batch.is_empty() {
@@ -4261,9 +4565,10 @@ impl GpuClosedLoopBackend {
                 .or_default()
                 .push(index);
         }
-        let mut ordered_gpu_records = vec![None; prepared.len()];
-        let mut plasticity_timestamp_ticks = 0_u64;
-        for (chunk_index, indices) in grouped_indices {
+        let grouped_chunks = grouped_indices.into_iter().collect::<Vec<_>>();
+        let chunk_count = grouped_chunks.len();
+        let mut prepared_chunks = Vec::with_capacity(chunk_count);
+        for (chunk_index, indices) in grouped_chunks {
             let submitted_entry = indices
                 .first()
                 .copied()
@@ -4283,30 +4588,22 @@ impl GpuClosedLoopBackend {
                     }
                 })
                 .collect::<Vec<_>>();
-            let (gpu_result, malformed_receipt, submission_started) = {
+            let (prepare_result, malformed_receipt) = {
                 let bucket = self
                     .class_buckets
                     .get_mut(&class_id)
                     .and_then(|pool| pool.chunks.get_mut(chunk_index))
                     .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-                let mut submission_started = false;
-                let result = bucket.pipelines.apply_fast_plasticity(
+                let result = bucket.pipelines.prepare_fast_plasticity(
                     &self.device,
-                    &self.queue,
                     &bucket.buffers,
                     &gpu_entries,
-                    GpuTimestampQueryResources::new(
-                        &self.plasticity_timestamp_resources.query_set,
-                        &self.plasticity_timestamp_resources.resolve_buffer,
-                        &self.plasticity_timestamp_resources.readback_buffer,
-                    ),
-                    &mut submission_started,
                 );
                 let malformed_receipt = bucket.pipelines.take_fast_plasticity_malformed_receipt();
-                (result, malformed_receipt, submission_started)
+                (result, malformed_receipt)
             };
-            let gpu_timed_result = match gpu_result {
-                Ok(result) => result,
+            let prepared_chunk = match prepare_result {
+                Ok(chunk) => chunk,
                 Err(
                     error @ (GpuClosedLoopError::MalformedUpload
                     | GpuClosedLoopError::StaleOrForeignHandle),
@@ -4330,32 +4627,324 @@ impl GpuClosedLoopBackend {
                             expected: malformed_receipt.map(|receipt| receipt.expected),
                             actual: malformed_receipt.map(|receipt| receipt.actual),
                         });
-                    // Another row or an earlier arena may already have published its
-                    // weight bank. Host metadata cannot safely retry the whole batch.
-                    let rejected_single_row = indices.len() == 1
-                        && malformed_receipt.is_some_and(|receipt| {
-                            receipt.field == GpuRuntimeApplyFastPlasticityMalformedField::CommitGuardRejected
-                        });
-                    if *published || (submission_started && !rejected_single_row) {
+                    if *published {
+                        #[cfg(feature = "training-rollout")]
+                        if let Some(readback) = self.training_capture_readback.as_ref() {
+                            readback.unmap();
+                        }
                         self.mark_device_lost();
                         return Err(ScaffoldContractError::NeuralBackendUnavailable);
                     }
                     return Err(ScaffoldContractError::LearningEvidenceMismatch);
                 }
                 Err(_) => {
+                    #[cfg(feature = "training-rollout")]
+                    if let Some(readback) = self.training_capture_readback.as_ref() {
+                        readback.unmap();
+                    }
+                    self.mark_device_lost();
+                    return Err(ScaffoldContractError::NeuralBackendUnavailable);
+                }
+            };
+            prepared_chunks.push((chunk_index, submitted_entry, indices, prepared_chunk));
+        }
+
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("closed-loop-fast-plasticity-batch"),
+            });
+        for (pos, (chunk_index, _, indices, prepared_chunk)) in prepared_chunks.iter().enumerate() {
+            let gpu_entries = indices
+                .iter()
+                .map(|index| {
+                    let entry = &prepared[*index];
+                    GpuFastPlasticityBatchEntry {
+                        developmental_plasticity: &entry.developmental_plasticity,
+                        slot: &entry.brain_slot,
+                        pending: &entry.pending_record,
+                        outcome: entry.outcome,
+                        active_weight_generation: entry.active_weight_generation,
+                        replay_generation: entry.replay_journal_generation,
+                        transaction_generation: entry.transaction_generation,
+                    }
+                })
+                .collect::<Vec<_>>();
+            let bucket = self
+                .class_buckets
+                .get(&class_id)
+                .and_then(|pool| pool.chunks.get(*chunk_index))
+                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+            bucket.pipelines.record_fast_plasticity(
+                &mut encoder,
+                &self.queue,
+                &bucket.buffers,
+                &gpu_entries,
+                prepared_chunk,
+                (
+                    &self.plasticity_timestamp_resources.query_set,
+                    pos == 0,
+                    pos + 1 == chunk_count,
+                ),
+            );
+        }
+        encoder.resolve_query_set(
+            &self.plasticity_timestamp_resources.query_set,
+            0..GPU_TIMESTAMP_QUERY_COUNT,
+            &self.plasticity_timestamp_resources.resolve_buffer,
+            0,
+        );
+        encoder.copy_buffer_to_buffer(
+            &self.plasticity_timestamp_resources.resolve_buffer,
+            0,
+            &self.plasticity_timestamp_resources.readback_buffer,
+            0,
+            GPU_TIMESTAMP_READBACK_BYTES,
+        );
+        let command_buffer = encoder.finish();
+        let mut map_receivers = Vec::with_capacity(chunk_count);
+        for (chunk_index, _, _, prepared_chunk) in &prepared_chunks {
+            let bucket = self
+                .class_buckets
+                .get(&class_id)
+                .and_then(|pool| pool.chunks.get(*chunk_index))
+                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+            let (sender, receiver) = std::sync::mpsc::channel();
+            command_buffer.map_buffer_on_submit(
+                bucket.buffers.compact_readback(),
+                wgpu::MapMode::Read,
+                0..prepared_chunk.readback_bytes as u64,
+                move |result| {
+                    let _ = sender.send(result);
+                },
+            );
+            map_receivers.push(receiver);
+        }
+        let (timestamp_sender, timestamp_receiver) = std::sync::mpsc::channel();
+        command_buffer.map_buffer_on_submit(
+            &self.plasticity_timestamp_resources.readback_buffer,
+            wgpu::MapMode::Read,
+            0..GPU_TIMESTAMP_READBACK_BYTES,
+            move |result| {
+                let _ = timestamp_sender.send(result);
+            },
+        );
+        let submission = self.queue.submit(Some(command_buffer));
+        Ok(PendingPlasticityBatch {
+            class_id,
+            chunk_count,
+            prepared,
+            prepared_chunks,
+            map_receivers,
+            timestamp_receiver,
+            submission,
+        })
+    }
+
+    fn complete_sealed_outcome_batch_inner(
+        &mut self,
+        pending: PendingPlasticityBatch,
+        published: &mut bool,
+    ) -> Result<Vec<GpuLearningReceipt>, ScaffoldContractError> {
+        let PendingPlasticityBatch {
+            class_id,
+            chunk_count,
+            prepared,
+            prepared_chunks,
+            map_receivers,
+            timestamp_receiver,
+            submission,
+        } = pending;
+        let mut ordered_gpu_records = vec![None; prepared.len()];
+        let poll_failed = self
+            .device
+            .poll(wgpu::PollType::Wait {
+                submission_index: Some(submission),
+                timeout: None,
+            })
+            .is_err();
+        let all_mappings_ok = map_receivers
+            .into_iter()
+            .all(|receiver| receiver.recv().ok().and_then(Result::ok).is_some());
+        let timestamp_mapping_ok = timestamp_receiver
+            .recv()
+            .ok()
+            .and_then(Result::ok)
+            .is_some();
+        if poll_failed || !all_mappings_ok || !timestamp_mapping_ok {
+            for (chunk_index, _, _, _) in &prepared_chunks {
+                if let Some(bucket) = self
+                    .class_buckets
+                    .get(&class_id)
+                    .and_then(|pool| pool.chunks.get(*chunk_index))
+                {
+                    bucket.buffers.compact_readback().unmap();
+                }
+            }
+            self.plasticity_timestamp_resources.readback_buffer.unmap();
+            #[cfg(feature = "training-rollout")]
+            if let Some(readback) = self.training_capture_readback.as_ref() {
+                readback.unmap();
+            }
+            self.mark_device_lost();
+            return Err(ScaffoldContractError::NeuralBackendUnavailable);
+        }
+        let Ok((plasticity_timestamp_ticks, plasticity_elapsed_ns)) = self
+            .plasticity_timestamp_resources
+            .read_delta_and_elapsed_ns()
+        else {
+            for (chunk_index, _, _, _) in &prepared_chunks {
+                if let Some(bucket) = self
+                    .class_buckets
+                    .get(&class_id)
+                    .and_then(|pool| pool.chunks.get(*chunk_index))
+                {
+                    bucket.buffers.compact_readback().unmap();
+                }
+            }
+            #[cfg(feature = "training-rollout")]
+            if let Some(readback) = self.training_capture_readback.as_ref() {
+                readback.unmap();
+            }
+            self.mark_device_lost();
+            return Err(ScaffoldContractError::NeuralBackendUnavailable);
+        };
+        if plasticity_timestamp_ticks == 0 {
+            for (chunk_index, _, _, _) in &prepared_chunks {
+                if let Some(bucket) = self
+                    .class_buckets
+                    .get(&class_id)
+                    .and_then(|pool| pool.chunks.get(*chunk_index))
+                {
+                    bucket.buffers.compact_readback().unmap();
+                }
+            }
+            #[cfg(feature = "training-rollout")]
+            if let Some(readback) = self.training_capture_readback.as_ref() {
+                readback.unmap();
+            }
+            self.mark_device_lost();
+            return Err(ScaffoldContractError::NeuralBackendUnavailable);
+        }
+
+        for (pos, (chunk_index, submitted_entry, indices, prepared_chunk)) in
+            prepared_chunks.iter().enumerate()
+        {
+            let gpu_entries = indices
+                .iter()
+                .map(|index| {
+                    let entry = &prepared[*index];
+                    GpuFastPlasticityBatchEntry {
+                        developmental_plasticity: &entry.developmental_plasticity,
+                        slot: &entry.brain_slot,
+                        pending: &entry.pending_record,
+                        outcome: entry.outcome,
+                        active_weight_generation: entry.active_weight_generation,
+                        replay_generation: entry.replay_journal_generation,
+                        transaction_generation: entry.transaction_generation,
+                    }
+                })
+                .collect::<Vec<_>>();
+            let (gpu_result, malformed_receipt) = {
+                let bucket = self
+                    .class_buckets
+                    .get_mut(&class_id)
+                    .and_then(|pool| pool.chunks.get_mut(*chunk_index))
+                    .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+                let result = bucket.pipelines.decode_fast_plasticity_records(
+                    &bucket.buffers,
+                    &gpu_entries,
+                    prepared_chunk.readback_bytes,
+                );
+                let malformed_receipt = bucket.pipelines.take_fast_plasticity_malformed_receipt();
+                (result, malformed_receipt)
+            };
+            let records = match gpu_result {
+                Ok(records) => records,
+                Err(
+                    error @ (GpuClosedLoopError::MalformedUpload
+                    | GpuClosedLoopError::StaleOrForeignHandle),
+                ) => {
+                    for (remaining_chunk, _, _, _) in &prepared_chunks[pos + 1..] {
+                        if let Some(bucket) = self
+                            .class_buckets
+                            .get(&class_id)
+                            .and_then(|pool| pool.chunks.get(*remaining_chunk))
+                        {
+                            bucket.buffers.compact_readback().unmap();
+                        }
+                    }
+                    let class = match error {
+                        GpuClosedLoopError::MalformedUpload => {
+                            GpuRuntimeApplyFastPlasticityFailureClass::MalformedUpload
+                        }
+                        GpuClosedLoopError::StaleOrForeignHandle => {
+                            GpuRuntimeApplyFastPlasticityFailureClass::StaleOrForeignHandle
+                        }
+                        _ => unreachable!("matched bounded fast-plasticity failure class"),
+                    };
+                    self.last_apply_fast_plasticity_failure =
+                        Some(GpuRuntimeApplyFastPlasticityFailureReceipt {
+                            class,
+                            class_id,
+                            chunk_index: *chunk_index,
+                            submitted_entry: *submitted_entry,
+                            malformed_field: malformed_receipt.map(|receipt| receipt.field),
+                            expected: malformed_receipt.map(|receipt| receipt.expected),
+                            actual: malformed_receipt.map(|receipt| receipt.actual),
+                        });
+                    let rejected_single_row = chunk_count == 1
+                        && indices.len() == 1
+                        && malformed_receipt.is_some_and(|receipt| {
+                            receipt.field == GpuRuntimeApplyFastPlasticityMalformedField::CommitGuardRejected
+                        });
+                    if *published || !rejected_single_row {
+                        #[cfg(feature = "training-rollout")]
+                        if let Some(readback) = self.training_capture_readback.as_ref() {
+                            readback.unmap();
+                        }
+                        self.mark_device_lost();
+                        return Err(ScaffoldContractError::NeuralBackendUnavailable);
+                    }
+                    return Err(ScaffoldContractError::LearningEvidenceMismatch);
+                }
+                Err(_) => {
+                    for (remaining_chunk, _, _, _) in &prepared_chunks[pos + 1..] {
+                        if let Some(bucket) = self
+                            .class_buckets
+                            .get(&class_id)
+                            .and_then(|pool| pool.chunks.get(*remaining_chunk))
+                        {
+                            bucket.buffers.compact_readback().unmap();
+                        }
+                    }
+                    #[cfg(feature = "training-rollout")]
+                    if let Some(readback) = self.training_capture_readback.as_ref() {
+                        readback.unmap();
+                    }
                     self.mark_device_lost();
                     return Err(ScaffoldContractError::NeuralBackendUnavailable);
                 }
             };
             *published = true;
-            if gpu_timed_result.records.len() != indices.len() {
+            if records.len() != indices.len() {
+                for (remaining_chunk, _, _, _) in &prepared_chunks[pos + 1..] {
+                    if let Some(bucket) = self
+                        .class_buckets
+                        .get(&class_id)
+                        .and_then(|pool| pool.chunks.get(*remaining_chunk))
+                    {
+                        bucket.buffers.compact_readback().unmap();
+                    }
+                }
+                #[cfg(feature = "training-rollout")]
+                if let Some(readback) = self.training_capture_readback.as_ref() {
+                    readback.unmap();
+                }
                 self.mark_device_lost();
                 return Err(ScaffoldContractError::NeuralBackendUnavailable);
             }
-            plasticity_timestamp_ticks = plasticity_timestamp_ticks
-                .checked_add(gpu_timed_result.timestamp_delta_ticks)
-                .ok_or(ScaffoldContractError::GpuTimestampQueryUnavailable)?;
-            for (index, record) in indices.into_iter().zip(gpu_timed_result.records) {
+            for (index, record) in indices.iter().copied().zip(records) {
                 ordered_gpu_records[index] = Some(record);
             }
         }
@@ -4364,6 +4953,10 @@ impl GpuClosedLoopBackend {
             .collect::<Option<Vec<_>>>()
             .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
         if gpu_records.len() != prepared.len() {
+            #[cfg(feature = "training-rollout")]
+            if let Some(readback) = self.training_capture_readback.as_ref() {
+                readback.unmap();
+            }
             self.mark_device_lost();
             return Err(ScaffoldContractError::NeuralBackendUnavailable);
         }
@@ -4390,6 +4983,10 @@ impl GpuClosedLoopBackend {
                 })
         });
         if !host_precommit_valid {
+            #[cfg(feature = "training-rollout")]
+            if let Some(readback) = self.training_capture_readback.as_ref() {
+                readback.unmap();
+            }
             self.mark_device_lost();
             return Err(ScaffoldContractError::NeuralBackendUnavailable);
         }
@@ -4408,6 +5005,10 @@ impl GpuClosedLoopBackend {
                 .learning_sequence_guard
                 .commit_validated(entry.commit_token);
             if guard_commit.is_err() {
+                #[cfg(feature = "training-rollout")]
+                if let Some(readback) = self.training_capture_readback.as_ref() {
+                    readback.unmap();
+                }
                 self.mark_device_lost();
                 return Err(ScaffoldContractError::NeuralBackendUnavailable);
             }
@@ -4474,6 +5075,11 @@ impl GpuClosedLoopBackend {
                     plasticity_timestamp_ticks,
                     timestamp_period_ns_q24: inference_period_ns_q24,
                 });
+                if let Some(timings) = self.last_per_pass_timings.as_mut() {
+                    if timings.dispatch_generation == dispatch_generation {
+                        timings.plasticity_ns = plasticity_elapsed_ns;
+                    }
+                }
                 self.pending_inference_timing = None;
             }
         }
@@ -4533,6 +5139,10 @@ impl GpuClosedLoopBackend {
         let discard_record = match discard_result {
             Ok(record) => record,
             Err(_) => {
+                #[cfg(feature = "training-rollout")]
+                if let Some(readback) = self.training_capture_readback.as_ref() {
+                    readback.unmap();
+                }
                 self.mark_device_lost();
                 return Err(ScaffoldContractError::NeuralBackendUnavailable);
             }
@@ -4546,6 +5156,10 @@ impl GpuClosedLoopBackend {
                 != identity.staging_eligibility_generation()
             || discard_record.transaction_generation() != next_transaction_generation
         {
+            #[cfg(feature = "training-rollout")]
+            if let Some(readback) = self.training_capture_readback.as_ref() {
+                readback.unmap();
+            }
             self.mark_device_lost();
             return Err(ScaffoldContractError::NeuralBackendUnavailable);
         }
@@ -4568,6 +5182,383 @@ impl GpuClosedLoopBackend {
             *identity,
             self.hardware.generation,
         ))
+    }
+
+    pub fn discard_pending_eligibility_batch(
+        &mut self,
+        batch: &[(GpuBrainHandle, &PendingEligibilityIdentity)],
+    ) -> Result<Vec<PendingEligibilityDiscardReceipt>, ScaffoldContractError> {
+        self.ensure_ready()?;
+        if batch.is_empty() {
+            return Ok(Vec::new());
+        }
+        struct PreparedDiscardEntry {
+            handle: GpuBrainHandle,
+            class_id: u16,
+            identity: PendingEligibilityIdentity,
+            brain_slot: GpuBrainSlot,
+            pending_record: GpuPendingEligibilityRecord,
+            transaction_generation: u64,
+        }
+        let mut seen = BTreeSet::new();
+        let mut prepared = Vec::with_capacity(batch.len());
+        let mut grouped = BTreeMap::<(u16, usize), Vec<usize>>::new();
+        for (index, (handle, identity)) in batch.iter().enumerate() {
+            self.validate_handle_backend(*handle)?;
+            if !seen.insert((handle.class_id.raw(), handle.slot, handle.generation)) {
+                return Err(ScaffoldContractError::LearningEvidenceMismatch);
+            }
+            let class_id = handle.class_id.raw();
+            let pool = self
+                .class_buckets
+                .get(&class_id)
+                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+            let chunk_index = pool
+                .bucket_index_for_handle(*handle)
+                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+            let resident = pool.resident(*handle)?;
+            let pending_receipt = resident
+                .pending_eligibility
+                .ok_or(ScaffoldContractError::LearningEvidenceMismatch)?;
+            let pending_record = resident
+                .pending_eligibility_record
+                .ok_or(ScaffoldContractError::LearningEvidenceMismatch)?;
+            if pending_receipt.identity() != *identity
+                || identity.handle_generation() != handle.generation
+                || identity.phenotype_hash() != handle.phenotype_hash
+            {
+                return Err(ScaffoldContractError::LearningEvidenceMismatch);
+            }
+            grouped
+                .entry((class_id, chunk_index))
+                .or_default()
+                .push(index);
+            prepared.push(PreparedDiscardEntry {
+                handle: *handle,
+                class_id,
+                identity: **identity,
+                brain_slot: resident.brain_slot.clone(),
+                pending_record,
+                transaction_generation: resident.transaction_generation,
+            });
+        }
+        #[cfg(feature = "gpu-tests")]
+        if self.forced_discard_rejections_remaining > 0 {
+            self.forced_discard_rejections_remaining -= 1;
+            return Err(ScaffoldContractError::LearningEvidenceMismatch);
+        }
+        let mut prepared_chunks = Vec::with_capacity(grouped.len());
+        for ((class_id, chunk_index), indices) in grouped {
+            let entries = indices
+                .iter()
+                .map(|index| {
+                    let item = &prepared[*index];
+                    (
+                        &item.brain_slot,
+                        &item.pending_record,
+                        item.transaction_generation,
+                    )
+                })
+                .collect::<Vec<_>>();
+            let bucket = self
+                .class_buckets
+                .get(&class_id)
+                .and_then(|pool| pool.chunks.get(chunk_index))
+                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+            let chunk = bucket
+                .pipelines
+                .prepare_discard_pending_eligibility_batch(&bucket.buffers, &entries)
+                .map_err(|_| ScaffoldContractError::NeuralBackendUnavailable)?;
+            prepared_chunks.push((class_id, chunk_index, indices, chunk));
+        }
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("closed-loop-discard-pending-eligibility-batch"),
+            });
+        for (class_id, chunk_index, indices, chunk) in &prepared_chunks {
+            let entries = indices
+                .iter()
+                .map(|index| {
+                    let item = &prepared[*index];
+                    (
+                        &item.brain_slot,
+                        &item.pending_record,
+                        item.transaction_generation,
+                    )
+                })
+                .collect::<Vec<_>>();
+            let bucket = self
+                .class_buckets
+                .get(class_id)
+                .and_then(|pool| pool.chunks.get(*chunk_index))
+                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+            bucket.pipelines.record_discard_pending_eligibility_batch(
+                &mut encoder,
+                &self.queue,
+                &bucket.buffers,
+                &entries,
+                chunk,
+            );
+        }
+        let command_buffer = encoder.finish();
+        let mut receivers = Vec::with_capacity(prepared_chunks.len());
+        for (class_id, chunk_index, _, chunk) in &prepared_chunks {
+            let bucket = self
+                .class_buckets
+                .get(class_id)
+                .and_then(|pool| pool.chunks.get(*chunk_index))
+                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+            let (sender, receiver) = std::sync::mpsc::channel();
+            command_buffer.map_buffer_on_submit(
+                bucket.buffers.compact_readback(),
+                wgpu::MapMode::Read,
+                0..chunk.readback_bytes,
+                move |result| {
+                    let _ = sender.send(result);
+                },
+            );
+            receivers.push(receiver);
+        }
+        let submission = self.queue.submit(Some(command_buffer));
+        let poll_failed = self
+            .device
+            .poll(wgpu::PollType::Wait {
+                submission_index: Some(submission),
+                timeout: None,
+            })
+            .is_err();
+        let all_mapped = receivers
+            .into_iter()
+            .all(|receiver| receiver.recv().ok().and_then(Result::ok).is_some());
+        if poll_failed || !all_mapped {
+            for (class_id, chunk_index, _, _) in &prepared_chunks {
+                if let Some(bucket) = self
+                    .class_buckets
+                    .get(class_id)
+                    .and_then(|pool| pool.chunks.get(*chunk_index))
+                {
+                    bucket.buffers.compact_readback().unmap();
+                }
+            }
+            #[cfg(feature = "training-rollout")]
+            if let Some(readback) = self.training_capture_readback.as_ref() {
+                readback.unmap();
+            }
+            self.mark_device_lost();
+            return Err(ScaffoldContractError::NeuralBackendUnavailable);
+        }
+        let mut ordered_records = vec![None; prepared.len()];
+        for (pos, (class_id, chunk_index, indices, chunk)) in prepared_chunks.iter().enumerate() {
+            let entries = indices
+                .iter()
+                .map(|index| {
+                    let item = &prepared[*index];
+                    (
+                        &item.brain_slot,
+                        &item.pending_record,
+                        item.transaction_generation,
+                    )
+                })
+                .collect::<Vec<_>>();
+            let bucket = self
+                .class_buckets
+                .get(class_id)
+                .and_then(|pool| pool.chunks.get(*chunk_index))
+                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+            let records = match bucket.pipelines.decode_discard_pending_eligibility_batch(
+                &bucket.buffers,
+                &entries,
+                chunk.readback_bytes,
+            ) {
+                Ok(records) => records,
+                Err(_) => {
+                    for (rem_class, rem_chunk, _, _) in &prepared_chunks[pos + 1..] {
+                        if let Some(bucket) = self
+                            .class_buckets
+                            .get(rem_class)
+                            .and_then(|pool| pool.chunks.get(*rem_chunk))
+                        {
+                            bucket.buffers.compact_readback().unmap();
+                        }
+                    }
+                    #[cfg(feature = "training-rollout")]
+                    if let Some(readback) = self.training_capture_readback.as_ref() {
+                        readback.unmap();
+                    }
+                    self.mark_device_lost();
+                    return Err(ScaffoldContractError::NeuralBackendUnavailable);
+                }
+            };
+            for (index, record) in indices.iter().copied().zip(records) {
+                ordered_records[index] = Some(record);
+            }
+        }
+        let mut receipts = Vec::with_capacity(prepared.len());
+        for (item, record) in prepared.into_iter().zip(ordered_records) {
+            let Some(discard_record) = record else {
+                #[cfg(feature = "training-rollout")]
+                if let Some(readback) = self.training_capture_readback.as_ref() {
+                    readback.unmap();
+                }
+                self.mark_device_lost();
+                return Err(ScaffoldContractError::NeuralBackendUnavailable);
+            };
+            let next_transaction_generation = item
+                .transaction_generation
+                .checked_add(1)
+                .ok_or(ScaffoldContractError::LearningEvidenceMismatch)?;
+            if discard_record.active_eligibility_generation()
+                != item.identity.active_eligibility_generation()
+                || discard_record.discarded_staging_generation()
+                    != item.identity.staging_eligibility_generation()
+                || discard_record.transaction_generation() != next_transaction_generation
+            {
+                #[cfg(feature = "training-rollout")]
+                if let Some(readback) = self.training_capture_readback.as_ref() {
+                    readback.unmap();
+                }
+                self.mark_device_lost();
+                return Err(ScaffoldContractError::NeuralBackendUnavailable);
+            }
+            let resident = self
+                .class_buckets
+                .get_mut(&item.class_id)
+                .and_then(|pool| pool.resident_mut(item.handle).ok())
+                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+            resident.transaction_generation = next_transaction_generation;
+            resident.inactive_eligibility_generation = 0;
+            resident.pending_eligibility = None;
+            resident.pending_eligibility_record = None;
+            if self.pending_inference_timing.is_some_and(|pending| {
+                pending.dispatch_generation == item.identity.dispatch_generation()
+            }) {
+                self.pending_inference_timing = None;
+            }
+            receipts.push(PendingEligibilityDiscardReceipt::new(
+                item.identity,
+                self.hardware.generation,
+            ));
+        }
+        Ok(receipts)
+    }
+
+    /// Discards independent pending eligibilities with one submission and one
+    /// device wait. Unlike [`Self::discard_pending_eligibility_batch`], a row
+    /// that fails host validation (or a forced test rejection) is reported at
+    /// its own input index and never blocks the other rows. Device failure
+    /// after submission still fail-stops the backend for every submitted row.
+    pub fn discard_pending_eligibility_batch_isolated(
+        &mut self,
+        batch: &[(GpuBrainHandle, PendingEligibilityIdentity)],
+    ) -> Vec<Result<PendingEligibilityDiscardReceipt, ScaffoldContractError>> {
+        if batch.is_empty() {
+            return Vec::new();
+        }
+        if self.ensure_ready().is_err() {
+            return (0..batch.len())
+                .map(|_| Err(self.ensure_ready().unwrap_err()))
+                .collect();
+        }
+        let mut results: Vec<
+            Option<Result<PendingEligibilityDiscardReceipt, ScaffoldContractError>>,
+        > = Vec::with_capacity(batch.len());
+        results.resize_with(batch.len(), || None);
+        let mut seen = BTreeSet::new();
+        let mut valid = Vec::with_capacity(batch.len());
+        // Per-row forced rejections preserve the old one-call-per-row semantics.
+        #[cfg(feature = "gpu-tests")]
+        let mut forced_remaining = std::mem::take(&mut self.forced_discard_rejections_remaining);
+        for (index, (handle, identity)) in batch.iter().enumerate() {
+            let validation = (|| -> Result<(), ScaffoldContractError> {
+                self.validate_handle_backend(*handle)?;
+                if !seen.insert((handle.class_id.raw(), handle.slot, handle.generation)) {
+                    return Err(ScaffoldContractError::LearningEvidenceMismatch);
+                }
+                let pool = self
+                    .class_buckets
+                    .get(&handle.class_id.raw())
+                    .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+                let resident = pool.resident(*handle)?;
+                let pending_receipt = resident
+                    .pending_eligibility
+                    .ok_or(ScaffoldContractError::LearningEvidenceMismatch)?;
+                resident
+                    .pending_eligibility_record
+                    .ok_or(ScaffoldContractError::LearningEvidenceMismatch)?;
+                if pending_receipt.identity() != identity
+                    || identity.handle_generation() != handle.generation
+                    || identity.phenotype_hash() != handle.phenotype_hash
+                {
+                    return Err(ScaffoldContractError::LearningEvidenceMismatch);
+                }
+                Ok(())
+            })();
+            #[cfg(feature = "gpu-tests")]
+            let validation = validation.and_then(|()| {
+                if forced_remaining > 0 {
+                    forced_remaining -= 1;
+                    Err(ScaffoldContractError::LearningEvidenceMismatch)
+                } else {
+                    Ok(())
+                }
+            });
+            match validation {
+                Ok(()) => valid.push(index),
+                Err(error) => results[index] = Some(Err(error)),
+            }
+        }
+        #[cfg(feature = "gpu-tests")]
+        {
+            self.forced_discard_rejections_remaining = forced_remaining;
+        }
+        if !valid.is_empty() {
+            let rows = valid
+                .iter()
+                .map(|index| (batch[*index].0, &batch[*index].1))
+                .collect::<Vec<_>>();
+            // Rows were prevalidated above, so the shared transaction only
+            // fails on device/readback failure, which already fail-stops.
+            #[cfg(feature = "gpu-tests")]
+            let held = std::mem::take(&mut self.forced_discard_rejections_remaining);
+            let outcome = self.discard_pending_eligibility_batch(&rows);
+            #[cfg(feature = "gpu-tests")]
+            {
+                self.forced_discard_rejections_remaining = held;
+            }
+            match outcome {
+                Ok(receipts) if receipts.len() == valid.len() => {
+                    for (index, receipt) in valid.iter().zip(receipts) {
+                        results[*index] = Some(Ok(receipt));
+                    }
+                }
+                Ok(_) => {
+                    self.mark_device_lost();
+                    for index in &valid {
+                        results[*index] =
+                            Some(Err(ScaffoldContractError::NeuralBackendUnavailable));
+                    }
+                }
+                Err(error) => {
+                    for index in &valid {
+                        let mapped = match error {
+                            ScaffoldContractError::NeuralBackendUnavailable => {
+                                ScaffoldContractError::NeuralBackendUnavailable
+                            }
+                            ScaffoldContractError::BrainOwnershipMismatch => {
+                                ScaffoldContractError::BrainOwnershipMismatch
+                            }
+                            _ => ScaffoldContractError::LearningEvidenceMismatch,
+                        };
+                        results[*index] = Some(Err(mapped));
+                    }
+                }
+            }
+        }
+        results
+            .into_iter()
+            .map(|result| result.unwrap_or(Err(ScaffoldContractError::LearningEvidenceMismatch)))
+            .collect()
     }
 
     /// Admit an owned CPU encoding view without exposing device or neural state.
@@ -4690,6 +5681,15 @@ impl GpuClosedLoopBackend {
             })
             .collect::<Vec<_>>();
         self.tick_inputs_with_selector_diagnostic_capture(&inputs, None, None, Some(sampling))
+    }
+
+    #[cfg(feature = "training-rollout")]
+    pub fn tick_memory_batch_training_with_captures(
+        &mut self,
+        batch: &GpuClosedLoopMemoryBatchInput<'_>,
+        sampling: &[crate::GpuTrainingSamplingConfig],
+    ) -> Result<GpuTrainingTickCaptures, ScaffoldContractError> {
+        self.tick_memory_batch_training_with_captures_inner(batch, sampling)
     }
 
     pub fn tick_memory_batch_with_selector_diagnostics(
@@ -4924,6 +5924,10 @@ impl GpuClosedLoopBackend {
         cohort: &GpuCuratedResidencyCohort,
     ) -> GpuCuratedResidencyOutcome {
         if let Err(error) = self.ensure_ready() {
+            #[cfg(feature = "training-rollout")]
+            if let Some(readback) = self.training_capture_readback.as_ref() {
+                readback.unmap();
+            }
             self.mark_device_lost();
             return GpuCuratedResidencyOutcome::Unknown {
                 error,
@@ -5103,6 +6107,10 @@ impl GpuClosedLoopBackend {
             .is_err()
             || self.device_lost.load(Ordering::Acquire)
         {
+            #[cfg(feature = "training-rollout")]
+            if let Some(readback) = self.training_capture_readback.as_ref() {
+                readback.unmap();
+            }
             self.mark_device_lost();
             return Err(ScaffoldContractError::NeuralBackendUnavailable);
         }
@@ -5120,6 +6128,10 @@ impl GpuClosedLoopBackend {
             .is_err()
             || self.device_lost.load(Ordering::Acquire)
         {
+            #[cfg(feature = "training-rollout")]
+            if let Some(readback) = self.training_capture_readback.as_ref() {
+                readback.unmap();
+            }
             self.mark_device_lost();
             return Err(ScaffoldContractError::NeuralBackendUnavailable);
         }
@@ -5169,6 +6181,8 @@ impl GpuClosedLoopBackend {
             ),
             pending_eligibility: None,
             pending_eligibility_record: None,
+            mutable_epoch: 0,
+            cached_mutable_words: std::sync::Mutex::new(None),
         });
         self.slot_generation_watermarks
             .insert((class_raw, slot), generation);
@@ -5177,6 +6191,10 @@ impl GpuClosedLoopBackend {
             .commit_admission_event(event_kind, handle, transient_peak_physical_bytes)
             .is_err()
         {
+            #[cfg(feature = "training-rollout")]
+            if let Some(readback) = self.training_capture_readback.as_ref() {
+                readback.unmap();
+            }
             self.mark_device_lost();
             return Err(ScaffoldContractError::NeuralBackendUnavailable);
         }
@@ -5192,6 +6210,13 @@ impl GpuClosedLoopBackend {
     }
 
     pub fn remove_brain(&mut self, handle: GpuBrainHandle) -> Result<(), ScaffoldContractError> {
+        let _span = tracing::debug_span!(
+            "gpu_remove_brain",
+            organism_id = handle.organism_id.raw(),
+            class_id = handle.class_id.raw(),
+            slot = handle.slot
+        )
+        .entered();
         self.ensure_ready()?;
         self.validate_handle_backend(handle)?;
         let class_raw = handle.class_id.raw();
@@ -5235,6 +6260,10 @@ impl GpuClosedLoopBackend {
                 .is_err()
                 || self.device_lost.load(Ordering::Acquire)
             {
+                #[cfg(feature = "training-rollout")]
+                if let Some(readback) = self.training_capture_readback.as_ref() {
+                    readback.unmap();
+                }
                 self.mark_device_lost();
                 return Err(ScaffoldContractError::NeuralBackendUnavailable);
             }
@@ -5243,6 +6272,10 @@ impl GpuClosedLoopBackend {
                 .retire_slot_active_side(handle.slot, handle.generation)
                 .is_err()
             {
+                #[cfg(feature = "training-rollout")]
+                if let Some(readback) = self.training_capture_readback.as_ref() {
+                    readback.unmap();
+                }
                 self.mark_device_lost();
                 return Err(ScaffoldContractError::NeuralBackendUnavailable);
             }
@@ -5277,6 +6310,10 @@ impl GpuClosedLoopBackend {
             .commit_admission_event(event_kind, handle, transient_peak_physical_bytes)
             .is_err()
         {
+            #[cfg(feature = "training-rollout")]
+            if let Some(readback) = self.training_capture_readback.as_ref() {
+                readback.unmap();
+            }
             self.mark_device_lost();
             return Err(ScaffoldContractError::NeuralBackendUnavailable);
         }
@@ -5285,6 +6322,10 @@ impl GpuClosedLoopBackend {
 
     pub(crate) fn ensure_ready(&mut self) -> Result<(), ScaffoldContractError> {
         if self.device_lost.load(Ordering::Acquire) {
+            #[cfg(feature = "training-rollout")]
+            if let Some(readback) = self.training_capture_readback.as_ref() {
+                readback.unmap();
+            }
             self.mark_device_lost();
         }
         if matches!(self.state, GpuBackendState::Ready) {
@@ -5306,6 +6347,7 @@ impl GpuClosedLoopBackend {
     }
 
     pub(crate) fn mark_device_lost(&mut self) {
+        tracing::error!("GPU closed-loop backend marked device lost");
         self.state = GpuBackendState::DeviceLost {
             last_checkpoint_digest: None,
         };
@@ -5322,6 +6364,10 @@ impl GpuClosedLoopBackend {
                     let _ = bucket.pipelines.mark_post_submit_poison(batch);
                 }
             }
+        }
+        #[cfg(feature = "training-rollout")]
+        if let Some(readback) = self.training_capture_readback.as_ref() {
+            readback.unmap();
         }
         self.mark_device_lost();
     }
@@ -5476,7 +6522,7 @@ impl GpuClosedLoopBackend {
             .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
             .resident(handle)?;
         let ranges = &resident.ranges;
-        let words = self.read_slot_mutable_words(handle, ranges)?;
+        let (words, atomic_words) = self.read_slot_mutable_and_atomic_words(handle, ranges)?;
         let read = |range: &std::ops::Range<u32>| -> Result<Vec<u32>, ScaffoldContractError> {
             let start = range
                 .start
@@ -5491,6 +6537,23 @@ impl GpuClosedLoopBackend {
                 .map(<[u32]>::to_vec)
                 .ok_or(ScaffoldContractError::GpuLayoutMismatch)
         };
+        let read_atomic =
+            |range: &std::ops::Range<u32>| -> Result<Vec<u32>, ScaffoldContractError> {
+                let start = range
+                    .start
+                    .checked_sub(ranges.atomic_state_words.start)
+                    .ok_or(ScaffoldContractError::GpuLayoutMismatch)?
+                    as usize;
+                let end = range
+                    .end
+                    .checked_sub(ranges.atomic_state_words.start)
+                    .ok_or(ScaffoldContractError::GpuLayoutMismatch)?
+                    as usize;
+                atomic_words
+                    .get(start..end)
+                    .map(<[u32]>::to_vec)
+                    .ok_or(ScaffoldContractError::GpuLayoutMismatch)
+            };
         let layout = &ranges.layout;
         let learning = read(&layout.learning_state_words)?;
         let bank = *learning
@@ -5505,7 +6568,7 @@ impl GpuClosedLoopBackend {
             .checked_add(16)
             .ok_or(ScaffoldContractError::GpuLayoutMismatch)?;
         Ok(GpuPlasticityProbeForTest {
-            receipt: read(&(layout.diagnostic_words.start..receipt_end))?,
+            receipt: read_atomic(&(layout.diagnostic_words.start..receipt_end))?,
             learning,
             pending: read(&layout.pending_eligibility_words)?,
             active_lifetime: read(if bank == 0 {
@@ -5959,6 +7022,8 @@ impl CuratedResidencyTransactionPort for GpuCuratedResidencyBackendPort<'_> {
             ),
             pending_eligibility: None,
             pending_eligibility_record: None,
+            mutable_epoch: 0,
+            cached_mutable_words: std::sync::Mutex::new(None),
         };
         Ok(PreparedCuratedBackendEntry {
             handle,
@@ -6195,7 +7260,7 @@ impl CuratedResidencyTransactionPort for GpuCuratedResidencyBackendPort<'_> {
             .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
             .handle;
         self.backend.commit_admission_event(
-            GpuAllocationEventKind::AdmitFromRetainedSlot,
+            GpuAllocationEventKind::ReplaceRetainedCohort,
             first_handle,
             self.backend.admission.physical_allocated_bytes,
         )?;
@@ -6376,7 +7441,7 @@ mod selector_diagnostic_binding_tests {
         let binding = selector_diagnostic_family_binding_offsets(24_576, 108_370, 25_344)
             .expect("measured N2048 binding is valid");
 
-        assert_eq!(binding, (25_344, 111_442));
+        assert_eq!(binding, (25_344, 109_906));
     }
 }
 

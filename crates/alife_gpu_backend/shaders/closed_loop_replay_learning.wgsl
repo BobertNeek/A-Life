@@ -12,12 +12,12 @@ fn sleep_immutable_plan_span_within(start:u32, count:u32) -> bool {
 }
 
 fn sleep_finite(value:f32) -> bool {
-  return value == value && abs(value) <= 3.402823466e+38;
+  return (bitcast<u32>(value) & 0x7f800000u) != 0x7f800000u;
 }
 
 fn sleep_reject(completion:u32) {
-  if (state_span_within(completion,16u)) {
-    atomicMax(&mutable_state_words[completion+3u],SLEEP_STATUS_REJECTED);
+  if (atomic_span_within(completion,16u)) {
+    atomicMax(&atomic_state_words[completion+3u],SLEEP_STATUS_REJECTED);
   }
 }
 
@@ -58,8 +58,8 @@ fn replay_sleep_learning(@builtin(global_invocation_id) gid:vec3<u32>) {
   if (header.brain_slot_index >= arrayLength(&brain_slots)) { return; }
   let brain = brain_slots[header.brain_slot_index];
   let completion = header.completion_offset;
-  if (!state_span_within(completion,16u)
-      || load_state_u32(completion+3u) != SLEEP_STATUS_PREPARED) { return; }
+  if (!atomic_span_within(completion,16u)
+      || load_atomic_u32(completion+3u) != SLEEP_STATUS_PREPARED) { return; }
   if (gid.x >= header.replay_span_count) { return; }
   let extension_base = brain.extension_record_offset;
   let span_base = header.replay_span_offset + gid.x*4u;

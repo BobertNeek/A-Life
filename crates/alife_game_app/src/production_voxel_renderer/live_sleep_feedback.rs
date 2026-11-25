@@ -1,6 +1,14 @@
 //! Wordless sleep feedback, read only from the living individual's current sleep phase.
 use super::*;
-use bevy::prelude::Query;
+use bevy::ecs::system::SystemParam;
+use bevy::prelude::{Added, Changed, Or, Query, RemovedComponents};
+
+#[derive(SystemParam)]
+pub(super) struct SleepFeedbackRemovals<'w, 's> {
+    roots: RemovedComponents<'w, 's, ProductionCreatureAssemblyRoot>,
+    visuals: RemovedComponents<'w, 's, Fvr04ProductionCreatureVisualMarker>,
+    cues: RemovedComponents<'w, 's, SleepCue>,
+}
 
 // Three small rings per individual, bounded independently of population scale.
 const MAX_CUES: usize = 8;
@@ -19,6 +27,7 @@ pub(super) struct SleepBubble(usize);
 #[derive(Default)]
 pub(super) struct SharedAssets {
     handles: Option<(Handle<Mesh>, Handle<StandardMaterial>)>,
+    had_frame: bool,
 }
 
 fn sleeping_individual(
@@ -98,7 +107,7 @@ fn bubble_transform(
 #[allow(
     clippy::too_many_arguments,
     clippy::type_complexity,
-    reason = "Bevy injects independent ECS parameters."
+    reason = "Bevy injects independent ECS parameters and change-detection filters."
 )]
 pub(super) fn sync(
     mut commands: Commands,
@@ -114,7 +123,29 @@ pub(super) fn sync(
         ),
         Without<SleepCue>,
     >,
+    changed_roots: Query<
+        (),
+        (
+            With<ProductionCreatureAssemblyRoot>,
+            Or<(
+                Added<ProductionCreatureAssemblyRoot>,
+                Changed<ProductionCreatureAssemblyRoot>,
+                Added<Fvr04ProductionCreatureVisualMarker>,
+                Changed<Fvr04ProductionCreatureVisualMarker>,
+                Changed<Transform>,
+            )>,
+        ),
+    >,
+    mut removals: SleepFeedbackRemovals,
     cameras: Query<&Transform, (With<Fvr03ProductionVoxelCamera>, Without<SleepCue>)>,
+    changed_cameras: Query<
+        (),
+        (
+            With<Fvr03ProductionVoxelCamera>,
+            Changed<Transform>,
+            Without<SleepCue>,
+        ),
+    >,
     mut cues: Query<
         (Entity, &mut SleepCue, &mut Transform, &Children),
         Without<ProductionCreatureAssemblyRoot>,
@@ -131,11 +162,62 @@ pub(super) fn sync(
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut shared: Local<SharedAssets>,
 ) {
+    let has_frame = frame.is_some();
+    let frame_changed =
+        frame.as_ref().is_some_and(|f| f.is_changed()) || shared.had_frame != has_frame;
+    shared.had_frame = has_frame;
+    let has_removed_roots = removals.roots.read().count() > 0;
+    let has_removed_visuals = removals.visuals.read().count() > 0;
+    let has_removed_cues = removals.cues.read().count() > 0;
+    let reconcile_membership = frame_changed
+        || !changed_roots.is_empty()
+        || has_removed_roots
+        || has_removed_visuals
+        || has_removed_cues;
+    if !reconcile_membership && cues.is_empty() {
+        return;
+    }
+
     let paused = ux.as_ref().is_some_and(|ux| ux.settings.paused);
     let speed = ux.as_ref().map_or(1.0, |ux| ux.animation_speed);
     let camera_rotation = cameras.iter().next().map_or(Quat::IDENTITY, |t| t.rotation);
+
+    if !reconcile_membership {
+        let camera_changed = !changed_cameras.is_empty();
+        for (entity, mut cue, mut transform, children) in &mut cues {
+            let Ok((_, _, _, pose)) = roots.get(cue.root) else {
+                commands.entity(entity).despawn();
+                continue;
+            };
+            let next_seconds =
+                advance_fvr04_animation_phase(cue.seconds, time.delta_secs(), speed, paused);
+            let seconds_changed = cue.seconds.to_bits() != next_seconds.to_bits();
+            if seconds_changed {
+                cue.seconds = next_seconds;
+            }
+            if !seconds_changed && !camera_changed {
+                continue;
+            }
+            let next = cue_transform(pose, camera_rotation, next_seconds);
+            if *transform != next {
+                *transform = next;
+            }
+            for child in children {
+                if let Ok((bubble, mut transform)) = bubbles.get_mut(*child) {
+                    let next =
+                        bubble_transform(pose.rotation, camera_rotation, next_seconds, bubble.0);
+                    if *transform != next {
+                        *transform = next;
+                    }
+                }
+            }
+        }
+        return;
+    }
+
     // Reconcile even without a new world tick: missing authority must clear the cue,
     // and a held/interpolated root or moving camera still changes its displayed pose.
+    // Stable IDs, rather than ECS iteration order, decide the bounded visible set.
     let mut eligible = BTreeMap::new();
     if let Some(frame) = frame.as_ref() {
         for (entity, root, visual, transform) in &roots {
@@ -143,31 +225,34 @@ pub(super) fn sync(
                 && transform.scale.abs().min_element() > f32::EPSILON
                 && sleeping_individual(&frame.current, root, visual)
             {
-                eligible.insert(
-                    (root.stable_id.raw(), root.organism_id.raw()),
-                    (entity, *transform),
-                );
+                let key = (root.stable_id.raw(), root.organism_id.raw());
+                if eligible.len() < MAX_CUES {
+                    eligible.insert(key, (entity, *transform));
+                } else if let Some((&max_key, _)) = eligible.last_key_value() {
+                    if key < max_key {
+                        eligible.pop_last();
+                        eligible.insert(key, (entity, *transform));
+                    }
+                }
             }
         }
     }
-    // Stable IDs, rather than ECS iteration order, decide the bounded visible set.
-    let mut eligible = eligible
-        .into_iter()
-        .take(MAX_CUES)
-        .collect::<BTreeMap<_, _>>();
     for (entity, mut cue, mut transform, children) in &mut cues {
         let key = (cue.stable_id.raw(), cue.organism_id.raw());
         if let Some((_, pose)) = eligible.get(&key).filter(|(root, _)| *root == cue.root) {
-            cue.seconds =
+            let next_seconds =
                 advance_fvr04_animation_phase(cue.seconds, time.delta_secs(), speed, paused);
-            let next = cue_transform(pose, camera_rotation, cue.seconds);
+            if cue.seconds.to_bits() != next_seconds.to_bits() {
+                cue.seconds = next_seconds;
+            }
+            let next = cue_transform(pose, camera_rotation, next_seconds);
             if *transform != next {
                 *transform = next;
             }
             for child in children {
                 if let Ok((bubble, mut transform)) = bubbles.get_mut(*child) {
                     let next =
-                        bubble_transform(pose.rotation, camera_rotation, cue.seconds, bubble.0);
+                        bubble_transform(pose.rotation, camera_rotation, next_seconds, bubble.0);
                     if *transform != next {
                         *transform = next;
                     }

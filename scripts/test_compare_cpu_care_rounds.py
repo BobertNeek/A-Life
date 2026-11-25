@@ -426,5 +426,154 @@ class BudgetAccountingTests(unittest.TestCase):
         self.assertNotEqual(compare.f32_config_identity(-0.0), compare.f32_config_identity(0.0))
 
 
+class ParallelAssessmentAndGuardTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name).resolve()
+        self.source = self.root / "synthetic-source"
+        self.source.mkdir()
+        self.write(self.source / "cpu-cycle.json", {"seed": 20, "fixture": True})
+        self.write(self.source / "actor-checkpoint.json", {"optimizer_step": 7})
+        self.write(self.source / "value-checkpoint.json", {"optimizer_step": 8})
+        (self.source / "trained.alife-foundation").write_bytes(b"synthetic codec stand-in; never executed")
+        self.binary = self.root / "unexecuted-binary"
+        self.binary.write_bytes(b"pure preflight fixture; not executable")
+        self.history = self.root / "history.json"
+        self.document = {"schema": 1, "kind": "mixed-care-seed-history", "complete": True,
+                         "evidence": "Synthetic preflight attestation; no real lineage or competence claim",
+                         "source_sha256": compare.native_pins(self.source), "imports": [],
+                         "reserved_seed_ranges": [], "consumed_seed_ranges": [[20, 20]],
+                         "assessment_seeds": [90, 91, 92]}
+        self.write(self.history, self.document)
+        self.output = self.root / "fresh-comparison"
+        self.spec_path = self.root / "recipe.json"
+        self.spec = {"schema": 1, "previous": str(self.source), "seed_history": str(self.history),
+                     "output": str(self.output), "care_binary": str(self.binary), "round_binary": str(self.binary),
+                     "temperature": 1.0,
+                     "rounds": [[{"collector_run_id": "a", "seed": 30, "lesson": "eat_held_food", "decisions": 2}],
+                                [{"collector_run_id": "a", "seed": 31, "lesson": "feeding", "decisions": 2}]],
+                     "assessments": [{"lesson": "eat_reachable_food", "seed": 90, "decisions": 4},
+                                     {"lesson": "feeding", "seed": 91, "decisions": 3},
+                                     {"lesson": "relocated_food", "seed": 92, "decisions": 5}]}
+        self.write(self.spec_path, self.spec)
+
+    def write(self, path, value):
+        path.write_text(json.dumps(value), encoding="utf-8")
+
+    def test_runner_guard_caches_frozen_trees_and_catches_tamper(self):
+        plan = compare.build_plan(self.spec_path)
+        self.output.mkdir()
+        runner = compare.Runner(plan)
+        frozen_dirs = []
+        for idx in range(4):
+            d = self.output / f"frozen-{idx}"
+            d.mkdir()
+            (d / "artifact.bin").write_bytes(f"artifact-{idx}".encode())
+            runner.freeze(d)
+            frozen_dirs.append(d)
+
+        pin_calls = []
+        real_file_pin = compare.file_pin
+
+        def counted_pin(path):
+            pin_calls.append(Path(path))
+            return real_file_pin(path)
+
+        with patch.object(compare, "file_pin", side_effect=counted_pin):
+            runner.guard()
+            first_count = len(pin_calls)
+            # Subsequent guards must not re-hash unchanged files in O(N^2) loops.
+            runner.guard()
+            runner.guard()
+            self.assertEqual(len(pin_calls), first_count)
+            # Forced exit guard re-hashes everything.
+            runner.guard(force=True)
+            self.assertGreater(len(pin_calls), first_count)
+            # Tampering with a frozen file invalidates its stat stamp and fails immediately.
+            (frozen_dirs[2] / "artifact.bin").write_bytes(b"tampered-artifact-payload")
+            with self.assertRaisesRegex(ValueError, "retained completed source/private artifact changed"):
+                runner.guard()
+
+    def test_parallel_assessments_preserve_deterministic_order_and_error_handling(self):
+        import time as _time
+        plan = compare.build_plan(self.spec_path)
+        self.output.mkdir()
+        for arm in ("cooperative", "serial"):
+            (self.output / arm / "histories").mkdir(parents=True)
+            (self.output / arm / "process").mkdir(parents=True)
+        runner = compare.Runner(plan)
+        pins = compare.native_pins(self.source)
+        arms = {
+            "cooperative": {"final_source": str(self.source), "final_source_sha256": pins},
+            "serial": {"final_source": str(self.source), "final_source_sha256": pins},
+        }
+
+        def fake_eval(argv, **kwargs):
+            spec_file = Path(argv[argv.index("--spec") + 1])
+            req = compare.read_json(spec_file)
+            # Make earlier seeds finish slower to verify deterministic ordering under out-of-order completion.
+            if req["seed"] == 90:
+                _time.sleep(0.08)
+            elif req["seed"] == 91:
+                _time.sleep(0.04)
+            out_dir = Path(req["output"])
+            out_dir.mkdir(parents=True)
+            result = {
+                "seed": req["seed"], "lesson": req["lesson"], "decisions": req["decisions"],
+                "evaluated_decisions": req["decisions"], "bootstrap_decisions": 1,
+                "teacher_present": False, "teacher_cue_frames": 0,
+                "semantic_prior_enabled": False, "offline_learning_disabled": True,
+                "actor_checkpoint_unchanged": True, "value_checkpoint_unchanged": True,
+                "offline_actor_optimizer_updates": 0, "offline_value_optimizer_updates": 0,
+                "promotion": "none",
+            }
+            self.write(out_dir / "care-evaluation.json", {"result": result})
+            kwargs["stdout"].write(json.dumps(result).encode())
+            return SimpleNamespace(returncode=0)
+
+        with patch.object(compare.subprocess, "run", side_effect=fake_eval), \
+                patch.object(compare, "native_pins", side_effect=AssertionError("should reuse final_source_sha256")):
+            paired = compare.assessments(runner, arms)
+
+        self.assertEqual([row["seed"] for row in paired], [90, 91, 92])
+        self.assertEqual([row["cooperative"]["result"]["seed"] for row in paired], [90, 91, 92])
+        self.assertEqual([row["serial"]["result"]["seed"] for row in paired], [90, 91, 92])
+        expected_frozen_order = [
+            self.output / arm / f"assessment-{index:02d}"
+            for index in range(3) for arm in ("cooperative", "serial")
+        ]
+        self.assertEqual(list(runner.frozen.keys()), expected_frozen_order)
+        for call_idx, (index, arm) in enumerate((i, a) for i in range(3) for a in ("cooperative", "serial")):
+            recorded = compare.read_json(runner.logs / f"{call_idx:03d}.argv.json")
+            self.assertIn(f"assessment-{index:02d}-spec.json", recorded["argv"][-1])
+            self.assertIn(f"/{arm}/" if os.name != "nt" else f"\\{arm}\\", recorded["argv"][-1])
+
+        # Verify deterministic error precedence: earliest task failure wins even if later task fails faster.
+        out2 = self.root / "fresh-comparison-err"
+        spec2 = {**self.spec, "output": str(out2)}
+        self.write(self.spec_path, spec2)
+        plan2 = compare.build_plan(self.spec_path)
+        out2.mkdir()
+        for arm in ("cooperative", "serial"):
+            (out2 / arm / "histories").mkdir(parents=True)
+            (out2 / arm / "process").mkdir(parents=True)
+        runner2 = compare.Runner(plan2)
+
+        def fail_eval(argv, **kwargs):
+            spec_file = Path(argv[argv.index("--spec") + 1])
+            req = compare.read_json(spec_file)
+            if req["seed"] == 90:
+                _time.sleep(0.06)
+                kwargs["stderr"].write(b"seed-90-error")
+                return SimpleNamespace(returncode=11)
+            kwargs["stderr"].write(b"seed-92-error")
+            return SimpleNamespace(returncode=22)
+
+        with patch.object(compare.subprocess, "run", side_effect=fail_eval):
+            with self.assertRaisesRegex(ValueError, r"failed\(11\)"):
+                compare.assessments(runner2, arms)
+
+
 if __name__ == "__main__":
     unittest.main()

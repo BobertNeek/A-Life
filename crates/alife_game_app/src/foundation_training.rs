@@ -4662,6 +4662,319 @@ impl FoundationReplayWriter {
     }
 }
 
+pub(crate) struct EphemeralReplayRow {
+    pub(crate) segment: u64,
+    pub(crate) tick: u64,
+    pub(crate) initial: alife_training::TrainingInitialState,
+    pub(crate) tick_data: alife_training::TrainingReplayTick,
+    pub(crate) memory_candidate_gain: f32,
+    pub(crate) behavior: alife_gpu_backend::GpuTrainingRolloutReceipt,
+    pub(crate) patch: alife_core::ExperiencePatch,
+}
+
+impl EphemeralReplayRow {
+    pub(crate) fn build_sequence(
+        rows: &[Self],
+        burn_in_ticks: usize,
+        phenotype: &alife_core::BrainPhenotype,
+    ) -> Result<TrainingSequence> {
+        let first = rows.first().ok_or_else(invalid)?;
+        if burn_in_ticks >= rows.len() {
+            return Err(invalid().into());
+        }
+        let sequence = TrainingSequence {
+            phenotype_hash: phenotype.phenotype_hash(),
+            initial: first.initial.clone(),
+            ticks: rows.iter().map(|row| row.tick_data.clone()).collect(),
+            burn_in_ticks,
+            memory_candidate_gain: first.memory_candidate_gain,
+        };
+        sequence.validate_for(phenotype)?;
+        Ok(sequence)
+    }
+}
+
+pub(crate) struct EphemeralReplayCollector {
+    source: FoundationReplaySource,
+    phenotype: alife_core::BrainPhenotype,
+    verified_phenotype_arc: Option<std::sync::Arc<alife_core::BrainPhenotype>>,
+    upload: alife_gpu_backend::closed_loop_buffers::GpuPhenotypeUpload,
+    recurrent_synapse_count: usize,
+    max_non_speech_decoder_lane: Option<usize>,
+    budget: FoundationReplayBudget,
+    next_index: u64,
+    segment: u64,
+    previous: Option<(u64, ReplayContinuity, alife_gpu_backend::GpuBrainSlot)>,
+    rows: Vec<EphemeralReplayRow>,
+}
+
+impl EphemeralReplayCollector {
+    pub(crate) fn new(
+        source: FoundationReplaySource,
+        phenotype: alife_core::BrainPhenotype,
+        asset: &FoundationWeightAsset,
+        budget: FoundationReplayBudget,
+    ) -> Result<Self> {
+        asset.validate_against(&phenotype)?;
+        if source.source_revision.is_empty()
+            || source.source_revision.len() > 128
+            || source.foundation_asset_digest != asset.digest()
+            || source.phenotype_hash != phenotype.phenotype_hash()
+            || source.compiler_inputs_digest != phenotype.compiler_inputs_digest()
+            || phenotype
+                .synapses()
+                .iter()
+                .zip(asset.weights())
+                .any(|(s, w)| s.genetic_weight().to_bits() != w.to_bits())
+        {
+            return Err("replay source is not the exact frozen actor phenotype".into());
+        }
+        budget.check_additional((phenotype.synapses().len() as u64).saturating_mul(256))?;
+        let upload =
+            alife_gpu_backend::closed_loop_buffers::GpuPhenotypeUpload::try_from(&phenotype)?;
+        let recurrent_synapse_count = recurrent_synapse_count(&phenotype);
+        let max_non_speech_decoder_lane = max_non_speech_decoder_lane(&phenotype);
+        Ok(Self {
+            source,
+            phenotype,
+            verified_phenotype_arc: None,
+            upload,
+            recurrent_synapse_count,
+            max_non_speech_decoder_lane,
+            budget,
+            next_index: 0,
+            segment: 0,
+            previous: None,
+            rows: Vec::new(),
+        })
+    }
+
+    pub(crate) fn start_segment(&mut self) -> Result<()> {
+        self.segment = self.segment.checked_add(1).ok_or_else(invalid)?;
+        self.previous = None;
+        Ok(())
+    }
+
+    pub(crate) fn len(&self) -> usize {
+        self.rows.len()
+    }
+
+    pub(crate) fn last_tick(&self) -> Option<u64> {
+        self.rows.last().map(|row| row.tick)
+    }
+
+    pub(crate) fn append(&mut self, step: &FoundationTrainingStep) -> Result<()> {
+        let before_matches = self
+            .verified_phenotype_arc
+            .as_ref()
+            .is_some_and(|arc| std::sync::Arc::ptr_eq(arc, &step.before.phenotype))
+            || step.before.phenotype.as_ref() == &self.phenotype;
+        let after_matches = (before_matches
+            && std::sync::Arc::ptr_eq(&step.after_inference.phenotype, &step.before.phenotype))
+            || step.after_inference.phenotype.as_ref() == &self.phenotype;
+        if !before_matches || !after_matches {
+            return Err("frozen genetic actor changed within a replay life".into());
+        }
+        if self.verified_phenotype_arc.is_none() {
+            self.verified_phenotype_arc = Some(step.before.phenotype.clone());
+        }
+        let scratch = (step.before.mutable_words.len() as u64)
+            .checked_add(step.after_inference.mutable_words.len() as u64)
+            .and_then(|n| n.checked_mul(16))
+            .ok_or_else(invalid)?;
+        self.budget.check_additional(scratch)?;
+        let sequence = foundation_replay_sequence_with_invariants(
+            std::slice::from_ref(step),
+            0,
+            &self.upload,
+            self.recurrent_synapse_count,
+            self.max_non_speech_decoder_lane,
+        )?;
+        if alife_core::OutcomeCreditPacket::from_sealed_patch(&step.patch)? != step.outcome_credit {
+            return Err("capture outcome credit differs from its sealed world patch".into());
+        }
+        let (before, after) =
+            ReplayContinuity::capture_step_pair(&step.before, &step.after_inference)?;
+        if let Some((tick, previous, slot)) = &self.previous {
+            if tick.checked_add(1) != Some(step.frame.tick().raw())
+                || *slot != step.before.brain_slot
+            {
+                return Err("replay tick/allocation gap requires an explicit new segment".into());
+            }
+            previous.validate_next(&before)?;
+        }
+        let record = FoundationReplayRecord {
+            schema: FOUNDATION_REPLAY_SCHEMA,
+            source: self.source.clone(),
+            record_index: self.next_index,
+            segment: self.segment,
+            tick: step.frame.tick().raw(),
+            organism_id: step.frame.organism_id().raw(),
+            sequence,
+            behavior: step.behavior.clone(),
+            patch: step.patch.clone(),
+            before,
+            after: after.clone(),
+        };
+        record.validate_with_options(&self.source, &self.phenotype, true)?;
+        let memory_candidate_gain = record.sequence.memory_candidate_gain;
+        let mut ticks = record.sequence.ticks;
+        let tick_data = ticks.pop().ok_or_else(invalid)?;
+        self.previous = Some((record.tick, after, step.after_inference.brain_slot.clone()));
+        self.next_index = self.next_index.checked_add(1).ok_or_else(invalid)?;
+        self.rows.push(EphemeralReplayRow {
+            segment: record.segment,
+            tick: record.tick,
+            initial: record.sequence.initial,
+            tick_data,
+            memory_candidate_gain,
+            behavior: record.behavior,
+            patch: record.patch,
+        });
+        Ok(())
+    }
+
+    pub(crate) fn into_rows(self) -> Vec<EphemeralReplayRow> {
+        self.rows
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct CohortBundleIndexView {
+    schema: u16,
+    #[allow(dead_code)]
+    source: FoundationReplaySource,
+    records: Vec<FoundationReplayRecordRef>,
+}
+
+/// Read-only verified reader supporting both standalone `.bin.zst` files and
+/// sealed `cohort-replay.bundle` records.
+pub struct FoundationReplayRecordReader {
+    replay_dir: std::path::PathBuf,
+    bundle_file: Option<std::fs::File>,
+    cohort_records: std::collections::BTreeMap<u64, FoundationReplayRecordRef>,
+    cohort_bundle_bytes: u64,
+}
+
+impl FoundationReplayRecordReader {
+    pub fn open(
+        replay_directory: &Path,
+        references: Option<&[FoundationReplayRecordRef]>,
+    ) -> Result<Self> {
+        let uses_cohort = references.is_some_and(|refs| refs.iter().any(|r| r.cohort.is_some()));
+        if uses_cohort && references.is_some_and(|refs| refs.iter().any(|r| r.cohort.is_none())) {
+            return Err("replay manifest mixes cohort and standalone storage".into());
+        }
+        if !uses_cohort {
+            return Ok(Self {
+                replay_dir: replay_directory.to_path_buf(),
+                bundle_file: None,
+                cohort_records: std::collections::BTreeMap::new(),
+                cohort_bundle_bytes: 0,
+            });
+        }
+        use std::io::{Read, Seek, SeekFrom};
+        const MAGIC: &[u8; 8] = b"ALCOH001";
+        const FOOTER_BYTES: u64 = 48;
+        const MAX_INDEX_BYTES: u64 = 64 * 1024 * 1024;
+        let root = replay_directory
+            .parent()
+            .ok_or("missing cohort parent directory")?;
+        let mut file = std::fs::File::open(root.join("cohort-replay.bundle"))?;
+        let size = file.metadata()?.len();
+        if size < FOOTER_BYTES {
+            return Err("torn replay cohort footer".into());
+        }
+        file.seek(SeekFrom::End(-(FOOTER_BYTES as i64)))?;
+        let mut footer = [0u8; FOOTER_BYTES as usize];
+        file.read_exact(&mut footer)?;
+        if &footer[..8] != MAGIC {
+            return Err("replay cohort footer magic changed".into());
+        }
+        let index_len = u64::from_le_bytes(footer[8..16].try_into()?);
+        if index_len == 0 || index_len > MAX_INDEX_BYTES || index_len > size - FOOTER_BYTES {
+            return Err("invalid replay cohort index size".into());
+        }
+        let data_bytes = size - FOOTER_BYTES - index_len;
+        file.seek(SeekFrom::Start(data_bytes))?;
+        let mut bytes = vec![0; index_len as usize];
+        file.read_exact(&mut bytes)?;
+        if blake3::hash(&bytes).as_bytes() != &footer[16..48] {
+            return Err("replay cohort index digest changed".into());
+        }
+        let index: CohortBundleIndexView = serde_json::from_slice(&bytes)?;
+        if index.schema != 1 || index.records.is_empty() {
+            return Err("invalid replay cohort index inventory".into());
+        }
+        let mut cohort_records = std::collections::BTreeMap::new();
+        for record in index.records {
+            let offset = record
+                .cohort
+                .as_ref()
+                .ok_or("cohort row lacks location")?
+                .offset;
+            cohort_records.insert(offset, record);
+        }
+        Ok(Self {
+            replay_dir: replay_directory.to_path_buf(),
+            bundle_file: Some(file),
+            cohort_records,
+            cohort_bundle_bytes: size,
+        })
+    }
+
+    pub fn read_record(
+        &mut self,
+        reference: Option<&FoundationReplayRecordRef>,
+        standalone_path: Option<&Path>,
+    ) -> Result<FoundationReplayRecord> {
+        use std::io::{Read, Seek, SeekFrom};
+        let bytes = if let Some(bundle) = &mut self.bundle_file {
+            let reference = reference.ok_or("cohort replay requires a manifest reference")?;
+            let location = reference
+                .cohort
+                .as_ref()
+                .ok_or("not a cohort replay reference")?;
+            if self.cohort_records.get(&location.offset) != Some(reference)
+                || bundle.metadata()?.len() != self.cohort_bundle_bytes
+            {
+                return Err("replay reference is not in the sealed cohort".into());
+            }
+            bundle.seek(SeekFrom::Start(location.offset))?;
+            read_verified_replay_bytes(
+                bundle.take(reference.encoded_bytes),
+                reference.encoded_bytes,
+                &reference.digest,
+            )?
+        } else if let Some(reference) = reference {
+            let path = standalone_path
+                .map(Path::to_path_buf)
+                .unwrap_or_else(|| self.replay_dir.join(reference.file_name()));
+            let file = std::fs::File::open(path)?;
+            if file.metadata()?.len() != reference.encoded_bytes {
+                return Err("replay file length mismatch".into());
+            }
+            read_verified_replay_bytes(file, reference.encoded_bytes, &reference.digest)?
+        } else {
+            let path = standalone_path.ok_or("missing standalone replay file path")?;
+            let mut bytes = Vec::new();
+            std::fs::File::open(path)?
+                .take(FOUNDATION_REPLAY_RECORD_LIMIT_BYTES + 1)
+                .read_to_end(&mut bytes)?;
+            if bytes.len() as u64 > FOUNDATION_REPLAY_RECORD_LIMIT_BYTES {
+                return Err("replay file exceeds byte limit".into());
+            }
+            bytes
+        };
+        let decoder = zstd::stream::read::Decoder::new(bytes.as_slice())?;
+        let record: FoundationReplayRecord = bincode::serde::decode_from_std_read(
+            &mut decoder.take(FOUNDATION_REPLAY_RECORD_LIMIT_BYTES + 1),
+            bincode::config::standard().with_limit::<268435456>(),
+        )?;
+        Ok(record)
+    }
+}
+
 type VerifiedReplayCacheKey = ([u8; 32], u64);
 
 // Bound decoded retention, not compressed file size. Eight times the complete

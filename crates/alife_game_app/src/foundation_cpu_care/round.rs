@@ -102,6 +102,20 @@ fn file_sha(path: &Path) -> Result<String> {
     io::copy(&mut File::open(path)?, &mut hash)?;
     Ok(format!("{:x}", hash.finalize()))
 }
+fn current_exe_sha256() -> Result<&'static str> {
+    static DIGEST: std::sync::OnceLock<std::result::Result<String, String>> =
+        std::sync::OnceLock::new();
+    DIGEST
+        .get_or_init(|| {
+            (|| -> Result<String> {
+                let path = std::env::current_exe()?.canonicalize()?;
+                file_sha(&path)
+            })()
+            .map_err(|e| e.to_string())
+        })
+        .as_deref()
+        .map_err(|e| e.clone().into())
+}
 fn qualified_checkout() -> Result<PathBuf> {
     let result = std::process::Command::new("git")
         .args(["rev-parse", "--show-toplevel"])
@@ -295,7 +309,7 @@ impl CpuCareRoundPlanV1 {
                 }
             }
         }
-        if file_sha(&std::env::current_exe()?.canonicalize()?)? != self.executable_sha256
+        if current_exe_sha256()? != self.executable_sha256
             || RuntimeSemanticPrior::deterministic_for_training(0)
                 .metrics
                 .provider_identity
@@ -525,7 +539,7 @@ pub fn prepare_cpu_care_round(mut spec: CpuCareRoundSpecV1) -> Result<CpuCareRou
     if resolve_isolated_training_output(&spec.output, preserved)? != spec.output {
         return Err("round output resolution changed".into());
     }
-    let executable_sha256 = file_sha(&std::env::current_exe()?.canonicalize()?)?;
+    let executable_sha256 = current_exe_sha256()?.to_owned();
     let provider = RuntimeSemanticPrior::deterministic_for_training(0)
         .metrics
         .provider_identity;
@@ -788,7 +802,6 @@ pub fn run_cpu_care_round(plan: &CpuCareRoundPlanV1) -> Result<CpuCooperativeRou
     let mut inputs = Vec::new();
     let mut members = Vec::new();
     for (index, assignment) in plan.assignments.iter().enumerate() {
-        plan.verify_inputs()?;
         let output = lane.join(&assignment.collector_run_id);
         let (history, snapshot) = dispatch_paths(&histories, &assignment.collector_run_id);
         let mut attempts = admission::collection_attempts(&lane)?;
@@ -817,20 +830,19 @@ pub fn run_cpu_care_round(plan: &CpuCareRoundPlanV1) -> Result<CpuCooperativeRou
             write_once(&history, &history_for(plan, &lane, &attempts, &snapshot)?)?;
             collect(plan, index, output.clone(), history.clone())?;
         }
-        admission::validate_collected_attempt(&lane, &output, assignment, plan.payload_sha256)?;
+        let validated =
+            admission::validate_collected_attempt(&lane, &output, assignment, plan.payload_sha256)?;
         let provenance = read_value(&output.join("care-seed-admission.json"))?;
         if provenance["history_sha256"] != file_sha(&history)? {
             return Err("care round dispatch history changed".into());
         }
         verify_dispatch_evidence(&output)?;
-        let shard = read_cpu_collector_output(&output)?;
-        if shard.snapshot != plan.snapshot {
+        if validated.snapshot != plan.snapshot {
             return Err("care collector source snapshot changed".into());
         }
-        let commit = Sha256::digest(fs::read(output.join(CPU_COLLECTOR_COMMIT_FILE))?).into();
         members.push(CpuCooperativeRoundMemberV1 {
             assignment: assignment.clone(),
-            collector_commit_sha256: commit,
+            collector_commit_sha256: validated.commit_sha256,
         });
         inputs.push(CpuCooperativeRoundInput {
             collector_run_id: assignment.collector_run_id.clone(),
@@ -849,19 +861,12 @@ pub fn run_cpu_care_round(plan: &CpuCareRoundPlanV1) -> Result<CpuCooperativeRou
     )?;
     write_once(&root.join("central-plan.json"), &central)?;
     plan.verify_inputs()?;
-    for input in &inputs {
-        verify_dispatch_evidence(&input.directory)?;
-    }
     let result = run_cpu_cooperative_round(
         &plan.spec.previous.join("training-handoff.json"),
         &central,
         &inputs,
         &root.join("learner"),
     )?;
-    plan.verify_inputs()?;
-    for input in &inputs {
-        verify_dispatch_evidence(&input.directory)?;
-    }
     drop(owner);
     Ok(result)
 }

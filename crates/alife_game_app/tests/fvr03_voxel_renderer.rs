@@ -42,6 +42,27 @@ fn production_ground_position(world_position: Vec3f) -> (f32, f32) {
     (world_position.x, world_position.z)
 }
 
+fn live_frame_with_moved_object(
+    save: &PortableSaveFile,
+    tick: Tick,
+    moved_object: alife_world::persistence::WorldObjectSaveState,
+) -> LiveBrainPresentationFrame {
+    let mut updated = save.clone();
+    updated.world.tick = tick;
+    let slot = updated
+        .world
+        .objects
+        .iter_mut()
+        .find(|object| object.id == moved_object.id)
+        .expect("moved object must exist in launch save");
+    *slot = moved_object;
+    let world = updated
+        .restore_headless_world()
+        .expect("updated save must restore a valid headless world");
+    LiveBrainPresentationFrame::from_authoritative_world(Vec::new(), &world)
+        .expect("authoritative live presentation frame")
+}
+
 fn production_launch(
     profile_id: ProductionFrontendProfileId,
 ) -> (
@@ -967,7 +988,7 @@ fn fvr04_selection_uses_current_root_position_without_retired_tile_ring() {
     object.position.z += 1.25;
     let expected = production_ground_position(object.position);
     app.insert_resource(LiveBrainPresentationFrameResource::from_current_frame(
-        LiveBrainPresentationFrame::try_new(Vec::new(), Tick::new(8), vec![object.into()]).unwrap(),
+        live_frame_with_moved_object(&save, Tick::new(8), object),
     ));
     app.update();
     assert_eq!(
@@ -1056,7 +1077,7 @@ fn fvr04_camera_follow_preserves_framing_after_continuous_live_projection() {
     object.position.z += 1.25;
     let expected = production_ground_position(object.position);
     app.insert_resource(LiveBrainPresentationFrameResource::from_current_frame(
-        LiveBrainPresentationFrame::try_new(Vec::new(), Tick::new(8), vec![object.into()]).unwrap(),
+        live_frame_with_moved_object(&save, Tick::new(8), object),
     ));
     app.update();
     let after_root = root_pose(&mut app);
@@ -1195,8 +1216,7 @@ fn fvr04_live_world_label_tracks_projected_root_by_stable_id() {
         moved_object.position.z + 1.0,
     );
     app.insert_resource(LiveBrainPresentationFrameResource::from_current_frame(
-        LiveBrainPresentationFrame::try_new(Vec::new(), Tick::new(8), vec![moved_object.into()])
-            .unwrap(),
+        live_frame_with_moved_object(&save, Tick::new(8), moved_object),
     ));
     app.update();
 
@@ -1330,8 +1350,7 @@ fn fvr04_live_creature_inspectors_report_current_authoritative_position_and_tick
     moved_object.position = Vec3f::new(11.25, 4.5, -12.75);
     let live_tick = Tick::new(42);
     app.insert_resource(LiveBrainPresentationFrameResource::from_current_frame(
-        LiveBrainPresentationFrame::try_new(Vec::new(), live_tick, vec![moved_object.into()])
-            .unwrap(),
+        live_frame_with_moved_object(&save, live_tick, moved_object),
     ));
     app.update();
 
@@ -1400,6 +1419,7 @@ fn fvr04_live_creature_inspectors_reject_stable_id_mismatch() {
             .map(|(entity, _)| entity)
             .expect("selected creature must have a production assembly root")
     };
+    alife_game_app::disable_creature_spawn_context_for_test(&mut app);
     let mismatched_root_id = WorldEntityId(stable_id.raw() + 50_000);
     app.world_mut()
         .get_mut::<ProductionCreatureAssemblyRoot>(root_entity)
@@ -1416,8 +1436,7 @@ fn fvr04_live_creature_inspectors_reject_stable_id_mismatch() {
         .expect("selected creature must have a matching saved world object");
     moved_object.position = Vec3f::new(19.25, 5.5, -23.75);
     app.insert_resource(LiveBrainPresentationFrameResource::from_current_frame(
-        LiveBrainPresentationFrame::try_new(Vec::new(), Tick::new(77), vec![moved_object.into()])
-            .unwrap(),
+        live_frame_with_moved_object(&save, Tick::new(77), moved_object),
     ));
     app.update();
 
@@ -1569,6 +1588,13 @@ fn v0_default_player_view_is_compact_and_uses_real_selected_creature_state() {
             .find(|child| app.world().get::<Text>(*child).is_some())
             .unwrap();
         assert_eq!(app.world().get::<Text>(unknown).unwrap().0, "?");
+        #[cfg(feature = "gpu-runtime")]
+        assert_eq!(
+            app.world().get::<Visibility>(unknown),
+            Some(&Visibility::Hidden),
+            "live GPU launch displays real selected creature state"
+        );
+        #[cfg(not(feature = "gpu-runtime"))]
         assert_eq!(
             app.world().get::<Visibility>(unknown),
             Some(&Visibility::Inherited),
@@ -1595,6 +1621,16 @@ fn v0_recovery_key_restores_the_clean_isometric_player_view() {
     let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
     let (mut app, _summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
+    app.update();
+    app.world_mut()
+        .resource_mut::<ButtonInput<KeyCode>>()
+        .press(KeyCode::Escape);
+    app.update();
+    {
+        let mut keyboard = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
+        keyboard.release(KeyCode::Escape);
+        keyboard.clear();
+    }
     app.update();
 
     {

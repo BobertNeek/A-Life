@@ -250,6 +250,15 @@ impl PartialEq for MemorySidecarState {
     }
 }
 
+#[derive(Debug)]
+pub struct MemoryObservationUndo {
+    bank_undo: MemoryBankObservationUndo,
+    previous_runtime_checks_deferred: bool,
+    previous_compaction: MemoryCompactionCheckpoint,
+    previous_canonical_checkpoint: Option<MemoryCompactionCheckpoint>,
+    previous_staged_bank: Option<MemoryBank>,
+}
+
 impl MemorySidecarState {
     pub fn new(
         organism_id: OrganismId,
@@ -433,6 +442,22 @@ impl MemorySidecarState {
         self.bank.recall_frame(draft)
     }
 
+    pub fn recall_routed_from_baseline(
+        &self,
+        routed_draft: &PerceptionFrameDraft,
+        baseline: &PreparedMemoryRecall,
+        novelty_changed: bool,
+    ) -> Result<PreparedMemoryRecall, ScaffoldContractError> {
+        if routed_draft.organism_id() != self.organism_id {
+            return Err(ScaffoldContractError::InvalidMemoryQuery);
+        }
+        if routed_draft.profile_provenance().identity() != self.profile {
+            return Err(ScaffoldContractError::SensorProfileMismatch);
+        }
+        self.bank
+            .recall_routed_from_baseline(routed_draft, baseline, novelty_changed)
+    }
+
     pub fn recall_frame_runtime(
         &self,
         draft: &PerceptionFrameDraft,
@@ -452,21 +477,37 @@ impl MemorySidecarState {
         &mut self,
         patch: &ExperiencePatch,
     ) -> Result<MemoryUpdateReceipt, ScaffoldContractError> {
-        self.observe_sealed_patch_impl(patch, false)
+        self.observe_sealed_patch_with_undo_impl(patch, false)
+            .map(|(receipt, _)| receipt)
     }
 
     pub fn observe_sealed_patch_runtime(
         &mut self,
         patch: &ExperiencePatch,
     ) -> Result<MemoryUpdateReceipt, ScaffoldContractError> {
-        self.observe_sealed_patch_impl(patch, true)
+        self.observe_sealed_patch_with_undo_impl(patch, true)
+            .map(|(receipt, _)| receipt)
     }
 
-    fn observe_sealed_patch_impl(
+    pub fn observe_sealed_patch_with_undo(
+        &mut self,
+        patch: &ExperiencePatch,
+    ) -> Result<(MemoryUpdateReceipt, MemoryObservationUndo), ScaffoldContractError> {
+        self.observe_sealed_patch_with_undo_impl(patch, false)
+    }
+
+    pub fn observe_sealed_patch_runtime_with_undo(
+        &mut self,
+        patch: &ExperiencePatch,
+    ) -> Result<(MemoryUpdateReceipt, MemoryObservationUndo), ScaffoldContractError> {
+        self.observe_sealed_patch_with_undo_impl(patch, true)
+    }
+
+    fn observe_sealed_patch_with_undo_impl(
         &mut self,
         patch: &ExperiencePatch,
         runtime: bool,
-    ) -> Result<MemoryUpdateReceipt, ScaffoldContractError> {
+    ) -> Result<(MemoryUpdateReceipt, MemoryObservationUndo), ScaffoldContractError> {
         if matches!(
             self.compaction.phase,
             MemoryCompactionPhase::Pending { .. } | MemoryCompactionPhase::Staged { .. }
@@ -479,19 +520,36 @@ impl MemorySidecarState {
         if patch.header().sensor_profile.identity() != self.profile {
             return Err(ScaffoldContractError::SensorProfileMismatch);
         }
-        let receipt = if runtime {
-            self.bank.observe_sealed_patch_runtime(patch)?
-        } else {
-            self.bank.observe_sealed_patch(patch)?
+        let (receipt, bank_undo) = self
+            .bank
+            .observe_sealed_patch_with_undo_impl(patch, runtime)?;
+        let undo = MemoryObservationUndo {
+            bank_undo,
+            previous_runtime_checks_deferred: self.runtime_checks_deferred,
+            previous_compaction: self.compaction,
+            previous_canonical_checkpoint: self.canonical_checkpoint.take(),
+            previous_staged_bank: self.staged_bank.take(),
         };
-        self.canonical_checkpoint.take();
         self.runtime_checks_deferred = runtime;
         self.compaction.active_generation = receipt.output_generation;
         self.compaction.active_digest = receipt.after_digest;
         self.compaction.phase = MemoryCompactionPhase::Idle;
-        self.staged_bank = None;
-        self.compaction.validate_contract()?;
-        Ok(receipt)
+        if let Err(error) = self.compaction.validate_contract() {
+            self.undo_observation(undo);
+            return Err(error);
+        }
+        Ok((receipt, undo))
+    }
+
+    pub fn undo_observation(&mut self, undo: MemoryObservationUndo) {
+        self.bank.undo_observation(undo.bank_undo);
+        self.runtime_checks_deferred = undo.previous_runtime_checks_deferred;
+        self.compaction = undo.previous_compaction;
+        self.staged_bank = undo.previous_staged_bank;
+        self.canonical_checkpoint = std::sync::OnceLock::new();
+        if let Some(checkpoint) = undo.previous_canonical_checkpoint {
+            let _ = self.canonical_checkpoint.set(checkpoint);
+        }
     }
 
     pub fn prepare_compaction(
@@ -1149,6 +1207,7 @@ fn memory_bank_from_portable(
         eviction_count: asset.eviction_count,
         records,
         last_sequence_by_organism,
+        cached_digest: std::sync::OnceLock::new(),
         family_index: std::collections::BTreeMap::new(),
         target_index: std::collections::BTreeMap::new(),
         family_namespace_index: std::collections::BTreeMap::new(),

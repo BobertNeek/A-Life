@@ -94,6 +94,13 @@ impl GpuClosedLoopBackend {
                 &mut staging,
             )
             .map_err(map_gpu_contract_error)?;
+        bucket.pipelines.record_refresh_effective_weights(
+            &self.queue,
+            &mut encoder,
+            &bucket.buffers,
+            slot.brain_slot.brain_slot_index(),
+            slot.brain_slot.record().synapse_count,
+        );
         let submission = self.queue.submit(Some(encoder.finish()));
         if self
             .device
@@ -124,6 +131,7 @@ impl GpuClosedLoopBackend {
         slot.training_phenotype = None;
         slot.learning_sequence_guard = rebound_guard;
         slot.last_activity = rebound_activity;
+        slot.invalidate_mutable_cache();
         self.organisms.insert(handle.organism_id.raw(), new_handle);
         self.training_structural_cache.retain(|key, _| {
             !(key.0 == class && key.1 == handle.slot && key.2 == handle.generation)
@@ -250,7 +258,75 @@ mod tests {
             .unwrap();
         assert!(installed.submission_completed);
         assert_eq!(installed.mutable_words_written, 0);
-        assert_eq!(before.mutable_words, after.mutable_words);
+        let genetic_after = backend
+            .read_immutable_genetic_weights_for_test(installed.handle)
+            .unwrap();
+        let installed_pool = backend
+            .class_buckets
+            .get(&installed.handle.class_id().raw())
+            .unwrap();
+        let installed_bucket = installed_pool.bucket_for_handle(installed.handle).unwrap();
+        let ranges = installed_pool
+            .resident(installed.handle)
+            .unwrap()
+            .brain_slot
+            .word_ranges()
+            .clone();
+        let base = ranges.activation_a_words.start as usize;
+        let eff0 = (ranges.effective_weight_words.start as usize - base)
+            ..(ranges.effective_weight_words.end as usize - base);
+        let eff1 = (ranges.effective_weight_bank_1_words.start as usize - base)
+            ..(ranges.effective_weight_bank_1_words.end as usize - base);
+        assert_eq!(before.mutable_words.len(), after.mutable_words.len());
+        for (idx, (prev, next)) in before
+            .mutable_words
+            .iter()
+            .zip(&after.mutable_words)
+            .enumerate()
+        {
+            if !eff0.contains(&idx) && !eff1.contains(&idx) {
+                assert_eq!(prev, next, "mutable word mismatch at index {idx}");
+            }
+        }
+        let alpha_words = crate::closed_loop_sleep::read_gpu_words(
+            &backend.device,
+            &backend.queue,
+            installed_bucket.buffers.neural_buffers()[3],
+            ranges.alpha_words.clone(),
+            "live-policy-alpha-readback",
+            None,
+            None,
+        )
+        .unwrap();
+        let l0 = (ranges.lifetime_weight_words.start as usize - base)
+            ..(ranges.lifetime_weight_words.end as usize - base);
+        let f0 = (ranges.fast_weight_words.start as usize - base)
+            ..(ranges.fast_weight_words.end as usize - base);
+        let l1 = (ranges.lifetime_weight_bank_1_words.start as usize - base)
+            ..(ranges.lifetime_weight_bank_1_words.end as usize - base);
+        let f1 = (ranges.fast_weight_bank_1_words.start as usize - base)
+            ..(ranges.fast_weight_bank_1_words.end as usize - base);
+        let canon_bits = |v: f32| {
+            if v == 0.0 {
+                0.0_f32.to_bits()
+            } else {
+                v.to_bits()
+            }
+        };
+        for i in 0..genetic_after.len() {
+            let g = genetic_after[i];
+            let a = f32::from_bits(alpha_words[i]);
+            let exp0 = canon_bits(
+                g + f32::from_bits(after.mutable_words[l0.start + i])
+                    + a * f32::from_bits(after.mutable_words[f0.start + i]),
+            );
+            let exp1 = canon_bits(
+                g + f32::from_bits(after.mutable_words[l1.start + i])
+                    + a * f32::from_bits(after.mutable_words[f1.start + i]),
+            );
+            assert_eq!(after.mutable_words[eff0.start + i], exp0);
+            assert_eq!(after.mutable_words[eff1.start + i], exp1);
+        }
         assert_eq!(before.v11, after.v11);
         assert_eq!(before.active_activation_side, after.active_activation_side);
         assert_eq!(before.active_weight_bank, after.active_weight_bank);

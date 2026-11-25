@@ -257,7 +257,7 @@ impl GpuClosedLoopBackend {
     ) -> Result<BoundedReplayBatch, ScaffoldContractError> {
         self.ensure_ready()?;
         let snapshot = self.sleep_slot_snapshot(handle)?;
-        let words = self.read_slot_mutable_words(handle, &snapshot.ranges)?;
+        let words = self.read_slot_mutable_words_cached(handle, &snapshot.ranges)?;
         let state = learning_state_from_slot_words(&words, &snapshot.ranges)?;
         validate_learning_state(&snapshot, &state)?;
 
@@ -378,7 +378,7 @@ impl GpuClosedLoopBackend {
     ) -> Result<GpuConsolidationRequest, ScaffoldContractError> {
         intent.validate_contract()?;
         let snapshot = self.sleep_slot_snapshot(handle)?;
-        let words = self.read_slot_mutable_words(handle, &snapshot.ranges)?;
+        let words = self.read_slot_mutable_words_cached(handle, &snapshot.ranges)?;
         let state = learning_state_from_slot_words(&words, &snapshot.ranges)?;
         validate_learning_state(&snapshot, &state)?;
         replay.validate_contract(
@@ -425,6 +425,12 @@ impl GpuClosedLoopBackend {
         request: &GpuConsolidationRequest,
         replay: &BoundedReplayBatch,
     ) -> Result<GpuSleepJobId, ScaffoldContractError> {
+        let _span = tracing::debug_span!(
+            "gpu_sleep_stage",
+            organism_id = handle.organism_id().raw(),
+            cycle_id = request.cycle_id
+        )
+        .entered();
         self.submit_sleep_consolidation_inner(handle, request, replay, None)
     }
 
@@ -474,6 +480,12 @@ impl GpuClosedLoopBackend {
         request: &GpuConsolidationRequest,
         staged: &ConsolidationStagedOutput,
     ) -> Result<GpuSleepConsolidationReceipt, ScaffoldContractError> {
+        let _span = tracing::debug_span!(
+            "gpu_sleep_commit",
+            organism_id = handle.organism_id().raw(),
+            cycle_id = request.cycle_id
+        )
+        .entered();
         let mut submission_started = false;
         let result =
             self.commit_sleep_consolidation_inner(handle, request, staged, &mut submission_started);
@@ -578,8 +590,9 @@ impl GpuClosedLoopBackend {
         }
         dispatch_result.map_err(map_gpu_contract_error)?;
 
-        let words = self.read_slot_mutable_words(handle, &snapshot.ranges)?;
-        let completion = completion_from_slot_words(&words, &snapshot.ranges)?;
+        let (words, atomic_words) =
+            self.read_slot_mutable_and_atomic_words(handle, &snapshot.ranges)?;
+        let completion = completion_from_slot_words(&atomic_words, &snapshot.ranges)?;
         let state = learning_state_from_slot_words(&words, &snapshot.ranges)?;
         if completion.status != SLEEP_STATUS_COMMITTED
             || completion.slot != handle.slot()
@@ -645,6 +658,7 @@ impl GpuClosedLoopBackend {
                 snapshot.ranges.immutable_plan_words.clone(),
                 "closed-loop-sleep-synaptogenesis-plan-readback",
                 None,
+                Some(&self.readback_scratch),
             )?;
             let immutable_weight_words = read_gpu_words(
                 &self.device,
@@ -653,6 +667,7 @@ impl GpuClosedLoopBackend {
                 snapshot.ranges.immutable_weight_words.clone(),
                 "closed-loop-sleep-synaptogenesis-weight-readback",
                 None,
+                Some(&self.readback_scratch),
             )?;
             Some(
                 GpuFixedSlotUpload::from_existing_slot(
@@ -661,6 +676,7 @@ impl GpuClosedLoopBackend {
                     immutable_plan_words,
                     immutable_weight_words,
                     words.clone(),
+                    atomic_words.clone(),
                 )
                 .with_added_lifetime_synapse(synapse)
                 .map_err(map_gpu_contract_error)?,
@@ -738,6 +754,10 @@ impl GpuClosedLoopBackend {
         if let Some(synapse) = pending_lifetime_synapse.as_ref() {
             resident.v11.clear_pending_lifetime_synapse(synapse)?;
         }
+        resident.invalidate_mutable_cache();
+        if pending_upload.is_none() {
+            resident.install_cached_mutable_words(std::sync::Arc::from(words.as_slice()));
+        }
         if self.sleep_jobs.remove(&staged.job_id.raw()).is_none() {
             self.mark_device_lost();
             return Err(ScaffoldContractError::NeuralBackendUnavailable);
@@ -780,7 +800,7 @@ impl GpuClosedLoopBackend {
             return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
         }
         let snapshot = self.sleep_slot_snapshot(handle)?;
-        let before_words = self.read_slot_mutable_words(handle, &snapshot.ranges)?;
+        let before_words = self.read_slot_mutable_words_cached(handle, &snapshot.ranges)?;
         let state = learning_state_from_slot_words(&before_words, &snapshot.ranges)?;
         let job_id = ConsolidationJobId::try_from_raw(self.next_sleep_job_id)?;
         self.next_sleep_job_id = self
@@ -808,8 +828,17 @@ impl GpuClosedLoopBackend {
             self.mark_device_lost();
             return Err(ScaffoldContractError::NeuralBackendUnavailable);
         }
-        let staged_words = self.read_slot_mutable_words(handle, &snapshot.ranges)?;
-        let completion = completion_from_slot_words(&staged_words, &snapshot.ranges)?;
+        let (staged_words, staged_atomic_words) =
+            self.read_slot_mutable_and_atomic_words(handle, &snapshot.ranges)?;
+        if let Some(resident) = self
+            .class_buckets
+            .get_mut(&handle.class_id().raw())
+            .and_then(|pool| pool.resident_mut(handle).ok())
+        {
+            resident.invalidate_mutable_cache();
+            resident.install_cached_mutable_words(std::sync::Arc::from(staged_words.as_slice()));
+        }
+        let completion = completion_from_slot_words(&staged_atomic_words, &snapshot.ranges)?;
         if completion.schema_version != 1
             || completion.slot != handle.slot()
             || completion.slot_generation != handle.generation()
@@ -933,6 +962,25 @@ impl GpuClosedLoopBackend {
         })
     }
 
+    pub(crate) fn read_slot_mutable_words_cached(
+        &self,
+        handle: GpuBrainHandle,
+        ranges: &GpuFixedSlotRanges,
+    ) -> Result<std::sync::Arc<[u32]>, ScaffoldContractError> {
+        let pool = self
+            .class_buckets
+            .get(&handle.class_id().raw())
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        let resident = pool.resident(handle)?;
+        if let Some(cached) = resident.cached_mutable_words() {
+            return Ok(cached);
+        }
+        let words = self.read_slot_mutable_words(handle, ranges)?;
+        let shared: std::sync::Arc<[u32]> = std::sync::Arc::from(words);
+        resident.install_cached_mutable_words(std::sync::Arc::clone(&shared));
+        Ok(shared)
+    }
+
     pub(crate) fn read_slot_mutable_words(
         &self,
         handle: GpuBrainHandle,
@@ -950,7 +998,39 @@ impl GpuClosedLoopBackend {
             ranges.mutable_state_words.clone(),
             "closed-loop-sleep-mutable-readback",
             Some(&self.mutable_slot_readback_counters),
+            Some(&self.readback_scratch),
         )
+    }
+
+    pub(crate) fn read_slot_mutable_and_atomic_words(
+        &self,
+        handle: GpuBrainHandle,
+        ranges: &GpuFixedSlotRanges,
+    ) -> Result<(Vec<u32>, Vec<u32>), ScaffoldContractError> {
+        let bucket = self
+            .class_buckets
+            .get(&handle.class_id().raw())
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+            .bucket_for_handle(handle)?;
+        let neural = bucket.buffers.neural_buffers();
+        let mut rows = read_gpu_word_ranges(
+            &self.device,
+            &self.queue,
+            &[
+                (neural[6], ranges.mutable_state_words.clone()),
+                (neural[7], ranges.atomic_state_words.clone()),
+            ],
+            "closed-loop-sleep-mutable-readback",
+            Some(&self.mutable_slot_readback_counters),
+            Some(&self.readback_scratch),
+        )?;
+        let atomic = rows
+            .pop()
+            .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
+        let mutable = rows
+            .pop()
+            .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
+        Ok((mutable, atomic))
     }
 
     #[cfg(feature = "gpu-tests")]
@@ -972,6 +1052,7 @@ impl GpuClosedLoopBackend {
             snapshot.ranges.layout.genetic_weight_words.clone(),
             "closed-loop-test-genetic-readback",
             None,
+            Some(&self.readback_scratch),
         )?;
         let active_words = words
             .get(..snapshot.brain_slot.record().synapse_count as usize)
@@ -1146,6 +1227,13 @@ impl GpuClosedLoopBackend {
             u64::from(range.start) * 4,
             bytemuck::cast_slice(&replacement),
         );
+        if let Some(resident) = self
+            .class_buckets
+            .get_mut(&handle.class_id().raw())
+            .and_then(|pool| pool.resident_mut(handle).ok())
+        {
+            resident.invalidate_mutable_cache();
+        }
         Ok(())
     }
 
@@ -1168,6 +1256,7 @@ impl GpuClosedLoopBackend {
             snapshot.ranges.immutable_plan_words.clone(),
             "closed-loop-test-slot-plan-digest",
             None,
+            Some(&self.readback_scratch),
         )?;
         let weight_words = read_gpu_words(
             &self.device,
@@ -1176,6 +1265,7 @@ impl GpuClosedLoopBackend {
             snapshot.ranges.immutable_weight_words.clone(),
             "closed-loop-test-slot-weight-digest",
             None,
+            Some(&self.readback_scratch),
         )?;
         let mutable_words = self.read_slot_mutable_words(handle, &snapshot.ranges)?;
         let mut digest = CanonicalDigestBuilder::new(b"ALIFE-GPU-SLEEP-SLOT-FULL-TEST-V1");
@@ -1652,7 +1742,7 @@ fn completion_from_slot_words(
     );
     pod_from_absolute(
         words,
-        ranges.mutable_state_words.start,
+        ranges.atomic_state_words.start,
         ranges.layout.diagnostic_words.start,
     )
 }
@@ -1709,8 +1799,10 @@ pub(crate) fn read_gpu_words(
     words: Range<u32>,
     label: &'static str,
     metrics: Option<&crate::closed_loop_runtime::GpuMutableSlotReadbackCounters>,
+    scratch: Option<&std::sync::Mutex<Option<wgpu::Buffer>>>,
 ) -> Result<Vec<u32>, ScaffoldContractError> {
-    let mut rows = read_gpu_word_ranges(device, queue, &[(source, words)], label, metrics)?;
+    let mut rows =
+        read_gpu_word_ranges(device, queue, &[(source, words)], label, metrics, scratch)?;
     rows.pop()
         .ok_or(ScaffoldContractError::NeuralBackendUnavailable)
 }
@@ -1723,12 +1815,14 @@ pub(crate) fn read_gpu_word_ranges(
     sources: &[(&wgpu::Buffer, Range<u32>)],
     label: &'static str,
     metrics: Option<&crate::closed_loop_runtime::GpuMutableSlotReadbackCounters>,
+    scratch: Option<&std::sync::Mutex<Option<wgpu::Buffer>>>,
 ) -> Result<Vec<Vec<u32>>, ScaffoldContractError> {
     if sources.is_empty() {
         return Ok(Vec::new());
     }
     let mut size = 0u64;
     let mut destinations = Vec::with_capacity(sources.len());
+    let max_buffer_size = device.limits().max_buffer_size;
     for (source, words) in sources {
         let bytes = u64::from(
             words
@@ -1742,31 +1836,51 @@ pub(crate) fn read_gpu_word_ranges(
         }
         let end = size
             .checked_add(bytes)
-            .filter(|end| *end <= device.limits().max_buffer_size)
+            .filter(|end| *end <= max_buffer_size)
             .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
         destinations.push(size..end);
         size = end;
     }
-    let readback = device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some(label),
-        size,
-        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-        mapped_at_creation: false,
+    let mut scratch_guard = scratch.map(|mutex| {
+        mutex
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     });
+    let mut transient_readback = None;
+    let readback: &wgpu::Buffer = if let Some(guard) = scratch_guard.as_deref_mut() {
+        let needs_alloc = guard.as_ref().is_none_or(|buffer| buffer.size() < size);
+        if needs_alloc {
+            let capacity = size.next_power_of_two().max(4096).min(max_buffer_size);
+            *guard = Some(device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some(label),
+                size: capacity,
+                usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+                mapped_at_creation: false,
+            }));
+        }
+        guard.as_ref().expect("allocated persistent readback")
+    } else {
+        transient_readback.insert(device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some(label),
+            size,
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        }))
+    };
     let mut encoder =
         device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some(label) });
     for ((source, words), destination) in sources.iter().zip(&destinations) {
         encoder.copy_buffer_to_buffer(
             source,
             u64::from(words.start) * 4,
-            &readback,
+            readback,
             destination.start,
             destination.end - destination.start,
         );
     }
     let command = encoder.finish();
     let (sender, receiver) = std::sync::mpsc::channel();
-    command.map_buffer_on_submit(&readback, wgpu::MapMode::Read, 0..size, move |result| {
+    command.map_buffer_on_submit(readback, wgpu::MapMode::Read, 0..size, move |result| {
         let _ = sender.send(result);
     });
     let submission = queue.submit(Some(command));

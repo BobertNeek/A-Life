@@ -538,8 +538,8 @@ fn install_spawn_assets(app: &mut App) {
     let mut assets = app.world_mut().resource_mut::<IslandAssets>();
     assets.terrain = gltf.clone();
     assets.props = placements()
-        .into_iter()
-        .map(|p| (p.kind, gltf.clone()))
+        .iter()
+        .map(|p| (p.kind.clone(), gltf.clone()))
         .collect();
     assets.spawned = false;
 }

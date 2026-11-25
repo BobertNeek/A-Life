@@ -846,6 +846,7 @@ fn draw_audit_label(image: &mut ImageBuffer<Rgba<u8>, Vec<u8>>, x: u32, y: u32, 
 }
 
 fn main() {
+    alife_game_app::init_headless_tracing();
     if let Err(error) = run(env::args().skip(1).collect()) {
         eprintln!("creature_part_builder: {error}");
         std::process::exit(1);

@@ -341,7 +341,17 @@ fn run(
     })?;
     Ok(receipt)
 }
+fn init_headless_tracing() {
+    let filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("warn"));
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .with_writer(std::io::stderr)
+        .try_init();
+}
+
 fn main() -> Result<()> {
+    init_headless_tracing();
     let args: Vec<_> = std::env::args_os().skip(1).collect();
     let usage = "usage: merge_founder_inference REQUEST.json ABSENT_OUTPUT_DIRECTORY [--conflict-policy ancestor-revert|midpoint]";
     let conflict_policy = match args.as_slice() {

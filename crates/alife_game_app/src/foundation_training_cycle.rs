@@ -3601,7 +3601,7 @@ fn run_foundation_training_cycle_in_owned_output(
     runtime.attach_durable_checkpoint_boundary(&save_path, &asset_root, base)?;
     let exact = runtime.capture_portable_checkpoint()?;
     let published = GpuDurableSaveManifest::publish_snapshot(&save_path, &asset_root, &exact)?;
-    if published.save != exact {
+    if *published.save != exact {
         return Err("cycle exact checkpoint changed during publication".into());
     }
     runtime.rebind_durable_checkpoint_boundary(&save_path, &asset_root, &exact)?;
@@ -3808,6 +3808,8 @@ fn run_foundation_training_cycle_in_owned_output(
     let source = foundation_replay_source(&phenotype, &asset, policy_version, &initial_checkpoint)?;
     let budget = FoundationReplayBudget::default();
     let replay_dir = output.join("replay");
+    let mut replay_cohort =
+        crate::foundation_training::CohortReplayWriter::new(output, source.clone())?;
     let mut writer = FoundationReplayWriter::new(
         &replay_dir,
         source.clone(),
@@ -3842,7 +3844,7 @@ fn run_foundation_training_cycle_in_owned_output(
     critic_capture_features.push(crate::foundation_training::snapshot_activation(
         &first[0].after_inference,
     )?);
-    references.push(writer.append(&first.remove(0))?);
+    references.push(writer.append_cohort(&first.remove(0), &mut replay_cohort)?);
     replay_append_seconds += append_started.elapsed().as_secs_f64();
     let mut gap = false;
     let (mut terminal_biology, mut terminal_death_tick) =
@@ -4069,12 +4071,13 @@ fn run_foundation_training_cycle_in_owned_output(
         critic_capture_features.push(crate::foundation_training::snapshot_activation(
             &captured[0].after_inference,
         )?);
-        references.push(writer.append(&captured.remove(0))?);
+        references.push(writer.append_cohort(&captured.remove(0), &mut replay_cohort)?);
         replay_append_seconds += append_started.elapsed().as_secs_f64();
         if terminal_biology.is_some() {
             break;
         }
     }
+    let _replay_commit = replay_cohort.seal()?;
     let causal_collection = FoundationCausalCollectionMetrics::measure(
         control_start_tick,
         runtime.world().tick().raw(),
@@ -4174,8 +4177,21 @@ fn run_foundation_training_cycle_in_owned_output(
             (value, age, expected)
         };
     // The exact production start state is stored at every replay row. Predict
-    // old values before any update in bounded chunks; keep only scalar targets.
-    let mut values = Vec::with_capacity(references.len());
+    // old values directly from captured activations before any update; keep only
+    // scalar targets.
+    if critic_capture_features.len() != references.len() {
+        return Err("captured activation count does not match replay references".into());
+    }
+    let values = value.predict_values_from_features(
+        trainer.session(),
+        phenotype.neuron_count(),
+        &critic_capture_features,
+    )?;
+    if let Some(expected) = expected_value_checkpoint.take() {
+        if serde_json::to_vec(&value.checkpoint(trainer.session())?)? != expected {
+            return Err("restored value weights/optimizer state changed before training".into());
+        }
+    }
     let mut actions_rewards: Vec<(PpoJointAction, f32)> = Vec::with_capacity(train_rows);
     let mut previous_physiology_after = None;
     let mut sleep_gap_reward_total = 0.0_f32;
@@ -4197,14 +4213,6 @@ fn run_foundation_training_cycle_in_owned_output(
         {
             let window =
                 load_foundation_replay_window(&replay_dir, refs, 0, &source, &phenotype, budget)?;
-            values.extend(value.predict_values(&mut trainer, &window.sequence)?);
-            if let Some(expected) = expected_value_checkpoint.take() {
-                if serde_json::to_vec(&value.checkpoint(trainer.session())?)? != expected {
-                    return Err(
-                        "restored value weights/optimizer state changed before training".into(),
-                    );
-                }
-            }
             for (row, (behavior, patch)) in window.behavior.iter().zip(&window.patches).enumerate()
             {
                 let index = segment_start + chunk * 512 + row;
@@ -4512,7 +4520,7 @@ fn run_foundation_training_cycle_in_owned_output(
             .map_err(|_| {
                 alife_training::TrainingError::from(ScaffoldContractError::InvalidDecisionEvidence)
             })?;
-            let window = PpoTrainingWindow {
+            let window = std::sync::Arc::new(PpoTrainingWindow {
                 speech_targets: speech_targets[burn_start..end]
                     .iter()
                     .enumerate()
@@ -4521,7 +4529,7 @@ fn run_foundation_training_cycle_in_owned_output(
                 sequence: replay.sequence,
                 batch: batch.window(start..end)?,
                 auxiliary: None,
-            };
+            });
             cached_windows.retain(index, &window, budget);
             Ok(window)
         },
@@ -4532,17 +4540,22 @@ fn run_foundation_training_cycle_in_owned_output(
         .actor_optimizer_step
         .checked_sub(actor_optimizer_step_before)
         .ok_or("actor optimizer step regressed")?;
-    let (residual_checkpoint, residual_receipt) = critic_residual::train(
+    let residual_steps = ppo_config.critic_residual_steps.unwrap_or(critic_updates);
+    let residual_pipelines = value.residual_pipelines(trainer.session())?.clone();
+    let (residual_checkpoint, residual_receipt) = critic_residual::train_with_options(
         trainer.session(),
         value.checkpoint(trainer.session())?,
         &critic_capture_features,
         batch.transitions(),
         ppo_config,
-        critic_updates,
+        residual_steps,
         policy_version,
+        Some(&residual_pipelines),
+        true,
     )?;
+    let residual_receipt = residual_receipt.ok_or("missing critic residual receipt")?;
     update.value_optimizer_step = residual_checkpoint.optimizer_step;
-    value = PpoTrainingState::from_checkpoint(residual_checkpoint)?;
+    value.load_checkpoint_in_place(trainer.session(), residual_checkpoint)?;
     let residual_bytes = serde_json::to_vec_pretty(&residual_receipt)?;
     let critic_residual_update_sha256 = {
         use sha2::{Digest, Sha256};

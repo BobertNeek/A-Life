@@ -82,6 +82,7 @@ pub struct GpuExactPopulationCaptureRowV1 {
     immutable_plan_bytes: Vec<u8>,
     immutable_weight_bytes: Vec<u8>,
     mutable_state_bytes: Vec<u8>,
+    atomic_state_bytes: Vec<u8>,
 }
 
 impl GpuExactPopulationCaptureRowV1 {
@@ -107,6 +108,10 @@ impl GpuExactPopulationCaptureRowV1 {
 
     pub fn mutable_state_bytes(&self) -> &[u8] {
         &self.mutable_state_bytes
+    }
+
+    pub fn atomic_state_bytes(&self) -> &[u8] {
+        &self.atomic_state_bytes
     }
 
     pub const fn activity_snapshot(&self) -> &GpuActivityRuntimeSnapshot {
@@ -154,6 +159,7 @@ impl GpuExactPopulationCaptureRowV1 {
             words(&self.immutable_plan_bytes)?,
             words(&self.immutable_weight_bytes)?,
             words(&self.mutable_state_bytes)?,
+            words(&self.atomic_state_bytes)?,
         ))
     }
 }
@@ -233,6 +239,7 @@ struct CapturedRowLayout {
     immutable_plan: Range<u64>,
     immutable_weight: Range<u64>,
     mutable_state: Range<u64>,
+    atomic_state: Range<u64>,
     learning_state: Range<u64>,
 }
 
@@ -437,6 +444,10 @@ impl GpuClosedLoopBackend {
                 &words_to_bytes(ranges.mutable_state_words.clone())?,
                 &mut destination_cursor,
             )?;
+            let atomic_state = reserve_destination(
+                &words_to_bytes(ranges.atomic_state_words.clone())?,
+                &mut destination_cursor,
+            )?;
             let learning_state = destination_subrange(
                 &mutable_state,
                 ranges.mutable_state_words.start,
@@ -462,6 +473,7 @@ impl GpuClosedLoopBackend {
                 immutable_plan,
                 immutable_weight,
                 mutable_state,
+                atomic_state,
                 learning_state,
             });
         }
@@ -749,7 +761,7 @@ fn reserve_destination(
 
 fn record_row_copies(
     encoder: &mut wgpu::CommandEncoder,
-    buffers: &[&wgpu::Buffer; 7],
+    buffers: &[&wgpu::Buffer; 8],
     ranges: &GpuFixedSlotRanges,
     staging: &wgpu::Buffer,
     layout: &CapturedRowLayout,
@@ -769,6 +781,10 @@ fn record_row_copies(
             buffers[6],
             words_to_bytes(ranges.mutable_state_words.clone())?,
         ),
+        (
+            buffers[7],
+            words_to_bytes(ranges.atomic_state_words.clone())?,
+        ),
     ];
     let destinations = [
         &layout.brain_slot,
@@ -776,6 +792,7 @@ fn record_row_copies(
         &layout.immutable_plan,
         &layout.immutable_weight,
         &layout.mutable_state,
+        &layout.atomic_state,
     ];
     for ((source, source_range), destination) in sources.into_iter().zip(destinations) {
         let source_size = source_range
@@ -869,6 +886,7 @@ fn decode_row(
         immutable_plan_bytes: take(&layout.immutable_plan)?,
         immutable_weight_bytes: take(&layout.immutable_weight)?,
         mutable_state_bytes: take(&layout.mutable_state)?,
+        atomic_state_bytes: take(&layout.atomic_state)?,
     })
 }
 

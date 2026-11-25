@@ -20,12 +20,12 @@ use crate::closed_loop_v11::{
 
 use super::{
     GpuBrainSlotExtensionRecord, GpuBrainSlotRecord, GpuClosedLoopError,
-    GpuDecoderEligibilityMetadata, GpuDecoderFamilyRecord, GpuDecoderWeightIndexRecord,
-    GpuDendriticBranchRecord, GpuDendriticInputRecord, GpuPhenotypeIdentityRecord,
-    GpuPhenotypeUpload, GpuPlasticityReceptorRecord, GpuReplayCaptureIdentityRecord,
-    GpuReplaySynapseSpanRecord, GpuSleepParameterRecord, GpuSlotLearningStateRecord,
-    GpuSynapseLearningMetadata, GPU_CLOSED_LOOP_LAYOUT_VERSION, GPU_DENDRITIC_BRANCH_RECORD_WORDS,
-    GPU_DENDRITIC_INPUT_RECORD_WORDS, GPU_NO_EXTENSION_SENTINEL,
+    GpuDecoderEligibilityMetadata, GpuDecoderFamilyRecord, GpuDecoderPlanRecord,
+    GpuDecoderWeightIndexRecord, GpuDendriticBranchRecord, GpuDendriticInputRecord,
+    GpuPhenotypeIdentityRecord, GpuPhenotypeUpload, GpuPlasticityReceptorRecord,
+    GpuReplayCaptureIdentityRecord, GpuReplaySynapseSpanRecord, GpuSleepParameterRecord,
+    GpuSlotLearningStateRecord, GpuSynapseLearningMetadata, GPU_CLOSED_LOOP_LAYOUT_VERSION,
+    GPU_DENDRITIC_BRANCH_RECORD_WORDS, GPU_DENDRITIC_INPUT_RECORD_WORDS, GPU_NO_EXTENSION_SENTINEL,
 };
 
 const GPU_PENDING_ELIGIBILITY_RECORD_WORDS: u32 = 36;
@@ -140,10 +140,12 @@ pub struct GpuSlotWordRanges {
     pub homeostasis_words: Range<u32>,
     pub lifetime_weight_words: Range<u32>,
     pub fast_weight_words: Range<u32>,
+    pub effective_weight_words: Range<u32>,
     pub recurrent_eligibility_words: Range<u32>,
     pub decoder_eligibility_words: Range<u32>,
     pub lifetime_weight_bank_1_words: Range<u32>,
     pub fast_weight_bank_1_words: Range<u32>,
+    pub effective_weight_bank_1_words: Range<u32>,
     pub recurrent_eligibility_bank_1_words: Range<u32>,
     pub decoder_eligibility_bank_1_words: Range<u32>,
     pub encoded_input_words: Range<u32>,
@@ -200,6 +202,7 @@ pub struct GpuClassBucketPlan {
     immutable_plan_words: Vec<u32>,
     immutable_weight_words: Vec<u32>,
     mutable_state_words: Vec<u32>,
+    atomic_state_words: Vec<u32>,
     bucket_ownership_token: u64,
 }
 
@@ -277,6 +280,7 @@ impl GpuClassBucketPlan {
             immutable_plan_words: Vec::new(),
             immutable_weight_words: Vec::new(),
             mutable_state_words: Vec::new(),
+            atomic_state_words: Vec::new(),
             bucket_ownership_token,
         })
     }
@@ -313,7 +317,7 @@ impl GpuClassBucketPlan {
         let decoder_plan_words = span(route_index_words.end, counts.decoder_plans * 8)?;
         let decoder_family_words = span(decoder_plan_words.end, counts.decoder_families * 8)?;
         let decoder_weight_index_words =
-            span(decoder_family_words.end, counts.decoder_weight_indices * 4)?;
+            span(decoder_family_words.end, counts.decoder_weight_indices * 2)?;
         let memory_channel_plan_words = span(
             decoder_weight_index_words.end,
             counts.memory_channel_plans * 8,
@@ -345,6 +349,7 @@ impl GpuClassBucketPlan {
         let alpha_words = span(genetic_weight_words.end, upload.alpha.len())?;
 
         let m0 = u32_len(&self.mutable_state_words)?;
+        let a0 = u32_len(&self.atomic_state_words)?;
         let n = phenotype.neuron_count() as usize;
         let total = upload.genetic_weights.len();
         let recurrent = upload.source_indices.len();
@@ -355,19 +360,22 @@ impl GpuClassBucketPlan {
         let homeostasis_words = span(accumulator_words.end, n * 2)?;
         let lifetime_weight_words = span(homeostasis_words.end, total)?;
         let fast_weight_words = span(lifetime_weight_words.end, total)?;
-        let recurrent_eligibility_words = span(fast_weight_words.end, recurrent)?;
+        let effective_weight_words = span(fast_weight_words.end, total)?;
+        let recurrent_eligibility_words = span(effective_weight_words.end, recurrent)?;
         let decoder_eligibility_words = span(recurrent_eligibility_words.end, decoder)?;
         let lifetime_weight_bank_1_words = span(decoder_eligibility_words.end, total)?;
         let fast_weight_bank_1_words = span(lifetime_weight_bank_1_words.end, total)?;
-        let recurrent_eligibility_bank_1_words = span(fast_weight_bank_1_words.end, recurrent)?;
+        let effective_weight_bank_1_words = span(fast_weight_bank_1_words.end, total)?;
+        let recurrent_eligibility_bank_1_words =
+            span(effective_weight_bank_1_words.end, recurrent)?;
         let decoder_eligibility_bank_1_words =
             span(recurrent_eligibility_bank_1_words.end, decoder)?;
         let encoded_input_words = span(decoder_eligibility_bank_1_words.end, n)?;
         let candidate_logit_words = span(encoded_input_words.end, MAX_ACTION_CANDIDATES)?;
-        let diagnostic_words = span(candidate_logit_words.end, 4)?;
+        let diagnostic_words = span(a0, 4)?;
         let selection_words = span(diagnostic_words.end, 16)?;
         let speech_payload_words = span(selection_words.end, 4)?;
-        let extension_words = span(speech_payload_words.end, 20)?;
+        let extension_words = span(candidate_logit_words.end, 20)?;
         let learning_state_words = span(extension_words.end, 24)?;
         let pending_eligibility_words = span(
             learning_state_words.end,
@@ -414,10 +422,12 @@ impl GpuClassBucketPlan {
             homeostasis_words,
             lifetime_weight_words,
             fast_weight_words,
+            effective_weight_words,
             recurrent_eligibility_words,
             decoder_eligibility_words,
             lifetime_weight_bank_1_words,
             fast_weight_bank_1_words,
+            effective_weight_bank_1_words,
             recurrent_eligibility_bank_1_words,
             decoder_eligibility_bank_1_words,
             encoded_input_words,
@@ -436,6 +446,7 @@ impl GpuClassBucketPlan {
         validate_heap_word_end(&self.capacity, ranges.dendritic_branch_words.end)?;
         validate_heap_word_end(&self.capacity, ranges.alpha_words.end)?;
         validate_heap_word_end(&self.capacity, ranges.replay_span_words.end)?;
+        validate_heap_word_end(&self.capacity, ranges.speech_payload_words.end)?;
         self.immutable_plan_words
             .try_reserve_exact(
                 (ranges.dendritic_branch_words.end - ranges.encoder_plan_words.start) as usize,
@@ -449,6 +460,11 @@ impl GpuClassBucketPlan {
         self.mutable_state_words
             .try_reserve_exact(
                 (ranges.replay_span_words.end - ranges.activation_a_words.start) as usize,
+            )
+            .map_err(|_| GpuClosedLoopError::CapacityExceeded)?;
+        self.atomic_state_words
+            .try_reserve_exact(
+                (ranges.speech_payload_words.end - ranges.diagnostic_words.start) as usize,
             )
             .map_err(|_| GpuClosedLoopError::CapacityExceeded)?;
 
@@ -481,8 +497,8 @@ impl GpuClassBucketPlan {
         push_record(&mut self.immutable_plan_words, &decoder_plan);
         for row in &upload.decoder_families {
             let mut relocated = *row;
-            let local = (row.weight_index_start - upload.decoder_weight_index_word_base) / 4;
-            relocated.weight_index_start = ranges.decoder_weight_index_words.start + local * 4;
+            let local = (row.weight_index_start - upload.decoder_weight_index_word_base) / 2;
+            relocated.weight_index_start = ranges.decoder_weight_index_words.start + local * 2;
             push_record(&mut self.immutable_plan_words, &relocated);
         }
         for row in &upload.decoder_weight_indices {
@@ -517,6 +533,21 @@ impl GpuClassBucketPlan {
             .extend(upload.alpha.iter().map(|v| v.to_bits()));
         self.mutable_state_words
             .resize(ranges.replay_span_words.end as usize, 0);
+        let genetic_bits: &[u32] = bytemuck::cast_slice(&upload.genetic_weights);
+        store_words_at(
+            &mut self.mutable_state_words,
+            0,
+            ranges.effective_weight_words.start,
+            genetic_bits,
+        )?;
+        store_words_at(
+            &mut self.mutable_state_words,
+            0,
+            ranges.effective_weight_bank_1_words.start,
+            genetic_bits,
+        )?;
+        self.atomic_state_words
+            .resize(ranges.speech_payload_words.end as usize, 0);
         let extension = make_slot_extension(&ranges, &counts, recurrent as u32)?;
         store_pod_at(
             &mut self.mutable_state_words,
@@ -582,7 +613,11 @@ impl GpuClassBucketPlan {
             selection_offset: ranges.selection_words.start,
             neuron_homeostasis_offset: ranges.homeostasis_words.start,
             extension_record_offset: ranges.extension_words.start,
-            reserved: [upload.joint_motor_mode, 0, 0],
+            reserved: [
+                upload.joint_motor_mode,
+                upload.speech_synapse_start,
+                ranges.effective_weight_words.start,
+            ],
         };
         record.validate_slice_a()?;
         let brain = GpuBrainSlot {
@@ -614,6 +649,9 @@ impl GpuClassBucketPlan {
     }
     pub fn mutable_state_words(&self) -> &[u32] {
         &self.mutable_state_words
+    }
+    pub fn atomic_state_words(&self) -> &[u32] {
+        &self.atomic_state_words
     }
     pub fn fast_weights<'a>(
         &'a self,
@@ -662,6 +700,8 @@ impl GpuClassBucketPlan {
                 &self.immutable_weight_words,
                 0,
                 &self.mutable_state_words,
+                0,
+                &self.atomic_state_words,
                 0,
             )?;
         }
@@ -1148,6 +1188,8 @@ fn validate_learning_slot_layout(
     immutable_weight_base: u32,
     mutable_state_words: &[u32],
     mutable_state_base: u32,
+    atomic_state_words: &[u32],
+    atomic_state_base: u32,
 ) -> Result<(), GpuClosedLoopError> {
     let synapse_count = usize::try_from(record.synapse_count)
         .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
@@ -1217,16 +1259,14 @@ fn validate_learning_slot_layout(
     for (range, active_words) in [
         (&ranges.lifetime_weight_words, synapse_count),
         (&ranges.fast_weight_words, synapse_count),
+        (&ranges.effective_weight_words, synapse_count),
         (&ranges.recurrent_eligibility_words, recurrent_count),
         (&ranges.decoder_eligibility_words, decoder_count),
         (&ranges.lifetime_weight_bank_1_words, synapse_count),
         (&ranges.fast_weight_bank_1_words, synapse_count),
+        (&ranges.effective_weight_bank_1_words, synapse_count),
         (&ranges.recurrent_eligibility_bank_1_words, recurrent_count),
         (&ranges.decoder_eligibility_bank_1_words, decoder_count),
-        (
-            &ranges.speech_payload_words,
-            std::mem::size_of::<crate::GpuSpeechPayloadRecord>() / 4,
-        ),
         (
             &ranges.extension_words,
             std::mem::size_of::<GpuBrainSlotExtensionRecord>() / 4,
@@ -1242,13 +1282,37 @@ fn validate_learning_slot_layout(
     ] {
         validate_active_range(mutable_state_words, mutable_state_base, range, active_words)?;
     }
+    for (range, active_words) in [
+        (&ranges.diagnostic_words, 4),
+        (
+            &ranges.selection_words,
+            std::mem::size_of::<crate::GpuSelectionRecord>() / 4,
+        ),
+        (
+            &ranges.speech_payload_words,
+            std::mem::size_of::<crate::GpuSpeechPayloadRecord>() / 4,
+        ),
+    ] {
+        validate_active_range(atomic_state_words, atomic_state_base, range, active_words)?;
+    }
 
     if record.genetic_weight_offset != ranges.genetic_weight_words.start
         || record.alpha_offset != ranges.alpha_words.start
         || record.lifetime_weight_offset != ranges.lifetime_weight_words.start
         || record.fast_weight_offset != ranges.fast_weight_words.start
+        || record.reserved[2] != ranges.effective_weight_words.start
+        || ranges
+            .effective_weight_bank_1_words
+            .start
+            .checked_sub(ranges.effective_weight_words.start)
+            != ranges
+                .fast_weight_bank_1_words
+                .start
+                .checked_sub(ranges.fast_weight_words.start)
         || record.recurrent_eligibility_offset != ranges.recurrent_eligibility_words.start
         || record.decoder_eligibility_offset != ranges.decoder_eligibility_words.start
+        || record.diagnostic_offset != ranges.diagnostic_words.start
+        || record.selection_offset != ranges.selection_words.start
         || record.extension_record_offset != ranges.extension_words.start
     {
         return Err(GpuClosedLoopError::MalformedUpload);
@@ -1478,9 +1542,41 @@ fn validate_learning_slot_layout(
         || memory_plan.memory_decoder_synapse_count as usize != counts.memory_weight_indices
         || counts.memory_weight_indices < 96
         || !counts.memory_weight_indices.is_multiple_of(8)
-        || memory_plan.reserved != [0; 2]
     {
         return Err(GpuClosedLoopError::MalformedUpload);
+    }
+    let [cog_start, cog_count] = memory_plan.reserved;
+    if cog_count == 0 {
+        if cog_start != 0 || decoder_metadata.iter().any(|row| row.decoder_head == 4) {
+            return Err(GpuClosedLoopError::MalformedUpload);
+        }
+    } else {
+        if cog_count != 8 * 18 {
+            return Err(GpuClosedLoopError::MalformedUpload);
+        }
+        let cog_start =
+            usize::try_from(cog_start).map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
+        let cog_end = cog_start
+            .checked_add(8 * 18)
+            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+        let cog_slice = decoder_metadata
+            .get(cog_start..cog_end)
+            .ok_or(GpuClosedLoopError::MalformedUpload)?;
+        for (offset, row) in cog_slice.iter().enumerate() {
+            if row.decoder_head != 4
+                || row.family as usize != offset / 18
+                || row.input_lane as usize != 36 + offset % 18
+            {
+                return Err(GpuClosedLoopError::MalformedUpload);
+            }
+        }
+        if decoder_metadata[..cog_start]
+            .iter()
+            .chain(&decoder_metadata[cog_end..])
+            .any(|row| row.decoder_head == 4)
+        {
+            return Err(GpuClosedLoopError::MalformedUpload);
+        }
     }
     let memory_map = validate_active_range(
         immutable_plan_words,
@@ -1515,6 +1611,65 @@ fn validate_learning_slot_layout(
         .any(|(index, metadata)| (metadata.decoder_head == 2) != seen_memory_rows[index])
     {
         return Err(GpuClosedLoopError::MalformedUpload);
+    }
+
+    let decoder_plan: GpuDecoderPlanRecord = read_pod_at(
+        immutable_plan_words,
+        immutable_plan_base,
+        ranges.decoder_plan_words.start,
+    )?;
+    if record.reserved[1] == u32::MAX {
+        if decoder_metadata.iter().any(|row| row.decoder_head == 3) {
+            return Err(GpuClosedLoopError::MalformedUpload);
+        }
+    } else {
+        let speech_start = usize::try_from(record.reserved[1])
+            .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
+        let speech_end = speech_start
+            .checked_add(1024)
+            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+        let speech_slice = decoder_metadata
+            .get(speech_start..speech_end)
+            .ok_or(GpuClosedLoopError::MalformedUpload)?;
+        let source_start = decoder_plan
+            .motor_start
+            .checked_add(128)
+            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+        let target_start = decoder_plan
+            .motor_start
+            .checked_add(160)
+            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+        if source_start
+            .checked_add(32)
+            .is_none_or(|end| end > record.neuron_count)
+            || target_start
+                .checked_add(32)
+                .is_none_or(|end| end > record.neuron_count)
+        {
+            return Err(GpuClosedLoopError::MalformedUpload);
+        }
+        for (offset, metadata) in speech_slice.iter().enumerate() {
+            let lane = (offset / 32) as u32;
+            let out = (offset % 32) as u32;
+            let synapse = synapse_metadata
+                .get(recurrent_count + speech_start + offset)
+                .ok_or(GpuClosedLoopError::MalformedUpload)?;
+            if metadata.decoder_head != 3
+                || metadata.input_lane != lane
+                || metadata.reserved != 0
+                || synapse.source_neuron != source_start + lane
+                || synapse.target_neuron != target_start + out
+            {
+                return Err(GpuClosedLoopError::MalformedUpload);
+            }
+        }
+        if decoder_metadata[..speech_start]
+            .iter()
+            .chain(&decoder_metadata[speech_end..])
+            .any(|row| row.decoder_head == 3)
+        {
+            return Err(GpuClosedLoopError::MalformedUpload);
+        }
     }
 
     let replay_identity: GpuReplayCaptureIdentityRecord = read_pod_at(
@@ -1683,6 +1838,7 @@ pub enum GpuClassBucketBufferRole {
     DispatchHeaderWords,
     FramePayloadWords,
     MutableStateWords,
+    AtomicStateWords,
     UploadStaging,
     CompactReadback,
 }
@@ -1701,7 +1857,7 @@ pub struct GpuClassBucketBufferManifestEntry {
     pub minimum_binding_size_bytes: u64,
 }
 
-/// Owns the seven fixed neural heap buffers. Staging/readback resources are auxiliary only.
+/// Owns the eight fixed neural heap buffers. Staging/readback resources are auxiliary only.
 pub struct GpuClassBucketBuffers {
     brain_slots: wgpu::Buffer,
     phenotype_identities: wgpu::Buffer,
@@ -1710,6 +1866,7 @@ pub struct GpuClassBucketBuffers {
     dispatch_header_words: wgpu::Buffer,
     frame_payload_words: wgpu::Buffer,
     mutable_state_words: wgpu::Buffer,
+    atomic_state_words: wgpu::Buffer,
     upload_staging: wgpu::Buffer,
     compact_readback: wgpu::Buffer,
     bucket_ownership_token: u64,
@@ -1729,6 +1886,7 @@ impl GpuClassBucketBuffers {
         dispatch_header_words: wgpu::Buffer,
         frame_payload_words: wgpu::Buffer,
         mutable_state_words: wgpu::Buffer,
+        atomic_state_words: wgpu::Buffer,
         upload_staging: wgpu::Buffer,
         compact_readback: wgpu::Buffer,
     ) -> Result<Self, GpuClosedLoopError> {
@@ -1750,6 +1908,7 @@ impl GpuClassBucketBuffers {
             dispatch_header_words,
             frame_payload_words,
             mutable_state_words,
+            atomic_state_words,
             upload_staging,
             compact_readback,
             bucket_ownership_token: plan.ownership_token(),
@@ -1769,7 +1928,7 @@ impl GpuClassBucketBuffers {
         }
         Ok(buffers)
     }
-    pub const fn neural_binding_manifest() -> [GpuClassBucketBufferManifestEntry; 7] {
+    pub const fn neural_binding_manifest() -> [GpuClassBucketBufferManifestEntry; 8] {
         use GpuBufferAccess::*;
         use GpuClassBucketBufferRole::*;
         [
@@ -1829,6 +1988,14 @@ impl GpuClassBucketBuffers {
                 neural_pipeline_bindable: true,
                 minimum_binding_size_bytes: 4,
             },
+            GpuClassBucketBufferManifestEntry {
+                group: 0,
+                binding: 7,
+                role: AtomicStateWords,
+                access: ReadWrite,
+                neural_pipeline_bindable: true,
+                minimum_binding_size_bytes: 4,
+            },
         ]
     }
     pub const fn auxiliary_buffer_manifest() -> [GpuClassBucketBufferManifestEntry; 2] {
@@ -1853,7 +2020,7 @@ impl GpuClassBucketBuffers {
             },
         ]
     }
-    pub fn neural_buffers(&self) -> [&wgpu::Buffer; 7] {
+    pub fn neural_buffers(&self) -> [&wgpu::Buffer; 8] {
         [
             &self.brain_slots,
             &self.phenotype_identities,
@@ -1862,6 +2029,7 @@ impl GpuClassBucketBuffers {
             &self.dispatch_header_words,
             &self.frame_payload_words,
             &self.mutable_state_words,
+            &self.atomic_state_words,
         ]
     }
     pub const fn upload_staging(&self) -> &wgpu::Buffer {
@@ -1897,6 +2065,7 @@ pub(crate) enum GpuFixedArenaHeap {
     ImmutablePlanWords,
     ImmutableWeightWords,
     MutableStateWords,
+    AtomicStateWords,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1907,6 +2076,7 @@ pub(crate) struct GpuFixedSlotStrides {
     pub(crate) immutable_plan_words: u32,
     pub(crate) immutable_weight_words: u32,
     pub(crate) mutable_state_words: u32,
+    pub(crate) atomic_state_words: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1918,6 +2088,7 @@ pub(crate) struct GpuFixedSlotRanges {
     pub(crate) immutable_plan_words: Range<u32>,
     pub(crate) immutable_weight_words: Range<u32>,
     pub(crate) mutable_state_words: Range<u32>,
+    pub(crate) atomic_state_words: Range<u32>,
     pub(crate) layout: GpuSlotWordRanges,
 }
 
@@ -1927,7 +2098,7 @@ impl GpuFixedSlotRanges {
         self.slot
     }
 
-    pub(crate) fn full_scrub_ranges(&self) -> [(GpuFixedArenaHeap, Range<u64>); 5] {
+    pub(crate) fn full_scrub_ranges(&self) -> [(GpuFixedArenaHeap, Range<u64>); 6] {
         [
             (GpuFixedArenaHeap::BrainSlots, self.brain_slot_bytes.clone()),
             (
@@ -1949,6 +2120,11 @@ impl GpuFixedSlotRanges {
                 words_to_bytes(self.mutable_state_words.clone())
                     .expect("validated fixed mutable word range converts to bytes"),
             ),
+            (
+                GpuFixedArenaHeap::AtomicStateWords,
+                words_to_bytes(self.atomic_state_words.clone())
+                    .expect("validated fixed atomic word range converts to bytes"),
+            ),
         ]
     }
 }
@@ -1962,6 +2138,7 @@ pub(crate) struct GpuFixedArenaBufferSizes {
     pub(crate) dispatch_header_words: u64,
     pub(crate) frame_payload_words: u64,
     pub(crate) mutable_state_words: u64,
+    pub(crate) atomic_state_words: u64,
     pub(crate) compact_readback: u64,
     pub(crate) aggregate: u64,
 }
@@ -2048,7 +2225,7 @@ impl GpuFixedClassArenaPlan {
         let decoder_weight_index_words = span_u32(
             &mut cursor,
             candidate_decoder
-                .checked_mul(4)
+                .checked_mul(2)
                 .ok_or(GpuClosedLoopError::ArithmeticOverflow)?,
         )?;
         let memory_channel_plan_words = span_u32(&mut cursor, 8)?;
@@ -2100,17 +2277,16 @@ impl GpuFixedClassArenaPlan {
         )?;
         let lifetime_weight_words = span_u32(&mut cursor, total)?;
         let fast_weight_words = span_u32(&mut cursor, total)?;
+        let effective_weight_words = span_u32(&mut cursor, total)?;
         let recurrent_eligibility_words = span_u32(&mut cursor, recurrent)?;
         let decoder_eligibility_words = span_u32(&mut cursor, decoder)?;
         let lifetime_weight_bank_1_words = span_u32(&mut cursor, total)?;
         let fast_weight_bank_1_words = span_u32(&mut cursor, total)?;
+        let effective_weight_bank_1_words = span_u32(&mut cursor, total)?;
         let recurrent_eligibility_bank_1_words = span_u32(&mut cursor, recurrent)?;
         let decoder_eligibility_bank_1_words = span_u32(&mut cursor, decoder)?;
         let encoded_input_words = span_u32(&mut cursor, n)?;
         let candidate_logit_words = span_u32(&mut cursor, candidates)?;
-        let diagnostic_words = span_u32(&mut cursor, 4)?;
-        let selection_words = span_u32(&mut cursor, 16)?;
-        let speech_payload_words = span_u32(&mut cursor, 4)?;
         let extension_words = span_u32(&mut cursor, 20)?;
         let learning_state_words = span_u32(&mut cursor, 24)?;
         let pending_eligibility_words =
@@ -2131,6 +2307,12 @@ impl GpuFixedClassArenaPlan {
                 .ok_or(GpuClosedLoopError::ArithmeticOverflow)?,
         )?;
         let mutable_state_stride = align_words(cursor, execution.storage_offset_alignment_bytes())?;
+
+        cursor = 0;
+        let diagnostic_words = span_u32(&mut cursor, 4)?;
+        let selection_words = span_u32(&mut cursor, 16)?;
+        let speech_payload_words = span_u32(&mut cursor, 4)?;
+        let atomic_state_stride = align_words(cursor, execution.storage_offset_alignment_bytes())?;
 
         let relative_layout = GpuSlotWordRanges {
             encoder_plan_words,
@@ -2161,10 +2343,12 @@ impl GpuFixedClassArenaPlan {
             homeostasis_words,
             lifetime_weight_words,
             fast_weight_words,
+            effective_weight_words,
             recurrent_eligibility_words,
             decoder_eligibility_words,
             lifetime_weight_bank_1_words,
             fast_weight_bank_1_words,
+            effective_weight_bank_1_words,
             recurrent_eligibility_bank_1_words,
             decoder_eligibility_bank_1_words,
             encoded_input_words,
@@ -2186,6 +2370,7 @@ impl GpuFixedClassArenaPlan {
             immutable_plan_words: immutable_plan_stride,
             immutable_weight_words: immutable_weight_stride,
             mutable_state_words: mutable_state_stride,
+            atomic_state_words: atomic_state_stride,
         };
         let slot_count = u64::from(slot_capacity);
         let brain_slots =
@@ -2198,6 +2383,7 @@ impl GpuFixedClassArenaPlan {
         let immutable_weight_words =
             checked_word_buffer_bytes(immutable_weight_stride, slot_capacity)?;
         let mutable_state_words = checked_word_buffer_bytes(mutable_state_stride, slot_capacity)?;
+        let atomic_state_words = checked_word_buffer_bytes(atomic_state_stride, slot_capacity)?;
         let dispatch_row_words = u64::try_from(crate::GPU_ACTIVE_DISPATCH_ROW_WORDS)
             .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
         let dispatch_header_words = checked_mul_bytes(
@@ -2260,6 +2446,7 @@ impl GpuFixedClassArenaPlan {
             dispatch_header_words,
             frame_payload_words,
             mutable_state_words,
+            atomic_state_words,
             compact_readback,
         ] {
             aggregate = aggregate
@@ -2274,6 +2461,7 @@ impl GpuFixedClassArenaPlan {
             dispatch_header_words,
             frame_payload_words,
             mutable_state_words,
+            atomic_state_words,
             compact_readback,
             aggregate,
         };
@@ -2288,6 +2476,7 @@ impl GpuFixedClassArenaPlan {
             sizes.dispatch_header_words,
             sizes.frame_payload_words,
             sizes.mutable_state_words,
+            sizes.atomic_state_words,
         ]
         .into_iter()
         .any(|bytes| bytes == 0 || bytes > storage_limit)
@@ -2362,10 +2551,12 @@ impl GpuFixedClassArenaPlan {
             &layout.homeostasis_words,
             &layout.lifetime_weight_words,
             &layout.fast_weight_words,
+            &layout.effective_weight_words,
             &layout.recurrent_eligibility_words,
             &layout.decoder_eligibility_words,
             &layout.lifetime_weight_bank_1_words,
             &layout.fast_weight_bank_1_words,
+            &layout.effective_weight_bank_1_words,
             &layout.recurrent_eligibility_bank_1_words,
             &layout.decoder_eligibility_bank_1_words,
             &layout.learning_state_words,
@@ -2425,6 +2616,7 @@ impl GpuFixedClassArenaPlan {
             .and_then(|value| value.checked_add(u64::from(self.strides.immutable_plan_words) * 4))
             .and_then(|value| value.checked_add(u64::from(self.strides.immutable_weight_words) * 4))
             .and_then(|value| value.checked_add(u64::from(self.strides.mutable_state_words) * 4))
+            .and_then(|value| value.checked_add(u64::from(self.strides.atomic_state_words) * 4))
             .and_then(|value| value.checked_add(dispatch_row_bytes))
             .and_then(|value| value.checked_add(staging_bytes))
             .and_then(|value| value.checked_add(compact_readback_bytes))
@@ -2480,6 +2672,9 @@ impl GpuFixedClassArenaPlan {
         let mutable_base = slot
             .checked_mul(self.strides.mutable_state_words)
             .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+        let atomic_base = slot
+            .checked_mul(self.strides.atomic_state_words)
+            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
         let mut layout = self.relative_layout.clone();
         for range in [
             &mut layout.encoder_plan_words,
@@ -2515,17 +2710,16 @@ impl GpuFixedClassArenaPlan {
             &mut layout.homeostasis_words,
             &mut layout.lifetime_weight_words,
             &mut layout.fast_weight_words,
+            &mut layout.effective_weight_words,
             &mut layout.recurrent_eligibility_words,
             &mut layout.decoder_eligibility_words,
             &mut layout.lifetime_weight_bank_1_words,
             &mut layout.fast_weight_bank_1_words,
+            &mut layout.effective_weight_bank_1_words,
             &mut layout.recurrent_eligibility_bank_1_words,
             &mut layout.decoder_eligibility_bank_1_words,
             &mut layout.encoded_input_words,
             &mut layout.candidate_logit_words,
-            &mut layout.diagnostic_words,
-            &mut layout.selection_words,
-            &mut layout.speech_payload_words,
             &mut layout.extension_words,
             &mut layout.learning_state_words,
             &mut layout.pending_eligibility_words,
@@ -2535,6 +2729,13 @@ impl GpuFixedClassArenaPlan {
         ] {
             shift_range(range, mutable_base)?;
         }
+        for range in [
+            &mut layout.diagnostic_words,
+            &mut layout.selection_words,
+            &mut layout.speech_payload_words,
+        ] {
+            shift_range(range, atomic_base)?;
+        }
         Ok(GpuFixedSlotRanges {
             arena_ownership_token: self.arena_ownership_token,
             slot,
@@ -2543,6 +2744,7 @@ impl GpuFixedClassArenaPlan {
             immutable_plan_words: plan_base..plan_base + self.strides.immutable_plan_words,
             immutable_weight_words: weight_base..weight_base + self.strides.immutable_weight_words,
             mutable_state_words: mutable_base..mutable_base + self.strides.mutable_state_words,
+            atomic_state_words: atomic_base..atomic_base + self.strides.atomic_state_words,
             layout,
         })
     }
@@ -2667,14 +2869,14 @@ impl GpuFixedClassArenaPlan {
                     .weight_index_start
                     .checked_sub(upload.decoder_weight_index_word_base)
                     .ok_or(GpuClosedLoopError::MalformedUpload)?
-                    / 4;
+                    / 2;
                 relocated.weight_index_start = ranges
                     .layout
                     .decoder_weight_index_words
                     .start
                     .checked_add(
                         local
-                            .checked_mul(4)
+                            .checked_mul(2)
                             .ok_or(GpuClosedLoopError::ArithmeticOverflow)?,
                     )
                     .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
@@ -2752,6 +2954,19 @@ impl GpuFixedClassArenaPlan {
         )?;
         let mut mutable_state_words = vec![0_u32; self.strides.mutable_state_words as usize];
         let mutable_base = ranges.mutable_state_words.start;
+        let genetic_bits: &[u32] = bytemuck::cast_slice(&upload.genetic_weights);
+        store_words_at(
+            &mut mutable_state_words,
+            mutable_base,
+            ranges.layout.effective_weight_words.start,
+            genetic_bits,
+        )?;
+        store_words_at(
+            &mut mutable_state_words,
+            mutable_base,
+            ranges.layout.effective_weight_bank_1_words.start,
+            genetic_bits,
+        )?;
         let extension = make_slot_extension(
             &ranges.layout,
             &counts,
@@ -2821,8 +3036,14 @@ impl GpuFixedClassArenaPlan {
             selection_offset: ranges.layout.selection_words.start,
             neuron_homeostasis_offset: ranges.layout.homeostasis_words.start,
             extension_record_offset: ranges.layout.extension_words.start,
-            reserved: [upload.joint_motor_mode, 0, 0],
+            reserved: [
+                upload.joint_motor_mode,
+                upload.speech_synapse_start,
+                ranges.layout.effective_weight_words.start,
+            ],
         };
+        let atomic_state_words = vec![0_u32; self.strides.atomic_state_words as usize];
+        let atomic_base = ranges.atomic_state_words.start;
         record.validate_slice_a()?;
         validate_learning_slot_layout(
             &record,
@@ -2834,6 +3055,8 @@ impl GpuFixedClassArenaPlan {
             weight_base,
             &mutable_state_words,
             mutable_base,
+            &atomic_state_words,
+            atomic_base,
         )?;
         let brain_slot = GpuBrainSlot {
             record,
@@ -2851,6 +3074,7 @@ impl GpuFixedClassArenaPlan {
             immutable_plan_words,
             immutable_weight_words,
             mutable_state_words,
+            atomic_state_words,
         })
     }
 
@@ -2880,6 +3104,7 @@ pub(crate) struct GpuFixedSlotUpload {
     immutable_plan_words: Vec<u32>,
     immutable_weight_words: Vec<u32>,
     mutable_state_words: Vec<u32>,
+    atomic_state_words: Vec<u32>,
 }
 
 impl GpuFixedSlotUpload {
@@ -2892,6 +3117,7 @@ impl GpuFixedSlotUpload {
             || self.record() != next.record()
             || self.immutable_plan_words != next.immutable_plan_words
             || self.mutable_state_words.len() != next.mutable_state_words.len()
+            || self.atomic_state_words.len() != next.atomic_state_words.len()
             || self.immutable_weight_words.len() != next.immutable_weight_words.len()
         {
             return Err(GpuClosedLoopError::MalformedUpload);
@@ -2924,6 +3150,7 @@ impl GpuFixedSlotUpload {
         immutable_plan_words: Vec<u32>,
         immutable_weight_words: Vec<u32>,
         mutable_state_words: Vec<u32>,
+        atomic_state_words: Vec<u32>,
     ) -> Self {
         Self {
             arena_ownership_token: ranges.arena_ownership_token,
@@ -2932,6 +3159,7 @@ impl GpuFixedSlotUpload {
             immutable_plan_words,
             immutable_weight_words,
             mutable_state_words,
+            atomic_state_words,
         }
     }
 
@@ -3157,6 +3385,14 @@ impl GpuFixedSlotUpload {
             self.ranges.layout.alpha_words.start,
             &checkpoint.alpha_bits,
         )?;
+        recompute_effective_weight_banks(
+            &weights,
+            weight_base,
+            &mut self.mutable_state_words,
+            self.ranges.mutable_state_words.start,
+            &self.ranges.layout,
+            self.brain_slot.record.synapse_count as usize,
+        )?;
         validate_learning_slot_layout(
             &self.brain_slot.record,
             &self.brain_slot.counts,
@@ -3167,6 +3403,8 @@ impl GpuFixedSlotUpload {
             weight_base,
             &self.mutable_state_words,
             self.ranges.mutable_state_words.start,
+            &self.atomic_state_words,
+            self.ranges.atomic_state_words.start,
         )?;
         self.immutable_plan_words = plan;
         self.immutable_weight_words = weights;
@@ -3233,11 +3471,19 @@ impl GpuFixedSlotUpload {
             (&self.ranges.layout.lifetime_weight_words, new_synapse_count),
             (&self.ranges.layout.fast_weight_words, new_synapse_count),
             (
+                &self.ranges.layout.effective_weight_words,
+                new_synapse_count,
+            ),
+            (
                 &self.ranges.layout.lifetime_weight_bank_1_words,
                 new_synapse_count,
             ),
             (
                 &self.ranges.layout.fast_weight_bank_1_words,
+                new_synapse_count,
+            ),
+            (
+                &self.ranges.layout.effective_weight_bank_1_words,
                 new_synapse_count,
             ),
             (
@@ -3526,6 +3772,14 @@ impl GpuFixedSlotUpload {
             self.ranges.layout.replay_span_words.start,
             &replay_spans,
         )?;
+        recompute_effective_weight_banks(
+            &immutable_weight_words,
+            weight_base,
+            &mut mutable_state_words,
+            mutable_base,
+            &self.ranges.layout,
+            new_synapse_count,
+        )?;
 
         let mut record = old_record;
         record.synapse_count =
@@ -3556,6 +3810,8 @@ impl GpuFixedSlotUpload {
             weight_base,
             &mutable_state_words,
             mutable_base,
+            &self.atomic_state_words,
+            self.ranges.atomic_state_words.start,
         )?;
         self.immutable_plan_words = immutable_plan_words;
         self.immutable_weight_words = immutable_weight_words;
@@ -3694,6 +3950,14 @@ impl GpuFixedSlotUpload {
             self.ranges.layout.replay_span_words.start,
             &fresh_replay_spans,
         )?;
+        recompute_effective_weight_banks(
+            &self.immutable_weight_words,
+            self.ranges.immutable_weight_words.start,
+            &mut self.mutable_state_words,
+            base,
+            &self.ranges.layout,
+            new_total,
+        )?;
         validate_learning_slot_layout(
             &self.brain_slot.record,
             &self.brain_slot.counts,
@@ -3704,6 +3968,8 @@ impl GpuFixedSlotUpload {
             self.ranges.immutable_weight_words.start,
             &self.mutable_state_words,
             base,
+            &self.atomic_state_words,
+            self.ranges.atomic_state_words.start,
         )?;
         Ok(self)
     }
@@ -3783,6 +4049,71 @@ fn remap_word_range(
             *destination
                 .get_mut(destination_start + new_index)
                 .ok_or(GpuClosedLoopError::CapacityExceeded)? = value;
+        }
+    }
+    Ok(())
+}
+
+fn recompute_effective_weight_banks(
+    immutable_weight_words: &[u32],
+    weight_base: u32,
+    mutable_state_words: &mut [u32],
+    mutable_base: u32,
+    layout: &GpuSlotWordRanges,
+    synapse_count: usize,
+) -> Result<(), GpuClosedLoopError> {
+    let genetic = validate_active_range(
+        immutable_weight_words,
+        weight_base,
+        &layout.genetic_weight_words,
+        synapse_count,
+    )?
+    .to_vec();
+    let alpha = validate_active_range(
+        immutable_weight_words,
+        weight_base,
+        &layout.alpha_words,
+        synapse_count,
+    )?
+    .to_vec();
+    for (lifetime_range, fast_range, eff_range) in [
+        (
+            &layout.lifetime_weight_words,
+            &layout.fast_weight_words,
+            &layout.effective_weight_words,
+        ),
+        (
+            &layout.lifetime_weight_bank_1_words,
+            &layout.fast_weight_bank_1_words,
+            &layout.effective_weight_bank_1_words,
+        ),
+    ] {
+        let lifetime = validate_active_range(
+            mutable_state_words,
+            mutable_base,
+            lifetime_range,
+            synapse_count,
+        )?
+        .to_vec();
+        let fast =
+            validate_active_range(mutable_state_words, mutable_base, fast_range, synapse_count)?
+                .to_vec();
+        let eff_start = eff_range
+            .start
+            .checked_sub(mutable_base)
+            .ok_or(GpuClosedLoopError::MalformedUpload)? as usize;
+        let eff_end = eff_start
+            .checked_add(synapse_count)
+            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+        let eff_dst = mutable_state_words
+            .get_mut(eff_start..eff_end)
+            .ok_or(GpuClosedLoopError::CapacityExceeded)?;
+        for index in 0..synapse_count {
+            let value = f32::from_bits(genetic[index])
+                + f32::from_bits(lifetime[index])
+                + f32::from_bits(alpha[index]) * f32::from_bits(fast[index]);
+            let canonical = if value == 0.0 { 0.0_f32 } else { value };
+            eff_dst[index] = canonical.to_bits();
         }
     }
     Ok(())
@@ -3899,6 +4230,7 @@ pub(crate) struct GpuFixedClassArenaBuffers {
     dispatch_header_words: wgpu::Buffer,
     frame_payload_words: wgpu::Buffer,
     mutable_state_words: wgpu::Buffer,
+    atomic_state_words: wgpu::Buffer,
     compact_readback: wgpu::Buffer,
     arena_ownership_token: u64,
     buffer_set_token: u64,
@@ -3923,6 +4255,7 @@ impl GpuFixedClassArenaBuffers {
                 sizes.dispatch_header_words,
                 sizes.frame_payload_words,
                 sizes.mutable_state_words,
+                sizes.atomic_state_words,
             ]
             .into_iter()
             .any(|bytes| {
@@ -3984,6 +4317,12 @@ impl GpuFixedClassArenaBuffers {
                 sizes.mutable_state_words,
                 storage_mutable,
             ),
+            atomic_state_words: create_fixed_buffer(
+                device,
+                "closed-loop-runtime-atomic-state",
+                sizes.atomic_state_words,
+                storage_mutable,
+            ),
             compact_readback: create_fixed_buffer(
                 device,
                 "closed-loop-runtime-compact-readback",
@@ -4012,6 +4351,8 @@ impl GpuFixedClassArenaBuffers {
                 != upload.ranges.immutable_weight_words.len() as u64 * 4
             || upload.mutable_state_words.len() as u64 * 4
                 != upload.ranges.mutable_state_words.len() as u64 * 4
+            || upload.atomic_state_words.len() as u64 * 4
+                != upload.ranges.atomic_state_words.len() as u64 * 4
         {
             return Err(GpuClosedLoopError::StaleOrForeignHandle);
         }
@@ -4100,6 +4441,8 @@ impl GpuFixedClassArenaBuffers {
                 != upload.ranges.immutable_weight_words.len() as u64 * 4
             || upload.mutable_state_words.len() as u64 * 4
                 != upload.ranges.mutable_state_words.len() as u64 * 4
+            || upload.atomic_state_words.len() as u64 * 4
+                != upload.ranges.atomic_state_words.len() as u64 * 4
         {
             return Err(GpuClosedLoopError::StaleOrForeignHandle);
         }
@@ -4151,6 +4494,12 @@ impl GpuFixedClassArenaBuffers {
             u64::from(upload.ranges.mutable_state_words.start) * 4,
             bytemuck::cast_slice(&upload.mutable_state_words),
         )?;
+        record_copy(
+            "closed-loop-runtime-curated-atomic-state-upload",
+            &self.atomic_state_words,
+            u64::from(upload.ranges.atomic_state_words.start) * 4,
+            bytemuck::cast_slice(&upload.atomic_state_words),
+        )?;
         Ok(())
     }
 
@@ -4164,6 +4513,8 @@ impl GpuFixedClassArenaBuffers {
             || upload.ranges.slot >= self.slot_capacity
             || upload.mutable_state_words.len() as u64 * 4
                 != upload.ranges.mutable_state_words.len() as u64 * 4
+            || upload.atomic_state_words.len() as u64 * 4
+                != upload.ranges.atomic_state_words.len() as u64 * 4
         {
             return Err(GpuClosedLoopError::StaleOrForeignHandle);
         }
@@ -4171,6 +4522,11 @@ impl GpuFixedClassArenaBuffers {
             &self.mutable_state_words,
             u64::from(upload.ranges.mutable_state_words.start) * 4,
             bytemuck::cast_slice(&upload.mutable_state_words),
+        );
+        queue.write_buffer(
+            &self.atomic_state_words,
+            u64::from(upload.ranges.atomic_state_words.start) * 4,
+            bytemuck::cast_slice(&upload.atomic_state_words),
         );
         Ok(())
     }
@@ -4189,6 +4545,8 @@ impl GpuFixedClassArenaBuffers {
                 != upload.ranges.immutable_weight_words.len() as u64 * 4
             || upload.mutable_state_words.len() as u64 * 4
                 != upload.ranges.mutable_state_words.len() as u64 * 4
+            || upload.atomic_state_words.len() as u64 * 4
+                != upload.ranges.atomic_state_words.len() as u64 * 4
         {
             return Err(GpuClosedLoopError::StaleOrForeignHandle);
         }
@@ -4343,6 +4701,9 @@ impl GpuFixedClassArenaBuffers {
         let mutable_word_count =
             usize::try_from(ranges.mutable_state_words.end - ranges.mutable_state_words.start)
                 .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
+        let atomic_word_count =
+            usize::try_from(ranges.atomic_state_words.end - ranges.atomic_state_words.start)
+                .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
         Ok((
             GpuFixedSlotUpload::from_existing_slot(
                 brain_slot,
@@ -4350,6 +4711,7 @@ impl GpuFixedClassArenaBuffers {
                 immutable_plan_words,
                 immutable_weight_words,
                 vec![0; mutable_word_count],
+                vec![0; atomic_word_count],
             ),
             byte_count,
             poll_wait_ns,
@@ -4420,11 +4782,17 @@ impl GpuFixedClassArenaBuffers {
         ranges: &GpuFixedSlotRanges,
     ) -> Result<(), GpuClosedLoopError> {
         self.validate_ranges(ranges)?;
-        let bytes = words_to_bytes(ranges.mutable_state_words.clone())?;
+        let mutable_bytes = words_to_bytes(ranges.mutable_state_words.clone())?;
         encoder.clear_buffer(
             &self.mutable_state_words,
-            bytes.start,
-            Some(bytes.end - bytes.start),
+            mutable_bytes.start,
+            Some(mutable_bytes.end - mutable_bytes.start),
+        );
+        let atomic_bytes = words_to_bytes(ranges.atomic_state_words.clone())?;
+        encoder.clear_buffer(
+            &self.atomic_state_words,
+            atomic_bytes.start,
+            Some(atomic_bytes.end - atomic_bytes.start),
         );
         Ok(())
     }
@@ -4442,6 +4810,7 @@ impl GpuFixedClassArenaBuffers {
                 GpuFixedArenaHeap::ImmutablePlanWords => &self.immutable_plan_words,
                 GpuFixedArenaHeap::ImmutableWeightWords => &self.immutable_weight_words,
                 GpuFixedArenaHeap::MutableStateWords => &self.mutable_state_words,
+                GpuFixedArenaHeap::AtomicStateWords => &self.atomic_state_words,
             };
             encoder.clear_buffer(buffer, range.start, Some(range.end - range.start));
         }
@@ -4456,13 +4825,14 @@ impl GpuFixedClassArenaBuffers {
             || u64::from(ranges.immutable_plan_words.end) * 4 > self.sizes.immutable_plan_words
             || u64::from(ranges.immutable_weight_words.end) * 4 > self.sizes.immutable_weight_words
             || u64::from(ranges.mutable_state_words.end) * 4 > self.sizes.mutable_state_words
+            || u64::from(ranges.atomic_state_words.end) * 4 > self.sizes.atomic_state_words
         {
             return Err(GpuClosedLoopError::StaleOrForeignHandle);
         }
         Ok(())
     }
 
-    pub(crate) fn neural_buffers(&self) -> [&wgpu::Buffer; 7] {
+    pub(crate) fn neural_buffers(&self) -> [&wgpu::Buffer; 8] {
         [
             &self.brain_slots,
             &self.phenotype_identities,
@@ -4471,6 +4841,7 @@ impl GpuFixedClassArenaBuffers {
             &self.dispatch_header_words,
             &self.frame_payload_words,
             &self.mutable_state_words,
+            &self.atomic_state_words,
         ]
     }
 
@@ -4687,6 +5058,7 @@ mod fixed_arena_tests {
                         previous.immutable_weight_words.end <= current.immutable_weight_words.start
                     );
                     assert!(previous.mutable_state_words.end <= current.mutable_state_words.start);
+                    assert!(previous.atomic_state_words.end <= current.atomic_state_words.start);
                 }
             }
         }
@@ -4772,7 +5144,7 @@ mod fixed_arena_tests {
             GpuFixedClassArenaPlan::new(BrainCapacityClass::n512(), 2, 512 * 1024 * 1024).unwrap();
         let slot = plan.slot_ranges(1).unwrap();
         let scrub = slot.full_scrub_ranges();
-        assert_eq!(scrub.len(), 5);
+        assert_eq!(scrub.len(), 6);
         assert_eq!(scrub[0].1, slot.brain_slot_bytes);
         assert_eq!(scrub[1].1, slot.identity_bytes);
         assert_eq!(
@@ -4786,6 +5158,10 @@ mod fixed_arena_tests {
         assert_eq!(
             scrub[4].1,
             words_to_bytes(slot.mutable_state_words.clone()).unwrap()
+        );
+        assert_eq!(
+            scrub[5].1,
+            words_to_bytes(slot.atomic_state_words.clone()).unwrap()
         );
         assert!(scrub.iter().all(|(_, range)| range.start < range.end));
     }
@@ -4880,6 +5256,21 @@ mod fixed_arena_tests {
                 .iter()
                 .all(|word| *word == 0));
         }
+        let synapse_count = upload.record().synapse_count as usize;
+        let genetic_local = (ranges.layout.genetic_weight_words.start
+            - ranges.immutable_weight_words.start) as usize;
+        let genetic_slice =
+            &upload.immutable_weight_words[genetic_local..genetic_local + synapse_count];
+        for range in [
+            &ranges.layout.effective_weight_words,
+            &ranges.layout.effective_weight_bank_1_words,
+        ] {
+            let local_start = (range.start - mutable_base) as usize;
+            assert_eq!(
+                &upload.mutable_state_words[local_start..local_start + synapse_count],
+                genetic_slice
+            );
+        }
         assert!(
             upload.counts().encoder_assignments
                 <= (capacity.execution().max_neurons() * 2) as usize
@@ -4967,6 +5358,8 @@ mod fixed_arena_tests {
                 upload.ranges.immutable_weight_words.start,
                 &upload.mutable_state_words,
                 mutable_base,
+                &upload.atomic_state_words,
+                upload.ranges.atomic_state_words.start,
             ),
             Err(GpuClosedLoopError::MalformedUpload)
         );

@@ -21,8 +21,8 @@ use bevy::{
     ecs::schedule::IntoScheduleConfigs,
     prelude::{
         default, App, ButtonInput, ClearColor, Color, Commands, DefaultPlugins, DetectChanges,
-        Entity, KeyCode, Mesh, Message, MessageWriter, MinimalPlugins, MouseButton, NonSendMut,
-        PluginGroup, Query, Res, ResMut, Resource, StandardMaterial, Time, Update,
+        Entity, KeyCode, Mesh, Message, MessageWriter, MinimalPlugins, MouseButton, PluginGroup,
+        Query, Res, ResMut, Resource, StandardMaterial, Time, Update,
     },
     render::{
         settings::{RenderCreation, WgpuSettings},
@@ -166,75 +166,13 @@ impl LiveBrainPresentationFrame {
             });
         }
     }
-}
 
-#[derive(Debug, Clone, PartialEq, Resource)]
-pub struct LiveBrainPresentationFrameResource {
-    pub previous: LiveBrainPresentationFrame,
-    pub current: LiveBrainPresentationFrame,
-}
-
-impl LiveBrainPresentationFrameResource {
-    pub fn from_authoritative_world(
-        world: &HeadlessWorld,
-    ) -> Result<Self, LiveBrainPresentationFrameError> {
-        let baseline = LiveBrainPresentationFrame::from_authoritative_world(Vec::new(), world)?;
-        Ok(Self {
-            previous: baseline.clone(),
-            current: baseline,
-        })
-    }
-
-    pub fn from_current_frame(current: LiveBrainPresentationFrame) -> Self {
-        Self {
-            previous: current.clone(),
-            current,
-        }
-    }
-
-    pub fn reseed_from_loaded_world(
-        &mut self,
-        world: &HeadlessWorld,
-    ) -> Result<(), LiveBrainPresentationFrameError> {
-        let baseline = LiveBrainPresentationFrame::from_authoritative_world(Vec::new(), world)?;
-        self.previous = baseline.clone();
-        self.current = baseline;
-        Ok(())
-    }
-
-    /// Refresh placed resources immediately, including while paused. Neural evidence stays intact.
-    pub(crate) fn refresh_world_objects(&mut self, world: &HeadlessWorld) {
-        self.current.world_objects_by_id = world
-            .object_snapshots()
-            .into_iter()
-            .map(|object| (object.id.raw(), object))
-            .collect();
-    }
-
-    pub fn try_publish_successful_tick(
-        &mut self,
-        tick_summaries: Vec<LiveBrainTickSummary>,
-        world: &HeadlessWorld,
-    ) -> Result<(), LiveBrainPresentationFrameError> {
-        self.try_publish_successful_tick_inner(tick_summaries, Vec::new(), world, false)
-    }
-
-    pub fn try_publish_successful_tick_with_cognitive(
-        &mut self,
-        tick_summaries: Vec<LiveBrainTickSummary>,
-        cognitive_snapshots: Vec<LiveCognitivePresentationSnapshot>,
-        world: &HeadlessWorld,
-    ) -> Result<(), LiveBrainPresentationFrameError> {
-        self.try_publish_successful_tick_inner(tick_summaries, cognitive_snapshots, world, true)
-    }
-
-    fn try_publish_successful_tick_inner(
-        &mut self,
+    pub fn try_build_from_tick(
         tick_summaries: Vec<LiveBrainTickSummary>,
         cognitive_snapshots: Vec<LiveCognitivePresentationSnapshot>,
         world: &HeadlessWorld,
         require_cognitive_snapshots: bool,
-    ) -> Result<(), LiveBrainPresentationFrameError> {
+    ) -> Result<Option<std::sync::Arc<Self>>, LiveBrainPresentationFrameError> {
         let authoritative_world_tick = world.tick();
         if (tick_summaries.is_empty()
             && world
@@ -246,11 +184,7 @@ impl LiveBrainPresentationFrameResource {
                     || summary.world_tick_after != authoritative_world_tick
             })
         {
-            // Empty habitats can publish ecology ticks and the final retirement.
-            // Render-only frames with live creatures retain the last frame whose summaries were
-            // produced by the same authoritative world tick. Never rotate a
-            // moved snapshot with an empty or stale summary batch.
-            return Ok(());
+            return Ok(None);
         }
         let snapshot = world.presentation_snapshot();
         let expected_organism_ids = snapshot
@@ -279,12 +213,9 @@ impl LiveBrainPresentationFrameResource {
         if tick_summaries.len() != expected_organism_ids.len()
             || returned_organism_ids != expected_organism_ids
         {
-            // A partial production tick advances the world but does not prove
-            // that absent organisms ticked. Keep the last complete causal
-            // frame until the next all-resident batch arrives.
-            return Ok(());
+            return Ok(None);
         }
-        let mut next = LiveBrainPresentationFrame::try_new(
+        let mut next = Self::try_new(
             tick_summaries,
             authoritative_world_tick,
             world.object_snapshots(),
@@ -320,7 +251,96 @@ impl LiveBrainPresentationFrameResource {
         }
         next.install_organism_snapshot(snapshot);
         next.cognitive_by_organism_id = cognitive_by_organism_id;
+        Ok(Some(std::sync::Arc::new(next)))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Resource)]
+pub struct LiveBrainPresentationFrameResource {
+    pub previous: std::sync::Arc<LiveBrainPresentationFrame>,
+    pub current: std::sync::Arc<LiveBrainPresentationFrame>,
+}
+
+impl LiveBrainPresentationFrameResource {
+    pub fn from_authoritative_world(
+        world: &HeadlessWorld,
+    ) -> Result<Self, LiveBrainPresentationFrameError> {
+        let baseline = std::sync::Arc::new(LiveBrainPresentationFrame::from_authoritative_world(
+            Vec::new(),
+            world,
+        )?);
+        Ok(Self {
+            previous: std::sync::Arc::clone(&baseline),
+            current: baseline,
+        })
+    }
+
+    pub fn from_current_frame(current: LiveBrainPresentationFrame) -> Self {
+        let current = std::sync::Arc::new(current);
+        Self {
+            previous: std::sync::Arc::clone(&current),
+            current,
+        }
+    }
+
+    pub fn reseed_from_loaded_world(
+        &mut self,
+        world: &HeadlessWorld,
+    ) -> Result<(), LiveBrainPresentationFrameError> {
+        let baseline = std::sync::Arc::new(LiveBrainPresentationFrame::from_authoritative_world(
+            Vec::new(),
+            world,
+        )?);
+        self.previous = std::sync::Arc::clone(&baseline);
+        self.current = baseline;
+        Ok(())
+    }
+
+    /// Refresh placed resources immediately, including while paused. Neural evidence stays intact.
+    pub(crate) fn refresh_world_objects(&mut self, world: &HeadlessWorld) {
+        std::sync::Arc::make_mut(&mut self.current).world_objects_by_id = world
+            .object_snapshots()
+            .into_iter()
+            .map(|object| (object.id.raw(), object))
+            .collect();
+    }
+
+    pub fn publish_arc_frame(&mut self, next: std::sync::Arc<LiveBrainPresentationFrame>) {
         self.previous = std::mem::replace(&mut self.current, next);
+    }
+
+    pub fn try_publish_successful_tick(
+        &mut self,
+        tick_summaries: Vec<LiveBrainTickSummary>,
+        world: &HeadlessWorld,
+    ) -> Result<(), LiveBrainPresentationFrameError> {
+        self.try_publish_successful_tick_inner(tick_summaries, Vec::new(), world, false)
+    }
+
+    pub fn try_publish_successful_tick_with_cognitive(
+        &mut self,
+        tick_summaries: Vec<LiveBrainTickSummary>,
+        cognitive_snapshots: Vec<LiveCognitivePresentationSnapshot>,
+        world: &HeadlessWorld,
+    ) -> Result<(), LiveBrainPresentationFrameError> {
+        self.try_publish_successful_tick_inner(tick_summaries, cognitive_snapshots, world, true)
+    }
+
+    fn try_publish_successful_tick_inner(
+        &mut self,
+        tick_summaries: Vec<LiveBrainTickSummary>,
+        cognitive_snapshots: Vec<LiveCognitivePresentationSnapshot>,
+        world: &HeadlessWorld,
+        require_cognitive_snapshots: bool,
+    ) -> Result<(), LiveBrainPresentationFrameError> {
+        if let Some(next) = LiveBrainPresentationFrame::try_build_from_tick(
+            tick_summaries,
+            cognitive_snapshots,
+            world,
+            require_cognitive_snapshots,
+        )? {
+            self.publish_arc_frame(next);
+        }
         Ok(())
     }
 
@@ -335,7 +355,7 @@ impl LiveBrainPresentationFrameResource {
             authoritative_world_tick,
             world_objects,
         )?;
-        self.previous = std::mem::replace(&mut self.current, next);
+        self.publish_arc_frame(std::sync::Arc::new(next));
         Ok(())
     }
 }
@@ -346,8 +366,465 @@ pub(crate) struct ProductionGpuBrainAuthorityResource {
 }
 
 #[cfg(feature = "gpu-runtime")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SimulationExecutionMode {
+    AsyncWorker,
+    SynchronousPerFrame,
+}
+
+#[cfg(feature = "gpu-runtime")]
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct SimWorkerBatchRequest {
+    pub ticks_to_run: u32,
+    pub max_mode: bool,
+    pub consume_step: bool,
+    pub measuring_performance: bool,
+}
+
+#[cfg(feature = "gpu-runtime")]
+pub(crate) enum SimWorkerStopReason {
+    Completed,
+    CheckpointPublicationPending { unspent_ticks: u32 },
+    CheckpointFailed,
+    RuntimeError(String),
+    PresentationError(LiveBrainPresentationFrameError),
+}
+
+#[cfg(feature = "gpu-runtime")]
+pub(crate) struct SimWorkerBatchResult {
+    pub request: SimWorkerBatchRequest,
+    pub scheduler_attempts: u64,
+    pub executed_ticks: u32,
+    pub gpu_samples: Vec<alife_gpu_backend::GpuNeuralTimingSample>,
+    pub retired_ids: Vec<WorldEntityId>,
+    pub presentation_frame: Option<std::sync::Arc<LiveBrainPresentationFrame>>,
+    pub authority_telemetry: crate::GpuBrainAuthorityTelemetry,
+    #[cfg_attr(not(all(test, feature = "gpu-tests")), allow(dead_code))]
+    pub coalesced_intermediate_frames: u32,
+    pub stop_reason: SimWorkerStopReason,
+}
+
+#[cfg(feature = "gpu-runtime")]
+pub(crate) fn execute_sim_worker_batch(
+    runtime: &mut crate::GpuLiveBrainRuntime,
+    request: SimWorkerBatchRequest,
+) -> SimWorkerBatchResult {
+    let frame_started = Instant::now();
+    let mut scheduler_attempts = 0_u64;
+    let mut executed_ticks = 0_u32;
+    let mut gpu_samples = Vec::new();
+    let mut retired_ids = Vec::new();
+    let mut presentation_frame = None;
+    let mut coalesced_intermediate_frames = 0_u32;
+    let mut deferred_summaries: Option<Vec<LiveBrainTickSummary>> = None;
+
+    let build_frame = |summaries: Vec<LiveBrainTickSummary>,
+                       runtime: &crate::GpuLiveBrainRuntime|
+     -> Result<
+        Option<std::sync::Arc<LiveBrainPresentationFrame>>,
+        LiveBrainPresentationFrameError,
+    > {
+        let cognitive_snapshots = runtime.live_cognitive_presentation_snapshots(&summaries);
+        LiveBrainPresentationFrame::try_build_from_tick(
+            summaries,
+            cognitive_snapshots,
+            runtime.world(),
+            true,
+        )
+    };
+
+    for attempt_index in 0..request.ticks_to_run {
+        scheduler_attempts = scheduler_attempts.saturating_add(1);
+        let tick_summaries = match runtime.tick_outcome() {
+            Ok(crate::GpuLiveTickOutcome::Progressed(tick_summaries)) => tick_summaries,
+            Ok(crate::GpuLiveTickOutcome::NoProgress(
+                crate::GpuLiveNoProgressReason::CheckpointPublicationPending,
+            )) => {
+                if let Some(summaries) = deferred_summaries.take() {
+                    match build_frame(summaries, runtime) {
+                        Ok(Some(frame)) => presentation_frame = Some(frame),
+                        Ok(None) => {}
+                        Err(error) => {
+                            return SimWorkerBatchResult {
+                                request,
+                                scheduler_attempts,
+                                executed_ticks,
+                                gpu_samples,
+                                retired_ids,
+                                presentation_frame,
+                                authority_telemetry: runtime.authority_telemetry(),
+                                coalesced_intermediate_frames,
+                                stop_reason: SimWorkerStopReason::PresentationError(error),
+                            };
+                        }
+                    }
+                }
+                let unspent_ticks = request.ticks_to_run.saturating_sub(attempt_index);
+                return SimWorkerBatchResult {
+                    request,
+                    scheduler_attempts,
+                    executed_ticks,
+                    gpu_samples,
+                    retired_ids,
+                    presentation_frame,
+                    authority_telemetry: runtime.authority_telemetry(),
+                    coalesced_intermediate_frames,
+                    stop_reason: SimWorkerStopReason::CheckpointPublicationPending {
+                        unspent_ticks,
+                    },
+                };
+            }
+            Ok(crate::GpuLiveTickOutcome::NoProgress(
+                crate::GpuLiveNoProgressReason::CheckpointFailed,
+            )) => {
+                return SimWorkerBatchResult {
+                    request,
+                    scheduler_attempts,
+                    executed_ticks,
+                    gpu_samples,
+                    retired_ids,
+                    presentation_frame,
+                    authority_telemetry: runtime.authority_telemetry(),
+                    coalesced_intermediate_frames,
+                    stop_reason: SimWorkerStopReason::CheckpointFailed,
+                };
+            }
+            Err(error) => {
+                return SimWorkerBatchResult {
+                    request,
+                    scheduler_attempts,
+                    executed_ticks,
+                    gpu_samples,
+                    retired_ids,
+                    presentation_frame,
+                    authority_telemetry: runtime.authority_telemetry(),
+                    coalesced_intermediate_frames,
+                    stop_reason: SimWorkerStopReason::RuntimeError(error.to_string()),
+                };
+            }
+        };
+
+        executed_ticks = executed_ticks.saturating_add(1);
+        if request.measuring_performance {
+            if let Some(sample) = runtime.take_completed_neural_timing_sample() {
+                gpu_samples.push(sample);
+            }
+        }
+        retired_ids.extend(runtime.take_presentation_retirements());
+
+        let yield_after_this_tick = attempt_index + 1 >= request.ticks_to_run
+            || (request.max_mode && frame_started.elapsed() >= Duration::from_millis(8));
+        if request.max_mode && !yield_after_this_tick {
+            if deferred_summaries.replace(tick_summaries).is_some() {
+                coalesced_intermediate_frames = coalesced_intermediate_frames.saturating_add(1);
+            }
+        } else {
+            if deferred_summaries.take().is_some() {
+                coalesced_intermediate_frames = coalesced_intermediate_frames.saturating_add(1);
+            }
+            match build_frame(tick_summaries, runtime) {
+                Ok(Some(frame)) => presentation_frame = Some(frame),
+                Ok(None) => {}
+                Err(error) => {
+                    return SimWorkerBatchResult {
+                        request,
+                        scheduler_attempts,
+                        executed_ticks,
+                        gpu_samples,
+                        retired_ids,
+                        presentation_frame,
+                        authority_telemetry: runtime.authority_telemetry(),
+                        coalesced_intermediate_frames,
+                        stop_reason: SimWorkerStopReason::PresentationError(error),
+                    };
+                }
+            }
+            if yield_after_this_tick {
+                break;
+            }
+        }
+    }
+
+    SimWorkerBatchResult {
+        request,
+        scheduler_attempts,
+        executed_ticks,
+        gpu_samples,
+        retired_ids,
+        presentation_frame,
+        authority_telemetry: runtime.authority_telemetry(),
+        coalesced_intermediate_frames,
+        stop_reason: SimWorkerStopReason::Completed,
+    }
+}
+
+#[cfg(feature = "gpu-runtime")]
+struct ProductionSimWorkerState {
+    runtime: Option<crate::GpuLiveBrainRuntime>,
+    pending_request: Option<SimWorkerBatchRequest>,
+    completed_batches: std::collections::VecDeque<SimWorkerBatchResult>,
+    worker_busy: bool,
+    shutdown: bool,
+}
+
+#[cfg(feature = "gpu-runtime")]
+struct ProductionSimWorkerShared {
+    state: std::sync::Mutex<ProductionSimWorkerState>,
+    condvar: std::sync::Condvar,
+}
+
+#[cfg(feature = "gpu-runtime")]
+pub(crate) struct ProductionRuntimeGuard<'a> {
+    guard: std::sync::MutexGuard<'a, ProductionSimWorkerState>,
+}
+
+#[cfg(feature = "gpu-runtime")]
+impl std::ops::Deref for ProductionRuntimeGuard<'_> {
+    type Target = crate::GpuLiveBrainRuntime;
+
+    fn deref(&self) -> &Self::Target {
+        self.guard
+            .runtime
+            .as_ref()
+            .expect("GpuLiveBrainRuntime must be present when worker is not busy")
+    }
+}
+
+#[cfg(feature = "gpu-runtime")]
+impl std::ops::DerefMut for ProductionRuntimeGuard<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.guard
+            .runtime
+            .as_mut()
+            .expect("GpuLiveBrainRuntime must be present when worker is not busy")
+    }
+}
+
+#[cfg(feature = "gpu-runtime")]
+fn run_production_sim_worker_loop(shared: std::sync::Arc<ProductionSimWorkerShared>) {
+    let mut guard = shared
+        .state
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    loop {
+        while !guard.shutdown && guard.pending_request.is_none() {
+            guard = shared
+                .condvar
+                .wait(guard)
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+        }
+        if guard.shutdown {
+            guard.worker_busy = false;
+            shared.condvar.notify_all();
+            break;
+        }
+        let Some(request) = guard.pending_request.take() else {
+            guard.worker_busy = false;
+            shared.condvar.notify_all();
+            continue;
+        };
+        let Some(mut runtime) = guard.runtime.take() else {
+            guard.worker_busy = false;
+            shared.condvar.notify_all();
+            continue;
+        };
+        guard.worker_busy = true;
+        drop(guard);
+
+        let batch_result = execute_sim_worker_batch(&mut runtime, request);
+
+        guard = shared
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        guard.runtime = Some(runtime);
+        guard.worker_busy = false;
+        guard.completed_batches.push_back(batch_result);
+        shared.condvar.notify_all();
+    }
+}
+
+#[cfg(feature = "gpu-runtime")]
+#[derive(Resource)]
 pub(crate) struct ProductionGpuBrainRuntimeResource {
-    pub(crate) runtime: crate::GpuLiveBrainRuntime,
+    mode: SimulationExecutionMode,
+    shared: std::sync::Arc<ProductionSimWorkerShared>,
+    worker_thread: Option<std::thread::JoinHandle<()>>,
+}
+
+#[cfg(feature = "gpu-runtime")]
+impl ProductionGpuBrainRuntimeResource {
+    pub(crate) fn new(runtime: crate::GpuLiveBrainRuntime, mode: SimulationExecutionMode) -> Self {
+        let shared = std::sync::Arc::new(ProductionSimWorkerShared {
+            state: std::sync::Mutex::new(ProductionSimWorkerState {
+                runtime: Some(runtime),
+                pending_request: None,
+                completed_batches: std::collections::VecDeque::new(),
+                worker_busy: false,
+                shutdown: false,
+            }),
+            condvar: std::sync::Condvar::new(),
+        });
+        let worker_thread = if mode == SimulationExecutionMode::AsyncWorker {
+            let worker_shared = std::sync::Arc::clone(&shared);
+            let handle = std::thread::Builder::new()
+                .name("alife-sim-worker".to_string())
+                .spawn(move || run_production_sim_worker_loop(worker_shared))
+                .expect("failed to spawn alife-sim-worker thread");
+            tracing::debug!("spawned alife-sim-worker background thread");
+            Some(handle)
+        } else {
+            None
+        };
+        Self {
+            mode,
+            shared,
+            worker_thread,
+        }
+    }
+
+    #[cfg_attr(not(all(test, feature = "gpu-tests")), allow(dead_code))]
+    pub(crate) fn execution_mode(&self) -> SimulationExecutionMode {
+        self.mode
+    }
+
+    pub(crate) fn lock(&self) -> ProductionRuntimeGuard<'_> {
+        let mut guard = self
+            .shared
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        while guard.worker_busy {
+            guard = self
+                .shared
+                .condvar
+                .wait(guard)
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+        }
+        ProductionRuntimeGuard { guard }
+    }
+
+    pub(crate) fn lock_mut(&mut self) -> ProductionRuntimeGuard<'_> {
+        let mut guard = self
+            .shared
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        while guard.worker_busy {
+            guard = self
+                .shared
+                .condvar
+                .wait(guard)
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+        }
+        ProductionRuntimeGuard { guard }
+    }
+
+    pub(crate) fn is_worker_busy(&self) -> bool {
+        let guard = self
+            .shared
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        guard.worker_busy || guard.pending_request.is_some()
+    }
+
+    pub(crate) fn take_completed_batches(&self) -> Vec<SimWorkerBatchResult> {
+        let mut guard = self
+            .shared
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        guard.completed_batches.drain(..).collect()
+    }
+
+    pub(crate) fn clear_completed_batches(&mut self) {
+        let mut guard = self
+            .shared
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        while guard.worker_busy {
+            guard = self
+                .shared
+                .condvar
+                .wait(guard)
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+        }
+        guard.completed_batches.clear();
+    }
+
+    pub(crate) fn dispatch_batch(&mut self, request: SimWorkerBatchRequest) {
+        match self.mode {
+            SimulationExecutionMode::SynchronousPerFrame => {
+                let mut guard = self
+                    .shared
+                    .state
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                let mut runtime = guard
+                    .runtime
+                    .take()
+                    .expect("GpuLiveBrainRuntime must be present in synchronous mode");
+                drop(guard);
+                let result = execute_sim_worker_batch(&mut runtime, request);
+                let mut guard = self
+                    .shared
+                    .state
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                guard.runtime = Some(runtime);
+                guard.completed_batches.push_back(result);
+            }
+            SimulationExecutionMode::AsyncWorker => {
+                let mut guard = self
+                    .shared
+                    .state
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                guard.pending_request = Some(request);
+                guard.worker_busy = true;
+                self.shared.condvar.notify_one();
+            }
+        }
+    }
+
+    pub(crate) fn shutdown_worker(&mut self) {
+        {
+            let mut guard = self
+                .shared
+                .state
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            guard.pending_request = None;
+            guard.shutdown = true;
+        }
+        self.shared.condvar.notify_all();
+        if let Some(handle) = self.worker_thread.take() {
+            tracing::debug!("shutting down alife-sim-worker background thread");
+            let _ = handle.join();
+        }
+    }
+
+    pub(crate) fn into_runtime(mut self) -> crate::GpuLiveBrainRuntime {
+        self.shutdown_worker();
+        let mut guard = self
+            .shared
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        guard
+            .runtime
+            .take()
+            .expect("GpuLiveBrainRuntime must be present after worker shutdown")
+    }
+}
+
+#[cfg(feature = "gpu-runtime")]
+impl Drop for ProductionGpuBrainRuntimeResource {
+    fn drop(&mut self) {
+        self.shutdown_worker();
+    }
 }
 
 #[cfg(feature = "gpu-runtime")]
@@ -548,8 +1025,10 @@ fn mark_production_gpu_authority_unavailable(
     authority: &mut ProductionGpuBrainAuthorityResource,
     reason: impl Into<String>,
 ) {
+    let reason = reason.into();
+    tracing::warn!(%reason, "production GPU brain authority unavailable");
     authority.telemetry.authoritative = false;
-    authority.telemetry.unavailable_reason = Some(reason.into());
+    authority.telemetry.unavailable_reason = Some(reason);
 }
 
 #[cfg(feature = "gpu-runtime")]
@@ -655,11 +1134,124 @@ fn apply_presentation_retirements(
 #[cfg(feature = "gpu-runtime")]
 #[allow(
     clippy::too_many_arguments,
+    reason = "Applies completed worker batch state across independent Bevy resources."
+)]
+fn drain_completed_sim_worker_batches(
+    runtime: &ProductionGpuBrainRuntimeResource,
+    authority: &mut ResMut<ProductionGpuBrainAuthorityResource>,
+    schedule: &mut ProductionGpuBrainTickScheduleResource,
+    presentation: &mut ResMut<LiveBrainPresentationFrameResource>,
+    performance: &mut Option<
+        ResMut<crate::production_voxel_renderer::Phase31PerformanceMetricsResource>,
+    >,
+    commands: &mut Commands,
+    map: &mut ResMut<BevyEntityMap>,
+    delta_secs: f32,
+) -> bool {
+    for result in runtime.take_completed_batches() {
+        schedule.scheduler_attempts = schedule
+            .scheduler_attempts
+            .saturating_add(result.scheduler_attempts);
+        if performance
+            .as_deref()
+            .is_some_and(|metrics| metrics.measuring())
+        {
+            if let Some(metrics) = performance.as_deref_mut() {
+                for sample in result.gpu_samples {
+                    metrics.record_gpu_sample(sample);
+                }
+            }
+        }
+        if result.executed_ticks > 0 {
+            if let Err(error) = schedule
+                .scheduler
+                .record_executed_ticks(result.executed_ticks)
+            {
+                schedule.failed = true;
+                mark_production_gpu_authority_unavailable(
+                    authority.as_mut(),
+                    format!("production scheduler accounting failed: {error}"),
+                );
+                return false;
+            }
+            schedule.animation_speed += (result.executed_ticks as f32)
+                / (crate::CA13_FIXED_SIM_TICK_HZ as f32 * delta_secs.max(f32::EPSILON));
+        }
+        if !result.retired_ids.is_empty() {
+            apply_presentation_retirements(commands, map.as_mut(), &result.retired_ids);
+        }
+        if let Some(frame) = result.presentation_frame {
+            presentation.as_mut().publish_arc_frame(frame);
+        }
+        if result.executed_ticks > 0
+            && !matches!(
+                result.stop_reason,
+                SimWorkerStopReason::PresentationError(_)
+            )
+        {
+            authority.as_mut().telemetry = result.authority_telemetry;
+        }
+        match result.stop_reason {
+            SimWorkerStopReason::Completed => {}
+            SimWorkerStopReason::CheckpointPublicationPending { unspent_ticks } => {
+                schedule.checkpoint_publication_waits =
+                    schedule.checkpoint_publication_waits.saturating_add(1);
+                if result.request.consume_step {
+                    schedule.step_pending = true;
+                } else if !result.request.max_mode {
+                    if let Err(error) = schedule
+                        .scheduler
+                        .preserve_unspent_planned_ticks(unspent_ticks)
+                    {
+                        schedule.failed = true;
+                        mark_production_gpu_authority_unavailable(
+                            authority.as_mut(),
+                            format!("production scheduler debt preservation failed: {error}"),
+                        );
+                        return false;
+                    }
+                    schedule.deferred_catch_up_ticks = schedule
+                        .deferred_catch_up_ticks
+                        .saturating_add(u64::from(unspent_ticks));
+                }
+                return false;
+            }
+            SimWorkerStopReason::CheckpointFailed => {
+                schedule.checkpoint_failed_waits =
+                    schedule.checkpoint_failed_waits.saturating_add(1);
+                schedule.failed = true;
+                mark_production_gpu_authority_unavailable(
+                    authority.as_mut(),
+                    "exact checkpoint transaction entered the failed state".to_string(),
+                );
+                return false;
+            }
+            SimWorkerStopReason::RuntimeError(message) => {
+                schedule.failed = true;
+                mark_production_gpu_authority_unavailable(authority.as_mut(), message);
+                return false;
+            }
+            SimWorkerStopReason::PresentationError(error) => {
+                schedule.failed = true;
+                mark_production_gpu_authority_unavailable(
+                    authority.as_mut(),
+                    format!("live presentation frame publication failed: {error:?}"),
+                );
+                return false;
+            }
+        }
+    }
+    !schedule.failed
+}
+
+#[cfg(feature = "gpu-runtime")]
+#[allow(
+    clippy::too_many_arguments,
     reason = "Bevy injects independent ECS system parameters."
 )]
 fn tick_production_gpu_brain(
     time: Res<Time>,
-    mut runtime: NonSendMut<ProductionGpuBrainRuntimeResource>,
+    mut runtime: ResMut<ProductionGpuBrainRuntimeResource>,
     mut authority: ResMut<ProductionGpuBrainAuthorityResource>,
     mut schedule: ResMut<ProductionGpuBrainTickScheduleResource>,
     mut presentation: ResMut<LiveBrainPresentationFrameResource>,
@@ -669,13 +1261,43 @@ fn tick_production_gpu_brain(
     mut commands: Commands,
     mut map: ResMut<BevyEntityMap>,
 ) {
+    if schedule.animation_speed != 0.0 {
+        schedule.animation_speed = 0.0;
+    }
+    let delta_secs = time.delta_secs();
+    if !drain_completed_sim_worker_batches(
+        &runtime,
+        &mut authority,
+        &mut schedule,
+        &mut presentation,
+        &mut performance,
+        &mut commands,
+        &mut map,
+        delta_secs,
+    ) {
+        return;
+    }
+
     if performance
         .as_deref()
         .is_some_and(|metrics| metrics.draining())
     {
-        if let Err(error) = runtime.runtime.poll_persistence_for_shutdown() {
+        drop(runtime.lock_mut());
+        if !drain_completed_sim_worker_batches(
+            &runtime,
+            &mut authority,
+            &mut schedule,
+            &mut presentation,
+            &mut performance,
+            &mut commands,
+            &mut map,
+            delta_secs,
+        ) {
+            return;
+        }
+        if let Err(error) = runtime.lock_mut().poll_persistence_for_shutdown() {
             schedule.failed = true;
-            mark_production_gpu_authority_unavailable(&mut authority, error.to_string());
+            mark_production_gpu_authority_unavailable(authority.as_mut(), error.to_string());
         }
         return;
     }
@@ -687,22 +1309,34 @@ fn tick_production_gpu_brain(
     // Pausing stops simulation time, not the asynchronous publication of a
     // checkpoint already requested by Save (or an in-flight sleep journal).
     if schedule.is_paused() {
-        if let Err(error) = runtime.runtime.poll_persistence_for_shutdown() {
+        drop(runtime.lock_mut());
+        if !drain_completed_sim_worker_batches(
+            &runtime,
+            &mut authority,
+            &mut schedule,
+            &mut presentation,
+            &mut performance,
+            &mut commands,
+            &mut map,
+            delta_secs,
+        ) {
+            return;
+        }
+        if let Err(error) = runtime.lock_mut().poll_persistence_for_shutdown() {
             schedule.failed = true;
-            mark_production_gpu_authority_unavailable(&mut authority, error.to_string());
+            mark_production_gpu_authority_unavailable(authority.as_mut(), error.to_string());
             return;
         }
     }
 
-    schedule.animation_speed = 0.0;
     let playback = schedule.playback;
     let max_mode = schedule.run_mode != crate::ProductionRunMode::OneX;
-    let scheduled_ticks = match schedule.observe_frame(time.delta_secs()) {
+    let scheduled_ticks = match schedule.observe_frame(delta_secs) {
         Ok(plan) => plan,
         Err(error) => {
             schedule.failed = true;
             mark_production_gpu_authority_unavailable(
-                &mut authority,
+                authority.as_mut(),
                 format!("production scheduler failed: {error}"),
             );
             return;
@@ -728,7 +1362,7 @@ fn tick_production_gpu_brain(
             Err(error) => {
                 schedule.failed = true;
                 mark_production_gpu_authority_unavailable(
-                    &mut authority,
+                    authority.as_mut(),
                     format!("production scheduler pacing failed: {error}"),
                 );
                 return;
@@ -739,102 +1373,51 @@ fn tick_production_gpu_brain(
         .deferred_catch_up_ticks
         .saturating_add(u64::from(paced_deferred_ticks));
 
-    let frame_started = Instant::now();
-    for attempt_index in 0..ticks_to_run {
-        schedule.scheduler_attempts = schedule.scheduler_attempts.saturating_add(1);
-        let tick_summaries = match runtime.runtime.tick_outcome() {
-            Ok(crate::GpuLiveTickOutcome::Progressed(tick_summaries)) => tick_summaries,
-            Ok(crate::GpuLiveTickOutcome::NoProgress(
-                crate::GpuLiveNoProgressReason::CheckpointPublicationPending,
-            )) => {
-                schedule.checkpoint_publication_waits =
-                    schedule.checkpoint_publication_waits.saturating_add(1);
-                if consume_step {
-                    schedule.step_pending = true;
-                } else if !max_mode {
-                    let unspent = ticks_to_run.saturating_sub(attempt_index);
-                    if let Err(error) = schedule.scheduler.preserve_unspent_planned_ticks(unspent) {
-                        schedule.failed = true;
-                        mark_production_gpu_authority_unavailable(
-                            &mut authority,
-                            format!("production scheduler debt preservation failed: {error}"),
-                        );
-                        return;
-                    }
-                    schedule.deferred_catch_up_ticks = schedule
-                        .deferred_catch_up_ticks
-                        .saturating_add(u64::from(unspent));
-                }
-                return;
-            }
-            Ok(crate::GpuLiveTickOutcome::NoProgress(
-                crate::GpuLiveNoProgressReason::CheckpointFailed,
-            )) => {
-                schedule.checkpoint_failed_waits =
-                    schedule.checkpoint_failed_waits.saturating_add(1);
-                schedule.failed = true;
-                mark_production_gpu_authority_unavailable(
-                    &mut authority,
-                    "exact checkpoint transaction entered the failed state".to_string(),
-                );
-                return;
-            }
-            Err(error) => {
-                schedule.failed = true;
-                mark_production_gpu_authority_unavailable(&mut authority, error.to_string());
-                return;
-            }
-        };
-        if performance
-            .as_deref()
-            .is_some_and(|metrics| metrics.measuring())
-        {
-            if let Some(sample) = runtime.runtime.take_completed_neural_timing_sample() {
-                if let Some(metrics) = performance.as_deref_mut() {
-                    metrics.record_gpu_sample(sample);
-                }
-            }
-        }
-        let cognitive_snapshots = runtime
-            .runtime
-            .live_cognitive_presentation_snapshots(&tick_summaries);
-        if let Err(error) = schedule.scheduler.record_executed_ticks(1) {
-            schedule.failed = true;
-            mark_production_gpu_authority_unavailable(
-                &mut authority,
-                format!("production scheduler accounting failed: {error}"),
-            );
-            return;
-        }
-        schedule.animation_speed +=
-            1.0 / (crate::CA13_FIXED_SIM_TICK_HZ as f32 * time.delta_secs().max(f32::EPSILON));
-        let retired_ids = runtime.runtime.take_presentation_retirements();
-        apply_presentation_retirements(&mut commands, &mut map, &retired_ids);
-        let world = runtime.runtime.world();
-
-        match presentation.try_publish_successful_tick_with_cognitive(
-            tick_summaries,
-            cognitive_snapshots,
-            world,
-        ) {
-            Ok(()) => {
-                authority.telemetry = runtime.runtime.authority_telemetry();
-            }
-            Err(error) => {
-                schedule.failed = true;
-                mark_production_gpu_authority_unavailable(
-                    &mut authority,
-                    format!("live presentation frame publication failed: {error:?}"),
-                );
-                return;
-            }
-        }
-        // Yield to controls/rendering between bounded batches. No multiplier or
-        // wall-time target limits Max speed; slow hardware still yields every tick.
-        if max_mode && frame_started.elapsed() >= Duration::from_millis(8) {
-            break;
-        }
+    if ticks_to_run == 0 {
+        return;
     }
+
+    if runtime.is_worker_busy() {
+        if consume_step {
+            schedule.step_pending = true;
+        } else if !max_mode {
+            if let Err(error) = schedule
+                .scheduler
+                .preserve_unspent_planned_ticks(ticks_to_run)
+            {
+                schedule.failed = true;
+                mark_production_gpu_authority_unavailable(
+                    authority.as_mut(),
+                    format!("production scheduler debt preservation failed: {error}"),
+                );
+                return;
+            }
+            schedule.deferred_catch_up_ticks = schedule
+                .deferred_catch_up_ticks
+                .saturating_add(u64::from(ticks_to_run));
+        }
+        return;
+    }
+
+    let measuring_performance = performance
+        .as_deref()
+        .is_some_and(|metrics| metrics.measuring());
+    runtime.dispatch_batch(SimWorkerBatchRequest {
+        ticks_to_run,
+        max_mode,
+        consume_step,
+        measuring_performance,
+    });
+    let _ = drain_completed_sim_worker_batches(
+        &runtime,
+        &mut authority,
+        &mut schedule,
+        &mut presentation,
+        &mut performance,
+        &mut commands,
+        &mut map,
+        delta_secs,
+    );
 }
 
 pub fn build_production_voxel_frontend_app_shell(
@@ -1037,7 +1620,14 @@ fn build_production_voxel_frontend_app_shell_inner(
                 initial_runtime_settings.0,
                 initial_runtime_settings.1,
             ))
-            .insert_non_send_resource(ProductionGpuBrainRuntimeResource { runtime })
+            .insert_resource(ProductionGpuBrainRuntimeResource::new(
+                runtime,
+                if launch.dry_run {
+                    SimulationExecutionMode::SynchronousPerFrame
+                } else {
+                    SimulationExecutionMode::AsyncWorker
+                },
+            ))
             .add_systems(
                 Update,
                 tick_production_gpu_brain.in_set(
@@ -1220,7 +1810,7 @@ fn reconcile_production_presentation(
 fn production_voxel_render_plugin(record_performance: bool) -> RenderPlugin {
     let mut wgpu_settings = WgpuSettings::default();
     if record_performance {
-        wgpu_settings.instance_flags = wgpu::InstanceFlags::empty();
+        wgpu_settings.instance_flags = bevy::render::settings::InstanceFlags::empty();
     }
     RenderPlugin {
         render_creation: RenderCreation::Automatic(wgpu_settings),
@@ -1288,9 +1878,9 @@ fn handoff_production_to_headless(world: &mut bevy::prelude::World) {
             .set_run_mode(crate::ProductionRunMode::OneX);
         return;
     }
-    if let Some(runtime) = world.remove_non_send_resource::<ProductionGpuBrainRuntimeResource>() {
+    if let Some(runtime) = world.remove_resource::<ProductionGpuBrainRuntimeResource>() {
         let handoff = world.non_send_resource::<ProductionHeadlessHandoff>();
-        *handoff.0.borrow_mut() = Some((runtime.runtime, summary));
+        *handoff.0.borrow_mut() = Some((runtime.into_runtime(), summary));
         world.write_message(AppExit::Success);
     }
 }
@@ -1421,6 +2011,157 @@ mod production_schedule_regression_tests {
         assert_eq!(schedule.observe_frame(0.0).unwrap(), 0);
         schedule.toggle_playback();
         assert_eq!(schedule.observe_frame(0.0).unwrap(), 4);
+    }
+
+    #[cfg(feature = "gpu-tests")]
+    #[test]
+    fn sim_worker_supports_sync_and_async_modes_and_coalesces_max_speed_frames() {
+        use super::{
+            ProductionGpuBrainRuntimeResource, SimWorkerBatchRequest, SimulationExecutionMode,
+        };
+        use alife_core::{BrainScaleTier, Tick};
+        use alife_world::HeadlessScenarioBuilder;
+
+        let backend = alife_gpu_backend::GpuClosedLoopBackend::new_required(
+            alife_gpu_backend::GpuRuntimeProfile::production_v1(),
+        )
+        .expect("GPU backend required for sim worker test");
+        let world = HeadlessScenarioBuilder::new(901).build().unwrap();
+        let runtime =
+            crate::GpuLiveBrainRuntime::new(backend, world, 901, BrainScaleTier::Nano512).unwrap();
+
+        let mut sync_res = ProductionGpuBrainRuntimeResource::new(
+            runtime,
+            SimulationExecutionMode::SynchronousPerFrame,
+        );
+        assert_eq!(
+            sync_res.execution_mode(),
+            SimulationExecutionMode::SynchronousPerFrame
+        );
+        sync_res.dispatch_batch(SimWorkerBatchRequest {
+            ticks_to_run: 1,
+            max_mode: false,
+            consume_step: false,
+            measuring_performance: false,
+        });
+        let sync_batches = sync_res.take_completed_batches();
+        assert_eq!(sync_batches.len(), 1);
+        assert_eq!(sync_batches[0].executed_ticks, 1);
+        assert_eq!(sync_batches[0].coalesced_intermediate_frames, 0);
+        assert_eq!(
+            sync_batches[0]
+                .presentation_frame
+                .as_ref()
+                .unwrap()
+                .authoritative_world_tick,
+            Tick::new(1)
+        );
+
+        let runtime = sync_res.into_runtime();
+        let mut async_res =
+            ProductionGpuBrainRuntimeResource::new(runtime, SimulationExecutionMode::AsyncWorker);
+        assert_eq!(
+            async_res.execution_mode(),
+            SimulationExecutionMode::AsyncWorker
+        );
+        async_res.dispatch_batch(SimWorkerBatchRequest {
+            ticks_to_run: 4,
+            max_mode: true,
+            consume_step: false,
+            measuring_performance: false,
+        });
+        // Barrier access waits for the background worker to finish its batch.
+        assert_eq!(async_res.lock().world().tick(), Tick::new(5));
+        let async_batches = async_res.take_completed_batches();
+        assert_eq!(async_batches.len(), 1);
+        assert_eq!(async_batches[0].executed_ticks, 4);
+        assert!(async_batches[0].coalesced_intermediate_frames >= 1);
+        assert_eq!(
+            async_batches[0]
+                .presentation_frame
+                .as_ref()
+                .unwrap()
+                .authoritative_world_tick,
+            Tick::new(5)
+        );
+        drop(async_res);
+    }
+
+    #[cfg(feature = "gpu-tests")]
+    #[test]
+    fn paused_idle_gpu_tick_does_not_mark_presentation_authority_or_entity_map_changed() {
+        use super::{
+            tick_production_gpu_brain, LiveBrainPresentationFrameResource,
+            ProductionGpuBrainAuthorityResource, ProductionGpuBrainRuntimeResource,
+            ProductionGpuBrainTickScheduleResource, SimulationExecutionMode,
+        };
+        use crate::BevyEntityMap;
+        use alife_core::BrainScaleTier;
+        use alife_world::HeadlessScenarioBuilder;
+        use bevy::prelude::{
+            App, DetectChanges, IntoScheduleConfigs, Res, ResMut, Resource, Time, Update,
+        };
+
+        #[derive(Default, Resource)]
+        struct ObservedChanges {
+            frame: bool,
+            authority: bool,
+            map: bool,
+        }
+
+        fn record_changes(
+            frame: Res<LiveBrainPresentationFrameResource>,
+            authority: Res<ProductionGpuBrainAuthorityResource>,
+            map: Res<BevyEntityMap>,
+            mut observed: ResMut<ObservedChanges>,
+        ) {
+            observed.frame = frame.is_changed();
+            observed.authority = authority.is_changed();
+            observed.map = map.is_changed();
+        }
+
+        let backend = alife_gpu_backend::GpuClosedLoopBackend::new_required(
+            alife_gpu_backend::GpuRuntimeProfile::production_v1(),
+        )
+        .expect("GPU backend required for change-detection test");
+        let world = HeadlessScenarioBuilder::new(902).build().unwrap();
+        let runtime =
+            crate::GpuLiveBrainRuntime::new(backend, world, 902, BrainScaleTier::Nano512).unwrap();
+        let telemetry = runtime.authority_telemetry();
+        let frame =
+            LiveBrainPresentationFrameResource::from_authoritative_world(runtime.world()).unwrap();
+
+        let mut app = App::new();
+        app.insert_resource(Time::<()>::default())
+            .insert_resource(ObservedChanges::default())
+            .insert_resource(ProductionGpuBrainAuthorityResource { telemetry })
+            .insert_resource(frame)
+            .insert_resource(ProductionGpuBrainTickScheduleResource::new_with_playback(
+                0,
+                RuntimePlaybackState::Paused,
+                crate::ProductionRunMode::OneX,
+            ))
+            .insert_resource(ProductionGpuBrainRuntimeResource::new(
+                runtime,
+                SimulationExecutionMode::SynchronousPerFrame,
+            ))
+            .insert_resource(BevyEntityMap::default())
+            .add_systems(
+                Update,
+                (
+                    tick_production_gpu_brain,
+                    record_changes.after(tick_production_gpu_brain),
+                ),
+            );
+
+        // Frame 1 clears initial resource insertion change flags; Frame 2 must not mark
+        // presentation, authority, or entity map changed while paused with an empty worker queue.
+        app.update();
+        app.update();
+        let observed = app.world().resource::<ObservedChanges>();
+        assert!(!observed.frame);
+        assert!(!observed.authority);
+        assert!(!observed.map);
     }
 }
 
@@ -1562,6 +2303,22 @@ mod live_presentation_regression_tests {
             .try_publish_successful_tick_with_cognitive(Vec::new(), Vec::new(), &world)
             .unwrap();
         assert_eq!(frames.current.authoritative_world_tick, world.tick());
+    }
+
+    #[test]
+    fn presentation_frame_resource_rotates_arc_pointers_without_deep_clone() {
+        let mut world = HeadlessScenarioBuilder::new(77).build().unwrap();
+        let mut frames =
+            LiveBrainPresentationFrameResource::from_authoritative_world(&world).unwrap();
+        assert!(std::sync::Arc::ptr_eq(&frames.previous, &frames.current));
+        let initial_ptr = std::sync::Arc::as_ptr(&frames.current);
+
+        world.advance_tick();
+        frames
+            .try_publish_successful_tick_with_cognitive(Vec::new(), Vec::new(), &world)
+            .unwrap();
+        assert_eq!(std::sync::Arc::as_ptr(&frames.previous), initial_ptr);
+        assert_ne!(std::sync::Arc::as_ptr(&frames.current), initial_ptr);
     }
 }
 

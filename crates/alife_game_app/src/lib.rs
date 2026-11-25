@@ -224,3 +224,15 @@ mod tests;
 
 #[cfg(feature = "foundation-training")]
 pub mod simulator_rehearsal;
+
+/// Initializes stderr `tracing` formatting for headless CLI binaries and
+/// dry-run entrypoints. Must not be called before `Bevy` `DefaultPlugins`
+/// graphical launch, which installs its own subscriber via `LogPlugin`.
+pub fn init_headless_tracing() {
+    let filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("warn"));
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .with_writer(std::io::stderr)
+        .try_init();
+}

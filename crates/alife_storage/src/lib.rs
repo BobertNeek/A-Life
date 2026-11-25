@@ -657,6 +657,86 @@ pub fn rename(source: impl AsRef<Path>, destination: impl AsRef<Path>) -> io::Re
     let b = destination.as_ref();
     replace_with(a, b, || fs::rename(a, b))
 }
+
+#[cfg(windows)]
+fn wide_nul(path: &Path) -> io::Result<Vec<u16>> {
+    use std::os::windows::ffi::OsStrExt;
+    let mut wide = Vec::with_capacity(path.as_os_str().len() + 1);
+    for unit in path.as_os_str().encode_wide() {
+        if unit == 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "path contains interior NUL unit",
+            ));
+        }
+        wide.push(unit);
+    }
+    wide.push(0);
+    Ok(wide)
+}
+
+#[cfg(windows)]
+fn win32_move_file_ex(src: &Path, dst: &Path, flags: u32) -> io::Result<()> {
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn MoveFileExW(existing: *const u16, new: *const u16, flags: u32) -> i32;
+    }
+    let src_wide = wide_nul(src)?;
+    let dst_wide = wide_nul(dst)?;
+    // SAFETY: `src_wide` and `dst_wide` are owned, live, NUL-terminated UTF-16
+    // buffers with no interior NULs for the duration of the Win32 call.
+    if unsafe { MoveFileExW(src_wide.as_ptr(), dst_wide.as_ptr(), flags) } == 0 {
+        Err(io::Error::last_os_error())
+    } else {
+        Ok(())
+    }
+}
+
+/// Atomically replace `dst` with `src`, creating `dst` if absent or overwriting it if present.
+///
+/// On Windows uses `MoveFileExW` with `MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH`.
+/// On non-Windows platforms falls back to `std::fs::rename(src, dst)`.
+pub fn atomic_replace_file(src: &Path, dst: &Path) -> io::Result<()> {
+    replace_with(src, dst, || {
+        #[cfg(windows)]
+        {
+            const MOVEFILE_REPLACE_EXISTING: u32 = 0x1;
+            const MOVEFILE_WRITE_THROUGH: u32 = 0x8;
+            win32_move_file_ex(src, dst, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)
+        }
+        #[cfg(not(windows))]
+        {
+            fs::rename(src, dst)
+        }
+    })
+}
+
+/// Atomically publish `src` to `dst` only if `dst` does not already exist.
+///
+/// On Windows uses `MoveFileExW` with `MOVEFILE_WRITE_THROUGH` only (never replacing an
+/// existing destination). On Unix uses `hard_link(src, dst)` followed by `remove_file(src)`.
+pub fn atomic_publish_new_file(src: &Path, dst: &Path) -> io::Result<()> {
+    #[cfg(windows)]
+    {
+        const MOVEFILE_WRITE_THROUGH: u32 = 0x8;
+        replace_with(src, dst, || {
+            win32_move_file_ex(src, dst, MOVEFILE_WRITE_THROUGH)
+        })
+    }
+    #[cfg(unix)]
+    {
+        hard_link(src, dst)?;
+        remove_file(src)
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        let _ = (src, dst);
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "atomic exclusive file publication is unsupported on this platform",
+        ))
+    }
+}
 pub fn remove_file(path: impl AsRef<Path>) -> io::Result<()> {
     let path = path.as_ref();
     let Some(b) = budget_for(path)? else {

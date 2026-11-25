@@ -191,6 +191,32 @@ except (ValueError, OSError): sys.exit(7)
                 store.remove_run(cp.digest(store.current))
         self.assertEqual((outside / 'learning').read_text(), 'preserve')
 
+    def test_publish_passes_precomputed_digests_without_rehashing_files(self):
+        before = cp.digest(self.store / cp.CURRENT)
+        after = cp.digest(self.new)
+        digested = []
+        real_digest = cp.digest
+
+        def counted(path):
+            digested.append(Path(path).name)
+            return real_digest(path)
+
+        with cp.Store(self.store, self.validate) as store:
+            with patch.object(cp, 'digest', side_effect=counted):
+                published = store.publish(self.new, before, candidate_digest=after)
+        self.assertEqual(published, after)
+        # Only self.current is hashed once before publication; candidate, pending, and previous
+        # are not re-hashed by Store.publish or Store.recover.
+        self.assertEqual(digested, [cp.CURRENT])
+        self.assertEqual((self.store / cp.CURRENT).read_bytes(), self.new.read_bytes())
+
+    def test_publish_rejects_mismatched_precomputed_candidate_digest(self):
+        before = cp.digest(self.store / cp.CURRENT)
+        with cp.Store(self.store, self.validate) as store:
+            with self.assertRaisesRegex(ValueError, 'candidate changed during publication'):
+                store.publish(self.new, before, candidate_digest='0' * 64)
+            self.assertEqual(store.current.read_bytes(), self.old.read_bytes())
+
 
 if __name__ == '__main__':
     unittest.main()

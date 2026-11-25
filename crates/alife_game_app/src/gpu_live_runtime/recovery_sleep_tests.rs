@@ -2,6 +2,10 @@
 use super::*;
 
 pub(super) fn fixture(label: &str) -> GpuLiveBrainRuntime {
+    fixture_with_population(label, alife_world::PHASE3_MIN_POPULATION)
+}
+
+pub(super) fn fixture_with_population(label: &str, population: u16) -> GpuLiveBrainRuntime {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!(
         "../../target/founder-training-evidence/recovery-journal-{}-{label}",
         std::process::id()
@@ -14,7 +18,7 @@ pub(super) fn fixture(label: &str) -> GpuLiveBrainRuntime {
     let mut runtime =
         crate::create_canonical_new_game_runtime(crate::CanonicalNewGameLaunchRequest {
             world_seed: 31_117,
-            population: alife_world::PHASE3_MIN_POPULATION,
+            population,
             disable_age_death: false,
             save_path: root.join("save.json"),
             asset_root: root.join("assets"),
@@ -287,7 +291,21 @@ fn durable_recovery_completes_one_sleep_cycle_after_learning() {
     let mut saw_completed = false;
     let mut compactions = 0;
     while progressed < 96 && Instant::now() < deadline {
+        let current_state = runtime.residents[&1].sleep_scheduler.state();
         if matches!(
+            current_state.consolidation,
+            ConsolidationState::Completed { .. }
+        ) && (runtime.exact_checkpoint_waiting_for_sleep_journal
+            || matches!(
+                runtime.exact_checkpoint_work,
+                ExactPopulationCheckpointRuntimeWorkV1::Capture { .. }
+                    | ExactPopulationCheckpointRuntimeWorkV1::Worker { .. }
+                    | ExactPopulationCheckpointRuntimeWorkV1::CommitWorker { .. }
+            ))
+        {
+            runtime.poll_sleep_journal_publication().unwrap();
+            runtime.poll_exact_population_checkpoint().unwrap();
+        } else if matches!(
             runtime.tick_outcome().unwrap(),
             GpuLiveTickOutcome::Progressed(_)
         ) {

@@ -1,6 +1,5 @@
-#![cfg(feature = "gpu-tests")]
-
-mod support;
+#[allow(unused_imports)]
+use crate::support;
 
 use alife_core::{
     BiochemistryState, BodyEventDelta, BrainCapacityClass, BrainGenome, Confidence,

@@ -141,7 +141,7 @@ fn closed_loop_records_have_stable_aligned_sizes_and_offsets() {
     assert_eq!(std::mem::align_of::<GpuRouteMetadataRecord>(), 16);
     assert_eq!(std::mem::align_of::<GpuDecoderPlanRecord>(), 16);
     assert_eq!(std::mem::align_of::<GpuDecoderFamilyRecord>(), 16);
-    assert_eq!(std::mem::align_of::<GpuDecoderWeightIndexRecord>(), 16);
+    assert_eq!(std::mem::align_of::<GpuDecoderWeightIndexRecord>(), 8);
     assert_eq!(std::mem::align_of::<GpuBrainSlotExtensionRecord>(), 16);
     assert_eq!(std::mem::align_of::<GpuSlotLearningStateRecord>(), 16);
 
@@ -152,7 +152,7 @@ fn closed_loop_records_have_stable_aligned_sizes_and_offsets() {
     assert_eq!(std::mem::size_of::<GpuRouteMetadataRecord>(), 48);
     assert_eq!(std::mem::size_of::<GpuDecoderPlanRecord>(), 32);
     assert_eq!(std::mem::size_of::<GpuDecoderFamilyRecord>(), 32);
-    assert_eq!(std::mem::size_of::<GpuDecoderWeightIndexRecord>(), 16);
+    assert_eq!(std::mem::size_of::<GpuDecoderWeightIndexRecord>(), 8);
     assert_eq!(std::mem::size_of::<GpuBrainSlotExtensionRecord>(), 80);
     assert_eq!(std::mem::size_of::<GpuSlotLearningStateRecord>(), 96);
 
@@ -203,7 +203,7 @@ fn closed_loop_records_have_stable_aligned_sizes_and_offsets() {
         family_raw, bias_bits, decoder_synapse_start, decoder_synapse_count, weight_index_start,
         weight_index_count, reserved0, reserved1);
     assert_record_offsets!(GpuDecoderWeightIndexRecord, DECODER_WEIGHT_FIELDS;
-        global_synapse_id, input_lane, motor_index, reserved0);
+        global_synapse_id, packed_lane_motor);
     assert_record_offsets!(GpuBrainSlotExtensionRecord, SLOT_EXTENSION_FIELDS;
         schema_version, projection_count, decoder_synapse_local_start, decoder_synapse_count,
         receptor_offset, decoder_input_plan_offset, decoder_metadata_offset,
@@ -308,7 +308,7 @@ fn naga_reflection_matches_every_closed_loop_wgsl_record() {
         ("GpuDecoderFamilyRecord", (&DECODER_FAMILY_FIELDS[..], 32)),
         (
             "GpuDecoderWeightIndexRecord",
-            (&DECODER_WEIGHT_FIELDS[..], 16),
+            (&DECODER_WEIGHT_FIELDS[..], 8),
         ),
         (
             "GpuBrainSlotExtensionRecord",
@@ -512,12 +512,8 @@ const DECODER_FAMILY_FIELDS: [(&str, u32); 8] = sequential(&[
     "reserved0",
     "reserved1",
 ]);
-const DECODER_WEIGHT_FIELDS: [(&str, u32); 4] = sequential(&[
-    "global_synapse_id",
-    "input_lane",
-    "motor_index",
-    "reserved0",
-]);
+const DECODER_WEIGHT_FIELDS: [(&str, u32); 2] =
+    sequential(&["global_synapse_id", "packed_lane_motor"]);
 const SLOT_EXTENSION_FIELDS: [(&str, u32); 20] = sequential(&[
     "schema_version",
     "projection_count",

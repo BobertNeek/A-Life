@@ -294,6 +294,29 @@ struct ContinuousCareAssistance {
     start_tick: u64,
 }
 
+fn try_prepare_care_assistance(
+    world: &mut alife_world::HeadlessWorld,
+    id: OrganismId,
+) -> Result<Option<ContinuousCareAssistance>> {
+    let Some(food) = world
+        .entity_id("food-01")
+        .filter(|&food| world.entity(food).is_some_and(care_food_ready))
+    else {
+        return Ok(None);
+    };
+    let Some(position) = care_food_position_in_gaze(world, id) else {
+        return Ok(None);
+    };
+    if !crate::foundation_training::relocate_unheld_foundation_food(world, food, position)? {
+        return Err("care food is unavailable for placement".into());
+    }
+    Ok(Some(ContinuousCareAssistance {
+        food,
+        start_tick: world.tick().raw(),
+    }))
+}
+
+#[cfg(test)]
 fn prepare_care_assistance(
     world: &mut alife_world::HeadlessWorld,
     id: OrganismId,
@@ -738,7 +761,7 @@ pub(super) fn run_same_individual_world(
     let mut collection_seconds = 0.0;
     let mut ppo_seconds_total = 0.0;
     let mut install_seconds_total = 0.0;
-    let mut replay_seal_seconds = 0.0;
+    let replay_seal_seconds = 0.0;
     let mut boundary_wait_seconds = 0.0;
     let mut no_progress_total = 0u64;
     let initial_capture_metrics = runtime.foundation_training_capture_metrics();
@@ -783,10 +806,6 @@ pub(super) fn run_same_individual_world(
         let wanted = request
             .decisions_per_update
             .min((request.total_trained_decisions as u64 - trained_rows) as usize);
-        let window_root = work.join(format!("window-{completed_updates:08}"));
-        // The life directory's parent owns the sealed cohort bundle. Use the
-        // same directory for collection and both subsequent replay passes.
-        let replay_dir = window_root.join("individual");
         let phenotype = alife_training::compile_validated_n2048_cached(
             runtime.live_foundation_compiler_inputs(id)?,
             &alife_core::BrainCapacityClass::n2048(),
@@ -803,16 +822,12 @@ pub(super) fn run_same_individual_world(
             &serde_json::to_vec(&trainer.checkpoint()?)?,
         )?;
         let budget = FoundationReplayBudget::default();
-        let mut cohort =
-            crate::foundation_training::CohortReplayWriter::new(&window_root, source.clone())?;
-        let mut writer = FoundationReplayWriter::new(
-            &replay_dir,
+        let mut collector = crate::foundation_training::EphemeralReplayCollector::new(
             source.clone(),
             phenotype.clone(),
             &asset,
             budget,
         )?;
-        let mut refs: Vec<crate::FoundationReplayRecordRef> = Vec::new();
         let mut features = Vec::new();
         let mut generic_rows = Vec::new();
         let mut meal_links = Vec::new();
@@ -915,14 +930,7 @@ pub(super) fn run_same_individual_world(
                             "reward_override":false,"biology_override":false}),
                         )?;
                     }
-                    let ready = runtime
-                        .world()
-                        .entity_id("food-01")
-                        .and_then(|target| runtime.world().entity(target))
-                        .is_some_and(care_food_ready)
-                        && care_food_position_in_gaze(runtime.world(), id).is_some();
-                    if ready {
-                        let scenario = prepare_care_assistance(runtime.world_mut(), id)?;
+                    if let Some(scenario) = try_prepare_care_assistance(runtime.world_mut(), id)? {
                         care_initial_food_placements += 1;
                         // Initial placement is assistance too, even before a
                         // later periodic reposition or cue has occurred.
@@ -1070,17 +1078,17 @@ pub(super) fn run_same_individual_world(
                 if step.frame.organism_id() != id || step.frame.tick() != before_tick {
                     return Err("continuous row belongs to a different individual/tick".into());
                 }
-                let gap = refs
-                    .last()
-                    .is_some_and(|r| r.tick + 1 != step.frame.tick().raw());
-                if refs.is_empty() || gap {
+                let gap = collector
+                    .last_tick()
+                    .is_some_and(|last| last + 1 != step.frame.tick().raw());
+                if collector.len() == 0 || gap {
                     verify_foundation_replay_step(&mut trainer, &step)?;
                 }
                 if gap {
-                    writer.start_segment()?;
+                    collector.start_segment()?;
                 }
                 if consumed(&step) {
-                    generic_rows.push(refs.len());
+                    generic_rows.push(collector.len());
                 }
                 let care_row = care_row_evidence(&step, &food);
                 if care_row.teacher_food_token_heard {
@@ -1109,64 +1117,58 @@ pub(super) fn run_same_individual_world(
                             .provenance
                             .observe(observation, events, last_food_token_heard)
                     {
-                        meal_links.push((refs.len(), meal));
+                        meal_links.push((collector.len(), meal));
                         captured_meal_provenance.observe(meal);
                     }
                 }
                 features.push(crate::foundation_training::snapshot_activation(
                     &step.after_inference,
                 )?);
-                refs.push(writer.append_cohort(&step, &mut cohort)?);
+                collector.append(&step)?;
             }
             if terminal_observed {
                 break;
             }
-            if refs.len() > wanted {
+            if collector.len() > wanted {
                 break;
             }
         }
         let care_after = care_world_observation(runtime.world(), id);
+        let captured_rows = collector.len();
         let causal = FoundationCausalCollectionMetrics::measure(
             first_tick,
             runtime.world().tick().raw(),
             collection.elapsed().as_secs_f64(),
-            refs.len(),
+            captured_rows,
             no_progress,
             capture_before,
             runtime.foundation_training_capture_metrics(),
         )?;
         collection_seconds += causal.collection_wall_seconds;
         no_progress_total += no_progress;
-        captured_total += refs.len() as u64;
+        captured_total += captured_rows as u64;
         generic_total += generic_rows.len() as u64;
         nourished_total += meal_links.len() as u64;
         if terminal_observed {
             // The terminal row/food observations above are included in capture
             // telemetry, while all this suffix remains explicitly untrained.
             // The immutable terminal event was already committed before metrics.
-            drop(writer);
-            drop(cohort);
-            alife_storage::remove_dir_all(&window_root)?;
+            drop(collector);
             on_update(serde_json::json!({"kind":"continuous-untrained-window-v1",
-                "session_nonce":session_nonce,"captured_rows":refs.len(),"trained_rows":0,
+                "session_nonce":session_nonce,"captured_rows":captured_rows,"trained_rows":0,
                 "stop_reason":stop,"causal_collection":causal,
                 "generic_consumed_events":generic_rows.len(),"exact_nourished_meals":meal_links.len(),
-                "food_meal_provenance_captured":MealProvenanceSummary::rows(&meal_links, refs.len()),
+                "food_meal_provenance_captured":MealProvenanceSummary::rows(&meal_links, captured_rows),
                 "food_meal_provenance_scope":food_provenance::SCOPE,
                 "policy_version":policy,"semantic_prior":compact_prior(&runtime, care_cue_emissions)}))?;
             break;
         }
-        let rows = loss_rows(refs.len(), wanted);
+        let rows = loss_rows(captured_rows, wanted);
         if rows == 0 {
-            drop(writer);
-            drop(cohort);
-            alife_storage::remove_dir_all(&window_root)?;
+            drop(collector);
             break;
         }
-        let sealing = Instant::now();
-        let replay = cohort.seal()?;
-        drop(writer);
-        replay_seal_seconds += sealing.elapsed().as_secs_f64();
+        let ephemeral_rows = collector.into_rows();
         // This only drains persistence workers; it does not advance world,
         // cognition, physiology or the exploration stream.
         let waiting = Instant::now();
@@ -1177,85 +1179,56 @@ pub(super) fn run_same_individual_world(
             // global heads/Adam. No wake, reset, clock advance or PPO/install is
             // invented to make a deadline. All this window's rows are untrained.
             stop = "sleep_consolidation_install_deferred";
-            alife_storage::remove_dir_all(&window_root)?;
             on_update(serde_json::json!({"kind":"continuous-untrained-window-v1",
-                "session_nonce":session_nonce,"captured_rows":refs.len(),"trained_rows":0,
+                "session_nonce":session_nonce,"captured_rows":captured_rows,"trained_rows":0,
                 "stop_reason":stop,"causal_collection":causal,
                 "generic_consumed_events":generic_rows.len(),"exact_nourished_meals":meal_links.len(),
-                "food_meal_provenance_captured":MealProvenanceSummary::rows(&meal_links, refs.len()),
+                "food_meal_provenance_captured":MealProvenanceSummary::rows(&meal_links, captured_rows),
                 "food_meal_provenance_scope":food_provenance::SCOPE,
                 "policy_version":policy,"semantic_prior":compact_prior(&runtime, care_cue_emissions)}))?;
             break;
         }
         runtime.ensure_live_foundation_policy_boundary(id)?;
         let ppo_started = Instant::now();
-        let mut values = Vec::with_capacity(refs.len());
+        let values = value
+            .predict_values_from_features(trainer.session(), phenotype.neuron_count(), &features)
+            .map_err(|error| format!("continuous value prediction: {error}"))?;
         let mut rewards: Vec<(PpoJointAction, f32)> = Vec::with_capacity(rows);
         let mut previous_after = None;
-        let mut segment_start = 0;
-        while segment_start < refs.len() {
-            let segment = refs[segment_start].segment;
-            let end = refs[segment_start..]
-                .iter()
-                .position(|r| r.segment != segment)
-                .map_or(refs.len(), |offset| segment_start + offset);
-            for (chunk, slice) in refs[segment_start..end].chunks(512).enumerate() {
-                let window = load_foundation_replay_window(
-                    &replay_dir,
-                    slice,
-                    0,
-                    &source,
-                    &phenotype,
-                    budget,
-                )
-                .map_err(|error| {
-                    format!("continuous value replay {}: {error}", replay_dir.display())
-                })?;
-                values.extend(
-                    value
-                        .predict_values(&mut trainer, &window.sequence)
-                        .map_err(|error| format!("continuous value prediction: {error}"))?,
-                );
-                for (row, (behavior, patch)) in
-                    window.behavior.iter().zip(&window.patches).enumerate()
-                {
-                    let index = segment_start + chunk * 512 + row;
-                    let physiology = patch
-                        .outcome()
-                        .measured_physiology
-                        .ok_or("continuous patch lacks measured physiology")?;
-                    if index > 0 && refs[index].tick > refs[index - 1].tick + 1 {
-                        let gap = alife_core::MeasuredPhysiologyTransition::new(
-                            previous_after.ok_or("missing pre-sleep biology")?,
-                            physiology.before,
-                        )?;
-                        let seconds = (refs[index].tick - refs[index - 1].tick - 1) as f64
-                            / f64::from(alife_world::WORLD_TICKS_PER_SECOND);
-                        let discount = (-std::f64::consts::LN_2 * seconds
-                            / f64::from(ppo.discount_half_life_seconds))
-                        .exp() as f32;
-                        let delayed = training_biological_value(&gap, &body)? * discount;
-                        rewards[index - 1].1 = (rewards[index - 1].1 + delayed).clamp(-1.0, 1.0);
-                    }
-                    previous_after = Some(physiology.after);
-                    if index == rows {
-                        break;
-                    }
-                    let receptors = physiology.before.neural_receptor_frame(&body)?;
-                    let modulator = alife_core::OutcomeCreditPacket::from_sealed_patch(patch)?
-                        .with_biochemical_receptors(&receptors)?
-                        .modulator();
-                    rewards.push((
-                        joint_action(behavior).map_err(|error| {
-                            format!("continuous joint action row {index}: {error}")
-                        })?,
-                        training_receptor_profile(&body).project(&modulator.frame())?,
-                    ));
-                }
+        for (index, row) in ephemeral_rows.iter().enumerate() {
+            let physiology = row
+                .patch
+                .outcome()
+                .measured_physiology
+                .ok_or("continuous patch lacks measured physiology")?;
+            if index > 0 && row.tick > ephemeral_rows[index - 1].tick + 1 {
+                let gap = alife_core::MeasuredPhysiologyTransition::new(
+                    previous_after.ok_or("missing pre-sleep biology")?,
+                    physiology.before,
+                )?;
+                let seconds = (row.tick - ephemeral_rows[index - 1].tick - 1) as f64
+                    / f64::from(alife_world::WORLD_TICKS_PER_SECOND);
+                let discount = (-std::f64::consts::LN_2 * seconds
+                    / f64::from(ppo.discount_half_life_seconds))
+                .exp() as f32;
+                let delayed = training_biological_value(&gap, &body)? * discount;
+                rewards[index - 1].1 = (rewards[index - 1].1 + delayed).clamp(-1.0, 1.0);
             }
-            segment_start = end;
+            previous_after = Some(physiology.after);
+            if index == rows {
+                break;
+            }
+            let receptors = physiology.before.neural_receptor_frame(&body)?;
+            let modulator = alife_core::OutcomeCreditPacket::from_sealed_patch(&row.patch)?
+                .with_biochemical_receptors(&receptors)?
+                .modulator();
+            rewards.push((
+                joint_action(&row.behavior)
+                    .map_err(|error| format!("continuous joint action row {index}: {error}"))?,
+                training_receptor_profile(&body).project(&modulator.frame())?,
+            ));
         }
-        if values.len() != refs.len() || rewards.len() != rows {
+        if values.len() != ephemeral_rows.len() || rewards.len() != rows {
             return Err("continuous target/capture length mismatch".into());
         }
         let transitions = rewards
@@ -1269,7 +1242,7 @@ pub(super) fn run_same_individual_world(
                 reward,
                 old_value: values[i],
                 next_value: values[i + 1],
-                elapsed_seconds: (refs[i + 1].tick - refs[i].tick) as f32
+                elapsed_seconds: (ephemeral_rows[i + 1].tick - ephemeral_rows[i].tick) as f32
                     / alife_world::WORLD_TICKS_PER_SECOND as f32,
                 boundary: if i + 1 == rows {
                     PpoBoundary::Truncated
@@ -1283,8 +1256,8 @@ pub(super) fn run_same_individual_world(
         let mut spans = Vec::new();
         let mut start = 0;
         while start < rows {
-            let segment = refs[start].segment;
-            let end = refs[start..rows]
+            let segment = ephemeral_rows[start].segment;
+            let end = ephemeral_rows[start..rows]
                 .iter()
                 .position(|r| r.segment != segment)
                 .map_or(rows, |n| start + n);
@@ -1299,7 +1272,6 @@ pub(super) fn run_same_individual_world(
         }
         // Bound immutable snapshots to this one policy/window. Repeated PPO
         // passes use admitted RAM, not a second claim about mutable disk state.
-        // Subsequent external replay loads still verify their actual bytes.
         let mut cached_windows = PpoWindowSnapshotCache::new(spans.len());
         let update = train_recurrent_ppo_cohort(
             &mut trainer,
@@ -1311,26 +1283,23 @@ pub(super) fn run_same_individual_world(
                     return Ok(cached);
                 }
                 let (burn, start, end) = spans[index];
-                let replay = load_foundation_replay_window(
-                    &replay_dir,
-                    &refs[burn..end],
+                let sequence = crate::foundation_training::EphemeralReplayRow::build_sequence(
+                    &ephemeral_rows[burn..end],
                     start - burn,
-                    &source,
                     &phenotype,
-                    budget,
                 )
                 .map_err(|error| {
-                    eprintln!("continuous PPO replay {}: {error}", replay_dir.display());
+                    eprintln!("continuous PPO ephemeral replay sequence: {error}");
                     alife_training::TrainingError::from(
                         ScaffoldContractError::InvalidDecisionEvidence,
                     )
                 })?;
-                let window = PpoTrainingWindow {
-                    speech_targets: vec![None; replay.sequence.ticks.len()],
-                    sequence: replay.sequence,
+                let window = std::sync::Arc::new(PpoTrainingWindow {
+                    speech_targets: vec![None; sequence.ticks.len()],
+                    sequence,
                     batch: batch.window(start..end)?,
                     auxiliary: None,
-                };
+                });
                 cached_windows.retain(index, &window, budget);
                 Ok(window)
             },
@@ -1353,16 +1322,20 @@ pub(super) fn run_same_individual_world(
             );
         }
         let next_policy = update_version;
-        let (critic, _) = critic_residual::train(
+        let residual_steps = ppo.critic_residual_steps.unwrap_or(actor_updates);
+        let residual_pipelines = value.residual_pipelines(trainer.session())?.clone();
+        let (critic, _) = critic_residual::train_with_options(
             trainer.session(),
             value.checkpoint(trainer.session())?,
             &features,
             batch.transitions(),
             ppo,
-            actor_updates,
+            residual_steps,
             next_policy,
+            Some(&residual_pipelines),
+            false,
         )?;
-        value = PpoTrainingState::from_checkpoint(critic)?;
+        value.load_checkpoint_in_place(trainer.session(), critic)?;
         let ppo_seconds = ppo_started.elapsed().as_secs_f64();
         ppo_seconds_total += ppo_seconds;
         let install_started = Instant::now();
@@ -1393,7 +1366,7 @@ pub(super) fn run_same_individual_world(
         let event = serde_json::json!({"kind":"continuous-update-v1","session_nonce":session_nonce,
             "source_world_seed":world_seed,"organism_id":id.raw(),"update":completed_updates,
             "policy_before":policy-1,"policy_after":policy,"trained_rows":rows,
-            "session_trained_rows":trained_rows,"captured_replay_rows":refs.len(),"bootstrap_replay_rows":1,
+            "session_trained_rows":trained_rows,"captured_replay_rows":captured_rows,"bootstrap_replay_rows":1,
             "actor_optimizer_step":trainer.optimizer_step(),"value_optimizer_step":value_age,
             "actor_optimizer_updates":actor_updates,"value_optimizer_updates":value_updates,
             "completed_epochs":update.completed_epochs,"stopped_for_kl":update.stopped_for_kl,
@@ -1401,7 +1374,7 @@ pub(super) fn run_same_individual_world(
             "mutable_words_written_during_install":install.mutable_words_written,
             "generic_consumed_events":generic_rows.len(),"trained_generic_consumed_events":generic_rows.iter().filter(|r| **r<rows).count(),
             "exact_nourished_meals":meal_links.len(),"trained_exact_nourished_meals":meal_links.iter().filter(|(row, _)| *row<rows).count(),
-            "food_meal_provenance_captured":MealProvenanceSummary::rows(&meal_links, refs.len()),
+            "food_meal_provenance_captured":MealProvenanceSummary::rows(&meal_links, captured_rows),
             "food_meal_provenance_trained":MealProvenanceSummary::rows(&meal_links, rows),
             "food_meal_provenance_scope":food_provenance::SCOPE,
             "food_evidence_scope":"exact existing food entities observed at this window start; regrowth of same entity is ordinary ecology",
@@ -1413,9 +1386,8 @@ pub(super) fn run_same_individual_world(
             "care_before":care_before,"care_after":care_after,
             "care_training_rows":care_row_summary(&care_rows[..rows]),
             "food_outcomes_cumulative_including_bootstrap":food.values().map(|evidence| &evidence.outcome).collect::<Vec<_>>(),
-            "replay_bundle_bytes":replay.bundle_bytes,"replay_data_sync_calls":replay.data_sync_calls,
+            "replay_bundle_bytes":0u64,"replay_data_sync_calls":0u64,
         });
-        alife_storage::remove_dir_all(&window_root)?;
         on_update(event)?;
         if completed_updates.is_multiple_of(request.snapshot_every_updates as u64) {
             if now()? >= request.finalization_deadline_unix_seconds {

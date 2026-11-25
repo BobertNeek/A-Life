@@ -5,15 +5,15 @@ use super::*;
 pub(super) struct HostSleepSnapshot {
     world: String,
     residents: String,
-    memories: BTreeMap<u64, MemorySidecarState>,
-    topologies: BTreeMap<u64, TopologySidecar>,
-    restored_replay: Vec<ExperiencePatch>,
+    memories: BTreeMap<u64, std::sync::Arc<MemorySidecarState>>,
+    topologies: BTreeMap<u64, std::sync::Arc<TopologySidecar>>,
+    restored_replay: std::sync::Arc<Vec<ExperiencePatch>>,
     sealed: Vec<ExperiencePatch>,
     last_sealed: Vec<ExperiencePatch>,
     sealed_count: usize,
-    journal_authorities: BTreeMap<u64, SleepJournalNeuralAuthority>,
-    exact_queue: Vec<GpuSleepTransactionJournalEntryV2>,
-    pending_queue: Vec<GpuSleepTransactionJournalEntryV2>,
+    journal_authorities: std::sync::Arc<BTreeMap<u64, SleepJournalNeuralAuthority>>,
+    exact_queue: std::sync::Arc<Vec<GpuSleepTransactionJournalEntryV2>>,
+    pending_queue: std::sync::Arc<Vec<GpuSleepTransactionJournalEntryV2>>,
     recovery_edges: Vec<(u64, SleepState, SleepState)>,
 }
 
@@ -35,13 +35,13 @@ impl HostSleepSnapshot {
             residents: format!("{:?}", runtime.residents),
             memories: runtime.memories.clone(),
             topologies: runtime.topologies.clone(),
-            restored_replay: runtime.restored_replay_patches.clone(),
+            restored_replay: std::sync::Arc::clone(&runtime.restored_replay_patches),
             sealed: runtime.sealed_patches.clone(),
             last_sealed: runtime.last_sealed_patches.clone(),
             sealed_count: runtime.sealed_patch_count,
-            journal_authorities: runtime.sleep_journal_neural_authorities.clone(),
-            exact_queue: runtime.pending_exact_sleep_journal_entries.clone(),
-            pending_queue: runtime.pending_sleep_journal_entries.clone(),
+            journal_authorities: std::sync::Arc::clone(&runtime.sleep_journal_neural_authorities),
+            exact_queue: std::sync::Arc::clone(&runtime.pending_exact_sleep_journal_entries),
+            pending_queue: std::sync::Arc::clone(&runtime.pending_sleep_journal_entries),
             recovery_edges: runtime
                 .pending_recovery_sleep_edges
                 .iter()
@@ -235,7 +235,7 @@ fn assert_device_failure_stops(completed: bool) {
 fn sleep_commit_followed_by_journal_preparation_failure_fail_stops() {
     let mut runtime = at_sleep_boundary("atomic-journal", true);
     let state = runtime.residents[&1].sleep_scheduler.state();
-    runtime.pending_recovery_sleep_edges.insert(
+    std::sync::Arc::make_mut(&mut runtime.pending_recovery_sleep_edges).insert(
         1,
         PendingRecoverySleepEdge {
             source: state,
@@ -275,7 +275,7 @@ fn stopped_sleep_session_refuses_portable_capture_and_manual_save() {
 fn later_organism_failure_restores_population_after_native_sleep_submit() {
     // The canonical launcher admits at least four founders. Exercise an ordered
     // pair within that existing fixture; the other founders remain untouched.
-    let mut runtime = recovery_sleep_tests::fixture("atomic-population");
+    let mut runtime = recovery_sleep_tests::fixture_with_population("atomic-population", 4);
     for id in [OrganismId(1), OrganismId(2)] {
         runtime.request_recovery_sleep(id).unwrap();
     }

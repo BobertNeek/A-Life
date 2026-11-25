@@ -3,14 +3,14 @@
 //! decision across sleep gaps; no replay reset state substitutes for a bootstrap.
 use alife_runtime::GpuAuthoritativeSession;
 use alife_training::{
-    CriticResidualRow, FrozenCriticResidualExperiment, PpoBoundary, PpoConfig, PpoTransition,
-    PpoValueHeadCheckpoint,
+    CriticResidualPipelines, CriticResidualRow, FrozenCriticResidualExperiment, PpoBoundary,
+    PpoConfig, PpoTransition, PpoValueHeadCheckpoint,
 };
 
 pub(super) const OBJECTIVE_VERSION: u16 = 1;
 const BATCH_ROWS: usize = 8 * 256;
 
-fn residual_rows(
+pub(super) fn residual_rows(
     transitions: &[PpoTransition],
     feature_states: usize,
     half_life: f32,
@@ -84,8 +84,33 @@ fn residual_batch(
     (start..end, feature_end, local)
 }
 
+#[cfg(test)]
 #[allow(clippy::too_many_arguments)]
 pub(super) fn train(
+    session: &GpuAuthoritativeSession,
+    checkpoint: PpoValueHeadCheckpoint,
+    features: &[Vec<f32>],
+    transitions: &[PpoTransition],
+    config: PpoConfig,
+    updates: u32,
+    policy: u64,
+) -> super::Result<(PpoValueHeadCheckpoint, serde_json::Value)> {
+    let (checkpoint, receipt) = train_with_options(
+        session,
+        checkpoint,
+        features,
+        transitions,
+        config,
+        updates,
+        policy,
+        None,
+        true,
+    )?;
+    Ok((checkpoint, receipt.ok_or("missing residual receipt")?))
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn train_with_options(
     session: &GpuAuthoritativeSession,
     mut checkpoint: PpoValueHeadCheckpoint,
     features: &[Vec<f32>],
@@ -93,7 +118,9 @@ pub(super) fn train(
     config: PpoConfig,
     updates: u32,
     policy: u64,
-) -> super::Result<(PpoValueHeadCheckpoint, serde_json::Value)> {
+    pipelines: Option<&CriticResidualPipelines>,
+    record_receipt: bool,
+) -> super::Result<(PpoValueHeadCheckpoint, Option<serde_json::Value>)> {
     config.validate()?;
     if updates == 0 || config.value_coefficient <= 0.0 || features.len() > 36_001 {
         return Err(
@@ -107,7 +134,7 @@ pub(super) fn train(
         config.discount_half_life_seconds,
     )?;
     let initial_age = checkpoint.optimizer_step;
-    let feature_sha256 = {
+    let feature_sha256 = if record_receipt {
         use sha2::{Digest, Sha256};
         let mut hash = Sha256::new();
         for row in features {
@@ -118,7 +145,9 @@ pub(super) fn train(
                 hash.update(value.to_le_bytes());
             }
         }
-        format!("{:x}", hash.finalize())
+        Some(format!("{:x}", hash.finalize()))
+    } else {
+        None
     };
     // One private GPU head owns the entire fit. A failed update/evaluation drops
     // it without publishing a partially fitted checkpoint to the PPO caller.
@@ -143,32 +172,52 @@ pub(super) fn train(
                 }
                 residual
             }
-            slot @ None => slot.insert(FrozenCriticResidualExperiment::new(
+            slot @ None => slot.insert(if let Some(pipelines) = pipelines {
+                FrozenCriticResidualExperiment::new_with_pipelines(
+                    session,
+                    &checkpoint,
+                    &features[start..feature_end],
+                    &local,
+                    local.len(),
+                    pipelines,
+                )?
+            } else {
+                FrozenCriticResidualExperiment::new(
+                    session,
+                    &checkpoint,
+                    &features[start..feature_end],
+                    &local,
+                    local.len(),
+                )?
+            }),
+        };
+        if record_receipt {
+            let before = match (same_batch, last_after_evaluation.take()) {
+                (true, Some(previous_after)) => previous_after,
+                _ => residual.evaluate(session)?,
+            };
+            residual.step_with_coefficient(
                 session,
-                &checkpoint,
-                &features[start..feature_end],
-                &local,
-                local.len(),
-            )?),
-        };
-        let before = match (same_batch, last_after_evaluation.take()) {
-            (true, Some(previous_after)) => previous_after,
-            _ => residual.evaluate(session)?,
-        };
-        residual.step_with_coefficient(
-            session,
-            config.value_optimizer,
-            config.value_coefficient,
-        )?;
-        let after = residual.evaluate(session)?;
-        let before_metrics = metrics(&before);
-        let after_metrics = metrics(&after);
-        last_batch_range = Some(batch_range);
-        last_after_evaluation = Some(after);
-        records.push(
-            serde_json::json!({"update":update+1,"loss_row_start":start,"loss_row_end":end,
-            "before":before_metrics,"after":after_metrics,"finite_preflight_passed":true}),
-        );
+                config.value_optimizer,
+                config.value_coefficient,
+            )?;
+            let after = residual.evaluate(session)?;
+            let before_metrics = metrics(&before);
+            let after_metrics = metrics(&after);
+            last_batch_range = Some(batch_range);
+            last_after_evaluation = Some(after);
+            records.push(
+                serde_json::json!({"update":update+1,"loss_row_start":start,"loss_row_end":end,
+                "before":before_metrics,"after":after_metrics,"finite_preflight_passed":true}),
+            );
+        } else {
+            residual.step_with_coefficient(
+                session,
+                config.value_optimizer,
+                config.value_coefficient,
+            )?;
+            last_batch_range = Some(batch_range);
+        }
     }
     // Retain the logical PPO-window checkpoint boundary and existing restart
     // codec. Only per-residual-update head transfers/reconstruction are removed.
@@ -176,13 +225,15 @@ pub(super) fn train(
         .ok_or("missing residual fit")?
         .checkpoint(session)?;
     checkpoint.last_updated_policy_version = Some(policy);
-    let receipt = serde_json::json!({"objective_version":OBJECTIVE_VERSION,
-        "objective":"full_sampled_one_step_bellman_residual","feature_authority":"captured_production_GPU_after_inference",
-        "features_frozen_before_actor_updates":true,"feature_states":features.len(),"loss_rows":rows.len(),
-        "captured_GPU_feature_sha256":feature_sha256,
-        "initial_critic_age":initial_age,"final_critic_age":checkpoint.optimizer_step,"optimizer_updates":updates,
-        "value_coefficient":config.value_coefficient,"optimizer":config.value_optimizer,
-        "actor_GAE_unchanged":true,"bootstrap_is_loss_row":false,"Adam_reset":false,"updates":records});
+    let receipt = feature_sha256.map(|feature_sha256| {
+        serde_json::json!({"objective_version":OBJECTIVE_VERSION,
+            "objective":"full_sampled_one_step_bellman_residual","feature_authority":"captured_production_GPU_after_inference",
+            "features_frozen_before_actor_updates":true,"feature_states":features.len(),"loss_rows":rows.len(),
+            "captured_GPU_feature_sha256":feature_sha256,
+            "initial_critic_age":initial_age,"final_critic_age":checkpoint.optimizer_step,"optimizer_updates":updates,
+            "value_coefficient":config.value_coefficient,"optimizer":config.value_optimizer,
+            "actor_GAE_unchanged":true,"bootstrap_is_loss_row":false,"Adam_reset":false,"updates":records})
+    });
     Ok((checkpoint, receipt))
 }
 

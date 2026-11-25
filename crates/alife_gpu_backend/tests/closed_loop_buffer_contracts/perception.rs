@@ -302,7 +302,7 @@ fn matching_slot_and_header_with_stale_v1_layout_are_rejected() {
 }
 
 #[test]
-fn class_bucket_buffers_expose_exactly_seven_neural_bindings() {
+fn class_bucket_buffers_expose_exactly_eight_neural_bindings() {
     let manifest = GpuClassBucketBuffers::neural_binding_manifest();
     let expected = [
         (
@@ -333,8 +333,12 @@ fn class_bucket_buffers_expose_exactly_seven_neural_bindings() {
             GpuClassBucketBufferRole::MutableStateWords,
             GpuBufferAccess::ReadWrite,
         ),
+        (
+            GpuClassBucketBufferRole::AtomicStateWords,
+            GpuBufferAccess::ReadWrite,
+        ),
     ];
-    assert_eq!(manifest.len(), 7);
+    assert_eq!(manifest.len(), 8);
     for (binding, (actual, (role, access))) in manifest.iter().zip(expected).enumerate() {
         assert_eq!(actual.group, 0);
         assert_eq!(actual.binding, binding as u32);

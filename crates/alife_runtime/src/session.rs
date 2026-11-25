@@ -149,6 +149,8 @@ pub struct GpuAuthoritativeSession {
     authority: GpuSessionAuthority,
     #[cfg(feature = "gpu-tests")]
     forced_admission_failures_remaining: u8,
+    #[cfg(feature = "gpu-tests")]
+    suppress_next_forced_admission_fail_stop: bool,
 }
 
 impl GpuAuthoritativeSession {
@@ -158,6 +160,8 @@ impl GpuAuthoritativeSession {
             authority: GpuSessionAuthority::new(consumer),
             #[cfg(feature = "gpu-tests")]
             forced_admission_failures_remaining: 0,
+            #[cfg(feature = "gpu-tests")]
+            suppress_next_forced_admission_fail_stop: false,
         }
     }
 
@@ -218,6 +222,14 @@ impl GpuAuthoritativeSession {
 
     pub fn record_contract_failure(&mut self, error: &ScaffoldContractError) {
         if *error == ScaffoldContractError::NeuralBackendUnavailable {
+            #[cfg(feature = "gpu-tests")]
+            if std::mem::take(&mut self.suppress_next_forced_admission_fail_stop) {
+                return;
+            }
+            tracing::warn!(
+                ?error,
+                "GPU session recorded fatal backend-unavailable contract failure"
+            );
             self.fail_stop(GpuSessionFailStopCause::BackendUnavailable);
         }
     }
@@ -227,11 +239,22 @@ impl GpuAuthoritativeSession {
         organism_id: OrganismId,
         phenotype: BrainPhenotype,
     ) -> Result<GpuBrainHandle, ScaffoldContractError> {
+        let _span = tracing::debug_span!(
+            "session_insert_brain",
+            organism_id = organism_id.raw(),
+            class_id = phenotype.brain_class_id().raw()
+        )
+        .entered();
         self.ensure_neural_actions_available()?;
         #[cfg(feature = "gpu-tests")]
         if self.forced_admission_failures_remaining > 0 {
             self.forced_admission_failures_remaining -= 1;
+            self.suppress_next_forced_admission_fail_stop = true;
             return Err(ScaffoldContractError::NeuralBackendUnavailable);
+        }
+        #[cfg(feature = "gpu-tests")]
+        {
+            self.suppress_next_forced_admission_fail_stop = false;
         }
         let result = self.backend.insert_brain(organism_id, phenotype);
         if let Err(error) = &result {

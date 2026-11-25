@@ -1,6 +1,7 @@
 //! Candidate-local memory encoding, shader layout and causal GPU behavior tests.
 
-mod support;
+#[allow(unused_imports)]
+use crate::support;
 
 #[cfg(feature = "gpu-tests")]
 use alife_core::{
@@ -712,7 +713,7 @@ fn finalized_memory_upload_binds_base_context_final_and_perception_header_identi
 // Use the checked-in Nano512 extension fixture.
 fn cognitive_memory_slot() -> alife_gpu_backend::GpuBrainSlot {
     let asset = alife_core::FoundationWeightAsset::decode_canonical(include_bytes!(
-        "../../../assets/founders/scaled-choice-nociceptive-v1/candidate.alife-foundation"
+        "../../../../assets/founders/scaled-choice-nociceptive-v1/candidate.alife-foundation"
     ))
     .unwrap();
     let manifest = asset.manifest();

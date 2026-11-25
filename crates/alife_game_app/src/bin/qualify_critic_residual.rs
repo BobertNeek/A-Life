@@ -1,4 +1,5 @@
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    alife_game_app::init_headless_tracing();
     let args = std::env::args_os().skip(1).collect::<Vec<_>>();
     if args.first().is_some_and(|v| v == "--gradient-regression") {
         if args.len() != 1 {

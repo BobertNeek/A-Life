@@ -13,13 +13,12 @@ alife_world = { path = "../alife_world" }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
-
-[target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61.2", features = [
-    "Win32_Storage_FileSystem",
-] }
+tracing.workspace = true
 
 [features]
 default = []
 training-rollout = ["alife_gpu_backend/training-rollout"]
 gpu-tests = ["alife_gpu_backend/gpu-tests"]
+
+[lints]
+workspace = true

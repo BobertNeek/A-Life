@@ -588,7 +588,7 @@ pub struct PredictionUpdate {
     pub mean_absolute_error: f32,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct GroundedSuccessorPredictor {
     schema_version: u16,
     semantic_state_abi: u16,
@@ -596,7 +596,21 @@ pub struct GroundedSuccessorPredictor {
     motor_condition_abi: u16,
     learning_rate: f32,
     rows: Vec<PredictorWeightRow>,
+    #[serde(skip, default)]
+    stored_category_count: usize,
     last_update: Option<PredictionUpdate>,
+}
+
+impl PartialEq for GroundedSuccessorPredictor {
+    fn eq(&self, other: &Self) -> bool {
+        self.schema_version == other.schema_version
+            && self.semantic_state_abi == other.semantic_state_abi
+            && self.semantic_state_count == other.semantic_state_count
+            && self.motor_condition_abi == other.motor_condition_abi
+            && self.learning_rate == other.learning_rate
+            && self.rows == other.rows
+            && self.last_update == other.last_update
+    }
 }
 
 #[derive(Deserialize)]
@@ -629,14 +643,19 @@ impl<'de> Deserialize<'de> for GroundedSuccessorPredictor {
         let wire = Wire::deserialize(deserializer)?;
         let value = match wire.schema_version {
             Some(version) if version == GROUNDED_PREDICTOR_ABI_VERSION
-                && wire.weights.is_none() && wire.input_feature_count.is_none() => Self {
-                    schema_version: version,
-                    semantic_state_abi: wire.semantic_state_abi,
-                    semantic_state_count: wire.semantic_state_count,
-                    motor_condition_abi: wire.motor_condition_abi,
-                    learning_rate: wire.learning_rate,
-                    rows: wire.rows.ok_or_else(|| serde::de::Error::custom("missing predictor rows"))?.0,
-                    last_update: wire.last_update,
+                && wire.weights.is_none() && wire.input_feature_count.is_none() => {
+                    let rows = wire.rows.ok_or_else(|| serde::de::Error::custom("missing predictor rows"))?.0;
+                    let stored_category_count = rows.iter().filter(|row| row.key.is_category()).count();
+                    Self {
+                        schema_version: version,
+                        semantic_state_abi: wire.semantic_state_abi,
+                        semantic_state_count: wire.semantic_state_count,
+                        motor_condition_abi: wire.motor_condition_abi,
+                        learning_rate: wire.learning_rate,
+                        rows,
+                        stored_category_count,
+                        last_update: wire.last_update,
+                    }
                 },
             None if wire.semantic_state_abi == 0 && wire.semantic_state_count == 0
                 && wire.motor_condition_abi == 0 && wire.input_feature_count == Some(0)
@@ -671,9 +690,175 @@ impl Default for GroundedSuccessorPredictor {
             motor_condition_abi: JOINT_MOTOR_CONDITION_ABI_V2,
             learning_rate: DEFAULT_PREDICTOR_LEARNING_RATE,
             rows: Vec::new(),
+            stored_category_count: 0,
             last_update: None,
         }
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct GroundedPredictionBaseline<'a> {
+    predictor: &'a GroundedSuccessorPredictor,
+    source_state: &'a SemanticStateVector,
+    baseline_values: Vec<f32>,
+    motor_row_start: usize,
+}
+
+impl<'a> GroundedPredictionBaseline<'a> {
+    pub fn predict_for_motor(
+        &self,
+        motor_condition: &JointMotorCondition,
+    ) -> Result<SuccessorPrediction, ScaffoldContractError> {
+        motor_condition.validate_contract()?;
+        if self.predictor.motor_condition_abi != motor_condition.abi_version {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
+        let mut predicted_successor = self.baseline_values.clone();
+        let mut modelled_categories = 0_u16;
+        let mut unmodelled_categories = 0_u16;
+        let rows = &self.predictor.rows;
+        let mut cursor = self.motor_row_start;
+        let channel_scale = (MOTOR_CONTINUOUS_COMPONENTS as f32).sqrt().recip();
+
+        let mut lookup_and_accum = |key: &PredictionFeatureKey, value: f32| -> bool {
+            if cursor >= rows.len() {
+                return false;
+            }
+            match rows[cursor].key.cmp(key) {
+                std::cmp::Ordering::Equal => {
+                    for (prediction, weight) in
+                        predicted_successor.iter_mut().zip(&rows[cursor].weights)
+                    {
+                        *prediction += weight * value;
+                    }
+                    cursor += 1;
+                    true
+                }
+                std::cmp::Ordering::Greater => false,
+                std::cmp::Ordering::Less => {
+                    match rows[cursor..].binary_search_by(|row| row.key.cmp(key)) {
+                        Ok(offset) => {
+                            cursor += offset;
+                            for (prediction, weight) in
+                                predicted_successor.iter_mut().zip(&rows[cursor].weights)
+                            {
+                                *prediction += weight * value;
+                            }
+                            cursor += 1;
+                            true
+                        }
+                        Err(offset) => {
+                            cursor += offset;
+                            false
+                        }
+                    }
+                }
+            }
+        };
+
+        for factor in &motor_condition.channels {
+            use MotorContinuousComponent::*;
+            let channel = factor.channel.canonical_key();
+            let position = factor.target.and_then(|target| target.position);
+            let values = [
+                (Presence, 1.0),
+                (Intensity, factor.intensity),
+                (
+                    Duration,
+                    factor.duration_ticks as f32 / (factor.duration_ticks as f32 + 1.0),
+                ),
+                (DirectionX, signed_unit(factor.direction.x)),
+                (DirectionY, signed_unit(factor.direction.y)),
+                (DirectionZ, signed_unit(factor.direction.z)),
+                (StandOff, bounded_unit(factor.stand_off_distance)),
+                (Confidence, factor.confidence),
+                (
+                    TargetPresent,
+                    if factor.target.is_some() { 1.0 } else { 0.0 },
+                ),
+                (
+                    TargetPositionPresent,
+                    if position.is_some() { 1.0 } else { 0.0 },
+                ),
+                (
+                    TargetPositionX,
+                    position.map_or(0.0, |pos| signed_unit(pos.x)),
+                ),
+                (
+                    TargetPositionY,
+                    position.map_or(0.0, |pos| signed_unit(pos.y)),
+                ),
+                (
+                    TargetPositionZ,
+                    position.map_or(0.0, |pos| signed_unit(pos.z)),
+                ),
+                (
+                    PayloadLength,
+                    factor.payload.len() as f32 / MAX_MOTOR_PAYLOAD_VALUES as f32,
+                ),
+            ];
+            for (component, value) in values {
+                let key = PredictionFeatureKey::Continuous { channel, component };
+                lookup_and_accum(&key, value * channel_scale);
+            }
+        }
+
+        for factor in &motor_condition.channels {
+            let channel = factor.channel.canonical_key();
+            let mut check_category = |category: MotorCategory| {
+                let key = PredictionFeatureKey::Category { channel, category };
+                if lookup_and_accum(&key, 1.0) {
+                    modelled_categories += 1;
+                } else {
+                    unmodelled_categories += 1;
+                }
+            };
+            check_category(MotorCategory::Primitive(factor.primitive.raw()));
+            check_category(MotorCategory::TargetEntity(
+                factor
+                    .target
+                    .and_then(|target| target.entity)
+                    .map(|id| id.raw()),
+            ));
+            for (position, value) in factor.payload.iter().enumerate() {
+                check_category(MotorCategory::Payload {
+                    position: position as u8,
+                    value: *value,
+                });
+            }
+            check_category(MotorCategory::CoordinationGroup(factor.coordination_group));
+        }
+
+        for prediction in &mut predicted_successor {
+            if !prediction.is_finite() {
+                return Err(ScaffoldContractError::NonFiniteFloat);
+            }
+            *prediction = prediction.clamp(0.0, 1.0);
+        }
+        Ok(SuccessorPrediction {
+            source_digest: [0; 4],
+            source_state: self.source_state.clone(),
+            motor_condition: motor_condition.clone(),
+            semantic_state_abi: self.source_state.abi_version,
+            predicted_successor,
+            predictor_abi_version: GROUNDED_PREDICTOR_ABI_VERSION,
+            category_coverage: PredictionCategoryCoverage {
+                stored_categorical_keys: self.predictor.stored_category_count() as u16,
+                modelled_categories,
+                unmodelled_categories,
+            },
+        })
+    }
+}
+
+#[derive(Debug)]
+pub struct PredictorObserveUndo {
+    previous_semantic_state_abi: u16,
+    previous_semantic_state_count: usize,
+    previous_stored_category_count: usize,
+    previous_last_update: Option<PredictionUpdate>,
+    inserted_keys: Vec<PredictionFeatureKey>,
+    previous_weights: Vec<(usize, Vec<f32>)>,
 }
 
 impl GroundedSuccessorPredictor {
@@ -686,54 +871,71 @@ impl GroundedSuccessorPredictor {
         Ok(value)
     }
 
+    pub fn prepare_baseline<'a>(
+        &'a self,
+        source_state: &'a SemanticStateVector,
+    ) -> Result<GroundedPredictionBaseline<'a>, ScaffoldContractError> {
+        source_state.validate_contract()?;
+        if self.schema_version != GROUNDED_PREDICTOR_ABI_VERSION
+            || (self.semantic_state_abi != 0
+                && (self.semantic_state_abi != source_state.abi_version
+                    || self.semantic_state_count != source_state.len()))
+        {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
+        let mut baseline_values = vec![0.0_f32; source_state.len()];
+        let mut motor_row_start = 0_usize;
+        if !self.rows.is_empty() {
+            let source_scale = ((1 + source_state.len()) as f32).sqrt().recip();
+            let mut cursor = 0_usize;
+            if let Some(row) = self.rows.get(cursor) {
+                if row.key == PredictionFeatureKey::Bias {
+                    for (prediction, weight) in baseline_values.iter_mut().zip(&row.weights) {
+                        *prediction += weight * source_scale;
+                    }
+                    cursor += 1;
+                }
+            }
+            for (index, value) in source_state.values.iter().enumerate() {
+                let key = PredictionFeatureKey::Semantic(index as u8);
+                while cursor < self.rows.len() && self.rows[cursor].key < key {
+                    cursor += 1;
+                }
+                if cursor < self.rows.len() && self.rows[cursor].key == key {
+                    let scaled = *value * source_scale;
+                    for (prediction, weight) in
+                        baseline_values.iter_mut().zip(&self.rows[cursor].weights)
+                    {
+                        *prediction += weight * scaled;
+                    }
+                    cursor += 1;
+                }
+            }
+            while cursor < self.rows.len()
+                && matches!(
+                    self.rows[cursor].key,
+                    PredictionFeatureKey::Bias | PredictionFeatureKey::Semantic(_)
+                )
+            {
+                cursor += 1;
+            }
+            motor_row_start = cursor;
+        }
+        Ok(GroundedPredictionBaseline {
+            predictor: self,
+            source_state,
+            baseline_values,
+            motor_row_start,
+        })
+    }
+
     pub fn predict(
         &self,
         source_state: &SemanticStateVector,
         motor_condition: &JointMotorCondition,
     ) -> Result<SuccessorPrediction, ScaffoldContractError> {
-        source_state.validate_contract()?;
-        motor_condition.validate_contract()?;
-        self.validate_runtime_shape(source_state, motor_condition)?;
-        let features = predictor_inputs(source_state, motor_condition);
-        let mut predicted_successor = vec![0.0_f32; source_state.len()];
-        let mut modelled_categories = 0;
-        let mut unmodelled_categories = 0;
-        for (key, value) in &features {
-            match self.rows.binary_search_by(|row| row.key.cmp(key)) {
-                Ok(index) => {
-                    if key.is_category() {
-                        modelled_categories += 1;
-                    }
-                    for (prediction, weight) in predicted_successor
-                        .iter_mut()
-                        .zip(&self.rows[index].weights)
-                    {
-                        *prediction += weight * value;
-                    }
-                }
-                Err(_) if key.is_category() => unmodelled_categories += 1,
-                Err(_) => {}
-            }
-        }
-        for prediction in &mut predicted_successor {
-            if !prediction.is_finite() {
-                return Err(ScaffoldContractError::NonFiniteFloat);
-            }
-            *prediction = prediction.clamp(0.0, 1.0);
-        }
-        Ok(SuccessorPrediction {
-            source_digest: [0; 4],
-            source_state: source_state.clone(),
-            motor_condition: motor_condition.clone(),
-            semantic_state_abi: source_state.abi_version,
-            predicted_successor,
-            predictor_abi_version: GROUNDED_PREDICTOR_ABI_VERSION,
-            category_coverage: PredictionCategoryCoverage {
-                stored_categorical_keys: self.stored_category_count() as u16,
-                modelled_categories,
-                unmodelled_categories,
-            },
-        })
+        self.prepare_baseline(source_state)?
+            .predict_for_motor(motor_condition)
     }
 
     /// Returns whether the predictor has learned at least one grounded target.
@@ -747,11 +949,18 @@ impl GroundedSuccessorPredictor {
         &mut self,
         receipt: &PredictionTargetReceipt,
     ) -> Result<PredictionUpdate, ScaffoldContractError> {
+        self.observe_with_undo(receipt).map(|(update, _)| update)
+    }
+
+    pub fn observe_with_undo(
+        &mut self,
+        receipt: &PredictionTargetReceipt,
+    ) -> Result<(PredictionUpdate, PredictorObserveUndo), ScaffoldContractError> {
         receipt.validate_contract()?;
         self.validate_contract()?;
         let mut prediction = self.predict(&receipt.source_state, &receipt.motor_condition)?;
         prediction.source_digest = receipt.source_digest;
-        self.observe_frozen(receipt, &prediction)
+        self.observe_frozen_with_undo(receipt, &prediction)
     }
 
     /// Apply a target to a forecast that was computed before the world
@@ -762,6 +971,15 @@ impl GroundedSuccessorPredictor {
         receipt: &PredictionTargetReceipt,
         frozen: &SuccessorPrediction,
     ) -> Result<PredictionUpdate, ScaffoldContractError> {
+        self.observe_frozen_with_undo(receipt, frozen)
+            .map(|(update, _)| update)
+    }
+
+    pub fn observe_frozen_with_undo(
+        &mut self,
+        receipt: &PredictionTargetReceipt,
+        frozen: &SuccessorPrediction,
+    ) -> Result<(PredictionUpdate, PredictorObserveUndo), ScaffoldContractError> {
         receipt.validate_contract()?;
         self.validate_contract()?;
         frozen.source_state.validate_contract()?;
@@ -778,41 +996,37 @@ impl GroundedSuccessorPredictor {
         let mut prediction = frozen.clone();
         prediction.source_digest = receipt.source_digest;
         let features = predictor_inputs(&receipt.source_state, &receipt.motor_condition);
-        // Stage all admission and arithmetic. Invalid input or overflow cannot partly
-        // allocate categories, change coefficients, or replace the last forecast.
-        let mut staged = self.clone();
-        if staged.semantic_state_abi == 0 {
-            staged.semantic_state_abi = receipt.source_state.abi_version;
-            staged.semantic_state_count = receipt.source_state.len();
-        }
-        let mut categories = staged.stored_category_count();
-        for (key, _) in &features {
-            if let Err(index) = staged.rows.binary_search_by(|row| row.key.cmp(key)) {
+        let (next_abi, next_count) = if self.semantic_state_abi == 0 {
+            (receipt.source_state.abi_version, receipt.source_state.len())
+        } else {
+            (self.semantic_state_abi, self.semantic_state_count)
+        };
+        let mut categories = self.stored_category_count();
+        let mut missing_keys = Vec::new();
+        let mut scratch_rows: Vec<(PredictionFeatureKey, Vec<f32>)> = Vec::new();
+        let mut active = Vec::with_capacity(features.len());
+        for (key, value) in &features {
+            let slot = if let Some(slot) = scratch_rows
+                .iter()
+                .position(|(scratch_key, _)| scratch_key == key)
+            {
+                slot
+            } else if let Ok(existing_idx) = self.rows.binary_search_by(|row| row.key.cmp(key)) {
+                scratch_rows.push((key.clone(), self.rows[existing_idx].weights.clone()));
+                scratch_rows.len() - 1
+            } else {
                 if key.is_category() {
                     if categories == MAX_PREDICTOR_CATEGORIES {
                         continue;
                     }
                     categories += 1;
                 }
-                staged.rows.insert(
-                    index,
-                    PredictorWeightRow {
-                        key: key.clone(),
-                        weights: vec![0.0; staged.semantic_state_count],
-                    },
-                );
-            }
+                missing_keys.push(key.clone());
+                scratch_rows.push((key.clone(), vec![0.0; next_count]));
+                scratch_rows.len() - 1
+            };
+            active.push((slot, *value));
         }
-        let active = features
-            .iter()
-            .filter_map(|(key, value)| {
-                staged
-                    .rows
-                    .binary_search_by(|row| row.key.cmp(key))
-                    .ok()
-                    .map(|index| (index, *value))
-            })
-            .collect::<Vec<_>>();
         let input_energy = active.iter().map(|(_, value)| value * value).sum::<f32>();
         let normalized_step = self.learning_rate / input_energy.max(f32::EPSILON);
         let mut error = Vec::with_capacity(receipt.target_state.len());
@@ -828,8 +1042,8 @@ impl GroundedSuccessorPredictor {
             error.push(difference);
             squared_error += difference * difference;
             absolute_error += difference.abs();
-            for &(index, input) in &active {
-                let weight = &mut staged.rows[index].weights[output];
+            for &(slot, input) in &active {
+                let weight = &mut scratch_rows[slot].1[output];
                 *weight += normalized_step * difference * input;
                 if !weight.is_finite() {
                     return Err(ScaffoldContractError::NonFiniteFloat);
@@ -844,10 +1058,63 @@ impl GroundedSuccessorPredictor {
             mean_squared_error: squared_error / count,
             mean_absolute_error: absolute_error / count,
         };
-        staged.last_update = Some(update.clone());
-        staged.validate_contract()?;
-        *self = staged;
-        Ok(update)
+        let mut inserted_keys = Vec::with_capacity(missing_keys.len());
+        for key in missing_keys {
+            let insert_idx = self
+                .rows
+                .binary_search_by(|row| row.key.cmp(&key))
+                .expect_err("missing key cannot exist prior to insertion");
+            self.rows.insert(
+                insert_idx,
+                PredictorWeightRow {
+                    key: key.clone(),
+                    weights: Vec::new(),
+                },
+            );
+            inserted_keys.push(key);
+        }
+        let mut previous_weights = Vec::with_capacity(scratch_rows.len());
+        for (key, updated_weights) in scratch_rows {
+            let idx = self
+                .rows
+                .binary_search_by(|row| row.key.cmp(&key))
+                .expect("scratch key must exist after missing insertions");
+            let prev = std::mem::replace(&mut self.rows[idx].weights, updated_weights);
+            if !inserted_keys.contains(&key) {
+                previous_weights.push((idx, prev));
+            }
+        }
+        let undo = PredictorObserveUndo {
+            previous_semantic_state_abi: self.semantic_state_abi,
+            previous_semantic_state_count: self.semantic_state_count,
+            previous_stored_category_count: self.stored_category_count,
+            previous_last_update: self.last_update.replace(update.clone()),
+            inserted_keys,
+            previous_weights,
+        };
+        self.semantic_state_abi = next_abi;
+        self.semantic_state_count = next_count;
+        self.stored_category_count = categories;
+        if let Err(error) = self.validate_contract() {
+            self.undo_observe(undo);
+            return Err(error);
+        }
+        Ok((update, undo))
+    }
+
+    pub fn undo_observe(&mut self, undo: PredictorObserveUndo) {
+        for (idx, prev_weights) in undo.previous_weights {
+            self.rows[idx].weights = prev_weights;
+        }
+        for key in &undo.inserted_keys {
+            if let Ok(idx) = self.rows.binary_search_by(|row| row.key.cmp(key)) {
+                self.rows.remove(idx);
+            }
+        }
+        self.semantic_state_abi = undo.previous_semantic_state_abi;
+        self.semantic_state_count = undo.previous_semantic_state_count;
+        self.stored_category_count = undo.previous_stored_category_count;
+        self.last_update = undo.previous_last_update;
     }
 
     pub fn last_update(&self) -> Option<&PredictionUpdate> {
@@ -855,23 +1122,7 @@ impl GroundedSuccessorPredictor {
     }
 
     pub fn stored_category_count(&self) -> usize {
-        self.rows.iter().filter(|row| row.key.is_category()).count()
-    }
-
-    fn validate_runtime_shape(
-        &self,
-        source_state: &SemanticStateVector,
-        motor_condition: &JointMotorCondition,
-    ) -> Result<(), ScaffoldContractError> {
-        if self.schema_version != GROUNDED_PREDICTOR_ABI_VERSION
-            || self.motor_condition_abi != motor_condition.abi_version
-            || (self.semantic_state_abi != 0
-                && (self.semantic_state_abi != source_state.abi_version
-                    || self.semantic_state_count != source_state.len()))
-        {
-            return Err(ScaffoldContractError::InvalidDecisionEvidence);
-        }
-        Ok(())
+        self.stored_category_count
     }
 }
 
@@ -891,7 +1142,10 @@ impl Validate for GroundedSuccessorPredictor {
             return Err(ScaffoldContractError::ScalarOutOfRange);
         }
         if self.semantic_state_abi == 0 {
-            if self.semantic_state_count != 0 || !self.rows.is_empty() || self.last_update.is_some()
+            if self.semantic_state_count != 0
+                || !self.rows.is_empty()
+                || self.stored_category_count != 0
+                || self.last_update.is_some()
             {
                 return Err(ScaffoldContractError::InvalidDecisionEvidence);
             }
@@ -914,13 +1168,20 @@ impl Validate for GroundedSuccessorPredictor {
                 return Err(ScaffoldContractError::InvalidDecisionEvidence);
             }
         }
+        let mut actual_categories = 0_usize;
         for row in &self.rows {
+            if row.key.is_category() {
+                actual_categories += 1;
+            }
             row.key.validate(self.semantic_state_count)?;
             if row.weights.len() != self.semantic_state_count
                 || row.weights.iter().any(|weight| !weight.is_finite())
             {
                 return Err(ScaffoldContractError::InvalidDecisionEvidence);
             }
+        }
+        if actual_categories != self.stored_category_count {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
         }
         if let Some(update) = &self.last_update {
             validate_prediction_update(update, self.semantic_state_count)?;

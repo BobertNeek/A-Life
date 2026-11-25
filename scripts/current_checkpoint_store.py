@@ -49,6 +49,17 @@ def digest(path):
     return result.hexdigest()
 
 
+def _copy_and_digest(source, target):
+    copied = hashlib.sha256()
+    with source.open('rb') as src, target.open('xb') as dst:
+        while block := src.read(1024 * 1024):
+            copied.update(block)
+            dst.write(block)
+        dst.flush()
+        os.fsync(dst.fileno())
+    return copied.hexdigest()
+
+
 def sync_directory(path):
     if os.name != 'nt':
         descriptor = os.open(path, os.O_RDONLY | getattr(os, 'O_DIRECTORY', 0))
@@ -194,7 +205,7 @@ class Store:
         self.locked = False
         return self._guard.__exit__(*args)
 
-    def recover(self):
+    def recover(self, *, precomputed=None):
         require(self.locked, 'writer lock required')
         current, pending, previous, intent = [self.root / n for n in (CURRENT, NEXT, PREVIOUS, INTENT)]
         if not intent.exists():
@@ -210,13 +221,14 @@ class Store:
                             'incomplete initial import; source retained, manual reconciliation required')
                     candidate = self.root / RUN / 'import.alife-checkpoint'
                     self.validate(candidate)
-                    require(digest(candidate) == state['candidate_sha256'], 'initial import candidate changed')
+                    cand_digest = digest(candidate)
+                    require(cand_digest == state['candidate_sha256'], 'initial import candidate changed')
                     regular(pending)
                     pending.unlink()  # Incomplete unpublished copy; complete candidate is retained.
                     if (self.root / INTENT_NEXT).exists():
                         regular(self.root / INTENT_NEXT)
                         (self.root / INTENT_NEXT).unlink()
-                    self.publish(candidate, None)
+                    self.publish(candidate, None, candidate_digest=cand_digest)
                     return
             if pending.exists():
                 regular(pending)
@@ -233,8 +245,16 @@ class Store:
         before, after = record['before'], record['after']
         require(isinstance(after, str) and len(after) == 64 and
                 (before is None or isinstance(before, str) and len(before) == 64), 'invalid publication hashes')
-        hashes = {p.name: digest(p) if p.exists() else None for p in (current, pending, previous)}
         require(not any(p.is_symlink() for p in (current, pending, previous)), 'publication symlink refused')
+        if precomputed is None:
+            hashes = {p.name: digest(p) if p.exists() else None for p in (current, pending, previous)}
+        else:
+            hashes = dict(precomputed)
+            for p in (current, pending, previous):
+                if hashes[p.name] is None:
+                    require(not p.exists(), f'unexpected checkpoint file during publication: {p.name}')
+                else:
+                    regular(p)
         if hashes[CURRENT] != after:
             require(hashes[NEXT] == after, 'committed candidate missing or corrupt; prior checkpoint preserved')
             self.validate(pending)
@@ -247,12 +267,10 @@ class Store:
                         if previous.exists():
                             regular(previous)
                             previous.unlink()
-                        with current.open('rb') as source, previous.open('xb') as target:
-                            shutil.copyfileobj(source, target, 1024 * 1024)
-                            target.flush()
-                            os.fsync(target.fileno())
+                        copied = _copy_and_digest(current, previous)
                         sync_directory(self.root)
-                        require(digest(previous) == before, 'prior changed during preservation')
+                        require(copied == before, 'prior changed during preservation')
+                        hashes[PREVIOUS] = copied
                     self.hook('old-preserved')
                 else:
                     require(hashes[CURRENT] is None and hashes[PREVIOUS] == before,
@@ -261,39 +279,41 @@ class Store:
             else:
                 require(hashes[CURRENT] is None and hashes[PREVIOUS] is None, 'initial publication collision')
             replace(pending, current)
+            hashes[CURRENT] = hashes[NEXT]
+            hashes[NEXT] = None
             self.hook('new-moved')
         else:
             require(hashes[NEXT] is None, 'ambiguous pending checkpoint')
         self.validate(current)
-        require(digest(current) == after, 'current changed during admission')
+        current_digest = hashes[CURRENT] if precomputed is not None else digest(current)
+        require(current_digest == after, 'current changed during admission')
         self.hook('new-verified')
         if previous.exists():
-            require(before is not None and digest(previous) == before, 'prior checkpoint changed')
+            prior_digest = hashes[PREVIOUS] if precomputed is not None else digest(previous)
+            require(before is not None and prior_digest == before, 'prior checkpoint changed')
             previous.unlink()
+            hashes[PREVIOUS] = None
             sync_directory(self.root)
         self.hook('old-removed')
         intent.unlink()
         sync_directory(self.root)
         self.hook('intent-removed')
 
-    def publish(self, candidate, expected):
+    def publish(self, candidate, expected, *, candidate_digest=None):
         require(self.locked, 'writer lock required')
         self.recover()
         actual = digest(self.current) if self.current.exists() else None
         require(actual == expected, 'accepted current changed before publication')
         candidate = Path(candidate)
         self.validate(candidate)
-        after = digest(candidate)
+        after = candidate_digest if candidate_digest is not None else digest(candidate)
         if actual == after:
             return actual
         pending = self.root / NEXT
-        with candidate.open('rb') as source, pending.open('xb') as target:
-            shutil.copyfileobj(source, target, 1024 * 1024)
-            target.flush()
-            os.fsync(target.fileno())
+        copied = _copy_and_digest(candidate, pending)
         sync_directory(self.root)
         self.hook('candidate-written')
-        require(digest(pending) == after, 'candidate changed during publication')
+        require(copied == after, 'candidate changed during publication')
         self.validate(pending)
         self.hook('candidate-verified')
         intent_next = self.root / INTENT_NEXT
@@ -301,7 +321,7 @@ class Store:
         self.hook('intent-prepared')
         replace(intent_next, self.root / INTENT)
         self.hook('intent-written')
-        self.recover()
+        self.recover(precomputed={CURRENT: actual, NEXT: after, PREVIOUS: None})
         return after
 
     def run_state(self):

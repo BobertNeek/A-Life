@@ -371,48 +371,13 @@ pub(super) fn sync_directory_ancestry(root: &Path) -> io::Result<()> {
     Ok(())
 }
 
-#[cfg(unix)]
 pub(super) fn publish_new(pending: &Path, sealed: &Path) -> io::Result<()> {
-    fs::hard_link(pending, sealed)?;
-    fs::remove_file(pending)?;
+    alife_storage::atomic_publish_new_file(pending, sealed)?;
     sync_directory(
         sealed
             .parent()
             .ok_or_else(|| invalid("collector parent missing"))?,
     )
-}
-
-#[cfg(windows)]
-pub(super) fn publish_new(pending: &Path, sealed: &Path) -> io::Result<()> {
-    use std::os::windows::ffi::OsStrExt;
-    #[link(name = "kernel32")]
-    unsafe extern "system" {
-        fn MoveFileExW(existing: *const u16, new: *const u16, flags: u32) -> i32;
-    }
-    let wide = |path: &Path| {
-        path.as_os_str()
-            .encode_wide()
-            .chain(Some(0))
-            .collect::<Vec<_>>()
-    };
-    let pending = wide(pending);
-    let sealed = wide(sealed);
-    // SAFETY: both paths own live NUL-terminated UTF-16 buffers. Exactly as in
-    // cohort replay publication, WRITE_THROUGH persists the rename; omitting
-    // REPLACE_EXISTING guarantees that another output cannot be overwritten.
-    const MOVEFILE_WRITE_THROUGH: u32 = 0x8;
-    if unsafe { MoveFileExW(pending.as_ptr(), sealed.as_ptr(), MOVEFILE_WRITE_THROUGH) } == 0 {
-        Err(io::Error::last_os_error())
-    } else {
-        Ok(())
-    }
-}
-#[cfg(not(any(unix, windows)))]
-pub(super) fn publish_new(_: &Path, _: &Path) -> io::Result<()> {
-    Err(io::Error::new(
-        io::ErrorKind::Unsupported,
-        "durable collector publication unsupported",
-    ))
 }
 
 #[cfg(test)]

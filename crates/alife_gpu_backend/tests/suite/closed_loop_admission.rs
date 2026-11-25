@@ -1,6 +1,7 @@
 //! Shared-backend admission and VRAM accounting tests.
 
-mod support;
+#[allow(unused_imports)]
+use crate::support;
 
 #[cfg(feature = "gpu-tests")]
 use alife_core::OrganismId;
@@ -633,4 +634,89 @@ fn production_profile_accepts_only_the_known_previous_v1_checkpoint_envelope() {
     assert!(!current
         .accepts_portable_checkpoint_profile(previous_v1.profile_id + 1, previous_digest)
         .unwrap());
+}
+
+#[cfg(feature = "gpu-tests")]
+#[test]
+fn replace_curated_cohort_supports_shrinking_equal_and_growing_retained_transitions() {
+    use alife_core::{
+        CreatureGenome, FoundationGeneticIdentity, FoundationWeightAsset,
+        N512FounderFoundationProjection,
+    };
+    use alife_gpu_backend::{
+        GpuClosedLoopBackend, GpuCuratedResidencyCohort, GpuCuratedResidencyEntry,
+        GpuCuratedResidencyOutcome, GpuCuratedResidencyTargetIdentity,
+    };
+
+    let foundation =
+        FoundationWeightAsset::builtin_nano512_v1(SensorProfile::PrivilegedAffordanceV1).unwrap();
+    let manifest = foundation.manifest();
+    let foundation_digest = foundation.digest();
+    let identity = FoundationGeneticIdentity::new(
+        manifest.foundation_id().raw(),
+        u16::try_from(manifest.foundation_version().raw()).unwrap(),
+        manifest.compatibility_family_id().raw(),
+        BrainCapacityClass::N512_ID,
+    )
+    .unwrap();
+    let build_entry = |seed: u64, organism_raw: u64| {
+        let expressed = CreatureGenome::early_mammal_founder(seed, identity)
+            .unwrap()
+            .express()
+            .unwrap();
+        let phenotype = N512FounderFoundationProjection::compile(
+            &expressed,
+            SensorProfile::PrivilegedAffordanceV1,
+            &foundation,
+        )
+        .unwrap()
+        .compiled_phenotype()
+        .clone();
+        GpuCuratedResidencyEntry {
+            organism_id: OrganismId(organism_raw),
+            opaque_target_identity: GpuCuratedResidencyTargetIdentity::new(organism_raw + 100),
+            exact_phenotype_hash: phenotype.phenotype_hash(),
+            exact_foundation_hash: foundation_digest,
+            phenotype,
+        }
+    };
+
+    let mut backend =
+        GpuClosedLoopBackend::new_required(GpuRuntimeProfile::production_v1()).unwrap();
+    for (seed, raw) in [(4_601, 1), (4_602, 2), (4_603, 3)] {
+        let entry = build_entry(seed, raw);
+        backend
+            .insert_brain(entry.organism_id, entry.phenotype)
+            .unwrap();
+    }
+
+    // Wait-free shrinking (3 -> 2), equal (2 -> 2), and growing (2 -> 3) retained replacements.
+    for (index, entries) in [
+        vec![build_entry(4_611, 11), build_entry(4_612, 12)],
+        vec![build_entry(4_621, 21), build_entry(4_622, 22)],
+        vec![
+            build_entry(4_631, 31),
+            build_entry(4_632, 32),
+            build_entry(4_633, 33),
+        ],
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let expected_len = entries.len() as u32;
+        let cohort = GpuCuratedResidencyCohort {
+            expected_old_generation: backend.curated_residency_generation(),
+            new_generation_fingerprint: [index as u64 + 1, 2, 3, 4],
+            ordered_entries: entries,
+        };
+        let outcome = backend.replace_curated_cohort(&cohort);
+        assert!(
+            matches!(outcome, GpuCuratedResidencyOutcome::Committed(_)),
+            "curated cohort transition {index} failed: {outcome:?}"
+        );
+        let receipt = backend.admission_receipt();
+        receipt.validate_contract().unwrap();
+        assert_eq!(receipt.live_brains, expected_len);
+        assert_eq!(receipt.last_event.unwrap().event_kind_raw, 5);
+    }
 }

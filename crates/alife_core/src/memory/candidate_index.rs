@@ -2,6 +2,7 @@ use super::*;
 
 use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::BTreeMap;
+use std::sync::OnceLock;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub(super) struct MemoryBucketKey {
@@ -144,7 +145,7 @@ impl CandidateMemoryRecordV2 {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub(super) struct CandidateMemoryStoreV2 {
     pub(super) generation: u64,
     pub(super) next_memory_id: u64,
@@ -152,6 +153,8 @@ pub(super) struct CandidateMemoryStoreV2 {
     pub(super) eviction_count: u64,
     pub(super) records: BTreeMap<u64, CandidateMemoryRecordV2>,
     pub(super) last_sequence_by_organism: BTreeMap<u64, u64>,
+    #[serde(skip, default)]
+    pub(super) cached_digest: OnceLock<(usize, [u64; 4])>,
     #[serde(skip, default)]
     pub(super) family_index: BTreeMap<MemoryBucketKey, Vec<MemoryId>>,
     #[serde(skip, default)]
@@ -168,6 +171,23 @@ pub(super) struct CandidateMemoryStoreV2 {
     pub(super) target_category_index: BTreeMap<TargetMemoryBucketKey, Vec<MemoryId>>,
 }
 
+impl PartialEq for CandidateMemoryStoreV2 {
+    fn eq(&self, other: &Self) -> bool {
+        self.generation == other.generation
+            && self.next_memory_id == other.next_memory_id
+            && self.merge_count == other.merge_count
+            && self.eviction_count == other.eviction_count
+            && self.records == other.records
+            && self.last_sequence_by_organism == other.last_sequence_by_organism
+            && self.family_index == other.family_index
+            && self.target_index == other.target_index
+            && self.family_namespace_index == other.family_namespace_index
+            && self.target_namespace_index == other.target_namespace_index
+            && self.family_category_index == other.family_category_index
+            && self.target_category_index == other.target_category_index
+    }
+}
+
 impl Default for CandidateMemoryStoreV2 {
     fn default() -> Self {
         Self {
@@ -177,6 +197,7 @@ impl Default for CandidateMemoryStoreV2 {
             eviction_count: 0,
             records: BTreeMap::new(),
             last_sequence_by_organism: BTreeMap::new(),
+            cached_digest: OnceLock::new(),
             family_index: BTreeMap::new(),
             target_index: BTreeMap::new(),
             family_namespace_index: BTreeMap::new(),
@@ -238,6 +259,7 @@ impl<'de> Deserialize<'de> for CandidateMemoryStoreV2 {
             eviction_count: wire.eviction_count,
             records: wire.records,
             last_sequence_by_organism: wire.last_sequence_by_organism,
+            cached_digest: OnceLock::new(),
             family_index: BTreeMap::new(),
             target_index: BTreeMap::new(),
             family_namespace_index: BTreeMap::new(),
@@ -287,7 +309,22 @@ impl CandidateMemoryStoreV2 {
         Ok(())
     }
 
+    pub(super) fn invalidate_digest_cache(&mut self) {
+        self.cached_digest.take();
+    }
+
     pub(super) fn digest(&self, capacity: usize) -> Result<[u64; 4], ScaffoldContractError> {
+        if let Some(&(cached_capacity, cached_digest)) = self.cached_digest.get() {
+            if cached_capacity == capacity {
+                return Ok(cached_digest);
+            }
+        }
+        let computed = self.compute_digest(capacity)?;
+        let _ = self.cached_digest.set((capacity, computed));
+        Ok(computed)
+    }
+
+    fn compute_digest(&self, capacity: usize) -> Result<[u64; 4], ScaffoldContractError> {
         self.validate_for_capacity(capacity)?;
         let mut digest = CanonicalDigestBuilder::new(CANDIDATE_MEMORY_BANK_DOMAIN);
         digest.write_u16(MEMORY_RECALL_SCHEMA_VERSION);
@@ -491,6 +528,7 @@ impl CandidateMemoryStoreV2 {
     }
 
     pub(super) fn rebuild_indices(&mut self) {
+        self.invalidate_digest_cache();
         self.family_index.clear();
         self.target_index.clear();
         self.family_namespace_index.clear();
@@ -577,6 +615,20 @@ pub(super) fn target_bins(features: &[f32]) -> [i8; CANDIDATE_FEATURE_COUNT] {
         *output = (value.clamp(-1.0, 1.0) * 7.0).round() as i8;
     }
     bins
+}
+
+pub(super) fn target_bin_distance_from_features(
+    query_bins: [i8; CANDIDATE_FEATURE_COUNT],
+    features: &[f32],
+) -> u32 {
+    query_bins
+        .into_iter()
+        .zip(features[MEMORY_TARGET_RANGE].iter())
+        .map(|(left, value)| {
+            let right = (value.clamp(-1.0, 1.0) * 7.0).round() as i8;
+            u32::from(left.abs_diff(right))
+        })
+        .sum()
 }
 
 pub(super) fn keys_for_query(

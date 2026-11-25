@@ -46,6 +46,7 @@ fn parse_request(mut args: impl Iterator<Item = OsString>) -> Result<InspectionR
 }
 
 fn main() -> Result<()> {
+    alife_game_app::init_headless_tracing();
     let request = parse_request(std::env::args_os().skip(1))?;
     // Native replay records contain large fixed-size state frames. Keep their
     // read-only decoding off Windows' small default executable stack.

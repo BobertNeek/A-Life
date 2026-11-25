@@ -9,9 +9,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-#[cfg(feature = "gpu-runtime")]
-use bevy::prelude::{NonSend, NonSendMut};
-
 use crate::BevyEntityMap;
 use alife_core::{OrganismId, Tick, Vec3f, WorldEntityId};
 use alife_world::CreatureAppearanceGenome;
@@ -1628,8 +1625,8 @@ pub fn production_archive_birth_manifest_for_test(
     organism_id: OrganismId,
 ) -> Option<alife_core::Blake3Digest> {
     app.world_mut()
-        .get_non_send_resource_mut::<ProductionGpuBrainRuntimeResource>()
-        .and_then(|runtime| runtime.runtime.archive_birth_manifest(organism_id))
+        .get_resource_mut::<ProductionGpuBrainRuntimeResource>()
+        .and_then(|runtime| runtime.lock().archive_birth_manifest(organism_id))
 }
 
 fn configure_production_voxel_presentation_schedule(app: &mut App) {
@@ -1829,16 +1826,17 @@ fn apply_production_runtime_load(world: &mut World) {
         }
         let staging_backend = {
             let live_runtime = world
-                .get_non_send_resource_mut::<ProductionGpuBrainRuntimeResource>()
+                .get_resource::<ProductionGpuBrainRuntimeResource>()
                 .ok_or_else(|| GameAppShellError::InvalidProductionFrontend {
                     message: "production GPU runtime missing during runtime load".to_string(),
                 })?;
-            live_runtime
-                .runtime
+            let backend = live_runtime
+                .lock()
                 .new_staging_like_live()
                 .map_err(|error| GameAppShellError::InvalidProductionFrontend {
                     message: format!("same-device staging backend unavailable: {error}"),
-                })?
+                })?;
+            backend
         };
         let menu_open = world
             .get_resource::<menu::MenuState>()
@@ -1852,12 +1850,13 @@ fn apply_production_runtime_load(world: &mut World) {
 
         {
             let mut live_runtime = world
-                .get_non_send_resource_mut::<ProductionGpuBrainRuntimeResource>()
+                .get_resource_mut::<ProductionGpuBrainRuntimeResource>()
                 .ok_or_else(|| GameAppShellError::InvalidProductionFrontend {
                     message: "production GPU runtime missing at load commit".to_string(),
                 })?;
+            live_runtime.clear_completed_batches();
             live_runtime
-                .runtime
+                .lock_mut()
                 .replace_from_durable_save(staging_backend, durable)?;
         }
 
@@ -1936,7 +1935,7 @@ pub(crate) fn dispatch_production_curated_founder_reset_core<R: CuratedFounderRe
 #[cfg(feature = "gpu-runtime")]
 fn dispatch_production_curated_founder_reset(
     mut commands: MessageReader<ProductionCuratedFounderResetCommand>,
-    mut runtime: NonSendMut<ProductionGpuBrainRuntimeResource>,
+    mut runtime: ResMut<ProductionGpuBrainRuntimeResource>,
     mut result: ResMut<ProductionCuratedFounderResetResultResource>,
     mut ux: ResMut<Fvr05ProductionUxStateResource>,
 ) {
@@ -1945,7 +1944,7 @@ fn dispatch_production_curated_founder_reset(
         return;
     }
     ux.pending_food_move = None;
-    dispatch_production_curated_founder_reset_core(&pending, &mut runtime.runtime, &mut result);
+    dispatch_production_curated_founder_reset_core(&pending, &mut *runtime.lock_mut(), &mut result);
 }
 
 pub fn spawn_fvr03_production_voxel_scene(
@@ -4937,7 +4936,9 @@ fn handle_fvr03_mouse_selection(
             let distance = ray.intersect_plane(Vec3::ZERO, InfinitePlane3d::default())?;
             ray.get_point(distance)
         };
-        hand.ground = Some(position);
+        if hand.ground != Some(position) {
+            hand.ground = Some(position);
+        }
         let tile = if highland.is_some() {
             VoxelTileCoord::new(position.x.floor() as i32, position.z.floor() as i32)
         } else {
@@ -4991,7 +4992,7 @@ fn handle_fvr03_mouse_selection(
             }
         }))
     })();
-    if hovered.is_none() {
+    if hovered.is_none() && hand.ground.is_some() {
         hand.ground = None;
     }
     apply_fvr03_pointer_sample(
@@ -5084,10 +5085,14 @@ fn apply_fvr03_pointer_sample(
     hovered: Option<StableVoxelObjectRef>,
     select: bool,
 ) {
-    selection.hovered = hovered;
+    if selection.hovered != hovered {
+        selection.hovered = hovered;
+    }
     if select {
         if let Some(hovered) = hovered {
-            selection.selected = Some(hovered);
+            if selection.selected != Some(hovered) {
+                selection.selected = Some(hovered);
+            }
         }
     }
 }
@@ -5758,10 +5763,11 @@ fn phase31_frame_snapshot(
     schedule: &ProductionGpuBrainTickScheduleResource,
     presentation: &LiveBrainPresentationFrameResource,
 ) -> Phase31FrameSnapshot {
+    let runtime = runtime.lock();
     Phase31FrameSnapshot {
-        runtime: runtime.runtime.performance_metrics(),
+        runtime: runtime.performance_metrics(),
         scheduler: schedule.performance_counters(),
-        checkpoint: runtime.runtime.exact_checkpoint_performance_state(),
+        checkpoint: runtime.exact_checkpoint_performance_state(),
         world_tick: presentation.current.authoritative_world_tick.raw(),
         world_objects: u64::try_from(presentation.current.object_count()).unwrap_or(u64::MAX),
         organisms: u64::try_from(presentation.current.organism_count()).unwrap_or(u64::MAX),
@@ -5771,7 +5777,7 @@ fn phase31_frame_snapshot(
 #[cfg(feature = "gpu-runtime")]
 fn phase31_performance_frame_begin(
     mut metrics: ResMut<Phase31PerformanceMetricsResource>,
-    runtime: NonSend<ProductionGpuBrainRuntimeResource>,
+    runtime: Res<ProductionGpuBrainRuntimeResource>,
     schedule: Res<ProductionGpuBrainTickScheduleResource>,
     presentation: Res<LiveBrainPresentationFrameResource>,
 ) {
@@ -5785,7 +5791,7 @@ fn phase31_performance_frame_begin(
         metrics.measurement_completed_at = None;
         metrics.measurement_start_world_tick =
             Some(presentation.current.authoritative_world_tick.raw());
-        metrics.runtime_baseline = Some(runtime.runtime.performance_metrics());
+        metrics.runtime_baseline = Some(runtime.lock().performance_metrics());
         metrics.scheduler_baseline = Some(schedule.performance_counters());
         metrics.last_frame_at = now;
         metrics.frame_snapshot = Some(end_snapshot);
@@ -5904,7 +5910,7 @@ fn phase31_performance_after_procedural_animation(
 #[cfg(feature = "gpu-runtime")]
 fn phase31_performance_after_ui(
     mut metrics: ResMut<Phase31PerformanceMetricsResource>,
-    runtime: NonSend<ProductionGpuBrainRuntimeResource>,
+    runtime: Res<ProductionGpuBrainRuntimeResource>,
     schedule: Res<ProductionGpuBrainTickScheduleResource>,
     authority: Res<ProductionGpuBrainAuthorityResource>,
     presentation: Res<LiveBrainPresentationFrameResource>,
@@ -5927,24 +5933,25 @@ fn phase31_performance_after_ui(
     if !draining {
         return;
     }
+    let runtime = runtime.lock();
     let drain_timed_out = metrics.measurement_completed_at.is_some_and(|completed| {
         Instant::now().duration_since(completed) >= PHASE31_PERSISTENCE_DRAIN_TIMEOUT
     });
-    if !runtime.runtime.persistence_terminal_for_shutdown() && !drain_timed_out {
+    if !runtime.persistence_terminal_for_shutdown() && !drain_timed_out {
         return;
     }
     if drain_timed_out {
-        let diagnostics = runtime.runtime.persistence_shutdown_diagnostics();
+        let diagnostics = runtime.persistence_shutdown_diagnostics();
         eprintln!("PHASE31_PERSISTENCE_DRAIN_TIMEOUT {diagnostics}");
         metrics.write_error = Some(diagnostics);
         exits.write(AppExit::Error(std::num::NonZeroU8::new(1).unwrap()));
         return;
     }
-    let persistence_failed = runtime.runtime.persistence_failed_for_shutdown();
+    let persistence_failed = runtime.persistence_failed_for_shutdown();
     let performance_failed = schedule.performance_failed() || persistence_failed || drain_timed_out;
     match write_phase31_performance_receipt(
         &metrics,
-        &runtime.runtime,
+        &runtime,
         schedule.performance_counters(),
         presentation.current.authoritative_world_tick.raw(),
         metrics
@@ -5961,7 +5968,7 @@ fn phase31_performance_after_ui(
                 "PHASE31_PERFORMANCE_RECEIPT_ERROR error={error}; authority_reason={:?}; scheduler={:?}; persistence={}",
                 authority.telemetry.unavailable_reason,
                 schedule.performance_counters(),
-                runtime.runtime.persistence_shutdown_diagnostics()
+                runtime.persistence_shutdown_diagnostics()
             );
             metrics.write_error = Some(error);
             exits.write(AppExit::Error(std::num::NonZeroU8::new(1).unwrap()));
@@ -6046,9 +6053,7 @@ fn request_fvr03_recorded_screenshot(
         ResMut<ProductionConversationLineageUiState>,
     >,
     #[cfg(feature = "gpu-runtime")] phase31: Option<Res<Phase31PerformanceMetricsResource>>,
-    #[cfg(feature = "gpu-runtime")] mut runtime: Option<
-        NonSendMut<ProductionGpuBrainRuntimeResource>,
-    >,
+    #[cfg(feature = "gpu-runtime")] mut runtime: Option<ResMut<ProductionGpuBrainRuntimeResource>>,
     #[cfg(feature = "gpu-runtime")] mut schedule: Option<
         ResMut<ProductionGpuBrainTickScheduleResource>,
     >,
@@ -6062,18 +6067,19 @@ fn request_fvr03_recorded_screenshot(
                 schedule.pause();
             }
             if let Some(runtime) = runtime.as_deref_mut() {
-                if let Err(error) = runtime.runtime.poll_persistence_for_shutdown() {
+                let mut runtime = runtime.lock_mut();
+                if let Err(error) = runtime.poll_persistence_for_shutdown() {
                     eprintln!("PRODUCTION_CAPTURE_PERSISTENCE_ERROR {error}");
                 }
-                if !runtime.runtime.persistence_terminal_for_shutdown()
+                if !runtime.persistence_terminal_for_shutdown()
                     && started.elapsed() < PHASE31_PERSISTENCE_DRAIN_TIMEOUT
                 {
                     return;
                 }
-                if !runtime.runtime.persistence_terminal_for_shutdown() {
+                if !runtime.persistence_terminal_for_shutdown() {
                     eprintln!(
                         "PRODUCTION_CAPTURE_DRAIN_TIMEOUT {}",
-                        runtime.runtime.persistence_shutdown_diagnostics()
+                        runtime.persistence_shutdown_diagnostics()
                     );
                 }
             }
@@ -6434,6 +6440,13 @@ fn write_fvr03_performance_artifact(
     );
     fs::write(&path, contents)?;
     Ok(path)
+}
+
+#[doc(hidden)]
+pub fn disable_creature_spawn_context_for_test(app: &mut App) {
+    let _ = app
+        .world_mut()
+        .remove_resource::<Fvr04CreatureSpawnContext>();
 }
 
 #[cfg(test)]

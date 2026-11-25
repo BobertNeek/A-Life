@@ -38,10 +38,15 @@ impl GpuLiveBrainRuntime {
         if let Some(prior) = self.semantic_prior.as_mut() {
             prior.retain_lives(&self.handles);
         }
-        self.last_sealed_patches
-            .retain(|patch| self.handles.contains_key(&patch.header().organism_id.raw()));
-        self.restored_replay_patches
-            .retain(|patch| self.handles.contains_key(&patch.header().organism_id.raw()));
+        self.retain_last_sealed_patches_for_live_handles();
+        if self
+            .restored_replay_patches
+            .iter()
+            .any(|patch| !self.handles.contains_key(&patch.header().organism_id.raw()))
+        {
+            std::sync::Arc::make_mut(&mut self.restored_replay_patches)
+                .retain(|patch| self.handles.contains_key(&patch.header().organism_id.raw()));
+        }
         self.last_learning_receipts.clear();
         self.last_gpu_authority_receipts.clear();
         self.last_activity_work_receipts.clear();
@@ -168,17 +173,15 @@ impl GpuLiveBrainRuntime {
                 })
                 .collect::<Result<Vec<_>, _>>()?
         };
+        let scheduled_count = scheduled_handles.len();
         let workers = preparation_worker_count(
-            scheduled_handles.len(),
+            scheduled_count,
             thread::available_parallelism().map_or(1, usize::from),
         );
         let audited_cognition = self.uses_audited_cognition();
-        let mut captured_rows = Vec::with_capacity(if workers == 2 {
-            scheduled_handles.len()
-        } else {
-            0
-        });
-        let perception_index = self.world.build_perception_batch_index()?;
+        let pipelined_candidate = self.pipelined_next_prep.take();
+        let mut dispatchable_handles = Vec::with_capacity(scheduled_count);
+        let mut captured_rows = Vec::with_capacity(if workers > 1 { scheduled_count } else { 0 });
         self.performance_metrics.tick_preamble_wall_ns = self
             .performance_metrics
             .tick_preamble_wall_ns
@@ -273,7 +276,9 @@ impl GpuLiveBrainRuntime {
                                 .memories
                                 .get_mut(&raw)
                                 .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?,
+                            memory_undos: &mut self.staged_memory_undos,
                             predictor: &mut resident.predictor,
+                            predictor_undos: &mut self.staged_predictor_undos,
                             topology: self
                                 .topologies
                                 .get_mut(&raw)
@@ -521,109 +526,207 @@ impl GpuLiveBrainRuntime {
                 );
                 continue;
             }
-            #[cfg(feature = "gpu-tests")]
-            let force_preparation_failure = self.forced_memory_preparation_failures.remove(&raw);
-            #[cfg(not(feature = "gpu-tests"))]
-            let force_preparation_failure = false;
-            let mut preparation_stage = "receptors";
-            let preparation = (|| -> Result<CapturedLivePreparation, ScaffoldContractError> {
-                if force_preparation_failure {
-                    return Err(ScaffoldContractError::InvalidMemoryQuery);
+            dispatchable_handles.push((raw, handle, world_entity_id));
+        }
+        #[cfg(feature = "gpu-tests")]
+        let has_forced_prep_failures = !self.forced_memory_preparation_failures.is_empty();
+        #[cfg(not(feature = "gpu-tests"))]
+        let has_forced_prep_failures = false;
+        let can_use_pipelined = !has_forced_prep_failures
+            && !dispatchable_handles.is_empty()
+            && (self.semantic_prior.is_none()
+                || self.sensor_profile != SensorProfile::GroundedTerrainVisionV1)
+            && dispatchable_handles.len() == scheduled_count
+            && pipelined_candidate.as_ref().is_some_and(|prep| {
+                prep.target_tick == tick_before
+                    && prep.world_mutation_epoch == self.world_mutation_epoch
+                    && prep.sensor_profile == self.sensor_profile
+                    && prep.audited_cognition == audited_cognition
+                    && prep.organisms.len() == dispatchable_handles.len()
+                    && dispatchable_handles
+                        .iter()
+                        .all(|(raw, handle, world_entity_id)| {
+                            let Some(entry) = prep.organisms.get(raw) else {
+                                return false;
+                            };
+                            let Some(organism) =
+                                self.world.organism_registry().get(OrganismId(*raw))
+                            else {
+                                return false;
+                            };
+                            let Some(resident) = self.residents.get(raw) else {
+                                return false;
+                            };
+                            let Some(memory) = self.memories.get(raw) else {
+                                return false;
+                            };
+                            let Some(topology) = self.topologies.get(raw) else {
+                                return false;
+                            };
+                            entry.key.handle == *handle
+                                && entry.key.world_entity_id == *world_entity_id
+                                && entry.key.homeostasis == resident.homeostasis
+                                && entry.key.embodiment_revision
+                                    == organism.state_graph().embodiment.revision
+                                && entry.key.sequence_id
+                                    == ExperienceSequenceId(resident.next_sequence)
+                                && entry.key.hysteresis == resident.attention_hysteresis
+                                && entry.key.memory_binding == memory.runtime_generation_binding()
+                                && entry.key.topology_digest
+                                    == topology.diagnostics().canonical_digest
+                                && organism
+                                    .biochemistry()
+                                    .neural_receptor_frame(organism.phenotype())
+                                    .ok()
+                                    .as_ref()
+                                    == Some(&entry.key.neural_receptors)
+                        })
+            });
+        if can_use_pipelined {
+            let mut prep = pipelined_candidate.expect("validated pipelined preparation");
+            self.world
+                .install_speculative_tracked_objects_in_staged_tick(prep.next_tracked_objects);
+            grounded_perception_wall_ns =
+                grounded_perception_wall_ns.saturating_add(prep.grounded_perception_wall_ns);
+            for (raw, _, _) in dispatchable_handles {
+                let mut entry = prep
+                    .organisms
+                    .remove(&raw)
+                    .expect("validated pipelined organism");
+                if let Some(prior) = self.semantic_prior.as_mut() {
+                    entry.captured.input.draft = prior
+                        .prepare(entry.captured.input.draft, entry.captured.input.sequence_id)?;
                 }
-                let grounded_perception_started = measure_preparation.then(Instant::now);
-                let organism = self
-                    .world
-                    .organism_registry()
-                    .get(OrganismId(raw))
-                    .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-                let neural_receptors = organism
-                    .biochemistry()
-                    .neural_receptor_frame(organism.phenotype())?;
-                if neural_receptors.source_tick != tick_before {
-                    return Err(ScaffoldContractError::InvalidDecisionEvidence);
-                }
-                let receptor_effects = resident
-                    .neural_receptors
-                    .effects_for(&resident.phenotype, &neural_receptors)?;
-                preparation_stage = "grounded draft";
-                let draft = self.world.perception_frame_draft_indexed(
-                    OrganismId(raw),
-                    tick_before,
-                    self.sensor_profile,
-                    resident.homeostasis,
-                    &perception_index,
-                )?;
-                // This is the owner's hint snapshot boundary for this attempt.
-                // Poll once in roster order, freeze the returned context in the
-                // owned draft, and leave replies arriving after this point for
-                // a later preparation. Workers never receive the prior actor.
-                let draft = if let Some(prior) = self.semantic_prior.as_mut() {
-                    prior.prepare(draft, ExperienceSequenceId(resident.next_sequence))?
-                } else {
-                    draft
-                };
-                grounded_perception_wall_ns = grounded_perception_wall_ns
-                    .saturating_add(grounded_perception_started.map_or(0, elapsed_ns));
-                Ok(CapturedLivePreparation {
-                    handle,
-                    world_entity_id,
-                    input: CapturedCpuPreparation {
-                        approximate_cache: (!audited_cognition)
-                            .then(|| resident.approximate_cache.clone()),
-                        draft,
-                        sequence_id: ExperienceSequenceId(resident.next_sequence),
-                        homeostasis: resident.homeostasis,
-                        hysteresis: resident.attention_hysteresis,
-                        policy: attention_selection_policy_for(&resident.phenotype),
-                        neural_receptors,
-                        receptor_effects,
+                collect_preparation(
+                    self,
+                    entry.captured,
+                    entry.outcome,
+                    &mut CpuPreparationCollection {
+                        batch: &mut batch,
+                        summaries: &mut summaries_by_organism,
+                        tick_before,
+                        tick_after,
+                        timing: &mut cpu_timing,
+                        measure: measure_preparation,
                     },
-                })
-            })();
-            match preparation {
-                Ok(captured) => {
-                    if workers == 1 {
-                        let outcomes = self.prepare_captured_cpu_rows(
-                            std::slice::from_ref(&captured),
-                            1,
-                            measure_preparation,
-                        )?;
-                        let outcome = outcomes
-                            .into_iter()
-                            .next()
-                            .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
-                        collect_preparation(
-                            self,
-                            captured,
-                            outcome,
-                            &mut CpuPreparationCollection {
-                                batch: &mut batch,
-                                summaries: &mut summaries_by_organism,
+                )?;
+            }
+        } else if !dispatchable_handles.is_empty() {
+            let perception_index = self.world.build_perception_batch_index()?;
+            for (raw, handle, world_entity_id) in dispatchable_handles {
+                #[cfg(feature = "gpu-tests")]
+                let force_preparation_failure =
+                    self.forced_memory_preparation_failures.remove(&raw);
+                #[cfg(not(feature = "gpu-tests"))]
+                let force_preparation_failure = false;
+                let mut preparation_stage = "receptors";
+                let preparation = (|| -> Result<CapturedLivePreparation, ScaffoldContractError> {
+                    if force_preparation_failure {
+                        return Err(ScaffoldContractError::InvalidMemoryQuery);
+                    }
+                    let grounded_perception_started = measure_preparation.then(Instant::now);
+                    let organism = self
+                        .world
+                        .organism_registry()
+                        .get(OrganismId(raw))
+                        .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+                    let neural_receptors = organism
+                        .biochemistry()
+                        .neural_receptor_frame(organism.phenotype())?;
+                    if neural_receptors.source_tick != tick_before {
+                        return Err(ScaffoldContractError::InvalidDecisionEvidence);
+                    }
+                    let resident = self
+                        .residents
+                        .get_mut(&raw)
+                        .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+                    let receptor_effects = resident
+                        .neural_receptors
+                        .effects_for(&resident.phenotype, &neural_receptors)?;
+                    preparation_stage = "grounded draft";
+                    let draft = self.world.perception_frame_draft_indexed(
+                        OrganismId(raw),
+                        tick_before,
+                        self.sensor_profile,
+                        resident.homeostasis,
+                        &perception_index,
+                    )?;
+                    // This is the owner's hint snapshot boundary for this attempt.
+                    // Poll once in roster order, freeze the returned context in the
+                    // owned draft, and leave replies arriving after this point for
+                    // a later preparation. Workers never receive the prior actor.
+                    let draft = if let Some(prior) = self.semantic_prior.as_mut() {
+                        prior.prepare(draft, ExperienceSequenceId(resident.next_sequence))?
+                    } else {
+                        draft
+                    };
+                    grounded_perception_wall_ns = grounded_perception_wall_ns
+                        .saturating_add(grounded_perception_started.map_or(0, elapsed_ns));
+                    let resident = self
+                        .residents
+                        .get(&raw)
+                        .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+                    Ok(CapturedLivePreparation {
+                        handle,
+                        world_entity_id,
+                        input: CapturedCpuPreparation {
+                            approximate_cache: (!audited_cognition)
+                                .then(|| resident.approximate_cache.clone()),
+                            draft,
+                            sequence_id: ExperienceSequenceId(resident.next_sequence),
+                            homeostasis: resident.homeostasis,
+                            hysteresis: resident.attention_hysteresis,
+                            policy: attention_selection_policy_for(&resident.phenotype),
+                            neural_receptors,
+                            receptor_effects,
+                        },
+                    })
+                })();
+                match preparation {
+                    Ok(captured) => {
+                        if workers == 1 {
+                            let outcomes = self.prepare_captured_cpu_rows(
+                                std::slice::from_ref(&captured),
+                                1,
+                                measure_preparation,
+                            )?;
+                            let outcome = outcomes
+                                .into_iter()
+                                .next()
+                                .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
+                            collect_preparation(
+                                self,
+                                captured,
+                                outcome,
+                                &mut CpuPreparationCollection {
+                                    batch: &mut batch,
+                                    summaries: &mut summaries_by_organism,
+                                    tick_before,
+                                    tick_after,
+                                    timing: &mut cpu_timing,
+                                    measure: measure_preparation,
+                                },
+                            )?;
+                        } else {
+                            captured_rows.push(captured);
+                        }
+                    }
+                    Err(error) => {
+                        if std::env::var_os("ALIFE_FOUNDATION_PROFILE").is_some() {
+                            eprintln!("foundation perception preparation failed at {tick_before:?} in {preparation_stage}: {error:?}");
+                        }
+                        self.last_memory_preparation_errors
+                            .push((OrganismId(raw), error));
+                        summaries_by_organism.insert(
+                            raw,
+                            Self::preparation_failure_summary(
+                                OrganismId(raw),
                                 tick_before,
                                 tick_after,
-                                timing: &mut cpu_timing,
-                                measure: measure_preparation,
-                            },
-                        )?;
-                    } else {
-                        captured_rows.push(captured);
+                                self.sealed_patch_count,
+                            ),
+                        );
                     }
-                }
-                Err(error) => {
-                    if std::env::var_os("ALIFE_FOUNDATION_PROFILE").is_some() {
-                        eprintln!("foundation perception preparation failed at {tick_before:?} in {preparation_stage}: {error:?}");
-                    }
-                    self.last_memory_preparation_errors
-                        .push((OrganismId(raw), error));
-                    summaries_by_organism.insert(
-                        raw,
-                        Self::preparation_failure_summary(
-                            OrganismId(raw),
-                            tick_before,
-                            tick_after,
-                            self.sealed_patch_count,
-                        ),
-                    );
                 }
             }
         }
@@ -789,11 +892,22 @@ impl GpuLiveBrainRuntime {
         }
         self.post_irreversible_gpu_commit_fail_stop_armed |= !completed_promotions.is_empty();
         for (organism_id, memory, receipt) in memory_commits {
-            let previous = self.memories.insert(organism_id.raw(), memory);
+            let previous = self
+                .memories
+                .insert(organism_id.raw(), std::sync::Arc::new(memory));
             debug_assert!(previous.is_some());
+            if let Some(undos) = self.staged_memory_undos.as_mut() {
+                undos.push(StagedMemoryUndo::Replace(organism_id.raw(), previous));
+            }
             self.last_memory_compaction_receipts.push(receipt);
-            self.restored_replay_patches
-                .retain(|patch| patch.header().organism_id != organism_id);
+            if self
+                .restored_replay_patches
+                .iter()
+                .any(|patch| patch.header().organism_id == organism_id)
+            {
+                std::sync::Arc::make_mut(&mut self.restored_replay_patches)
+                    .retain(|patch| patch.header().organism_id != organism_id);
+            }
         }
         self.performance_metrics.sleep_promotion_wall_ns = self
             .performance_metrics
@@ -834,17 +948,6 @@ impl GpuLiveBrainRuntime {
                     .saturating_add(elapsed_ns(started));
             }
             let inference_rows = u64::try_from(batch.len()).unwrap_or(u64::MAX);
-            #[cfg(feature = "foundation-training")]
-            let before_training = if self.training_sampling.is_some() {
-                self.backend.capture_training_states(
-                    &batch
-                        .iter()
-                        .map(|prepared| (prepared.handle, prepared.frame.tick()))
-                        .collect::<Vec<_>>(),
-                )?
-            } else {
-                Vec::new()
-            };
             let inference_started = Instant::now();
             #[cfg(all(test, feature = "gpu-tests", not(feature = "foundation-training")))]
             let gpu_ticks = super::action_credit_food_tests::tick_with_selector_capture(
@@ -863,49 +966,43 @@ impl GpuLiveBrainRuntime {
                     message: format!("neural execution failed: {error}"),
                 })?;
             #[cfg(feature = "foundation-training")]
-            let gpu_ticks = if let Some(sampling) = self.training_sampling {
-                let count = u32::try_from(batch.len())
-                    .map_err(|_| ScaffoldContractError::InvalidDecisionEvidence)?;
-                let next_counter = sampling
-                    .counter
-                    .checked_add(count)
-                    .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
-                let mut configs = Vec::with_capacity(batch.len());
-                for (index, prepared) in batch.iter().enumerate() {
-                    let demonstrator = match self.training_demonstrator.as_mut() {
-                        Some(teacher) => Some(teacher(
-                            &prepared.frame,
-                            self.backend
-                                .training_enabled_motor_channels(prepared.handle)?,
-                        )?),
-                        None => sampling.demonstrator,
-                    };
-                    configs.push(alife_gpu_backend::GpuTrainingSamplingConfig {
-                        counter: sampling.counter + index as u32,
-                        demonstrator,
-                        ..sampling
-                    });
-                }
-                self.training_sampling
-                    .as_mut()
-                    .expect("training enabled")
-                    .counter = next_counter;
-                self.backend
-                    .tick_memory_batch_training(&memory_batch, &configs)?
-            } else {
-                self.backend.tick_memory_batch(&memory_batch)?
-            };
-            #[cfg(feature = "foundation-training")]
-            let after_training = if self.training_sampling.is_some() {
-                self.backend.capture_training_states(
-                    &batch
-                        .iter()
-                        .map(|prepared| (prepared.handle, prepared.frame.tick()))
-                        .collect::<Vec<_>>(),
-                )?
-            } else {
-                Vec::new()
-            };
+            let (gpu_ticks, before_training, after_training) =
+                if let Some(sampling) = self.training_sampling {
+                    let count = u32::try_from(batch.len())
+                        .map_err(|_| ScaffoldContractError::InvalidDecisionEvidence)?;
+                    let next_counter = sampling
+                        .counter
+                        .checked_add(count)
+                        .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
+                    let mut configs = Vec::with_capacity(batch.len());
+                    for (index, prepared) in batch.iter().enumerate() {
+                        let demonstrator = match self.training_demonstrator.as_mut() {
+                            Some(teacher) => Some(teacher(
+                                &prepared.frame,
+                                self.backend
+                                    .training_enabled_motor_channels(prepared.handle)?,
+                            )?),
+                            None => sampling.demonstrator,
+                        };
+                        configs.push(alife_gpu_backend::GpuTrainingSamplingConfig {
+                            counter: sampling.counter + index as u32,
+                            demonstrator,
+                            ..sampling
+                        });
+                    }
+                    self.training_sampling
+                        .as_mut()
+                        .expect("training enabled")
+                        .counter = next_counter;
+                    self.backend
+                        .tick_memory_batch_training_with_captures(&memory_batch, &configs)?
+                } else {
+                    (
+                        self.backend.tick_memory_batch(&memory_batch)?,
+                        Vec::new(),
+                        Vec::new(),
+                    )
+                };
             #[cfg(feature = "foundation-training")]
             if self.training_sampling.is_some()
                 && (before_training.len() != batch.len()
@@ -1097,8 +1194,10 @@ impl GpuLiveBrainRuntime {
                 self.queue_exact_checkpoint_journal_entries(sleep_journal_entries)?;
                 journaled_recovery_edges.clear();
             } else if !sleep_journal_entries.is_empty() {
-                self.sleep_journal_neural_authorities
-                    .extend(sleep_journal_neural_authority_updates);
+                if !sleep_journal_neural_authority_updates.is_empty() {
+                    std::sync::Arc::make_mut(&mut self.sleep_journal_neural_authorities)
+                        .extend(sleep_journal_neural_authority_updates);
+                }
                 let enqueue_started = self.performance_measurement_enabled.then(Instant::now);
                 self.start_sleep_journal_publication(sleep_journal_entries)?;
                 self.performance_metrics
@@ -1168,8 +1267,10 @@ impl GpuLiveBrainRuntime {
                 .sleep_persistence_calls
                 .saturating_add(1);
             self.checkpoint_durability = durability;
-            self.sleep_journal_neural_authorities
-                .extend(sleep_journal_neural_authority_updates);
+            if !sleep_journal_neural_authority_updates.is_empty() {
+                std::sync::Arc::make_mut(&mut self.sleep_journal_neural_authorities)
+                    .extend(sleep_journal_neural_authority_updates);
+            }
             let enqueue_started = self.performance_measurement_enabled.then(Instant::now);
             self.start_sleep_journal_publication(sleep_journal_entries)?;
             self.performance_metrics
@@ -1183,15 +1284,18 @@ impl GpuLiveBrainRuntime {
                 .saturating_add(elapsed_ns(sleep_persistence_started));
         }
         // A failed tick or enqueue must retain the earliest unjournaled source.
-        for raw in journaled_recovery_edges {
-            self.pending_recovery_sleep_edges.remove(&raw);
+        if !journaled_recovery_edges.is_empty() {
+            let edges = std::sync::Arc::make_mut(&mut self.pending_recovery_sleep_edges);
+            for raw in journaled_recovery_edges {
+                edges.remove(&raw);
+            }
         }
         Ok(summaries_by_organism.into_values().collect())
     }
 }
 
 impl GpuLiveBrainRuntime {
-    fn prepare_captured_cpu_rows(
+    pub(super) fn prepare_captured_cpu_rows(
         &mut self,
         captured: &[CapturedLivePreparation],
         workers: usize,
@@ -1215,8 +1319,8 @@ impl GpuLiveBrainRuntime {
                 CpuPreparationJob {
                     input: &row.input,
                     slot: slot.as_ref().ok(),
-                    memory: self.memories.get(&raw),
-                    topology: self.topologies.get(&raw),
+                    memory: self.memories.get(&raw).map(std::sync::Arc::as_ref),
+                    topology: self.topologies.get(&raw).map(std::sync::Arc::as_ref),
                     predictor: self.residents.get(&raw).map(|resident| &resident.predictor),
                 }
             })

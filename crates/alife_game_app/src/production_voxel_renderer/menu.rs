@@ -661,8 +661,8 @@ fn spawn_ui(world: &mut World) {
 
 fn load_availability(world: &World) -> LoadAvailability {
     #[cfg(feature = "gpu-runtime")]
-    if let Some(runtime) = world.get_non_send_resource::<ProductionGpuBrainRuntimeResource>() {
-        return runtime_load_availability(Some(&runtime.runtime));
+    if let Some(runtime) = world.get_resource::<ProductionGpuBrainRuntimeResource>() {
+        return runtime_load_availability(Some(&*runtime.lock()));
     }
     LoadAvailability::Unavailable
 }
@@ -917,33 +917,33 @@ fn poll_quit(world: &mut World) {
     let timed_out = quit.started.elapsed() >= std::time::Duration::from_secs(60);
     let result = (|| -> Result<bool, String> {
         let mut runtime = world
-            .get_non_send_resource_mut::<ProductionGpuBrainRuntimeResource>()
+            .get_resource_mut::<ProductionGpuBrainRuntimeResource>()
             .ok_or("GPU runtime unavailable during quit")?;
+        let mut runtime = runtime.lock_mut();
         runtime
-            .runtime
             .poll_persistence_for_shutdown()
             .map_err(|error| error.to_string())?;
-        if runtime.runtime.persistence_failed_for_shutdown() {
-            return Err(runtime.runtime.persistence_shutdown_diagnostics());
+        if runtime.persistence_failed_for_shutdown() {
+            return Err(runtime.persistence_shutdown_diagnostics());
         }
         if let crate::GpuManualCheckpointStatus::Failed { message, .. } =
-            runtime.runtime.manual_checkpoint_status()
+            runtime.manual_checkpoint_status()
         {
             return Err(message.clone());
         }
         if quit_checkpoint_complete(
-            runtime.runtime.manual_checkpoint_status(),
+            runtime.manual_checkpoint_status(),
             &destination,
             tick,
-            runtime.runtime.persistence_idle_for_shutdown(),
-            runtime.runtime.persistence_failed_for_shutdown(),
+            runtime.persistence_idle_for_shutdown(),
+            runtime.persistence_failed_for_shutdown(),
         ) {
             return Ok(true);
         }
         if timed_out {
             return Err(format!(
                 "Quit checkpoint timed out: {}",
-                runtime.runtime.persistence_shutdown_diagnostics()
+                runtime.persistence_shutdown_diagnostics()
             ));
         }
         Ok(false)

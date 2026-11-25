@@ -31,6 +31,8 @@ pub(super) fn state() -> ProductionConversationLineageUiState {
         lineage_data_filter: LineageDataFilter::All,
         lineage_sort: LineageSort::Overall,
         lineage_loaded: false,
+        lineage_loading: false,
+        lineage_load_generation: 0,
         lineage_rows: Vec::new(),
         lineage_cursor: 0,
         cohort: Vec::new(),

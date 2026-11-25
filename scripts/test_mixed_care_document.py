@@ -1,5 +1,6 @@
 """Compact ledger persistence, without changing recovery data or size limits."""
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -62,7 +63,8 @@ class CompactDocumentTests(unittest.TestCase):
         if seeds.os.name != 'nt':
             self.assertEqual(events[-1], 'fsync')
 
-    def test_symlink_rejected_and_nonfinite_rejected(self):
+    @unittest.skipIf(os.name == 'nt', 'symlink creation requires Windows privilege')
+    def test_symlink_rejected(self):
         target = self.path.parent / 'target.json'
         target.write_bytes(b'previous')
         self.path.symlink_to(target)
@@ -70,6 +72,8 @@ class CompactDocumentTests(unittest.TestCase):
             seeds.write_document(self.path, self.value, compact=True)
         self.assertEqual(target.read_bytes(), b'previous')
         self.path.unlink()
+
+    def test_nonfinite_rejected(self):
         with self.assertRaises(ValueError):
             seeds.write_document(self.path, {'value': float('nan')}, compact=True)
         self.assertFalse(self.path.exists())

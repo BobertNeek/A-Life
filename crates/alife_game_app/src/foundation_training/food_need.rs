@@ -80,15 +80,23 @@ fn state(world: &HeadlessWorld, organism: OrganismId) -> Result<FoodNeedState> {
 
 /// Shared with held/reachable setup: same ordinary ticks and admission bounds.
 pub(super) fn advance_healthy_need(world: &mut HeadlessWorld, organism: OrganismId) -> Result<()> {
+    let initial = state(world, organism)?;
+    if initial.hunger >= 0.12 && initial.energy <= 0.9 {
+        return validate_ready(&initial);
+    }
+    let mut staged = world.clone();
+    let empty_events = std::collections::BTreeMap::new();
     for _ in 0..2400 {
-        let current = state(world, organism)?;
+        let current = state(&staged, organism)?;
         if current.hunger >= 0.12 && current.energy <= 0.9 {
             break;
         }
-        world.try_advance_tick()?;
+        staged.try_advance_tick_with_body_events_in_staged_tick(&empty_events)?;
     }
-    let current = state(world, organism)?;
-    validate_ready(&current)
+    let current = state(&staged, organism)?;
+    validate_ready(&current)?;
+    *world = staged;
+    Ok(())
 }
 
 fn validate_ready(current: &FoodNeedState) -> Result<()> {

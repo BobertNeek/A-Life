@@ -312,6 +312,51 @@ class CurrentCareTests(unittest.TestCase):
                     current.import_seeds(source, self.root / 'history.json', lane, 'strict')
         self.assertEqual(current.mixed.file_hashes(source), pins)
 
+    def test_pinned_guard_cache_avoids_redundant_hashing_and_git_and_catches_tamper(self):
+        helper_dir = Path(current.__file__).parent
+        helpers = ('run_current_care.py', 'current_checkpoint_store.py', 'run_mixed_care_serial.py',
+                   'care_host.py', 'grab_food_seed_reservations.py', 'summarize_ppo_diagnostics.py')
+        checkout = {'head': 'fixture-head', 'tree': 'fixture-tree', 'cargo_lock_sha256': 'lock-sha'}
+        state = {
+            'executables': {str(self.binary): current.host.sha256(self.binary)},
+            'helpers': {name: current.host.sha256(helper_dir / name) for name in helpers},
+            'prior_environment': current.prior_environment(),
+            'checkout': checkout,
+        }
+        hash_cache = current.host.FileHashCache()
+        checkout_cache = {}
+        hash_calls = []
+        git_calls = []
+        real_sha256 = current.host.sha256
+
+        def counted_sha(path):
+            hash_calls.append(Path(path))
+            return real_sha256(path)
+
+        def counted_checkout():
+            git_calls.append(1)
+            return dict(checkout)
+
+        with patch.object(current.host, 'sha256', side_effect=counted_sha), \
+                patch.object(current, 'checkout_context', side_effect=counted_checkout):
+            current.pinned(state, hash_cache=hash_cache, checkout_cache=checkout_cache, force=True)
+            self.assertEqual(len(hash_calls), 7)
+            self.assertEqual(len(git_calls), 1)
+            # Poll iterations reuse cached hashes and git state when metadata is unchanged.
+            current.pinned(state, hash_cache=hash_cache, checkout_cache=checkout_cache, force=False)
+            current.pinned(state, hash_cache=hash_cache, checkout_cache=checkout_cache, force=False)
+            self.assertEqual(len(hash_calls), 7)
+            self.assertEqual(len(git_calls), 1)
+            # Forced exit verification re-hashes and re-checks git even when metadata is unchanged.
+            current.pinned(state, hash_cache=hash_cache, checkout_cache=checkout_cache, force=True)
+            self.assertEqual(len(hash_calls), 14)
+            self.assertEqual(len(git_calls), 2)
+            # Mutating the binary invalidates the metadata stamp and is rejected immediately.
+            self.binary.write_bytes(b'tampered executable identity')
+            with self.assertRaisesRegex(ValueError, 'pinned executable changed'):
+                current.pinned(state, hash_cache=hash_cache, checkout_cache=checkout_cache, force=False)
+            self.assertEqual(len(hash_calls), 15)
+
 
 if __name__ == '__main__':
     unittest.main()

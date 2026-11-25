@@ -25,6 +25,16 @@ const QUANTITIES: [Quantity; 6] = [
     Quantity::PraiseSignal,
 ];
 impl Quantity {
+    const fn index(self) -> usize {
+        match self {
+            Self::Hunger => 0,
+            Self::Energy => 1,
+            Self::Fatigue => 2,
+            Self::Calm => 3,
+            Self::SleepPressure => 4,
+            Self::PraiseSignal => 5,
+        }
+    }
     fn name(self) -> &'static str {
         match self {
             Self::Hunger => "hunger",
@@ -151,7 +161,7 @@ struct StatusRoot;
 #[derive(Component)]
 struct Playback;
 #[derive(Resource)]
-struct Icons(BTreeMap<&'static str, Handle<Image>>);
+pub(super) struct Icons(BTreeMap<&'static str, Handle<Image>>);
 const PANEL: Color = Color::srgb(0.075, 0.115, 0.135);
 const CARD: Color = Color::srgb(0.050, 0.075, 0.090);
 const INK: Color = Color::srgb(0.98, 0.96, 0.84);
@@ -549,97 +559,292 @@ pub(super) fn spawn(world: &mut World) {
     }
     world.insert_resource(Icons(handles));
 }
-fn set_readout(world: &mut World, readout: Option<&Readout>, debug: bool) {
-    for mut visibility in world
-        .query_filtered::<&mut Visibility, With<StatusRoot>>()
-        .iter_mut(world)
-    {
-        *visibility = if debug {
-            Visibility::Hidden
-        } else {
-            Visibility::Visible
-        };
+#[derive(bevy::ecs::system::SystemParam)]
+#[allow(
+    clippy::type_complexity,
+    reason = "Bevy SystemParam query bundle groups disjoint HUD queries."
+)]
+pub(super) struct HudSyncQueries<'w, 's> {
+    status_roots: Query<
+        'w,
+        's,
+        &'static mut Visibility,
+        (
+            With<StatusRoot>,
+            Without<HudRoot>,
+            Without<HeldFood>,
+            Without<RenameButton>,
+            Without<MeterTrack>,
+            Without<Unknown>,
+            Without<Warning>,
+            Without<V0PlayerControlStrip>,
+        ),
+    >,
+    hud_roots: Query<
+        'w,
+        's,
+        (&'static mut Node, &'static mut Visibility),
+        (
+            With<HudRoot>,
+            Without<StatusRoot>,
+            Without<HeldFood>,
+            Without<RenameButton>,
+            Without<MeterTrack>,
+            Without<Unknown>,
+            Without<Warning>,
+            Without<V0PlayerControlStrip>,
+            Without<Quantity>,
+            Without<QuantityIcon>,
+            Without<MeterFill>,
+        ),
+    >,
+    identities: Query<
+        'w,
+        's,
+        &'static mut Text,
+        (
+            With<Identity>,
+            Without<CreatureName>,
+            Without<Count>,
+            Without<V0PlayerControlStrip>,
+        ),
+    >,
+    creature_names: Query<
+        'w,
+        's,
+        (&'static mut Text, &'static mut AccessibilityNode),
+        (
+            With<CreatureName>,
+            Without<Identity>,
+            Without<Count>,
+            Without<RenameButton>,
+            Without<V0PlayerControlStrip>,
+        ),
+    >,
+    rename_buttons: Query<
+        'w,
+        's,
+        (
+            &'static mut Visibility,
+            &'static mut bevy::picking::Pickable,
+            &'static mut FocusPolicy,
+            &'static mut Interaction,
+            &'static mut BorderColor,
+            &'static mut AccessibilityNode,
+        ),
+        (
+            With<RenameButton>,
+            Without<StatusRoot>,
+            Without<HudRoot>,
+            Without<HeldFood>,
+            Without<MeterTrack>,
+            Without<Unknown>,
+            Without<Warning>,
+            Without<V0PlayerControlStrip>,
+            Without<CreatureName>,
+        ),
+    >,
+    held_foods: Query<
+        'w,
+        's,
+        &'static mut Visibility,
+        (
+            With<HeldFood>,
+            Without<StatusRoot>,
+            Without<HudRoot>,
+            Without<RenameButton>,
+            Without<MeterTrack>,
+            Without<Unknown>,
+            Without<Warning>,
+            Without<V0PlayerControlStrip>,
+        ),
+    >,
+    meter_fills: Query<
+        'w,
+        's,
+        (
+            &'static MeterFill,
+            &'static mut Node,
+            &'static mut BackgroundColor,
+        ),
+        (
+            Without<HudRoot>,
+            Without<Quantity>,
+            Without<QuantityIcon>,
+            Without<V0PlayerControlStrip>,
+        ),
+    >,
+    meter_tracks: Query<
+        'w,
+        's,
+        (&'static MeterTrack, &'static mut Visibility),
+        (
+            Without<StatusRoot>,
+            Without<HudRoot>,
+            Without<HeldFood>,
+            Without<RenameButton>,
+            Without<Unknown>,
+            Without<Warning>,
+            Without<V0PlayerControlStrip>,
+        ),
+    >,
+    unknowns: Query<
+        'w,
+        's,
+        (&'static Unknown, &'static mut Visibility),
+        (
+            Without<StatusRoot>,
+            Without<HudRoot>,
+            Without<HeldFood>,
+            Without<RenameButton>,
+            Without<MeterTrack>,
+            Without<Warning>,
+            Without<V0PlayerControlStrip>,
+        ),
+    >,
+    warnings: Query<
+        'w,
+        's,
+        (&'static Warning, &'static mut Visibility),
+        (
+            Without<StatusRoot>,
+            Without<HudRoot>,
+            Without<HeldFood>,
+            Without<RenameButton>,
+            Without<MeterTrack>,
+            Without<Unknown>,
+            Without<V0PlayerControlStrip>,
+        ),
+    >,
+    quantities: Query<
+        'w,
+        's,
+        &'static mut Node,
+        (
+            With<Quantity>,
+            Without<HudRoot>,
+            Without<MeterFill>,
+            Without<QuantityIcon>,
+            Without<V0PlayerControlStrip>,
+        ),
+    >,
+    quantity_icons: Query<
+        'w,
+        's,
+        &'static mut Node,
+        (
+            With<QuantityIcon>,
+            Without<HudRoot>,
+            Without<MeterFill>,
+            Without<Quantity>,
+            Without<V0PlayerControlStrip>,
+        ),
+    >,
+    playbacks: Query<'w, 's, &'static mut ImageNode, With<Playback>>,
+    counts: Query<
+        'w,
+        's,
+        &'static mut Text,
+        (
+            With<Count>,
+            Without<Identity>,
+            Without<CreatureName>,
+            Without<V0PlayerControlStrip>,
+        ),
+    >,
+}
+
+fn apply_readout_queries(
+    queries: &mut HudSyncQueries<'_, '_>,
+    readout: Option<&Readout>,
+    debug: bool,
+    status_visible: Visibility,
+    hud_visible: Visibility,
+) {
+    for mut visibility in &mut queries.status_roots {
+        visibility.set_if_neq(status_visible);
     }
-    for mut visible in world
-        .query_filtered::<&mut Visibility, With<HudRoot>>()
-        .iter_mut(world)
-    {
-        let next = if readout.is_some() && !debug {
-            Visibility::Visible
-        } else {
-            Visibility::Hidden
-        };
-        if *visible != next {
-            *visible = next;
-        }
+    for (_, mut visible) in &mut queries.hud_roots {
+        visible.set_if_neq(hud_visible);
     }
-    for mut text in world
-        .query_filtered::<&mut Text, With<Identity>>()
-        .iter_mut(world)
-    {
+    for mut text in &mut queries.identities {
         let next = readout.map_or_else(String::new, |r| format!("#{}", r.stable_id));
         if text.0 != next {
             text.0 = next;
         }
     }
     let name = readout.and_then(|r| r.name.as_deref());
-    for (mut text, mut accessible) in world
-        .query_filtered::<(&mut Text, &mut AccessibilityNode), With<CreatureName>>()
-        .iter_mut(world)
-    {
+    for (mut text, mut accessible) in &mut queries.creature_names {
         let next = name.unwrap_or("");
         if text.0 != next {
             text.0 = next.to_owned();
         }
         // The complete canonical name remains available when the line clips.
-        accessible.set_label(next);
-    }
-    for (mut visible, mut pickable, mut focus, mut interaction, mut border, mut accessible) in world
-        .query_filtered::<(
-            &mut Visibility,
-            &mut bevy::picking::Pickable,
-            &mut FocusPolicy,
-            &mut Interaction,
-            &mut BorderColor,
-            &mut AccessibilityNode,
-        ), With<RenameButton>>()
-        .iter_mut(world)
-    {
-        if let Some(name) = name.filter(|_| !debug) {
-            *visible = Visibility::Inherited;
-            *pickable = bevy::picking::Pickable::default();
-            *focus = FocusPolicy::Block;
-            accessible.set_label(format!("Name {name}"));
-            accessible.clear_disabled();
-            accessible.clear_hidden();
-        } else {
-            *visible = Visibility::Hidden;
-            *pickable = bevy::picking::Pickable::IGNORE;
-            *focus = FocusPolicy::Pass;
-            *interaction = Interaction::None;
-            accessible.set_label("Name selected creature");
-            accessible.set_disabled();
-            accessible.set_hidden();
+        if accessible.label() != Some(next) {
+            accessible.set_label(next);
         }
-        *border = bevel(*interaction != Interaction::Pressed);
+    }
+    for (mut visible, mut pickable, mut focus, mut interaction, mut border, mut accessible) in
+        &mut queries.rename_buttons
+    {
+        let active_name = name.filter(|_| !debug);
+        if let Some(name) = active_name {
+            visible.set_if_neq(Visibility::Inherited);
+            let next_pickable = bevy::picking::Pickable::default();
+            if *pickable != next_pickable {
+                *pickable = next_pickable;
+            }
+            if *focus != FocusPolicy::Block {
+                *focus = FocusPolicy::Block;
+            }
+            let next_label = format!("Name {name}");
+            if accessible.label() != Some(next_label.as_str()) {
+                accessible.set_label(next_label);
+            }
+            if accessible.is_disabled() {
+                accessible.clear_disabled();
+            }
+            if accessible.is_hidden() {
+                accessible.clear_hidden();
+            }
+        } else {
+            visible.set_if_neq(Visibility::Hidden);
+            if *pickable != bevy::picking::Pickable::IGNORE {
+                *pickable = bevy::picking::Pickable::IGNORE;
+            }
+            if *focus != FocusPolicy::Pass {
+                *focus = FocusPolicy::Pass;
+            }
+            if *interaction != Interaction::None {
+                *interaction = Interaction::None;
+            }
+            if accessible.label() != Some("Name selected creature") {
+                accessible.set_label("Name selected creature");
+            }
+            if !accessible.is_disabled() {
+                accessible.set_disabled();
+            }
+            if !accessible.is_hidden() {
+                accessible.set_hidden();
+            }
+        }
+        let pressed = active_name.is_some() && *interaction == Interaction::Pressed;
+        let next_border = bevel(!pressed);
+        if *border != next_border {
+            *border = next_border;
+        }
     }
     let values = readout.map_or([None; 6], |r| r.values);
-    for mut visibility in world
-        .query_filtered::<&mut Visibility, With<HeldFood>>()
-        .iter_mut(world)
-    {
-        *visibility = if readout.is_some_and(|readout| readout.holding_food) {
-            Visibility::Inherited
-        } else {
-            Visibility::Hidden
-        };
+    let held_food_visible = if readout.is_some_and(|readout| readout.holding_food) {
+        Visibility::Inherited
+    } else {
+        Visibility::Hidden
+    };
+    for mut visibility in &mut queries.held_foods {
+        visibility.set_if_neq(held_food_visible);
     }
-    let value = |quantity| values[QUANTITIES.iter().position(|q| *q == quantity).unwrap()];
-    for (fill, mut node, mut color) in world
-        .query::<(&MeterFill, &mut Node, &mut BackgroundColor)>()
-        .iter_mut(world)
-    {
-        let amount = value(fill.0);
+    for (fill, mut node, mut color) in &mut queries.meter_fills {
+        let amount = values[fill.0.index()];
         let width = Val::Percent(amount.unwrap_or(0.0) * 100.0);
         if node.width != width {
             node.width = width;
@@ -649,58 +854,156 @@ fn set_readout(world: &mut World, readout: Option<&Readout>, debug: bool) {
             color.0 = next;
         }
     }
-    for (track, mut visible) in world
-        .query::<(&MeterTrack, &mut Visibility)>()
-        .iter_mut(world)
-    {
-        *visible = if value(track.0).is_some() {
+    for (track, mut visible) in &mut queries.meter_tracks {
+        visible.set_if_neq(if values[track.0.index()].is_some() {
             Visibility::Inherited
         } else {
             Visibility::Hidden
-        };
+        });
     }
-    for (unknown, mut visible) in world.query::<(&Unknown, &mut Visibility)>().iter_mut(world) {
-        *visible = if value(unknown.0).is_none() {
+    for (unknown, mut visible) in &mut queries.unknowns {
+        visible.set_if_neq(if values[unknown.0.index()].is_none() {
             Visibility::Inherited
         } else {
             Visibility::Hidden
-        };
+        });
     }
-    for (warning, mut visible) in world.query::<(&Warning, &mut Visibility)>().iter_mut(world) {
-        *visible = if value(warning.0).is_some_and(|v| warning.0.warning(v)) {
-            Visibility::Inherited
-        } else {
-            Visibility::Hidden
-        };
+    for (warning, mut visible) in &mut queries.warnings {
+        visible.set_if_neq(
+            if values[warning.0.index()].is_some_and(|v| warning.0.warning(v)) {
+                Visibility::Inherited
+            } else {
+                Visibility::Hidden
+            },
+        );
     }
 }
-fn apply_layout(world: &mut World, size: Vec2) {
-    let width = (size.x - 32.0).clamp(0.0, 370.0);
-    for mut node in world
-        .query_filtered::<&mut Node, With<HudRoot>>()
-        .iter_mut(world)
-    {
-        if node.width != Val::Px(width) {
-            node.width = Val::Px(width);
+
+fn apply_layout_queries(queries: &mut HudSyncQueries<'_, '_>, size: Vec2) {
+    let width = Val::Px((size.x - 32.0).clamp(0.0, 370.0));
+    for (mut node, _) in &mut queries.hud_roots {
+        if node.width != width {
+            node.width = width;
         }
     }
     let short = size.y < 300.0;
-    for mut node in world
-        .query_filtered::<&mut Node, With<Quantity>>()
-        .iter_mut(world)
-    {
-        node.height = Val::Px(if short { 48.0 } else { 68.0 });
-        node.row_gap = Val::Px(if short { 4.0 } else { 8.0 });
+    let quantity_height = Val::Px(if short { 48.0 } else { 68.0 });
+    let quantity_gap = Val::Px(if short { 4.0 } else { 8.0 });
+    for mut node in &mut queries.quantities {
+        if node.height != quantity_height {
+            node.height = quantity_height;
+        }
+        if node.row_gap != quantity_gap {
+            node.row_gap = quantity_gap;
+        }
     }
-    for mut node in world
-        .query_filtered::<&mut Node, With<QuantityIcon>>()
-        .iter_mut(world)
-    {
-        let size = Val::Px(if short { 24.0 } else { 32.0 });
-        node.width = size;
-        node.height = size;
+    let icon_size = Val::Px(if short { 24.0 } else { 32.0 });
+    for mut node in &mut queries.quantity_icons {
+        if node.width != icon_size {
+            node.width = icon_size;
+        }
+        if node.height != icon_size {
+            node.height = icon_size;
+        }
     }
 }
+
+fn apply_status_queries(
+    queries: &mut HudSyncQueries<'_, '_>,
+    icons: Option<&Icons>,
+    count: usize,
+    paused: bool,
+    fast: bool,
+) {
+    let key = if paused {
+        "paused"
+    } else if fast {
+        "fast"
+    } else {
+        "playing"
+    };
+    if let Some(handle) = icons.and_then(|icons| icons.0.get(key)) {
+        for mut image in &mut queries.playbacks {
+            if image.image != *handle {
+                image.image = handle.clone();
+            }
+        }
+    }
+    let next = count.to_string();
+    for mut text in &mut queries.counts {
+        if text.0 != next {
+            text.0.clone_from(&next);
+        }
+    }
+}
+
+#[cfg(test)]
+fn set_readout(world: &mut World, readout: Option<&Readout>, debug: bool) {
+    let mut state: bevy::ecs::system::SystemState<HudSyncQueries<'_, '_>> =
+        bevy::ecs::system::SystemState::new(world);
+    let mut queries = state.get_mut(world);
+    let status_visible = if debug {
+        Visibility::Hidden
+    } else {
+        Visibility::Visible
+    };
+    let hud_visible = if readout.is_some() && !debug {
+        Visibility::Visible
+    } else {
+        Visibility::Hidden
+    };
+    apply_readout_queries(&mut queries, readout, debug, status_visible, hud_visible);
+}
+
+#[cfg(test)]
+fn apply_layout(world: &mut World, size: Vec2) {
+    let mut state: bevy::ecs::system::SystemState<HudSyncQueries<'_, '_>> =
+        bevy::ecs::system::SystemState::new(world);
+    let mut queries = state.get_mut(world);
+    apply_layout_queries(&mut queries, size);
+}
+
+fn selected_readout_from_parts(
+    entity_map: Option<&BevyEntityMap>,
+    creature_roots: &Query<(
+        &ProductionCreatureAssemblyRoot,
+        &Fvr04ProductionCreatureVisualMarker,
+    )>,
+    frame: Option<&LiveBrainPresentationFrameResource>,
+    canonical: Option<&HeadlessWorld>,
+    stable_id: WorldEntityId,
+) -> Readout {
+    let identity = entity_map
+        .and_then(|map| map.bevy_entity(stable_id))
+        .and_then(|entity| {
+            let (root, visual) = creature_roots.get(entity).ok()?;
+            (root.stable_id == stable_id
+                && visual.stable_id == stable_id
+                && root.organism_id == visual.organism_id)
+                .then_some(root.organism_id)
+        });
+    let row = frame.and_then(|frame| frame.current.organism(stable_id));
+    identity.map_or(
+        Readout {
+            stable_id: stable_id.raw(),
+            name: None,
+            values: [None; 6],
+            holding_food: false,
+        },
+        |organism_id| {
+            let mut readout = Readout::from_row(
+                stable_id,
+                organism_id,
+                row,
+                frame.into_iter().flat_map(|frame| frame.current.objects()),
+            );
+            readout.name = selected_name(canonical, stable_id, organism_id, row);
+            readout
+        },
+    )
+}
+
+#[cfg(test)]
 fn selected_readout(world: &World, stable_id: WorldEntityId) -> Readout {
     let identity = world
         .get_resource::<BevyEntityMap>()
@@ -730,9 +1033,11 @@ fn selected_readout(world: &World, stable_id: WorldEntityId) -> Readout {
                 frame.into_iter().flat_map(|frame| frame.current.objects()),
             );
             #[cfg(feature = "gpu-runtime")]
-            let canonical = world
-                .get_non_send_resource::<ProductionGpuBrainRuntimeResource>()
-                .map(|runtime| runtime.runtime.world());
+            let runtime_guard = world
+                .get_resource::<ProductionGpuBrainRuntimeResource>()
+                .map(|runtime| runtime.lock());
+            #[cfg(feature = "gpu-runtime")]
+            let canonical = runtime_guard.as_deref().map(|runtime| runtime.world());
             #[cfg(not(feature = "gpu-runtime"))]
             let canonical = None;
             readout.name = selected_name(canonical, stable_id, organism_id, row);
@@ -765,33 +1070,15 @@ fn selected_name(
     row.filter(|row| valid_row(stable_id, organism_id, row))
         .map(|row| row.object.label.clone())
 }
+
+#[cfg(test)]
 fn set_status(world: &mut World, count: usize, paused: bool, fast: bool) {
-    let handle = world.resource::<Icons>().0[if paused {
-        "paused"
-    } else if fast {
-        "fast"
-    } else {
-        "playing"
-    }]
-    .clone();
-    for mut image in world
-        .query_filtered::<&mut ImageNode, With<Playback>>()
-        .iter_mut(world)
-    {
-        if image.image != handle {
-            image.image = handle.clone();
-        }
-    }
-    for mut text in world
-        .query_filtered::<&mut Text, With<Count>>()
-        .iter_mut(world)
-    {
-        let next = count.to_string();
-        if text.0 != next {
-            text.0 = next;
-        }
-    }
+    let mut state: bevy::ecs::system::SystemState<(Option<Res<Icons>>, HudSyncQueries<'_, '_>)> =
+        bevy::ecs::system::SystemState::new(world);
+    let (icons, mut queries) = state.get_mut(world);
+    apply_status_queries(&mut queries, icons.as_deref(), count, paused, fast);
 }
+
 fn panel_bottom(size: Vec2) -> f32 {
     let width = (size.x - 32.0).clamp(0.0, 370.0);
     let columns = ((width - 18.0 + 8.0) / 60.0).floor().max(1.0) as usize;
@@ -802,6 +1089,8 @@ fn panel_bottom(size: Vec2) -> f32 {
         + rows as f32 * if size.y < 300.0 { 48.0 } else { 68.0 }
         + (rows - 1) as f32 * 6.0
 }
+
+#[cfg(test)]
 fn adapt_bottom_controls_visibility(world: &mut World, size: Vec2, selected_visible: bool) {
     let occupied_top = care_dock::occupied_top(world, size);
     if occupied_top < 72.0 {
@@ -809,7 +1098,7 @@ fn adapt_bottom_controls_visibility(world: &mut World, size: Vec2, selected_visi
             .query_filtered::<&mut Visibility, With<StatusRoot>>()
             .iter_mut(world)
         {
-            *visible = Visibility::Hidden;
+            visible.set_if_neq(Visibility::Hidden);
         }
     }
     if selected_visible && panel_bottom(size) + 8.0 > occupied_top {
@@ -817,37 +1106,94 @@ fn adapt_bottom_controls_visibility(world: &mut World, size: Vec2, selected_visi
             .query_filtered::<&mut Visibility, With<HudRoot>>()
             .iter_mut(world)
         {
-            *visible = Visibility::Hidden;
+            visible.set_if_neq(Visibility::Hidden);
         }
     }
 }
-pub(super) fn sync(world: &mut World) {
-    let ux = world.resource::<Fvr05ProductionUxStateResource>();
+
+#[allow(
+    clippy::too_many_arguments,
+    clippy::type_complexity,
+    reason = "Bevy injects independent ECS system parameters and disjoint HUD queries."
+)]
+pub(super) fn sync(
+    ux: Res<Fvr05ProductionUxStateResource>,
+    scene: Res<Fvr03ProductionVoxelSceneResource>,
+    selection: Res<Fvr03ProductionVoxelSelectionResource>,
+    windows: Query<&Window, With<PrimaryWindow>>,
+    icons: Option<Res<Icons>>,
+    entity_map: Option<Res<BevyEntityMap>>,
+    frame: Option<Res<LiveBrainPresentationFrameResource>>,
+    #[cfg(feature = "gpu-runtime")] runtime: Option<Res<ProductionGpuBrainRuntimeResource>>,
+    #[cfg(feature = "gpu-runtime")] conversation: Option<
+        Res<crate::ProductionConversationLineageUiState>,
+    >,
+    strips: Query<
+        (&Text, &TextFont, &Node, &Visibility, Option<&ComputedNode>),
+        With<V0PlayerControlStrip>,
+    >,
+    creature_roots: Query<(
+        &ProductionCreatureAssemblyRoot,
+        &Fvr04ProductionCreatureVisualMarker,
+    )>,
+    mut queries: HudSyncQueries<'_, '_>,
+) {
     let debug = ux.debug_mode;
     let paused = ux.settings.paused;
     let fast = ux.settings.playback_mode() != crate::ProductionRunMode::OneX;
-    let count = world
-        .resource::<Fvr03ProductionVoxelSceneResource>()
-        .creature_render_count;
-    let selected = world
-        .resource::<Fvr03ProductionVoxelSelectionResource>()
+    let count = scene.creature_render_count;
+    let selected = selection
         .selected
         .filter(|r| r.kind == StableVoxelRefKind::Creature)
         .and_then(|r| r.stable_id);
-    let readout = selected
-        .filter(|_| !debug)
-        .map(|stable_id| selected_readout(world, stable_id));
-    set_readout(world, readout.as_ref(), debug);
-    set_status(world, count, paused, fast);
-    let size = world
-        .query_filtered::<&Window, With<PrimaryWindow>>()
-        .iter(world)
+    #[cfg(feature = "gpu-runtime")]
+    let runtime_guard = runtime.as_ref().map(|runtime| runtime.lock());
+    #[cfg(feature = "gpu-runtime")]
+    let canonical = runtime_guard.as_deref().map(|runtime| runtime.world());
+    #[cfg(not(feature = "gpu-runtime"))]
+    let canonical = None;
+    let readout = selected.filter(|_| !debug).map(|stable_id| {
+        selected_readout_from_parts(
+            entity_map.as_deref(),
+            &creature_roots,
+            frame.as_deref(),
+            canonical,
+            stable_id,
+        )
+    });
+    let size = windows
+        .iter()
         .next()
         .map_or(Vec2::new(1280.0, 720.0), |window| {
             Vec2::new(window.width(), window.height())
         });
-    apply_layout(world, size);
-    adapt_bottom_controls_visibility(world, size, readout.is_some() && !debug);
+    let occupied_top = care_dock::occupied_top_from_parts(
+        size,
+        ux.last_error.is_some(),
+        #[cfg(feature = "gpu-runtime")]
+        conversation.as_deref(),
+        strips,
+    );
+    let status_visible = if debug || occupied_top < 72.0 {
+        Visibility::Hidden
+    } else {
+        Visibility::Visible
+    };
+    let selected_visible = readout.is_some() && !debug;
+    let hud_visible = if selected_visible && panel_bottom(size) + 8.0 <= occupied_top {
+        Visibility::Visible
+    } else {
+        Visibility::Hidden
+    };
+    apply_readout_queries(
+        &mut queries,
+        readout.as_ref(),
+        debug,
+        status_visible,
+        hud_visible,
+    );
+    apply_status_queries(&mut queries, icons.as_deref(), count, paused, fast);
+    apply_layout_queries(&mut queries, size);
 }
 
 #[cfg(test)]

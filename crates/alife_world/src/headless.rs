@@ -60,6 +60,7 @@ const DEFAULT_ENTITY_ID_START: u64 = 1;
 const DEFAULT_ORGANISM_ID_START: u64 = 1;
 const DEFAULT_HEARING_RADIUS: f32 = 6.0;
 pub(crate) const HEADLESS_CONTACT_RADIUS: f32 = 0.75;
+const SPATIAL_NORMAL_MAX_RADIUS: f32 = 4.0;
 const EAT_RADIUS: f32 = 1.25;
 // A body-local grip stays in reach and remains visible at either head limit.
 const CARRY_GRIP_DISTANCE: f32 = 0.5;
@@ -375,7 +376,7 @@ mod carry_pose_tests {
     #[test]
     fn carry_pose_reserves_visible_held_contact_among_nearer_contact_clutter() {
         let (mut world, _, held) = held_world();
-        world.objects.get_mut(&held.raw()).unwrap().radius = 0.1;
+        world.set_object_radius_for_test(held, 0.1);
         for index in 0..18 {
             let label = format!("clutter-{index}");
             world
@@ -406,6 +407,7 @@ mod carry_pose_tests {
                 world.agent_for(ORGANISM).unwrap(),
                 world.objects.values(),
                 true,
+                None,
             )
             .unwrap();
         let grounded =
@@ -447,7 +449,7 @@ mod carry_pose_tests {
     #[test]
     fn carry_pose_does_not_bypass_occlusion_or_released_peripheral_cone() {
         let (mut world, _, held) = held_world();
-        world.objects.get_mut(&held.raw()).unwrap().radius = 0.1;
+        world.set_object_radius_for_test(held, 0.1);
         terrain_wall(&mut world, [0.24, -0.1, 0.26, 0.1, 0.4, 0.8]);
         assert!(!draft(&mut world)
             .candidates()
@@ -631,12 +633,12 @@ mod terrain_vision_tests {
             .unwrap();
         let food = clear.entity_id("food").unwrap();
         // Another creature's possession cannot be consumed, even within reach.
-        clear.objects.get_mut(&food.raw()).unwrap().carried_by = Some(OrganismId(2));
+        clear.set_object_carried_by_for_test(food, Some(OrganismId(2)));
         let eat = HeadlessWorldCommand::eat(OrganismId(1), food).unwrap();
         assert!(!clear.apply_command(&eat).unwrap().execution.succeeded);
         assert_eq!(clear.objects[&food.raw()].carried_by, Some(OrganismId(2)));
         assert!(!clear.objects[&food.raw()].consumed);
-        clear.objects.get_mut(&food.raw()).unwrap().carried_by = None;
+        clear.set_object_carried_by_for_test(food, None);
         let grab = HeadlessWorldCommand::structured(
             OrganismId(1),
             HeadlessActionIds::GRAB,
@@ -660,6 +662,7 @@ mod terrain_vision_tests {
                 observer,
                 world.objects.values(),
                 true,
+                None,
             )
             .unwrap()
             .visible
@@ -736,6 +739,7 @@ mod terrain_vision_tests {
                 world.agent_for(OrganismId(1)).unwrap(),
                 world.objects.values(),
                 true,
+                None,
             )
             .unwrap();
         assert!(
@@ -867,7 +871,7 @@ mod terrain_vision_tests {
             .unwrap();
         let food = world.entity_id("food").unwrap();
         let observer = world.agent_for(OrganismId(1)).unwrap();
-        let blocked = world.terrain_vision_fan(observer);
+        let blocked = world.terrain_vision_fan(observer, None);
         assert!(!seen(&world, food));
         assert!(blocked[7] < 0.5 || blocked[8] < 0.5);
         let step = HeadlessWorldCommand::structured(
@@ -1325,6 +1329,10 @@ pub struct HeadlessWorld {
     next_utterance_id: u64,
     objects: BTreeMap<u64, WorldObject>,
     labels: BTreeMap<String, WorldEntityId>,
+    agent_entities_by_organism: BTreeMap<u64, WorldEntityId>,
+    carried_by_organism: BTreeMap<u64, Vec<u64>>,
+    spatial_cells: BTreeMap<(i32, i32, i32), Vec<u64>>,
+    oversized_objects: BTreeSet<u64>,
     last_touched_entities: Vec<WorldEntityId>,
     last_action_result: Option<HeadlessActionResult>,
     ingestion_observations: BTreeMap<u64, IngestionObservation>,
@@ -1334,7 +1342,7 @@ pub struct HeadlessWorld {
     pending_player_care: BTreeMap<u64, BodyEventDelta>,
     player_hold: Option<player_hand::PlayerHold>,
     tracked_objects: TrackedObjectRegistry,
-    habitats: HabitatAuthority,
+    habitats: std::sync::Arc<HabitatAuthority>,
     organism_registry: WorldOrganismRegistry,
     #[cfg(test)]
     injected_post_action_failure: bool,
@@ -1421,6 +1429,8 @@ pub struct HeadlessPerceptionBatchIndex {
     cells: BTreeMap<(i32, i32, i32), Vec<u64>>,
     organism_entities: BTreeMap<u64, u64>,
     max_contact_radius: f32,
+    max_object_radius: f32,
+    nonfinite_object_radius: bool,
     carried_entities: BTreeMap<u64, Vec<u64>>,
     nonvisual_requires_full_scan: bool,
 }
@@ -1518,11 +1528,8 @@ impl HeadlessWorld {
             zone.center = p;
         }
         self.terrain = Some(terrain);
-        let carriers = self
-            .objects
-            .values()
-            .filter_map(|object| object.carried_by.map(OrganismId::raw))
-            .collect::<BTreeSet<_>>();
+        self.rebuild_indexes_from_objects();
+        let carriers = self.carried_by_organism.keys().copied().collect::<Vec<_>>();
         for carrier in carriers {
             self.sync_carried_pose(OrganismId(carrier))?;
         }
@@ -1542,6 +1549,10 @@ impl HeadlessWorld {
             next_utterance_id: 1,
             objects: BTreeMap::new(),
             labels: BTreeMap::new(),
+            agent_entities_by_organism: BTreeMap::new(),
+            carried_by_organism: BTreeMap::new(),
+            spatial_cells: BTreeMap::new(),
+            oversized_objects: BTreeSet::new(),
             last_touched_entities: Vec::new(),
             last_action_result: None,
             ingestion_observations: BTreeMap::new(),
@@ -1555,7 +1566,7 @@ impl HeadlessWorld {
                 DEFAULT_TRACKED_OBJECT_CAPACITY_PER_ORGANISM,
             )
             .expect("the canonical tracked-object capacity is valid"),
-            habitats: HabitatAuthority::default(),
+            habitats: std::sync::Arc::new(HabitatAuthority::default()),
             organism_registry: WorldOrganismRegistry::default(),
             #[cfg(test)]
             injected_post_action_failure: false,
@@ -1620,10 +1631,10 @@ impl HeadlessWorld {
         if !record.lifecycle().is_alive()
             || distance(source, body.position) > reach
             || if praise {
-                self.blocking_object_between(source, body.position)
+                self.blocking_object_between(source, body.position, None)
                     .is_some()
             } else {
-                !self.physical_contact_reachable(source, body.position)
+                !self.physical_contact_reachable(source, body.position, None)
             }
         {
             return Err(ScaffoldContractError::InvalidActionDecision);
@@ -1661,7 +1672,7 @@ impl HeadlessWorld {
                 .collect::<Vec<_>>()
         };
         authority.validate_at_tick(&known_creatures, self.tick)?;
-        self.habitats = authority;
+        self.habitats = std::sync::Arc::new(authority);
         Ok(())
     }
 
@@ -1736,8 +1747,137 @@ impl HeadlessWorld {
     ) -> Result<Tick, ScaffoldContractError> {
         let mut candidate = self.clone();
         let next_tick = candidate.try_advance_tick_with_body_events_in_staged_tick(body_events)?;
+        candidate
+            .tracked_objects
+            .adopt_staged_transaction_from(&mut self.tracked_objects);
         *self = candidate;
         Ok(next_tick)
+    }
+
+    #[doc(hidden)]
+    pub fn clone_for_staged_tick(&mut self) -> Self {
+        self.tracked_objects.begin_staged_transaction();
+        Self {
+            seed: self.seed,
+            disable_age_death: self.disable_age_death,
+            terrain: self.terrain.clone(),
+            tick: self.tick,
+            next_entity_id: self.next_entity_id,
+            next_organism_id: self.next_organism_id,
+            next_spawn_sequence: self.next_spawn_sequence,
+            next_utterance_id: self.next_utterance_id,
+            objects: self.objects.clone(),
+            labels: self.labels.clone(),
+            agent_entities_by_organism: self.agent_entities_by_organism.clone(),
+            carried_by_organism: self.carried_by_organism.clone(),
+            spatial_cells: self.spatial_cells.clone(),
+            oversized_objects: self.oversized_objects.clone(),
+            last_touched_entities: self.last_touched_entities.clone(),
+            last_action_result: self.last_action_result.clone(),
+            ingestion_observations: self.ingestion_observations.clone(),
+            ecology: self.ecology.clone(),
+            speech: self.speech.clone(),
+            last_creature_utterance_ticks: self.last_creature_utterance_ticks.clone(),
+            pending_player_care: self.pending_player_care.clone(),
+            player_hold: self.player_hold.clone(),
+            tracked_objects: self.tracked_objects.empty_placeholder(),
+            habitats: std::sync::Arc::clone(&self.habitats),
+            organism_registry: self.organism_registry.clone(),
+            #[cfg(test)]
+            injected_post_action_failure: self.injected_post_action_failure,
+            #[cfg(test)]
+            injected_tick_late_failure_after_first_organism: self
+                .injected_tick_late_failure_after_first_organism,
+        }
+    }
+
+    #[doc(hidden)]
+    pub fn commit_staged_tick(&mut self) {
+        self.tracked_objects.commit_staged_transaction();
+    }
+
+    #[doc(hidden)]
+    pub fn rollback_staged_tick(&mut self, mut backup: Self) {
+        let placeholder = self.tracked_objects.empty_placeholder();
+        let mut tracked_objects = std::mem::replace(&mut self.tracked_objects, placeholder);
+        tracked_objects.rollback_staged_transaction();
+        backup.tracked_objects = tracked_objects;
+        *self = backup;
+    }
+
+    #[doc(hidden)]
+    pub fn adopt_staged_transaction_from(&mut self, prior: &mut Self) {
+        self.tracked_objects
+            .adopt_staged_transaction_from(&mut prior.tracked_objects);
+    }
+
+    #[doc(hidden)]
+    pub fn can_speculate_perception_at_next_tick(&self, next_tick: Tick) -> bool {
+        if self.tick.raw().checked_add(1) != Some(next_tick.raw()) {
+            return false;
+        }
+        let regrow_due = self.ecology.resources.iter().any(|resource| {
+            self.objects
+                .get(&resource.object_id.raw())
+                .is_some_and(|obj| obj.consumed)
+                && resource.consumed_at_tick.is_some_and(|consumed_at| {
+                    next_tick.raw().saturating_sub(consumed_at.raw())
+                        >= resource.regrow_after_ticks as u64
+                })
+        });
+        if regrow_due {
+            return false;
+        }
+        if self.ecology.config.max_spawn_per_tick == 0
+            || self.objects.len() >= self.ecology.config.max_world_objects
+            || self.ecology.resources.len() >= self.ecology.config.max_resource_records
+        {
+            return true;
+        }
+        let spawn_due = self.ecology.spawn_policies.iter().any(|policy| {
+            if next_tick.raw() < policy.next_spawn_tick.raw() {
+                return false;
+            }
+            let generated_prefix = format!("{}-", policy.label_prefix);
+            let active_for_prefix = self
+                .objects
+                .values()
+                .filter(|object| {
+                    object.kind == WorldObjectKind::Food
+                        && !object.consumed
+                        && object
+                            .label
+                            .strip_prefix(&generated_prefix)
+                            .is_some_and(|suffix| suffix.parse::<u32>().is_ok())
+                })
+                .count();
+            active_for_prefix < policy.max_active
+        });
+        !spawn_due
+    }
+
+    #[doc(hidden)]
+    pub fn with_speculative_next_tick_tracked_objects<R>(
+        &mut self,
+        next_tick: Tick,
+        f: impl FnOnce(&mut Self) -> Result<R, ScaffoldContractError>,
+    ) -> Result<(R, TrackedObjectRegistry), ScaffoldContractError> {
+        let old_tick = self.tick;
+        let speculative_tracked = self.tracked_objects.clone();
+        let active_tracked = std::mem::replace(&mut self.tracked_objects, speculative_tracked);
+        self.tick = next_tick;
+        let result = f(self);
+        let next_tracked = std::mem::replace(&mut self.tracked_objects, active_tracked);
+        self.tick = old_tick;
+        result.map(|value| (value, next_tracked))
+    }
+
+    #[doc(hidden)]
+    pub fn install_speculative_tracked_objects_in_staged_tick(
+        &mut self,
+        replacement: TrackedObjectRegistry,
+    ) {
+        self.tracked_objects.replace_with_staged_backup(replacement);
     }
 
     /// Advances one tick without creating a nested rollback snapshot.
@@ -2073,7 +2213,7 @@ impl HeadlessWorld {
                     .set_birth_energy(provision.min(1.0))
                     .map_err(map_organism_registry_error)?;
                 candidate.register_organism_record(child_record)?;
-                let mut child_habitats = candidate.habitats.clone();
+                let mut child_habitats = (*candidate.habitats).clone();
                 child_habitats
                     .register_creature(child_id, habitat_id, next_tick)
                     .map_err(|_| ScaffoldContractError::InvalidId)?;
@@ -2097,10 +2237,40 @@ impl HeadlessWorld {
 
         let mut eligible_pairs = Vec::new();
         let mut mating_organism_ids = BTreeSet::new();
-        for (maternal_index, maternal_id) in alive_organism_ids.iter().enumerate() {
-            for paternal_id in alive_organism_ids.iter().skip(maternal_index + 1) {
-                let Some(pair) =
-                    self.eligible_mating_pair(*maternal_id, *paternal_id, next_tick)?
+        let mut paternal_candidates = Vec::new();
+        for maternal_id in &alive_organism_ids {
+            let maternal_entity = self.agent_entity_id(*maternal_id)?;
+            let maternal_position = self
+                .objects
+                .get(&maternal_entity.raw())
+                .ok_or(ScaffoldContractError::InvalidId)?
+                .position;
+            paternal_candidates.clear();
+            self.for_each_spatial_candidate(
+                maternal_position,
+                maternal_position,
+                HEADLESS_MATING_RADIUS,
+                |object| {
+                    if object.kind != WorldObjectKind::Agent {
+                        return;
+                    }
+                    let Some(paternal_id) = object.organism_id else {
+                        return;
+                    };
+                    if paternal_id.raw() > maternal_id.raw()
+                        && self
+                            .organism_registry
+                            .get(paternal_id)
+                            .is_some_and(|record| record.lifecycle().is_alive())
+                    {
+                        paternal_candidates.push(paternal_id);
+                    }
+                },
+            );
+            paternal_candidates.sort_unstable_by_key(|id| id.raw());
+            paternal_candidates.dedup();
+            for paternal_id in paternal_candidates.iter().copied() {
+                let Some(pair) = self.eligible_mating_pair(*maternal_id, paternal_id, next_tick)?
                 else {
                     continue;
                 };
@@ -2237,11 +2407,37 @@ impl HeadlessWorld {
             .organism_registry
             .get(organism_id)
             .ok_or(ScaffoldContractError::InvalidId)?;
+        let own_position = self
+            .objects
+            .get(&own.world_entity_id().raw())
+            .ok_or(ScaffoldContractError::InvalidId)?
+            .position;
+        let mut partner_ids = Vec::new();
+        self.for_each_spatial_candidate(
+            own_position,
+            own_position,
+            HEADLESS_MATING_RADIUS,
+            |object| {
+                if object.kind != WorldObjectKind::Agent {
+                    return;
+                }
+                let Some(partner_id) = object.organism_id else {
+                    return;
+                };
+                if partner_id.raw() != organism_id.raw()
+                    && self
+                        .organism_registry
+                        .get(partner_id)
+                        .is_some_and(|record| record.lifecycle().is_alive())
+                {
+                    partner_ids.push(partner_id);
+                }
+            },
+        );
+        partner_ids.sort_unstable_by_key(|id| id.raw());
+        partner_ids.dedup();
         let mut strongest = 0.0_f32;
-        for partner_id in self.alive_organism_ids() {
-            if partner_id.raw() == organism_id.raw() {
-                continue;
-            }
+        for partner_id in partner_ids {
             let (maternal_id, paternal_id) = if organism_id.raw() < partner_id.raw() {
                 (organism_id, partner_id)
             } else {
@@ -2560,7 +2756,8 @@ impl HeadlessWorld {
             &serde_json::to_vec(&self.ecology).map_err(|_| ScaffoldContractError::InvalidId)?,
         );
         digest.write_bytes(
-            &serde_json::to_vec(&self.habitats).map_err(|_| ScaffoldContractError::InvalidId)?,
+            &serde_json::to_vec(self.habitats.as_ref())
+                .map_err(|_| ScaffoldContractError::InvalidId)?,
         );
         digest.write_bytes(
             &serde_json::to_vec(&self.speech.snapshot())
@@ -2671,6 +2868,8 @@ impl HeadlessWorld {
         let mut cells = BTreeMap::<(i32, i32, i32), Vec<u64>>::new();
         let mut organism_entities = BTreeMap::new();
         let mut max_contact_radius = HEADLESS_CONTACT_RADIUS;
+        let mut max_object_radius = 0.0_f32;
+        let mut nonfinite_object_radius = false;
         let mut carried_entities = BTreeMap::<u64, Vec<u64>>::new();
         let collect_nonvisual_metadata = self.objects.len() > NONVISUAL_SMALL_WORLD_OBJECTS;
         let mut nonvisual_requires_full_scan = !collect_nonvisual_metadata;
@@ -2680,6 +2879,10 @@ impl HeadlessWorld {
                 .entry(perception_cell(object.position))
                 .or_default()
                 .push(object.id.raw());
+            if !object.consumed {
+                max_object_radius = max_object_radius.max(object.radius);
+                nonfinite_object_radius |= !object.radius.is_finite();
+            }
             if collect_nonvisual_metadata && !object.consumed {
                 max_contact_radius = max_contact_radius.max(object.radius);
                 // Even a remote nonfinite chemical can affect the canonical
@@ -2711,6 +2914,8 @@ impl HeadlessWorld {
             cells,
             organism_entities,
             max_contact_radius,
+            max_object_radius,
+            nonfinite_object_radius,
             carried_entities,
             nonvisual_requires_full_scan,
         })
@@ -2729,7 +2934,7 @@ impl HeadlessWorld {
             self.tracked_objects.per_organism_capacity(),
             states,
         )?;
-        self.tracked_objects = restored;
+        self.tracked_objects.replace_with_staged_backup(restored);
         Ok(())
     }
 
@@ -2749,10 +2954,13 @@ impl HeadlessWorld {
     }
 
     pub fn organism_entity_ids(&self) -> Vec<(OrganismId, WorldEntityId)> {
-        self.objects
-            .values()
-            .filter_map(|object| object.organism_id.map(|organism| (organism, object.id)))
-            .collect()
+        let mut pairs = self
+            .agent_entities_by_organism
+            .iter()
+            .map(|(&organism, &entity)| (OrganismId(organism), entity))
+            .collect::<Vec<_>>();
+        pairs.sort_unstable_by_key(|(_, entity)| entity.raw());
+        pairs
     }
 
     pub fn organism_registry(&self) -> &WorldOrganismRegistry {
@@ -2809,6 +3017,9 @@ impl HeadlessWorld {
             .link_life_manifest(organism_id, digest)
             .map_err(map_organism_registry_error)?;
         candidate.validate_organism_bindings()?;
+        candidate
+            .tracked_objects
+            .adopt_staged_transaction_from(&mut self.tracked_objects);
         *self = candidate;
         Ok(())
     }
@@ -2825,6 +3036,9 @@ impl HeadlessWorld {
             .link_birth_manifest(organism_id, digest)
             .map_err(map_organism_registry_error)?;
         candidate.validate_organism_bindings()?;
+        candidate
+            .tracked_objects
+            .adopt_staged_transaction_from(&mut self.tracked_objects);
         *self = candidate;
         Ok(())
     }
@@ -2858,7 +3072,7 @@ impl HeadlessWorld {
             .remove_dead(organism_id)
             .map_err(map_organism_registry_error)?;
         let final_object = candidate.remove_agent_entity(object.id)?;
-        candidate.habitats.retire_creature(organism_id);
+        std::sync::Arc::make_mut(&mut candidate.habitats).retire_creature(organism_id);
         if candidate
             .last_action_result
             .as_ref()
@@ -2870,6 +3084,9 @@ impl HeadlessWorld {
             .last_creature_utterance_ticks
             .remove(&organism_id.raw());
         candidate.validate_organism_bindings()?;
+        candidate
+            .tracked_objects
+            .adopt_staged_transaction_from(&mut self.tracked_objects);
         *self = candidate;
         Ok((final_record, final_object))
     }
@@ -2925,6 +3142,9 @@ impl HeadlessWorld {
             replacement.next_organism_id = replacement.next_organism_id.max(next_organism_id);
         }
         replacement.validate_complete_organism_bindings(false)?;
+        replacement
+            .tracked_objects
+            .adopt_staged_transaction_from(&mut self.tracked_objects);
         *self = replacement;
         Ok(())
     }
@@ -3023,16 +3243,42 @@ impl HeadlessWorld {
         Ok(())
     }
 
+    fn validate_single_organism_binding(
+        &self,
+        organism_id: OrganismId,
+        world_entity_id: WorldEntityId,
+    ) -> Result<&WorldOrganismRecord, ScaffoldContractError> {
+        let record = self
+            .organism_registry
+            .get(organism_id)
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        record.validate_contract()?;
+        if record.world_entity_id() != world_entity_id {
+            return Err(ScaffoldContractError::InvalidId);
+        }
+        let object = self
+            .objects
+            .get(&world_entity_id.raw())
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        if object.id != world_entity_id
+            || object.kind != WorldObjectKind::Agent
+            || object.organism_id != Some(organism_id)
+            || self
+                .organism_registry
+                .get_by_world_entity_id(world_entity_id)
+                .is_none_or(|bound| bound.organism_id() != organism_id)
+        {
+            return Err(ScaffoldContractError::InvalidId);
+        }
+        Ok(record)
+    }
+
     pub fn remove_organism(
         &mut self,
         organism_id: OrganismId,
     ) -> Result<WorldObject, ScaffoldContractError> {
         organism_id.validate()?;
-        let entity_id = self
-            .organism_entity_ids()
-            .into_iter()
-            .find_map(|(candidate, entity_id)| (candidate == organism_id).then_some(entity_id))
-            .ok_or(ScaffoldContractError::InvalidId)?;
+        let entity_id = self.agent_entity_id(organism_id)?;
         self.remove_agent_entity(entity_id)
     }
 
@@ -3074,6 +3320,7 @@ impl HeadlessWorld {
             return Err(ScaffoldContractError::InvalidId);
         }
         self.objects.remove(&id.raw());
+        self.index_object_remove(&object);
         if self.player_held_object() == Some(id) {
             self.player_hold = None;
         }
@@ -3120,8 +3367,15 @@ impl HeadlessWorld {
             social_affinity: 0.0,
             teacher_channel: None,
         })?;
+        let new_radius = spec.radius.max(0.1);
         if let Some(object) = self.objects.get_mut(&id.raw()) {
-            object.radius = spec.radius.max(0.1);
+            object.radius = new_radius;
+        }
+        if let Some(object) = self.objects.get(&id.raw()) {
+            if Self::is_oversized_spatial(object) {
+                let pos = object.position;
+                self.update_object_spatial_cell(id, pos, false);
+            }
         }
         self.rebuild_ecology_metrics();
         Ok(id)
@@ -3150,6 +3404,7 @@ impl HeadlessWorld {
             .objects
             .remove(&id.raw())
             .ok_or(ScaffoldContractError::InvalidId)?;
+        self.index_object_remove(&object);
         self.labels.remove(&object.label);
         self.last_touched_entities.retain(|touched| *touched != id);
         if self
@@ -3188,10 +3443,16 @@ impl HeadlessWorld {
                 return Err(ScaffoldContractError::InvalidId);
             }
         }
-        let (start, carrier) = self
+        let (start, carrier, old_oversized) = self
             .objects
             .get(&id.raw())
-            .map(|object| (object.position, object.organism_id))
+            .map(|object| {
+                (
+                    object.position,
+                    object.organism_id,
+                    Self::is_oversized_spatial(object),
+                )
+            })
             .ok_or(ScaffoldContractError::InvalidId)?;
         let displacement = subtract(position, start);
         let object = self
@@ -3200,6 +3461,7 @@ impl HeadlessWorld {
             .ok_or(ScaffoldContractError::InvalidId)?;
         object.grounded_physical.velocity = displacement;
         object.position = position;
+        self.update_object_spatial_cell(id, start, old_oversized);
         if let Some(carrier) = carrier {
             self.sync_carried_pose(carrier)?;
         }
@@ -3237,12 +3499,26 @@ impl HeadlessWorld {
     fn sync_carried_pose(&mut self, carrier: OrganismId) -> Result<(), ScaffoldContractError> {
         let agent = self.agent_for(carrier)?;
         let grip = Self::carry_grip(agent.position, agent.body_yaw);
-        for object in self.objects.values_mut() {
-            if object.carried_by == Some(carrier) {
-                let displacement = subtract(grip, object.position);
-                object.position = grip;
-                object.grounded_physical.velocity = displacement;
-            }
+        let Some(carried_ids) = self.carried_by_organism.get(&carrier.raw()).cloned() else {
+            return Ok(());
+        };
+        for id_raw in carried_ids {
+            let Some((old_pos, old_oversized)) = self
+                .objects
+                .get_mut(&id_raw)
+                .filter(|object| object.carried_by == Some(carrier))
+                .map(|object| {
+                    let old_pos = object.position;
+                    let old_oversized = Self::is_oversized_spatial(object);
+                    let displacement = subtract(grip, old_pos);
+                    object.position = grip;
+                    object.grounded_physical.velocity = displacement;
+                    (old_pos, old_oversized)
+                })
+            else {
+                continue;
+            };
+            self.update_object_spatial_cell(WorldEntityId(id_raw), old_pos, old_oversized);
         }
         Ok(())
     }
@@ -3252,17 +3528,26 @@ impl HeadlessWorld {
         carrier: OrganismId,
         grab_target: Option<WorldEntityId>,
     ) -> Vec<(WorldEntityId, Vec3f, bool)> {
-        self.objects
-            .values()
-            .filter_map(|object| {
-                let held = object.carried_by == Some(carrier);
-                (held || Some(object.id) == grab_target).then_some((
-                    object.id,
-                    object.position,
-                    held,
-                ))
-            })
-            .collect()
+        let mut positions = Vec::new();
+        let mut seen_target = false;
+        if let Some(carried_ids) = self.carried_by_organism.get(&carrier.raw()) {
+            for id_raw in carried_ids {
+                if let Some(object) = self.objects.get(id_raw) {
+                    if object.carried_by == Some(carrier) {
+                        if Some(object.id) == grab_target {
+                            seen_target = true;
+                        }
+                        positions.push((object.id, object.position, true));
+                    }
+                }
+            }
+        }
+        if let Some(target) = grab_target.filter(|_| !seen_target) {
+            if let Some(object) = self.objects.get(&target.raw()) {
+                positions.push((object.id, object.position, false));
+            }
+        }
+        positions
     }
 
     fn commit_carried_interval_velocity(
@@ -3283,14 +3568,18 @@ impl HeadlessWorld {
         let Ok(agent) = self.agent_for(carrier) else {
             return false;
         };
+        let Some(carried_ids) = self.carried_by_organism.get(&carrier.raw()) else {
+            return true;
+        };
         let delta_yaw = (yaw - agent.body_yaw + std::f32::consts::PI)
             .rem_euclid(std::f32::consts::TAU)
             - std::f32::consts::PI;
         // At most a 5-degree arc per segment, including movement that reorients
         // the body. Check the grip and the body-to-grip reach throughout.
         let steps = (delta_yaw.abs() / 5.0_f32.to_radians()).ceil().max(1.0) as usize;
-        self.objects
-            .values()
+        carried_ids
+            .iter()
+            .filter_map(|id| self.objects.get(id))
             .filter(|object| object.carried_by == Some(carrier))
             .all(|object| {
                 let mut previous = object.position;
@@ -3301,8 +3590,8 @@ impl HeadlessWorld {
                         scale(subtract(position, agent.position), fraction),
                     );
                     let grip = Self::carry_grip(body, agent.body_yaw + delta_yaw * fraction);
-                    if !self.solid_segment_clear(body, grip)
-                        || !self.solid_segment_clear(previous, grip)
+                    if !self.solid_segment_clear(body, grip, None)
+                        || !self.solid_segment_clear(previous, grip, None)
                     {
                         return false;
                     }
@@ -3313,10 +3602,14 @@ impl HeadlessWorld {
     }
 
     fn detach_carried_objects(&mut self, carrier: OrganismId) {
-        for object in self.objects.values_mut() {
-            if object.carried_by == Some(carrier) {
-                object.carried_by = None;
-                object.activity_hold = false;
+        if let Some(carried_ids) = self.carried_by_organism.remove(&carrier.raw()) {
+            for id_raw in carried_ids {
+                if let Some(object) = self.objects.get_mut(&id_raw) {
+                    if object.carried_by == Some(carrier) {
+                        object.carried_by = None;
+                        object.activity_hold = false;
+                    }
+                }
             }
         }
     }
@@ -3391,7 +3684,7 @@ impl HeadlessWorld {
                 .iter()
                 .map(|(organism, tick)| (OrganismId(*organism), *tick))
                 .collect(),
-            habitats: self.habitats.clone(),
+            habitats: (*self.habitats).clone(),
             organism_records,
             external_actor_ids,
             voxel_backend: None,
@@ -3532,7 +3825,7 @@ impl HeadlessWorld {
                 return Err(ScaffoldContractError::InvalidId);
             }
         }
-        let world = Self {
+        let mut world = Self {
             seed: state.seed,
             disable_age_death: state.disable_age_death,
             terrain,
@@ -3543,6 +3836,10 @@ impl HeadlessWorld {
             next_utterance_id: state.next_utterance_id,
             objects,
             labels,
+            agent_entities_by_organism: BTreeMap::new(),
+            carried_by_organism: BTreeMap::new(),
+            spatial_cells: BTreeMap::new(),
+            oversized_objects: BTreeSet::new(),
             last_touched_entities: state.last_touched_entities.clone(),
             last_action_result: None,
             ingestion_observations: state.ingestion_observations.clone(),
@@ -3559,13 +3856,14 @@ impl HeadlessWorld {
                 state.seed,
                 DEFAULT_TRACKED_OBJECT_CAPACITY_PER_ORGANISM,
             )?,
-            habitats: state.habitats.clone(),
+            habitats: std::sync::Arc::new(state.habitats.clone()),
             organism_registry,
             #[cfg(test)]
             injected_post_action_failure: false,
             #[cfg(test)]
             injected_tick_late_failure_after_first_organism: false,
         };
+        world.rebuild_indexes_from_objects();
         if has_authoritative_organism_records {
             world.validate_complete_organism_bindings(true)?;
         }
@@ -3647,6 +3945,7 @@ impl HeadlessWorld {
                             observer,
                             self.indexed_nearby_objects(observer, index)?.into_iter(),
                             true,
+                            Some(index),
                         )?
                     }
                     (None, true) => {
@@ -3657,6 +3956,7 @@ impl HeadlessWorld {
                             observer,
                             self.objects.values(),
                             true,
+                            None,
                         )?
                     }
                     (Some(index), false) => {
@@ -3734,8 +4034,11 @@ impl HeadlessWorld {
                     }
                 }
                 if terrain_vision {
-                    let observer = self.agent_for(organism_id)?;
-                    sensory.channels.visual_affordance = self.terrain_vision_fan(observer);
+                    let observer = match index {
+                        Some(index) => self.indexed_agent_for(organism_id, index)?,
+                        None => self.agent_for(organism_id)?,
+                    };
+                    sensory.channels.visual_affordance = self.terrain_vision_fan(observer, index);
                     let vision_gain =
                         embodiment.map_or(1.0, |body| body.sensor_gain(SensorCapability::Vision));
                     scale_sensory_group(&mut sensory.channels.visual_affordance, vision_gain);
@@ -3813,6 +4116,7 @@ impl HeadlessWorld {
             observer,
             self.objects.values(),
             false,
+            None,
         )
     }
 
@@ -3830,6 +4134,7 @@ impl HeadlessWorld {
             observer,
             self.indexed_nearby_objects(observer, index)?.into_iter(),
             false,
+            Some(index),
         )
     }
 
@@ -3840,6 +4145,7 @@ impl HeadlessWorld {
         observer: &WorldObject,
         objects: impl Iterator<Item = &'a WorldObject>,
         terrain_vision: bool,
+        index: Option<&HeadlessPerceptionBatchIndex>,
     ) -> Result<PhysicalObservationSnapshot, ScaffoldContractError> {
         let gaze_yaw = observer.body_yaw + observer.head_yaw;
         let observer_pose = Pose {
@@ -3859,7 +4165,7 @@ impl HeadlessWorld {
             .filter_map(|object| {
                 let measured_distance = distance(observer.position, object.position);
                 (measured_distance <= HEADLESS_VISION_RADIUS
-                    && (!terrain_vision || self.object_in_sight(observer, object)))
+                    && (!terrain_vision || self.object_in_sight(observer, object, index)))
                 .then(|| {
                     Ok((
                         measured_distance,
@@ -3874,6 +4180,7 @@ impl HeadlessWorld {
                                     && !self.physical_contact_reachable(
                                         observer.position,
                                         object.position,
+                                        index,
                                     )
                                 {
                                     properties.chemical[2] = 0.0;
@@ -3885,6 +4192,7 @@ impl HeadlessWorld {
                                     && self.physical_contact_reachable(
                                         observer.position,
                                         object.position,
+                                        index,
                                     )),
                             confidence: Confidence::new(
                                 proximity_salience(measured_distance, HEADLESS_VISION_RADIUS)
@@ -4010,7 +4318,12 @@ impl HeadlessWorld {
         Ok(())
     }
 
-    fn object_in_sight(&self, observer: &WorldObject, target: &WorldObject) -> bool {
+    fn object_in_sight(
+        &self,
+        observer: &WorldObject,
+        target: &WorldObject,
+        index: Option<&HeadlessPerceptionBatchIndex>,
+    ) -> bool {
         let relative = subtract(target.position, observer.position);
         // Coincident X/Z has no azimuth. Do not let atan2(0, 0) assign an
         // arbitrary world bearing; keep range and physical occlusion below.
@@ -4040,7 +4353,7 @@ impl HeadlessWorld {
             return true;
         }
         let direction = scale(to_target, 1.0 / range);
-        self.first_sight_hit(eye, direction, range, observer.id, Some(target.id))
+        self.first_sight_hit(eye, direction, range, observer.id, Some(target.id), index)
             .is_none_or(|hit| hit >= range - target.radius * 0.25)
     }
 
@@ -4049,6 +4362,7 @@ impl HeadlessWorld {
     fn terrain_vision_fan(
         &self,
         observer: &WorldObject,
+        index: Option<&HeadlessPerceptionBatchIndex>,
     ) -> [f32; SENSORY_VISUAL_AFFORDANCE_CHANNEL_COUNT] {
         let mut rays = [1.0; SENSORY_VISUAL_AFFORDANCE_CHANNEL_COUNT];
         let eye = Vec3f::new(
@@ -4056,14 +4370,19 @@ impl HeadlessWorld {
             observer.position.y + VISION_EYE_HEIGHT,
             observer.position.z,
         );
-        for (index, range) in rays.iter_mut().enumerate() {
-            let fraction = index as f32 / (SENSORY_VISUAL_AFFORDANCE_CHANNEL_COUNT - 1) as f32;
+        for (ray_index, range) in rays.iter_mut().enumerate() {
+            let fraction = ray_index as f32 / (SENSORY_VISUAL_AFFORDANCE_CHANNEL_COUNT - 1) as f32;
             let yaw =
                 observer.body_yaw + observer.head_yaw + (2.0 * fraction - 1.0) * VISION_HALF_ANGLE;
             let direction = normalize(Vec3f::new(yaw.cos(), VISION_RAY_PITCH, yaw.sin()));
-            if let Some(hit) =
-                self.first_sight_hit(eye, direction, HEADLESS_VISION_RADIUS, observer.id, None)
-            {
+            if let Some(hit) = self.first_sight_hit(
+                eye,
+                direction,
+                HEADLESS_VISION_RADIUS,
+                observer.id,
+                None,
+                index,
+            ) {
                 *range = (hit / HEADLESS_VISION_RADIUS).clamp(0.0, 1.0);
             }
         }
@@ -4077,33 +4396,70 @@ impl HeadlessWorld {
         max_range: f32,
         observer: WorldEntityId,
         target: Option<WorldEntityId>,
+        index: Option<&HeadlessPerceptionBatchIndex>,
     ) -> Option<f32> {
         let mut nearest = max_range;
         let mut found = false;
-        for object in self.objects.values() {
-            if object.id == observer
-                || Some(object.id) == target
-                || object.consumed
-                || object.optical_opacity <= 0.0
+        let padding = match index {
+            Some(index)
+                if !index.nonfinite_object_radius
+                    && index.max_object_radius <= SPATIAL_NORMAL_MAX_RADIUS =>
             {
-                continue;
+                index.max_object_radius * 1.5
             }
-            let center = Vec3f::new(
-                object.position.x,
-                object.position.y + object.radius * 0.5,
-                object.position.z,
-            );
-            if let Some(hit) = sight_sphere_hit(origin, direction, center, object.radius, nearest) {
-                nearest = hit;
-                found = true;
-            }
-        }
-        if let Some(terrain) = self.terrain.as_ref() {
-            for bounds in &terrain.surface().obstacles {
-                if let Some(hit) = sight_box_hit(origin, direction, *bounds, nearest) {
+            _ => SPATIAL_NORMAL_MAX_RADIUS * 1.5,
+        };
+        if !max_range.is_finite() {
+            for object in self.objects.values() {
+                if object.id == observer
+                    || Some(object.id) == target
+                    || object.consumed
+                    || object.optical_opacity <= 0.0
+                {
+                    continue;
+                }
+                let center = Vec3f::new(
+                    object.position.x,
+                    object.position.y + object.radius * 0.5,
+                    object.position.z,
+                );
+                if let Some(hit) =
+                    sight_sphere_hit(origin, direction, center, object.radius, nearest)
+                {
                     nearest = hit;
                     found = true;
                 }
+            }
+        } else {
+            let end = add(origin, scale(direction, max_range));
+            self.for_each_ray_spatial_candidate(origin, end, padding, index, |object| {
+                if object.id == observer
+                    || Some(object.id) == target
+                    || object.consumed
+                    || object.optical_opacity <= 0.0
+                {
+                    return;
+                }
+                let center = Vec3f::new(
+                    object.position.x,
+                    object.position.y + object.radius * 0.5,
+                    object.position.z,
+                );
+                if let Some(hit) =
+                    sight_sphere_hit(origin, direction, center, object.radius, nearest)
+                {
+                    nearest = hit;
+                    found = true;
+                }
+            });
+        }
+        if let Some(terrain) = self.terrain.as_ref() {
+            if let Some(hit) = terrain
+                .surface()
+                .obstacle_ray_hit(origin, direction, nearest, 0.0)
+            {
+                nearest = hit;
+                found = true;
             }
         }
         let mut previous = 0.0;
@@ -4416,9 +4772,12 @@ impl HeadlessWorld {
         bundle: &MotorCommandBundle,
         world_entity_id: WorldEntityId,
     ) -> Result<HeadlessMotorTransactionReceipt, HeadlessMotorTransactionError> {
-        let before = self.clone();
+        let mut before = self.clone();
         let result = self.apply_registered_motor_bundle_inner(bundle, world_entity_id, None, None);
         if let Err(error) = result {
+            before
+                .tracked_objects
+                .adopt_staged_transaction_from(&mut self.tracked_objects);
             *self = before;
             return Err(error);
         }
@@ -4431,10 +4790,13 @@ impl HeadlessWorld {
         world_entity_id: WorldEntityId,
         neural: &NeuralEmissionFrame,
     ) -> Result<HeadlessMotorTransactionReceipt, HeadlessMotorTransactionError> {
-        let before = self.clone();
+        let mut before = self.clone();
         let result =
             self.apply_registered_motor_bundle_inner(bundle, world_entity_id, Some(neural), None);
         if let Err(error) = result {
+            before
+                .tracked_objects
+                .adopt_staged_transaction_from(&mut self.tracked_objects);
             *self = before;
             return Err(error);
         }
@@ -4615,7 +4977,7 @@ impl HeadlessWorld {
                 .advance_biology(bundle.organism_id, outcome_tick, body_event)
                 .map_err(map_organism_registry_error)?;
         }
-        self.validate_organism_bindings()?;
+        self.validate_single_organism_binding(bundle.organism_id, world_entity_id)?;
         let biology_after = *self
             .organism_registry
             .get(bundle.organism_id)
@@ -4691,7 +5053,6 @@ impl HeadlessWorld {
     ) -> Result<Tick, HeadlessMotorTransactionError> {
         bundle.validate_contract()?;
         world_entity_id.validate()?;
-        self.validate_organism_bindings()?;
         if bundle.tick != self.tick {
             return Err(HeadlessMotorTransactionError::Contract(
                 ScaffoldContractError::NonMonotonicTick,
@@ -4703,14 +5064,8 @@ impl HeadlessWorld {
             .checked_add(1)
             .map(Tick::new)
             .ok_or(ScaffoldContractError::InvalidId)?;
-        let record = self
-            .organism_registry
-            .get(bundle.organism_id)
-            .ok_or(ScaffoldContractError::InvalidId)?;
-        if !record.lifecycle().is_alive()
-            || record.world_entity_id() != world_entity_id
-            || record.biochemistry().tick != self.tick
-        {
+        let record = self.validate_single_organism_binding(bundle.organism_id, world_entity_id)?;
+        if !record.lifecycle().is_alive() || record.biochemistry().tick != self.tick {
             return Err(HeadlessMotorTransactionError::Contract(
                 if record.biochemistry().tick != self.tick {
                     ScaffoldContractError::NonMonotonicTick
@@ -4729,21 +5084,6 @@ impl HeadlessWorld {
                     command.channel,
                 ));
             }
-        }
-        let object = self
-            .objects
-            .get(&world_entity_id.raw())
-            .ok_or(ScaffoldContractError::InvalidId)?;
-        if object.kind != WorldObjectKind::Agent
-            || object.organism_id != Some(bundle.organism_id)
-            || self
-                .organism_registry
-                .get_by_world_entity_id(world_entity_id)
-                .is_none_or(|bound| bound.organism_id() != bundle.organism_id)
-        {
-            return Err(HeadlessMotorTransactionError::Contract(
-                ScaffoldContractError::InvalidId,
-            ));
         }
         Ok(outcome_tick)
     }
@@ -4788,10 +5128,13 @@ impl HeadlessWorld {
         outcome_tick: Tick,
         mode: RegisteredCommandMode,
     ) -> Result<HeadlessActionBiologyReceipt, ScaffoldContractError> {
-        let before = self.clone();
+        let mut before = self.clone();
         let result =
             self.apply_registered_transaction_inner(command, world_entity_id, outcome_tick, mode);
         if let Err(error) = result {
+            before
+                .tracked_objects
+                .adopt_staged_transaction_from(&mut self.tracked_objects);
             *self = before;
             return Err(error);
         }
@@ -4834,7 +5177,7 @@ impl HeadlessWorld {
         self.organism_registry
             .advance_biology(command.organism_id, outcome_tick, action_result.body_event)
             .map_err(map_organism_registry_error)?;
-        self.validate_organism_bindings()?;
+        self.validate_single_organism_binding(command.organism_id, world_entity_id)?;
         let biology_after = *self
             .organism_registry
             .get(command.organism_id)
@@ -4865,7 +5208,6 @@ impl HeadlessWorld {
     ) -> Result<BiochemistryState, ScaffoldContractError> {
         command.validate_contract()?;
         world_entity_id.validate()?;
-        self.validate_organism_bindings()?;
         let expected_tick = self
             .tick
             .raw()
@@ -4875,32 +5217,13 @@ impl HeadlessWorld {
         if outcome_tick != expected_tick {
             return Err(ScaffoldContractError::NonMonotonicTick);
         }
-        let record = self
-            .organism_registry
-            .get(command.organism_id)
-            .ok_or(ScaffoldContractError::InvalidId)?;
-        if !record.lifecycle().is_alive()
-            || record.world_entity_id() != world_entity_id
-            || record.biochemistry().tick != self.tick
-        {
+        let record = self.validate_single_organism_binding(command.organism_id, world_entity_id)?;
+        if !record.lifecycle().is_alive() || record.biochemistry().tick != self.tick {
             return Err(if record.biochemistry().tick != self.tick {
                 ScaffoldContractError::NonMonotonicTick
             } else {
                 ScaffoldContractError::InvalidId
             });
-        }
-        let object = self
-            .objects
-            .get(&world_entity_id.raw())
-            .ok_or(ScaffoldContractError::InvalidId)?;
-        if object.kind != WorldObjectKind::Agent
-            || object.organism_id != Some(command.organism_id)
-            || self
-                .organism_registry
-                .get_by_world_entity_id(world_entity_id)
-                .is_none_or(|bound| bound.organism_id() != command.organism_id)
-        {
-            return Err(ScaffoldContractError::InvalidId);
         }
         Ok(*record.biochemistry())
     }
@@ -5010,9 +5333,8 @@ impl HeadlessWorld {
         }
         if matches!(spec.kind, WorldObjectKind::Agent)
             && spec.organism_id.is_some_and(|organism_id| {
-                self.objects
-                    .values()
-                    .any(|object| object.organism_id == Some(organism_id))
+                self.agent_entities_by_organism
+                    .contains_key(&organism_id.raw())
             })
         {
             return Err(ScaffoldContractError::InvalidId);
@@ -5081,6 +5403,7 @@ impl HeadlessWorld {
         self.next_spawn_sequence = next_spawn_sequence;
         self.objects.insert(id.raw(), object);
         self.labels.insert(spec.label.to_string(), id);
+        self.index_object_insert(id);
         Ok(id)
     }
 
@@ -5235,7 +5558,7 @@ impl HeadlessWorld {
                     .get(&target.raw())
                     .map(|object| {
                         (
-                            self.physical_contact_reachable(agent_position, object.position),
+                            self.physical_contact_reachable(agent_position, object.position, None),
                             !object.consumed
                                 && object.organism_id.is_none_or(|organism_id| {
                                     self.organism_registry
@@ -5332,7 +5655,7 @@ impl HeadlessWorld {
                 WorldObjectKind::Ball | WorldObjectKind::ActivityToy
             )
             || toy.carried_by.is_some_and(|id| id != command.organism_id)
-            || !self.physical_contact_reachable(agent.position, toy.position)
+            || !self.physical_contact_reachable(agent.position, toy.position, None)
         {
             return self.finish_action(
                 command,
@@ -5405,10 +5728,10 @@ impl HeadlessWorld {
         let target_is_self = target == agent_id || target_organism == Some(organism_id);
         let owned_by_other = target_carried_by.is_some_and(|owner| owner != organism_id);
         let grip = Self::carry_grip(agent.position, agent.body_yaw);
-        let within_reach = self.physical_contact_reachable(agent_position, target_position)
+        let within_reach = self.physical_contact_reachable(agent_position, target_position, None)
             && (target_carried_by == Some(organism_id)
-                || (self.solid_segment_clear(agent_position, grip)
-                    && self.solid_segment_clear(target_position, grip)));
+                || (self.solid_segment_clear(agent_position, grip, None)
+                    && self.solid_segment_clear(target_position, grip, None)));
         agent_is_live
             && has_manipulation_effector
             && target_is_live
@@ -5427,11 +5750,17 @@ impl HeadlessWorld {
     ) -> bool {
         self.grasp_target_is_reachable(organism_id, agent_id, target)
             && (self.objects[&target.raw()].carried_by == Some(organism_id)
-                || !self.objects.values().any(|object| {
-                    !object.consumed
-                        && object.carried_by == Some(organism_id)
-                        && object.id != target
-                }))
+                || !self
+                    .carried_by_organism
+                    .get(&organism_id.raw())
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|id| self.objects.get(id))
+                    .any(|object| {
+                        !object.consumed
+                            && object.carried_by == Some(organism_id)
+                            && object.id != target
+                    }))
     }
 
     fn eat_can_pick_up(&self, organism_id: OrganismId, target: WorldEntityId) -> bool {
@@ -5470,18 +5799,21 @@ impl HeadlessWorld {
                 Vec::new(),
             );
         }
-        let object = self
-            .objects
-            .get_mut(&target.raw())
-            .ok_or(ScaffoldContractError::InvalidId)?;
-        // Contact is reversible: the same legal target releases what this
-        // organism already holds. A painful carried object must be escapable.
-        object.carried_by = if target_carried_by == Some(command.organism_id) {
+        let next_carried_by = if target_carried_by == Some(command.organism_id) {
             None
         } else {
             Some(command.organism_id)
         };
-        object.activity_hold = false;
+        {
+            let object = self
+                .objects
+                .get_mut(&target.raw())
+                .ok_or(ScaffoldContractError::InvalidId)?;
+            object.activity_hold = false;
+        }
+        // Contact is reversible: the same legal target releases what this
+        // organism already holds. A painful carried object must be escapable.
+        self.set_object_carried_by(target, next_carried_by);
         if target_carried_by != Some(command.organism_id) {
             self.sync_carried_pose(command.organism_id)?;
         }
@@ -5516,10 +5848,17 @@ impl HeadlessWorld {
         let label = format!("voice-token-{}", organism_id.raw());
         let token_id = VOCAL_TOKEN_ID_BASE.saturating_add((organism_id.raw() % 10_000) as u32);
         if let Some(existing) = self.labels.get(&label).copied() {
-            if let Some(object) = self.objects.get_mut(&existing.raw()) {
-                object.position = position;
-                object.token_id = Some(token_id);
-                object.consumed = false;
+            if let Some((old_pos, old_oversized)) =
+                self.objects.get_mut(&existing.raw()).map(|object| {
+                    let old_pos = object.position;
+                    let old_oversized = Self::is_oversized_spatial(object);
+                    object.position = position;
+                    object.token_id = Some(token_id);
+                    object.consumed = false;
+                    (old_pos, old_oversized)
+                })
+            {
+                self.update_object_spatial_cell(existing, old_pos, old_oversized);
             }
             return Ok(existing);
         }
@@ -5552,7 +5891,7 @@ impl HeadlessWorld {
             return self.invalid_target(command, Some(target));
         };
         let agent = self.agent_for(command.organism_id)?;
-        if !self.physical_contact_reachable(agent.position, target_position) {
+        if !self.physical_contact_reachable(agent.position, target_position, None) {
             return self.finish_action(
                 command,
                 false,
@@ -5604,16 +5943,19 @@ impl HeadlessWorld {
                 touched,
             );
         }
-        let object = self
-            .objects
-            .get_mut(&target.raw())
-            .ok_or(ScaffoldContractError::InvalidId)?;
-        let nutrition = object.nutrition;
-        let pain = object.hazard_pain;
-        let taste = object.grounded_physical.chemical[2];
-        object.consumed = true;
-        object.carried_by = None;
-        object.activity_hold = false;
+        let (nutrition, pain, taste) = {
+            let object = self
+                .objects
+                .get_mut(&target.raw())
+                .ok_or(ScaffoldContractError::InvalidId)?;
+            let nutrition = object.nutrition;
+            let pain = object.hazard_pain;
+            let taste = object.grounded_physical.chemical[2];
+            object.consumed = true;
+            object.activity_hold = false;
+            (nutrition, pain, taste)
+        };
+        self.set_object_carried_by(target, None);
         self.ingestion_observations.insert(
             command.organism_id.raw(),
             IngestionObservation {
@@ -5744,7 +6086,7 @@ impl HeadlessWorld {
             };
             destination = grounded;
         }
-        if let Some(blocker) = self.blocking_object_between(start, destination) {
+        if let Some(blocker) = self.blocking_object_between(start, destination, None) {
             return self.finish_action(
                 command,
                 false,
@@ -5760,21 +6102,22 @@ impl HeadlessWorld {
             );
         }
 
-        let touched = self
-            .objects
-            .iter()
-            .filter(|(id, object)| {
-                **id != agent_id.raw()
-                    && !object.consumed
-                    && (distance(object.position, destination) <= object.radius
-                        || (object.kind == WorldObjectKind::Hazard
-                            && distance(
-                                object.position,
-                                closest_point_on_segment(object.position, start, destination),
-                            ) <= object.radius))
-            })
-            .map(|(id, _)| WorldEntityId(*id))
-            .collect::<Vec<_>>();
+        let mut touched = Vec::new();
+        self.for_each_spatial_candidate(start, destination, SPATIAL_NORMAL_MAX_RADIUS, |object| {
+            if object.id != agent_id
+                && !object.consumed
+                && (distance(object.position, destination) <= object.radius
+                    || (object.kind == WorldObjectKind::Hazard
+                        && distance(
+                            object.position,
+                            closest_point_on_segment(object.position, start, destination),
+                        ) <= object.radius))
+            {
+                touched.push(object.id);
+            }
+        });
+        touched.sort_unstable_by_key(|id| id.raw());
+        touched.dedup();
         let hazard = touched.iter().find_map(|id| {
             self.objects
                 .get(&id.raw())
@@ -5797,9 +6140,13 @@ impl HeadlessWorld {
                 Vec::new(),
             );
         }
-        if let Some(agent) = self.objects.get_mut(&agent_id.raw()) {
+        if let Some(old_oversized) = self.objects.get_mut(&agent_id.raw()).map(|agent| {
+            let old_oversized = Self::is_oversized_spatial(agent);
             agent.position = destination;
             agent.body_yaw = yaw;
+            old_oversized
+        }) {
+            self.update_object_spatial_cell(agent_id, start, old_oversized);
         }
         self.sync_carried_pose(command.organism_id)?;
         self.commit_local_steering(command.organism_id, observed_goal, displacement, detour)?;
@@ -5935,9 +6282,13 @@ impl HeadlessWorld {
             .velocity = displacement;
         // Single-action and joint boundaries then commit actual held-object
         // displacement. Clear stale motion even for direct neural vocalization.
-        for object in self.objects.values_mut() {
-            if object.carried_by == Some(organism_id) {
-                object.grounded_physical.velocity = Vec3f::ZERO;
+        if let Some(carried_ids) = self.carried_by_organism.get(&organism_id.raw()) {
+            for id_raw in carried_ids {
+                if let Some(object) = self.objects.get_mut(id_raw) {
+                    if object.carried_by == Some(organism_id) {
+                        object.grounded_physical.velocity = Vec3f::ZERO;
+                    }
+                }
             }
         }
         Ok(())
@@ -5947,11 +6298,9 @@ impl HeadlessWorld {
         &self,
         organism_id: OrganismId,
     ) -> Result<WorldEntityId, ScaffoldContractError> {
-        self.objects
-            .iter()
-            .find_map(|(id, object)| {
-                (object.organism_id == Some(organism_id)).then_some(WorldEntityId(*id))
-            })
+        self.agent_entities_by_organism
+            .get(&organism_id.raw())
+            .copied()
             .ok_or(ScaffoldContractError::InvalidId)
     }
 
@@ -6126,40 +6475,64 @@ impl HeadlessWorld {
         visible
     }
 
-    fn blocking_object_between(&self, start: Vec3f, end: Vec3f) -> Option<WorldEntityId> {
-        self.objects.iter().find_map(|(id, object)| {
-            object
-                .blocks_segment(start, end)
-                .then_some(WorldEntityId(*id))
-        })
+    fn blocking_object_between(
+        &self,
+        start: Vec3f,
+        end: Vec3f,
+        index: Option<&HeadlessPerceptionBatchIndex>,
+    ) -> Option<WorldEntityId> {
+        let mut best: Option<u64> = None;
+        self.for_each_ray_spatial_candidate(
+            start,
+            end,
+            SPATIAL_NORMAL_MAX_RADIUS,
+            index,
+            |object| {
+                if best.is_some_and(|id| object.id.raw() >= id) {
+                    return;
+                }
+                if object.blocks_segment(start, end) {
+                    best = Some(object.id.raw());
+                }
+            },
+        );
+        best.map(WorldEntityId)
     }
 
     /// Contact legality uses solid geometry, independently of gaze and opacity.
-    fn physical_contact_reachable(&self, start: Vec3f, end: Vec3f) -> bool {
-        distance(start, end) <= EAT_RADIUS && self.solid_segment_clear(start, end)
+    fn physical_contact_reachable(
+        &self,
+        start: Vec3f,
+        end: Vec3f,
+        index: Option<&HeadlessPerceptionBatchIndex>,
+    ) -> bool {
+        distance(start, end) <= EAT_RADIUS && self.solid_segment_clear(start, end, index)
     }
 
-    fn solid_segment_clear(&self, start: Vec3f, end: Vec3f) -> bool {
+    fn solid_segment_clear(
+        &self,
+        start: Vec3f,
+        end: Vec3f,
+        index: Option<&HeadlessPerceptionBatchIndex>,
+    ) -> bool {
         let length = distance(start, end);
-        if self.blocking_object_between(start, end).is_some() {
+        if self.blocking_object_between(start, end, index).is_some() {
             return false;
         }
         let Some(terrain) = self.terrain.as_ref() else {
             return true;
         };
         if length <= f32::EPSILON {
-            return !terrain
+            return terrain
                 .surface()
-                .obstacles
-                .iter()
-                .any(|bounds| sight_box_hit(start, Vec3f::ZERO, *bounds, 0.0).is_some());
+                .obstacle_ray_hit(start, Vec3f::ZERO, 0.0, 0.0)
+                .is_none();
         }
         let direction = scale(subtract(end, start), 1.0 / length);
-        !terrain
+        terrain
             .surface()
-            .obstacles
-            .iter()
-            .any(|bounds| sight_box_hit(start, direction, *bounds, length).is_some())
+            .obstacle_ray_hit(start, direction, length, 0.0)
+            .is_none()
     }
 
     /// Reuse the endpoint hazard scan for peer overlap, including stationary
@@ -6171,37 +6544,42 @@ impl HeadlessWorld {
     ) -> (Option<(WorldEntityId, f32)>, bool) {
         let mut hazard: Option<(&WorldObject, f32)> = None;
         let mut peer_touch = false;
-        for object in self.objects.values() {
-            if object.id == own_entity || object.consumed {
-                continue;
-            }
-            match object.kind {
-                WorldObjectKind::Hazard => {
-                    let separation = distance(object.position, position);
-                    if separation <= object.radius
-                        && hazard.is_none_or(|(previous, previous_distance)| {
-                            separation
-                                .total_cmp(&previous_distance)
-                                .then_with(|| object.id.raw().cmp(&previous.id.raw()))
-                                .is_lt()
-                        })
-                    {
-                        hazard = Some((object, separation));
+        self.for_each_spatial_candidate(
+            position,
+            position,
+            SPATIAL_NORMAL_MAX_RADIUS.max(HEADLESS_CONTACT_RADIUS),
+            |object| {
+                if object.id == own_entity || object.consumed {
+                    return;
+                }
+                match object.kind {
+                    WorldObjectKind::Hazard => {
+                        let separation = distance(object.position, position);
+                        if separation <= object.radius
+                            && hazard.is_none_or(|(previous, previous_distance)| {
+                                separation
+                                    .total_cmp(&previous_distance)
+                                    .then_with(|| object.id.raw().cmp(&previous.id.raw()))
+                                    .is_lt()
+                            })
+                        {
+                            hazard = Some((object, separation));
+                        }
                     }
+                    WorldObjectKind::Agent if !peer_touch => {
+                        peer_touch = distance(object.position, position)
+                            <= object.radius.min(HEADLESS_CONTACT_RADIUS)
+                            && object.organism_id.is_some_and(|id| {
+                                self.organism_registry
+                                    .get(id)
+                                    .is_none_or(|record| record.lifecycle().is_alive())
+                            })
+                            && self.physical_contact_reachable(position, object.position, None);
+                    }
+                    _ => {}
                 }
-                WorldObjectKind::Agent if !peer_touch => {
-                    peer_touch = distance(object.position, position)
-                        <= object.radius.min(HEADLESS_CONTACT_RADIUS)
-                        && object.organism_id.is_some_and(|id| {
-                            self.organism_registry
-                                .get(id)
-                                .is_none_or(|record| record.lifecycle().is_alive())
-                        })
-                        && self.physical_contact_reachable(position, object.position);
-                }
-                _ => {}
-            }
-        }
+            },
+        );
         (
             hazard.map(|(object, _)| (object.id, object.hazard_pain)),
             peer_touch,
@@ -6219,41 +6597,35 @@ impl HeadlessWorld {
             return report;
         }
 
-        let resource_ids = self
-            .ecology
-            .resources
-            .iter()
-            .map(|resource| resource.object_id)
-            .collect::<Vec<_>>();
-        for object_id in resource_ids {
-            let Some(object) = self.objects.get_mut(&object_id.raw()) else {
+        let tick = self.tick;
+        let objects = &mut self.objects;
+        let ecology = &mut self.ecology;
+        for resource in &mut ecology.resources {
+            let Some(object) = objects.get_mut(&resource.object_id.raw()) else {
                 report.cap_rejections = report.cap_rejections.saturating_add(1);
-                continue;
-            };
-            let Some(resource) = self.ecology.resource_by_object_mut(object_id) else {
                 continue;
             };
             if object.consumed {
                 if let Some(consumed_at) = resource.consumed_at_tick {
-                    let elapsed = self.tick.raw().saturating_sub(consumed_at.raw());
+                    let elapsed = tick.raw().saturating_sub(consumed_at.raw());
                     if elapsed >= resource.regrow_after_ticks as u64 {
                         object.consumed = false;
                         object.nutrition = resource.base_nutrition.clamp(0.0, 1.0);
-                        resource.last_regrown_tick = Some(self.tick);
+                        resource.last_regrown_tick = Some(tick);
                         resource.consumed_at_tick = None;
                         resource.low_salience_marker = false;
-                        report.regrown_entities.push(object_id);
-                        self.ecology.metrics.resources_regrown =
-                            self.ecology.metrics.resources_regrown.saturating_add(1);
+                        report.regrown_entities.push(resource.object_id);
+                        ecology.metrics.resources_regrown =
+                            ecology.metrics.resources_regrown.saturating_add(1);
                     }
                 }
             } else if let Some(regrown_at) = resource.last_regrown_tick {
-                let elapsed = self.tick.raw().saturating_sub(regrown_at.raw());
+                let elapsed = tick.raw().saturating_sub(regrown_at.raw());
                 if elapsed >= resource.decay_after_ticks as u64 {
                     resource.low_salience_marker = true;
-                    report.cleanup_marked_entities.push(object_id);
-                    self.ecology.metrics.cleanup_marked =
-                        self.ecology.metrics.cleanup_marked.saturating_add(1);
+                    report.cleanup_marked_entities.push(resource.object_id);
+                    ecology.metrics.cleanup_marked =
+                        ecology.metrics.cleanup_marked.saturating_add(1);
                 }
             }
         }
@@ -6265,12 +6637,20 @@ impl HeadlessWorld {
     }
 
     fn spawn_ecology_resources(&mut self, report: &mut EcologyStepReport) {
+        if !self
+            .ecology
+            .spawn_policies
+            .iter()
+            .any(|policy| self.tick.raw() >= policy.next_spawn_tick.raw())
+        {
+            return;
+        }
         let mut spawned_this_tick = 0_usize;
-        let policies = self.ecology.spawn_policies.clone();
-        for (policy_index, mut policy) in policies.into_iter().enumerate() {
+        for policy_index in 0..self.ecology.spawn_policies.len() {
             if spawned_this_tick >= self.ecology.config.max_spawn_per_tick {
                 break;
             }
+            let mut policy = self.ecology.spawn_policies[policy_index].clone();
             if self.tick.raw() < policy.next_spawn_tick.raw() {
                 continue;
             }
@@ -6347,6 +6727,7 @@ impl HeadlessWorld {
             };
             if self.ecology.add_resource(lifecycle).is_err() {
                 if let Some(removed) = self.objects.remove(&id.raw()) {
+                    self.index_object_remove(&removed);
                     self.labels.remove(&removed.label);
                 }
                 report.cap_rejections = report.cap_rejections.saturating_add(1);
@@ -6386,18 +6767,26 @@ impl HeadlessWorld {
         }) {
             self.player_hold = None;
         }
-        let object_kinds = self
-            .objects
-            .values()
-            .filter(|object| matches!(object.kind, WorldObjectKind::Food | WorldObjectKind::Hazard))
-            .map(|object| {
-                (
-                    object.id.raw(),
-                    (object.kind == WorldObjectKind::Food, object.consumed),
-                )
-            })
-            .collect::<BTreeMap<_, _>>();
-        self.ecology.rebuild_metrics(&object_kinds);
+        let mut active_resources = 0_usize;
+        let mut consumed_resources = 0_usize;
+        let mut active_hazards = 0_usize;
+        for object in self.objects.values() {
+            match object.kind {
+                WorldObjectKind::Food => {
+                    if object.consumed {
+                        consumed_resources += 1;
+                    } else {
+                        active_resources += 1;
+                    }
+                }
+                WorldObjectKind::Hazard if !object.consumed => {
+                    active_hazards += 1;
+                }
+                _ => {}
+            }
+        }
+        self.ecology
+            .set_metrics_counts(active_resources, consumed_resources, active_hazards);
     }
 
     fn ambient_light_for_tick(&self) -> f32 {
@@ -6407,6 +6796,322 @@ impl HeadlessWorld {
         } else {
             0.35
         }
+    }
+
+    pub(crate) fn is_oversized_spatial(object: &WorldObject) -> bool {
+        !object.radius.is_finite()
+            || object.radius > SPATIAL_NORMAL_MAX_RADIUS
+            || !object.position.x.is_finite()
+            || !object.position.y.is_finite()
+            || !object.position.z.is_finite()
+    }
+
+    fn rebuild_indexes_from_objects(&mut self) {
+        self.agent_entities_by_organism.clear();
+        self.carried_by_organism.clear();
+        self.spatial_cells.clear();
+        self.oversized_objects.clear();
+        for object in self.objects.values() {
+            if let Some(organism_id) = object.organism_id {
+                self.agent_entities_by_organism
+                    .entry(organism_id.raw())
+                    .or_insert(object.id);
+            }
+            if let Some(carrier) = object.carried_by {
+                self.carried_by_organism
+                    .entry(carrier.raw())
+                    .or_default()
+                    .push(object.id.raw());
+            }
+            if Self::is_oversized_spatial(object) {
+                self.oversized_objects.insert(object.id.raw());
+            } else {
+                self.spatial_cells
+                    .entry(perception_cell(object.position))
+                    .or_default()
+                    .push(object.id.raw());
+            }
+        }
+    }
+
+    fn index_object_insert(&mut self, id: WorldEntityId) {
+        let Some(object) = self.objects.get(&id.raw()) else {
+            return;
+        };
+        if let Some(organism_id) = object.organism_id {
+            self.agent_entities_by_organism
+                .entry(organism_id.raw())
+                .or_insert(object.id);
+        }
+        if let Some(carrier) = object.carried_by {
+            let entry = self.carried_by_organism.entry(carrier.raw()).or_default();
+            if !entry.contains(&id.raw()) {
+                entry.push(id.raw());
+            }
+        }
+        if Self::is_oversized_spatial(object) {
+            self.oversized_objects.insert(id.raw());
+        } else {
+            let entry = self
+                .spatial_cells
+                .entry(perception_cell(object.position))
+                .or_default();
+            if !entry.contains(&id.raw()) {
+                entry.push(id.raw());
+            }
+        }
+    }
+
+    fn index_object_remove(&mut self, object: &WorldObject) {
+        let id_raw = object.id.raw();
+        if let Some(organism_id) = object.organism_id {
+            if self.agent_entities_by_organism.get(&organism_id.raw()) == Some(&object.id) {
+                self.agent_entities_by_organism.remove(&organism_id.raw());
+            }
+        }
+        if let Some(carrier) = object.carried_by {
+            if let Some(list) = self.carried_by_organism.get_mut(&carrier.raw()) {
+                list.retain(|entry| *entry != id_raw);
+                if list.is_empty() {
+                    self.carried_by_organism.remove(&carrier.raw());
+                }
+            }
+        }
+        if Self::is_oversized_spatial(object) {
+            self.oversized_objects.remove(&id_raw);
+        } else {
+            let cell = perception_cell(object.position);
+            if let Some(list) = self.spatial_cells.get_mut(&cell) {
+                list.retain(|entry| *entry != id_raw);
+                if list.is_empty() {
+                    self.spatial_cells.remove(&cell);
+                }
+            }
+        }
+    }
+
+    pub(crate) fn set_object_carried_by(
+        &mut self,
+        id: WorldEntityId,
+        new_carrier: Option<OrganismId>,
+    ) {
+        let Some(object) = self.objects.get_mut(&id.raw()) else {
+            return;
+        };
+        let old_carrier = object.carried_by;
+        if old_carrier == new_carrier {
+            return;
+        }
+        object.carried_by = new_carrier;
+        if let Some(old) = old_carrier {
+            if let Some(list) = self.carried_by_organism.get_mut(&old.raw()) {
+                list.retain(|entry| *entry != id.raw());
+                if list.is_empty() {
+                    self.carried_by_organism.remove(&old.raw());
+                }
+            }
+        }
+        if let Some(new) = new_carrier {
+            let list = self.carried_by_organism.entry(new.raw()).or_default();
+            if !list.contains(&id.raw()) {
+                list.push(id.raw());
+            }
+        }
+    }
+
+    pub(crate) fn update_object_spatial_cell(
+        &mut self,
+        id: WorldEntityId,
+        old_pos: Vec3f,
+        old_oversized: bool,
+    ) {
+        let Some(object) = self.objects.get(&id.raw()) else {
+            return;
+        };
+        let new_oversized = Self::is_oversized_spatial(object);
+        let new_pos = object.position;
+        if old_oversized && new_oversized {
+            self.oversized_objects.insert(id.raw());
+            return;
+        }
+        let old_cell = perception_cell(old_pos);
+        let new_cell = perception_cell(new_pos);
+        if !old_oversized && !new_oversized && old_cell == new_cell {
+            return;
+        }
+        if old_oversized {
+            self.oversized_objects.remove(&id.raw());
+        } else if let Some(list) = self.spatial_cells.get_mut(&old_cell) {
+            list.retain(|entry| *entry != id.raw());
+            if list.is_empty() {
+                self.spatial_cells.remove(&old_cell);
+            }
+        }
+        if new_oversized {
+            self.oversized_objects.insert(id.raw());
+        } else {
+            let list = self.spatial_cells.entry(new_cell).or_default();
+            if !list.contains(&id.raw()) {
+                list.push(id.raw());
+            }
+        }
+    }
+
+    pub(crate) fn for_each_spatial_candidate<'a>(
+        &'a self,
+        start: Vec3f,
+        end: Vec3f,
+        padding: f32,
+        mut visit: impl FnMut(&'a WorldObject),
+    ) {
+        if self.spatial_cells.is_empty() && self.oversized_objects.is_empty() {
+            return;
+        }
+        if !padding.is_finite()
+            || padding < 0.0
+            || !start.x.is_finite()
+            || !start.y.is_finite()
+            || !start.z.is_finite()
+            || !end.x.is_finite()
+            || !end.y.is_finite()
+            || !end.z.is_finite()
+        {
+            for object in self.objects.values() {
+                visit(object);
+            }
+            return;
+        }
+        let pad = f64::from(padding) * (1.0 + 8.0 * f64::from(f32::EPSILON)) + 1e-4;
+        let cell_scale = f64::from(HEADLESS_VISION_RADIUS);
+        let x0 = ((f64::from(start.x.min(end.x)) - pad) / cell_scale).floor() as i32;
+        let x1 = ((f64::from(start.x.max(end.x)) + pad) / cell_scale).floor() as i32;
+        let y0 = ((f64::from(start.y.min(end.y)) - pad) / cell_scale).floor() as i32;
+        let y1 = ((f64::from(start.y.max(end.y)) + pad) / cell_scale).floor() as i32;
+        let z0 = ((f64::from(start.z.min(end.z)) - pad) / cell_scale).floor() as i32;
+        let z1 = ((f64::from(start.z.max(end.z)) + pad) / cell_scale).floor() as i32;
+        let cell_count = (i64::from(x1) - i64::from(x0) + 1)
+            .saturating_mul(i64::from(y1) - i64::from(y0) + 1)
+            .saturating_mul(i64::from(z1) - i64::from(z0) + 1);
+        if cell_count > 128 || cell_count > self.objects.len() as i64 {
+            for object in self.objects.values() {
+                visit(object);
+            }
+            return;
+        }
+        for x in x0..=x1 {
+            for y in y0..=y1 {
+                for z in z0..=z1 {
+                    if let Some(ids) = self.spatial_cells.get(&(x, y, z)) {
+                        for id in ids {
+                            if let Some(object) = self.objects.get(id) {
+                                visit(object);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        for id in &self.oversized_objects {
+            if let Some(object) = self.objects.get(id) {
+                visit(object);
+            }
+        }
+    }
+
+    fn for_each_ray_spatial_candidate<'a>(
+        &'a self,
+        start: Vec3f,
+        end: Vec3f,
+        padding: f32,
+        index: Option<&HeadlessPerceptionBatchIndex>,
+        mut visit: impl FnMut(&'a WorldObject),
+    ) {
+        if let Some(index) = index.filter(|index| {
+            !index.nonfinite_object_radius
+                && index.max_object_radius <= SPATIAL_NORMAL_MAX_RADIUS
+                && self.validate_perception_batch_index(index).is_ok()
+        }) {
+            if !padding.is_finite()
+                || padding < 0.0
+                || !start.x.is_finite()
+                || !start.y.is_finite()
+                || !start.z.is_finite()
+                || !end.x.is_finite()
+                || !end.y.is_finite()
+                || !end.z.is_finite()
+            {
+                for object in self.objects.values() {
+                    visit(object);
+                }
+                return;
+            }
+            let pad = f64::from(padding) * (1.0 + 8.0 * f64::from(f32::EPSILON)) + 1e-4;
+            let cell_scale = f64::from(HEADLESS_VISION_RADIUS);
+            let x0 = ((f64::from(start.x.min(end.x)) - pad) / cell_scale).floor() as i32;
+            let x1 = ((f64::from(start.x.max(end.x)) + pad) / cell_scale).floor() as i32;
+            let y0 = ((f64::from(start.y.min(end.y)) - pad) / cell_scale).floor() as i32;
+            let y1 = ((f64::from(start.y.max(end.y)) + pad) / cell_scale).floor() as i32;
+            let z0 = ((f64::from(start.z.min(end.z)) - pad) / cell_scale).floor() as i32;
+            let z1 = ((f64::from(start.z.max(end.z)) + pad) / cell_scale).floor() as i32;
+            let cell_count = (i64::from(x1) - i64::from(x0) + 1)
+                .saturating_mul(i64::from(y1) - i64::from(y0) + 1)
+                .saturating_mul(i64::from(z1) - i64::from(z0) + 1);
+            if cell_count > 128 || cell_count > self.objects.len() as i64 {
+                for object in self.objects.values() {
+                    visit(object);
+                }
+                return;
+            }
+            for x in x0..=x1 {
+                for y in y0..=y1 {
+                    for z in z0..=z1 {
+                        if let Some(ids) = index.cells.get(&(x, y, z)) {
+                            for id in ids {
+                                if let Some(object) = self.objects.get(id) {
+                                    visit(object);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            return;
+        }
+        self.for_each_spatial_candidate(start, end, padding, visit);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_object_position_for_test(&mut self, id: WorldEntityId, position: Vec3f) {
+        let Some((old_pos, old_oversized)) = self.objects.get_mut(&id.raw()).map(|object| {
+            let old_pos = object.position;
+            let old_oversized = Self::is_oversized_spatial(object);
+            object.position = position;
+            (old_pos, old_oversized)
+        }) else {
+            return;
+        };
+        self.update_object_spatial_cell(id, old_pos, old_oversized);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_object_carried_by_for_test(
+        &mut self,
+        id: WorldEntityId,
+        carried_by: Option<OrganismId>,
+    ) {
+        self.set_object_carried_by(id, carried_by);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_object_radius_for_test(&mut self, id: WorldEntityId, radius: f32) {
+        let Some((pos, old_oversized)) = self.objects.get_mut(&id.raw()).map(|object| {
+            let old_oversized = Self::is_oversized_spatial(object);
+            object.radius = radius;
+            (object.position, old_oversized)
+        }) else {
+            return;
+        };
+        self.update_object_spatial_cell(id, pos, old_oversized);
     }
 }
 
@@ -6648,8 +7353,15 @@ impl HeadlessScenarioBuilder {
             teacher_channel: None,
         });
         if let Some(id) = self.world.entity_id(label) {
+            let mut changed = None;
             if let Some(object) = self.world.objects.get_mut(&id.raw()) {
+                let old_oversized = HeadlessWorld::is_oversized_spatial(object);
                 object.radius = radius.max(0.1);
+                changed = Some((object.position, old_oversized));
+            }
+            if let Some((pos, old_oversized)) = changed {
+                self.world
+                    .update_object_spatial_cell(id, pos, old_oversized);
             }
         }
         self
@@ -7031,7 +7743,7 @@ impl crate::ActionLegalityChecker for HeadlessWorld {
                 || object.consumed
                 || (object.carried_by != Some(action.organism_id)
                     && !self.eat_can_pick_up(action.organism_id, target))
-                || !self.physical_contact_reachable(agent.position, object.position)
+                || !self.physical_contact_reachable(agent.position, object.position, None)
             {
                 return crate::ActionLegality::BlockedByWorldState;
             }
@@ -8057,37 +8769,12 @@ mod sight_ray_direction_tests {
             })
             .unwrap();
         world.editor_set_optical_opacity(rear, 0.0).unwrap();
-        let clear = world.terrain_vision_fan(world.agent_for(OrganismId(1)).unwrap());
+        let clear = world.terrain_vision_fan(world.agent_for(OrganismId(1)).unwrap(), None);
         assert!(clear.iter().all(|range| *range > 0.0));
         world.editor_set_optical_opacity(rear, 1.0).unwrap();
-        let opaque = world.terrain_vision_fan(world.agent_for(OrganismId(1)).unwrap());
+        let opaque = world.terrain_vision_fan(world.agent_for(OrganismId(1)).unwrap(), None);
         assert_eq!(opaque.map(f32::to_bits), clear.map(f32::to_bits));
     }
-}
-
-fn sight_box_hit(origin: Vec3f, direction: Vec3f, bounds: [f32; 6], max_range: f32) -> Option<f32> {
-    let mut entry = 0.0_f32;
-    let mut exit = max_range;
-    for (position, velocity, minimum, maximum) in [
-        (origin.x, direction.x, bounds[0], bounds[2]),
-        (origin.y, direction.y, bounds[4], bounds[5]),
-        (origin.z, direction.z, bounds[1], bounds[3]),
-    ] {
-        if velocity.abs() <= f32::EPSILON {
-            if position < minimum || position > maximum {
-                return None;
-            }
-        } else {
-            let near = (minimum - position) / velocity;
-            let far = (maximum - position) / velocity;
-            entry = entry.max(near.min(far));
-            exit = exit.min(near.max(far));
-            if entry > exit {
-                return None;
-            }
-        }
-    }
-    Some(entry)
 }
 
 fn perception_cell(position: Vec3f) -> (i32, i32, i32) {
@@ -8440,11 +9127,8 @@ mod task_6_factorized_motor_tests {
         assert_eq!(remote_inspect_result.body_event.damage, 0.0);
         assert!(world.last_touched_entities.is_empty());
 
-        {
-            let consumed_hazard = world.objects.get_mut(&far_hazard.raw()).unwrap();
-            consumed_hazard.position = Vec3f::new(0.5, 0.0, 0.0);
-            consumed_hazard.consumed = true;
-        }
+        world.set_object_position_for_test(far_hazard, Vec3f::new(0.5, 0.0, 0.0));
+        world.objects.get_mut(&far_hazard.raw()).unwrap().consumed = true;
         let consumed_inspect = HeadlessWorldCommand::structured(
             ORGANISM_ID,
             ActionKind::Inspect.canonical_id(),
@@ -8543,7 +9227,7 @@ mod task_6_factorized_motor_tests {
             Some(ORGANISM_ID)
         );
 
-        world.objects.get_mut(&near_food.raw()).unwrap().carried_by = Some(OrganismId(99));
+        world.set_object_carried_by_for_test(near_food, Some(OrganismId(99)));
         let ownership_result = world.apply_command(&nearby_grab).unwrap();
         assert!(!ownership_result.execution.succeeded);
         assert_eq!(
@@ -9465,9 +10149,13 @@ mod task_6_factorized_motor_tests {
             })
             .unwrap();
 
-        assert!(world.physical_contact_reachable(Vec3f::ZERO, world.entity(food).unwrap().position));
+        assert!(world.physical_contact_reachable(
+            Vec3f::ZERO,
+            world.entity(food).unwrap().position,
+            None
+        ));
         assert_eq!(
-            world.blocking_object_between(Vec3f::ZERO, Vec3f::new(MOVE_STEP, 0.0, 0.0)),
+            world.blocking_object_between(Vec3f::ZERO, Vec3f::new(MOVE_STEP, 0.0, 0.0), None),
             Some(blocker),
         );
         let receipt = world.apply_registered_motor_bundle(&bundle, agent).unwrap();
@@ -11578,7 +12266,7 @@ mod eat_possession_tests {
     #[test]
     fn another_creatures_held_food_cannot_be_eaten_or_stolen() {
         let (mut world, food) = world();
-        world.objects.get_mut(&food.raw()).unwrap().carried_by = Some(OrganismId(2));
+        world.set_object_carried_by_for_test(food, Some(OrganismId(2)));
         assert_rejected(&mut world, food);
         assert_eq!(world.entity(food).unwrap().carried_by, Some(OrganismId(2)));
     }
@@ -11650,7 +12338,7 @@ mod eat_possession_tests {
             let (mut world, food) = world();
             match case {
                 "out_of_reach" => {
-                    world.objects.get_mut(&food.raw()).unwrap().position = Vec3f::new(4.0, 0.0, 0.0)
+                    world.set_object_position_for_test(food, Vec3f::new(4.0, 0.0, 0.0));
                 }
                 "unsafe" => world.objects.get_mut(&food.raw()).unwrap().hazard_pain = 0.3,
                 "nonfood" => {
@@ -11698,7 +12386,11 @@ mod eat_possession_tests {
             )
             .unwrap(),
         );
-        assert!(world.physical_contact_reachable(Vec3f::ZERO, world.entity(food).unwrap().position));
+        assert!(world.physical_contact_reachable(
+            Vec3f::ZERO,
+            world.entity(food).unwrap().position,
+            None
+        ));
         assert_rejected(&mut world, food);
         assert_eq!(world.entity(food).unwrap().carried_by, None);
     }
@@ -11733,6 +12425,127 @@ mod eat_possession_tests {
         let stale = world.apply_command(&command).unwrap();
         assert!(!stale.execution.succeeded);
         assert_eq!(stale.body_event.nutrition, 0.0);
+    }
+}
+
+#[cfg(test)]
+mod spatial_grid_parity_tests {
+    use super::*;
+    use alife_core::{BrainCapacityClass, CreatureGenome, FoundationGeneticIdentity};
+
+    fn register_pair(world: &mut HeadlessWorld, id: OrganismId, entity: WorldEntityId, seed: u64) {
+        let genome = CreatureGenome::early_mammal_founder(
+            seed,
+            FoundationGeneticIdentity::new(10, 1, 7, BrainCapacityClass::N512_ID).unwrap(),
+        )
+        .unwrap();
+        let phenotype = genome.express().unwrap();
+        let record =
+            WorldOrganismRecord::newborn(id, entity, genome, phenotype, Tick::ZERO).unwrap();
+        world.register_organism_record(record).unwrap();
+    }
+
+    #[test]
+    fn spatial_grid_parity_across_mating_contacts_move_and_save_restore() {
+        let mut world = HeadlessScenarioBuilder::new(71_234)
+            .agent("a1", OrganismId(1), Vec3f::new(0.0, 0.0, 0.0))
+            .agent("a2", OrganismId(2), Vec3f::new(0.6, 0.0, 0.0))
+            .agent("a3-far", OrganismId(3), Vec3f::new(25.0, 0.0, 0.0))
+            .hazard("near-hazard", Vec3f::new(0.15, 0.0, 0.0), 0.25)
+            .hazard("oversized-hazard", Vec3f::new(5.5, 0.0, 0.0), 0.4)
+            .food("snack", Vec3f::new(0.1, 0.0, 0.05), 0.5)
+            .build()
+            .unwrap();
+        let a1 = world.agent_entity_id(OrganismId(1)).unwrap();
+        let a2 = world.agent_entity_id(OrganismId(2)).unwrap();
+        let a3 = world.agent_entity_id(OrganismId(3)).unwrap();
+        register_pair(&mut world, OrganismId(1), a1, 0xE10_7001);
+        register_pair(&mut world, OrganismId(2), a2, 0xE10_7002);
+        register_pair(&mut world, OrganismId(3), a3, 0xE10_7003);
+
+        let oversized_hazard = world.entity_id("oversized-hazard").unwrap();
+        world.set_object_radius_for_test(oversized_hazard, 6.0);
+        assert!(world.oversized_objects.contains(&oversized_hazard.raw()));
+
+        // Verify body_contacts_at detects both peer touch and nearest hazard (including oversized).
+        let (hazard_hit, peer_touch) = world.body_contacts_at(a1, Vec3f::new(0.55, 0.0, 0.0));
+        assert!(peer_touch);
+        assert_eq!(
+            hazard_hit.map(|(id, _)| id),
+            Some(world.entity_id("near-hazard").unwrap())
+        );
+
+        let (oversized_hit, far_peer_touch) =
+            world.body_contacts_at(a3, Vec3f::new(11.0, 0.0, 0.0));
+        assert!(!far_peer_touch);
+        assert_eq!(oversized_hit.map(|(id, _)| id), Some(oversized_hazard));
+
+        // Verify mating_response and collect_mating_opportunities match full scan.
+        let expected_mating_a1 = world.mating_response(OrganismId(1), Tick(1)).unwrap();
+        let expected_mating_a3 = world.mating_response(OrganismId(3), Tick(1)).unwrap();
+        assert_eq!(expected_mating_a3, 0.0);
+        let opp = world.collect_mating_opportunities(Tick(1)).unwrap();
+
+        // Move a1 forward and verify touched_entities matches full scan in ID order.
+        let move_cmd = HeadlessWorldCommand::structured(
+            OrganismId(1),
+            HeadlessActionIds::STEP_FORWARD,
+            ActionKind::Move,
+            None,
+            None,
+        )
+        .unwrap();
+        let moved = world.apply_command(&move_cmd).unwrap();
+        assert!(moved.execution.succeeded);
+        let new_pos = world.agent_for(OrganismId(1)).unwrap().position;
+        let expected_touched: Vec<WorldEntityId> = world
+            .objects
+            .iter()
+            .filter(|(id, obj)| {
+                **id != a1.raw()
+                    && !obj.consumed
+                    && (distance(obj.position, new_pos) <= obj.radius
+                        || (obj.kind == WorldObjectKind::Hazard
+                            && distance(
+                                obj.position,
+                                closest_point_on_segment(obj.position, Vec3f::ZERO, new_pos),
+                            ) <= obj.radius))
+            })
+            .map(|(id, _)| WorldEntityId(*id))
+            .collect();
+        assert_eq!(moved.touched_entities, expected_touched);
+
+        // Save/restore must rebuild all 4 indexes identically.
+        let saved = world.save_state();
+        let restored = HeadlessWorld::from_save_state(&saved).unwrap();
+        assert_eq!(
+            restored.canonical_signature_digest().unwrap(),
+            world.canonical_signature_digest().unwrap()
+        );
+        assert_eq!(
+            restored.agent_entity_id(OrganismId(1)).unwrap(),
+            world.agent_entity_id(OrganismId(1)).unwrap()
+        );
+        assert_eq!(
+            restored.body_contacts_at(a1, new_pos),
+            world.body_contacts_at(a1, new_pos)
+        );
+        assert_eq!(
+            restored.mating_response(OrganismId(1), Tick(1)).unwrap(),
+            expected_mating_a1
+        );
+        let restored_opp = restored.collect_mating_opportunities(Tick(1)).unwrap();
+        assert_eq!(restored_opp.alive_organism_ids, opp.alive_organism_ids);
+        assert_eq!(restored_opp.mating_organism_ids, opp.mating_organism_ids);
+        assert_eq!(restored_opp.eligible_pairs.len(), opp.eligible_pairs.len());
+        for (a, b) in restored_opp.eligible_pairs.iter().zip(&opp.eligible_pairs) {
+            assert_eq!(a.maternal_id, b.maternal_id);
+            assert_eq!(a.paternal_id, b.paternal_id);
+            assert_eq!(a.maternal_position, b.maternal_position);
+            assert_eq!(a.paternal_position, b.paternal_position);
+            assert_eq!(a.habitat_id, b.habitat_id);
+        }
+        assert!(restored.oversized_objects.contains(&oversized_hazard.raw()));
     }
 }
 

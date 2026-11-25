@@ -118,7 +118,7 @@ fn actual_route_masks_decoder_selection_and_persisted_eligibility_gate_updates()
             })
             .await
             .unwrap();
-        let entries = (0..7)
+        let entries = (0..8)
             .map(|binding| wgpu::BindGroupLayoutEntry {
                 binding,
                 visibility: wgpu::ShaderStages::COMPUTE,
@@ -212,6 +212,7 @@ fn actual_route_masks_decoder_selection_and_persisted_eligibility_gate_updates()
             make_buffer("dispatch", bytemuck::cast_slice(&[0_u32; 332])),
             make_buffer("frame", bytemuck::cast_slice(&vec![0_u32; 16_384])),
             make_buffer("state", bytemuck::cast_slice(plan.mutable_state_words())),
+            make_buffer("atomic", bytemuck::cast_slice(plan.atomic_state_words())),
         ];
         let bindings = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("isolated-production-bindings"),
@@ -281,8 +282,9 @@ fn actual_route_masks_decoder_selection_and_persisted_eligibility_gate_updates()
                 state[learning + 13] = 1;
                 let event_base = state[learning + 17] as usize;
                 state[event_base + 2] = 10;
-                state[brain.selection_offset as usize + 5] = 2;
-                state[brain.selection_offset as usize + 11] = 1;
+                let mut atomic = plan.atomic_state_words().to_vec();
+                atomic[brain.selection_offset as usize + 5] = 2;
+                atomic[brain.selection_offset as usize + 11] = 1;
 
                 let mut headers = [0_u32; 332];
                 headers[272 + 5] = 1;
@@ -313,6 +315,7 @@ fn actual_route_masks_decoder_selection_and_persisted_eligibility_gate_updates()
                 queue.write_buffer(&buffers[4], 0, bytemuck::cast_slice(&headers));
                 queue.write_buffer(&buffers[5], 0, bytemuck::cast_slice(&frame));
                 queue.write_buffer(&buffers[6], 0, bytemuck::cast_slice(&state));
+                queue.write_buffer(&buffers[7], 0, bytemuck::cast_slice(&atomic));
                 let count = if is_decoder {
                     headers[272 + 14]
                 } else {

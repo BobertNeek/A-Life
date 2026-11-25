@@ -43,6 +43,7 @@ fn parse_request(args: &[String]) -> Result<Request> {
 }
 
 fn main() -> Result<()> {
+    alife_game_app::init_headless_tracing();
     let Request {
         source,
         output,

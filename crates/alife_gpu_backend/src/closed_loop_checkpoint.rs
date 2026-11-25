@@ -124,7 +124,10 @@ pub fn decode_exact_population_capture_row(
     topology.validate_for_capacity(capacity)?;
     let words = bytemuck::try_cast_slice::<u8, u32>(row.mutable_state_bytes())
         .map_err(|_| ScaffoldContractError::ConsolidationGenerationMismatch)?;
+    let atomic_words = bytemuck::try_cast_slice::<u8, u32>(row.atomic_state_bytes())
+        .map_err(|_| ScaffoldContractError::ConsolidationGenerationMismatch)?;
     let base = row.ranges.mutable_state_words.start;
+    let atomic_base = row.ranges.atomic_state_words.start;
     let state: GpuSlotLearningStateRecord =
         record_from_range(words, base, &row.ranges.layout.learning_state_words)?;
     let active_weight_generation = join_pair([
@@ -187,8 +190,8 @@ pub fn decode_exact_population_capture_row(
             }
             validate_pending_joint_payload(
                 receipt,
-                words,
-                base,
+                atomic_words,
+                atomic_base,
                 &row.ranges.layout.speech_payload_words,
             )?;
             Some(pending_parts_from_receipt(receipt)?)
@@ -343,11 +346,17 @@ pub fn decode_exact_population_completed_sleep_staging(
     let parts = snapshot.into_parts();
     let words = bytemuck::try_cast_slice::<u8, u32>(row.mutable_state_bytes())
         .map_err(|_| ScaffoldContractError::ConsolidationGenerationMismatch)?;
+    let atomic_words = bytemuck::try_cast_slice::<u8, u32>(row.atomic_state_bytes())
+        .map_err(|_| ScaffoldContractError::ConsolidationGenerationMismatch)?;
     let base = row.ranges.mutable_state_words.start;
+    let atomic_base = row.ranges.atomic_state_words.start;
     let state: GpuSlotLearningStateRecord =
         record_from_range(words, base, &row.ranges.layout.learning_state_words)?;
-    let completion: GpuSleepCompletionRecord =
-        record_from_absolute_start(words, base, row.ranges.layout.diagnostic_words.start)?;
+    let completion: GpuSleepCompletionRecord = record_from_absolute_start(
+        atomic_words,
+        atomic_base,
+        row.ranges.layout.diagnostic_words.start,
+    )?;
     if completion.schema_version != 1
         || completion.slot != row.identity().slot
         || completion.slot_generation != row.identity().slot_generation
@@ -1629,8 +1638,9 @@ impl GpuClosedLoopBackend {
                 side,
             )
         };
-        let words = self.read_slot_mutable_words(handle, &ranges)?;
+        let (words, atomic_words) = self.read_slot_mutable_and_atomic_words(handle, &ranges)?;
         let base = ranges.mutable_state_words.start;
+        let atomic_base = ranges.atomic_state_words.start;
         let state: GpuSlotLearningStateRecord =
             record_from_range(&words, base, &ranges.layout.learning_state_words)?;
         let active_weight_generation = join_pair([
@@ -1683,8 +1693,8 @@ impl GpuClosedLoopBackend {
                 }
                 validate_pending_joint_payload(
                     receipt,
-                    &words,
-                    base,
+                    &atomic_words,
+                    atomic_base,
                     &ranges.layout.speech_payload_words,
                 )?;
                 Some(pending_parts_from_receipt(receipt)?)
@@ -1970,13 +1980,13 @@ impl GpuClosedLoopBackend {
             state.transaction_generation_lo,
             state.transaction_generation_hi,
         ] = split_pair(parts.learning_transaction_generation);
-        let buffer = self
+        let bucket = self
             .class_buckets
             .get(&handle.class_id().raw())
             .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
-            .bucket_for_handle(handle)?
-            .buffers
-            .neural_buffers()[6];
+            .bucket_for_handle(handle)?;
+        let buffer = bucket.buffers.neural_buffers()[6];
+        let atomic_buffer = bucket.buffers.neural_buffers()[7];
         for (range, words) in [
             (
                 &ranges.layout.activation_a_words,
@@ -2034,10 +2044,6 @@ impl GpuClosedLoopBackend {
                 &ranges.layout.replay_sample_words,
                 parts.replay_samples.as_slice(),
             ),
-            (
-                &ranges.layout.speech_payload_words,
-                restored_speech_words.as_slice(),
-            ),
             (&ranges.layout.learning_state_words, state.words()),
             (
                 &ranges.layout.pending_eligibility_words,
@@ -2046,7 +2052,26 @@ impl GpuClosedLoopBackend {
         ] {
             write_exact_prefix(&self.queue, buffer, range, words)?;
         }
-        let submission = self.queue.submit(std::iter::empty());
+        write_exact_prefix(
+            &self.queue,
+            atomic_buffer,
+            &ranges.layout.speech_payload_words,
+            restored_speech_words.as_slice(),
+        )?;
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("closed-loop-restore-refresh-effective-weights"),
+            });
+        bucket.pipelines.record_refresh_effective_weights(
+            &self.queue,
+            &mut encoder,
+            &bucket.buffers,
+            handle.slot(),
+            u32::try_from(parts.lifetime_bank_0_bits.len())
+                .map_err(|_| ScaffoldContractError::NeuralBackendUnavailable)?,
+        );
+        let submission = self.queue.submit(Some(encoder.finish()));
         if self
             .device
             .poll(wgpu::PollType::Wait {
@@ -2088,6 +2113,7 @@ impl GpuClosedLoopBackend {
             resident.learning_sequence_guard = restored_learning_sequence_guard;
             resident.pending_eligibility = pending_receipt;
             resident.pending_eligibility_record = pending_receipt.map(|_| pending_record);
+            resident.invalidate_mutable_cache();
         }
         self.next_dispatch_generation = next_dispatch_generation;
         Ok(GpuBrainRestoreReceipt {
@@ -2131,13 +2157,15 @@ impl GpuClosedLoopBackend {
             snapshot.sleep_plan.eligibility_reset_policy_raw(),
             snapshot.sleep_plan.replay_consume_policy_raw(),
         )?;
-        let words = self.read_slot_mutable_words(handle, &snapshot.ranges)?;
+        let (words, atomic_words) =
+            self.read_slot_mutable_and_atomic_words(handle, &snapshot.ranges)?;
         let base = snapshot.ranges.mutable_state_words.start;
+        let atomic_base = snapshot.ranges.atomic_state_words.start;
         let state: GpuSlotLearningStateRecord =
             record_from_range(&words, base, &snapshot.ranges.layout.learning_state_words)?;
         let completion: GpuSleepCompletionRecord = record_from_absolute_start(
-            &words,
-            base,
+            &atomic_words,
+            atomic_base,
             snapshot.ranges.layout.diagnostic_words.start,
         )?;
         if state.active_weight_bank != u32::from(snapshot.active_weight_bank)
@@ -2301,7 +2329,7 @@ impl GpuClosedLoopBackend {
             recurrent_count,
             decoder_count,
         )?;
-        let before_words = self.read_slot_mutable_words(handle, &snapshot.ranges)?;
+        let before_words = self.read_slot_mutable_words_cached(handle, &snapshot.ranges)?;
         let base = snapshot.ranges.mutable_state_words.start;
         let state: GpuSlotLearningStateRecord = record_from_range(
             &before_words,
@@ -2349,13 +2377,13 @@ impl GpuClosedLoopBackend {
         {
             return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
         }
-        let buffer = self
+        let bucket = self
             .class_buckets
             .get(&handle.class_id().raw())
             .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
-            .bucket_for_handle(handle)?
-            .buffers
-            .neural_buffers()[6];
+            .bucket_for_handle(handle)?;
+        let buffer = bucket.buffers.neural_buffers()[6];
+        let atomic_buffer = bucket.buffers.neural_buffers()[7];
         let (output_lifetime_range, output_fast_range, output_lifetime, output_fast) =
             if staged.output_weight_bank == 0 {
                 (
@@ -2422,9 +2450,9 @@ impl GpuClosedLoopBackend {
         };
         write_words_at_offset(
             &self.queue,
-            buffer,
+            atomic_buffer,
             snapshot.ranges.layout.diagnostic_words.start,
-            snapshot.ranges.mutable_state_words.end,
+            snapshot.ranges.atomic_state_words.end,
             bytemuck::cast_slice(std::slice::from_ref(&completion)),
         )?;
         let (header, payload_words) =
@@ -2440,7 +2468,20 @@ impl GpuClosedLoopBackend {
             staged: *staged,
             hardware_receipt_generation: self.hardware.generation,
         };
-        let submission = self.queue.submit(std::iter::empty());
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("closed-loop-restore-sleep-staging-refresh-effective"),
+            });
+        bucket.pipelines.record_refresh_effective_weights(
+            &self.queue,
+            &mut encoder,
+            &bucket.buffers,
+            handle.slot(),
+            u32::try_from(parts.lifetime_bank_0_bits.len())
+                .map_err(|_| ScaffoldContractError::NeuralBackendUnavailable)?,
+        );
+        let submission = self.queue.submit(Some(encoder.finish()));
         if self
             .device
             .poll(wgpu::PollType::Wait {
@@ -2451,6 +2492,13 @@ impl GpuClosedLoopBackend {
         {
             self.mark_device_lost();
             return Err(ScaffoldContractError::NeuralBackendUnavailable);
+        }
+        if let Some(resident) = self
+            .class_buckets
+            .get_mut(&handle.class_id().raw())
+            .and_then(|pool| pool.resident_mut(handle).ok())
+        {
+            resident.invalidate_mutable_cache();
         }
         self.next_sleep_job_id = self.next_sleep_job_id.max(
             staged

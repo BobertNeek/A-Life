@@ -43,13 +43,17 @@ impl PhysicalTrackingProvenance {
     }
 
     pub fn canonical_key(&self) -> PhysicalTrackingKey {
-        let mut bytes = Vec::with_capacity(PHYSICAL_TRACKING_DOMAIN.len() + 30);
-        bytes.extend_from_slice(PHYSICAL_TRACKING_DOMAIN);
-        bytes.extend_from_slice(&self.schema_version.to_le_bytes());
-        bytes.extend_from_slice(&self.world_seed.to_le_bytes());
-        bytes.extend_from_slice(&self.zone_id.to_le_bytes());
-        bytes.extend_from_slice(&self.spawn_sequence.to_le_bytes());
-        bytes.extend_from_slice(&self.lineage_key.to_le_bytes());
+        const DOMAIN_LEN: usize = PHYSICAL_TRACKING_DOMAIN.len();
+        const KEY_LEN: usize = DOMAIN_LEN + 30;
+        const _: () = assert!(KEY_LEN == 53);
+
+        let mut bytes = [0_u8; KEY_LEN];
+        bytes[..DOMAIN_LEN].copy_from_slice(PHYSICAL_TRACKING_DOMAIN);
+        bytes[DOMAIN_LEN..DOMAIN_LEN + 2].copy_from_slice(&self.schema_version.to_le_bytes());
+        bytes[DOMAIN_LEN + 2..DOMAIN_LEN + 10].copy_from_slice(&self.world_seed.to_le_bytes());
+        bytes[DOMAIN_LEN + 10..DOMAIN_LEN + 14].copy_from_slice(&self.zone_id.to_le_bytes());
+        bytes[DOMAIN_LEN + 14..DOMAIN_LEN + 22].copy_from_slice(&self.spawn_sequence.to_le_bytes());
+        bytes[DOMAIN_LEN + 22..KEY_LEN].copy_from_slice(&self.lineage_key.to_le_bytes());
 
         let mut first = TRACKING_STREAM_SEED_A;
         let mut second = TRACKING_STREAM_SEED_B;
@@ -165,11 +169,40 @@ pub struct TrackedObjectObservationReceipt {
     pub after_digest: [u64; 4],
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
+enum TrackedObjectTxUndo {
+    ObserveExisting {
+        observer_raw: u64,
+        previous_next_id: u64,
+        ops: Vec<BatchUndoOp>,
+    },
+    RemoveInsertedOrganism {
+        observer_raw: u64,
+    },
+    ReplaceRegistry {
+        world_seed: u64,
+        per_organism_capacity: u32,
+        organisms: BTreeMap<u64, OrganismTrackedObjects>,
+    },
+}
+
+#[derive(Debug)]
 pub struct TrackedObjectRegistry {
     world_seed: u64,
     per_organism_capacity: u32,
     organisms: BTreeMap<u64, OrganismTrackedObjects>,
+    staged_tx: Option<Vec<TrackedObjectTxUndo>>,
+}
+
+impl Clone for TrackedObjectRegistry {
+    fn clone(&self) -> Self {
+        Self {
+            world_seed: self.world_seed,
+            per_organism_capacity: self.per_organism_capacity,
+            organisms: self.organisms.clone(),
+            staged_tx: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -190,7 +223,76 @@ impl TrackedObjectRegistry {
             world_seed,
             per_organism_capacity,
             organisms: BTreeMap::new(),
+            staged_tx: None,
         })
+    }
+
+    pub(crate) fn empty_placeholder(&self) -> Self {
+        Self {
+            world_seed: self.world_seed,
+            per_organism_capacity: self.per_organism_capacity,
+            organisms: BTreeMap::new(),
+            staged_tx: None,
+        }
+    }
+
+    pub(crate) fn begin_staged_transaction(&mut self) {
+        self.staged_tx = Some(Vec::new());
+    }
+
+    pub(crate) fn commit_staged_transaction(&mut self) {
+        self.staged_tx = None;
+    }
+
+    pub(crate) fn rollback_staged_transaction(&mut self) {
+        if let Some(ops) = self.staged_tx.take() {
+            for op in ops.into_iter().rev() {
+                match op {
+                    TrackedObjectTxUndo::ObserveExisting {
+                        observer_raw,
+                        previous_next_id,
+                        ops,
+                    } => {
+                        let existing = self
+                            .organisms
+                            .get_mut(&observer_raw)
+                            .expect("staged observer exists during rollback");
+                        for batch_op in ops.into_iter().rev() {
+                            existing.apply_undo(batch_op);
+                        }
+                        existing.next_id = previous_next_id;
+                    }
+                    TrackedObjectTxUndo::RemoveInsertedOrganism { observer_raw } => {
+                        self.organisms.remove(&observer_raw);
+                    }
+                    TrackedObjectTxUndo::ReplaceRegistry {
+                        world_seed,
+                        per_organism_capacity,
+                        organisms,
+                    } => {
+                        self.world_seed = world_seed;
+                        self.per_organism_capacity = per_organism_capacity;
+                        self.organisms = organisms;
+                    }
+                }
+            }
+        }
+    }
+
+    pub(crate) fn adopt_staged_transaction_from(&mut self, prior: &mut Self) {
+        self.staged_tx = prior.staged_tx.take();
+    }
+
+    pub(crate) fn replace_with_staged_backup(&mut self, mut replacement: Self) {
+        if let Some(mut tx) = self.staged_tx.take() {
+            tx.push(TrackedObjectTxUndo::ReplaceRegistry {
+                world_seed: self.world_seed,
+                per_organism_capacity: self.per_organism_capacity,
+                organisms: std::mem::take(&mut self.organisms),
+            });
+            replacement.staged_tx = Some(tx);
+        }
+        *self = replacement;
     }
 
     pub fn observe(
@@ -200,12 +302,47 @@ impl TrackedObjectRegistry {
         descriptor: StablePhysicalDescriptor,
         tick: Tick,
     ) -> Result<TrackedObjectObservationReceipt, ScaffoldContractError> {
-        let mut candidate = self.staged_observer(observer)?;
+        observer.validate()?;
+        let observer_raw = observer.raw();
+        if let Some(existing) = self.organisms.get_mut(&observer_raw) {
+            let before_digest = existing.canonical_digest();
+            let previous_next_id = existing.next_id;
+            let (tracked_object_id, op) =
+                existing.observe_with_undo(provenance, descriptor, tick)?;
+            let inserted = matches!(op, BatchUndoOp::RevertInsert { .. });
+            let evicted = match &op {
+                BatchUndoOp::RevertInsert { evicted, .. } => {
+                    evicted.map(|record| record.tracked_object_id)
+                }
+                BatchUndoOp::RestoreExisting(_) => None,
+            };
+            let receipt = TrackedObjectObservationReceipt {
+                organism_id_raw: observer_raw,
+                tracked_object_id,
+                inserted,
+                evicted,
+                record_count: existing.records_by_key.len() as u32,
+                next_id: existing.next_id,
+                before_digest,
+                after_digest: existing.canonical_digest(),
+            };
+            if let Some(tx) = self.staged_tx.as_mut() {
+                tx.push(TrackedObjectTxUndo::ObserveExisting {
+                    observer_raw,
+                    previous_next_id,
+                    ops: vec![op],
+                });
+            }
+            return Ok(receipt);
+        }
+
+        let mut candidate =
+            OrganismTrackedObjects::new(observer_raw, self.world_seed, self.per_organism_capacity);
         let before_digest = candidate.canonical_digest();
         let (tracked_object_id, inserted, evicted) =
             candidate.observe(provenance, descriptor, tick)?;
         let receipt = TrackedObjectObservationReceipt {
-            organism_id_raw: observer.raw(),
+            organism_id_raw: observer_raw,
             tracked_object_id,
             inserted,
             evicted,
@@ -214,26 +351,11 @@ impl TrackedObjectRegistry {
             before_digest,
             after_digest: candidate.canonical_digest(),
         };
-        self.organisms.insert(observer.raw(), candidate);
+        self.organisms.insert(observer_raw, candidate);
+        if let Some(tx) = self.staged_tx.as_mut() {
+            tx.push(TrackedObjectTxUndo::RemoveInsertedOrganism { observer_raw });
+        }
         Ok(receipt)
-    }
-
-    fn staged_observer(
-        &self,
-        observer: OrganismId,
-    ) -> Result<OrganismTrackedObjects, ScaffoldContractError> {
-        observer.validate()?;
-        Ok(self
-            .organisms
-            .get(&observer.raw())
-            .cloned()
-            .unwrap_or_else(|| {
-                OrganismTrackedObjects::new(
-                    observer.raw(),
-                    self.world_seed,
-                    self.per_organism_capacity,
-                )
-            }))
     }
 
     pub(crate) fn observe_batch(
@@ -243,13 +365,54 @@ impl TrackedObjectRegistry {
             Item = (PhysicalTrackingProvenance, StablePhysicalDescriptor, Tick),
         >,
     ) -> Result<Vec<TrackedObjectId>, ScaffoldContractError> {
-        let mut candidate = self.staged_observer(observer)?;
+        observer.validate()?;
+        if let Some(existing) = self.organisms.get_mut(&observer.raw()) {
+            let original_next_id = existing.next_id;
+            let mut undo = Vec::new();
+            let mut ids = Vec::new();
+            for (provenance, descriptor, tick) in observations {
+                match existing.observe_with_undo(provenance, descriptor, tick) {
+                    Ok((id, op)) => {
+                        undo.push(op);
+                        ids.push(id);
+                    }
+                    Err(error) => {
+                        for op in undo.into_iter().rev() {
+                            existing.apply_undo(op);
+                        }
+                        existing.next_id = original_next_id;
+                        return Err(error);
+                    }
+                }
+            }
+            if let Some(tx) = self.staged_tx.as_mut() {
+                if !undo.is_empty() {
+                    tx.push(TrackedObjectTxUndo::ObserveExisting {
+                        observer_raw: observer.raw(),
+                        previous_next_id: original_next_id,
+                        ops: undo,
+                    });
+                }
+            }
+            return Ok(ids);
+        }
+
+        let mut candidate = OrganismTrackedObjects::new(
+            observer.raw(),
+            self.world_seed,
+            self.per_organism_capacity,
+        );
         let mut ids = Vec::new();
         for (provenance, descriptor, tick) in observations {
             ids.push(candidate.observe(provenance, descriptor, tick)?.0);
         }
         if !ids.is_empty() {
             self.organisms.insert(observer.raw(), candidate);
+            if let Some(tx) = self.staged_tx.as_mut() {
+                tx.push(TrackedObjectTxUndo::RemoveInsertedOrganism {
+                    observer_raw: observer.raw(),
+                });
+            }
         }
         Ok(ids)
     }
@@ -261,6 +424,17 @@ impl TrackedObjectRegistry {
         self.organisms
             .get(&observer.raw())
             .map(|state| state.records_by_key.values())
+    }
+
+    pub fn record_by_key(
+        &self,
+        observer: OrganismId,
+        tracking_key: PhysicalTrackingKey,
+    ) -> Option<&TrackedObjectRecord> {
+        self.organisms
+            .get(&observer.raw())?
+            .records_by_key
+            .get(&tracking_key)
     }
 
     pub fn record(
@@ -349,8 +523,18 @@ impl TrackedObjectRegistry {
             world_seed,
             per_organism_capacity,
             organisms,
+            staged_tx: None,
         })
     }
+}
+
+#[derive(Debug)]
+enum BatchUndoOp {
+    RestoreExisting(TrackedObjectRecord),
+    RevertInsert {
+        inserted_key: PhysicalTrackingKey,
+        evicted: Option<TrackedObjectRecord>,
+    },
 }
 
 impl OrganismTrackedObjects {
@@ -362,6 +546,93 @@ impl OrganismTrackedObjects {
             next_id: initial_tracked_object_id(world_seed, organism_id_raw),
             records_by_key: BTreeMap::new(),
         }
+    }
+
+    fn apply_undo(&mut self, op: BatchUndoOp) {
+        match op {
+            BatchUndoOp::RestoreExisting(record) => {
+                self.records_by_key.insert(record.tracking_key, record);
+            }
+            BatchUndoOp::RevertInsert {
+                inserted_key,
+                evicted,
+            } => {
+                self.records_by_key.remove(&inserted_key);
+                if let Some(evicted_record) = evicted {
+                    self.records_by_key
+                        .insert(evicted_record.tracking_key, evicted_record);
+                }
+            }
+        }
+    }
+
+    fn observe_with_undo(
+        &mut self,
+        provenance: PhysicalTrackingProvenance,
+        descriptor: StablePhysicalDescriptor,
+        tick: Tick,
+    ) -> Result<(TrackedObjectId, BatchUndoOp), ScaffoldContractError> {
+        provenance.validate_contract()?;
+        descriptor.validate_contract()?;
+        if provenance.world_seed != self.world_seed {
+            return Err(ScaffoldContractError::InvalidId);
+        }
+        let tracking_key = provenance.canonical_key();
+
+        if let Some(existing) = self.records_by_key.get_mut(&tracking_key) {
+            if tick.raw() < existing.last_seen_tick.raw() {
+                return Err(ScaffoldContractError::NonMonotonicTick);
+            }
+            let previous = *existing;
+            existing.last_seen_tick = tick;
+            existing.stable_physical_descriptor = descriptor;
+            return Ok((
+                existing.tracked_object_id,
+                BatchUndoOp::RestoreExisting(previous),
+            ));
+        }
+
+        let tracked_object_id = TrackedObjectId(self.next_id);
+        self.next_id = self
+            .next_id
+            .checked_add(1)
+            .ok_or(ScaffoldContractError::TrackedObjectIdentityExhausted)?;
+
+        let evicted = if self.records_by_key.len() == self.capacity as usize {
+            let key = self
+                .records_by_key
+                .iter()
+                .min_by_key(|(key, record)| {
+                    (
+                        record.last_seen_tick.raw(),
+                        record.tracked_object_id.raw(),
+                        **key,
+                    )
+                })
+                .map(|(key, _)| *key)
+                .expect("positive capacity has an eviction target");
+            self.records_by_key.remove(&key)
+        } else {
+            None
+        };
+
+        self.records_by_key.insert(
+            tracking_key,
+            TrackedObjectRecord {
+                tracked_object_id,
+                tracking_provenance: provenance,
+                tracking_key,
+                last_seen_tick: tick,
+                stable_physical_descriptor: descriptor,
+            },
+        );
+        Ok((
+            tracked_object_id,
+            BatchUndoOp::RevertInsert {
+                inserted_key: tracking_key,
+                evicted,
+            },
+        ))
     }
 
     fn observe(
@@ -533,5 +804,113 @@ mod tests {
             assert_eq!(saved, audited.save_state(owner).unwrap());
             sensing = TrackedObjectRegistry::from_save_state(saved).unwrap();
         }
+    }
+
+    #[test]
+    fn record_by_key_and_evicting_batch_rollback_preserve_exact_state() {
+        let observer = OrganismId(1);
+        let mut registry = TrackedObjectRegistry::new(77, 2).unwrap();
+        registry
+            .observe_batch(
+                observer,
+                [
+                    (provenance(1), descriptor(), Tick::new(1)),
+                    (provenance(2), descriptor(), Tick::new(2)),
+                ],
+            )
+            .unwrap();
+        let key1 = provenance(1).canonical_key();
+        let rec1 = registry.record_by_key(observer, key1).unwrap();
+        assert_eq!(rec1.tracking_key, key1);
+        assert_eq!(rec1.last_seen_tick, Tick::new(1));
+        assert!(registry
+            .record_by_key(observer, provenance(99).canonical_key())
+            .is_none());
+
+        let before = registry.save_state(observer).unwrap();
+        // Batch updates existing key, inserts new key causing eviction, updates same key again,
+        // and then fails on non-monotonic tick for provenance(2).
+        let err = registry
+            .observe_batch(
+                observer,
+                [
+                    (
+                        provenance(2),
+                        StablePhysicalDescriptor([0.25; 15]),
+                        Tick::new(5),
+                    ),
+                    (provenance(3), descriptor(), Tick::new(6)),
+                    (
+                        provenance(3),
+                        StablePhysicalDescriptor([0.5; 15]),
+                        Tick::new(7),
+                    ),
+                    (provenance(2), descriptor(), Tick::new(4)),
+                ],
+            )
+            .unwrap_err();
+        assert_eq!(err, ScaffoldContractError::NonMonotonicTick);
+        assert_eq!(registry.save_state(observer).unwrap(), before);
+    }
+
+    #[test]
+    fn staged_transaction_rollback_restores_new_updated_and_evicted_records_exactly() {
+        let observer_a = OrganismId(1);
+        let observer_b = OrganismId(2);
+        let mut registry = TrackedObjectRegistry::new(77, 2).unwrap();
+        registry
+            .observe_batch(
+                observer_a,
+                [
+                    (provenance(1), descriptor(), Tick::new(1)),
+                    (provenance(2), descriptor(), Tick::new(2)),
+                ],
+            )
+            .unwrap();
+        let before_a = registry.save_state(observer_a).unwrap();
+        let before_b = registry.save_state(observer_b).unwrap();
+
+        registry.begin_staged_transaction();
+        registry
+            .observe_batch(
+                observer_a,
+                [
+                    (
+                        provenance(1),
+                        StablePhysicalDescriptor([0.75; 15]),
+                        Tick::new(5),
+                    ),
+                    (provenance(3), descriptor(), Tick::new(6)),
+                ],
+            )
+            .unwrap();
+        registry
+            .observe(
+                observer_b,
+                provenance(10),
+                StablePhysicalDescriptor([0.25; 15]),
+                Tick::new(6),
+            )
+            .unwrap();
+        assert_ne!(registry.save_state(observer_a).unwrap(), before_a);
+        assert!(registry
+            .record_by_key(observer_b, provenance(10).canonical_key())
+            .is_some());
+
+        registry.rollback_staged_transaction();
+        assert_eq!(registry.save_state(observer_a).unwrap(), before_a);
+        assert_eq!(registry.save_state(observer_b).unwrap(), before_b);
+        assert!(registry
+            .record_by_key(observer_b, provenance(10).canonical_key())
+            .is_none());
+
+        registry.begin_staged_transaction();
+        registry
+            .observe_batch(observer_b, [(provenance(11), descriptor(), Tick::new(7))])
+            .unwrap();
+        registry.commit_staged_transaction();
+        assert!(registry
+            .record_by_key(observer_b, provenance(11).canonical_key())
+            .is_some());
     }
 }

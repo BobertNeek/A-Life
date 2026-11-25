@@ -1,9 +1,9 @@
 //! Real-hardware tests for sealed-outcome GPU fast plasticity.
 //!
 //! These tests apply sealed experience patches through the production GPU path.
-#![cfg(feature = "gpu-tests")]
 
-mod support;
+#[allow(unused_imports)]
+use crate::support;
 
 use alife_core::sleep::SleepReplayEvidence;
 use alife_core::{
@@ -774,6 +774,40 @@ fn install_full_recorded_pressures(
     backend.install_recorded_pressure_replay(pressures).unwrap();
 }
 
+fn matched_control_frame(organism_raw: u64, tick_raw: u64) -> alife_core::PerceptionFrame {
+    let source = support::perception_frame_for_profile_at_tick(
+        organism_raw,
+        tick_raw,
+        alife_core::SensorProfile::PrivilegedAffordanceV1,
+        true,
+        2,
+    );
+    let mut channels = alife_core::SensoryChannels::ZERO;
+    channels.visual_affordance[0] = 0.75;
+    channels.visual_affordance[1] = 0.25;
+    channels.auditory_acoustic[0] = 0.5;
+    let sensory = alife_core::SensorySnapshot::new(
+        source.organism_id(),
+        source.tick(),
+        alife_core::Vec3f::ZERO,
+        channels,
+        Default::default(),
+    )
+    .unwrap();
+    alife_core::PerceptionFrame::new(
+        source.organism_id(),
+        source.tick(),
+        source.sensor_profile(),
+        sensory,
+        source.body(),
+        *source.homeostasis(),
+        source.candidates().to_vec(),
+        source.profile_provenance(),
+        source.grounded_object_slots().to_vec(),
+    )
+    .unwrap()
+}
+
 fn matched_chemistry_tick(
     backend: &mut GpuClosedLoopBackend,
     rows: &[(
@@ -1074,8 +1108,8 @@ fn plasticity_wgsl_parses_with_four_passes_and_exactly_seven_heap_bindings() {
         .collect::<std::collections::BTreeSet<_>>();
     assert_eq!(
         bindings,
-        (0_u32..7).map(|binding| (0, binding)).collect(),
-        "plasticity must reuse the exact seven production heaps"
+        (0_u32..8).map(|binding| (0, binding)).collect(),
+        "plasticity must reuse the exact eight production heaps"
     );
 }
 
@@ -1640,20 +1674,8 @@ fn modulator_credit_changes_the_next_encounter_relative_to_an_inherited_no_learn
     let physiology_b = support::test_physiology(42, &control_phenotype).unwrap();
     for exposure in 0_u64..8 {
         let tick_raw = 1_000 + exposure * 2;
-        let frame_a = support::perception_frame_for_profile_at_tick(
-            organism_a.raw(),
-            tick_raw,
-            alife_core::SensorProfile::PrivilegedAffordanceV1,
-            true,
-            2,
-        );
-        let frame_b = support::perception_frame_for_profile_at_tick(
-            organism_b.raw(),
-            tick_raw,
-            alife_core::SensorProfile::PrivilegedAffordanceV1,
-            true,
-            2,
-        );
+        let frame_a = matched_control_frame(organism_a.raw(), tick_raw);
+        let frame_b = matched_control_frame(organism_b.raw(), tick_raw);
         let (_, ticks): (Vec<_>, Vec<_>) = matched_chemistry_tick(
             &mut backend,
             &[
@@ -1692,20 +1714,8 @@ fn modulator_credit_changes_the_next_encounter_relative_to_an_inherited_no_learn
                 .all(|value| *value == 0.0));
         }
     }
-    let frame_a = support::perception_frame_for_profile_at_tick(
-        organism_a.raw(),
-        1_100,
-        alife_core::SensorProfile::PrivilegedAffordanceV1,
-        true,
-        2,
-    );
-    let frame_b = support::perception_frame_for_profile_at_tick(
-        organism_b.raw(),
-        1_100,
-        alife_core::SensorProfile::PrivilegedAffordanceV1,
-        true,
-        2,
-    );
+    let frame_a = matched_control_frame(organism_a.raw(), 1_100);
+    let frame_b = matched_control_frame(organism_b.raw(), 1_100);
     let (first_frames, first): (Vec<_>, Vec<_>) = matched_chemistry_tick(
         &mut backend,
         &[
@@ -1775,20 +1785,8 @@ fn modulator_credit_changes_the_next_encounter_relative_to_an_inherited_no_learn
     assert!(rewarded_fast.iter().any(|value| *value != 0.0));
     assert!(control_fast.iter().all(|value| *value == 0.0));
 
-    let next_a = support::perception_frame_for_profile_at_tick(
-        organism_a.raw(),
-        1_102,
-        alife_core::SensorProfile::PrivilegedAffordanceV1,
-        true,
-        2,
-    );
-    let next_b = support::perception_frame_for_profile_at_tick(
-        organism_b.raw(),
-        1_102,
-        alife_core::SensorProfile::PrivilegedAffordanceV1,
-        true,
-        2,
-    );
+    let next_a = matched_control_frame(organism_a.raw(), 1_102);
+    let next_b = matched_control_frame(organism_b.raw(), 1_102);
     let after = matched_chemistry_tick(
         &mut backend,
         &[
@@ -1863,15 +1861,7 @@ fn reward_and_pain_change_the_next_decision_in_opposite_directions() {
     };
     for exposure in 0_u64..8 {
         let tick_raw = 1_200 + exposure * 2;
-        let frames = organisms.map(|organism| {
-            support::perception_frame_for_profile_at_tick(
-                organism.raw(),
-                tick_raw,
-                alife_core::SensorProfile::PrivilegedAffordanceV1,
-                true,
-                2,
-            )
-        });
+        let frames = organisms.map(|organism| matched_control_frame(organism.raw(), tick_raw));
         let rows = std::array::from_fn::<_, 4, _>(|index| {
             (
                 handles[index],
@@ -1911,15 +1901,7 @@ fn reward_and_pain_change_the_next_decision_in_opposite_directions() {
                 .all(|value| *value == 0.0));
         }
     }
-    let frames = organisms.map(|organism| {
-        support::perception_frame_for_profile_at_tick(
-            organism.raw(),
-            1_300,
-            alife_core::SensorProfile::PrivilegedAffordanceV1,
-            true,
-            2,
-        )
-    });
+    let frames = organisms.map(|organism| matched_control_frame(organism.raw(), 1_300));
     let rows = std::array::from_fn::<_, 4, _>(|index| {
         (
             handles[index],
@@ -2013,15 +1995,7 @@ fn reward_and_pain_change_the_next_decision_in_opposite_directions() {
     assert_eq!(receipts[1].max_abs_delta, 0.0);
     assert_eq!(receipts[3].max_abs_delta, 0.0);
 
-    let next_frames = organisms.map(|organism| {
-        support::perception_frame_for_profile_at_tick(
-            organism.raw(),
-            1_302,
-            alife_core::SensorProfile::PrivilegedAffordanceV1,
-            true,
-            2,
-        )
-    });
+    let next_frames = organisms.map(|organism| matched_control_frame(organism.raw(), 1_302));
     let rows = std::array::from_fn::<_, 4, _>(|index| {
         (
             handles[index],
@@ -2077,15 +2051,8 @@ fn decoder_credit_is_selected_family_and_selected_feature_specific() {
         support::test_physiology(42, &control_phenotype).unwrap(),
     ];
     for exposure in 0_u64..8 {
-        let frames = organisms.map(|organism| {
-            support::perception_frame_for_profile_at_tick(
-                organism.raw(),
-                1_400 + exposure * 2,
-                alife_core::SensorProfile::PrivilegedAffordanceV1,
-                true,
-                2,
-            )
-        });
+        let frames =
+            organisms.map(|organism| matched_control_frame(organism.raw(), 1_400 + exposure * 2));
         let (_, ticks): (Vec<_>, Vec<_>) = matched_chemistry_tick(
             &mut backend,
             &[
@@ -2123,15 +2090,7 @@ fn decoder_credit_is_selected_family_and_selected_feature_specific() {
                 .all(|value| *value == 0.0));
         }
     }
-    let frames = organisms.map(|organism| {
-        support::perception_frame_for_profile_at_tick(
-            organism.raw(),
-            1_500,
-            alife_core::SensorProfile::PrivilegedAffordanceV1,
-            true,
-            2,
-        )
-    });
+    let frames = organisms.map(|organism| matched_control_frame(organism.raw(), 1_500));
     let (frames, ticks): (Vec<_>, Vec<_>) = matched_chemistry_tick(
         &mut backend,
         &[
@@ -2424,4 +2383,176 @@ fn abi_conversion_uses_only_validated_sealed_credit() {
     backend
         .discard_pending_eligibility(handle, tick.pending_eligibility.identity())
         .unwrap();
+}
+
+#[test]
+fn split_phase_fast_plasticity_matches_synchronous_batch_and_abort_fail_stops() {
+    let capacity = BrainCapacityClass::n512();
+    let genome = BrainGenome::scaffold(19, capacity.id());
+    let development =
+        DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(0.45).unwrap());
+    let phenotype = PhenotypeCompiler::compile(
+        &genome,
+        &capacity,
+        &development,
+        SensorProfile::PrivilegedAffordanceV1,
+    )
+    .unwrap();
+    let organism = alife_core::OrganismId(4_203);
+    let physiology = support::test_physiology(organism.raw(), &phenotype).unwrap();
+    let frame = support::perception_frame_for_profile_at_tick(
+        organism.raw(),
+        920,
+        SensorProfile::PrivilegedAffordanceV1,
+        true,
+        1,
+    );
+
+    let mut sync_backend =
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .unwrap();
+    let sync_handle = sync_backend
+        .insert_brain(organism, phenotype.clone())
+        .unwrap();
+    let (sync_frame, sync_tick) = support::tick_with_receptors(
+        &mut sync_backend,
+        sync_handle,
+        &phenotype,
+        &physiology,
+        &frame,
+    )
+    .unwrap();
+    let (sync_patch, sync_receptors) = sealed_measured_event(
+        sync_handle,
+        &phenotype,
+        &genome,
+        &development,
+        &physiology,
+        &sync_frame,
+        &sync_tick,
+        1,
+        nutrition_event(),
+    );
+    let sync_receipts = sync_backend
+        .apply_sealed_outcome_batch(&[(sync_handle, &sync_patch, &sync_receptors)])
+        .unwrap();
+
+    let mut split_backend =
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .unwrap();
+    let split_handle = split_backend
+        .insert_brain(organism, phenotype.clone())
+        .unwrap();
+    let (split_frame, split_tick) = support::tick_with_receptors(
+        &mut split_backend,
+        split_handle,
+        &phenotype,
+        &physiology,
+        &frame,
+    )
+    .unwrap();
+    let (split_patch, split_receptors) = sealed_measured_event(
+        split_handle,
+        &phenotype,
+        &genome,
+        &development,
+        &physiology,
+        &split_frame,
+        &split_tick,
+        1,
+        nutrition_event(),
+    );
+    let pending = split_backend
+        .submit_sealed_outcome_batch(&[(split_handle, &split_patch, &split_receptors)])
+        .unwrap();
+    // Host slot pending eligibility remains intact until complete_sealed_outcome_batch.
+    assert!(split_backend
+        .pending_eligibility(split_handle)
+        .unwrap()
+        .is_some());
+    let split_receipts = split_backend
+        .complete_sealed_outcome_batch(pending)
+        .unwrap();
+    assert_eq!(split_receipts.len(), sync_receipts.len());
+    assert_eq!(split_receipts[0].sequence_id, sync_receipts[0].sequence_id);
+    assert_eq!(
+        split_receipts[0].dispatch_generation,
+        sync_receipts[0].dispatch_generation
+    );
+    assert_eq!(
+        split_receipts[0].active_activation_side,
+        sync_receipts[0].active_activation_side
+    );
+    assert_eq!(
+        split_receipts[0].input_fast_generation,
+        sync_receipts[0].input_fast_generation
+    );
+    assert_eq!(
+        split_receipts[0].output_fast_generation,
+        sync_receipts[0].output_fast_generation
+    );
+    assert_eq!(
+        split_receipts[0].output_eligibility_generation,
+        sync_receipts[0].output_eligibility_generation
+    );
+    assert_eq!(
+        split_receipts[0].replay_journal_generation,
+        sync_receipts[0].replay_journal_generation
+    );
+    assert_eq!(
+        split_receipts[0].transaction_generation,
+        sync_receipts[0].transaction_generation
+    );
+    assert_eq!(
+        split_receipts[0].fast_weights_changed,
+        sync_receipts[0].fast_weights_changed
+    );
+    assert_eq!(
+        split_receipts[0].max_abs_delta,
+        sync_receipts[0].max_abs_delta
+    );
+    assert_eq!(
+        split_backend
+            .read_active_fast_weights_for_test(split_handle)
+            .unwrap(),
+        sync_backend
+            .read_active_fast_weights_for_test(sync_handle)
+            .unwrap()
+    );
+
+    // Next tick + abort_pending_plasticity_batch must unmap cleanly and fail-stop the backend.
+    let frame2 = support::perception_frame_for_profile_at_tick(
+        organism.raw(),
+        921,
+        SensorProfile::PrivilegedAffordanceV1,
+        true,
+        1,
+    );
+    let (frame2, tick2) = support::tick_with_receptors(
+        &mut split_backend,
+        split_handle,
+        &phenotype,
+        &physiology,
+        &frame2,
+    )
+    .unwrap();
+    let (patch2, receptors2) = sealed_measured_event(
+        split_handle,
+        &phenotype,
+        &genome,
+        &development,
+        &physiology,
+        &frame2,
+        &tick2,
+        2,
+        nutrition_event(),
+    );
+    let pending2 = split_backend
+        .submit_sealed_outcome_batch(&[(split_handle, &patch2, &receptors2)])
+        .unwrap();
+    split_backend.abort_pending_plasticity_batch(pending2);
+    assert_eq!(
+        split_backend.pending_eligibility(split_handle),
+        Err(alife_core::ScaffoldContractError::NeuralBackendUnavailable)
+    );
 }

@@ -212,6 +212,9 @@ fn production_save_load_restores_every_authority_and_rejects_missing_embodiment_
     app.insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_millis(
         34,
     )));
+    app.update();
+    press_key(&mut app, KeyCode::Escape);
+    run_render_updates(&mut app, 1);
 
     let reached_meaningful_state = (0..384).any(|_| {
         app.update();
@@ -313,6 +316,8 @@ fn production_save_load_restores_every_authority_and_rejects_missing_embodiment_
         .get_mut::<bevy::window::Window>(window_entity)
         .unwrap()
         .set_cursor_position(None);
+    // Procedural camera streaming outside the authored island was retired;
+    // camera motion clamps to the bounded island while creatures and meshes remain stable.
     let mut mesh_counts = Vec::new();
     for distance in [200.0, 400.0, 600.0, 0.0] {
         let mut moved = snapped;
@@ -321,15 +326,9 @@ fn production_save_load_restores_every_authority_and_rejects_missing_embodiment_
             .get_mut::<bevy::prelude::Transform>(camera_entity)
             .unwrap() = moved;
         run_render_updates(&mut app, 1);
-        let forward = moved.rotation * bevy::math::Vec3::NEG_Z;
-        let focus = moved.translation + forward * (-moved.translation.y / forward.y);
         let scene = app
             .world()
             .resource::<alife_game_app::Fvr03ProductionVoxelSceneResource>();
-        assert!(scene.contains_tile(VoxelTileCoord::new(
-            focus.x.floor() as i32,
-            focus.z.floor() as i32
-        )));
         assert_eq!(scene.creature_render_count, 4);
         mesh_counts.push(
             app.world()
@@ -343,7 +342,7 @@ fn production_save_load_restores_every_authority_and_rejects_missing_embodiment_
     );
     press_key(&mut app, KeyCode::Home);
     app.world_mut().despawn(window_entity);
-    println!("PASS arrows, window-edge input, Home snap, follow release, terrain streaming: {mesh_counts:?}");
+    println!("PASS arrows, window-edge input, Home snap, follow release, bounded island camera motion: {mesh_counts:?}");
     let before_action = save_runtime(&mut app, &before_action_path, &asset_root);
     let existing_food = before_action
         .world

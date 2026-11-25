@@ -512,3 +512,41 @@ fn legacy_digest_predictor_state_is_rejected_instead_of_reset() {
     });
     assert!(serde_json::from_value::<GroundedSuccessorPredictor>(legacy).is_err());
 }
+
+#[test]
+fn observe_with_undo_restores_initial_and_steady_state_predictors_and_rejects_overflow_atomically()
+{
+    let initial = GroundedSuccessorPredictor::with_learning_rate(0.25).unwrap();
+    let mut predictor = initial.clone();
+    let move_left = transition(1, 1, vec![0.1, 0.9]);
+    let (_, first_undo) = predictor.observe_with_undo(&move_left).unwrap();
+    assert_ne!(predictor, initial);
+    predictor.undo_observe(first_undo);
+    assert_eq!(predictor, initial);
+
+    predictor.observe(&move_left).unwrap();
+    let move_right = transition(2, 2, vec![0.9, 0.1]);
+    let steady_before = predictor.clone();
+    let mut forecast = predictor
+        .predict(move_right.source_state(), move_right.motor_condition())
+        .unwrap();
+    forecast.source_digest = move_right.source_digest;
+    let (_, steady_undo) = predictor
+        .observe_frozen_with_undo(&move_right, &forecast)
+        .unwrap();
+    assert_ne!(predictor, steady_before);
+    predictor.undo_observe(steady_undo);
+    assert_eq!(predictor, steady_before);
+
+    let overflow = transition(99, 3, vec![1.0, 0.0]);
+    let mut overflow_forecast = predictor
+        .predict(overflow.source_state(), overflow.motor_condition())
+        .unwrap();
+    overflow_forecast.source_digest = overflow.source_digest;
+    overflow_forecast.predicted_successor = vec![f32::NEG_INFINITY, 0.0];
+    assert!(matches!(
+        predictor.observe_frozen_with_undo(&overflow, &overflow_forecast),
+        Err(alife_core::ScaffoldContractError::NonFiniteFloat)
+    ));
+    assert_eq!(predictor, steady_before);
+}

@@ -48,19 +48,77 @@ impl HeadlessWorld {
         if !gain.is_finite() || gain <= 0.0 {
             return Ok(None);
         }
-        let snapshot = self.physical_observation_snapshot_from_objects(
-            organism,
-            self.tick,
-            observer,
-            self.objects.values(),
-            true,
-        )?;
-        Ok(snapshot
-            .visible
+        let Some(target_obj) = self.objects.get(&target.raw()) else {
+            return Ok(None);
+        };
+        if target_obj.id == observer.id || target_obj.consumed {
+            return Ok(None);
+        }
+        let target_dist = distance(observer.position, target_obj.position);
+        if target_dist > HEADLESS_VISION_RADIUS || !self.object_in_sight(observer, target_obj, None)
+        {
+            return Ok(None);
+        }
+        let confidence =
+            Confidence::new(proximity_salience(target_dist, HEADLESS_VISION_RADIUS).max(0.1))?;
+        if (confidence.raw() * gain).clamp(0.0, 1.0) <= 0.0 {
+            return Ok(None);
+        }
+        let mut nearby_unconsumed = 0usize;
+        self.for_each_spatial_candidate(
+            observer.position,
+            observer.position,
+            HEADLESS_VISION_RADIUS,
+            |object| {
+                if object.id != observer.id && !object.consumed {
+                    nearby_unconsumed += 1;
+                }
+            },
+        );
+        if nearby_unconsumed <= MAX_VISIBLE_ENTITIES {
+            return Ok(Some(subtract(target_obj.position, observer.position)));
+        }
+        let mut visible = Vec::new();
+        self.for_each_spatial_candidate(
+            observer.position,
+            observer.position,
+            HEADLESS_VISION_RADIUS,
+            |object| {
+                if object.id == observer.id || object.consumed {
+                    return;
+                }
+                let measured_distance = distance(observer.position, object.position);
+                if measured_distance <= HEADLESS_VISION_RADIUS
+                    && self.object_in_sight(observer, object, None)
+                {
+                    visible.push((
+                        measured_distance,
+                        object.tracking_key,
+                        object.id,
+                        object.carried_by == Some(organism),
+                    ));
+                }
+            },
+        );
+        visible.sort_by(|left, right| {
+            left.0
+                .total_cmp(&right.0)
+                .then_with(|| left.1.cmp(&right.1))
+        });
+        if visible.len() > MAX_VISIBLE_ENTITIES {
+            if let Some(index) = visible
+                .iter()
+                .position(|(_, _, _, carried)| *carried)
+                .filter(|index| *index >= MAX_VISIBLE_ENTITIES)
+            {
+                visible.swap(MAX_VISIBLE_ENTITIES - 1, index);
+            }
+        }
+        visible.truncate(MAX_VISIBLE_ENTITIES);
+        Ok(visible
             .iter()
-            .find(|object| object.transport_entity == target)
-            .filter(|object| (object.confidence.raw() * gain).clamp(0.0, 1.0) > 0.0)
-            .map(|object| subtract(object.position, snapshot.observer_pose.translation)))
+            .any(|(_, _, id, _)| *id == target)
+            .then(|| subtract(target_obj.position, observer.position)))
     }
 
     /// Only nearest physical clearance ranges leave this bounded sensor query.
@@ -74,10 +132,13 @@ impl HeadlessWorld {
             });
         // Conservative swept envelope while carrying. Ordinary grip-arc and
         // terrain checks still validate the one selected step before mutation.
-        let radius = self
-            .objects
-            .values()
-            .filter(|object| !object.consumed && object.carried_by == observer.organism_id)
+        let radius = observer
+            .organism_id
+            .and_then(|id| self.carried_by_organism.get(&id.raw()))
+            .into_iter()
+            .flatten()
+            .filter_map(|id| self.objects.get(id))
+            .filter(|object| !object.consumed)
             .fold(body_radius, |radius, object| {
                 radius.max(CARRY_GRIP_DISTANCE + object.radius)
             });
@@ -85,6 +146,17 @@ impl HeadlessWorld {
         if !radius.is_finite() {
             return ranges;
         }
+        let mut nearby_obstacles = Vec::new();
+        self.for_each_spatial_candidate(
+            observer.position,
+            observer.position,
+            LOCAL_HORIZON + radius + SPATIAL_NORMAL_MAX_RADIUS,
+            |object| {
+                if object.kind == WorldObjectKind::Obstacle && !object.consumed {
+                    nearby_obstacles.push(object);
+                }
+            },
+        );
         for (index, degrees) in STEERING_ANGLES.iter().enumerate() {
             let yaw = bearing + degrees.to_radians();
             let gaze_delta = (yaw - observer.body_yaw - observer.head_yaw + std::f32::consts::PI)
@@ -95,11 +167,7 @@ impl HeadlessWorld {
             }
             let direction = Vec3f::new(yaw.cos(), 0.0, yaw.sin());
             let mut nearest = LOCAL_HORIZON;
-            for object in self
-                .objects
-                .values()
-                .filter(|object| object.kind == WorldObjectKind::Obstacle && !object.consumed)
-            {
+            for object in &nearby_obstacles {
                 if let Some(hit) = sight_sphere_hit(
                     observer.position,
                     direction,
@@ -111,20 +179,13 @@ impl HeadlessWorld {
                 }
             }
             if let Some(terrain) = &self.terrain {
-                for bounds in &terrain.surface().obstacles {
-                    let expanded = [
-                        bounds[0] - radius,
-                        bounds[1] - radius,
-                        bounds[2] + radius,
-                        bounds[3] + radius,
-                        bounds[4],
-                        bounds[5],
-                    ];
-                    if let Some(hit) =
-                        sight_box_hit(observer.position, direction, expanded, nearest)
-                    {
-                        nearest = nearest.min(hit);
-                    }
+                if let Some(hit) = terrain.surface().obstacle_ray_hit(
+                    observer.position,
+                    direction,
+                    nearest,
+                    radius,
+                ) {
+                    nearest = nearest.min(hit);
                 }
             }
             ranges[index] = nearest;
@@ -309,15 +370,17 @@ mod tests {
         ] {
             let (mut world, target) = world(Vec::new(), 0.2);
             let endpoint = Vec3f::new(3.138_172, 0.0, -2.085_676_2);
-            world.objects.get_mut(&target.raw()).unwrap().position = endpoint;
+            world.set_object_position_for_test(target, endpoint);
             let actor = world.agent_entity_id(ORGANISM).unwrap();
-            let body = world.objects.get_mut(&actor.raw()).unwrap();
-            body.position = Vec3f::new(
-                endpoint.x - 0.05 * angle.cos(),
-                endpoint.y,
-                endpoint.z - 0.05 * angle.sin(),
+            world.set_object_position_for_test(
+                actor,
+                Vec3f::new(
+                    endpoint.x - 0.05 * angle.cos(),
+                    endpoint.y,
+                    endpoint.z - 0.05 * angle.sin(),
+                ),
             );
-            body.body_yaw = angle;
+            world.objects.get_mut(&actor.raw()).unwrap().body_yaw = angle;
             assert!(world
                 .visible_motion_target(ORGANISM, target)
                 .unwrap()
@@ -484,7 +547,9 @@ mod tests {
         assert!(!result.execution.succeeded);
         assert_eq!(world.agent_for(ORGANISM).unwrap().position, before);
         // Moving an unseen target changes no automatic bearing or detour.
-        world.objects.get_mut(&target.raw()).unwrap().position.z = 0.3;
+        let mut moved_target = world.entity(target).unwrap().position;
+        moved_target.z = 0.3;
+        world.set_object_position_for_test(target, moved_target);
         assert_eq!(
             world.apply_command(&approach(target)).unwrap().execution,
             hidden.execution
@@ -615,8 +680,12 @@ mod tests {
     fn carry_clearance_changes_local_step_without_dropping_the_object() {
         let (mut bare, target) = world(vec![[1.06, -0.1, 1.26, 0.1, 0.0, 0.2]], 0.2);
         let actor = bare.agent_entity_id(ORGANISM).unwrap();
-        bare.objects.get_mut(&actor.raw()).unwrap().position.x = 0.2;
-        bare.objects.get_mut(&target.raw()).unwrap().position.x = 3.0;
+        let mut actor_pos = bare.entity(actor).unwrap().position;
+        actor_pos.x = 0.2;
+        bare.set_object_position_for_test(actor, actor_pos);
+        let mut target_pos = bare.entity(target).unwrap().position;
+        target_pos.x = 3.0;
+        bare.set_object_position_for_test(target, target_pos);
         let ball = bare
             .spawn_toy("carried", Vec3f::new(0.7, 0.0, 0.0), true)
             .unwrap();
@@ -678,7 +747,8 @@ mod tests {
         world.register_organism_record(record).unwrap();
         assert!(world.object_in_sight(
             world.agent_for(ORGANISM).unwrap(),
-            world.entity(target).unwrap()
+            world.entity(target).unwrap(),
+            None
         ));
         assert!(world
             .visible_motion_target(ORGANISM, target)
@@ -701,7 +771,8 @@ mod tests {
         }
         assert!(cluttered.object_in_sight(
             cluttered.agent_for(ORGANISM).unwrap(),
-            cluttered.entity(target).unwrap()
+            cluttered.entity(target).unwrap(),
+            None
         ));
         assert!(cluttered
             .visible_motion_target(ORGANISM, target)
@@ -721,7 +792,9 @@ mod tests {
         let wall = [0.26, -0.3, 0.45, 0.3, 0.0, 2.0];
         let (mut left, target) = world(vec![wall], 0.2);
         let mut right = left.clone();
-        right.objects.get_mut(&target.raw()).unwrap().position.z = 0.1;
+        let mut moved = right.entity(target).unwrap().position;
+        moved.z = 0.1;
+        right.set_object_position_for_test(target, moved);
         right.terrain = Some(
             crate::WorldTerrain::new(
                 crate::TerrainData {
@@ -746,6 +819,7 @@ mod tests {
                     world.agent_for(ORGANISM).unwrap(),
                     world.objects.values(),
                     true,
+                    None,
                 )
                 .unwrap()
         };
@@ -843,6 +917,156 @@ mod tests {
                 .unwrap()
                 .local_steering,
             Some(state)
+        );
+    }
+
+    #[test]
+    fn visible_motion_target_truncates_past_16_and_local_clearance_matches_linear_scan() {
+        let (mut world, first_target) = world(
+            vec![
+                [0.8, 0.4, 1.2, 0.8, 0.0, 2.0],
+                [-1.4, -0.3, -1.1, 0.3, 0.0, 2.0],
+            ],
+            0.2,
+        );
+        world.editor_set_optical_opacity(first_target, 0.0).unwrap();
+        // Spawn 18 visible food objects along +X so MAX_VISIBLE_ENTITIES=16 truncation applies,
+        // and carry the farthest one so the carried-item slot swap is also exercised.
+        let mut extras = Vec::new();
+        for i in 0..18 {
+            let label = format!("crowd-{i}");
+            let x = 0.2 + i as f32 * 0.08;
+            let id = world
+                .insert_object(crate::headless::SpawnSpec {
+                    label: &label,
+                    kind: WorldObjectKind::Food,
+                    organism_id: None,
+                    position: Vec3f::new(x, 0.0, 0.0),
+                    nutrition: 0.5,
+                    hazard_pain: 0.0,
+                    token_id: None,
+                    social_affinity: 0.0,
+                    teacher_channel: None,
+                })
+                .unwrap();
+            world.editor_set_optical_opacity(id, 0.0).unwrap();
+            extras.push(id);
+        }
+        let carried_far = *extras.last().unwrap();
+        world.set_object_carried_by_for_test(carried_far, Some(ORGANISM));
+        let rejected_unheld = extras[16];
+
+        let snapshot = world
+            .physical_observation_snapshot_from_objects(
+                ORGANISM,
+                world.tick(),
+                world.agent_for(ORGANISM).unwrap(),
+                world.objects.values(),
+                true,
+                None,
+            )
+            .unwrap();
+        assert_eq!(snapshot.visible.len(), MAX_VISIBLE_ENTITIES);
+        for probe in [first_target, extras[0], rejected_unheld, carried_far] {
+            let expected = snapshot
+                .visible
+                .iter()
+                .find(|entry| entry.transport_entity == probe)
+                .map(|entry| subtract(entry.position, snapshot.observer_pose.translation));
+            let actual = world.visible_motion_target(ORGANISM, probe).unwrap();
+            assert_eq!(actual, expected, "mismatch for probe {probe:?}");
+        }
+        assert!(world
+            .visible_motion_target(ORGANISM, rejected_unheld)
+            .unwrap()
+            .is_none());
+        assert!(world
+            .visible_motion_target(ORGANISM, carried_far)
+            .unwrap()
+            .is_some());
+
+        // Compare local_clearance_ranges against brute-force linear obstacle scan.
+        world
+            .editor_spawn_object(crate::WorldEditorSpawnSpec {
+                label: "sphere-blocker".into(),
+                kind: WorldObjectKind::Obstacle,
+                organism_id: None,
+                position: Vec3f::new(0.8, 0.0, 0.6),
+                nutrition: 0.0,
+                hazard_pain: 0.0,
+                radius: 0.35,
+                token_id: None,
+            })
+            .unwrap();
+        let observer = world.agent_for(ORGANISM).unwrap();
+        let bearing = 0.25_f32;
+        let actual_ranges = world.local_clearance_ranges(observer, bearing);
+
+        let body_radius = world
+            .terrain
+            .as_ref()
+            .map_or(HEADLESS_CONTACT_RADIUS, |terrain| {
+                terrain.limits().body_radius.max(HEADLESS_CONTACT_RADIUS)
+            });
+        let radius = world
+            .objects
+            .values()
+            .filter(|object| !object.consumed && object.carried_by == observer.organism_id)
+            .fold(body_radius, |acc, object| {
+                acc.max(CARRY_GRIP_DISTANCE + object.radius)
+            });
+        let mut expected_ranges = [LOCAL_HORIZON; STEERING_ANGLES.len()];
+        for (index, degrees) in STEERING_ANGLES.iter().enumerate() {
+            let yaw = bearing + degrees.to_radians();
+            let gaze_delta = (yaw - observer.body_yaw - observer.head_yaw + std::f32::consts::PI)
+                .rem_euclid(std::f32::consts::TAU)
+                - std::f32::consts::PI;
+            if gaze_delta.abs() > VISION_HALF_ANGLE {
+                expected_ranges[index] = 0.0;
+                continue;
+            }
+            let direction = Vec3f::new(yaw.cos(), 0.0, yaw.sin());
+            let mut nearest = LOCAL_HORIZON;
+            for object in world
+                .objects
+                .values()
+                .filter(|object| object.kind == WorldObjectKind::Obstacle && !object.consumed)
+            {
+                if let Some(hit) = crate::headless::sight_sphere_hit(
+                    observer.position,
+                    direction,
+                    object.position,
+                    object.radius + radius,
+                    nearest,
+                ) {
+                    nearest = nearest.min(hit);
+                }
+            }
+            if let Some(terrain) = &world.terrain {
+                for bounds in &terrain.surface().obstacles {
+                    let expanded = [
+                        bounds[0] - radius,
+                        bounds[1] - radius,
+                        bounds[2] + radius,
+                        bounds[3] + radius,
+                        bounds[4],
+                        bounds[5],
+                    ];
+                    if let Some(hit) = crate::terrain_surface::sight_box_hit(
+                        observer.position,
+                        direction,
+                        expanded,
+                        nearest,
+                    ) {
+                        nearest = nearest.min(hit);
+                    }
+                }
+            }
+            expected_ranges[index] = nearest;
+        }
+        assert_eq!(
+            actual_ranges.map(f32::to_bits),
+            expected_ranges.map(f32::to_bits)
         );
     }
 }

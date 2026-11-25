@@ -120,3 +120,84 @@ fn canonical_builder_length_prefixes_utf8_and_bytes() {
         ]
     );
 }
+
+fn reference_finish256(bytes: &[u8]) -> [u64; 4] {
+    const SEEDS: [u64; 4] = [
+        0xa11f_ea7e_d00d_0001,
+        0xc0de_cafe_51a7_0002,
+        0x9e37_79b9_7f4a_7c15,
+        0xd1b5_4a32_d192_ed03,
+    ];
+    const LENGTH_FINALIZER: u64 = 0xf1a1_d165_e57a_0000;
+    fn splitmix64(mut value: u64) -> u64 {
+        value = value.wrapping_add(0x9e37_79b9_7f4a_7c15);
+        value = (value ^ (value >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+        value = (value ^ (value >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+        value ^ (value >> 31)
+    }
+    let byte_len = u64::try_from(bytes.len()).unwrap();
+    let mut streams = SEEDS;
+    for chunk in bytes.chunks(8) {
+        let mut padded = [0u8; 8];
+        padded[..chunk.len()].copy_from_slice(chunk);
+        let word = u64::from_le_bytes(padded);
+        for stream in &mut streams {
+            *stream = splitmix64(*stream ^ word);
+        }
+    }
+    let length_word = byte_len ^ LENGTH_FINALIZER;
+    for stream in &mut streams {
+        *stream = splitmix64(*stream ^ length_word);
+    }
+    streams
+}
+
+#[test]
+fn streaming_builder_matches_reference_across_lengths_and_splits() {
+    for domain_len in 0..=16 {
+        let domain: Vec<u8> = (0..domain_len)
+            .map(|i| (i as u8).wrapping_mul(17))
+            .collect();
+        for payload_len in 0..=64 {
+            let payload: Vec<u8> = (0..payload_len)
+                .map(|i| (i as u8).wrapping_mul(31).wrapping_add(7))
+                .collect();
+            let mut expected = Vec::new();
+            expected.push(0xd0);
+            expected.extend_from_slice(&(domain.len() as u64).to_le_bytes());
+            expected.extend_from_slice(&domain);
+            expected.push(0x0c);
+            expected.extend_from_slice(&(payload.len() as u64).to_le_bytes());
+            expected.extend_from_slice(&payload);
+
+            let mut single = CanonicalDigestBuilder::new(&domain);
+            single.write_bytes(&payload);
+            assert_eq!(single.clone().finish256(), reference_finish256(&expected));
+
+            // Also verify mixed primitive tags + non-finite non-mutation + PartialEq.
+            let mut a = CanonicalDigestBuilder::new(&domain);
+            a.write_bool(payload_len % 2 == 0);
+            a.write_u8(payload_len as u8);
+            a.write_u16(payload_len as u16);
+            a.write_u32(payload_len as u32);
+            a.write_u64(payload_len as u64);
+            a.write_i8(-(payload_len as i8));
+            a.write_i16(-(payload_len as i16));
+            a.write_i32(-payload_len);
+            a.write_i64(-(payload_len as i64));
+            a.write_f32(-0.0).unwrap();
+            a.write_f64(-0.0).unwrap();
+            a.write_sequence_len(3);
+            a.write_none();
+            a.write_some();
+            a.write_utf8("ok");
+            a.write_bytes(&payload);
+
+            let mut b = a.clone();
+            assert!(b.write_f32(f32::NAN).is_err());
+            assert!(b.write_f64(f64::NEG_INFINITY).is_err());
+            assert_eq!(a, b);
+            assert_eq!(a.finish128(), [b.clone().finish256()[0], b.finish256()[1]]);
+        }
+    }
+}

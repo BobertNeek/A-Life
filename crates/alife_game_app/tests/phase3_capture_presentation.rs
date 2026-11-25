@@ -56,6 +56,7 @@ fn fvr05_inspector_chrome_exclusively_owns_the_right_panel_region() {
         let mut ux = app
             .world_mut()
             .resource_mut::<Fvr05ProductionUxStateResource>();
+        ux.debug_mode = true;
         ux.settings.show_menu = true;
         ux.settings.show_settings = false;
     }
@@ -84,10 +85,13 @@ fn fvr05_inspector_chrome_exclusively_owns_the_right_panel_region() {
     assert_eq!(right_visibility, Visibility::Visible);
     assert_eq!(v0_visibility, Visibility::Hidden);
 
-    app.world_mut()
-        .resource_mut::<Fvr05ProductionUxStateResource>()
-        .settings
-        .show_menu = false;
+    {
+        let mut ux = app
+            .world_mut()
+            .resource_mut::<Fvr05ProductionUxStateResource>();
+        ux.debug_mode = false;
+        ux.settings.show_menu = false;
+    }
     app.update();
 
     let right_visibility = {

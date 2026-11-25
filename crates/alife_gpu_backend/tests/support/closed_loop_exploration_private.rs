@@ -557,8 +557,8 @@ fn actual_training_composer_bypasses_game_perturbations_before_exact_training_sa
     .validate(&module)
     .unwrap();
     assert!(source.contains("fn game_exploration_enabled(header:GpuPerceptionHeader) -> bool {\n  return (header.reserved & 0x80000000u) == 0u;\n}"));
-    assert!(source.contains("selected_candidate = training_sample(header, brain, 0u);"));
-    assert!(source.contains("motor_candidates[slot] = training_sample(header, brain, slot + 1u);"));
+    assert!(source.contains("let sampled = training_sample(header, brain, 0u);"));
+    assert!(source.contains("let sampled = training_sample(header, brain, tid);"));
 }
 
 #[test]

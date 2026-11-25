@@ -2,14 +2,120 @@
 
 use super::*;
 
+#[cfg(feature = "training-rollout")]
+type FusedTrainingCapturePair = (
+    Vec<crate::training_rollout::GpuTrainingStateSnapshot>,
+    Vec<crate::training_rollout::GpuTrainingStateSnapshot>,
+);
+#[cfg(not(feature = "training-rollout"))]
+type FusedTrainingCapturePair = ();
+
 impl GpuClosedLoopBackend {
     pub(super) fn tick_inputs_with_selector_diagnostic_capture(
         &mut self,
         batch: &[GpuRuntimeTickInput<'_>],
         selector_diagnostic_candidate_indices: Option<&[u16]>,
-        mut selector_diagnostic_error_capture: Option<&mut SelectorDiagnosticErrorCapture>,
+        selector_diagnostic_error_capture: Option<&mut SelectorDiagnosticErrorCapture>,
         #[cfg(feature = "training-rollout")] sampling: Option<&[crate::GpuTrainingSamplingConfig]>,
     ) -> Result<Vec<GpuClosedLoopTick>, ScaffoldContractError> {
+        #[cfg(feature = "training-rollout")]
+        {
+            let (ticks, _) = self.tick_inputs_inner(
+                batch,
+                selector_diagnostic_candidate_indices,
+                selector_diagnostic_error_capture,
+                sampling,
+                false,
+            )?;
+            Ok(ticks)
+        }
+        #[cfg(not(feature = "training-rollout"))]
+        {
+            self.tick_inputs_inner(
+                batch,
+                selector_diagnostic_candidate_indices,
+                selector_diagnostic_error_capture,
+            )
+        }
+    }
+
+    #[cfg(feature = "training-rollout")]
+    pub(super) fn tick_memory_batch_training_with_captures_inner(
+        &mut self,
+        batch: &GpuClosedLoopMemoryBatchInput<'_>,
+        sampling: &[crate::GpuTrainingSamplingConfig],
+    ) -> Result<GpuTrainingTickCaptures, ScaffoldContractError> {
+        let inputs = batch
+            .members
+            .iter()
+            .map(|member| GpuRuntimeTickInput {
+                handle: member.handle,
+                frame: member.frame,
+                memory_upload: Some(member.memory_upload),
+            })
+            .collect::<Vec<_>>();
+        let (ticks, captures) =
+            self.tick_inputs_inner(&inputs, None, None, Some(sampling), true)?;
+        if let Some((before, after)) = captures {
+            return Ok((ticks, before, after));
+        }
+        // Fallback if fused staging buffer exceeded device max_buffer_size / 256 MiB ceiling.
+        let requests = inputs
+            .iter()
+            .map(|input| (input.handle, input.frame.tick()))
+            .collect::<Vec<_>>();
+        let before = self.capture_training_states(&requests)?;
+        let ticks =
+            self.tick_inputs_with_selector_diagnostic_capture(&inputs, None, None, Some(sampling))?;
+        let after = self.capture_training_states(&requests)?;
+        Ok((ticks, before, after))
+    }
+
+    #[cfg(feature = "training-rollout")]
+    fn tick_inputs_inner(
+        &mut self,
+        batch: &[GpuRuntimeTickInput<'_>],
+        selector_diagnostic_candidate_indices: Option<&[u16]>,
+        selector_diagnostic_error_capture: Option<&mut SelectorDiagnosticErrorCapture>,
+        sampling: Option<&[crate::GpuTrainingSamplingConfig]>,
+        capture_training_states: bool,
+    ) -> Result<(Vec<GpuClosedLoopTick>, Option<FusedTrainingCapturePair>), ScaffoldContractError>
+    {
+        self.tick_inputs_impl(
+            batch,
+            selector_diagnostic_candidate_indices,
+            selector_diagnostic_error_capture,
+            sampling,
+            capture_training_states,
+        )
+    }
+
+    #[cfg(not(feature = "training-rollout"))]
+    fn tick_inputs_inner(
+        &mut self,
+        batch: &[GpuRuntimeTickInput<'_>],
+        selector_diagnostic_candidate_indices: Option<&[u16]>,
+        selector_diagnostic_error_capture: Option<&mut SelectorDiagnosticErrorCapture>,
+    ) -> Result<Vec<GpuClosedLoopTick>, ScaffoldContractError> {
+        let (ticks, _) = self.tick_inputs_impl(
+            batch,
+            selector_diagnostic_candidate_indices,
+            selector_diagnostic_error_capture,
+        )?;
+        Ok(ticks)
+    }
+
+    fn tick_inputs_impl(
+        &mut self,
+        batch: &[GpuRuntimeTickInput<'_>],
+        selector_diagnostic_candidate_indices: Option<&[u16]>,
+        mut selector_diagnostic_error_capture: Option<&mut SelectorDiagnosticErrorCapture>,
+        #[cfg(feature = "training-rollout")] sampling: Option<&[crate::GpuTrainingSamplingConfig]>,
+        #[cfg(feature = "training-rollout")] capture_training_states: bool,
+    ) -> Result<(Vec<GpuClosedLoopTick>, Option<FusedTrainingCapturePair>), ScaffoldContractError>
+    {
+        let _span =
+            tracing::debug_span!("gpu_closed_loop_tick_batch", batch_len = batch.len()).entered();
         let capture_selector_diagnostics = selector_diagnostic_candidate_indices.is_some();
         #[cfg(feature = "training-rollout")]
         if let Some(configs) = sampling {
@@ -226,12 +332,24 @@ impl GpuClosedLoopBackend {
                 batch: None,
                 recorded: false,
                 map_ticket: None,
-                selector_readback: None,
+                has_selector_readback: false,
                 selector_map_ticket: None,
                 selector_captures: None,
                 validated: None,
             });
         }
+
+        // Capture preflight side/snapshot metadata before `begin_prepared_batch`
+        // arms `authority.pending` on the pipelines.
+        #[cfg(feature = "training-rollout")]
+        let fused_capture_plan = if capture_training_states {
+            match self.prepare_fused_training_captures(batch)? {
+                Some(plan) => Some(plan),
+                None => return Ok((Vec::new(), None)),
+            }
+        } else {
+            None
+        };
 
         for index in 0..dispatches.len() {
             let class_id = dispatches[index].class_id;
@@ -368,13 +486,13 @@ impl GpuClosedLoopBackend {
                         return Err(map_gpu_contract_error(error));
                     }
                 };
-                dispatch.selector_readback =
-                    Some(self.device.create_buffer(&wgpu::BufferDescriptor {
-                        label: Some("closed-loop-selector-diagnostic-readback"),
-                        size: bytes,
-                        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-                        mapped_at_creation: false,
-                    }));
+                let bucket = self
+                    .class_buckets
+                    .get_mut(&dispatch.class_id)
+                    .and_then(|pool| pool.chunks.get_mut(dispatch.chunk_index))
+                    .expect("begun bucket exists");
+                bucket.ensure_selector_readback(&self.device, bytes);
+                dispatch.has_selector_readback = true;
             }
         }
 
@@ -404,17 +522,15 @@ impl GpuClosedLoopBackend {
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("closed-loop-runtime-mixed-class-tick"),
             });
-        {
-            let _timestamp_start = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some("closed-loop-runtime-timestamp-start"),
-                timestamp_writes: Some(wgpu::ComputePassTimestampWrites {
-                    query_set: &self.timestamp_resources.query_set,
-                    beginning_of_pass_write_index: Some(0),
-                    end_of_pass_write_index: None,
-                }),
-            });
+        #[cfg(feature = "training-rollout")]
+        if let Some(plan) = fused_capture_plan.as_ref() {
+            if let Err(error) = self.encode_fused_training_capture_before(&mut encoder, plan) {
+                self.cleanup_unsubmitted_dispatches(&mut dispatches);
+                return Err(error);
+            }
         }
-        for index in 0..dispatches.len() {
+        let dispatch_count = dispatches.len();
+        for index in 0..dispatch_count {
             if let Some(capture) = selector_diagnostic_error_capture.as_deref_mut() {
                 capture.later_stage = Some(GpuRuntimeSelectorDiagnosticStage::RecordDispatch);
             }
@@ -424,20 +540,33 @@ impl GpuClosedLoopBackend {
                 .get_mut(&dispatch.class_id)
                 .and_then(|pool| pool.chunks.get_mut(dispatch.chunk_index))
                 .expect("begun bucket exists");
-            let result = match dispatch.selector_readback.as_ref() {
-                Some(readback) => bucket
+            let timestamp = (
+                &self.timestamp_resources.query_set,
+                index == 0,
+                index + 1 == dispatch_count,
+                self.per_pass_profiling_enabled,
+            );
+            let result = if dispatch.has_selector_readback {
+                let readback = bucket
+                    .selector_readback
+                    .as_ref()
+                    .expect("allocated selector readback");
+                bucket
                     .pipelines
-                    .record_staged_closed_loop_with_selector_diagnostics(
+                    .record_staged_closed_loop_with_selector_diagnostics_timed(
                         &mut encoder,
                         &bucket.buffers,
                         dispatch.batch.as_ref().expect("begun batch"),
                         readback,
-                    ),
-                None => bucket.pipelines.record_staged_closed_loop(
+                        timestamp,
+                    )
+            } else {
+                bucket.pipelines.record_staged_closed_loop_timed(
                     &mut encoder,
                     &bucket.buffers,
                     dispatch.batch.as_ref().expect("begun batch"),
-                ),
+                    timestamp,
+                )
             };
             if let Err(error) = result {
                 self.cleanup_unsubmitted_dispatches(&mut dispatches);
@@ -445,19 +574,26 @@ impl GpuClosedLoopBackend {
             }
             dispatch.recorded = true;
         }
-        {
-            let _timestamp_end = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some("closed-loop-runtime-timestamp-end"),
-                timestamp_writes: Some(wgpu::ComputePassTimestampWrites {
-                    query_set: &self.timestamp_resources.query_set,
-                    beginning_of_pass_write_index: None,
-                    end_of_pass_write_index: Some(1),
-                }),
-            });
+        #[cfg(feature = "training-rollout")]
+        if let Some(plan) = fused_capture_plan.as_ref() {
+            if let Err(error) = self.encode_fused_training_capture_after(&mut encoder, plan) {
+                self.cleanup_unsubmitted_dispatches(&mut dispatches);
+                return Err(error);
+            }
         }
+        let timestamp_query_count = if self.per_pass_profiling_enabled {
+            GPU_PER_PASS_TIMESTAMP_QUERY_COUNT
+        } else {
+            GPU_TIMESTAMP_QUERY_COUNT
+        };
+        let timestamp_readback_bytes = if self.per_pass_profiling_enabled {
+            GPU_PER_PASS_TIMESTAMP_READBACK_BYTES
+        } else {
+            GPU_TIMESTAMP_READBACK_BYTES
+        };
         encoder.resolve_query_set(
             &self.timestamp_resources.query_set,
-            0..GPU_TIMESTAMP_QUERY_COUNT,
+            0..timestamp_query_count,
             &self.timestamp_resources.resolve_buffer,
             0,
         );
@@ -466,7 +602,7 @@ impl GpuClosedLoopBackend {
             0,
             &self.timestamp_resources.readback_buffer,
             0,
-            GPU_TIMESTAMP_READBACK_BYTES,
+            timestamp_readback_bytes,
         );
         let command_buffer = encoder.finish();
         for index in 0..dispatches.len() {
@@ -491,11 +627,15 @@ impl GpuClosedLoopBackend {
                     return Err(map_gpu_contract_error(error));
                 }
             }
-            if let Some(readback) = dispatch.selector_readback.as_ref() {
+            if dispatch.has_selector_readback {
                 if let Some(capture) = selector_diagnostic_error_capture.as_deref_mut() {
                     capture.later_stage =
                         Some(GpuRuntimeSelectorDiagnosticStage::RegisterSelectorDiagnosticMapping);
                 }
+                let readback = bucket
+                    .selector_readback
+                    .as_ref()
+                    .expect("allocated selector readback");
                 match bucket.pipelines.register_selector_diagnostic_mapping(
                     &command_buffer,
                     readback,
@@ -509,11 +649,30 @@ impl GpuClosedLoopBackend {
                 }
             }
         }
+        #[cfg(feature = "training-rollout")]
+        let fused_capture_receiver = if let Some(plan) = fused_capture_plan.as_ref() {
+            let readback = self
+                .training_capture_readback
+                .as_ref()
+                .expect("allocated training capture readback");
+            let (sender, receiver) = std::sync::mpsc::channel();
+            command_buffer.map_buffer_on_submit(
+                readback,
+                wgpu::MapMode::Read,
+                0..plan.total_bytes,
+                move |result| {
+                    let _ = sender.send(result);
+                },
+            );
+            Some(receiver)
+        } else {
+            None
+        };
         let (timestamp_sender, timestamp_receiver) = std::sync::mpsc::channel();
         command_buffer.map_buffer_on_submit(
             &self.timestamp_resources.readback_buffer,
             wgpu::MapMode::Read,
-            0..GPU_TIMESTAMP_READBACK_BYTES,
+            0..timestamp_readback_bytes,
             move |result| {
                 let _ = timestamp_sender.send(result);
             },
@@ -523,6 +682,7 @@ impl GpuClosedLoopBackend {
         if let Some(capture) = selector_diagnostic_error_capture.as_deref_mut() {
             capture.later_stage = Some(GpuRuntimeSelectorDiagnosticStage::DevicePoll);
         }
+        let poll_started = std::time::Instant::now();
         let poll_failed = self
             .device
             .poll(wgpu::PollType::Wait {
@@ -530,6 +690,7 @@ impl GpuClosedLoopBackend {
                 timeout: None,
             })
             .is_err();
+        let _poll_wait_ns = u64::try_from(poll_started.elapsed().as_nanos()).unwrap_or(u64::MAX);
         let mappings_succeeded = dispatches.iter_mut().all(|dispatch| {
             dispatch
                 .map_ticket
@@ -537,12 +698,25 @@ impl GpuClosedLoopBackend {
                 .is_some_and(GpuCompactMapTicket::mapping_succeeded)
         });
         let selector_mappings_succeeded = dispatches.iter_mut().all(|dispatch| {
-            dispatch.selector_readback.is_none()
+            !dispatch.has_selector_readback
                 || dispatch
                     .selector_map_ticket
                     .take()
                     .is_some_and(GpuCompactMapTicket::mapping_succeeded)
         });
+        #[cfg(feature = "training-rollout")]
+        let (capture_mapping_succeeded, _capture_receive_wait_ns) = match fused_capture_receiver {
+            Some(receiver) => {
+                let receive_started = std::time::Instant::now();
+                let ok = receiver.recv().ok().and_then(Result::ok).is_some();
+                let wait_ns =
+                    u64::try_from(receive_started.elapsed().as_nanos()).unwrap_or(u64::MAX);
+                (ok, wait_ns)
+            }
+            None => (true, 0),
+        };
+        #[cfg(not(feature = "training-rollout"))]
+        let capture_mapping_succeeded = true;
         let timestamp_mapping_succeeded = timestamp_mapping_completed(&timestamp_receiver);
         let post_submit_failure_stage = if forced_loss {
             Some(GpuRuntimeSelectorDiagnosticStage::DeviceLostAfterSubmit)
@@ -554,7 +728,7 @@ impl GpuClosedLoopBackend {
             Some(GpuRuntimeSelectorDiagnosticStage::SelectorMappingCompletion)
         } else if !timestamp_mapping_succeeded {
             Some(GpuRuntimeSelectorDiagnosticStage::TimestampMappingCompletion)
-        } else if self.device_lost.load(Ordering::Acquire) {
+        } else if !capture_mapping_succeeded || self.device_lost.load(Ordering::Acquire) {
             Some(GpuRuntimeSelectorDiagnosticStage::DeviceLostAfterSubmit)
         } else {
             None
@@ -570,12 +744,20 @@ impl GpuClosedLoopBackend {
                     .and_then(|pool| pool.chunks.get_mut(dispatch.chunk_index))
                     .expect("submitted bucket exists");
                 bucket.buffers.compact_readback().unmap();
-                if let Some(readback) = dispatch.selector_readback.as_ref() {
-                    readback.unmap();
+                if dispatch.has_selector_readback {
+                    if let Some(readback) = bucket.selector_readback.as_ref() {
+                        readback.unmap();
+                    }
                 }
                 let _ = bucket
                     .pipelines
                     .mark_post_submit_poison(dispatch.batch.as_ref().expect("submitted batch"));
+            }
+            #[cfg(feature = "training-rollout")]
+            if fused_capture_plan.is_some() {
+                if let Some(readback) = self.training_capture_readback.as_ref() {
+                    readback.unmap();
+                }
             }
             self.timestamp_resources.readback_buffer.unmap();
             self.mark_device_lost();
@@ -591,26 +773,35 @@ impl GpuClosedLoopBackend {
         if let Some(capture) = selector_diagnostic_error_capture.as_deref_mut() {
             capture.later_stage = Some(GpuRuntimeSelectorDiagnosticStage::TimestampReadback);
         }
-        let (inference_timestamp_ticks, completed_gpu_time_ns) =
-            match self.timestamp_resources.read_delta_and_elapsed_ns() {
-                Ok(timing) => timing,
-                Err(error) => {
-                    for dispatch in &dispatches {
-                        self.class_buckets
-                            .get(&dispatch.class_id)
-                            .and_then(|pool| pool.chunks.get(dispatch.chunk_index))
-                            .expect("submitted bucket exists")
-                            .buffers
-                            .compact_readback()
-                            .unmap();
-                        if let Some(readback) = dispatch.selector_readback.as_ref() {
+        let (inference_timestamp_ticks, completed_gpu_time_ns, per_pass_stages_ns) = match self
+            .timestamp_resources
+            .read_delta_elapsed_and_per_pass_ns(self.per_pass_profiling_enabled)
+        {
+            Ok(timing) => timing,
+            Err(error) => {
+                for dispatch in &dispatches {
+                    let bucket = self
+                        .class_buckets
+                        .get(&dispatch.class_id)
+                        .and_then(|pool| pool.chunks.get(dispatch.chunk_index))
+                        .expect("submitted bucket exists");
+                    bucket.buffers.compact_readback().unmap();
+                    if dispatch.has_selector_readback {
+                        if let Some(readback) = bucket.selector_readback.as_ref() {
                             readback.unmap();
                         }
                     }
-                    self.poison_submitted_dispatches(&dispatches);
-                    return Err(error);
                 }
-            };
+                #[cfg(feature = "training-rollout")]
+                if fused_capture_plan.is_some() {
+                    if let Some(readback) = self.training_capture_readback.as_ref() {
+                        readback.unmap();
+                    }
+                }
+                self.poison_submitted_dispatches(&dispatches);
+                return Err(error);
+            }
+        };
 
         if capture_logits {
             if let Some(capture) = selector_diagnostic_error_capture.as_deref_mut() {
@@ -626,7 +817,7 @@ impl GpuClosedLoopBackend {
                         .and_then(|pool| pool.chunks.get(dispatch.chunk_index))
                         .expect("mapped bucket exists");
                     bucket.pipelines.decode_mapped_selector_diagnostics(
-                        dispatch
+                        bucket
                             .selector_readback
                             .as_ref()
                             .expect("diagnostic capture was requested"),
@@ -637,11 +828,14 @@ impl GpuClosedLoopBackend {
                     Ok(captures) => dispatches[index].selector_captures = Some(captures),
                     Err(_) => {
                         for still_mapped in &dispatches[index + 1..] {
-                            still_mapped
-                                .selector_readback
-                                .as_ref()
-                                .expect("diagnostic capture was requested")
-                                .unmap();
+                            if let Some(readback) = self
+                                .class_buckets
+                                .get(&still_mapped.class_id)
+                                .and_then(|pool| pool.chunks.get(still_mapped.chunk_index))
+                                .and_then(|bucket| bucket.selector_readback.as_ref())
+                            {
+                                readback.unmap();
+                            }
                         }
                         for submitted in &dispatches {
                             let bucket = self
@@ -653,6 +847,12 @@ impl GpuClosedLoopBackend {
                             let _ = bucket.pipelines.mark_post_submit_poison(
                                 submitted.batch.as_ref().expect("submitted batch"),
                             );
+                        }
+                        #[cfg(feature = "training-rollout")]
+                        if fused_capture_plan.is_some() {
+                            if let Some(readback) = self.training_capture_readback.as_ref() {
+                                readback.unmap();
+                            }
                         }
                         self.mark_device_lost();
                         return Err(ScaffoldContractError::NeuralBackendUnavailable);
@@ -717,6 +917,12 @@ impl GpuClosedLoopBackend {
                             submitted.batch.as_ref().expect("submitted batch"),
                         );
                     }
+                    #[cfg(feature = "training-rollout")]
+                    if fused_capture_plan.is_some() {
+                        if let Some(readback) = self.training_capture_readback.as_ref() {
+                            readback.unmap();
+                        }
+                    }
                     self.mark_device_lost();
                     return Err(ScaffoldContractError::NeuralBackendUnavailable);
                 }
@@ -748,6 +954,12 @@ impl GpuClosedLoopBackend {
                 let _ = bucket
                     .pipelines
                     .mark_post_submit_poison(dispatch.batch.as_ref().expect("submitted batch"));
+            }
+            #[cfg(feature = "training-rollout")]
+            if fused_capture_plan.is_some() {
+                if let Some(readback) = self.training_capture_readback.as_ref() {
+                    readback.unmap();
+                }
             }
             self.mark_device_lost();
             return Err(ScaffoldContractError::NeuralBackendUnavailable);
@@ -1178,6 +1390,12 @@ impl GpuClosedLoopBackend {
             let committed = match commit {
                 Ok(committed) => committed,
                 Err(_) => {
+                    #[cfg(feature = "training-rollout")]
+                    if fused_capture_plan.is_some() {
+                        if let Some(readback) = self.training_capture_readback.as_ref() {
+                            readback.unmap();
+                        }
+                    }
                     self.mark_device_lost();
                     return Err(ScaffoldContractError::NeuralBackendUnavailable);
                 }
@@ -1192,6 +1410,12 @@ impl GpuClosedLoopBackend {
                 || committed.factorized_motor_candidates.len() != dispatch.original_indices.len()
                 || committed.pending_records.len() != dispatch.original_indices.len()
             {
+                #[cfg(feature = "training-rollout")]
+                if fused_capture_plan.is_some() {
+                    if let Some(readback) = self.training_capture_readback.as_ref() {
+                        readback.unmap();
+                    }
+                }
                 self.mark_device_lost();
                 return Err(ScaffoldContractError::NeuralBackendUnavailable);
             }
@@ -1215,6 +1439,12 @@ impl GpuClosedLoopBackend {
             }
         }
         if commit_mismatch {
+            #[cfg(feature = "training-rollout")]
+            if fused_capture_plan.is_some() {
+                if let Some(readback) = self.training_capture_readback.as_ref() {
+                    readback.unmap();
+                }
+            }
             self.mark_device_lost();
             return Err(ScaffoldContractError::NeuralBackendUnavailable);
         }
@@ -1248,6 +1478,12 @@ impl GpuClosedLoopBackend {
                     })
         });
         if !host_precommit_valid {
+            #[cfg(feature = "training-rollout")]
+            if fused_capture_plan.is_some() {
+                if let Some(readback) = self.training_capture_readback.as_ref() {
+                    readback.unmap();
+                }
+            }
             self.mark_device_lost();
             return Err(ScaffoldContractError::NeuralBackendUnavailable);
         }
@@ -1290,13 +1526,56 @@ impl GpuClosedLoopBackend {
         if let Some(capture) = selector_diagnostic_error_capture {
             capture.later_stage = Some(GpuRuntimeSelectorDiagnosticStage::ConvertPopulation);
         }
+        let population = u32::try_from(batch.len())
+            .map_err(|_| ScaffoldContractError::NeuralBackendUnavailable)?;
         self.pending_inference_timing = Some(PendingInferenceTiming {
             dispatch_generation: dispatch_generation.get(),
             class_id_raw: timing_class_id,
-            population: u32::try_from(batch.len())
-                .map_err(|_| ScaffoldContractError::NeuralBackendUnavailable)?,
+            population,
             inference_timestamp_ticks,
         });
-        Ok(prepared_ticks)
+        self.last_per_pass_timings = per_pass_stages_ns.map(
+            |[encode_ns, recurrent_ns, decode_select_ns, eligibility_ns]| GpuPerPassTimings {
+                dispatch_generation: dispatch_generation.get(),
+                class_id_raw: timing_class_id.unwrap_or(0),
+                population,
+                encode_ns,
+                recurrent_ns,
+                decode_select_ns,
+                eligibility_ns,
+                plasticity_ns: 0,
+            },
+        );
+        if let Some(timings) = self.last_per_pass_timings {
+            tracing::trace!(
+                dispatch_generation = timings.dispatch_generation,
+                class_id = timings.class_id_raw,
+                population = timings.population,
+                encode_ns = timings.encode_ns,
+                recurrent_ns = timings.recurrent_ns,
+                decode_select_ns = timings.decode_select_ns,
+                eligibility_ns = timings.eligibility_ns,
+                "recorded GPU per-pass timings"
+            );
+        }
+        #[cfg(feature = "training-rollout")]
+        let captures = match fused_capture_plan {
+            Some(plan) => Some(self.finish_fused_training_captures(
+                plan,
+                dispatch_generation.get(),
+                &prepared_ticks,
+                _poll_wait_ns,
+                _capture_receive_wait_ns,
+            )?),
+            None => None,
+        };
+        #[cfg(feature = "training-rollout")]
+        {
+            Ok((prepared_ticks, captures))
+        }
+        #[cfg(not(feature = "training-rollout"))]
+        {
+            Ok((prepared_ticks, None))
+        }
     }
 }

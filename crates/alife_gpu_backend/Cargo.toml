@@ -11,6 +11,7 @@ bytemuck.workspace = true
 naga = { version = "29.0.3", features = ["wgsl-in"] }
 pollster.workspace = true
 serde.workspace = true
+tracing.workspace = true
 wgpu.workspace = true
 
 [dev-dependencies]
@@ -21,3 +22,6 @@ default = []
 test-support = []
 gpu-tests = ["test-support"]
 training-rollout = []
+
+[lints]
+workspace = true

@@ -1,5 +1,3 @@
-#![cfg(feature = "gpu-tests")]
-
 use alife_core::{
     BrainCapacityClass, CanonicalDigestBuilder, DecoderHeadKind, OrganismId, ScaffoldContractError,
     SensorProfile,
@@ -10,7 +8,8 @@ use alife_gpu_backend::{
     GPU_CLOSED_LOOP_TICK_READBACK_BYTES,
 };
 
-mod support;
+#[allow(unused_imports)]
+use crate::support;
 
 fn join_u64(words: [u32; 2]) -> u64 {
     u64::from(words[0]) | (u64::from(words[1]) << 32)
@@ -245,7 +244,7 @@ fn pending_transaction_blocks_the_next_frame_until_gpu_discard() {
     );
     let blocked_frame = support::perception_frame_for_profile_at_tick(
         1,
-        2,
+        first_frame.tick().raw() + 1,
         SensorProfile::PrivilegedAffordanceV1,
         false,
         2,
@@ -276,7 +275,7 @@ fn pending_transaction_blocks_the_next_frame_until_gpu_discard() {
 
     let second_frame = support::perception_frame_for_profile_at_tick(
         1,
-        3,
+        first_frame.tick().raw() + 2,
         alife_core::SensorProfile::PrivilegedAffordanceV1,
         false,
         2,
@@ -845,5 +844,224 @@ fn decoder_learning_metadata_uses_absolute_activation_indices() {
         let synapse = &upload.synapse_learning_metadata[metadata.global_synapse_id as usize];
         assert_eq!(metadata.motor_index, synapse.source_neuron);
         assert!(metadata.motor_index < phenotype.neuron_count());
+    }
+}
+
+#[test]
+fn discard_pending_eligibility_batch_clears_selected_rows_and_preserves_siblings() {
+    let mut backend =
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .unwrap();
+    let phenotypes = [
+        support::n512_phenotype(41),
+        support::n512_phenotype(42),
+        support::n512_phenotype(43),
+    ];
+    let handles = phenotypes
+        .iter()
+        .enumerate()
+        .map(|(i, p)| {
+            backend
+                .insert_brain(OrganismId(i as u64 + 1), p.clone())
+                .unwrap()
+        })
+        .collect::<Vec<_>>();
+    let tick0 = alife_core::Tick::new(101);
+    let mut frames = Vec::new();
+    let mut uploads = Vec::new();
+    for (i, (handle, phenotype)) in handles.iter().zip(&phenotypes).enumerate() {
+        let frame = support::perception_frame_for_profile_at_tick(
+            i as u64 + 1,
+            tick0.raw(),
+            SensorProfile::PrivilegedAffordanceV1,
+            i % 2 == 0,
+            2,
+        );
+        let (frame, recall) = support::try_empty_recall(&frame).unwrap();
+        let upload = backend
+            .prepare_memory_context_upload(*handle, &frame, &recall)
+            .unwrap();
+        let physiology = support::test_physiology(i as u64 + 1, phenotype).unwrap();
+        uploads.push(
+            support::bind_chemistry_receptor_effects(upload, phenotype, &physiology, tick0)
+                .unwrap(),
+        );
+        frames.push(frame);
+    }
+    let inputs = handles
+        .iter()
+        .zip(&frames)
+        .zip(&uploads)
+        .map(|((h, f), u)| {
+            alife_gpu_backend::GpuClosedLoopMemoryTickInput::try_new(*h, f, u).unwrap()
+        })
+        .collect();
+    let batch = alife_gpu_backend::GpuClosedLoopMemoryBatchInput::try_new(inputs).unwrap();
+    let outcomes = backend.tick_memory_batch(&batch).unwrap();
+    assert_eq!(outcomes.len(), 3);
+    let ids = outcomes
+        .iter()
+        .map(|o| o.pending_eligibility.identity())
+        .collect::<Vec<_>>();
+    for handle in &handles {
+        assert!(backend.pending_eligibility(*handle).unwrap().is_some());
+    }
+
+    // Mismatched / duplicate batch rejection must leave every resident untouched.
+    assert!(backend
+        .discard_pending_eligibility_batch(&[(handles[0], ids[0]), (handles[0], ids[0])])
+        .is_err());
+    assert!(backend
+        .discard_pending_eligibility_batch(&[(handles[0], ids[0]), (handles[2], ids[0])])
+        .is_err());
+    for handle in &handles {
+        assert!(backend.pending_eligibility(*handle).unwrap().is_some());
+    }
+
+    // Batch discard a subset out of slot order; leave handles[1] pending as sibling.
+    let receipts = backend
+        .discard_pending_eligibility_batch(&[(handles[2], ids[2]), (handles[0], ids[0])])
+        .unwrap();
+    assert_eq!(receipts.len(), 2);
+    assert_eq!(receipts[0].identity, *ids[2]);
+    assert_eq!(receipts[1].identity, *ids[0]);
+    assert!(backend.pending_eligibility(handles[0]).unwrap().is_none());
+    assert_eq!(
+        backend.pending_eligibility(handles[1]).unwrap(),
+        Some(outcomes[1].pending_eligibility)
+    );
+    assert!(backend.pending_eligibility(handles[2]).unwrap().is_none());
+
+    // Discarded slots cleanly accept a subsequent tick while sibling remains pending.
+    let tick1 = alife_core::Tick::new(102);
+    let mut frames1 = Vec::new();
+    let mut uploads1 = Vec::new();
+    for &idx in &[0_usize, 2_usize] {
+        let frame = support::perception_frame_for_profile_at_tick(
+            idx as u64 + 1,
+            tick1.raw(),
+            SensorProfile::PrivilegedAffordanceV1,
+            true,
+            2,
+        );
+        let (frame, recall) = support::try_empty_recall(&frame).unwrap();
+        let upload = backend
+            .prepare_memory_context_upload(handles[idx], &frame, &recall)
+            .unwrap();
+        let physiology = support::test_physiology(idx as u64 + 1, &phenotypes[idx]).unwrap();
+        uploads1.push(
+            support::bind_chemistry_receptor_effects(upload, &phenotypes[idx], &physiology, tick1)
+                .unwrap(),
+        );
+        frames1.push(frame);
+    }
+    let inputs1 = [0_usize, 2_usize]
+        .into_iter()
+        .zip(&frames1)
+        .zip(&uploads1)
+        .map(|((idx, f), u)| {
+            alife_gpu_backend::GpuClosedLoopMemoryTickInput::try_new(handles[idx], f, u).unwrap()
+        })
+        .collect();
+    let batch1 = alife_gpu_backend::GpuClosedLoopMemoryBatchInput::try_new(inputs1).unwrap();
+    let outcomes1 = backend.tick_memory_batch(&batch1).unwrap();
+    let final_receipts = backend
+        .discard_pending_eligibility_batch(&[
+            (handles[1], ids[1]),
+            (handles[0], outcomes1[0].pending_eligibility.identity()),
+            (handles[2], outcomes1[1].pending_eligibility.identity()),
+        ])
+        .unwrap();
+    assert_eq!(final_receipts.len(), 3);
+    for handle in &handles {
+        assert!(backend.pending_eligibility(*handle).unwrap().is_none());
+    }
+}
+
+#[test]
+fn discard_pending_eligibility_batch_isolated_preserves_valid_rows_and_input_order() {
+    let mut backend =
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .unwrap();
+    let phenotypes = [
+        support::n512_phenotype(141),
+        support::n512_phenotype(142),
+        support::n512_phenotype(143),
+    ];
+    let handles = phenotypes
+        .iter()
+        .enumerate()
+        .map(|(i, p)| {
+            backend
+                .insert_brain(OrganismId(i as u64 + 1), p.clone())
+                .unwrap()
+        })
+        .collect::<Vec<_>>();
+    let tick0 = alife_core::Tick::new(201);
+    let mut frames = Vec::new();
+    let mut uploads = Vec::new();
+    for (i, (handle, phenotype)) in handles.iter().zip(&phenotypes).enumerate() {
+        let frame = support::perception_frame_for_profile_at_tick(
+            i as u64 + 1,
+            tick0.raw(),
+            SensorProfile::PrivilegedAffordanceV1,
+            i % 2 == 0,
+            2,
+        );
+        let (frame, recall) = support::try_empty_recall(&frame).unwrap();
+        let upload = backend
+            .prepare_memory_context_upload(*handle, &frame, &recall)
+            .unwrap();
+        let physiology = support::test_physiology(i as u64 + 1, phenotype).unwrap();
+        uploads.push(
+            support::bind_chemistry_receptor_effects(upload, phenotype, &physiology, tick0)
+                .unwrap(),
+        );
+        frames.push(frame);
+    }
+    let inputs = handles
+        .iter()
+        .zip(&frames)
+        .zip(&uploads)
+        .map(|((h, f), u)| {
+            alife_gpu_backend::GpuClosedLoopMemoryTickInput::try_new(*h, f, u).unwrap()
+        })
+        .collect();
+    let batch = alife_gpu_backend::GpuClosedLoopMemoryBatchInput::try_new(inputs).unwrap();
+    let outcomes = backend.tick_memory_batch(&batch).unwrap();
+    let ids = outcomes
+        .iter()
+        .map(|o| *o.pending_eligibility.identity())
+        .collect::<Vec<_>>();
+
+    // Force one rejection for the first valid row (index 1); row 0 has a mismatched identity;
+    // row 2 is valid and must succeed in the same isolated batch.
+    backend.force_discard_rejections_for_test(1);
+    let results = backend.discard_pending_eligibility_batch_isolated(&[
+        (handles[0], ids[1]),
+        (handles[1], ids[1]),
+        (handles[2], ids[2]),
+    ]);
+    assert_eq!(results.len(), 3);
+    assert_eq!(
+        results[0],
+        Err(alife_core::ScaffoldContractError::LearningEvidenceMismatch)
+    );
+    assert_eq!(
+        results[1],
+        Err(alife_core::ScaffoldContractError::LearningEvidenceMismatch)
+    );
+    assert_eq!(results[2].as_ref().unwrap().identity, ids[2]);
+
+    assert!(backend.pending_eligibility(handles[0]).unwrap().is_some());
+    assert!(backend.pending_eligibility(handles[1]).unwrap().is_some());
+    assert!(backend.pending_eligibility(handles[2]).unwrap().is_none());
+
+    let remaining = backend
+        .discard_pending_eligibility_batch_isolated(&[(handles[1], ids[1]), (handles[0], ids[0])]);
+    assert!(remaining[0].is_ok());
+    assert!(remaining[1].is_ok());
+    for handle in &handles {
+        assert!(backend.pending_eligibility(*handle).unwrap().is_none());
     }
 }

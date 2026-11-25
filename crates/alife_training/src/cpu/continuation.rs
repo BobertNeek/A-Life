@@ -22,6 +22,18 @@ type Result<T> = std::result::Result<T, Box<dyn Error>>;
 fn hash(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
+fn current_exe_sha256() -> Option<&'static str> {
+    static DIGEST: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+    DIGEST
+        .get_or_init(|| {
+            let path = std::env::current_exe().ok()?;
+            let mut file = fs::File::open(path).ok()?;
+            let mut hasher = Sha256::new();
+            std::io::copy(&mut file, &mut hasher).ok()?;
+            Some(format!("{:x}", hasher.finalize()))
+        })
+        .as_deref()
+}
 fn asset_digest(asset: &FoundationWeightAsset) -> String {
     asset
         .digest()
@@ -533,7 +545,7 @@ fn collect_cpu_episode_inner(
             let binding: FoundationSerialHandoffBindingV1 = serde_json::from_slice(&binding_bytes)?;
             let pinned = SERIAL_HANDOFF_SOURCE_FILES
                 .into_iter()
-                .map(|name| (name.to_owned(), hash(&source_bytes[name])))
+                .map(|name| (name.to_owned(), source_hashes[name].clone()))
                 .collect();
             binding.validate(&pinned, &hash(&handoff_bytes))?;
             let handoff: FoundationTrainingHandoffV1 = serde_json::from_slice(&handoff_bytes)?;
@@ -582,8 +594,10 @@ fn collect_cpu_episode_inner(
                 {
                     return Err("CPU source changed during typed founder admission".into());
                 }
-                source_hashes.insert(name.clone(), hash(&bytes));
-                source_bytes.insert(name, bytes);
+                if !source_hashes.contains_key(&name) {
+                    source_hashes.insert(name.clone(), hash(&bytes));
+                    source_bytes.insert(name, bytes);
+                }
             }
         }
         if receipt_name == "group50.json"
@@ -915,12 +929,11 @@ pub fn run_cpu_continuation(
     let episode_receipt = episode_receipt.ok_or("collection finalization missing")?;
     let profile = trainer.phenotype().sensor_profile();
     let update_started = Instant::now();
-    let update = train_cpu_residual_cohort(
+    let update = super::cohort::train_cpu_residual_cohort_slice(
         &mut trainer,
         &mut value,
+        &windows,
         windows.len(),
-        windows.len(),
-        |i| Ok(windows[i].clone()),
         config,
         version,
     )?;
@@ -928,10 +941,8 @@ pub fn run_cpu_continuation(
     let trained = trainer.export_candidate(asset.manifest().training_stage())?;
     let (_, next, next_inputs) = compile_game(args.seed, founder_seed, &trained)?;
     trainer.rebind_for_next_cohort(next, trained.clone())?;
-    fs::write(
-        args.output.join("trained.alife-foundation"),
-        trained.encode_canonical()?,
-    )?;
+    let trained_bytes = trained.encode_canonical()?;
+    fs::write(args.output.join("trained.alife-foundation"), &trained_bytes)?;
     // The pinned typed handoff retains the complete compiler inputs. Ordinary
     // serial sources already admit it without a duplicate compiler sidecar.
     let handoff = FoundationTrainingHandoffV1::new(
@@ -941,24 +952,21 @@ pub fn run_cpu_continuation(
         trainer.checkpoint(),
         value.checkpoint(),
     )?;
-    write_json(args.output.join("training-handoff.json"), &handoff)?;
-    write_json(
-        args.output.join("actor-checkpoint.json"),
-        &trainer.checkpoint(),
-    )?;
-    write_json(
-        args.output.join("value-checkpoint.json"),
-        &value.checkpoint(),
-    )?;
+    let handoff_bytes = serde_json::to_vec(&handoff)?;
+    fs::write(args.output.join("training-handoff.json"), &handoff_bytes)?;
+    let actor_bytes = serde_json::to_vec(&trainer.checkpoint())?;
+    fs::write(args.output.join("actor-checkpoint.json"), &actor_bytes)?;
+    let value_bytes = serde_json::to_vec(&value.checkpoint())?;
+    fs::write(args.output.join("value-checkpoint.json"), &value_bytes)?;
     let output_hashes = [
-        "training-handoff.json",
-        "trained.alife-foundation",
-        "actor-checkpoint.json",
-        "value-checkpoint.json",
+        ("training-handoff.json", &handoff_bytes),
+        ("trained.alife-foundation", &trained_bytes),
+        ("actor-checkpoint.json", &actor_bytes),
+        ("value-checkpoint.json", &value_bytes),
     ]
     .into_iter()
-    .map(|name| Ok((name.to_owned(), hash(&fs::read(args.output.join(name))?))))
-    .collect::<Result<BTreeMap<_, _>>>()?;
+    .map(|(name, bytes)| (name.to_owned(), hash(bytes)))
+    .collect::<BTreeMap<_, _>>();
     let ancestry_hashes = source_hashes
         .iter()
         .filter(|(name, _)| {
@@ -992,7 +1000,7 @@ pub fn run_cpu_continuation(
             .unwrap()
             .remove("native_source_receipt_ref");
     }
-    receipt["consumer_build"] = json!({"git_head":option_env!("ALIFE_CONSUMER_GIT_HEAD"),"git_tree":option_env!("ALIFE_CONSUMER_GIT_TREE"),"executable_sha256":std::env::current_exe().ok().and_then(|p| fs::read(p).ok()).map(|bytes| hash(&bytes))});
+    receipt["consumer_build"] = json!({"git_head":option_env!("ALIFE_CONSUMER_GIT_HEAD"),"git_tree":option_env!("ALIFE_CONSUMER_GIT_TREE"),"executable_sha256":current_exe_sha256()});
     receipt["episode"] = episode_receipt.metadata;
     receipt["episode_artifact_sha256"] = json!(episode_hashes);
     receipt["actor_optimizer_updates"] =

@@ -209,12 +209,11 @@ impl AdmittedCpuCollectorCohort {
         {
             return Err(invalid());
         }
-        train_cpu_residual_cohort(
+        super::cohort::train_cpu_residual_cohort_slice(
             trainer,
             value,
-            self.windows.len(),
+            &self.windows,
             effective_batch_size,
-            |i| Ok(self.windows[i].clone()),
             config,
             version,
         )
@@ -255,12 +254,6 @@ pub fn admit_cpu_collector_shards(
         }
     }
     let mut seen = BTreeSet::new();
-    let mut sampling_evidence = BTreeSet::new();
-    let mut cohort = AdmittedCpuCollectorCohort {
-        snapshot: snapshot.clone(),
-        windows: Vec::new(),
-        window_trajectories: Vec::new(),
-    };
     // Canonical execution order is independent of transport arrival order.
     let mut shards = shards;
     shards.sort_by(|a, b| {
@@ -268,24 +261,29 @@ pub fn admit_cpu_collector_shards(
             .collector_run_id
             .cmp(&b.assignment.collector_run_id)
     });
-    for mut shard in shards {
-        shard.validate_seal()?;
+    for shard in &shards {
         if shard.snapshot != snapshot
             || !assignments.contains(&shard.assignment)
             || !seen.insert(shard.assignment.collector_run_id.clone())
         {
             return Err(invalid());
         }
+    }
+    super::parallel_map_indexed(&shards, |_, shard| shard.validate_seal())?;
+    for shard in &mut shards {
         shard
             .trajectories
             .sort_by_key(|t| t.final_record.organism_id().raw());
+    }
+    let shard_windows = super::parallel_map_indexed(&shards, |_, shard| {
         let mut organisms = BTreeSet::new();
         let mut counters = BTreeSet::new();
-        for trajectory in shard.trajectories {
-            let record = trajectory.final_record;
+        let mut traj_windows = Vec::with_capacity(shard.trajectories.len());
+        for trajectory in &shard.trajectories {
+            let record = &trajectory.final_record;
             record.validate_contract()?;
             // Use the same native founder/compiler check as a live CPU host.
-            super::host::validate_record_founder(&record, trainer).map_err(|_| invalid())?;
+            super::host::validate_record_founder(record, trainer).map_err(|_| invalid())?;
             let id = record.organism_id();
             if !organisms.insert(id.raw()) || trajectory.decisions.is_empty() {
                 return Err(invalid());
@@ -314,22 +312,14 @@ pub fn admit_cpu_collector_shards(
                         ..shard.assignment.sampling_counter_end)
                         .contains(&counter)
                     || !counters.insert(counter)
-                    || !sampling_evidence.insert((
-                        shard.assignment.world_seed,
-                        shard.assignment.sampling_seed,
-                        shard.assignment.episode_config_sha256,
-                        counter,
-                    ))
                 {
                     return Err(invalid());
                 }
                 previous_counter = Some(counter);
-                // Include the living bootstrap decision, absent from actor loss.
-                validate_decision(trainer, decision, &record, &shard.assignment, config)?;
             }
             let windows = cpu_training_windows(
                 &trajectory.decisions,
-                (!record.lifecycle().is_alive()).then_some(&record),
+                (!record.lifecycle().is_alive()).then_some(record),
                 trainer,
                 value,
                 record.phenotype(),
@@ -338,22 +328,89 @@ pub fn admit_cpu_collector_shards(
                 window_ticks,
                 burn_in,
             )?;
-            for window in windows {
-                super::cohort::validate_frozen_residual_window(
-                    trainer, value, &window, config, version,
-                )?;
-                cohort.window_trajectories.push(CpuCollectorTrajectoryId {
-                    collector_run_id: shard.assignment.collector_run_id.clone(),
-                    organism_id: id,
-                });
-                cohort.windows.push(window);
-            }
+            traj_windows.push(windows);
         }
         if counters.len() as u64
             != u64::from(shard.assignment.sampling_counter_end)
                 - u64::from(shard.assignment.sampling_counter_start)
         {
             return Err(invalid());
+        }
+        Ok(traj_windows)
+    })?;
+
+    let mut sampling_evidence = BTreeSet::new();
+    let mut total_decisions = 0usize;
+    let mut total_windows = 0usize;
+    for (shard, traj_windows) in shards.iter().zip(&shard_windows) {
+        for (trajectory, windows) in shard.trajectories.iter().zip(traj_windows) {
+            for decision in &trajectory.decisions {
+                let counter = decision.sampling_counter.ok_or_else(invalid)?;
+                if !sampling_evidence.insert((
+                    shard.assignment.world_seed,
+                    shard.assignment.sampling_seed,
+                    shard.assignment.episode_config_sha256,
+                    counter,
+                )) {
+                    return Err(invalid());
+                }
+            }
+            total_decisions += trajectory.decisions.len();
+            total_windows += windows.len();
+        }
+    }
+
+    enum AdmissionTask<'a> {
+        Decision {
+            decision: &'a CpuCollectedDecision,
+            record: &'a WorldOrganismRecord,
+            assignment: &'a CpuCollectorAssignmentV1,
+        },
+        Window(&'a CpuResidualTrainingWindow),
+    }
+
+    let mut tasks = Vec::with_capacity(total_decisions + total_windows);
+    for (shard, traj_windows) in shards.iter().zip(&shard_windows) {
+        for (trajectory, windows) in shard.trajectories.iter().zip(traj_windows) {
+            for decision in &trajectory.decisions {
+                tasks.push(AdmissionTask::Decision {
+                    decision,
+                    record: &trajectory.final_record,
+                    assignment: &shard.assignment,
+                });
+            }
+            for window in windows {
+                tasks.push(AdmissionTask::Window(window));
+            }
+        }
+    }
+    super::parallel_map_indexed(&tasks, |_, task| match task {
+        AdmissionTask::Decision {
+            decision,
+            record,
+            assignment,
+        } => validate_decision(trainer, decision, record, assignment, config),
+        AdmissionTask::Window(window) => {
+            super::cohort::validate_frozen_residual_window(trainer, value, window, config, version)
+        }
+    })?;
+
+    let mut cohort = AdmittedCpuCollectorCohort {
+        snapshot,
+        windows: Vec::with_capacity(total_windows),
+        window_trajectories: Vec::with_capacity(total_windows),
+    };
+    for (shard, traj_windows) in shards.into_iter().zip(shard_windows) {
+        let run_id = shard.assignment.collector_run_id;
+        for (trajectory, windows) in shard.trajectories.into_iter().zip(traj_windows) {
+            let id = trajectory.final_record.organism_id();
+            for window in windows {
+                cohort.window_trajectories.push(CpuCollectorTrajectoryId {
+                    collector_run_id: run_id.clone(),
+                    organism_id: id,
+                });
+                cohort.windows.push(window);
+            }
         }
     }
     Ok(cohort)

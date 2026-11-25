@@ -166,8 +166,8 @@ pub(super) fn project_live_world_to_fvr04_creature_roots(world: &mut World) {
                 for object in pending_newborns {
                     let Some(appearance) = frame.current.organism(object.id).and_then(|row| {
                         world
-                            .get_non_send_resource::<ProductionGpuBrainRuntimeResource>()?
-                            .runtime
+                            .get_resource::<ProductionGpuBrainRuntimeResource>()?
+                            .lock()
                             .creature_appearance(
                                 row.organism_id,
                                 row.genome.id,

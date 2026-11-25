@@ -199,6 +199,7 @@ fn seal_selection(
     let sealed = seal_prepared_selection_core(
         world,
         &mut residents,
+        None,
         0,
         CognitiveWorkCostPolicy::disabled(),
         false,

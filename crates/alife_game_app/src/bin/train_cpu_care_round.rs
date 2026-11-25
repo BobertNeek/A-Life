@@ -26,6 +26,7 @@ fn add_unknown_freshness_context(value: &mut serde_json::Value, known_exclusions
     }
 }
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    alife_game_app::init_headless_tracing();
     // Native checkpoint reconstruction and recurrent PPO need more stack than
     // the Windows executable's main thread. Bound it explicitly as other
     // offline care tools do; RUST_MIN_STACK does not resize the main thread.

@@ -31,6 +31,7 @@ struct TerrainMaterialSlot {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
+    alife_game_app::init_headless_tracing();
     let args = env::args_os().skip(1).collect::<Vec<_>>();
     if args.len() != 3 {
         return Err(

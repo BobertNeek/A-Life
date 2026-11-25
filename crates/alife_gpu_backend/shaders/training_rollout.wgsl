@@ -24,25 +24,32 @@ fn training_sample(header:GpuPerceptionHeader, brain:GpuBrainSlotRecord, factor:
     return frame_payload_words[offset + 4u + factor];
   }
   let temperature = bitcast<f32>(frame_payload_words[offset + 2u]);
+  var weights: array<f32, 32>;
+  var valid_mask = 0u;
   var maximum = -3.402823e38;
   var last = 0xffffffffu;
   for (var index=0u; index<header.candidate_count; index++) {
     if (!training_candidate_allowed(header, brain, index, factor)) { continue; }
-    maximum = max(maximum, load_state_f32(brain.candidate_logit_offset + index));
+    let logit = load_state_f32(brain.candidate_logit_offset + index);
+    weights[index] = logit;
+    valid_mask |= (1u << index);
+    maximum = max(maximum, logit);
     last = index;
   }
   if (last == 0xffffffffu) { return last; }
   var total = 0.0;
   for (var index=0u; index<header.candidate_count; index++) {
-    if (training_candidate_allowed(header, brain, index, factor)) {
-      total += exp((load_state_f32(brain.candidate_logit_offset + index) - maximum) / temperature);
+    if ((valid_mask & (1u << index)) != 0u) {
+      let w = exp((weights[index] - maximum) / temperature);
+      weights[index] = w;
+      total += w;
     }
   }
   let draw_target = training_random(frame_payload_words[offset], frame_payload_words[offset + 1u], factor) * total;
   var cumulative = 0.0;
   for (var index=0u; index<header.candidate_count; index++) {
-    if (training_candidate_allowed(header, brain, index, factor)) {
-      cumulative += exp((load_state_f32(brain.candidate_logit_offset + index) - maximum) / temperature);
+    if ((valid_mask & (1u << index)) != 0u) {
+      cumulative += weights[index];
       if (draw_target < cumulative) { return index; }
     }
   }

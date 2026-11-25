@@ -15,6 +15,7 @@ Both independent experimental arms intentionally use the same recipe seeds.
 Their paired outcomes are descriptive, not a statistical claim of synergy.
 """
 import argparse
+import concurrent.futures
 import copy
 import hashlib
 import json
@@ -22,10 +23,13 @@ import math
 import os
 from pathlib import Path
 import re
+import stat
 import struct
 import subprocess
 import sys
+import threading
 
+import care_host as host
 import grab_food_seed_reservations as seeds
 
 MIB = 1024 * 1024
@@ -480,18 +484,23 @@ def write_new(path, value):
         os.fsync(stream.fileno())
 
 
-def verify_inputs(plan):
-    require(all(file_pin(Path(path)) == pin for path, pin in plan["immutable_files"].items()),
+def verify_inputs(plan, *, pin_fn=file_pin, tree_verify_fn=None, checkout_fn=qualified_checkout):
+    require(all(pin_fn(Path(path)) == pin for path, pin in plan["immutable_files"].items()),
             "pinned recipe/binary/history/helper input changed")
-    require(raw_tree(Path(plan["spec"]["previous"])) == plan["initial_source_tree"], "immutable initial source tree changed")
+    previous = Path(plan["spec"]["previous"])
+    if tree_verify_fn is None:
+        require(raw_tree(previous) == plan["initial_source_tree"], "immutable initial source tree changed")
+    else:
+        require(tree_verify_fn(previous, plan["initial_source_tree"]), "immutable initial source tree changed")
     if plan["known_exclusions"]:
-        require(qualified_checkout() == plan["admission_checkout"], "qualified admission checkout changed")
+        require(checkout_fn() == plan["admission_checkout"], "qualified admission checkout changed")
 
 
-def episode_history(plan, previous, trained, *, ledger=None, snapshot=None):
+def episode_history(plan, previous, trained, *, ledger=None, snapshot=None,
+                    source_pins=None, base_document=None):
     original = Path(plan["spec"]["seed_history"])
-    document = copy.deepcopy(read_json(original, 4 * MIB))
-    document["source_sha256"] = native_pins(previous)
+    document = copy.deepcopy(base_document if base_document is not None else read_json(original, 4 * MIB))
+    document["source_sha256"] = dict(source_pins) if source_pins is not None else native_pins(previous)
     document["consumed_seed_ranges"] = seeds._ranges(document["consumed_seed_ranges"] + [[seed, seed] for seed in trained])
     document["assessment_seeds"] = sorted(set(document["assessment_seeds"]) |
                                            {row["seed"] for row in plan["spec"]["assessments"]})
@@ -517,30 +526,106 @@ class Runner:
         self.logs = self.root / "commands"
         self.logs.mkdir()
         self.calls = 0
+        self._lock = threading.RLock()
+        self._pin_cache = {}
+        self._git_stamp = None
+        self._git_checkout = None
 
-    def guard(self):
-        verify_inputs(self.plan)
-        for path, expected in self.frozen.items():
-            require(raw_tree(path) == expected, f"retained completed source/private artifact changed: {path}")
+    def _cached_file_pin(self, path, *, force=False):
+        target = Path(path)
+        resolved = str(target.resolve())
+        info = target.lstat()
+        require(stat.S_ISREG(info.st_mode), f"regular nonsymlink file required: {target}")
+        stamp = (info.st_mtime_ns, info.st_size, info.st_ino, info.st_dev)
+        if not force:
+            cached = self._pin_cache.get(resolved)
+            if cached is not None and cached[0] == stamp:
+                return cached[1]
+        pin = file_pin(target)
+        self._pin_cache[resolved] = (stamp, pin)
+        return pin
+
+    def _verify_tree(self, root, expected, *, force=False):
+        if force:
+            return raw_tree(root) == expected
+        root = Path(root)
+        require(root.is_dir() and not root.is_symlink(), f"real input directory required: {root}")
+        result, total = {}, 0
+        for directory, directories, files in os.walk(root, followlinks=False):
+            for name in directories:
+                require(not (Path(directory) / name).is_symlink(), "input tree must not contain directory symlinks")
+            for name in sorted(files):
+                path = Path(directory) / name
+                pin = self._cached_file_pin(path, force=False)
+                total += pin["bytes"]
+                require(len(result) < MAX_INPUT_FILES and total <= MAX_INPUT_BYTES,
+                        "input tree exceeds file/byte bound")
+                result[str(path.relative_to(root))] = pin
+        return result == expected
+
+    def _cached_checkout(self, *, force=False):
+        root = Path(__file__).resolve().parent.parent
+        stamp = host.git_checkout_stamp(root)
+        if not force and stamp is not None and self._git_checkout is not None and self._git_stamp == stamp:
+            return self._git_checkout
+        value = qualified_checkout()
+        self._git_stamp = stamp
+        self._git_checkout = value
+        return value
+
+    def guard(self, *, force=False):
+        with self._lock:
+            verify_inputs(
+                self.plan,
+                pin_fn=lambda p: self._cached_file_pin(p, force=force),
+                tree_verify_fn=lambda root, expected: self._verify_tree(root, expected, force=force),
+                checkout_fn=lambda: self._cached_checkout(force=force),
+            )
+            for path, expected in self.frozen.items():
+                require(self._verify_tree(path, expected, force=force),
+                        f"retained completed source/private artifact changed: {path}")
+
+    def record_frozen(self, path, tree):
+        with self._lock:
+            self.frozen[path] = tree
+            root = Path(path)
+            for rel, pin in tree.items():
+                target = root / rel
+                try:
+                    info = target.lstat()
+                except OSError:
+                    continue
+                if stat.S_ISREG(info.st_mode):
+                    stamp = (info.st_mtime_ns, info.st_size, info.st_ino, info.st_dev)
+                    self._pin_cache[str(target.resolve())] = (stamp, pin)
 
     def freeze(self, path):
-        self.frozen[path] = raw_tree(path)
+        self.record_frozen(path, raw_tree(path))
 
-    def command(self, binary, args, cwd, *, prior=True):
-        self.guard()
-        number = f"{self.calls:03d}"
-        self.calls += 1
-        environment = {key: value for key, value in os.environ.items() if not key.startswith("ALIFE_SLM_")}
-        environment.update(ALIFE_SLM_PRIOR="on" if prior else "off", ALIFE_SLM_PRIOR_BACKEND="deterministic")
-        if self.plan["known_exclusions"]:
-            environment = {key: value for key, value in environment.items() if not key.startswith("GIT_")}
-            environment.update(GIT_DIR=self.plan["admission_checkout"]["git_dir"],
-                               GIT_WORK_TREE=self.plan["admission_checkout"]["root"])
-        argv = [str(binary), *map(str, args)]
-        write_new(self.logs / f"{number}.argv.json", {"argv": argv, "cwd": str(cwd),
-                  "prior_environment": {key: value for key, value in environment.items() if key.startswith("ALIFE_SLM_")},
-                  **comparison_context(self.plan)})
-        print(f"comparison command {number}: {Path(binary).name} {args[0]}", file=sys.stderr, flush=True)
+    def reserve_call_number(self):
+        with self._lock:
+            number = self.calls
+            self.calls += 1
+            return number
+
+    def command(self, binary, args, cwd, *, prior=True, call_number=None):
+        with self._lock:
+            self.guard()
+            if call_number is None:
+                call_number = self.calls
+                self.calls += 1
+            number = f"{call_number:03d}"
+            environment = {key: value for key, value in os.environ.items() if not key.startswith("ALIFE_SLM_")}
+            environment.update(ALIFE_SLM_PRIOR="on" if prior else "off", ALIFE_SLM_PRIOR_BACKEND="deterministic")
+            if self.plan["known_exclusions"]:
+                environment = {key: value for key, value in environment.items() if not key.startswith("GIT_")}
+                environment.update(GIT_DIR=self.plan["admission_checkout"]["git_dir"],
+                                   GIT_WORK_TREE=self.plan["admission_checkout"]["root"])
+            argv = [str(binary), *map(str, args)]
+            write_new(self.logs / f"{number}.argv.json", {"argv": argv, "cwd": str(cwd),
+                      "prior_environment": {key: value for key, value in environment.items() if key.startswith("ALIFE_SLM_")},
+                      **comparison_context(self.plan)})
+            print(f"comparison command {number}: {Path(binary).name} {args[0]}", file=sys.stderr, flush=True)
         with (self.logs / f"{number}.stdout.json").open("xb") as out, (self.logs / f"{number}.stderr.log").open("xb") as err:
             completed = subprocess.run(argv, cwd=cwd, env=environment, stdin=subprocess.DEVNULL,
                                        stdout=out, stderr=err, timeout=3600, check=False)
@@ -706,35 +791,65 @@ def f32_config_identity(value):
 def assessments(runner, arms):
     spec = runner.plan["spec"]
     trained = [row["seed"] for rows in spec["rounds"] for row in rows]
-    paired = []
+    base_history = read_json(Path(spec["seed_history"]), 4 * MIB)
+    tasks = []
     for index, assessment in enumerate(spec["assessments"]):
-        pair = dict(assessment)
         for arm, training in arms.items():
-            root = runner.root / arm
-            history = root / "histories" / f"assessment-{index:02d}.json"
-            source = Path(training["final_source"])
-            write_new(history, episode_history(runner.plan, source, trained))
-            output = root / f"assessment-{index:02d}"
-            request = {"previous": str(source), "output": str(output),
-                       "seed_history": str(history), "temperature": spec["temperature"],
-                       "known_exclusions": runner.plan["known_exclusions"], **assessment}
-            recipe = root / f"assessment-{index:02d}-spec.json"
-            write_new(recipe, request)
-            result = runner.command(spec["round_binary"], ["evaluate", "--spec", recipe], root / "process", prior=False)
-            verify_unknown_context(result, runner.plan)
-            receipt = read_json(output / "care-evaluation.json")
-            require(receipt["result"] == result and all(result[key] == assessment[key] for key in assessment),
-                    "heldout receipt/CLI result differs from its requested lesson/seed/dose")
-            require(result["evaluated_decisions"] == assessment["decisions"] and result["bootstrap_decisions"] == 1
-                    and result["teacher_present"] is False and result["teacher_cue_frames"] == 0
-                    and result["semantic_prior_enabled"] is False and result["offline_learning_disabled"] is True
-                    and result["actor_checkpoint_unchanged"] is True and result["value_checkpoint_unchanged"] is True
-                    and result["offline_actor_optimizer_updates"] == result["offline_value_optimizer_updates"] == 0
-                    and result["promotion"] == "none", "evaluation did not retain its heldout/frozen-founder contract")
-            runner.freeze(output)
-            pair[arm] = {"output": str(output), "receipt_sha256": file_pin(output / "care-evaluation.json")["sha256"],
-                         "result": result}
-        paired.append(pair)
+            call_number = runner.reserve_call_number()
+            tasks.append((index, arm, assessment, training, call_number))
+
+    def run_one(task):
+        index, arm, assessment, training, call_number = task
+        root = runner.root / arm
+        history = root / "histories" / f"assessment-{index:02d}.json"
+        source = Path(training["final_source"])
+        write_new(history, episode_history(
+            runner.plan, source, trained,
+            source_pins=training["final_source_sha256"],
+            base_document=base_history,
+        ))
+        output = root / f"assessment-{index:02d}"
+        request = {"previous": str(source), "output": str(output),
+                   "seed_history": str(history), "temperature": spec["temperature"],
+                   "known_exclusions": runner.plan["known_exclusions"], **assessment}
+        recipe = root / f"assessment-{index:02d}-spec.json"
+        write_new(recipe, request)
+        result = runner.command(spec["round_binary"], ["evaluate", "--spec", recipe],
+                                root / "process", prior=False, call_number=call_number)
+        verify_unknown_context(result, runner.plan)
+        receipt = read_json(output / "care-evaluation.json")
+        require(receipt["result"] == result and all(result[key] == assessment[key] for key in assessment),
+                "heldout receipt/CLI result differs from its requested lesson/seed/dose")
+        require(result["evaluated_decisions"] == assessment["decisions"] and result["bootstrap_decisions"] == 1
+                and result["teacher_present"] is False and result["teacher_cue_frames"] == 0
+                and result["semantic_prior_enabled"] is False and result["offline_learning_disabled"] is True
+                and result["actor_checkpoint_unchanged"] is True and result["value_checkpoint_unchanged"] is True
+                and result["offline_actor_optimizer_updates"] == result["offline_value_optimizer_updates"] == 0
+                and result["promotion"] == "none", "evaluation did not retain its heldout/frozen-founder contract")
+        tree = raw_tree(output)
+        receipt_sha256 = tree["care-evaluation.json"]["sha256"]
+        return (index, arm, output, tree,
+                {"output": str(output), "receipt_sha256": receipt_sha256, "result": result})
+
+    if len(tasks) <= 1:
+        outcomes = [run_one(task) for task in tasks]
+    else:
+        max_workers = min(len(tasks), max(1, os.cpu_count() or 1))
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = [executor.submit(run_one, task) for task in tasks]
+            outcomes = []
+            try:
+                for future in futures:
+                    outcomes.append(future.result())
+            except BaseException:
+                for pending in futures:
+                    pending.cancel()
+                raise
+
+    paired = [dict(assessment) for assessment in spec["assessments"]]
+    for index, arm, output, tree, entry in outcomes:
+        runner.record_frozen(output, tree)
+        paired[index][arm] = entry
     return paired
 
 
@@ -748,7 +863,7 @@ def execute(plan):
     runner = Runner(plan)
     arms = {arm: arm_training(runner, arm) for arm in ("cooperative", "serial")}
     paired = assessments(runner, arms)
-    runner.guard()
+    runner.guard(force=True)
     report = {"schema": 1, "kind": "cpu-care-matched-comparison", "complete": True,
               "plan_sha256": plan["plan_sha256"], "initial_source": plan["spec"]["previous"],
               "initial_source_sha256": plan["initial_source_sha256"], "initial_fixture": plan["initial_fixture"],

@@ -1,7 +1,9 @@
 //! Immutable per-owner CPU preparation, bounded to one scoped child and its caller.
 use super::*;
 use alife_gpu_backend::{GpuBrainSlot, GpuClosedLoopError};
+use std::collections::VecDeque;
 use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::sync::{Arc, Condvar, Mutex, OnceLock};
 
 pub(super) struct CapturedCpuPreparation {
     pub approximate_cache:
@@ -51,7 +53,7 @@ pub(super) struct CpuPreparationOutcome {
 // No worker may request, poll or consume a hint, including serial spawn fallback.
 pub(super) fn preparation_worker_count(rows: usize, available: usize) -> usize {
     if rows >= 8 && available >= 2 {
-        2
+        available.min(rows)
     } else {
         1
     }
@@ -78,13 +80,13 @@ fn prepare_cpu_row(job: &CpuPreparationJob<'_>, measure: bool) -> CpuPreparation
         return super::approximate_cognition::prepare_row(job, measure);
     }
     let input = job.input;
-    let shared = alife_runtime::canonical_preparation::CanonicalPreparationInput {
-        draft: input.draft.clone(),
+    let shared = alife_runtime::canonical_preparation::CanonicalPreparationInputRef {
+        draft: &input.draft,
         sequence_id: input.sequence_id,
         homeostasis: input.homeostasis,
         hysteresis: input.hysteresis,
         policy: input.policy,
-        neural_receptors: input.neural_receptors.clone(),
+        neural_receptors: &input.neural_receptors,
         receptor_effects: input.receptor_effects,
     };
     let Some(memory) = job.memory else {
@@ -114,7 +116,7 @@ fn prepare_cpu_row(job: &CpuPreparationJob<'_>, measure: bool) -> CpuPreparation
             timing: Default::default(),
         };
     };
-    let outcome = alife_runtime::canonical_preparation::prepare_canonical_frame(
+    let outcome = alife_runtime::canonical_preparation::prepare_canonical_frame_borrowed(
         &shared, memory, topology, predictor, measure,
     );
     let mut timing = outcome.timing;
@@ -159,10 +161,284 @@ fn prepare_cpu_row(job: &CpuPreparationJob<'_>, measure: bool) -> CpuPreparation
 // Faults exist only in CPU tests, without environment switches or live hooks.
 #[cfg(test)]
 #[derive(Default)]
-struct PreparationFaults {
+pub(super) struct PreparationFaults {
     spawn_failure: bool,
     panic_row: Option<usize>,
     visits: Vec<std::sync::atomic::AtomicUsize>,
+}
+
+struct PoolTask {
+    func: Box<dyn FnOnce() + Send + 'static>,
+    completion: Arc<BatchCompletion>,
+}
+
+struct PoolState {
+    queue: VecDeque<PoolTask>,
+    shutdown: bool,
+}
+
+struct PoolInner {
+    state: Mutex<PoolState>,
+    worker_cv: Condvar,
+}
+
+struct BatchCompletion {
+    remaining: Mutex<usize>,
+    done: Condvar,
+}
+
+struct InFlightGuard {
+    completion: Arc<BatchCompletion>,
+}
+
+impl Drop for InFlightGuard {
+    fn drop(&mut self) {
+        let mut remaining = self
+            .completion
+            .remaining
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
+        while *remaining > 0 {
+            remaining = self
+                .completion
+                .done
+                .wait(remaining)
+                .unwrap_or_else(|poison| poison.into_inner());
+        }
+    }
+}
+
+struct TaskCompletionGuard(Arc<BatchCompletion>);
+
+impl Drop for TaskCompletionGuard {
+    fn drop(&mut self) {
+        let mut remaining = self
+            .0
+            .remaining
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
+        *remaining -= 1;
+        if *remaining == 0 {
+            self.0.done.notify_all();
+        }
+    }
+}
+
+pub(super) struct CpuPreparationPool {
+    inner: Arc<PoolInner>,
+    workers: Mutex<Vec<thread::JoinHandle<()>>>,
+}
+
+impl CpuPreparationPool {
+    pub(super) fn new() -> Self {
+        Self {
+            inner: Arc::new(PoolInner {
+                state: Mutex::new(PoolState {
+                    queue: VecDeque::new(),
+                    shutdown: false,
+                }),
+                worker_cv: Condvar::new(),
+            }),
+            workers: Mutex::new(Vec::new()),
+        }
+    }
+
+    fn worker_loop(inner: Arc<PoolInner>) {
+        loop {
+            let task = {
+                let mut state = inner
+                    .state
+                    .lock()
+                    .unwrap_or_else(|poison| poison.into_inner());
+                loop {
+                    if let Some(task) = state.queue.pop_front() {
+                        break task;
+                    }
+                    if state.shutdown {
+                        return;
+                    }
+                    state = inner
+                        .worker_cv
+                        .wait(state)
+                        .unwrap_or_else(|poison| poison.into_inner());
+                }
+            };
+            let _done = TaskCompletionGuard(task.completion);
+            let _ = catch_unwind(AssertUnwindSafe(task.func));
+        }
+    }
+
+    fn ensure_workers(&self, needed: usize) -> usize {
+        let mut workers = self
+            .workers
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
+        while workers.len() < needed {
+            let inner = Arc::clone(&self.inner);
+            match thread::Builder::new()
+                .name("alife-cpu-preparation".into())
+                .spawn(move || Self::worker_loop(inner))
+            {
+                Ok(handle) => workers.push(handle),
+                Err(_) => break,
+            }
+        }
+        workers.len()
+    }
+
+    #[cfg(test)]
+    pub(super) fn worker_count(&self) -> usize {
+        self.workers
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner())
+            .len()
+    }
+
+    pub(super) fn prepare_rows(
+        &self,
+        jobs: &[CpuPreparationJob<'_>],
+        workers: usize,
+        measure: bool,
+        #[cfg(test)] faults: &PreparationFaults,
+    ) -> Result<Vec<CpuPreparationOutcome>, ScaffoldContractError> {
+        let compute = |rows: &[CpuPreparationJob<'_>], offset: usize| {
+            rows.iter()
+                .enumerate()
+                .map(|(index, row)| {
+                    #[cfg(test)]
+                    {
+                        if let Some(visits) = faults.visits.get(offset + index) {
+                            visits.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        }
+                        assert_ne!(
+                            faults.panic_row,
+                            Some(offset + index),
+                            "injected CPU preparation panic"
+                        );
+                    }
+                    #[cfg(not(test))]
+                    let _ = (index, offset);
+                    prepare_cpu_row(row, measure)
+                })
+                .collect::<Vec<_>>()
+        };
+
+        catch_unwind(AssertUnwindSafe(|| {
+            let requested_chunks = workers.min(jobs.len());
+            if requested_chunks < 2 {
+                return Ok(compute(jobs, 0));
+            }
+            #[cfg(test)]
+            let forced_spawn_failure = faults.spawn_failure;
+            #[cfg(not(test))]
+            let forced_spawn_failure = false;
+            if forced_spawn_failure {
+                return Ok(compute(jobs, 0));
+            }
+            let available_workers = self.ensure_workers(requested_chunks - 1);
+            if available_workers == 0 {
+                return Ok(compute(jobs, 0));
+            }
+            let effective_chunks = (available_workers + 1).min(jobs.len());
+            let base = jobs.len() / effective_chunks;
+            let rem = jobs.len() % effective_chunks;
+            let mut chunk_slices: Vec<(usize, &[CpuPreparationJob<'_>])> =
+                Vec::with_capacity(effective_chunks);
+            let mut start = 0_usize;
+            for chunk_idx in 0..effective_chunks {
+                let len = base + usize::from(chunk_idx < rem);
+                chunk_slices.push((start, &jobs[start..start + len]));
+                start += len;
+            }
+
+            let mut chunk_results: Vec<Option<Result<Vec<CpuPreparationOutcome>, ()>>> =
+                (0..effective_chunks).map(|_| None).collect();
+            let (first_slot, worker_slots) = chunk_results.split_at_mut(1);
+            let (first_offset, first_rows) = chunk_slices[0];
+
+            let completion = Arc::new(BatchCompletion {
+                remaining: Mutex::new(worker_slots.len()),
+                done: Condvar::new(),
+            });
+            let mut tasks = Vec::with_capacity(worker_slots.len());
+            for ((offset, rows), slot) in chunk_slices[1..].iter().copied().zip(worker_slots) {
+                let task: Box<dyn FnOnce() + Send + '_> = Box::new(move || {
+                    let result =
+                        catch_unwind(AssertUnwindSafe(|| compute(rows, offset))).map_err(|_| ());
+                    *slot = Some(result);
+                });
+                // SAFETY: `guard` (`InFlightGuard`) below waits in `Drop` until
+                // `completion.remaining == 0`. Every worker moves `task` into
+                // `catch_unwind` and drops it before `TaskCompletionGuard::drop`
+                // decrements `completion.remaining`. Therefore all references
+                // captured by `task` (`rows`, `slot`, `faults`) strictly outlive
+                // any worker access, even if chunk 0 panics or unwinds.
+                let erased: Box<dyn FnOnce() + Send + 'static> =
+                    unsafe { std::mem::transmute(task) };
+                tasks.push(PoolTask {
+                    func: erased,
+                    completion: Arc::clone(&completion),
+                });
+            }
+
+            let guard = InFlightGuard {
+                completion: Arc::clone(&completion),
+            };
+            {
+                let mut state = self
+                    .inner
+                    .state
+                    .lock()
+                    .unwrap_or_else(|poison| poison.into_inner());
+                state.queue.extend(tasks);
+                self.inner.worker_cv.notify_all();
+            }
+
+            first_slot[0] = Some(
+                catch_unwind(AssertUnwindSafe(|| compute(first_rows, first_offset)))
+                    .map_err(|_| ()),
+            );
+            drop(guard);
+
+            let mut output = Vec::with_capacity(jobs.len());
+            for slot in chunk_results {
+                match slot {
+                    Some(Ok(rows)) => output.extend(rows),
+                    Some(Err(())) | None => {
+                        return Err(ScaffoldContractError::InvalidDecisionEvidence);
+                    }
+                }
+            }
+            Ok(output)
+        }))
+        .map_err(|_| ScaffoldContractError::InvalidDecisionEvidence)?
+    }
+}
+
+impl Drop for CpuPreparationPool {
+    fn drop(&mut self) {
+        {
+            let mut state = self
+                .inner
+                .state
+                .lock()
+                .unwrap_or_else(|poison| poison.into_inner());
+            state.shutdown = true;
+            self.inner.worker_cv.notify_all();
+        }
+        let mut workers = self
+            .workers
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
+        for handle in workers.drain(..) {
+            let _ = handle.join();
+        }
+    }
+}
+
+fn global_cpu_preparation_pool() -> &'static CpuPreparationPool {
+    static POOL: OnceLock<CpuPreparationPool> = OnceLock::new();
+    POOL.get_or_init(CpuPreparationPool::new)
 }
 
 pub(super) fn prepare_cpu_rows(
@@ -185,69 +461,13 @@ fn prepare_cpu_rows_inner(
     measure: bool,
     #[cfg(test)] faults: &PreparationFaults,
 ) -> Result<Vec<CpuPreparationOutcome>, ScaffoldContractError> {
-    let compute = |rows: &[CpuPreparationJob<'_>], offset: usize| {
-        rows.iter()
-            .enumerate()
-            .map(|(index, row)| {
-                #[cfg(test)]
-                {
-                    if let Some(visits) = faults.visits.get(offset + index) {
-                        visits.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                    }
-                    assert_ne!(
-                        faults.panic_row,
-                        Some(offset + index),
-                        "injected CPU preparation panic"
-                    );
-                }
-                #[cfg(not(test))]
-                let _ = (index, offset);
-                prepare_cpu_row(row, measure)
-            })
-            .collect::<Vec<_>>()
-    };
-    // Both halves borrow retained inputs. A failed spawn drops no captured
-    // draft/hint; fallback computes each row once and never repeats housekeeping.
-    catch_unwind(AssertUnwindSafe(|| {
-        if workers < 2 || jobs.len() < 2 {
-            return Ok(compute(jobs, 0));
-        }
-        thread::scope(|scope| {
-            let split = jobs.len().div_ceil(2);
-            let (left, right) = jobs.split_at(split);
-            #[cfg(test)]
-            let forced_spawn_failure = faults.spawn_failure;
-            #[cfg(not(test))]
-            let forced_spawn_failure = false;
-            let child = if forced_spawn_failure {
-                Err(std::io::Error::other(
-                    "injected CPU preparation spawn failure",
-                ))
-            } else {
-                thread::Builder::new()
-                    .name("alife-cpu-preparation".into())
-                    .spawn_scoped(scope, move || {
-                        catch_unwind(AssertUnwindSafe(|| compute(right, split)))
-                    })
-            };
-            match child {
-                Err(_) => Ok(compute(jobs, 0)),
-                Ok(child) => {
-                    let left = catch_unwind(AssertUnwindSafe(|| compute(left, 0)));
-                    // Always join, including a panic on the calling thread.
-                    let right = child
-                        .join()
-                        .map_err(|_| ScaffoldContractError::InvalidDecisionEvidence)?
-                        .map_err(|_| ScaffoldContractError::InvalidDecisionEvidence)?;
-                    let mut output =
-                        left.map_err(|_| ScaffoldContractError::InvalidDecisionEvidence)?;
-                    output.extend(right);
-                    Ok(output)
-                }
-            }
-        })
-    }))
-    .map_err(|_| ScaffoldContractError::InvalidDecisionEvidence)?
+    global_cpu_preparation_pool().prepare_rows(
+        jobs,
+        workers,
+        measure,
+        #[cfg(test)]
+        faults,
+    )
 }
 
 #[cfg(test)]

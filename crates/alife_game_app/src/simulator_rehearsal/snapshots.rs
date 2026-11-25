@@ -28,7 +28,7 @@ pub(super) fn attach_durable(
     }
     let exact = capture_exact(runtime, output, assets)?;
     let published = crate::GpuDurableSaveManifest::publish_snapshot(&path, assets, &exact)?;
-    if published.save != exact {
+    if *published.save != exact {
         return Err("rehearsal durable publication changed exact state".into());
     }
     runtime.rebind_durable_checkpoint_boundary(&path, assets, &exact)?;

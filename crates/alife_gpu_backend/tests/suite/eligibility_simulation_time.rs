@@ -3,7 +3,7 @@
 use alife_gpu_backend::{CLOSED_LOOP_ELIGIBILITY_WGSL, CLOSED_LOOP_PLASTICITY_WGSL};
 
 const TIME_PROBE: &str = r#"
-@group(0) @binding(7) var<storage,read_write> time_probe:array<f32>;
+@group(0) @binding(8) var<storage,read_write> time_probe:array<f32>;
 @compute @workgroup_size(1)
 fn probe_simulation_time() {
   time_probe[0] = eligibility_decay_for_ticks(0.95,vec2<u32>(0u,0u));
@@ -180,7 +180,7 @@ fn simulation_time_real_gpu_probe_preserves_reference_decay_and_attenuates_delay
             label: Some("simulation-time-helper-bindings"),
             layout: &pipeline.get_bind_group_layout(0),
             entries: &[wgpu::BindGroupEntry {
-                binding: 7,
+                binding: 8,
                 resource: output.as_entire_binding(),
             }],
         });

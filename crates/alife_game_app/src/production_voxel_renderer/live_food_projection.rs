@@ -23,6 +23,20 @@ pub(super) fn care_object_center(
     ground + Vec3::Y * (height + 0.30)
 }
 
+#[derive(Default)]
+pub(super) struct CareObjectAssets {
+    meshes: Option<(Handle<Mesh>, Handle<Mesh>)>,
+    materials: BTreeMap<([u32; 3], u32), Handle<StandardMaterial>>,
+}
+
+fn normalized_f32_bits(value: f32) -> u32 {
+    if value == 0.0 {
+        0.0_f32.to_bits()
+    } else {
+        value.to_bits()
+    }
+}
+
 #[allow(
     clippy::too_many_arguments,
     reason = "Bevy injects independent ECS system parameters."
@@ -34,7 +48,7 @@ pub(super) fn sync_care_objects(
     surface: Res<creature_grounding::RenderedTerrainSurface>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    mut assets: Local<Option<(Handle<Mesh>, Handle<Mesh>)>>,
+    mut assets: Local<CareObjectAssets>,
     mut object_entities: Query<(Entity, &LiveCareObject, &mut Transform)>,
 ) {
     let Some(frame) = frame else {
@@ -58,7 +72,10 @@ pub(super) fn sync_care_objects(
     let translation = |position| care_object_center(position, highlands.is_some(), &surface);
     for (entity, marker, mut transform) in &mut object_entities {
         if let Some(object) = objects.remove(&marker.0.raw()) {
-            transform.translation = translation(object.position);
+            let next = translation(object.position);
+            if transform.translation != next {
+                transform.translation = next;
+            }
         } else {
             commands.entity(entity).despawn();
         }
@@ -66,19 +83,38 @@ pub(super) fn sync_care_objects(
     if objects.is_empty() {
         return;
     }
-    let (sphere, station) = assets.get_or_insert_with(|| {
-        (
-            meshes.add(Sphere::new(1.0).mesh().uv(16, 12)),
-            meshes.add(Cuboid::new(2.0, 2.0, 2.0)),
-        )
-    });
+    let (sphere, station) = assets
+        .meshes
+        .get_or_insert_with(|| {
+            (
+                meshes.add(Sphere::new(1.0).mesh().uv(16, 12)),
+                meshes.add(Cuboid::new(2.0, 2.0, 2.0)),
+            )
+        })
+        .clone();
     for (id, object) in objects {
         let physical = object.grounded_physical;
-        let material = materials.add(StandardMaterial {
-            base_color: Color::srgb(physical.color[0], physical.color[1], physical.color[2]),
-            perceptual_roughness: physical.material[0].clamp(0.05, 1.0),
-            ..default()
-        });
+        let color = [physical.color[0], physical.color[1], physical.color[2]];
+        let roughness = physical.material[0].clamp(0.05, 1.0);
+        let key = (
+            [
+                normalized_f32_bits(color[0]),
+                normalized_f32_bits(color[1]),
+                normalized_f32_bits(color[2]),
+            ],
+            normalized_f32_bits(roughness),
+        );
+        let material = assets
+            .materials
+            .entry(key)
+            .or_insert_with(|| {
+                materials.add(StandardMaterial {
+                    base_color: Color::srgb(color[0], color[1], color[2]),
+                    perceptual_roughness: roughness,
+                    ..default()
+                })
+            })
+            .clone();
         let shape = Vec3::new(physical.shape[0], physical.shape[1], physical.shape[2]) * 0.3
             + Vec3::splat(0.1);
         commands
@@ -159,8 +195,10 @@ pub(super) fn align_carried_care_objects(
         // Hearthling heading follows world yaw directly; retain the world's grip
         // offset and existing object height, correcting only the smoothed X/Z.
         let position = world_position_for_render(object.position, false) + offset;
-        transform.translation.x = position.x;
-        transform.translation.z = position.z;
+        if transform.translation.x != position.x || transform.translation.z != position.z {
+            transform.translation.x = position.x;
+            transform.translation.z = position.z;
+        }
     }
 }
 
@@ -213,7 +251,7 @@ mod tests {
                     .unwrap();
             app.world_mut()
                 .resource_mut::<LiveBrainPresentationFrameResource>()
-                .current = moved;
+                .current = std::sync::Arc::new(moved);
             app.update();
             assert!(query
                 .iter(app.world())
@@ -223,7 +261,7 @@ mod tests {
                 LiveBrainPresentationFrame::try_new(Vec::new(), world.tick(), objects).unwrap();
             app.world_mut()
                 .resource_mut::<LiveBrainPresentationFrameResource>()
-                .current = consumed;
+                .current = std::sync::Arc::new(consumed);
             app.update();
             assert_eq!(query.iter(app.world()).count(), 0);
             assert_eq!(
@@ -303,7 +341,7 @@ mod tests {
                             .unwrap();
                     app.world_mut()
                         .resource_mut::<LiveBrainPresentationFrameResource>()
-                        .current = frame;
+                        .current = std::sync::Arc::new(frame);
                     app.update();
                     let mut query = app.world_mut().query::<(&LiveCareObject, &Transform)>();
                     let (marker, transform) = query.single(app.world()).unwrap();
@@ -541,11 +579,12 @@ mod tests {
             .unwrap();
         let mut objects = world.object_snapshots();
         objects[2].carried_by = Some(OrganismId(11));
-        let frame =
-            LiveBrainPresentationFrame::try_new(Vec::new(), world.tick(), objects.clone()).unwrap();
+        let frame = std::sync::Arc::new(
+            LiveBrainPresentationFrame::try_new(Vec::new(), world.tick(), objects.clone()).unwrap(),
+        );
         let mut app = App::new();
         app.insert_resource(LiveBrainPresentationFrameResource {
-            previous: frame.clone(),
+            previous: std::sync::Arc::clone(&frame),
             current: frame,
         })
         .insert_resource(creature_grounding::RenderedTerrainSurface::from_meshes(
@@ -614,8 +653,9 @@ mod tests {
             .authoritative_world_tick;
         app.world_mut()
             .resource_mut::<LiveBrainPresentationFrameResource>()
-            .current =
-            LiveBrainPresentationFrame::try_new(Vec::new(), tick, objects.to_vec()).unwrap();
+            .current = std::sync::Arc::new(
+            LiveBrainPresentationFrame::try_new(Vec::new(), tick, objects.to_vec()).unwrap(),
+        );
     }
 
     fn alignment_objects() -> Vec<alife_world::WorldObject> {
@@ -645,11 +685,12 @@ mod tests {
         objects: &[alife_world::WorldObject],
         reverse_care_order: bool,
     ) -> (App, Vec<Entity>) {
-        let frame =
-            LiveBrainPresentationFrame::try_new(Vec::new(), Tick(17), objects.to_vec()).unwrap();
+        let frame = std::sync::Arc::new(
+            LiveBrainPresentationFrame::try_new(Vec::new(), Tick(17), objects.to_vec()).unwrap(),
+        );
         let mut app = App::new();
         app.insert_resource(LiveBrainPresentationFrameResource {
-            previous: frame.clone(),
+            previous: std::sync::Arc::clone(&frame),
             current: frame,
         })
         .init_resource::<CarrierOffsetScanCounts>()

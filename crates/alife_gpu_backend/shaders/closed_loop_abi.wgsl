@@ -87,7 +87,7 @@ struct GpuDecoderFamilyRecord {
   weight_index_start:u32, weight_index_count:u32, reserved0:u32, reserved1:u32,
 }
 struct GpuDecoderWeightIndexRecord {
-  global_synapse_id:u32, input_lane:u32, motor_index:u32, reserved0:u32,
+  global_synapse_id:u32, packed_lane_motor:u32,
 }
 struct GpuCandidateMemoryRecord {
   @align(16) candidate_index:u32, target_confidence:f32, family_confidence:f32, source_counts_packed:u32,
@@ -204,7 +204,7 @@ struct GpuFastPlasticityCommitRecord {
 struct GpuReplaySynapseSpanRecord {
   local_synapse_id:u32, sample_start:u32, sample_count:u32, reserved:u32,
 }
-struct GpuWeightBankBases { lifetime:u32, fast:u32, }
+struct GpuWeightBankBases { lifetime:u32, fast:u32, effective:u32, }
 struct GpuEligibilityBankBases { recurrent:u32, decoder:u32, }
 struct GpuWeightBankPair {
   active_bases:GpuWeightBankBases, staging_bases:GpuWeightBankBases,
@@ -219,7 +219,8 @@ struct GpuEligibilityBankPair {
 @group(0) @binding(3) var<storage, read> immutable_weight_words: array<u32>;
 @group(0) @binding(4) var<storage, read> dispatch_header_words: array<u32>;
 @group(0) @binding(5) var<storage, read_write> frame_payload_words: array<u32>;
-@group(0) @binding(6) var<storage, read_write> mutable_state_words: array<atomic<u32>>;
+@group(0) @binding(6) var<storage, read_write> mutable_state_words: array<u32>;
+@group(0) @binding(7) var<storage, read_write> atomic_state_words: array<atomic<u32>>;
 
 fn load_encoder_plan(base:u32) -> GpuEncoderPlanRecord {
   return GpuEncoderPlanRecord(immutable_plan_words[base],immutable_plan_words[base+1u],immutable_plan_words[base+2u],immutable_plan_words[base+3u],immutable_plan_words[base+4u],immutable_plan_words[base+5u],immutable_plan_words[base+6u],immutable_plan_words[base+7u]);
@@ -243,7 +244,7 @@ fn load_decoder_family(base:u32) -> GpuDecoderFamilyRecord {
   return GpuDecoderFamilyRecord(immutable_plan_words[base],immutable_plan_words[base+1u],immutable_plan_words[base+2u],immutable_plan_words[base+3u],immutable_plan_words[base+4u],immutable_plan_words[base+5u],immutable_plan_words[base+6u],immutable_plan_words[base+7u]);
 }
 fn load_decoder_weight_index(base:u32) -> GpuDecoderWeightIndexRecord {
-  return GpuDecoderWeightIndexRecord(immutable_plan_words[base],immutable_plan_words[base+1u],immutable_plan_words[base+2u],immutable_plan_words[base+3u]);
+  return GpuDecoderWeightIndexRecord(immutable_plan_words[base],immutable_plan_words[base+1u]);
 }
 fn load_memory_context_header(base:u32) -> GpuMemoryContextHeader {
   return GpuMemoryContextHeader(
@@ -298,13 +299,19 @@ fn load_perception_header(base:u32) -> GpuPerceptionHeader {
 fn load_candidate(base:u32) -> GpuCandidateRecord {
   return GpuCandidateRecord(dispatch_header_words[base],dispatch_header_words[base+1u],dispatch_header_words[base+2u],dispatch_header_words[base+3u],dispatch_header_words[base+4u],dispatch_header_words[base+5u],dispatch_header_words[base+6u],dispatch_header_words[base+7u]);
 }
-fn load_state_u32(base:u32) -> u32 { return atomicLoad(&mutable_state_words[base]); }
-fn store_state_u32(base:u32, value:u32) { atomicStore(&mutable_state_words[base], value); }
+fn load_state_u32(base:u32) -> u32 { return mutable_state_words[base]; }
+fn store_state_u32(base:u32, value:u32) { mutable_state_words[base] = value; }
 fn load_state_f32(base:u32) -> f32 { return bitcast<f32>(load_state_u32(base)); }
 fn store_state_f32(base:u32, value:f32) { store_state_u32(base, bitcast<u32>(value)); }
+fn load_atomic_u32(base:u32) -> u32 { return atomicLoad(&atomic_state_words[base]); }
+fn store_atomic_u32(base:u32, value:u32) { atomicStore(&atomic_state_words[base], value); }
 fn canonicalize_state_zero(value:f32) -> f32 { return select(value,0.0,value==0.0); }
 fn state_span_within(start:u32, count:u32) -> bool {
   let limit = arrayLength(&mutable_state_words);
+  return start <= limit && count <= limit - start;
+}
+fn atomic_span_within(start:u32, count:u32) -> bool {
+  let limit = arrayLength(&atomic_state_words);
   return start <= limit && count <= limit - start;
 }
 fn plan_span_within(start:u32, count:u32) -> bool {
@@ -436,9 +443,12 @@ fn active_weight_bases(
   learning:GpuSlotLearningStateRecord,
 ) -> GpuWeightBankBases {
   let bank_1 = learning.active_weight_bank == 1u;
+  let eff_0 = brain.reserved[2];
+  let eff_1 = eff_0 + (extension.fast_bank_1_offset - brain.fast_weight_offset);
   return GpuWeightBankBases(
     select(brain.lifetime_weight_offset, extension.lifetime_bank_1_offset, bank_1),
-    select(brain.fast_weight_offset, extension.fast_bank_1_offset, bank_1)
+    select(brain.fast_weight_offset, extension.fast_bank_1_offset, bank_1),
+    select(eff_0, eff_1, bank_1)
   );
 }
 fn inactive_weight_bases(
@@ -447,9 +457,12 @@ fn inactive_weight_bases(
   learning:GpuSlotLearningStateRecord,
 ) -> GpuWeightBankBases {
   let bank_1 = learning.active_weight_bank == 0u;
+  let eff_0 = brain.reserved[2];
+  let eff_1 = eff_0 + (extension.fast_bank_1_offset - brain.fast_weight_offset);
   return GpuWeightBankBases(
     select(brain.lifetime_weight_offset, extension.lifetime_bank_1_offset, bank_1),
-    select(brain.fast_weight_offset, extension.fast_bank_1_offset, bank_1)
+    select(brain.fast_weight_offset, extension.fast_bank_1_offset, bank_1),
+    select(eff_0, eff_1, bank_1)
   );
 }
 fn active_eligibility_bases(
@@ -486,14 +499,18 @@ fn load_weight_bank_pair_direct(brain:GpuBrainSlotRecord) -> GpuWeightBankPair {
   let lifetime_bank_1 = load_state_u32(extension_base + 11u);
   let learning_base = load_state_u32(extension_base + 15u);
   let bank_1_active = load_state_u32(learning_base + 1u) == 1u;
+  let eff_0 = brain.reserved[2];
+  let eff_1 = eff_0 + (fast_bank_1 - brain.fast_weight_offset);
   return GpuWeightBankPair(
     GpuWeightBankBases(
       select(brain.lifetime_weight_offset, lifetime_bank_1, bank_1_active),
-      select(brain.fast_weight_offset, fast_bank_1, bank_1_active)
+      select(brain.fast_weight_offset, fast_bank_1, bank_1_active),
+      select(eff_0, eff_1, bank_1_active)
     ),
     GpuWeightBankBases(
       select(brain.lifetime_weight_offset, lifetime_bank_1, !bank_1_active),
-      select(brain.fast_weight_offset, fast_bank_1, !bank_1_active)
+      select(brain.fast_weight_offset, fast_bank_1, !bank_1_active),
+      select(eff_0, eff_1, !bank_1_active)
     )
   );
 }
@@ -564,14 +581,24 @@ fn validate_slice_a_slot(slot_index:u32, header:GpuPerceptionHeader) -> bool {
     && header.active_activation_side <= 1u
     && slot.extension_record_offset != 0xffffffffu
     && state_span_within(slot.extension_record_offset, 20u)
-    && valid_joint_motor_mode(slot.reserved[0]) && slot.reserved[1] == 0u && slot.reserved[2] == 0u
+    && valid_joint_motor_mode(slot.reserved[0])
+    && (slot.reserved[1] == 0xffffffffu
+      || (slot.synapse_count >= slot.recurrent_synapse_count
+        && slot.reserved[1] <= slot.synapse_count - slot.recurrent_synapse_count
+        && 1024u <= (slot.synapse_count - slot.recurrent_synapse_count) - slot.reserved[1]))
+    && slot.reserved[2] > slot.fast_weight_offset
+    && state_span_within(slot.reserved[2], slot.synapse_count)
     && (header.dispatch_generation_lo != 0u || header.dispatch_generation_hi != 0u)
     && selector_span_valid;
   if (!valid) { return false; }
   let extension = load_slot_extension(slot);
   valid = extension.schema_version == GPU_CLOSED_LOOP_LAYOUT_VERSION
+    && extension.fast_bank_1_offset >= slot.fast_weight_offset
+    && state_span_within(slot.reserved[2] + (extension.fast_bank_1_offset - slot.fast_weight_offset), slot.synapse_count)
     && extension.reserved0 != 0xffffffffu
-    && state_span_within(extension.reserved0, 4u)
+    && atomic_span_within(extension.reserved0, 4u)
+    && atomic_span_within(slot.diagnostic_offset, 4u)
+    && atomic_span_within(slot.selection_offset, GPU_SELECTION_RECORD_WORDS)
     && extension.reserved1 != 0xffffffffu
     && plan_span_within(extension.reserved1, 1u)
     && state_span_within(extension.learning_state_offset, 24u)

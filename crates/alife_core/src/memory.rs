@@ -166,6 +166,14 @@ impl PreparedMemoryRecall {
         draft: &PerceptionFrameDraft,
     ) -> Result<Vec<crate::FinalizedMemoryAttentionEvidence>, ScaffoldContractError> {
         self.validate_for_draft(draft)?;
+        self.attention_evidence()
+    }
+
+    /// Derive predecision attention evidence from an already-validated recall
+    /// without re-validating and re-encoding the originating draft.
+    pub fn attention_evidence(
+        &self,
+    ) -> Result<Vec<crate::FinalizedMemoryAttentionEvidence>, ScaffoldContractError> {
         let mut evidence = Vec::with_capacity(self.candidate_queries.len());
         for (query, candidate) in self.candidate_queries.iter().zip(&self.context.candidates) {
             evidence.push(
@@ -473,9 +481,9 @@ mod sidecar;
 
 pub use sidecar::{
     MemoryCompactionCheckpoint, MemoryCompactionIdentity, MemoryCompactionPhase,
-    MemoryCompactionReceipt, MemorySidecarState, MemoryUpdateKind, MemoryUpdateReceipt,
-    PortableMemoryBankAssetV2, PortableMemoryRecordV2, PreparedMemoryCompaction,
-    PORTABLE_MEMORY_BANK_ASSET_SCHEMA_VERSION,
+    MemoryCompactionReceipt, MemoryObservationUndo, MemorySidecarState, MemoryUpdateKind,
+    MemoryUpdateReceipt, PortableMemoryBankAssetV2, PortableMemoryRecordV2,
+    PreparedMemoryCompaction, PORTABLE_MEMORY_BANK_ASSET_SCHEMA_VERSION,
 };
 
 mod candidate_index;
@@ -887,6 +895,33 @@ impl<'de> Deserialize<'de> for MemoryBank {
     }
 }
 
+#[derive(Debug)]
+enum BankUndoMutation {
+    Ignore,
+    Merge {
+        memory_id: MemoryId,
+        old: CandidateMemoryRecordV2,
+    },
+    Insert {
+        memory_id: MemoryId,
+    },
+    EvictAndInsert {
+        removed: CandidateMemoryRecordV2,
+        inserted_id: MemoryId,
+    },
+}
+
+#[derive(Debug)]
+pub(crate) struct MemoryBankObservationUndo {
+    organism_id_raw: u64,
+    input_generation: u64,
+    previous_next_memory_id: u64,
+    previous_merge_count: u64,
+    previous_eviction_count: u64,
+    previous_last_sequence: Option<u64>,
+    mutation: BankUndoMutation,
+}
+
 impl MemoryBank {
     pub fn new(config: MemoryBankConfig) -> Result<Self, ScaffoldContractError> {
         config.validate_contract()?;
@@ -993,8 +1028,16 @@ impl MemoryBank {
             target_counts[slot] += 1;
             family_counts[slot][usize::from(candidate.family.raw())] += 1;
         }
-        let mut target_cache = std::collections::BTreeMap::new();
-        let mut family_cache = std::collections::BTreeMap::new();
+        type TargetCacheEntry = (
+            (TargetMemoryBucketKey, [u32; 66]),
+            (u16, candidate_recall::TargetRecallResult),
+        );
+        type FamilyCacheEntry = (
+            (MemoryBucketKey, [u32; crate::MEMORY_QUERY_V2_FEATURE_COUNT]),
+            (u16, candidate_recall::FamilyRecallResult),
+        );
+        let mut target_cache: Vec<TargetCacheEntry> = Vec::new();
+        let mut family_cache: Vec<FamilyCacheEntry> = Vec::new();
         let mut candidate_queries = Vec::with_capacity(draft.candidates().len());
         let mut candidate_contexts = Vec::with_capacity(draft.candidates().len());
         let mut candidate_receipts = Vec::with_capacity(draft.candidates().len());
@@ -1013,10 +1056,12 @@ impl MemoryBank {
                 .then(|| (target_bucket.clone(), target_recall_features(&query)));
             let family_cache_key = (family_counts[slot][usize::from(candidate.family.raw())] > 1)
                 .then(|| (family_bucket.clone(), query.features().map(f32::to_bits)));
-            let (target, target_reused_from) = match target_cache_key
-                .as_ref()
-                .and_then(|key| target_cache.get(key))
-            {
+            let (target, target_reused_from) = match target_cache_key.as_ref().and_then(|key| {
+                target_cache
+                    .iter()
+                    .find(|(cached_key, _)| cached_key == key)
+                    .map(|(_, value)| value)
+            }) {
                 Some((index, result)) => (Clone::clone(result), Some(*index)),
                 None => {
                     let result =
@@ -1030,15 +1075,17 @@ impl MemoryBank {
                     }
                     similarity_evaluations = similarity_evaluations.saturating_add(result.searched);
                     if let Some(key) = target_cache_key {
-                        target_cache.insert(key, (candidate.candidate_index, result.clone()));
+                        target_cache.push((key, (candidate.candidate_index, result.clone())));
                     }
                     (result, None)
                 }
             };
-            let (family, family_reused_from) = match family_cache_key
-                .as_ref()
-                .and_then(|key| family_cache.get(key))
-            {
+            let (family, family_reused_from) = match family_cache_key.as_ref().and_then(|key| {
+                family_cache
+                    .iter()
+                    .find(|(cached_key, _)| cached_key == key)
+                    .map(|(_, value)| value)
+            }) {
                 Some((index, result)) => (Clone::clone(result), Some(*index)),
                 None => {
                     let result =
@@ -1050,7 +1097,7 @@ impl MemoryBank {
                     );
                     similarity_evaluations = similarity_evaluations.saturating_add(result.searched);
                     if let Some(key) = family_cache_key {
-                        family_cache.insert(key, (candidate.candidate_index, result.clone()));
+                        family_cache.push((key, (candidate.candidate_index, result.clone())));
                     }
                     (result, None)
                 }
@@ -1142,25 +1189,175 @@ impl MemoryBank {
         Ok(prepared)
     }
 
+    pub fn recall_routed_from_baseline(
+        &self,
+        routed_draft: &PerceptionFrameDraft,
+        baseline: &PreparedMemoryRecall,
+        novelty_changed: bool,
+    ) -> Result<PreparedMemoryRecall, ScaffoldContractError> {
+        self.config.validate_contract()?;
+        if self.len != 0 {
+            return Err(ScaffoldContractError::MemoryModeConflict);
+        }
+        routed_draft
+            .validate_contract()
+            .map_err(|_| ScaffoldContractError::InvalidMemoryQuery)?;
+        let profile = routed_draft.profile_provenance().identity();
+        if baseline.receipt.runtime_approximate
+            || baseline.receipt.input_generation != self.candidate_store.generation
+            || baseline.receipt.organism_id_raw != routed_draft.organism_id().raw()
+            || baseline.context.tick != routed_draft.tick()
+            || baseline.context.profile != profile
+            || baseline.context.candidates.len() != routed_draft.candidates().len()
+            || (novelty_changed && !self.candidate_store.records.is_empty())
+        {
+            return self.recall_frame(routed_draft);
+        }
+        if routed_draft.base_digest() == baseline.base_frame_digest {
+            let mut reused = baseline.clone();
+            reused.cognitive_context = None;
+            return Ok(reused);
+        }
+
+        let candidate_count = routed_draft.candidates().len();
+        let mut used = vec![false; candidate_count];
+        let mut candidate_queries = Vec::with_capacity(candidate_count);
+        let mut candidate_contexts = Vec::with_capacity(candidate_count);
+        let mut candidate_receipts = Vec::with_capacity(candidate_count);
+        let mut degradations = Vec::new();
+        let mut target_first_new: Vec<Option<u16>> = vec![None; candidate_count];
+        let mut family_first_new: Vec<Option<u16>> = vec![None; candidate_count];
+
+        for candidate in routed_draft.candidates() {
+            let query = MemoryQueryEncoderV2::encode_validated_candidate(routed_draft, candidate)?;
+            let Some(old_idx) = (0..candidate_count).find(|&idx| {
+                if used[idx] {
+                    return false;
+                }
+                let old_q = &baseline.candidate_queries[idx];
+                old_q.action_id() == query.action_id()
+                    && old_q.action_kind() == query.action_kind()
+                    && old_q.action_family() == query.action_family()
+                    && old_q.tracked_object_id() == query.tracked_object_id()
+                    && old_q.candidate_feature_digest() == query.candidate_feature_digest()
+                    && old_q.features()[11].to_bits() == query.features()[11].to_bits()
+            }) else {
+                return self.recall_frame(routed_draft);
+            };
+            used[old_idx] = true;
+
+            let mut context = baseline.context.candidates[old_idx];
+            context.candidate_index = candidate.candidate_index;
+            candidate_contexts.push(context);
+
+            let old_receipt = &baseline.receipt.candidates[old_idx];
+            let old_target_root = old_receipt.target_reused_from.map_or(old_idx, usize::from);
+            let target_reused_from = match target_first_new[old_target_root] {
+                Some(first) => Some(first),
+                None => {
+                    target_first_new[old_target_root] = Some(candidate.candidate_index);
+                    None
+                }
+            };
+            let old_family_root = old_receipt.family_reused_from.map_or(old_idx, usize::from);
+            let family_reused_from = match family_first_new[old_family_root] {
+                Some(first) => Some(first),
+                None => {
+                    family_first_new[old_family_root] = Some(candidate.candidate_index);
+                    None
+                }
+            };
+
+            if old_receipt.target_eligible > old_receipt.target_searched {
+                degradations.push(MemoryRecallDegradation::SearchShortlisted {
+                    candidate_index: candidate.candidate_index,
+                    channel: MemoryRecallChannel::TargetLatent,
+                    eligible: old_receipt.target_eligible,
+                    searched: old_receipt.target_searched,
+                });
+            }
+            if old_receipt.family_eligible > old_receipt.family_searched {
+                degradations.push(MemoryRecallDegradation::SearchShortlisted {
+                    candidate_index: candidate.candidate_index,
+                    channel: MemoryRecallChannel::FamilyValue,
+                    eligible: old_receipt.family_eligible,
+                    searched: old_receipt.family_searched,
+                });
+            }
+
+            candidate_receipts.push(CandidateMemoryRecallReceipt {
+                candidate_index: candidate.candidate_index,
+                query_digest: query.canonical_digest(),
+                target_bucket: old_receipt.target_bucket,
+                family_bucket: old_receipt.family_bucket,
+                target_eligible: old_receipt.target_eligible,
+                target_searched: old_receipt.target_searched,
+                target_matches: old_receipt.target_matches,
+                family_eligible: old_receipt.family_eligible,
+                family_searched: old_receipt.family_searched,
+                family_matches: old_receipt.family_matches,
+                target_reused_from,
+                family_reused_from,
+            });
+            candidate_queries.push(query);
+        }
+
+        let context =
+            EpisodicRetrievalContextV1::new(routed_draft.tick(), profile, candidate_contexts)?;
+        let encoded_context = context.to_perception_context_block()?;
+        let context_digest = encoded_context.canonical_digest();
+        let receipt = MemoryRecallReceipt {
+            runtime_approximate: false,
+            schema_version: MEMORY_RECALL_SCHEMA_VERSION,
+            organism_id_raw: routed_draft.organism_id().raw(),
+            input_generation: self.candidate_store.generation,
+            bank_digest: baseline.receipt.bank_digest,
+            base_frame_digest: routed_draft.base_digest(),
+            context_digest,
+            candidate_count: u16::try_from(candidate_count)
+                .map_err(|_| ScaffoldContractError::InvalidMemoryQuery)?,
+            exact_bucket_reads: baseline.receipt.exact_bucket_reads,
+            neighbor_bucket_reads: baseline.receipt.neighbor_bucket_reads,
+            similarity_evaluations: baseline.receipt.similarity_evaluations,
+            candidates: candidate_receipts,
+            degradations,
+        };
+        receipt.validate_contract()?;
+        let prepared = PreparedMemoryRecall {
+            context,
+            encoded_context,
+            candidate_queries,
+            base_frame_digest: routed_draft.base_digest(),
+            receipt,
+            cognitive_context: None,
+            social_recognition: baseline.social_recognition.clone(),
+        };
+        #[cfg(debug_assertions)]
+        prepared.validate_for_draft(routed_draft)?;
+        Ok(prepared)
+    }
+
     pub fn observe_sealed_patch(
         &mut self,
         patch: &ExperiencePatch,
     ) -> Result<MemoryUpdateReceipt, ScaffoldContractError> {
-        self.observe_sealed_patch_impl(patch, false)
+        self.observe_sealed_patch_with_undo_impl(patch, false)
+            .map(|(receipt, _)| receipt)
     }
 
     pub fn observe_sealed_patch_runtime(
         &mut self,
         patch: &ExperiencePatch,
     ) -> Result<MemoryUpdateReceipt, ScaffoldContractError> {
-        self.observe_sealed_patch_impl(patch, true)
+        self.observe_sealed_patch_with_undo_impl(patch, true)
+            .map(|(receipt, _)| receipt)
     }
 
-    fn observe_sealed_patch_impl(
+    pub(crate) fn observe_sealed_patch_with_undo_impl(
         &mut self,
         patch: &ExperiencePatch,
         runtime: bool,
-    ) -> Result<MemoryUpdateReceipt, ScaffoldContractError> {
+    ) -> Result<(MemoryUpdateReceipt, MemoryBankObservationUndo), ScaffoldContractError> {
         if !runtime {
             patch.validate_contract()?;
         }
@@ -1380,31 +1577,29 @@ impl MemoryBank {
         let previous_merge_count = self.candidate_store.merge_count;
         let previous_eviction_count = self.candidate_store.eviction_count;
 
-        match &plan {
-            MutationPlan::Ignore => {}
+        let mutation_undo = match plan {
+            MutationPlan::Ignore => BankUndoMutation::Ignore,
             MutationPlan::Merge {
                 memory_id,
                 old,
                 merged,
                 merge_count,
             } => {
-                self.candidate_store.remove_record_from_indices(old);
-                self.candidate_store
-                    .records
-                    .insert(memory_id.raw(), merged.clone());
-                self.candidate_store.insert_record_into_indices(*memory_id);
-                self.candidate_store.merge_count = *merge_count;
+                self.candidate_store.remove_record_from_indices(&old);
+                self.candidate_store.records.insert(memory_id.raw(), merged);
+                self.candidate_store.insert_record_into_indices(memory_id);
+                self.candidate_store.merge_count = merge_count;
+                BankUndoMutation::Merge { memory_id, old }
             }
             MutationPlan::Insert {
                 record,
                 next_memory_id,
             } => {
-                self.candidate_store
-                    .records
-                    .insert(record.memory_id.raw(), record.clone());
-                self.candidate_store
-                    .insert_record_into_indices(record.memory_id);
-                self.candidate_store.next_memory_id = *next_memory_id;
+                let memory_id = record.memory_id;
+                self.candidate_store.records.insert(memory_id.raw(), record);
+                self.candidate_store.insert_record_into_indices(memory_id);
+                self.candidate_store.next_memory_id = next_memory_id;
+                BankUndoMutation::Insert { memory_id }
             }
             MutationPlan::EvictAndInsert {
                 removed,
@@ -1412,23 +1607,37 @@ impl MemoryBank {
                 next_memory_id,
                 eviction_count,
             } => {
+                let inserted_id = record.memory_id;
                 self.candidate_store
                     .records
                     .remove(&removed.memory_id.raw());
-                self.candidate_store.remove_record_from_indices(removed);
+                self.candidate_store.remove_record_from_indices(&removed);
                 self.candidate_store
                     .records
-                    .insert(record.memory_id.raw(), record.clone());
-                self.candidate_store
-                    .insert_record_into_indices(record.memory_id);
-                self.candidate_store.next_memory_id = *next_memory_id;
-                self.candidate_store.eviction_count = *eviction_count;
+                    .insert(inserted_id.raw(), record);
+                self.candidate_store.insert_record_into_indices(inserted_id);
+                self.candidate_store.next_memory_id = next_memory_id;
+                self.candidate_store.eviction_count = eviction_count;
+                BankUndoMutation::EvictAndInsert {
+                    removed,
+                    inserted_id,
+                }
             }
-        }
+        };
+        self.candidate_store.invalidate_digest_cache();
         self.candidate_store.generation = output_generation;
         self.candidate_store
             .last_sequence_by_organism
             .insert(organism_id_raw, sequence_raw);
+        let undo = MemoryBankObservationUndo {
+            organism_id_raw,
+            input_generation,
+            previous_next_memory_id,
+            previous_merge_count,
+            previous_eviction_count,
+            previous_last_sequence,
+            mutation: mutation_undo,
+        };
 
         let digest_result = if runtime {
             Ok(self.runtime_generation_binding(OrganismId(organism_id_raw)))
@@ -1438,47 +1647,12 @@ impl MemoryBank {
         let after_digest = match digest_result {
             Ok(digest) => digest,
             Err(error) => {
-                self.candidate_store.generation = input_generation;
-                self.candidate_store.next_memory_id = previous_next_memory_id;
-                self.candidate_store.merge_count = previous_merge_count;
-                self.candidate_store.eviction_count = previous_eviction_count;
-                match previous_last_sequence {
-                    Some(sequence) => {
-                        self.candidate_store
-                            .last_sequence_by_organism
-                            .insert(organism_id_raw, sequence);
-                    }
-                    None => {
-                        self.candidate_store
-                            .last_sequence_by_organism
-                            .remove(&organism_id_raw);
-                    }
-                }
-                match &plan {
-                    MutationPlan::Ignore => {}
-                    MutationPlan::Merge { memory_id, old, .. } => {
-                        self.candidate_store
-                            .records
-                            .insert(memory_id.raw(), old.clone());
-                    }
-                    MutationPlan::Insert { record, .. } => {
-                        self.candidate_store.records.remove(&record.memory_id.raw());
-                    }
-                    MutationPlan::EvictAndInsert {
-                        removed, record, ..
-                    } => {
-                        self.candidate_store.records.remove(&record.memory_id.raw());
-                        self.candidate_store
-                            .records
-                            .insert(removed.memory_id.raw(), removed.clone());
-                    }
-                }
-                self.candidate_store.rebuild_indices();
+                self.undo_observation(undo);
                 return Err(error);
             }
         };
 
-        Ok(MemoryUpdateReceipt {
+        let receipt = MemoryUpdateReceipt {
             runtime_approximate: runtime,
             sealed_sequence_id: patch.header().sequence_id,
             organism_id_raw,
@@ -1493,7 +1667,56 @@ impl MemoryBank {
             eviction_count: self.candidate_store.eviction_count,
             before_digest,
             after_digest,
-        })
+        };
+        Ok((receipt, undo))
+    }
+
+    pub(crate) fn undo_observation(&mut self, undo: MemoryBankObservationUndo) {
+        self.candidate_store.generation = undo.input_generation;
+        self.candidate_store.next_memory_id = undo.previous_next_memory_id;
+        self.candidate_store.merge_count = undo.previous_merge_count;
+        self.candidate_store.eviction_count = undo.previous_eviction_count;
+        match undo.previous_last_sequence {
+            Some(sequence) => {
+                self.candidate_store
+                    .last_sequence_by_organism
+                    .insert(undo.organism_id_raw, sequence);
+            }
+            None => {
+                self.candidate_store
+                    .last_sequence_by_organism
+                    .remove(&undo.organism_id_raw);
+            }
+        }
+        match undo.mutation {
+            BankUndoMutation::Ignore => {}
+            BankUndoMutation::Merge { memory_id, old } => {
+                if let Some(merged) = self.candidate_store.records.remove(&memory_id.raw()) {
+                    self.candidate_store.remove_record_from_indices(&merged);
+                }
+                self.candidate_store.records.insert(memory_id.raw(), old);
+                self.candidate_store.insert_record_into_indices(memory_id);
+            }
+            BankUndoMutation::Insert { memory_id } => {
+                if let Some(inserted) = self.candidate_store.records.remove(&memory_id.raw()) {
+                    self.candidate_store.remove_record_from_indices(&inserted);
+                }
+            }
+            BankUndoMutation::EvictAndInsert {
+                removed,
+                inserted_id,
+            } => {
+                if let Some(inserted) = self.candidate_store.records.remove(&inserted_id.raw()) {
+                    self.candidate_store.remove_record_from_indices(&inserted);
+                }
+                let removed_id = removed.memory_id;
+                self.candidate_store
+                    .records
+                    .insert(removed_id.raw(), removed);
+                self.candidate_store.insert_record_into_indices(removed_id);
+            }
+        }
+        self.candidate_store.invalidate_digest_cache();
     }
 
     fn compact_candidate_records(
@@ -1608,6 +1831,7 @@ impl MemoryBank {
             .map_err(|_| ScaffoldContractError::ScalarOutOfRange)?;
         folded.truncate(keep);
         folded.sort_by_key(|record| (record.last_tick.raw(), record.memory_id.raw()));
+        self.candidate_store.invalidate_digest_cache();
         self.candidate_store.records = folded
             .into_iter()
             .map(|record| (record.memory_id.raw(), record))
@@ -1622,6 +1846,7 @@ impl MemoryBank {
             .eviction_count
             .checked_add(u64::from(evicted_count))
             .ok_or(ScaffoldContractError::ScalarOutOfRange)?;
+        self.candidate_store.invalidate_digest_cache();
         self.candidate_store.generation = output_generation;
         self.candidate_store.rebuild_indices();
         let output_digest = self.candidate_store.digest(self.config.capacity)?;

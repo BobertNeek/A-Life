@@ -199,6 +199,147 @@ pub fn cpu_training_windows(
     }
     Ok(windows)
 }
+const PARALLEL_WINDOW_CHUNK: usize = 32;
+
+fn validate_residual_cohort_inputs(
+    trainer: &CpuFoundationTrainer,
+    value: &CpuValueHead,
+    window_count: usize,
+    effective_batch_size: usize,
+    config: PpoConfig,
+    version: u64,
+) -> Result<(), TrainingError> {
+    config.validate()?;
+    if window_count == 0
+        || effective_batch_size == 0
+        || config.value_coefficient <= 0.
+        || value.checkpoint().feature_count != trainer.phenotype().neuron_count()
+        || value
+            .checkpoint()
+            .last_updated_policy_version
+            .is_some_and(|v| version <= v)
+    {
+        return Err(super::invalid());
+    }
+    Ok(())
+}
+
+type ResidualWindowGradients = (Vec<f32>, Vec<f32>, Vec<f32>);
+
+fn evaluate_and_backward_residual_window(
+    trainer: &CpuFoundationTrainer,
+    value: &CpuValueHead,
+    w: &CpuResidualTrainingWindow,
+    config: PpoConfig,
+    version: u64,
+) -> Result<ResidualWindowGradients, TrainingError> {
+    let ((adjoints, objectives, _replayed), tape) =
+        super::objective::evaluate_window_with_tape(trainer, &w.actor, config, version)?;
+    validate_residual_window(w, None, config)?;
+    let probe =
+        trainer.backward_with_tape(&w.actor.sequence, &tape, &adjoints, &w.actor.speech_targets)?;
+    drop(tape);
+    let (_, critic_parts) =
+        value.residual_gradients(&w.critic_features, &w.critic_rows, config.value_coefficient)?;
+    let kls = objectives.into_iter().map(|o| o.approximate_kl).collect();
+    Ok((probe.gradients, critic_parts, kls))
+}
+
+pub(super) fn train_cpu_residual_cohort_slice(
+    trainer: &mut CpuFoundationTrainer,
+    value: &mut CpuValueHead,
+    windows: &[CpuResidualTrainingWindow],
+    effective_batch_size: usize,
+    config: PpoConfig,
+    version: u64,
+) -> Result<PpoUpdateReceipt, TrainingError> {
+    train_cpu_residual_cohort_slice_with_threads(
+        trainer,
+        value,
+        windows,
+        effective_batch_size,
+        config,
+        version,
+        usize::MAX,
+    )
+}
+
+pub(super) fn train_cpu_residual_cohort_slice_with_threads(
+    trainer: &mut CpuFoundationTrainer,
+    value: &mut CpuValueHead,
+    windows: &[CpuResidualTrainingWindow],
+    effective_batch_size: usize,
+    config: PpoConfig,
+    version: u64,
+    max_threads: usize,
+) -> Result<PpoUpdateReceipt, TrainingError> {
+    let window_count = windows.len();
+    validate_residual_cohort_inputs(
+        trainer,
+        value,
+        window_count,
+        effective_batch_size,
+        config,
+        version,
+    )?;
+    let counts = super::parallel_map_indexed_with_limit(windows, max_threads, |_, w| {
+        validate_frozen_residual_window(trainer, value, w, config, version)?;
+        Ok(w.actor.batch.len())
+    })?;
+    let mut receipt = PpoUpdateReceipt {
+        collection_policy_version: version,
+        completed_epochs: 0,
+        stopped_for_kl: false,
+        mean_kl_before_updates: Vec::new(),
+        actor_optimizer_step: trainer.optimizer_step(),
+        value_optimizer_step: value.checkpoint().optimizer_step,
+    };
+    for _ in 0..config.epochs {
+        for start in (0..window_count).step_by(effective_batch_size) {
+            let end = (start + effective_batch_size).min(window_count);
+            let total = counts[start..end].iter().sum::<usize>();
+            let mut gradient = vec![0.; trainer.weights().len()];
+            let mut vg = vec![0.; value.checkpoint().feature_count as usize + 1];
+            let mut kl = 0.;
+            for chunk_start in (start..end).step_by(PARALLEL_WINDOW_CHUNK) {
+                let chunk_end = (chunk_start + PARALLEL_WINDOW_CHUNK).min(end);
+                let chunk = &windows[chunk_start..chunk_end];
+                let results =
+                    super::parallel_map_indexed_with_limit(chunk, max_threads, |_, w| {
+                        evaluate_and_backward_residual_window(trainer, value, w, config, version)
+                    })?;
+                for (w, (actor_parts, critic_parts, kls)) in chunk.iter().zip(results) {
+                    let scale = w.actor.batch.len() as f32 / total as f32;
+                    for (g, part) in gradient.iter_mut().zip(actor_parts) {
+                        *g += part * scale;
+                    }
+                    for (g, part) in vg.iter_mut().zip(critic_parts) {
+                        *g += part * scale;
+                    }
+                    for o_kl in kls {
+                        kl += o_kl / total as f32;
+                    }
+                }
+            }
+            super::finite(&gradient)?;
+            super::finite(&vg)?;
+            super::finite(&[kl])?;
+            receipt.mean_kl_before_updates.push(kl);
+            if kl > config.target_kl {
+                receipt.stopped_for_kl = true;
+                return Ok(receipt);
+            }
+            let next = value.proposal(&vg, config.value_optimizer, version)?;
+            trainer.apply_gradients(&gradient)?;
+            *value = next;
+            receipt.actor_optimizer_step = trainer.optimizer_step();
+            receipt.value_optimizer_step = value.checkpoint().optimizer_step;
+        }
+        receipt.completed_epochs += 1;
+    }
+    Ok(receipt)
+}
+
 /// One actor update and one full residual critic Adam update per effective batch.
 /// Every window's frozen probabilities and actual features are checked before
 /// the first mutation. Tape memory is bounded by one window.
@@ -215,23 +356,26 @@ pub fn train_cpu_residual_cohort<F>(
 where
     F: FnMut(usize) -> Result<CpuResidualTrainingWindow, TrainingError>,
 {
-    config.validate()?;
-    if window_count == 0
-        || effective_batch_size == 0
-        || config.value_coefficient <= 0.
-        || value.checkpoint().feature_count != trainer.phenotype().neuron_count()
-        || value
-            .checkpoint()
-            .last_updated_policy_version
-            .is_some_and(|v| version <= v)
-    {
-        return Err(super::invalid());
-    }
-    let mut counts = Vec::new();
-    for i in 0..window_count {
-        let w = load(i)?;
-        validate_frozen_residual_window(trainer, value, &w, config, version)?;
-        counts.push(w.actor.batch.len());
+    validate_residual_cohort_inputs(
+        trainer,
+        value,
+        window_count,
+        effective_batch_size,
+        config,
+        version,
+    )?;
+    let mut counts = Vec::with_capacity(window_count);
+    for chunk_start in (0..window_count).step_by(PARALLEL_WINDOW_CHUNK) {
+        let chunk_end = (chunk_start + PARALLEL_WINDOW_CHUNK).min(window_count);
+        let mut chunk = Vec::with_capacity(chunk_end - chunk_start);
+        for i in chunk_start..chunk_end {
+            chunk.push(load(i)?);
+        }
+        let chunk_counts = super::parallel_map_indexed_with_limit(&chunk, usize::MAX, |_, w| {
+            validate_frozen_residual_window(trainer, value, w, config, version)?;
+            Ok(w.actor.batch.len())
+        })?;
+        counts.extend(chunk_counts);
     }
     let mut receipt = PpoUpdateReceipt {
         collection_policy_version: version,
@@ -248,33 +392,31 @@ where
             let mut gradient = vec![0.; trainer.weights().len()];
             let mut vg = vec![0.; value.checkpoint().feature_count as usize + 1];
             let mut kl = 0.;
-            for (i, &count) in counts.iter().enumerate().take(end).skip(start) {
-                let w = load(i)?;
-                if w.actor.batch.len() != count {
-                    return Err(super::invalid());
+            for chunk_start in (start..end).step_by(PARALLEL_WINDOW_CHUNK) {
+                let chunk_end = (chunk_start + PARALLEL_WINDOW_CHUNK).min(end);
+                let mut chunk = Vec::with_capacity(chunk_end - chunk_start);
+                for (i, &count) in counts.iter().enumerate().take(chunk_end).skip(chunk_start) {
+                    let w = load(i)?;
+                    if w.actor.batch.len() != count {
+                        return Err(super::invalid());
+                    }
+                    chunk.push(w);
                 }
-                let (adjoints, objectives, _replayed) =
-                    super::objective::evaluate_window(trainer, &w.actor, config, version)?;
-                validate_residual_window(&w, None, config)?;
-                let probe = trainer.probe_replay_gradients_with_speech(
-                    &w.actor.sequence,
-                    &adjoints,
-                    &w.actor.speech_targets,
-                )?;
-                let scale = count as f32 / total as f32;
-                for (g, part) in gradient.iter_mut().zip(probe.gradients) {
-                    *g += part * scale;
-                }
-                let (_, parts) = value.residual_gradients(
-                    &w.critic_features,
-                    &w.critic_rows,
-                    config.value_coefficient,
-                )?;
-                for (g, part) in vg.iter_mut().zip(parts) {
-                    *g += part * scale;
-                }
-                for o in objectives {
-                    kl += o.approximate_kl / total as f32;
+                let results =
+                    super::parallel_map_indexed_with_limit(&chunk, usize::MAX, |_, w| {
+                        evaluate_and_backward_residual_window(trainer, value, w, config, version)
+                    })?;
+                for (w, (actor_parts, critic_parts, kls)) in chunk.iter().zip(results) {
+                    let scale = w.actor.batch.len() as f32 / total as f32;
+                    for (g, part) in gradient.iter_mut().zip(actor_parts) {
+                        *g += part * scale;
+                    }
+                    for (g, part) in vg.iter_mut().zip(critic_parts) {
+                        *g += part * scale;
+                    }
+                    for o_kl in kls {
+                        kl += o_kl / total as f32;
+                    }
                 }
             }
             super::finite(&gradient)?;
@@ -360,4 +502,244 @@ fn validate_residual_window(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod determinism_tests {
+    use super::*;
+    use crate::{
+        PpoBatch, PpoBoundary, PpoTrainingWindow, PpoTransition, PpoValueHeadCheckpoint,
+        StageTrainableMask, TrainingInitialState, TrainingReplayCandidate, TrainingReplayTick,
+        TrainingSequence,
+    };
+    use alife_core::{
+        BrainCapacityClass, BrainGenome, CandidateActionFamily, DendriticBranch,
+        DendriticBranchSet, DendriticInputRef, DevelopmentState, FoundationWeightAsset,
+        NormalizedScalar, PhenotypeCompiler, SensorProfile, Tick,
+    };
+
+    #[test]
+    fn parallel_residual_cohort_matches_single_threaded_bit_for_bit() {
+        let capacity = BrainCapacityClass::n2048();
+        let genome = BrainGenome::scaffold(0x7A11, capacity.id());
+        let development =
+            DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(0.8).unwrap());
+        let source =
+            FoundationWeightAsset::builtin_n2048_v1(SensorProfile::GroundedObjectSlotsV1).unwrap();
+        let p = PhenotypeCompiler::compile_from_foundation_asset(
+            &genome,
+            &capacity,
+            &development,
+            SensorProfile::GroundedObjectSlotsV1,
+            &source,
+        )
+        .unwrap();
+        let mask = StageTrainableMask::from_synapse_indices(
+            &p,
+            &(0..p.synapses().len() as u32).collect::<Vec<_>>(),
+        )
+        .unwrap();
+        let make_trainer = || {
+            CpuFoundationTrainer::new(
+                p.clone(),
+                source.clone(),
+                mask.clone(),
+                crate::AdamWConfig::default(),
+            )
+            .unwrap()
+        };
+        let make_value = || {
+            CpuValueHead::from_checkpoint(PpoValueHeadCheckpoint {
+                feature_count: p.neuron_count(),
+                optimizer_step: 42,
+                parameters: vec![0.; (p.neuron_count() as usize + 1) * 3],
+                last_updated_policy_version: Some(7399),
+            })
+            .unwrap()
+        };
+        let mut t_seq = make_trainer();
+        let mut v_seq = make_value();
+        let mut t_par = make_trainer();
+        let mut v_par = make_value();
+
+        let n = p.neuron_count() as usize;
+        let config = PpoConfig {
+            epochs: 2,
+            ..Default::default()
+        };
+        let mut inputs = [0.; 54];
+        for (i, v) in inputs.iter_mut().enumerate() {
+            *v = 0.03 * (i % 5) as f32;
+        }
+        let candidates = [
+            CandidateActionFamily::Approach,
+            CandidateActionFamily::Ingest,
+            CandidateActionFamily::Idle,
+        ]
+        .into_iter()
+        .map(|family| TrainingReplayCandidate {
+            family,
+            decoder_inputs: inputs,
+            innate_bias: 0.04,
+        })
+        .collect::<Vec<_>>();
+
+        let windows: Vec<CpuResidualTrainingWindow> = (0..5)
+            .map(|w_idx| {
+                let initial = TrainingInitialState {
+                    activations: (0..n)
+                        .map(|i| 0.05 + ((i + w_idx) % 7) as f32 * 0.01)
+                        .collect(),
+                    activity_ema: vec![0.2; n],
+                    metabolic_load: vec![0.03; n],
+                    dendrites: DendriticBranchSet::new(vec![DendriticBranch::new(
+                        35,
+                        0.02,
+                        0.4,
+                        vec![DendriticInputRef::new(6, 0.8).unwrap()],
+                    )
+                    .unwrap()])
+                    .unwrap(),
+                };
+                let tick = TrainingReplayTick {
+                    encoded_inputs: (0..n)
+                        .map(|i| ((i + w_idx * 3) % 11) as f32 * 0.015)
+                        .collect(),
+                    projection_gain: 0.85,
+                    local_threshold_shift: 0.017,
+                    microstep_count: u32::from(p.microstep_count()),
+                    enabled_routes: vec![true; p.projections().len()],
+                    effective_weight_offsets: (0..p.synapses().len())
+                        .map(|i| (i % 7) as f32 * 0.002)
+                        .collect(),
+                    structural_synapses: vec![],
+                    candidates: candidates.clone(),
+                };
+                let seq = TrainingSequence {
+                    phenotype_hash: p.phenotype_hash(),
+                    initial,
+                    ticks: vec![tick; 2],
+                    burn_in_ticks: 0,
+                    memory_candidate_gain: p
+                        .candidate_decoder()
+                        .memory_channel()
+                        .map_or(0., |m| m.max_candidate_gain()),
+                };
+                let eval = t_seq.evaluate_replay(&seq).unwrap();
+                let transitions: Vec<PpoTransition> = (0..2)
+                    .map(|i| {
+                        let mut a = crate::PpoJointAction {
+                            candidate_count: 3,
+                            representative_mask: 7,
+                            motor_masks: [0; 6],
+                            representative: ((w_idx + i) % 3) as u16,
+                            forced_slots: vec![None; 3],
+                            motor_candidates: [None; 6],
+                            old_joint_log_probability: -1.,
+                            temperature: config.temperature,
+                        };
+                        a.old_joint_log_probability = super::objective::cpu_ppo_objective(
+                            &eval.candidate_logits[i],
+                            &a,
+                            0.,
+                            config,
+                        )
+                        .unwrap()
+                        .joint_log_probability;
+                        PpoTransition {
+                            policy_version: 7400,
+                            trajectory_id: w_idx as u64 + 1,
+                            step: i as u64,
+                            action: a,
+                            reward: 0.1 + 0.07 * w_idx as f32 + 0.05 * i as f32,
+                            old_value: 0.,
+                            next_value: 0.,
+                            elapsed_seconds: 0.05,
+                            boundary: if i == 1 {
+                                PpoBoundary::Terminated
+                            } else {
+                                PpoBoundary::Continuing
+                            },
+                        }
+                    })
+                    .collect();
+                let critic_rows = transitions
+                    .iter()
+                    .enumerate()
+                    .map(|(i, t)| CriticResidualRow {
+                        current: i as u32,
+                        next: i as u32 + 1,
+                        reward: t.reward,
+                        discount: if t.boundary == PpoBoundary::Terminated {
+                            0.
+                        } else {
+                            (-std::f32::consts::LN_2 * t.elapsed_seconds
+                                / config.discount_half_life_seconds)
+                                .exp()
+                        },
+                    })
+                    .collect();
+                let mut critic_features = eval.final_activations.clone();
+                critic_features.push(eval.final_activations.last().unwrap().clone());
+                CpuResidualTrainingWindow {
+                    actor: PpoTrainingWindow {
+                        sequence: seq,
+                        batch: PpoBatch::from_rollout(7400, transitions, config).unwrap(),
+                        auxiliary: None,
+                        speech_targets: vec![None; 2],
+                    },
+                    critic_features,
+                    critic_rows,
+                }
+            })
+            .collect();
+
+        let receipt_seq = train_cpu_residual_cohort_slice_with_threads(
+            &mut t_seq, &mut v_seq, &windows, 4, config, 7400, 1,
+        )
+        .unwrap();
+        let receipt_par = train_cpu_residual_cohort_slice_with_threads(
+            &mut t_par,
+            &mut v_par,
+            &windows,
+            4,
+            config,
+            7400,
+            usize::MAX,
+        )
+        .unwrap();
+
+        assert_eq!(receipt_seq, receipt_par);
+        let c_seq = t_seq.checkpoint();
+        let c_par = t_par.checkpoint();
+        assert_eq!(c_seq.optimizer_step, c_par.optimizer_step);
+        assert_eq!(c_seq.update_ages, c_par.update_ages);
+        assert!(c_seq
+            .weights
+            .iter()
+            .zip(&c_par.weights)
+            .all(|(a, b)| a.to_bits() == b.to_bits()));
+        assert!(c_seq
+            .first_moment
+            .iter()
+            .zip(&c_par.first_moment)
+            .all(|(a, b)| a.to_bits() == b.to_bits()));
+        assert!(c_seq
+            .second_moment
+            .iter()
+            .zip(&c_par.second_moment)
+            .all(|(a, b)| a.to_bits() == b.to_bits()));
+        let vc_seq = v_seq.checkpoint();
+        let vc_par = v_par.checkpoint();
+        assert_eq!(vc_seq.optimizer_step, vc_par.optimizer_step);
+        assert_eq!(
+            vc_seq.last_updated_policy_version,
+            vc_par.last_updated_policy_version
+        );
+        assert!(vc_seq
+            .parameters
+            .iter()
+            .zip(&vc_par.parameters)
+            .all(|(a, b)| a.to_bits() == b.to_bits()));
+    }
 }
