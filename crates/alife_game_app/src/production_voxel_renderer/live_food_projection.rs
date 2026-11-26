@@ -145,7 +145,11 @@ pub(super) fn sync_care_objects(
                     distance / object.radius,
                 ));
             }
-            transform.translation = next;
+            if transform.translation.to_array().map(f32::to_bits)
+                != next.to_array().map(f32::to_bits)
+            {
+                transform.translation = next;
+            }
         } else {
             commands.entity(entity).despawn();
         }
@@ -251,8 +255,12 @@ pub(super) fn align_carried_care_objects(
         // Hearthling heading follows world yaw directly; retain the world's grip
         // offset and existing object height, correcting only the smoothed X/Z.
         let position = world_position_for_render(object.position, false) + offset;
-        transform.translation.x = position.x;
-        transform.translation.z = position.z;
+        if transform.translation.x.to_bits() != position.x.to_bits()
+            || transform.translation.z.to_bits() != position.z.to_bits()
+        {
+            transform.translation.x = position.x;
+            transform.translation.z = position.z;
+        }
     }
 }
 
@@ -1290,6 +1298,7 @@ mod tests {
                 .world()
                 .resource::<LiveBrainPresentationFrameResource>()
                 .clone();
+            let mut last_projection = None;
             for x in [3.0, 3.25, 3.5, 3.75, 3.75, 4.0, 4.0] {
                 app.world_mut()
                     .resource_mut::<DisplayedCarrierPositions>()
@@ -1306,6 +1315,13 @@ mod tests {
                     app.world().resource::<LiveBrainPresentationFrameResource>(),
                     &authoritative,
                 );
+                let entity = care_entity(&mut app, objects[2].id).unwrap();
+                let transform = app.world().entity(entity).get_ref::<Transform>().unwrap();
+                let changed_at = transform.last_changed();
+                if let Some((last_x, last_changed_at)) = last_projection {
+                    assert_eq!(changed_at != last_changed_at, x != last_x);
+                }
+                last_projection = Some((x, changed_at));
             }
         }
     }

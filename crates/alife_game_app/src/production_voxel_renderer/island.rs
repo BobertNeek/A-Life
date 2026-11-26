@@ -9,9 +9,12 @@ use bevy::{
 
 #[derive(Resource)]
 pub(super) struct IslandActive;
-fn placements() -> Vec<Prop> {
-    serde_json::from_str(include_str!("../../assets/landscape/island/props.json"))
-        .expect("validated island prop placements")
+fn placements() -> &'static [Prop] {
+    static PLACEMENTS: std::sync::OnceLock<Vec<Prop>> = std::sync::OnceLock::new();
+    PLACEMENTS.get_or_init(|| {
+        serde_json::from_str(include_str!("../../assets/landscape/island/props.json"))
+            .expect("validated island prop placements")
+    })
 }
 pub(super) fn has_baked_art(terrain: Option<&alife_world::WorldTerrain>) -> bool {
     terrain.is_some_and(|terrain| terrain.binding() == alife_world::island_terrain().binding())
