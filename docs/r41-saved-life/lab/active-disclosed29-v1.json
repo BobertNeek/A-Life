@@ -1,0 +1,2947 @@
+{
+  "cases": {
+    "canonical-L-full": {
+      "atoms": {
+        "maze:formal": [
+          5,
+          2
+        ],
+        "maze:intake": [
+          5,
+          2
+        ]
+      },
+      "decisions": 1024,
+      "lesson": "maze",
+      "scenario": {
+        "authentic_player_tokens_per_cut": [],
+        "case_id": "canonical-L-full",
+        "decision_limit": 1024,
+        "evaluation_nonce": 1794935016,
+        "exact_released_visible_opening": null,
+        "host_pressure": {
+          "actual_gpu_timing_preserved": true,
+          "applied_gpu_time_ns": 0,
+          "cross_arm_frame_replay": false,
+          "enabled": true,
+          "live_atp_and_heap_constraints": true,
+          "production_policy_unchanged": true,
+          "scope": "controlled_host_pressure_not_fixed_neural_work"
+        },
+        "navigation_task": {
+          "kind": "l_corner",
+          "mirror": false,
+          "prey_speed_per_tick": 0.0,
+          "rotation_radians": 0.0
+        },
+        "registry": "disclosed-r41-card-c46270cc-29/v1",
+        "semantic_prior_mode": "off",
+        "starting_organism_id": 3,
+        "world_tick_limit": 1024
+      },
+      "scenario_sha256": "dd9cbecdb81e1e84888829d6cde45f99ccc9f2f38aa24b3321bc008d603d2f55",
+      "weight": 5.0,
+      "weight_rational": [
+        5,
+        1
+      ]
+    },
+    "dogleg_corridor": {
+      "atoms": {
+        "maze:formal": [
+          5,
+          2
+        ],
+        "maze:intake": [
+          5,
+          2
+        ]
+      },
+      "decisions": 1024,
+      "lesson": "maze",
+      "scenario": {
+        "authentic_player_tokens_per_cut": [],
+        "case_id": "dogleg_corridor",
+        "decision_limit": 1024,
+        "evaluation_nonce": 1794935016,
+        "exact_released_visible_opening": null,
+        "host_pressure": {
+          "actual_gpu_timing_preserved": true,
+          "applied_gpu_time_ns": 0,
+          "cross_arm_frame_replay": false,
+          "enabled": true,
+          "live_atp_and_heap_constraints": true,
+          "production_policy_unchanged": true,
+          "scope": "controlled_host_pressure_not_fixed_neural_work"
+        },
+        "navigation_task": {
+          "kind": "dogleg_corridor",
+          "mirror": false,
+          "prey_speed_per_tick": 0.0,
+          "rotation_radians": 0.0
+        },
+        "registry": "disclosed-r41-card-c46270cc-29/v1",
+        "semantic_prior_mode": "off",
+        "starting_organism_id": 3,
+        "world_tick_limit": 8192
+      },
+      "scenario_sha256": "aa1391906952d327d8cb28f685ccc6f8caabb058b082a85027bed760a4b5fb52",
+      "weight": 5.0,
+      "weight_rational": [
+        5,
+        1
+      ]
+    },
+    "doorway_chambers": {
+      "atoms": {
+        "maze:formal": [
+          5,
+          2
+        ],
+        "maze:intake": [
+          5,
+          2
+        ]
+      },
+      "decisions": 1024,
+      "lesson": "maze",
+      "scenario": {
+        "authentic_player_tokens_per_cut": [],
+        "case_id": "doorway_chambers",
+        "decision_limit": 1024,
+        "evaluation_nonce": 1794935016,
+        "exact_released_visible_opening": null,
+        "host_pressure": {
+          "actual_gpu_timing_preserved": true,
+          "applied_gpu_time_ns": 0,
+          "cross_arm_frame_replay": false,
+          "enabled": true,
+          "live_atp_and_heap_constraints": true,
+          "production_policy_unchanged": true,
+          "scope": "controlled_host_pressure_not_fixed_neural_work"
+        },
+        "navigation_task": {
+          "kind": "doorway_chambers",
+          "mirror": false,
+          "prey_speed_per_tick": 0.0,
+          "rotation_radians": 0.0
+        },
+        "registry": "disclosed-r41-card-c46270cc-29/v1",
+        "semantic_prior_mode": "off",
+        "starting_organism_id": 3,
+        "world_tick_limit": 8192
+      },
+      "scenario_sha256": "8a1bd1b4616205c320598910f56034c563a92ce9e4bf5e4801d7828f3548bf26",
+      "weight": 5.0,
+      "weight_rational": [
+        5,
+        1
+      ]
+    },
+    "original-autonomous-axis": {
+      "atoms": {
+        "hunt:intake": [
+          10,
+          1
+        ]
+      },
+      "decisions": 256,
+      "lesson": "hunt",
+      "scenario": {
+        "authentic_player_tokens_per_cut": [],
+        "case_id": "original-autonomous-axis",
+        "decision_limit": 256,
+        "evaluation_nonce": 1794935016,
+        "exact_released_visible_opening": null,
+        "host_pressure": {
+          "actual_gpu_timing_preserved": true,
+          "applied_gpu_time_ns": 0,
+          "cross_arm_frame_replay": false,
+          "enabled": true,
+          "live_atp_and_heap_constraints": true,
+          "production_policy_unchanged": true,
+          "scope": "controlled_host_pressure_not_fixed_neural_work"
+        },
+        "navigation_task": {
+          "kind": "autonomous_prey",
+          "mirror": false,
+          "prey_speed_per_tick": 0.052000001072883606,
+          "rotation_radians": 3.100961446762085
+        },
+        "registry": "disclosed-r41-card-c46270cc-29/v1",
+        "semantic_prior_mode": "off",
+        "starting_organism_id": 3,
+        "world_tick_limit": 256
+      },
+      "scenario_sha256": "4292f9756c10ea987f386cedcb5b515a768a6cc0e007926db70a5e7ba7581ab7",
+      "weight": 10.0,
+      "weight_rational": [
+        10,
+        1
+      ]
+    },
+    "original-autonomous-plus4": {
+      "atoms": {
+        "hunt:intake": [
+          10,
+          1
+        ]
+      },
+      "decisions": 256,
+      "lesson": "hunt",
+      "scenario": {
+        "authentic_player_tokens_per_cut": [],
+        "case_id": "original-autonomous-plus4",
+        "decision_limit": 256,
+        "evaluation_nonce": 1794935016,
+        "exact_released_visible_opening": null,
+        "host_pressure": {
+          "actual_gpu_timing_preserved": true,
+          "applied_gpu_time_ns": 0,
+          "cross_arm_frame_replay": false,
+          "enabled": true,
+          "live_atp_and_heap_constraints": true,
+          "production_policy_unchanged": true,
+          "scope": "controlled_host_pressure_not_fixed_neural_work"
+        },
+        "navigation_task": {
+          "kind": "autonomous_prey",
+          "mirror": false,
+          "prey_speed_per_tick": 0.052000001072883606,
+          "rotation_radians": -3.1124107837677
+        },
+        "registry": "disclosed-r41-card-c46270cc-29/v1",
+        "semantic_prior_mode": "off",
+        "starting_organism_id": 3,
+        "world_tick_limit": 256
+      },
+      "scenario_sha256": "fb99badb28f6901284616417f7a8cfb67abb7ba0d703dc4df04c5b506cdafc79",
+      "weight": 10.0,
+      "weight_rational": [
+        10,
+        1
+      ]
+    },
+    "r12-word-ball-silence": {
+      "atoms": {
+        "grounded_expression:quiet-without-food": [
+          2,
+          1
+        ]
+      },
+      "decisions": 256,
+      "lesson": "grounded_expression",
+      "scenario": {
+        "authentic_player_tokens_per_cut": [],
+        "case_id": "r12-word-ball-silence",
+        "decision_limit": 256,
+        "evaluation_nonce": 1794935016,
+        "exact_released_visible_opening": {
+          "after_sound_sha256": "c4572aa8cea0a2a30fb1f3f151e74b145136e76d91d4dcebbf8d39196b7ca8fb",
+          "at_tick": 3074,
+          "before_sound_sha256": "c4572aa8cea0a2a30fb1f3f151e74b145136e76d91d4dcebbf8d39196b7ca8fb",
+          "biological_choices": 0,
+          "body_changed": false,
+          "body_position": {
+            "x": -16.169696807861328,
+            "y": 0.0,
+            "z": 205.9512176513672
+          },
+          "body_yaw": 2.68048357963562,
+          "common_allocated_ids": [
+            11,
+            12,
+            13
+          ],
+          "common_removed_source_ids": [
+            2,
+            3,
+            4,
+            6,
+            7,
+            9,
+            10
+          ],
+          "food": null,
+          "forced_action": false,
+          "global_reference_counts_verified": true,
+          "hazard": null,
+          "heard": [],
+          "kind": "R12-crossed-physical-reference-v1",
+          "mirror": false,
+          "mode": "r12-word-ball-silence",
+          "obstacle": null,
+          "physical_control": "zero or named native Fruit/Ball/Obstacle entries globally, empty sensory field otherwise; retained agents and remote hazard unchanged; native sensory report, no scored IDs or answer fed to neural input",
+          "slots": {
+            "other": {
+              "x": -17.583749771118164,
+              "y": 0.0,
+              "z": 208.04953002929688
+            },
+            "primary": {
+              "x": -18.696104049682617,
+              "y": 0.0,
+              "z": 205.81063842773438
+            }
+          },
+          "subjects": [
+            {
+              "id": 12,
+              "kind": "Ball",
+              "p": {
+                "x": -18.696104049682617,
+                "y": 0.0,
+                "z": 205.81063842773438
+              }
+            }
+          ],
+          "toy": {
+            "id": 12,
+            "kind": "Ball",
+            "p": {
+              "x": -18.696104049682617,
+              "y": 0.0,
+              "z": 205.81063842773438
+            }
+          },
+          "visible": [
+            12
+          ]
+        },
+        "host_pressure": {
+          "actual_gpu_timing_preserved": true,
+          "applied_gpu_time_ns": 0,
+          "cross_arm_frame_replay": false,
+          "enabled": true,
+          "live_atp_and_heap_constraints": true,
+          "production_policy_unchanged": true,
+          "scope": "controlled_host_pressure_not_fixed_neural_work"
+        },
+        "navigation_task": null,
+        "registry": "disclosed-r41-card-c46270cc-29/v1",
+        "semantic_prior_mode": "off",
+        "starting_organism_id": 3,
+        "world_tick_limit": 256
+      },
+      "scenario_sha256": "52917d5c41945e7ae9871e0665deef6fdb9df46386ae4fcdb0959b2a97594161",
+      "weight": 2.0,
+      "weight_rational": [
+        2,
+        1
+      ]
+    },
+    "r12-word-empty-silence": {
+      "atoms": {
+        "grounded_expression:quiet-without-food": [
+          2,
+          1
+        ]
+      },
+      "decisions": 256,
+      "lesson": "grounded_expression",
+      "scenario": {
+        "authentic_player_tokens_per_cut": [],
+        "case_id": "r12-word-empty-silence",
+        "decision_limit": 256,
+        "evaluation_nonce": 1794935016,
+        "exact_released_visible_opening": {
+          "after_sound_sha256": "b74b77329939b67f74aabde5fed85ba1aa87655d08d968511428117fc5538ae2",
+          "at_tick": 3074,
+          "before_sound_sha256": "b74b77329939b67f74aabde5fed85ba1aa87655d08d968511428117fc5538ae2",
+          "biological_choices": 0,
+          "body_changed": false,
+          "body_position": {
+            "x": -16.169696807861328,
+            "y": 0.0,
+            "z": 205.9512176513672
+          },
+          "body_yaw": 2.68048357963562,
+          "common_allocated_ids": [
+            11,
+            12,
+            13
+          ],
+          "common_removed_source_ids": [
+            2,
+            3,
+            4,
+            6,
+            7,
+            9,
+            10
+          ],
+          "food": null,
+          "forced_action": false,
+          "global_reference_counts_verified": true,
+          "hazard": null,
+          "heard": [],
+          "kind": "R12-crossed-physical-reference-v1",
+          "mirror": false,
+          "mode": "r12-word-empty-silence",
+          "obstacle": null,
+          "physical_control": "zero or named native Fruit/Ball/Obstacle entries globally, empty sensory field otherwise; retained agents and remote hazard unchanged; native sensory report, no scored IDs or answer fed to neural input",
+          "slots": {
+            "other": {
+              "x": -17.583749771118164,
+              "y": 0.0,
+              "z": 208.04953002929688
+            },
+            "primary": {
+              "x": -18.696104049682617,
+              "y": 0.0,
+              "z": 205.81063842773438
+            }
+          },
+          "subjects": [],
+          "toy": null,
+          "visible": []
+        },
+        "host_pressure": {
+          "actual_gpu_timing_preserved": true,
+          "applied_gpu_time_ns": 0,
+          "cross_arm_frame_replay": false,
+          "enabled": true,
+          "live_atp_and_heap_constraints": true,
+          "production_policy_unchanged": true,
+          "scope": "controlled_host_pressure_not_fixed_neural_work"
+        },
+        "navigation_task": null,
+        "registry": "disclosed-r41-card-c46270cc-29/v1",
+        "semantic_prior_mode": "off",
+        "starting_organism_id": 3,
+        "world_tick_limit": 256
+      },
+      "scenario_sha256": "7853919165d7e58c629268884c5aafd116d97eefe415e348bc0936a1973a1177",
+      "weight": 2.0,
+      "weight_rational": [
+        2,
+        1
+      ]
+    },
+    "r12-word-food-obstacle-silence": {
+      "atoms": {
+        "grounded_expression:grounded-food": [
+          5,
+          3
+        ]
+      },
+      "decisions": 256,
+      "lesson": "grounded_expression",
+      "scenario": {
+        "authentic_player_tokens_per_cut": [],
+        "case_id": "r12-word-food-obstacle-silence",
+        "decision_limit": 256,
+        "evaluation_nonce": 1794935016,
+        "exact_released_visible_opening": {
+          "after_sound_sha256": "8e86aac353a781ee971378a46e357975e2fce312341f7de596f6d99a97ff3d87",
+          "at_tick": 3074,
+          "before_sound_sha256": "8e86aac353a781ee971378a46e357975e2fce312341f7de596f6d99a97ff3d87",
+          "biological_choices": 0,
+          "body_changed": false,
+          "body_position": {
+            "x": -16.169696807861328,
+            "y": 0.0,
+            "z": 205.9512176513672
+          },
+          "body_yaw": 2.68048357963562,
+          "common_allocated_ids": [
+            11,
+            12,
+            13
+          ],
+          "common_removed_source_ids": [
+            2,
+            3,
+            4,
+            6,
+            7,
+            9,
+            10
+          ],
+          "food": {
+            "id": 11,
+            "kind": "Food",
+            "nutrition": 0.44999998807907104,
+            "p": {
+              "x": -18.696104049682617,
+              "y": 0.0,
+              "z": 205.81063842773438
+            }
+          },
+          "forced_action": false,
+          "global_reference_counts_verified": true,
+          "hazard": null,
+          "heard": [],
+          "kind": "R12-crossed-physical-reference-v1",
+          "mirror": false,
+          "mode": "r12-word-food-obstacle-silence",
+          "obstacle": {
+            "id": 13,
+            "kind": "Obstacle",
+            "p": {
+              "x": -17.583749771118164,
+              "y": 0.0,
+              "z": 208.04953002929688
+            }
+          },
+          "physical_control": "zero or named native Fruit/Ball/Obstacle entries globally, empty sensory field otherwise; retained agents and remote hazard unchanged; native sensory report, no scored IDs or answer fed to neural input",
+          "slots": {
+            "other": {
+              "x": -17.583749771118164,
+              "y": 0.0,
+              "z": 208.04953002929688
+            },
+            "primary": {
+              "x": -18.696104049682617,
+              "y": 0.0,
+              "z": 205.81063842773438
+            }
+          },
+          "subjects": [
+            {
+              "id": 11,
+              "kind": "Food",
+              "nutrition": 0.44999998807907104,
+              "p": {
+                "x": -18.696104049682617,
+                "y": 0.0,
+                "z": 205.81063842773438
+              }
+            },
+            {
+              "id": 13,
+              "kind": "Obstacle",
+              "p": {
+                "x": -17.583749771118164,
+                "y": 0.0,
+                "z": 208.04953002929688
+              }
+            }
+          ],
+          "toy": null,
+          "visible": [
+            13,
+            11
+          ]
+        },
+        "host_pressure": {
+          "actual_gpu_timing_preserved": true,
+          "applied_gpu_time_ns": 0,
+          "cross_arm_frame_replay": false,
+          "enabled": true,
+          "live_atp_and_heap_constraints": true,
+          "production_policy_unchanged": true,
+          "scope": "controlled_host_pressure_not_fixed_neural_work"
+        },
+        "navigation_task": null,
+        "registry": "disclosed-r41-card-c46270cc-29/v1",
+        "semantic_prior_mode": "off",
+        "starting_organism_id": 3,
+        "world_tick_limit": 256
+      },
+      "scenario_sha256": "b1f8234013aa1a8e98d447ea7617c0aad988ca1c1cffef3ddd0d2ee52c2258e6",
+      "weight": 1.6666666666666667,
+      "weight_rational": [
+        5,
+        3
+      ]
+    },
+    "r12-word-food-silence": {
+      "atoms": {
+        "grounded_expression:grounded-food": [
+          5,
+          3
+        ]
+      },
+      "decisions": 256,
+      "lesson": "grounded_expression",
+      "scenario": {
+        "authentic_player_tokens_per_cut": [],
+        "case_id": "r12-word-food-silence",
+        "decision_limit": 256,
+        "evaluation_nonce": 1794935016,
+        "exact_released_visible_opening": {
+          "after_sound_sha256": "2b36ffeabf5d7e037f4a93a73ffd19e7453031a82134ed73724ca2b74d654366",
+          "at_tick": 3074,
+          "before_sound_sha256": "2b36ffeabf5d7e037f4a93a73ffd19e7453031a82134ed73724ca2b74d654366",
+          "biological_choices": 0,
+          "body_changed": false,
+          "body_position": {
+            "x": -16.169696807861328,
+            "y": 0.0,
+            "z": 205.9512176513672
+          },
+          "body_yaw": 2.68048357963562,
+          "common_allocated_ids": [
+            11,
+            12,
+            13
+          ],
+          "common_removed_source_ids": [
+            2,
+            3,
+            4,
+            6,
+            7,
+            9,
+            10
+          ],
+          "food": {
+            "id": 11,
+            "kind": "Food",
+            "nutrition": 0.44999998807907104,
+            "p": {
+              "x": -18.696104049682617,
+              "y": 0.0,
+              "z": 205.81063842773438
+            }
+          },
+          "forced_action": false,
+          "global_reference_counts_verified": true,
+          "hazard": null,
+          "heard": [],
+          "kind": "R12-crossed-physical-reference-v1",
+          "mirror": false,
+          "mode": "r12-word-food-silence",
+          "obstacle": null,
+          "physical_control": "zero or named native Fruit/Ball/Obstacle entries globally, empty sensory field otherwise; retained agents and remote hazard unchanged; native sensory report, no scored IDs or answer fed to neural input",
+          "slots": {
+            "other": {
+              "x": -17.583749771118164,
+              "y": 0.0,
+              "z": 208.04953002929688
+            },
+            "primary": {
+              "x": -18.696104049682617,
+              "y": 0.0,
+              "z": 205.81063842773438
+            }
+          },
+          "subjects": [
+            {
+              "id": 11,
+              "kind": "Food",
+              "nutrition": 0.44999998807907104,
+              "p": {
+                "x": -18.696104049682617,
+                "y": 0.0,
+                "z": 205.81063842773438
+              }
+            }
+          ],
+          "toy": null,
+          "visible": [
+            11
+          ]
+        },
+        "host_pressure": {
+          "actual_gpu_timing_preserved": true,
+          "applied_gpu_time_ns": 0,
+          "cross_arm_frame_replay": false,
+          "enabled": true,
+          "live_atp_and_heap_constraints": true,
+          "production_policy_unchanged": true,
+          "scope": "controlled_host_pressure_not_fixed_neural_work"
+        },
+        "navigation_task": null,
+        "registry": "disclosed-r41-card-c46270cc-29/v1",
+        "semantic_prior_mode": "off",
+        "starting_organism_id": 3,
+        "world_tick_limit": 256
+      },
+      "scenario_sha256": "fb5336897466c275db7824f2bee7b1ddefcdd814f17ac6b3f018952792e022f4",
+      "weight": 1.6666666666666667,
+      "weight_rational": [
+        5,
+        3
+      ]
+    },
+    "r12-word-mirror-food-silence": {
+      "atoms": {
+        "grounded_expression:grounded-food": [
+          5,
+          3
+        ]
+      },
+      "decisions": 256,
+      "lesson": "grounded_expression",
+      "scenario": {
+        "authentic_player_tokens_per_cut": [],
+        "case_id": "r12-word-mirror-food-silence",
+        "decision_limit": 256,
+        "evaluation_nonce": 1794935016,
+        "exact_released_visible_opening": {
+          "after_sound_sha256": "a3efdb3d91c8757a24afd64ae98e5a1b820e880acd31d5748b6e825b328f458e",
+          "at_tick": 3074,
+          "before_sound_sha256": "a3efdb3d91c8757a24afd64ae98e5a1b820e880acd31d5748b6e825b328f458e",
+          "biological_choices": 0,
+          "body_changed": false,
+          "body_position": {
+            "x": -16.169696807861328,
+            "y": 0.0,
+            "z": 205.9512176513672
+          },
+          "body_yaw": 2.68048357963562,
+          "common_allocated_ids": [
+            11,
+            12,
+            13
+          ],
+          "common_removed_source_ids": [
+            2,
+            3,
+            4,
+            6,
+            7,
+            9,
+            10
+          ],
+          "food": {
+            "id": 11,
+            "kind": "Food",
+            "nutrition": 0.44999998807907104,
+            "p": {
+              "x": -17.583749771118164,
+              "y": 0.0,
+              "z": 208.04953002929688
+            }
+          },
+          "forced_action": false,
+          "global_reference_counts_verified": true,
+          "hazard": null,
+          "heard": [],
+          "kind": "R12-crossed-physical-reference-v1",
+          "mirror": true,
+          "mode": "r12-word-mirror-food-silence",
+          "obstacle": null,
+          "physical_control": "zero or named native Fruit/Ball/Obstacle entries globally, empty sensory field otherwise; retained agents and remote hazard unchanged; native sensory report, no scored IDs or answer fed to neural input",
+          "slots": {
+            "other": {
+              "x": -18.696104049682617,
+              "y": 0.0,
+              "z": 205.81063842773438
+            },
+            "primary": {
+              "x": -17.583749771118164,
+              "y": 0.0,
+              "z": 208.04953002929688
+            }
+          },
+          "subjects": [
+            {
+              "id": 11,
+              "kind": "Food",
+              "nutrition": 0.44999998807907104,
+              "p": {
+                "x": -17.583749771118164,
+                "y": 0.0,
+                "z": 208.04953002929688
+              }
+            }
+          ],
+          "toy": null,
+          "visible": [
+            11
+          ]
+        },
+        "host_pressure": {
+          "actual_gpu_timing_preserved": true,
+          "applied_gpu_time_ns": 0,
+          "cross_arm_frame_replay": false,
+          "enabled": true,
+          "live_atp_and_heap_constraints": true,
+          "production_policy_unchanged": true,
+          "scope": "controlled_host_pressure_not_fixed_neural_work"
+        },
+        "navigation_task": null,
+        "registry": "disclosed-r41-card-c46270cc-29/v1",
+        "semantic_prior_mode": "off",
+        "starting_organism_id": 3,
+        "world_tick_limit": 256
+      },
+      "scenario_sha256": "cefdcfc8310fe3d4674ea85a3f7df94cc087e3c22801f97bfd83bb7720ad1459",
+      "weight": 1.6666666666666667,
+      "weight_rational": [
+        5,
+        3
+      ]
+    },
+    "r12-word-obstacle-silence": {
+      "atoms": {
+        "grounded_expression:quiet-without-food": [
+          2,
+          1
+        ]
+      },
+      "decisions": 256,
+      "lesson": "grounded_expression",
+      "scenario": {
+        "authentic_player_tokens_per_cut": [],
+        "case_id": "r12-word-obstacle-silence",
+        "decision_limit": 256,
+        "evaluation_nonce": 1794935016,
+        "exact_released_visible_opening": {
+          "after_sound_sha256": "8d62afbf4e2339743b796c69913ef7ccedeb5a657e81f33d64169acfd4a06ee0",
+          "at_tick": 3074,
+          "before_sound_sha256": "8d62afbf4e2339743b796c69913ef7ccedeb5a657e81f33d64169acfd4a06ee0",
+          "biological_choices": 0,
+          "body_changed": false,
+          "body_position": {
+            "x": -16.169696807861328,
+            "y": 0.0,
+            "z": 205.9512176513672
+          },
+          "body_yaw": 2.68048357963562,
+          "common_allocated_ids": [
+            11,
+            12,
+            13
+          ],
+          "common_removed_source_ids": [
+            2,
+            3,
+            4,
+            6,
+            7,
+            9,
+            10
+          ],
+          "food": null,
+          "forced_action": false,
+          "global_reference_counts_verified": true,
+          "hazard": null,
+          "heard": [],
+          "kind": "R12-crossed-physical-reference-v1",
+          "mirror": false,
+          "mode": "r12-word-obstacle-silence",
+          "obstacle": {
+            "id": 13,
+            "kind": "Obstacle",
+            "p": {
+              "x": -17.583749771118164,
+              "y": 0.0,
+              "z": 208.04953002929688
+            }
+          },
+          "physical_control": "zero or named native Fruit/Ball/Obstacle entries globally, empty sensory field otherwise; retained agents and remote hazard unchanged; native sensory report, no scored IDs or answer fed to neural input",
+          "slots": {
+            "other": {
+              "x": -17.583749771118164,
+              "y": 0.0,
+              "z": 208.04953002929688
+            },
+            "primary": {
+              "x": -18.696104049682617,
+              "y": 0.0,
+              "z": 205.81063842773438
+            }
+          },
+          "subjects": [
+            {
+              "id": 13,
+              "kind": "Obstacle",
+              "p": {
+                "x": -17.583749771118164,
+                "y": 0.0,
+                "z": 208.04953002929688
+              }
+            }
+          ],
+          "toy": null,
+          "visible": [
+            13
+          ]
+        },
+        "host_pressure": {
+          "actual_gpu_timing_preserved": true,
+          "applied_gpu_time_ns": 0,
+          "cross_arm_frame_replay": false,
+          "enabled": true,
+          "live_atp_and_heap_constraints": true,
+          "production_policy_unchanged": true,
+          "scope": "controlled_host_pressure_not_fixed_neural_work"
+        },
+        "navigation_task": null,
+        "registry": "disclosed-r41-card-c46270cc-29/v1",
+        "semantic_prior_mode": "off",
+        "starting_organism_id": 3,
+        "world_tick_limit": 256
+      },
+      "scenario_sha256": "e6c3fe793129081fa6e13987fc190435ffca4d06a0f2a8e72635ffe5264c6215",
+      "weight": 2.0,
+      "weight_rational": [
+        2,
+        1
+      ]
+    },
+    "r14-word-mirror-root-silence": {
+      "atoms": {
+        "grounded_expression:grounded-food": [
+          5,
+          3
+        ]
+      },
+      "decisions": 256,
+      "lesson": "grounded_expression",
+      "scenario": {
+        "authentic_player_tokens_per_cut": [],
+        "case_id": "r14-word-mirror-root-silence",
+        "decision_limit": 256,
+        "evaluation_nonce": 1794935016,
+        "exact_released_visible_opening": {
+          "after_sound_sha256": "fc1aebe84d91d7b066e0c23e6015e0027e3e9d2fff563e0556363d037ed8604b",
+          "at_tick": 3074,
+          "before_sound_sha256": "fc1aebe84d91d7b066e0c23e6015e0027e3e9d2fff563e0556363d037ed8604b",
+          "biological_choices": 0,
+          "body_changed": false,
+          "body_position": {
+            "x": -16.169696807861328,
+            "y": 0.0,
+            "z": 205.9512176513672
+          },
+          "body_yaw": 2.68048357963562,
+          "common_allocated_ids": [
+            11,
+            12
+          ],
+          "common_removed_source_ids": [
+            2,
+            3,
+            4,
+            6,
+            7,
+            9,
+            10
+          ],
+          "food": {
+            "chemical": [
+              0.800000011920929,
+              0.25,
+              0.3499999940395355
+            ],
+            "color": [
+              0.973058819770813,
+              0.40305882692337036,
+              0.103058822453022
+            ],
+            "id": 11,
+            "kind": "Food",
+            "material": [
+              0.3499999940395355,
+              0.15000000596046448,
+              0.6499999761581421
+            ],
+            "nutrition": 0.6499999761581421,
+            "p": {
+              "x": -17.91830825805664,
+              "y": 0.0,
+              "z": 207.71327209472656
+            },
+            "shape": [
+              0.44999998807907104,
+              0.8999999761581421,
+              0.44999998807907104
+            ]
+          },
+          "forced_action": false,
+          "global_reference_counts_verified": true,
+          "hazard": null,
+          "heard": [],
+          "kind": "R14-root-vs-odor-matched-activitytoy-v1",
+          "layout": "root",
+          "mirror": true,
+          "mode": "r14-word-mirror-root-silence",
+          "obstacle": null,
+          "opening_smell_bits": [
+            1060320742,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "physical_control": "native Root vs real ActivityToy same object ID, position, radius and isolated smell-chemistry bands; object photos/texture/shape and taste differ; observer metadata not brain input",
+          "slots": {
+            "other": {
+              "x": -18.63021469116211,
+              "y": 0.0,
+              "z": 206.28038024902344
+            },
+            "primary": {
+              "x": -17.91830825805664,
+              "y": 0.0,
+              "z": 207.71327209472656
+            }
+          },
+          "subjects": [
+            {
+              "chemical": [
+                0.800000011920929,
+                0.25,
+                0.3499999940395355
+              ],
+              "color": [
+                0.973058819770813,
+                0.40305882692337036,
+                0.103058822453022
+              ],
+              "id": 11,
+              "kind": "Food",
+              "material": [
+                0.3499999940395355,
+                0.15000000596046448,
+                0.6499999761581421
+              ],
+              "nutrition": 0.6499999761581421,
+              "p": {
+                "x": -17.91830825805664,
+                "y": 0.0,
+                "z": 207.71327209472656
+              },
+              "shape": [
+                0.44999998807907104,
+                0.8999999761581421,
+                0.44999998807907104
+              ]
+            }
+          ],
+          "toy": null,
+          "visible": [
+            11
+          ]
+        },
+        "host_pressure": {
+          "actual_gpu_timing_preserved": true,
+          "applied_gpu_time_ns": 0,
+          "cross_arm_frame_replay": false,
+          "enabled": true,
+          "live_atp_and_heap_constraints": true,
+          "production_policy_unchanged": true,
+          "scope": "controlled_host_pressure_not_fixed_neural_work"
+        },
+        "navigation_task": null,
+        "registry": "disclosed-r41-card-c46270cc-29/v1",
+        "semantic_prior_mode": "off",
+        "starting_organism_id": 3,
+        "world_tick_limit": 256
+      },
+      "scenario_sha256": "f2aab606b28fe8aee52ed1f7cf4cd925207bc5952cd5ea0eb7a5551021270fb8",
+      "weight": 1.6666666666666667,
+      "weight_rational": [
+        5,
+        3
+      ]
+    },
+    "r14-word-mirror-scent-decoy-silence": {
+      "atoms": {
+        "grounded_expression:quiet-without-food": [
+          2,
+          1
+        ]
+      },
+      "decisions": 256,
+      "lesson": "grounded_expression",
+      "scenario": {
+        "authentic_player_tokens_per_cut": [],
+        "case_id": "r14-word-mirror-scent-decoy-silence",
+        "decision_limit": 256,
+        "evaluation_nonce": 1794935016,
+        "exact_released_visible_opening": {
+          "after_sound_sha256": "e6b183000650a201de37fb9c843fd10f8b901b6aba889587a220c30df10bba63",
+          "at_tick": 3074,
+          "before_sound_sha256": "e6b183000650a201de37fb9c843fd10f8b901b6aba889587a220c30df10bba63",
+          "biological_choices": 0,
+          "body_changed": false,
+          "body_position": {
+            "x": -16.169696807861328,
+            "y": 0.0,
+            "z": 205.9512176513672
+          },
+          "body_yaw": 2.68048357963562,
+          "common_allocated_ids": [
+            11,
+            12
+          ],
+          "common_removed_source_ids": [
+            2,
+            3,
+            4,
+            6,
+            7,
+            9,
+            10
+          ],
+          "food": null,
+          "forced_action": false,
+          "global_reference_counts_verified": true,
+          "hazard": null,
+          "heard": [],
+          "kind": "R14-root-vs-odor-matched-activitytoy-v1",
+          "layout": "scent-decoy",
+          "mirror": true,
+          "mode": "r14-word-mirror-scent-decoy-silence",
+          "obstacle": null,
+          "opening_smell_bits": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "physical_control": "native Root vs real ActivityToy same object ID, position, radius and isolated smell-chemistry bands; object photos/texture/shape and taste differ; observer metadata not brain input",
+          "slots": {
+            "other": {
+              "x": -18.63021469116211,
+              "y": 0.0,
+              "z": 206.28038024902344
+            },
+            "primary": {
+              "x": -17.91830825805664,
+              "y": 0.0,
+              "z": 207.71327209472656
+            }
+          },
+          "subjects": [
+            {
+              "chemical": [
+                0.800000011920929,
+                0.25,
+                0.0
+              ],
+              "color": [
+                0.1788235306739807,
+                0.3499999940395355,
+                0.8999999761581421
+              ],
+              "id": 11,
+              "kind": "ActivityToy",
+              "material": [
+                0.20000000298023224,
+                0.800000011920929,
+                0.20000000298023224
+              ],
+              "nutrition": 0.0,
+              "p": {
+                "x": -17.91830825805664,
+                "y": 0.0,
+                "z": 207.71327209472656
+              },
+              "shape": [
+                0.8999999761581421,
+                0.6499999761581421,
+                0.6000000238418579
+              ]
+            }
+          ],
+          "toy": {
+            "chemical": [
+              0.800000011920929,
+              0.25,
+              0.0
+            ],
+            "color": [
+              0.1788235306739807,
+              0.3499999940395355,
+              0.8999999761581421
+            ],
+            "id": 11,
+            "kind": "ActivityToy",
+            "material": [
+              0.20000000298023224,
+              0.800000011920929,
+              0.20000000298023224
+            ],
+            "nutrition": 0.0,
+            "p": {
+              "x": -17.91830825805664,
+              "y": 0.0,
+              "z": 207.71327209472656
+            },
+            "shape": [
+              0.8999999761581421,
+              0.6499999761581421,
+              0.6000000238418579
+            ]
+          },
+          "visible": [
+            11
+          ]
+        },
+        "host_pressure": {
+          "actual_gpu_timing_preserved": true,
+          "applied_gpu_time_ns": 0,
+          "cross_arm_frame_replay": false,
+          "enabled": true,
+          "live_atp_and_heap_constraints": true,
+          "production_policy_unchanged": true,
+          "scope": "controlled_host_pressure_not_fixed_neural_work"
+        },
+        "navigation_task": null,
+        "registry": "disclosed-r41-card-c46270cc-29/v1",
+        "semantic_prior_mode": "off",
+        "starting_organism_id": 3,
+        "world_tick_limit": 256
+      },
+      "scenario_sha256": "bc6656c2862dba3c9f13294e5004a5a947f9b81d29004897d44f27cb667d6702",
+      "weight": 2.0,
+      "weight_rational": [
+        2,
+        1
+      ]
+    },
+    "r14-word-root-scent-decoy-silence": {
+      "atoms": {
+        "grounded_expression:grounded-food": [
+          5,
+          3
+        ]
+      },
+      "decisions": 256,
+      "lesson": "grounded_expression",
+      "scenario": {
+        "authentic_player_tokens_per_cut": [],
+        "case_id": "r14-word-root-scent-decoy-silence",
+        "decision_limit": 256,
+        "evaluation_nonce": 1794935016,
+        "exact_released_visible_opening": {
+          "after_sound_sha256": "705adf26ae2ae6983f3f889657f2fed1b146ff42e4f17a6a95cb0a29b61e438f",
+          "at_tick": 3074,
+          "before_sound_sha256": "705adf26ae2ae6983f3f889657f2fed1b146ff42e4f17a6a95cb0a29b61e438f",
+          "biological_choices": 0,
+          "body_changed": false,
+          "body_position": {
+            "x": -16.169696807861328,
+            "y": 0.0,
+            "z": 205.9512176513672
+          },
+          "body_yaw": 2.68048357963562,
+          "common_allocated_ids": [
+            11,
+            12
+          ],
+          "common_removed_source_ids": [
+            2,
+            3,
+            4,
+            6,
+            7,
+            9,
+            10
+          ],
+          "food": {
+            "chemical": [
+              0.800000011920929,
+              0.25,
+              0.3499999940395355
+            ],
+            "color": [
+              0.973058819770813,
+              0.40305882692337036,
+              0.103058822453022
+            ],
+            "id": 11,
+            "kind": "Food",
+            "material": [
+              0.3499999940395355,
+              0.15000000596046448,
+              0.6499999761581421
+            ],
+            "nutrition": 0.6499999761581421,
+            "p": {
+              "x": -18.63021469116211,
+              "y": 0.0,
+              "z": 206.28038024902344
+            },
+            "shape": [
+              0.44999998807907104,
+              0.8999999761581421,
+              0.44999998807907104
+            ]
+          },
+          "forced_action": false,
+          "global_reference_counts_verified": true,
+          "hazard": null,
+          "heard": [],
+          "kind": "R14-root-vs-odor-matched-activitytoy-v1",
+          "layout": "root-scent-decoy",
+          "mirror": false,
+          "mode": "r14-word-root-scent-decoy-silence",
+          "obstacle": null,
+          "opening_smell_bits": [
+            1060320734,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "physical_control": "native Root vs real ActivityToy same object ID, position, radius and isolated smell-chemistry bands; object photos/texture/shape and taste differ; observer metadata not brain input",
+          "slots": {
+            "other": {
+              "x": -17.91830825805664,
+              "y": 0.0,
+              "z": 207.71327209472656
+            },
+            "primary": {
+              "x": -18.63021469116211,
+              "y": 0.0,
+              "z": 206.28038024902344
+            }
+          },
+          "subjects": [
+            {
+              "chemical": [
+                0.800000011920929,
+                0.25,
+                0.3499999940395355
+              ],
+              "color": [
+                0.973058819770813,
+                0.40305882692337036,
+                0.103058822453022
+              ],
+              "id": 11,
+              "kind": "Food",
+              "material": [
+                0.3499999940395355,
+                0.15000000596046448,
+                0.6499999761581421
+              ],
+              "nutrition": 0.6499999761581421,
+              "p": {
+                "x": -18.63021469116211,
+                "y": 0.0,
+                "z": 206.28038024902344
+              },
+              "shape": [
+                0.44999998807907104,
+                0.8999999761581421,
+                0.44999998807907104
+              ]
+            },
+            {
+              "chemical": [
+                0.800000011920929,
+                0.25,
+                0.0
+              ],
+              "color": [
+                0.160392165184021,
+                0.3499999940395355,
+                0.8999999761581421
+              ],
+              "id": 12,
+              "kind": "ActivityToy",
+              "material": [
+                0.20000000298023224,
+                0.800000011920929,
+                0.20000000298023224
+              ],
+              "nutrition": 0.0,
+              "p": {
+                "x": -17.91830825805664,
+                "y": 0.0,
+                "z": 207.71327209472656
+              },
+              "shape": [
+                0.8999999761581421,
+                0.6499999761581421,
+                0.6000000238418579
+              ]
+            }
+          ],
+          "toy": {
+            "chemical": [
+              0.800000011920929,
+              0.25,
+              0.0
+            ],
+            "color": [
+              0.160392165184021,
+              0.3499999940395355,
+              0.8999999761581421
+            ],
+            "id": 12,
+            "kind": "ActivityToy",
+            "material": [
+              0.20000000298023224,
+              0.800000011920929,
+              0.20000000298023224
+            ],
+            "nutrition": 0.0,
+            "p": {
+              "x": -17.91830825805664,
+              "y": 0.0,
+              "z": 207.71327209472656
+            },
+            "shape": [
+              0.8999999761581421,
+              0.6499999761581421,
+              0.6000000238418579
+            ]
+          },
+          "visible": [
+            12,
+            11
+          ]
+        },
+        "host_pressure": {
+          "actual_gpu_timing_preserved": true,
+          "applied_gpu_time_ns": 0,
+          "cross_arm_frame_replay": false,
+          "enabled": true,
+          "live_atp_and_heap_constraints": true,
+          "production_policy_unchanged": true,
+          "scope": "controlled_host_pressure_not_fixed_neural_work"
+        },
+        "navigation_task": null,
+        "registry": "disclosed-r41-card-c46270cc-29/v1",
+        "semantic_prior_mode": "off",
+        "starting_organism_id": 3,
+        "world_tick_limit": 256
+      },
+      "scenario_sha256": "5a7d9c785970e4948b04c9f5484171991dc86d7436bb9aefede31be399639da1",
+      "weight": 1.6666666666666667,
+      "weight_rational": [
+        5,
+        3
+      ]
+    },
+    "r14-word-root-silence": {
+      "atoms": {
+        "grounded_expression:grounded-food": [
+          5,
+          3
+        ]
+      },
+      "decisions": 256,
+      "lesson": "grounded_expression",
+      "scenario": {
+        "authentic_player_tokens_per_cut": [],
+        "case_id": "r14-word-root-silence",
+        "decision_limit": 256,
+        "evaluation_nonce": 1794935016,
+        "exact_released_visible_opening": {
+          "after_sound_sha256": "51b9baaff3f93ac72ea2d29ee4bb52e0f465135e15e05040a2a5a4ac6ed2212b",
+          "at_tick": 3074,
+          "before_sound_sha256": "51b9baaff3f93ac72ea2d29ee4bb52e0f465135e15e05040a2a5a4ac6ed2212b",
+          "biological_choices": 0,
+          "body_changed": false,
+          "body_position": {
+            "x": -16.169696807861328,
+            "y": 0.0,
+            "z": 205.9512176513672
+          },
+          "body_yaw": 2.68048357963562,
+          "common_allocated_ids": [
+            11,
+            12
+          ],
+          "common_removed_source_ids": [
+            2,
+            3,
+            4,
+            6,
+            7,
+            9,
+            10
+          ],
+          "food": {
+            "chemical": [
+              0.800000011920929,
+              0.25,
+              0.3499999940395355
+            ],
+            "color": [
+              0.973058819770813,
+              0.40305882692337036,
+              0.103058822453022
+            ],
+            "id": 11,
+            "kind": "Food",
+            "material": [
+              0.3499999940395355,
+              0.15000000596046448,
+              0.6499999761581421
+            ],
+            "nutrition": 0.6499999761581421,
+            "p": {
+              "x": -18.63021469116211,
+              "y": 0.0,
+              "z": 206.28038024902344
+            },
+            "shape": [
+              0.44999998807907104,
+              0.8999999761581421,
+              0.44999998807907104
+            ]
+          },
+          "forced_action": false,
+          "global_reference_counts_verified": true,
+          "hazard": null,
+          "heard": [],
+          "kind": "R14-root-vs-odor-matched-activitytoy-v1",
+          "layout": "root",
+          "mirror": false,
+          "mode": "r14-word-root-silence",
+          "obstacle": null,
+          "opening_smell_bits": [
+            1060320734,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "physical_control": "native Root vs real ActivityToy same object ID, position, radius and isolated smell-chemistry bands; object photos/texture/shape and taste differ; observer metadata not brain input",
+          "slots": {
+            "other": {
+              "x": -17.91830825805664,
+              "y": 0.0,
+              "z": 207.71327209472656
+            },
+            "primary": {
+              "x": -18.63021469116211,
+              "y": 0.0,
+              "z": 206.28038024902344
+            }
+          },
+          "subjects": [
+            {
+              "chemical": [
+                0.800000011920929,
+                0.25,
+                0.3499999940395355
+              ],
+              "color": [
+                0.973058819770813,
+                0.40305882692337036,
+                0.103058822453022
+              ],
+              "id": 11,
+              "kind": "Food",
+              "material": [
+                0.3499999940395355,
+                0.15000000596046448,
+                0.6499999761581421
+              ],
+              "nutrition": 0.6499999761581421,
+              "p": {
+                "x": -18.63021469116211,
+                "y": 0.0,
+                "z": 206.28038024902344
+              },
+              "shape": [
+                0.44999998807907104,
+                0.8999999761581421,
+                0.44999998807907104
+              ]
+            }
+          ],
+          "toy": null,
+          "visible": [
+            11
+          ]
+        },
+        "host_pressure": {
+          "actual_gpu_timing_preserved": true,
+          "applied_gpu_time_ns": 0,
+          "cross_arm_frame_replay": false,
+          "enabled": true,
+          "live_atp_and_heap_constraints": true,
+          "production_policy_unchanged": true,
+          "scope": "controlled_host_pressure_not_fixed_neural_work"
+        },
+        "navigation_task": null,
+        "registry": "disclosed-r41-card-c46270cc-29/v1",
+        "semantic_prior_mode": "off",
+        "starting_organism_id": 3,
+        "world_tick_limit": 256
+      },
+      "scenario_sha256": "bd9d57c2b51a08327e4bbe48dd48e9fec985915ab557ed7a74f3fe97f1ad4d1b",
+      "weight": 1.6666666666666667,
+      "weight_rational": [
+        5,
+        3
+      ]
+    },
+    "r14-word-scent-decoy-silence": {
+      "atoms": {
+        "grounded_expression:quiet-without-food": [
+          2,
+          1
+        ]
+      },
+      "decisions": 256,
+      "lesson": "grounded_expression",
+      "scenario": {
+        "authentic_player_tokens_per_cut": [],
+        "case_id": "r14-word-scent-decoy-silence",
+        "decision_limit": 256,
+        "evaluation_nonce": 1794935016,
+        "exact_released_visible_opening": {
+          "after_sound_sha256": "caa327282694e791c3aa1d7b1a1201f3cd4d0f075313656594052c0dda25c875",
+          "at_tick": 3074,
+          "before_sound_sha256": "caa327282694e791c3aa1d7b1a1201f3cd4d0f075313656594052c0dda25c875",
+          "biological_choices": 0,
+          "body_changed": false,
+          "body_position": {
+            "x": -16.169696807861328,
+            "y": 0.0,
+            "z": 205.9512176513672
+          },
+          "body_yaw": 2.68048357963562,
+          "common_allocated_ids": [
+            11,
+            12
+          ],
+          "common_removed_source_ids": [
+            2,
+            3,
+            4,
+            6,
+            7,
+            9,
+            10
+          ],
+          "food": null,
+          "forced_action": false,
+          "global_reference_counts_verified": true,
+          "hazard": null,
+          "heard": [],
+          "kind": "R14-root-vs-odor-matched-activitytoy-v1",
+          "layout": "scent-decoy",
+          "mirror": false,
+          "mode": "r14-word-scent-decoy-silence",
+          "obstacle": null,
+          "opening_smell_bits": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "physical_control": "native Root vs real ActivityToy same object ID, position, radius and isolated smell-chemistry bands; object photos/texture/shape and taste differ; observer metadata not brain input",
+          "slots": {
+            "other": {
+              "x": -17.91830825805664,
+              "y": 0.0,
+              "z": 207.71327209472656
+            },
+            "primary": {
+              "x": -18.63021469116211,
+              "y": 0.0,
+              "z": 206.28038024902344
+            }
+          },
+          "subjects": [
+            {
+              "chemical": [
+                0.800000011920929,
+                0.25,
+                0.0
+              ],
+              "color": [
+                0.1788235306739807,
+                0.3499999940395355,
+                0.8999999761581421
+              ],
+              "id": 11,
+              "kind": "ActivityToy",
+              "material": [
+                0.20000000298023224,
+                0.800000011920929,
+                0.20000000298023224
+              ],
+              "nutrition": 0.0,
+              "p": {
+                "x": -18.63021469116211,
+                "y": 0.0,
+                "z": 206.28038024902344
+              },
+              "shape": [
+                0.8999999761581421,
+                0.6499999761581421,
+                0.6000000238418579
+              ]
+            }
+          ],
+          "toy": {
+            "chemical": [
+              0.800000011920929,
+              0.25,
+              0.0
+            ],
+            "color": [
+              0.1788235306739807,
+              0.3499999940395355,
+              0.8999999761581421
+            ],
+            "id": 11,
+            "kind": "ActivityToy",
+            "material": [
+              0.20000000298023224,
+              0.800000011920929,
+              0.20000000298023224
+            ],
+            "nutrition": 0.0,
+            "p": {
+              "x": -18.63021469116211,
+              "y": 0.0,
+              "z": 206.28038024902344
+            },
+            "shape": [
+              0.8999999761581421,
+              0.6499999761581421,
+              0.6000000238418579
+            ]
+          },
+          "visible": [
+            11
+          ]
+        },
+        "host_pressure": {
+          "actual_gpu_timing_preserved": true,
+          "applied_gpu_time_ns": 0,
+          "cross_arm_frame_replay": false,
+          "enabled": true,
+          "live_atp_and_heap_constraints": true,
+          "production_policy_unchanged": true,
+          "scope": "controlled_host_pressure_not_fixed_neural_work"
+        },
+        "navigation_task": null,
+        "registry": "disclosed-r41-card-c46270cc-29/v1",
+        "semantic_prior_mode": "off",
+        "starting_organism_id": 3,
+        "world_tick_limit": 256
+      },
+      "scenario_sha256": "0fcb955f0c9bab1703368c5ac9051624c63af7dcf4bb6adf0ef3b35042ed3f01",
+      "weight": 2.0,
+      "weight_rational": [
+        2,
+        1
+      ]
+    },
+    "r2-grade-left": {
+      "atoms": {
+        "care:alive": [
+          5,
+          1
+        ],
+        "care:safe-intake": [
+          5,
+          1
+        ]
+      },
+      "decisions": 256,
+      "lesson": "care",
+      "scenario": {
+        "authentic_player_tokens_per_cut": [],
+        "case_id": "r2-grade-left",
+        "decision_limit": 256,
+        "evaluation_nonce": 1794935016,
+        "exact_released_visible_opening": {
+          "after_sound_sha256": "bf000011dc342564f2f69993ee32814dd539fedd2cbcf1b40931df4199bb0290",
+          "at_tick": 3074,
+          "before_sound_sha256": "bf000011dc342564f2f69993ee32814dd539fedd2cbcf1b40931df4199bb0290",
+          "biological_choices": 0,
+          "body_changed": false,
+          "body_position": {
+            "x": -16.169696807861328,
+            "y": 0.0,
+            "z": 205.9512176513672
+          },
+          "body_yaw": 2.68048357963562,
+          "flat_unblocked_first_20cm_and_centre_to_both_referents": true,
+          "food": {
+            "id": 2,
+            "nutrition": 0.8500000238418579,
+            "p": {
+              "x": -17.273618698120117,
+              "y": 0.0,
+              "z": 207.43763732910156
+            }
+          },
+          "forced_action": false,
+          "hazard": {
+            "contact": true,
+            "hidden_pain": 0.1599999964237213,
+            "id": 11,
+            "initial_radial_cosine_toward_food": 0.26696503162384033,
+            "opening_penetration_m": 0.007916748523712158,
+            "p": {
+              "x": -16.53968048095703,
+              "y": 0.0,
+              "z": 205.47622680664062
+            },
+            "radius": 0.6100000143051147,
+            "surface_temperature": 0.84
+          },
+          "heard": [],
+          "kind": "prospective-r2-grade-or-words-v1",
+          "mode": "r2-grade-left",
+          "toy": {
+            "id": 4,
+            "p": {
+              "x": -18.021120071411133,
+              "y": 0.0,
+              "z": 205.93309020996094
+            }
+          },
+          "visible": [
+            11,
+            2,
+            4
+          ]
+        },
+        "host_pressure": {
+          "actual_gpu_timing_preserved": true,
+          "applied_gpu_time_ns": 0,
+          "cross_arm_frame_replay": false,
+          "enabled": true,
+          "live_atp_and_heap_constraints": true,
+          "production_policy_unchanged": true,
+          "scope": "controlled_host_pressure_not_fixed_neural_work"
+        },
+        "navigation_task": null,
+        "registry": "disclosed-r41-card-c46270cc-29/v1",
+        "semantic_prior_mode": "off",
+        "starting_organism_id": 3,
+        "world_tick_limit": 256
+      },
+      "scenario_sha256": "90addde98006038958404cdfee14d4662eb57c0fd578bfaa1340a61c51927ee3",
+      "weight": 10.0,
+      "weight_rational": [
+        10,
+        1
+      ]
+    },
+    "r2-grade-right": {
+      "atoms": {
+        "care:alive": [
+          5,
+          1
+        ],
+        "care:safe-intake": [
+          5,
+          1
+        ]
+      },
+      "decisions": 256,
+      "lesson": "care",
+      "scenario": {
+        "authentic_player_tokens_per_cut": [],
+        "case_id": "r2-grade-right",
+        "decision_limit": 256,
+        "evaluation_nonce": 1794935016,
+        "exact_released_visible_opening": {
+          "after_sound_sha256": "1c2e1773228a97d07ff4ba23c66b398f61ba87ff161a4e1cad681f29f2c84c12",
+          "at_tick": 3074,
+          "before_sound_sha256": "1c2e1773228a97d07ff4ba23c66b398f61ba87ff161a4e1cad681f29f2c84c12",
+          "biological_choices": 0,
+          "body_changed": false,
+          "body_position": {
+            "x": -16.169696807861328,
+            "y": 0.0,
+            "z": 205.9512176513672
+          },
+          "body_yaw": 2.68048357963562,
+          "flat_unblocked_first_20cm_and_centre_to_both_referents": true,
+          "food": {
+            "id": 2,
+            "nutrition": 0.8500000238418579,
+            "p": {
+              "x": -18.021120071411133,
+              "y": 0.0,
+              "z": 205.93309020996094
+            }
+          },
+          "forced_action": false,
+          "hazard": {
+            "contact": true,
+            "hidden_pain": 0.1599999964237213,
+            "id": 11,
+            "initial_radial_cosine_toward_food": 0.2669699192047119,
+            "opening_penetration_m": 0.007921576499938965,
+            "p": {
+              "x": -16.0146484375,
+              "y": 0.0,
+              "z": 206.53298950195312
+            },
+            "radius": 0.6100000143051147,
+            "surface_temperature": 0.84
+          },
+          "heard": [],
+          "kind": "prospective-r2-grade-or-words-v1",
+          "mode": "r2-grade-right",
+          "toy": {
+            "id": 4,
+            "p": {
+              "x": -17.273618698120117,
+              "y": 0.0,
+              "z": 207.43763732910156
+            }
+          },
+          "visible": [
+            11,
+            4,
+            2
+          ]
+        },
+        "host_pressure": {
+          "actual_gpu_timing_preserved": true,
+          "applied_gpu_time_ns": 0,
+          "cross_arm_frame_replay": false,
+          "enabled": true,
+          "live_atp_and_heap_constraints": true,
+          "production_policy_unchanged": true,
+          "scope": "controlled_host_pressure_not_fixed_neural_work"
+        },
+        "navigation_task": null,
+        "registry": "disclosed-r41-card-c46270cc-29/v1",
+        "semantic_prior_mode": "off",
+        "starting_organism_id": 3,
+        "world_tick_limit": 256
+      },
+      "scenario_sha256": "b543d7ef322929dff9a269149fe84f750df68774368d4869bfb9ff89fb07b8a6",
+      "weight": 10.0,
+      "weight_rational": [
+        10,
+        1
+      ]
+    },
+    "r2-word-approach-food": {
+      "atoms": {
+        "receptive:first-signed": [
+          5,
+          2
+        ]
+      },
+      "decisions": 16,
+      "lesson": "receptive",
+      "scenario": {
+        "authentic_player_tokens_per_cut": [
+          [
+            6,
+            1
+          ],
+          [
+            6,
+            1
+          ],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          []
+        ],
+        "case_id": "r2-word-approach-food",
+        "decision_limit": 16,
+        "evaluation_nonce": 1794935016,
+        "exact_released_visible_opening": {
+          "after_sound_sha256": "612216a4f1469c23e988373bb8037f8a64f3af1e80b3ab5e2d7548a6078a22a4",
+          "at_tick": 3074,
+          "before_sound_sha256": "551546212581695ff3b9e29f11ce17fc226f9aaaa0626b62095c88e7d45dd593",
+          "biological_choices": 0,
+          "body_changed": false,
+          "body_position": {
+            "x": -16.169696807861328,
+            "y": 0.0,
+            "z": 205.9512176513672
+          },
+          "body_yaw": 2.68048357963562,
+          "flat_unblocked_first_20cm_and_centre_to_both_referents": true,
+          "food": {
+            "id": 2,
+            "nutrition": 0.8500000238418579,
+            "p": {
+              "x": -17.68580436706543,
+              "y": 0.0,
+              "z": 207.73175048828125
+            }
+          },
+          "forced_action": false,
+          "hazard": null,
+          "heard": [
+            6,
+            1
+          ],
+          "kind": "prospective-r2-grade-or-words-v1",
+          "mode": "r2-word-approach-food",
+          "toy": {
+            "id": 4,
+            "p": {
+              "x": -18.50449562072754,
+              "y": 0.0,
+              "z": 206.08392333984375
+            }
+          },
+          "visible": [
+            2,
+            4
+          ]
+        },
+        "host_pressure": {
+          "actual_gpu_timing_preserved": true,
+          "applied_gpu_time_ns": 0,
+          "cross_arm_frame_replay": false,
+          "enabled": true,
+          "live_atp_and_heap_constraints": true,
+          "production_policy_unchanged": true,
+          "scope": "controlled_host_pressure_not_fixed_neural_work"
+        },
+        "navigation_task": null,
+        "registry": "disclosed-r41-card-c46270cc-29/v1",
+        "semantic_prior_mode": "off",
+        "starting_organism_id": 3,
+        "world_tick_limit": 16
+      },
+      "scenario_sha256": "4b35b60763b5a6cef0c61050e9b0675e9ecc076b3a694759e26a46f357f1ef1c",
+      "weight": 2.5,
+      "weight_rational": [
+        5,
+        2
+      ]
+    },
+    "r2-word-approach-toy": {
+      "atoms": {
+        "receptive:first-signed": [
+          5,
+          2
+        ]
+      },
+      "decisions": 16,
+      "lesson": "receptive",
+      "scenario": {
+        "authentic_player_tokens_per_cut": [
+          [
+            6,
+            2
+          ],
+          [
+            6,
+            2
+          ],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          []
+        ],
+        "case_id": "r2-word-approach-toy",
+        "decision_limit": 16,
+        "evaluation_nonce": 1794935016,
+        "exact_released_visible_opening": {
+          "after_sound_sha256": "db6c05f4bcd77966001d817dbfb5daba7a08ea6d037b76813a434abadec48e6a",
+          "at_tick": 3074,
+          "before_sound_sha256": "551546212581695ff3b9e29f11ce17fc226f9aaaa0626b62095c88e7d45dd593",
+          "biological_choices": 0,
+          "body_changed": false,
+          "body_position": {
+            "x": -16.169696807861328,
+            "y": 0.0,
+            "z": 205.9512176513672
+          },
+          "body_yaw": 2.68048357963562,
+          "flat_unblocked_first_20cm_and_centre_to_both_referents": true,
+          "food": {
+            "id": 2,
+            "nutrition": 0.8500000238418579,
+            "p": {
+              "x": -17.68580436706543,
+              "y": 0.0,
+              "z": 207.73175048828125
+            }
+          },
+          "forced_action": false,
+          "hazard": null,
+          "heard": [
+            6,
+            2
+          ],
+          "kind": "prospective-r2-grade-or-words-v1",
+          "mode": "r2-word-approach-toy",
+          "toy": {
+            "id": 4,
+            "p": {
+              "x": -18.50449562072754,
+              "y": 0.0,
+              "z": 206.08392333984375
+            }
+          },
+          "visible": [
+            2,
+            4
+          ]
+        },
+        "host_pressure": {
+          "actual_gpu_timing_preserved": true,
+          "applied_gpu_time_ns": 0,
+          "cross_arm_frame_replay": false,
+          "enabled": true,
+          "live_atp_and_heap_constraints": true,
+          "production_policy_unchanged": true,
+          "scope": "controlled_host_pressure_not_fixed_neural_work"
+        },
+        "navigation_task": null,
+        "registry": "disclosed-r41-card-c46270cc-29/v1",
+        "semantic_prior_mode": "off",
+        "starting_organism_id": 3,
+        "world_tick_limit": 16
+      },
+      "scenario_sha256": "2d2f38c98b0256409a9423b376237f1a2c43754ba18cfec5cc112c0939cc3b6c",
+      "weight": 2.5,
+      "weight_rational": [
+        5,
+        2
+      ]
+    },
+    "r2-word-mirror-approach-food": {
+      "atoms": {
+        "receptive:first-signed": [
+          5,
+          2
+        ]
+      },
+      "decisions": 16,
+      "lesson": "receptive",
+      "scenario": {
+        "authentic_player_tokens_per_cut": [
+          [
+            6,
+            1
+          ],
+          [
+            6,
+            1
+          ],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          []
+        ],
+        "case_id": "r2-word-mirror-approach-food",
+        "decision_limit": 16,
+        "evaluation_nonce": 1794935016,
+        "exact_released_visible_opening": {
+          "after_sound_sha256": "ab128d07bb7c62ecc91f549ee59572ef41dbe54aed09fa41dcd04147811ec8de",
+          "at_tick": 3074,
+          "before_sound_sha256": "ad96da96089cc5dd69c7146d870bd56eca4d628cd2362f81da1afd2bd1c32c7e",
+          "biological_choices": 0,
+          "body_changed": false,
+          "body_position": {
+            "x": -16.169696807861328,
+            "y": 0.0,
+            "z": 205.9512176513672
+          },
+          "body_yaw": 2.68048357963562,
+          "flat_unblocked_first_20cm_and_centre_to_both_referents": true,
+          "food": {
+            "id": 2,
+            "nutrition": 0.8500000238418579,
+            "p": {
+              "x": -18.50449562072754,
+              "y": 0.0,
+              "z": 206.08392333984375
+            }
+          },
+          "forced_action": false,
+          "hazard": null,
+          "heard": [
+            6,
+            1
+          ],
+          "kind": "prospective-r2-grade-or-words-v1",
+          "mode": "r2-word-mirror-approach-food",
+          "toy": {
+            "id": 4,
+            "p": {
+              "x": -17.68580436706543,
+              "y": 0.0,
+              "z": 207.73175048828125
+            }
+          },
+          "visible": [
+            4,
+            2
+          ]
+        },
+        "host_pressure": {
+          "actual_gpu_timing_preserved": true,
+          "applied_gpu_time_ns": 0,
+          "cross_arm_frame_replay": false,
+          "enabled": true,
+          "live_atp_and_heap_constraints": true,
+          "production_policy_unchanged": true,
+          "scope": "controlled_host_pressure_not_fixed_neural_work"
+        },
+        "navigation_task": null,
+        "registry": "disclosed-r41-card-c46270cc-29/v1",
+        "semantic_prior_mode": "off",
+        "starting_organism_id": 3,
+        "world_tick_limit": 16
+      },
+      "scenario_sha256": "9c81a2bc84f00c708f6cc8afbe85fe353facbc07f7aaf9302501f4b6569617e0",
+      "weight": 2.5,
+      "weight_rational": [
+        5,
+        2
+      ]
+    },
+    "r2-word-mirror-approach-toy": {
+      "atoms": {
+        "receptive:first-signed": [
+          5,
+          2
+        ]
+      },
+      "decisions": 16,
+      "lesson": "receptive",
+      "scenario": {
+        "authentic_player_tokens_per_cut": [
+          [
+            6,
+            2
+          ],
+          [
+            6,
+            2
+          ],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          []
+        ],
+        "case_id": "r2-word-mirror-approach-toy",
+        "decision_limit": 16,
+        "evaluation_nonce": 1794935016,
+        "exact_released_visible_opening": {
+          "after_sound_sha256": "300a5dbc497f7d12dcac895e93336b826bb3bdc60674362855993705327be3e7",
+          "at_tick": 3074,
+          "before_sound_sha256": "ad96da96089cc5dd69c7146d870bd56eca4d628cd2362f81da1afd2bd1c32c7e",
+          "biological_choices": 0,
+          "body_changed": false,
+          "body_position": {
+            "x": -16.169696807861328,
+            "y": 0.0,
+            "z": 205.9512176513672
+          },
+          "body_yaw": 2.68048357963562,
+          "flat_unblocked_first_20cm_and_centre_to_both_referents": true,
+          "food": {
+            "id": 2,
+            "nutrition": 0.8500000238418579,
+            "p": {
+              "x": -18.50449562072754,
+              "y": 0.0,
+              "z": 206.08392333984375
+            }
+          },
+          "forced_action": false,
+          "hazard": null,
+          "heard": [
+            6,
+            2
+          ],
+          "kind": "prospective-r2-grade-or-words-v1",
+          "mode": "r2-word-mirror-approach-toy",
+          "toy": {
+            "id": 4,
+            "p": {
+              "x": -17.68580436706543,
+              "y": 0.0,
+              "z": 207.73175048828125
+            }
+          },
+          "visible": [
+            4,
+            2
+          ]
+        },
+        "host_pressure": {
+          "actual_gpu_timing_preserved": true,
+          "applied_gpu_time_ns": 0,
+          "cross_arm_frame_replay": false,
+          "enabled": true,
+          "live_atp_and_heap_constraints": true,
+          "production_policy_unchanged": true,
+          "scope": "controlled_host_pressure_not_fixed_neural_work"
+        },
+        "navigation_task": null,
+        "registry": "disclosed-r41-card-c46270cc-29/v1",
+        "semantic_prior_mode": "off",
+        "starting_organism_id": 3,
+        "world_tick_limit": 16
+      },
+      "scenario_sha256": "3eb1c0d3e1056a68609cbe33744d4fc6b4942ff8fdb356cc518100e5292c3b85",
+      "weight": 2.5,
+      "weight_rational": [
+        5,
+        2
+      ]
+    },
+    "r2-word-mirror-retreat-food": {
+      "atoms": {
+        "receptive:first-signed": [
+          5,
+          2
+        ]
+      },
+      "decisions": 16,
+      "lesson": "receptive",
+      "scenario": {
+        "authentic_player_tokens_per_cut": [
+          [
+            7,
+            1
+          ],
+          [
+            7,
+            1
+          ],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          []
+        ],
+        "case_id": "r2-word-mirror-retreat-food",
+        "decision_limit": 16,
+        "evaluation_nonce": 1794935016,
+        "exact_released_visible_opening": {
+          "after_sound_sha256": "f476b3b59d15ef6a93cc81b0ec63ad201361bc8b56fef68ae6cf1c26c3658ef9",
+          "at_tick": 3074,
+          "before_sound_sha256": "ad96da96089cc5dd69c7146d870bd56eca4d628cd2362f81da1afd2bd1c32c7e",
+          "biological_choices": 0,
+          "body_changed": false,
+          "body_position": {
+            "x": -16.169696807861328,
+            "y": 0.0,
+            "z": 205.9512176513672
+          },
+          "body_yaw": 2.68048357963562,
+          "flat_unblocked_first_20cm_and_centre_to_both_referents": true,
+          "food": {
+            "id": 2,
+            "nutrition": 0.8500000238418579,
+            "p": {
+              "x": -18.50449562072754,
+              "y": 0.0,
+              "z": 206.08392333984375
+            }
+          },
+          "forced_action": false,
+          "hazard": null,
+          "heard": [
+            7,
+            1
+          ],
+          "kind": "prospective-r2-grade-or-words-v1",
+          "mode": "r2-word-mirror-retreat-food",
+          "toy": {
+            "id": 4,
+            "p": {
+              "x": -17.68580436706543,
+              "y": 0.0,
+              "z": 207.73175048828125
+            }
+          },
+          "visible": [
+            4,
+            2
+          ]
+        },
+        "host_pressure": {
+          "actual_gpu_timing_preserved": true,
+          "applied_gpu_time_ns": 0,
+          "cross_arm_frame_replay": false,
+          "enabled": true,
+          "live_atp_and_heap_constraints": true,
+          "production_policy_unchanged": true,
+          "scope": "controlled_host_pressure_not_fixed_neural_work"
+        },
+        "navigation_task": null,
+        "registry": "disclosed-r41-card-c46270cc-29/v1",
+        "semantic_prior_mode": "off",
+        "starting_organism_id": 3,
+        "world_tick_limit": 16
+      },
+      "scenario_sha256": "f72e091646b476abf26d58e22acf1438e566e547b74574bc82c154fb786973fb",
+      "weight": 2.5,
+      "weight_rational": [
+        5,
+        2
+      ]
+    },
+    "r2-word-mirror-retreat-toy": {
+      "atoms": {
+        "receptive:first-signed": [
+          5,
+          2
+        ]
+      },
+      "decisions": 16,
+      "lesson": "receptive",
+      "scenario": {
+        "authentic_player_tokens_per_cut": [
+          [
+            7,
+            2
+          ],
+          [
+            7,
+            2
+          ],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          []
+        ],
+        "case_id": "r2-word-mirror-retreat-toy",
+        "decision_limit": 16,
+        "evaluation_nonce": 1794935016,
+        "exact_released_visible_opening": {
+          "after_sound_sha256": "13c046ade738e11a55f8b4c6c8a8ebc669fd30477f89feb4fe9cf7b52bf4a18c",
+          "at_tick": 3074,
+          "before_sound_sha256": "ad96da96089cc5dd69c7146d870bd56eca4d628cd2362f81da1afd2bd1c32c7e",
+          "biological_choices": 0,
+          "body_changed": false,
+          "body_position": {
+            "x": -16.169696807861328,
+            "y": 0.0,
+            "z": 205.9512176513672
+          },
+          "body_yaw": 2.68048357963562,
+          "flat_unblocked_first_20cm_and_centre_to_both_referents": true,
+          "food": {
+            "id": 2,
+            "nutrition": 0.8500000238418579,
+            "p": {
+              "x": -18.50449562072754,
+              "y": 0.0,
+              "z": 206.08392333984375
+            }
+          },
+          "forced_action": false,
+          "hazard": null,
+          "heard": [
+            7,
+            2
+          ],
+          "kind": "prospective-r2-grade-or-words-v1",
+          "mode": "r2-word-mirror-retreat-toy",
+          "toy": {
+            "id": 4,
+            "p": {
+              "x": -17.68580436706543,
+              "y": 0.0,
+              "z": 207.73175048828125
+            }
+          },
+          "visible": [
+            4,
+            2
+          ]
+        },
+        "host_pressure": {
+          "actual_gpu_timing_preserved": true,
+          "applied_gpu_time_ns": 0,
+          "cross_arm_frame_replay": false,
+          "enabled": true,
+          "live_atp_and_heap_constraints": true,
+          "production_policy_unchanged": true,
+          "scope": "controlled_host_pressure_not_fixed_neural_work"
+        },
+        "navigation_task": null,
+        "registry": "disclosed-r41-card-c46270cc-29/v1",
+        "semantic_prior_mode": "off",
+        "starting_organism_id": 3,
+        "world_tick_limit": 16
+      },
+      "scenario_sha256": "43db86c8dbb742ac29913dd4b7c2e1348136756a7ca11702eda35ba2d1b72e87",
+      "weight": 2.5,
+      "weight_rational": [
+        5,
+        2
+      ]
+    },
+    "r2-word-mirror-silence": {
+      "atoms": {},
+      "decisions": 16,
+      "lesson": "receptive",
+      "scenario": {
+        "authentic_player_tokens_per_cut": [],
+        "case_id": "r2-word-mirror-silence",
+        "decision_limit": 16,
+        "evaluation_nonce": 1794935016,
+        "exact_released_visible_opening": {
+          "after_sound_sha256": "ad96da96089cc5dd69c7146d870bd56eca4d628cd2362f81da1afd2bd1c32c7e",
+          "at_tick": 3074,
+          "before_sound_sha256": "ad96da96089cc5dd69c7146d870bd56eca4d628cd2362f81da1afd2bd1c32c7e",
+          "biological_choices": 0,
+          "body_changed": false,
+          "body_position": {
+            "x": -16.169696807861328,
+            "y": 0.0,
+            "z": 205.9512176513672
+          },
+          "body_yaw": 2.68048357963562,
+          "flat_unblocked_first_20cm_and_centre_to_both_referents": true,
+          "food": {
+            "id": 2,
+            "nutrition": 0.8500000238418579,
+            "p": {
+              "x": -18.50449562072754,
+              "y": 0.0,
+              "z": 206.08392333984375
+            }
+          },
+          "forced_action": false,
+          "hazard": null,
+          "heard": [],
+          "kind": "prospective-r2-grade-or-words-v1",
+          "mode": "r2-word-mirror-silence",
+          "toy": {
+            "id": 4,
+            "p": {
+              "x": -17.68580436706543,
+              "y": 0.0,
+              "z": 207.73175048828125
+            }
+          },
+          "visible": [
+            4,
+            2
+          ]
+        },
+        "host_pressure": {
+          "actual_gpu_timing_preserved": true,
+          "applied_gpu_time_ns": 0,
+          "cross_arm_frame_replay": false,
+          "enabled": true,
+          "live_atp_and_heap_constraints": true,
+          "production_policy_unchanged": true,
+          "scope": "controlled_host_pressure_not_fixed_neural_work"
+        },
+        "navigation_task": null,
+        "registry": "disclosed-r41-card-c46270cc-29/v1",
+        "semantic_prior_mode": "off",
+        "starting_organism_id": 3,
+        "world_tick_limit": 16
+      },
+      "scenario_sha256": "9720e8d81ba7b0127a3f47d34e39bb929b8d066fb761b8e696a3335434a680c8",
+      "weight": 0.0,
+      "weight_rational": [
+        0,
+        1
+      ]
+    },
+    "r2-word-retreat-food": {
+      "atoms": {
+        "receptive:first-signed": [
+          5,
+          2
+        ]
+      },
+      "decisions": 16,
+      "lesson": "receptive",
+      "scenario": {
+        "authentic_player_tokens_per_cut": [
+          [
+            7,
+            1
+          ],
+          [
+            7,
+            1
+          ],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          []
+        ],
+        "case_id": "r2-word-retreat-food",
+        "decision_limit": 16,
+        "evaluation_nonce": 1794935016,
+        "exact_released_visible_opening": {
+          "after_sound_sha256": "67de07f73441d796aa1afb99f6bf6f4101a70c56ccd2af08f59cef2e355f7975",
+          "at_tick": 3074,
+          "before_sound_sha256": "551546212581695ff3b9e29f11ce17fc226f9aaaa0626b62095c88e7d45dd593",
+          "biological_choices": 0,
+          "body_changed": false,
+          "body_position": {
+            "x": -16.169696807861328,
+            "y": 0.0,
+            "z": 205.9512176513672
+          },
+          "body_yaw": 2.68048357963562,
+          "flat_unblocked_first_20cm_and_centre_to_both_referents": true,
+          "food": {
+            "id": 2,
+            "nutrition": 0.8500000238418579,
+            "p": {
+              "x": -17.68580436706543,
+              "y": 0.0,
+              "z": 207.73175048828125
+            }
+          },
+          "forced_action": false,
+          "hazard": null,
+          "heard": [
+            7,
+            1
+          ],
+          "kind": "prospective-r2-grade-or-words-v1",
+          "mode": "r2-word-retreat-food",
+          "toy": {
+            "id": 4,
+            "p": {
+              "x": -18.50449562072754,
+              "y": 0.0,
+              "z": 206.08392333984375
+            }
+          },
+          "visible": [
+            2,
+            4
+          ]
+        },
+        "host_pressure": {
+          "actual_gpu_timing_preserved": true,
+          "applied_gpu_time_ns": 0,
+          "cross_arm_frame_replay": false,
+          "enabled": true,
+          "live_atp_and_heap_constraints": true,
+          "production_policy_unchanged": true,
+          "scope": "controlled_host_pressure_not_fixed_neural_work"
+        },
+        "navigation_task": null,
+        "registry": "disclosed-r41-card-c46270cc-29/v1",
+        "semantic_prior_mode": "off",
+        "starting_organism_id": 3,
+        "world_tick_limit": 16
+      },
+      "scenario_sha256": "65ab5dfc6ca0decae163841ba9986d77c63803e4328c019c0d31a859e0145ef4",
+      "weight": 2.5,
+      "weight_rational": [
+        5,
+        2
+      ]
+    },
+    "r2-word-retreat-toy": {
+      "atoms": {
+        "receptive:first-signed": [
+          5,
+          2
+        ]
+      },
+      "decisions": 16,
+      "lesson": "receptive",
+      "scenario": {
+        "authentic_player_tokens_per_cut": [
+          [
+            7,
+            2
+          ],
+          [
+            7,
+            2
+          ],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          []
+        ],
+        "case_id": "r2-word-retreat-toy",
+        "decision_limit": 16,
+        "evaluation_nonce": 1794935016,
+        "exact_released_visible_opening": {
+          "after_sound_sha256": "0dd0326fdfb812407c664cf8763a37632b757a83a743bc541c4286446e4f7db9",
+          "at_tick": 3074,
+          "before_sound_sha256": "551546212581695ff3b9e29f11ce17fc226f9aaaa0626b62095c88e7d45dd593",
+          "biological_choices": 0,
+          "body_changed": false,
+          "body_position": {
+            "x": -16.169696807861328,
+            "y": 0.0,
+            "z": 205.9512176513672
+          },
+          "body_yaw": 2.68048357963562,
+          "flat_unblocked_first_20cm_and_centre_to_both_referents": true,
+          "food": {
+            "id": 2,
+            "nutrition": 0.8500000238418579,
+            "p": {
+              "x": -17.68580436706543,
+              "y": 0.0,
+              "z": 207.73175048828125
+            }
+          },
+          "forced_action": false,
+          "hazard": null,
+          "heard": [
+            7,
+            2
+          ],
+          "kind": "prospective-r2-grade-or-words-v1",
+          "mode": "r2-word-retreat-toy",
+          "toy": {
+            "id": 4,
+            "p": {
+              "x": -18.50449562072754,
+              "y": 0.0,
+              "z": 206.08392333984375
+            }
+          },
+          "visible": [
+            2,
+            4
+          ]
+        },
+        "host_pressure": {
+          "actual_gpu_timing_preserved": true,
+          "applied_gpu_time_ns": 0,
+          "cross_arm_frame_replay": false,
+          "enabled": true,
+          "live_atp_and_heap_constraints": true,
+          "production_policy_unchanged": true,
+          "scope": "controlled_host_pressure_not_fixed_neural_work"
+        },
+        "navigation_task": null,
+        "registry": "disclosed-r41-card-c46270cc-29/v1",
+        "semantic_prior_mode": "off",
+        "starting_organism_id": 3,
+        "world_tick_limit": 16
+      },
+      "scenario_sha256": "4a905d6fbb35c9a5d321ff4f99dd09e893d425625545ec6d533711d4a990a82e",
+      "weight": 2.5,
+      "weight_rational": [
+        5,
+        2
+      ]
+    },
+    "r2-word-silence": {
+      "atoms": {},
+      "decisions": 16,
+      "lesson": "receptive",
+      "scenario": {
+        "authentic_player_tokens_per_cut": [],
+        "case_id": "r2-word-silence",
+        "decision_limit": 16,
+        "evaluation_nonce": 1794935016,
+        "exact_released_visible_opening": {
+          "after_sound_sha256": "551546212581695ff3b9e29f11ce17fc226f9aaaa0626b62095c88e7d45dd593",
+          "at_tick": 3074,
+          "before_sound_sha256": "551546212581695ff3b9e29f11ce17fc226f9aaaa0626b62095c88e7d45dd593",
+          "biological_choices": 0,
+          "body_changed": false,
+          "body_position": {
+            "x": -16.169696807861328,
+            "y": 0.0,
+            "z": 205.9512176513672
+          },
+          "body_yaw": 2.68048357963562,
+          "flat_unblocked_first_20cm_and_centre_to_both_referents": true,
+          "food": {
+            "id": 2,
+            "nutrition": 0.8500000238418579,
+            "p": {
+              "x": -17.68580436706543,
+              "y": 0.0,
+              "z": 207.73175048828125
+            }
+          },
+          "forced_action": false,
+          "hazard": null,
+          "heard": [],
+          "kind": "prospective-r2-grade-or-words-v1",
+          "mode": "r2-word-silence",
+          "toy": {
+            "id": 4,
+            "p": {
+              "x": -18.50449562072754,
+              "y": 0.0,
+              "z": 206.08392333984375
+            }
+          },
+          "visible": [
+            2,
+            4
+          ]
+        },
+        "host_pressure": {
+          "actual_gpu_timing_preserved": true,
+          "applied_gpu_time_ns": 0,
+          "cross_arm_frame_replay": false,
+          "enabled": true,
+          "live_atp_and_heap_constraints": true,
+          "production_policy_unchanged": true,
+          "scope": "controlled_host_pressure_not_fixed_neural_work"
+        },
+        "navigation_task": null,
+        "registry": "disclosed-r41-card-c46270cc-29/v1",
+        "semantic_prior_mode": "off",
+        "starting_organism_id": 3,
+        "world_tick_limit": 16
+      },
+      "scenario_sha256": "9135ab47e041e349e57c30108e68f2408a3112ac8d29c8bd0fe26fa17b706a02",
+      "weight": 0.0,
+      "weight_rational": [
+        0,
+        1
+      ]
+    },
+    "u_detour": {
+      "atoms": {
+        "maze:formal": [
+          5,
+          2
+        ],
+        "maze:intake": [
+          5,
+          2
+        ]
+      },
+      "decisions": 1024,
+      "lesson": "maze",
+      "scenario": {
+        "authentic_player_tokens_per_cut": [],
+        "case_id": "u_detour",
+        "decision_limit": 1024,
+        "evaluation_nonce": 1794935016,
+        "exact_released_visible_opening": null,
+        "host_pressure": {
+          "actual_gpu_timing_preserved": true,
+          "applied_gpu_time_ns": 0,
+          "cross_arm_frame_replay": false,
+          "enabled": true,
+          "live_atp_and_heap_constraints": true,
+          "production_policy_unchanged": true,
+          "scope": "controlled_host_pressure_not_fixed_neural_work"
+        },
+        "navigation_task": {
+          "kind": "u_detour",
+          "mirror": false,
+          "prey_speed_per_tick": 0.0,
+          "rotation_radians": 0.0
+        },
+        "registry": "disclosed-r41-card-c46270cc-29/v1",
+        "semantic_prior_mode": "off",
+        "starting_organism_id": 3,
+        "world_tick_limit": 8192
+      },
+      "scenario_sha256": "1dbaff9cafd5b3f6a9cbbf070b94114bf9ba12e6d1afcbec2952d7fe606b6cec",
+      "weight": 5.0,
+      "weight_rational": [
+        5,
+        1
+      ]
+    }
+  },
+  "domain_weights": {
+    "care": 20,
+    "grounded_expression": 20,
+    "hunt": 20,
+    "maze": 20,
+    "receptive": 20
+  },
+  "executable_sha256": "588b60942ded9959eef5860e96bf546b2acd05a71fe6a6d77d9296304ff22bf6",
+  "historical_rubric_sha256": "c46270cc725b56f04ae3edb172424026e0b1959ece7fd397a9abf42d57fdb207",
+  "historical_scoring_method_sha256": "897b06b1fbda5ded0b92cd3b47ece4827b44d52df6ac5cb10b1741b68c44c56e",
+  "min_improvement": 0.0,
+  "runtime_policy": "Same already-qualified saved-life evaluator and disclosed replay nonce, zero host pressure, semantic prior off, independent resident GPU software simulation, same mature source/start within each pair. No placeholder, teacher or cross-arm replay.",
+  "schema": "qualia.saved_life_card.v1",
+  "scorecard_id": "qualia-disclosed-29-v1",
+  "scoring_policy": "Original public case semantics and frozen score atoms. Five equally weighted domains. Hunt split evenly across the two disclosed moving-prey atoms. Historical 30-case result is separate and not scored or claimed here.",
+  "source_catalog_sha256": "e842779cd7c573a6e8c45adcd100463d225601805a630230da681d6187fcfd9e",
+  "zero_weight_control_policy": "Run and authenticate both silence controls; no point credit."
+}
