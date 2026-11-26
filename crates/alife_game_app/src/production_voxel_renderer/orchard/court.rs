@@ -86,9 +86,9 @@ impl PreviewInput<'_, '_> {
 }
 
 #[derive(Component)]
-pub(super) struct Rim(usize);
+pub(in crate::production_voxel_renderer) struct Rim(usize);
 
-pub(super) type Rims<'w, 's> = Query<
+pub(in crate::production_voxel_renderer) type Rims<'w, 's> = Query<
     'w,
     's,
     (Entity, &'static Rim, &'static mut Transform),
