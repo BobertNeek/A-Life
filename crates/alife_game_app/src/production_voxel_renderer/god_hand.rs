@@ -421,7 +421,7 @@ fn object_contact_position(
                     * (0.18 * creature_scale.x)
         }
         WorldObjectKind::Food | WorldObjectKind::Ball | WorldObjectKind::ActivityToy => {
-            live_food_projection::care_object_center(object.position, terrain_bound, surface)
+            live_food_projection::care_object_center(object, terrain_bound, surface)
         }
         _ => base + Vec3::Y * 0.30,
     }
@@ -2042,12 +2042,13 @@ mod tests {
                         assert_eq!(
                             center,
                             live_food_projection::care_object_center(
-                                object.position,
+                                object,
                                 terrain_bound,
                                 &surface
                             )
                         );
-                        let expected_y = 2.30
+                        let expected_y = 2.0
+                            + live_food_projection::keepsake_lift(object)
                             + if terrain_bound {
                                 0.0
                             } else if measured {
@@ -2160,11 +2161,8 @@ mod tests {
                     if let Some(height) = sampled {
                         assert!((height - 0.9).abs() < 1e-5);
                     }
-                    let center = live_food_projection::care_object_center(
-                        object.position,
-                        terrain_bound,
-                        surface,
-                    );
+                    let center =
+                        live_food_projection::care_object_center(object, terrain_bound, surface);
                     let lift = if terrain_bound {
                         0.0
                     } else if measured {
@@ -2172,8 +2170,11 @@ mod tests {
                     } else {
                         0.44
                     };
-                    let expected_center =
-                        Vec3::new(expected.x, expected.y + lift + 0.30, expected.z);
+                    let expected_center = Vec3::new(
+                        expected.x,
+                        expected.y + lift + live_food_projection::keepsake_lift(object),
+                        expected.z,
+                    );
                     assert!((center - expected_center).length() < 1e-5);
                     let contact =
                         object_contact_position(object, terrain_bound, surface, Vec3::ONE);

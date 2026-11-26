@@ -55,7 +55,7 @@ fn refresh(s: &mut Shelf) -> io::Result<()> {
     Ok(())
 }
 fn expose(world: &mut World, s: &mut Shelf) -> bool {
-    let Ok((pose, proj, camera, ambient, fog, tone)) = world
+    let Ok((pose, proj, camera, ambient, fog, tone, fxaa)) = world
         .query_filtered::<(
             &Transform,
             &Projection,
@@ -63,18 +63,20 @@ fn expose(world: &mut World, s: &mut Shelf) -> bool {
             &AmbientLight,
             &DistanceFog,
             &Tonemapping,
+            &bevy_anti_alias::fxaa::Fxaa,
         ), With<Fvr03ProductionVoxelCamera>>()
         .single(world)
     else {
         return false;
     };
-    let (pose, projection, clear_color, ambient, fog, tonemapping) = (
+    let (pose, projection, clear_color, ambient, fog, tonemapping, fxaa) = (
         *pose,
         proj.clone(),
         camera.clear_color,
         ambient.clone(),
         fog.clone(),
         *tone,
+        fxaa.clone(),
     );
     let mut target = Image::new_target_texture(
         plates::WIDTH,
@@ -100,6 +102,7 @@ fn expose(world: &mut World, s: &mut Shelf) -> bool {
             fog,
             tonemapping,
             Msaa::Off,
+            fxaa,
         ))
         .id();
     s.flight = Some(Flight {

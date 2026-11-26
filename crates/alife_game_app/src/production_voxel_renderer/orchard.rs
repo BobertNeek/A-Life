@@ -507,6 +507,7 @@ mod plants {
             commands.spawn((
                 Name::new("Lantern pear"),
                 Plant(b.tile, stage),
+                groundlight::ContactArea::new(0.46),
                 Mesh3d(model(stage)),
                 MeshMaterial3d(material.clone()),
                 pose(b.tile),

@@ -69,6 +69,7 @@ mod creature_grounding;
 mod field_signs;
 mod god_hand;
 mod graphics_capture;
+mod groundlight;
 mod hearthling;
 #[cfg(test)]
 mod hearthling_asset_retirement_tests;
@@ -2050,6 +2051,7 @@ pub fn spawn_fvr03_production_voxel_scene(
             .in_set(ProductionVoxelPresentationSet::AuthoritativeProjection),
     );
     landmarks::install(app);
+    groundlight::install(app);
     app.add_systems(
         Update,
         (
@@ -5170,11 +5172,7 @@ fn pick_live_object_body_with_chime(
                 ),
                 WorldObjectKind::Agent => (position, &[(0.35, 0.40), (0.90, 0.48), (1.35, 0.38)]),
                 WorldObjectKind::Food | WorldObjectKind::Ball => (
-                    live_food_projection::care_object_center(
-                        object.position,
-                        terrain_bound,
-                        surface,
-                    ),
+                    live_food_projection::care_object_center(object, terrain_bound, surface),
                     &[(0.0, 0.42)],
                 ),
                 _ => (position, &[(0.30, 0.42)]),
@@ -5209,8 +5207,7 @@ fn pick_live_food(
             object.kind == WorldObjectKind::Food && !object.consumed && object.carried_by.is_none()
         })
         .filter_map(|object| {
-            let center =
-                live_food_projection::care_object_center(object.position, terrain_bound, surface);
+            let center = live_food_projection::care_object_center(object, terrain_bound, surface);
             let ground = Vec3::new(center.x, 0.0, center.z);
             let along = (center - ray.origin).dot(*ray.direction);
             let closest = ray.origin + *ray.direction * along;

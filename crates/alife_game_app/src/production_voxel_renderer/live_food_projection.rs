@@ -47,11 +47,32 @@ impl Keepsakes {
 /// Terrain-bound world positions already include elevation; unbound positions
 /// retain their canonical Y above the rendered surface (or the existing fallback).
 pub(super) fn care_object_center(
-    position: Vec3f,
+    object: &alife_world::WorldObject,
     terrain_bound: bool,
     surface: &creature_grounding::RenderedTerrainSurface,
 ) -> Vec3 {
-    grounded_object_origin(position, terrain_bound, surface) + Vec3::Y * 0.30
+    grounded_object_origin(object.position, terrain_bound, surface)
+        + Vec3::Y * keepsake_lift(object)
+}
+
+/// Depth beneath the authored origin, in mesh units, times the body's actual
+/// visual scale. A grasp owns its own existing optical offset; do not lower it
+/// onto a surface a creature is holding it above.
+pub(super) fn keepsake_lift(object: &alife_world::WorldObject) -> f32 {
+    if object.carried_by.is_some() {
+        return 0.30;
+    }
+    let sole = match object.kind {
+        WorldObjectKind::Food => 0.79,
+        WorldObjectKind::Ball => 0.8212,
+        WorldObjectKind::ActivityToy => 0.69,
+        _ => return 0.30,
+    };
+    sole * keepsake_scale(object).y
+}
+
+fn keepsake_scale(object: &alife_world::WorldObject) -> Vec3 {
+    Vec3::from_array(object.grounded_physical.shape) * 0.3 + Vec3::splat(0.1)
 }
 
 /// Ground contact shared by handheld care items and fixed physical scenery.
@@ -102,10 +123,12 @@ pub(super) fn sync_care_objects(
         })
         .map(|object| (object.id.raw(), object))
         .collect();
-    let translation = |position| care_object_center(position, highlands.is_some(), &surface);
+    let translation = |object: &alife_world::WorldObject| {
+        care_object_center(object, highlands.is_some(), &surface)
+    };
     for (entity, marker, mut transform) in &mut object_entities {
         if let Some(object) = objects.remove(&marker.0.raw()) {
-            let next = translation(object.position);
+            let next = translation(object);
             let travel = Vec3::new(
                 next.x - transform.translation.x,
                 0.,
@@ -135,14 +158,14 @@ pub(super) fn sync_care_objects(
         .map(|server| assets.get_or_insert_with(|| Keepsakes::load(server)));
     for (id, object) in objects {
         let physical = object.grounded_physical;
-        let shape = Vec3::new(physical.shape[0], physical.shape[1], physical.shape[2]) * 0.3
-            + Vec3::splat(0.1);
+        let shape = keepsake_scale(object);
         commands
             .spawn((
                 Name::new(object.label.clone()),
                 LiveCareObject(WorldEntityId(id)),
+                groundlight::ContactArea::new(0.99 * shape.x.max(shape.z)),
                 Fvr04ProductionRuntimeSceneRoot,
-                Transform::from_translation(translation(object.position)),
+                Transform::from_translation(translation(object)),
                 Visibility::default(),
             ))
             .with_children(|parent| {
@@ -393,14 +416,23 @@ mod tests {
             creature_grounding::RenderedTerrainSurface::from_meshes(std::iter::empty(), 1.0);
         for reverse in [false, true] {
             let mut objects = world.object_snapshots();
+            for object in &mut objects {
+                object.grounded_physical.shape[1] = 0.50;
+            }
             if reverse {
                 objects.reverse();
             }
             let frame =
                 LiveBrainPresentationFrame::try_new(Vec::new(), world.tick(), objects).unwrap();
             for origin_x in [-2.0, 0.0] {
-                let ray =
-                    bevy::math::Ray3d::new(Vec3::new(origin_x, 0.3, 0.0), bevy::math::Dir3::X);
+                let ray = bevy::math::Ray3d::new(
+                    Vec3::new(
+                        origin_x,
+                        keepsake_lift(frame.object(expected).unwrap()),
+                        0.0,
+                    ),
+                    bevy::math::Dir3::X,
+                );
                 let ground = Vec3::new(4.0, 0.0, 0.0);
                 let body = pick_live_object_body(&frame, true, &surface, &ray, ground).unwrap();
                 let food = pick_live_food(&frame, true, &surface, &ray, ground).unwrap();
@@ -428,7 +460,7 @@ mod tests {
                 .unwrap();
         let surface =
             creature_grounding::RenderedTerrainSurface::from_meshes(std::iter::empty(), 1.0);
-        let center = care_object_center(frame.objects().next().unwrap().position, true, &surface);
+        let center = care_object_center(frame.objects().next().unwrap(), true, &surface);
         let ray = bevy::math::Ray3d::new(Vec3::new(0.0, 2.0, 0.0), bevy::math::Dir3::NEG_Y);
         let along = (center - ray.origin).dot(*ray.direction);
         assert!(ray.get_point(along).distance_squared(center) <= 0.42_f32.powi(2));
@@ -491,15 +523,24 @@ mod tests {
                 ));
             }
             app.update();
-            let mut query = app
-                .world_mut()
-                .query_filtered::<&Transform, With<LiveCareObject>>();
+            let mut query = app.world_mut().query::<(&LiveCareObject, &Transform)>();
             assert_eq!(query.iter(app.world()).count(), 2);
-            let fruit = query.iter(app.world()).next().unwrap();
+            let mut objects = world.object_snapshots();
+            let apple = objects
+                .iter()
+                .find(|o| o.kind == WorldObjectKind::Food)
+                .unwrap();
+            let (_, fruit) = query
+                .iter(app.world())
+                .find(|(mark, _)| mark.0 == apple.id)
+                .unwrap();
             assert_eq!(fruit.translation.x, 2.5);
             assert_eq!(fruit.translation.z, -3.5);
-            assert!((fruit.translation.y - if highlands { 4.30 } else { 4.74 }).abs() < 1e-5);
-            let mut objects = world.object_snapshots();
+            assert!(
+                (fruit.translation.y - keepsake_lift(apple) - if highlands { 4.0 } else { 4.44 })
+                    .abs()
+                    < 1e-5
+            );
             let toy = objects
                 .iter_mut()
                 .find(|object| object.kind == WorldObjectKind::Ball)
@@ -514,7 +555,7 @@ mod tests {
             app.update();
             assert!(query
                 .iter(app.world())
-                .any(|transform| transform.translation.x == 4.5));
+                .any(|(_, transform)| transform.translation.x == 4.5));
             objects.iter_mut().for_each(|object| object.consumed = true);
             let consumed =
                 LiveBrainPresentationFrame::try_new(Vec::new(), world.tick(), objects).unwrap();
@@ -553,16 +594,47 @@ mod tests {
     }
 
     #[test]
-    fn care_object_center_preserves_canonical_height_and_uses_only_unbound_surface_lift() {
+    fn loose_keepsakes_sit_on_their_real_authored_sole_and_carried_ones_keep_the_grip() {
+        let world = alife_world::HeadlessScenarioBuilder::new(11)
+            .food("pear", Vec3f::ZERO, 0.25)
+            .toy("rattle", Vec3f::ZERO, true)
+            .toy("table", Vec3f::ZERO, false)
+            .build()
+            .unwrap();
+        for mut body in world.object_snapshots() {
+            let bytes: &[u8] = match body.kind {
+                WorldObjectKind::Food => include_bytes!("../../assets/care/orchard-fruit.glb"),
+                WorldObjectKind::Ball => include_bytes!("../../assets/care/orbital-rattle.glb"),
+                WorldObjectKind::ActivityToy => include_bytes!("../../assets/care/chime-table.glb"),
+                _ => unreachable!(),
+            };
+            let end = 20 + u32::from_le_bytes(bytes[12..16].try_into().unwrap()) as usize;
+            let json: serde_json::Value = serde_json::from_slice(&bytes[20..end]).unwrap();
+            let position = json["meshes"][0]["primitives"][0]["attributes"]["POSITION"]
+                .as_u64()
+                .unwrap() as usize;
+            let sole = -json["accessors"][position]["min"][1].as_f64().unwrap() as f32;
+            for height_channel in [0.0, 0.45, 1.0] {
+                body.grounded_physical.shape[1] = height_channel;
+                let lift = keepsake_lift(&body);
+                assert!((lift - sole * (0.10 + 0.30 * height_channel)).abs() < 0.00001);
+            }
+            body.carried_by = Some(OrganismId(7));
+            assert_eq!(keepsake_lift(&body), 0.30);
+        }
+    }
+
+    #[test]
+    fn object_origin_preserves_canonical_height_and_uses_only_unbound_surface_lift() {
         let position = Vec3f::new(0.5, 2.0, 0.5);
         for (terrain_bound, surface_height, expected_y) in [
-            (false, Some(0.9), 3.2),
-            (false, None, 2.74),
-            (true, Some(0.9), 2.3),
-            (true, None, 2.3),
+            (false, Some(0.9), 2.9),
+            (false, None, 2.44),
+            (true, Some(0.9), 2.0),
+            (true, None, 2.0),
         ] {
             let surface = surface_with_height(surface_height);
-            let center = care_object_center(position, terrain_bound, &surface);
+            let center = grounded_object_origin(position, terrain_bound, &surface);
             assert_eq!(center.x, position.x);
             assert_eq!(center.z, position.z);
             assert!((center.y - expected_y).abs() < 1e-5);
@@ -615,11 +687,7 @@ mod tests {
                         .resource::<creature_grounding::RenderedTerrainSurface>();
                     assert_eq!(
                         center,
-                        care_object_center(
-                            frame.object(id).unwrap().position,
-                            terrain_bound,
-                            surface
-                        )
+                        care_object_center(frame.object(id).unwrap(), terrain_bound, surface)
                     );
                     let ray = bevy::math::Ray3d::new(center - Vec3::X * 2.0, bevy::math::Dir3::X);
                     let ground_hit = Vec3::new(4.0, 0.0, 0.5);
@@ -637,7 +705,8 @@ mod tests {
                     );
                     if !terrain_bound {
                         // The former primary/contact center was below the visible food.
-                        let wrong = Vec3::new(0.5, y + 0.30, 0.5);
+                        let wrong =
+                            Vec3::new(0.5, y + keepsake_lift(frame.object(id).unwrap()), 0.5);
                         let wrong_ray =
                             bevy::math::Ray3d::new(wrong - Vec3::X * 2.0, bevy::math::Dir3::X);
                         assert!(pick_live_object_body(
@@ -675,7 +744,7 @@ mod tests {
         let id = original[0].id;
         for terrain_bound in [false, true] {
             let surface = surface_with_height(Some(0.9));
-            let center = care_object_center(original[0].position, terrain_bound, &surface);
+            let center = care_object_center(&original[0], terrain_bound, &surface);
             let ray = bevy::math::Ray3d::new(center - Vec3::X * 2.0, bevy::math::Dir3::X);
             let ground_hit = Vec3::new(4.0, 0.0, 0.5);
             for (carried_by, consumed) in [
@@ -718,7 +787,7 @@ mod tests {
         for terrain_bound in [false, true] {
             for height in [Some(0.9), None] {
                 let surface = surface_with_height(height);
-                let center = care_object_center(original[0].position, terrain_bound, &surface);
+                let center = care_object_center(&original[0], terrain_bound, &surface);
                 let ray = bevy::math::Ray3d::new(center - Vec3::X * 2.0, bevy::math::Dir3::X);
                 let ground_hit = Vec3::new(4.0, 0.0, 0.5);
                 for (carried_by, consumed) in
@@ -1137,7 +1206,7 @@ mod tests {
             );
             assert_eq!(
                 care_position(&mut apps[1], objects[6].id),
-                Vec3::new(12.0, 2.30, 13.0)
+                Vec3::new(12.0, 2.0 + keepsake_lift(&objects[2]), 13.0)
             );
         }
     }
@@ -1263,7 +1332,7 @@ mod tests {
         app.update();
         assert_eq!(
             care_position(&mut app, objects[2].id),
-            Vec3::new(7.0, 2.30, 8.0)
+            Vec3::new(7.0, 2.0 + keepsake_lift(&objects[2]), 8.0)
         );
         objects[2].carried_by = Some(OrganismId(22));
         objects[2].position = Vec3f::new(-7.5, 2.0, -9.0);
@@ -1327,7 +1396,7 @@ mod tests {
         assert_ne!(care_entity(&mut app, objects[2].id).unwrap(), old_entity);
         assert_eq!(
             care_position(&mut app, objects[2].id),
-            Vec3::new(12.0, 2.30, 13.0)
+            Vec3::new(12.0, 2.0 + keepsake_lift(&objects[2]), 13.0)
         );
         let removed_id = objects.remove(2).id;
         replace_objects(&mut app, &objects);
