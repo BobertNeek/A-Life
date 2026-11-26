@@ -6147,6 +6147,38 @@ impl GpuLiveBrainRuntime {
         self.training_demonstrator = None;
     }
 
+    #[cfg(feature = "foundation-training")]
+    pub fn set_v11_dendritic_branches(
+        &mut self,
+        organism_id: OrganismId,
+        branches: alife_core::DendriticBranchSet,
+    ) -> Result<(), GameAppShellError> {
+        let handle = *self
+            .handles
+            .get(&organism_id.raw())
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        self.backend.set_v11_dendritic_branches(handle, branches)?;
+        Ok(())
+    }
+
+    #[cfg(feature = "foundation-training")]
+    pub fn checkpoint_v11_dendritic_branches(
+        &self,
+        organism_id: OrganismId,
+    ) -> Result<alife_core::DendriticBranchSet, GameAppShellError> {
+        let handle = *self
+            .handles
+            .get(&organism_id.raw())
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        Ok(self.backend.checkpoint_v11(handle)?.dendritic_branches)
+    }
+
+    #[cfg(feature = "foundation-training")]
+    pub fn set_deterministic_semantic_prior_for_surgery(&mut self, seed: u64) {
+        self.semantic_prior =
+            Some(semantic_prior::RuntimeSemanticPrior::deterministic_for_training(seed));
+    }
+
     pub(crate) fn new_benchmark_profiled(
         backend: GpuClosedLoopBackend,
         world: HeadlessWorld,

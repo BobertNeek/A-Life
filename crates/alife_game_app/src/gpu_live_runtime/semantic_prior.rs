@@ -186,7 +186,7 @@ pub(crate) struct RuntimeSemanticPrior {
 impl RuntimeSemanticPrior {
     /// Explicit stateless provider for a fresh training life. This path reads
     /// neither ambient provider settings nor a shared cache, and starts no worker.
-    #[cfg(any(feature = "cpu-training", all(test, feature = "foundation-training")))]
+    #[cfg(any(feature = "cpu-training", feature = "foundation-training"))]
     pub(crate) fn deterministic_for_training(seed: u64) -> Self {
         let context_contract = context_contract();
         let provider_identity = provider_identity(

@@ -45,6 +45,16 @@ name = "qualify_critic_residual"
 path = "src/bin/qualify_critic_residual.rs"
 required-features = ["foundation-training"]
 
+[[bin]]
+name = "brain_surgery_eval"
+path = "src/bin/brain_surgery_eval.rs"
+required-features = ["foundation-training"]
+
+[[test]]
+name = "brain_surgery_reopen"
+path = "tests/brain_surgery_reopen.rs"
+required-features = ["foundation-training", "gpu-tests"]
+
 [[example]]
 name = "inspect_saved_policy"
 required-features = ["foundation-training"]

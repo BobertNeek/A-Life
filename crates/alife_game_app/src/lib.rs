@@ -223,6 +223,8 @@ pub mod bevy_shell;
 mod tests;
 
 #[cfg(feature = "foundation-training")]
+pub mod brain_surgery;
+#[cfg(feature = "foundation-training")]
 pub mod simulator_rehearsal;
 
 /// Initializes stderr `tracing` formatting for headless CLI binaries and

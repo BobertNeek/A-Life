@@ -745,6 +745,7 @@ pub fn run_foundation_training_pilot(
             food_position: None,
             lesson: None,
             asset_override: None,
+            dendritic_branches_override: None,
             silent_request: false,
             food_need_condition: FoundationFoodNeedCondition::default(),
         },
@@ -767,6 +768,7 @@ pub fn run_foundation_teacher_pilot(
             food_position: None,
             lesson: None,
             asset_override: None,
+            dendritic_branches_override: None,
             silent_request: false,
             food_need_condition: FoundationFoodNeedCondition::default(),
         },
@@ -790,6 +792,7 @@ pub fn run_foundation_teacher_pilot_with_scenario(
             food_position,
             lesson: None,
             asset_override: None,
+            dendritic_branches_override: None,
             silent_request: false,
             food_need_condition: FoundationFoodNeedCondition::default(),
         },
@@ -814,6 +817,7 @@ pub fn run_foundation_teacher_pilot_with_lesson(
             food_position,
             lesson: Some(lesson),
             asset_override: None,
+            dendritic_branches_override: None,
             silent_request: false,
             food_need_condition: FoundationFoodNeedCondition::default(),
         },
@@ -853,6 +857,7 @@ pub fn run_adapted_foundation_teacher_pilot(
             food_position: None,
             lesson: Some(lesson),
             asset_override: Some(asset),
+            dendritic_branches_override: None,
             silent_request: false,
             food_need_condition: FoundationFoodNeedCondition::default(),
         },
@@ -882,6 +887,26 @@ pub fn run_foundation_request_evaluation(
     asset: FoundationWeightAsset,
     request: FoundationEvaluationRequest,
 ) -> Result<FoundationPilotReceipt> {
+    run_foundation_request_evaluation_with_v11_branches(
+        output,
+        world_seed,
+        founder_seed_base,
+        tick_count,
+        asset,
+        None,
+        request,
+    )
+}
+
+pub fn run_foundation_request_evaluation_with_v11_branches(
+    output: &Path,
+    world_seed: u64,
+    founder_seed_base: u64,
+    tick_count: usize,
+    asset: FoundationWeightAsset,
+    dendritic_branches: Option<alife_core::DendriticBranchSet>,
+    request: FoundationEvaluationRequest,
+) -> Result<FoundationPilotReceipt> {
     if !matches!(request.token, 1 | 2 | 9 | 13 | 15 | 16) {
         return Err("controlled request supports food/toy, get/play, and root/fruit pairs".into());
     }
@@ -895,6 +920,7 @@ pub fn run_foundation_request_evaluation(
             food_position: None,
             lesson: Some(FoundationTeacherLesson::VocabularyReception),
             asset_override: Some(asset),
+            dendritic_branches_override: dendritic_branches,
             silent_request: false,
             food_need_condition: FoundationFoodNeedCondition::default(),
         },
@@ -983,6 +1009,29 @@ pub fn run_foundation_evaluation_pilot_with_config(
     evaluation: FoundationEvaluationConfig,
     asset: FoundationWeightAsset,
 ) -> Result<FoundationPilotReceipt> {
+    run_foundation_evaluation_pilot_with_v11_branches(
+        output,
+        world_seed,
+        founder_seed_base,
+        tick_count,
+        lesson,
+        evaluation,
+        asset,
+        None,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn run_foundation_evaluation_pilot_with_v11_branches(
+    output: &Path,
+    world_seed: u64,
+    founder_seed_base: u64,
+    tick_count: usize,
+    lesson: FoundationTeacherLesson,
+    evaluation: FoundationEvaluationConfig,
+    asset: FoundationWeightAsset,
+    dendritic_branches: Option<alife_core::DendriticBranchSet>,
+) -> Result<FoundationPilotReceipt> {
     evaluation.validate()?;
     evaluation
         .food_need_condition
@@ -1007,6 +1056,7 @@ pub fn run_foundation_evaluation_pilot_with_config(
             food_position: evaluation.food_position,
             lesson: Some(lesson),
             asset_override: Some(asset),
+            dendritic_branches_override: dendritic_branches,
             silent_request: evaluation.silent_request,
             food_need_condition: evaluation.food_need_condition,
         },
@@ -1716,6 +1766,7 @@ struct FoundationPilotOptions {
     food_position: Option<[f32; 2]>,
     lesson: Option<FoundationTeacherLesson>,
     asset_override: Option<FoundationWeightAsset>,
+    dendritic_branches_override: Option<alife_core::DendriticBranchSet>,
     silent_request: bool,
     food_need_condition: FoundationFoodNeedCondition,
 }
@@ -1752,6 +1803,7 @@ fn run_foundation_training_pilot_with_request(
         food_position,
         lesson,
         asset_override,
+        dendritic_branches_override,
         silent_request,
         food_need_condition,
     } = options;
@@ -1904,6 +1956,9 @@ fn run_foundation_training_pilot_with_request(
         initial_sampling,
     )
     .map_err(|error| format!("pilot runtime admission: {error}"))?;
+    if let Some(branches) = dendritic_branches_override {
+        runtime.set_v11_dendritic_branches(learner, branches)?;
+    }
     let teacher_previous = std::sync::Arc::new(std::sync::Mutex::new(None));
     if teacher_mode {
         let mut navigation = GroundedNavigationTeacher::default();
