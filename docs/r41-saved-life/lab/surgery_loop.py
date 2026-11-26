@@ -267,6 +267,9 @@ def verified_state_failure(state: dict[str, Any]) -> str | None:
         if gate and (not manifest.get("reopen_verified") or
                      manifest.get("full_saved_life_current_sha256") != gate.get("full_saved_life_current_sha256")):
             raise SurgeryLoopError("active mature Current/reopen identity differs from state")
+        runtime = gate.get("evaluator_local_path")
+        if runtime and sha256_file(pathlib.Path(runtime)) != state["known_good_eval_bin_sha256"]:
+            raise SurgeryLoopError("installed saved-life evaluator differs from state")
         card = gate.get("active_card")
         if card:
             load_active_card(state)
@@ -606,8 +609,8 @@ def cmd_record_comparison(args: argparse.Namespace) -> dict[str, Any]:
         target = next((p for p in state["in_flight_patches"]
                        if p["patch_id"] == proof["patch_id"] and p["target_base_id"] == state["active_base_id"]
                        and p["status"] == "unscored"),None)
-        if not spec or not target or not pin.get("baseline"):
-            raise SurgeryLoopError("comparison lacks frozen case, active baseline or registered candidate")
+        if not spec or not target:
+            raise SurgeryLoopError("comparison lacks a frozen case or registered candidate")
         expected = dict(schema="qualia.saved_life_completed_comparison.v1", scorecard_id=pin["id"],
                         rubric_sha256=pin["sha256"], evaluator_sha256=state["known_good_eval_bin_sha256"],
                         base_id=state["active_base_id"], source_current_sha256=gate["full_saved_life_current_sha256"],
