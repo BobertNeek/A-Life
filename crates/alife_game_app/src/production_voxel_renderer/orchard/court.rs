@@ -317,7 +317,7 @@ mod tests {
     fn signed_viewport_chime_preview_garden_return_and_late_seat_refusal() {
         use alife_world::orchard::{OrchardGesture, OrchardReceipt};
 
-        assert!(ORCHARD_COURT_REVIEW);
+        const { assert!(ORCHARD_COURT_REVIEW) };
         let mut world = alife_world::HeadlessWorld::new(1643);
         world.enable_island_for_new_game().unwrap();
         assert_eq!(world.tend_orchard(ROOT).unwrap(), OrchardReceipt::Sown);

@@ -1136,7 +1136,7 @@ mod tests {
                 .expect("signed Follow ray must hit the actual island")
         }
 
-        assert!(REOPENED_CHIME_COMMIT_REVIEW);
+        const { assert!(REOPENED_CHIME_COMMIT_REVIEW) };
         let mut world = HeadlessScenarioBuilder::new(1643)
             .agent("signed-follow-target", WALKER, Vec3f::ZERO)
             .build()
@@ -1656,10 +1656,12 @@ mod tests {
     fn reopened_chime_keeps_legal_old_support_on_cancel_and_commits_one_real_intentional_drop() {
         use alife_world::{AssetManifest, PortableSaveFile, RuntimeConfig};
 
-        assert!(
-            REOPENED_CHIME_COMMIT_REVIEW,
-            "use only the separate review opt-in"
-        );
+        const {
+            assert!(
+                REOPENED_CHIME_COMMIT_REVIEW,
+                "use only the separate review opt-in"
+            )
+        };
         let mut base = alife_world::HeadlessWorld::new(1643);
         base.enable_island_for_new_game().unwrap();
         let ground = |world: &alife_world::HeadlessWorld, x, z| {
