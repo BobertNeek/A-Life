@@ -291,8 +291,10 @@ pub(super) fn handle_fvr05_production_ux_input(
             }
         }
         orchard::drive(
-            &keyboard,
-            hand.as_ref().and_then(|hand| hand.ground),
+            orchard::DriveInput {
+                keyboard: &keyboard,
+                hand_ground: hand.as_ref().and_then(|hand| hand.ground),
+            },
             &mut selection,
             &mut follow,
             &mut dock,

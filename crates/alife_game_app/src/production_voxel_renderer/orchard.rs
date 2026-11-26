@@ -236,9 +236,17 @@ fn focus_existing_garden_return(
 }
 
 #[cfg(feature = "gpu-runtime")]
+pub(super) struct DriveInput<'a> {
+    pub(super) keyboard: &'a ButtonInput<KeyCode>,
+    pub(super) hand_ground: Option<Vec3>,
+}
+
+#[cfg(feature = "gpu-runtime")]
 pub(super) fn drive(
-    keyboard: &ButtonInput<KeyCode>,
-    hand_ground: Option<Vec3>,
+    DriveInput {
+        keyboard,
+        hand_ground,
+    }: DriveInput<'_>,
     selection: &mut Fvr03ProductionVoxelSelectionResource,
     follow: &mut Fvr04ProductionCreatureFollowResource,
     dock: &mut care_dock::State,
@@ -408,10 +416,7 @@ mod plants {
         mut pot_cache: Local<wick_pot::PotArt>,
         live_seat: court::PreviewInput,
         mut pots: Query<(Entity, &wick_pot::WickPiece, &mut Transform), Without<Plant>>,
-        mut rims: Query<
-            (Entity, &court::Rim, &mut Transform),
-            (Without<Plant>, Without<wick_pot::WickPiece>),
-        >,
+        mut rims: court::Rims<'_, '_>,
         mut query: Query<
             (Entity, &mut Plant, &mut Mesh3d, &mut Transform),
             Without<wick_pot::WickPiece>,

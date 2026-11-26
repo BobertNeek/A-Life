@@ -84,7 +84,17 @@ impl PreviewInput<'_, '_> {
 }
 
 #[derive(Component)]
-pub(in crate::production_voxel_renderer) struct Rim(usize);
+pub(super) struct Rim(usize);
+
+pub(super) type Rims<'w, 's> = Query<
+    'w,
+    's,
+    (Entity, &'static Rim, &'static mut Transform),
+    (
+        Without<super::plants::Plant>,
+        Without<super::wick_pot::WickPiece>,
+    ),
+>;
 
 struct Pieces {
     ceramic: Handle<Mesh>,
@@ -108,10 +118,6 @@ fn rim_pose(contact: OrchardCourtFoot, axis: [i32; 2]) -> Transform {
         .with_scale(Vec3::new(0.49, 1.08, 0.74))
 }
 
-#[allow(
-    clippy::type_complexity,
-    reason = "Distinct transform queries keep the two Orchard dressings independent."
-)]
 pub(super) fn sync(
     court: Option<OrchardCourt>,
     preview: Option<Ghost>,
@@ -119,13 +125,7 @@ pub(super) fn sync(
     materials: Option<&mut Assets<StandardMaterial>>,
     state: &mut Art,
     commands: &mut Commands,
-    found: &mut Query<
-        (Entity, &Rim, &mut Transform),
-        (
-            Without<super::plants::Plant>,
-            Without<super::wick_pot::WickPiece>,
-        ),
-    >,
+    found: &mut Rims<'_, '_>,
 ) {
     if court.is_none() && preview.is_none() {
         for (entity, ..) in found.iter() {
