@@ -7,7 +7,7 @@ Enforces:
 - At most one unscored patch in flight per Astra owner, bounded global backlog.
 - Data-only patches (rejects unlanded changes under crates/ unless explicit override).
 - Candidate digest binding from score -> reopen verification -> byte-identical backup promotion.
-- Strict 2-hour stall fuse blocking all new proposals until real score or reopen-verified recovery.
+- A stall is observable; rollback is reserved for verified active state failure.
 """
 
 from __future__ import annotations
@@ -17,6 +17,8 @@ from contextlib import contextmanager
 import datetime as dt
 import hashlib
 import json
+import math
+import re
 import os
 import pathlib
 import shutil
@@ -249,53 +251,100 @@ def dirty_crates_files(repo_root: pathlib.Path) -> list[str]:
     return [line for line in proc.stdout.splitlines() if line.strip()]
 
 
-def compute_watchdog(state: dict[str, Any], now_utc: str | None = None) -> dict[str, Any]:
-    now = parse_utc(now_utc) if now_utc else dt.datetime.now(dt.timezone.utc)
-    last_score = parse_utc(str(state["last_real_score_utc"]))
-    last_recovery_raw = state.get("last_recovery_utc")
-    effective_progress = last_score
-    if last_recovery_raw:
-        last_recovery = parse_utc(str(last_recovery_raw))
-        if last_recovery > effective_progress:
-            effective_progress = last_recovery
+def verified_state_failure(state: dict[str, Any]) -> str | None:
+    """Validate immutable active artifacts, not merely the time since progress."""
+    try:
+        manifest, digest = load_bundle_manifest(pathlib.Path(state["active_base_dir"]))
+        for actual, key in (
+            (digest, "active_base_manifest_sha256"),
+            (manifest["base_id"], "active_base_id"),
+            (manifest["foundation_digest"], "active_base_foundation_digest"),
+            (manifest["dendritic_branches_sha256"], "active_base_dendritic_sha256"),
+        ):
+            if actual != state.get(key):
+                raise SurgeryLoopError(f"active bundle differs from {key}")
+        gate = state.get("saved_life_controls", {})
+        if gate and (not manifest.get("reopen_verified") or
+                     manifest.get("full_saved_life_current_sha256") != gate.get("full_saved_life_current_sha256")):
+            raise SurgeryLoopError("active mature Current/reopen identity differs from state")
+        card = gate.get("active_card")
+        if card:
+            load_active_card(state)
+        return None
+    except (SurgeryLoopError, OSError, KeyError, ValueError, TypeError) as exc:
+        return str(exc)
 
+
+def load_active_card(state: dict[str, Any]) -> dict[str, Any]:
+    gate = state["saved_life_controls"]
+    pin = gate["active_card"]
+    path = pathlib.Path(pin["path"])
+    if sha256_file(path) != pin["sha256"]:
+        raise SurgeryLoopError("active card SHA-256 differs from state")
+    card = read_json(path, "frozen active card")
+    if (card["scorecard_id"] != pin["id"] or len(card["cases"]) != 29
+            or card["executable_sha256"] != state["known_good_eval_bin_sha256"]
+            or card["historical_rubric_sha256"] != gate["historical_rubric_sha256"]):
+        raise SurgeryLoopError("active card identity differs from state")
+    baseline = pin.get("baseline")
+    if baseline and (baseline["base_id"] != state["active_base_id"]
+                     or baseline["score"] != state["active_base_score"]
+                     or sha256_file(pathlib.Path(baseline["path"])) != baseline["sha256"]):
+        raise SurgeryLoopError("active baseline differs from state")
+    return card
+
+
+def compute_watchdog(state: dict[str, Any], now_utc: str | None = None,
+                     *, failure: str | None = None) -> dict[str, Any]:
+    now = parse_utc(now_utc) if now_utc else dt.datetime.now(dt.timezone.utc)
+    stamps = [parse_utc(str(state["last_real_score_utc"]))]
+    for key in ("last_recovery_utc", "last_completed_comparison_utc", "last_candidate_closed_utc",
+                "last_baseline_utc"):
+        if state.get(key):
+            stamps.append(parse_utc(state[key]))
+    last_score = stamps[0]
     hours_since_real_score = max(0.0, (now - last_score).total_seconds() / 3600.0)
-    hours_since_progress = max(0.0, (now - effective_progress).total_seconds() / 3600.0)
+    hours_since_progress = max(0.0, (now - max(stamps)).total_seconds() / 3600.0)
     fuse_hours = float(state.get("stall_fuse_hours", 2.0))
     in_flight = list(state.get("in_flight_patches", []))
     unscored = [p for p in in_flight if p.get("status") == "unscored"]
     scored = [p for p in in_flight if p.get("status") == "scored"]
+    gate = state.get("saved_life_controls", {})
+    card = gate.get("active_card")
+    stalled = hours_since_progress >= fuse_hours
 
-    if hours_since_progress >= fuse_hours:
+    if failure:
         status = "ROLLBACK_REQUIRED"
-        action = (
-            f"No matched base-vs-candidate score or verified recovery recorded in "
-            f"{hours_since_progress:.2f}h (>= {fuse_hours:.2f}h). STOP editing tooling or running "
-            f"stock-creature proxy checks. Reset to known_good_git_sha={state.get('known_good_git_sha')} "
-            f"and run scripts/bootstrap_cloud_surgery.sh --state SURGERY_STATE.json --recover "
-            f"(verifying real active_base_dir={state.get('active_base_dir')}) before proposing new edits."
-        )
+        action = "Do not dispatch. Restore the exact verified active bundle or card and independently reopen it."
+    elif gate.get("round_paused"):
+        status = "PAUSED"
+        action = "Finish the authorized handoff or verification; do not dispatch new patches."
+    elif card and not card.get("baseline"):
+        status = "BASELINE_REQUIRED"
+        action = "Run the frozen full card against the exact active saved-life base before formal scoring."
     elif unscored:
         status = "SCORE_QUEUE_BACKLOG"
-        ids = ", ".join(str(p["patch_id"]) for p in unscored)
-        action = (
-            f"Score existing candidate(s) [{ids}] with brain_surgery_eval score before stacking new edits. "
-            f"Proxy stock-creature checks do not count as progress."
-        )
+        action = "Run matched saved-life comparisons for the existing candidates; no proxy tests."
+    elif stalled:
+        status = "STALLED"
+        action = "No measured progress within the time window. Resume the next real comparison; do not roll back for time alone."
     else:
         status = "HEALTHY"
-        action = (
-            f"Ready for data-only patches targeting active_base_id={state.get('active_base_id')}. "
-            f"Never chain edits without scoring the previous round."
-        )
+        action = f"Ready for data-only patches targeting active_base_id={state.get('active_base_id')}."
 
     return {
         "status": status,
+        "stalled": stalled,
+        "verified_state_failure": failure,
         "hours_since_last_real_score": round(hours_since_real_score, 4),
         "hours_since_last_progress": round(hours_since_progress, 4),
         "stall_fuse_hours": fuse_hours,
         "last_real_score_utc": state["last_real_score_utc"],
-        "last_recovery_utc": last_recovery_raw,
+        "last_recovery_utc": state.get("last_recovery_utc"),
+        "last_completed_comparison_utc": state.get("last_completed_comparison_utc"),
+        "last_candidate_closed_utc": state.get("last_candidate_closed_utc"),
+        "last_baseline_utc": state.get("last_baseline_utc"),
+        "active_card_id": card and card["id"],
         "active_base_id": state["active_base_id"],
         "active_base_dir": state["active_base_dir"],
         "active_base_score": state["active_base_score"],
@@ -358,11 +407,10 @@ def cmd_propose(args: argparse.Namespace) -> dict[str, Any]:
         if manifest_sha != state["active_base_manifest_sha256"]:
             raise SurgeryLoopError("active_base_dir manifest SHA-256 drifted from SURGERY_STATE.json")
 
-        watchdog = compute_watchdog(state, args.now_utc)
+        watchdog = compute_watchdog(state, args.now_utc, failure=verified_state_failure(state))
         if watchdog["status"] == "ROLLBACK_REQUIRED":
             raise SurgeryLoopError(
-                "stall fuse is ROLLBACK_REQUIRED; run scripts/bootstrap_cloud_surgery.sh --recover "
-                "or record-score against active_base_id before proposing new edits"
+                f"verified state failure: {watchdog['verified_state_failure']}"
             )
 
         if not args.allow_engine_changes:
@@ -415,6 +463,7 @@ def cmd_propose(args: argparse.Namespace) -> dict[str, Any]:
             "patch_id": patch_id,
             "owner": owner,
             "patch_path": str(patch_path),
+            "patch_sha256": sha256_file(patch_path),
             "target_base_id": state["active_base_id"],
             "status": "unscored",
             "proposed_at_utc": utc_now_iso(args.now_utc),
@@ -433,13 +482,188 @@ def cmd_propose(args: argparse.Namespace) -> dict[str, Any]:
         return entry
 
 
+def valid_digest(value: Any) -> bool:
+    return isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value) is not None
+
+
+def validate_card_cases(card: dict[str, Any]) -> dict[str, Any]:
+    cases = card["cases"]
+    if not isinstance(cases, dict) or len(cases) != 29 or any(
+        not valid_digest(v.get("scenario_sha256")) or type(v.get("decisions")) is not int
+        or v["decisions"] <= 0 or type(v.get("weight")) not in (int, float)
+        or not math.isfinite(v["weight"]) or v["weight"] < 0 for v in cases.values()
+    ) or not math.isclose(math.fsum(v["weight"] for v in cases.values()), 100.0, abs_tol=1e-6):
+        raise SurgeryLoopError("invalid frozen 29-case card scenarios, decisions, or weights")
+    return cases
+
+
+def weighted_score(cases: dict[str, Any], scores: dict[str, Any]) -> float:
+    if scores.keys() != cases.keys() or any(type(v) not in (int, float) or not 0 <= v <= 100 for v in scores.values()):
+        raise SurgeryLoopError("missing, duplicated, or invalid frozen-card score rows")
+    return math.fsum(cases[k]["weight"] * v for k, v in scores.items()) / math.fsum(
+        v["weight"] for v in cases.values())
+
+
+def record_baseline(state: dict[str, Any], path: pathlib.Path) -> dict[str, Any]:
+    card = load_active_card(state)
+    specs = validate_card_cases(card)
+    gate = state["saved_life_controls"]
+    pin = gate["active_card"]
+    if pin.get("baseline"):
+        raise SurgeryLoopError("baseline is already frozen")
+    proof = read_json(path, "fresh native baseline")
+    expected = dict(schema="qualia.saved_life_baseline.v1", base_id=state["active_base_id"],
+                    scorecard_id=pin["id"], rubric_sha256=pin["sha256"],
+                    evaluator_sha256=state["known_good_eval_bin_sha256"],
+                    source_current_sha256=gate["full_saved_life_current_sha256"])
+    if any(proof.get(k) != v for k, v in expected.items()) or proof["cases"].keys() != specs.keys():
+        raise SurgeryLoopError("baseline is not tied to the complete active card and saved-life base")
+    for key, v in proof["cases"].items():
+        spec = specs[key]
+        if (v.get("scenario_sha256") != spec["scenario_sha256"] or v.get("decisions") != spec["decisions"]
+                or not valid_digest(v.get("native_receipt_sha256")) or not valid_digest(v.get("rows_sha256"))):
+            raise SurgeryLoopError(f"baseline native evidence invalid for {key}")
+    score = weighted_score(specs, {k: v["score"] for k,v in proof["cases"].items()})
+    if not math.isclose(score, proof["score"], abs_tol=1e-8):
+        raise SurgeryLoopError("baseline score differs from frozen-card weights")
+    when = utc_now_iso(proof["measured_at_utc"])
+    if not parse_utc(gate["round_transition_utc"]) <= parse_utc(when) <= parse_utc(utc_now_iso()):
+        raise SurgeryLoopError("baseline was not measured after the authorized transition")
+    pin["baseline"] = dict(base_id=state["active_base_id"], score=score, path=str(path),
+                           sha256=sha256_file(path), measured_at_utc=when)
+    state["active_base_score"] = score
+    state["last_baseline_utc"] = when
+    return pin["baseline"]
+
+
+def cmd_record_baseline(args: argparse.Namespace) -> dict[str, Any]:
+    path = pathlib.Path(args.state).resolve()
+    with state_lock(path):
+        state = load_state(path)
+        failure = verified_state_failure(state)
+        if failure:
+            raise SurgeryLoopError(failure)
+        baseline = record_baseline(state, pathlib.Path(args.evidence).resolve())
+        write_json_atomic(path,state)
+        return baseline
+
+
+def check_active_comparison(state: dict[str, Any], report: dict[str, Any], target: dict[str, Any]) -> str:
+    gate = state["saved_life_controls"]
+    pin = gate["active_card"]
+    if not pin.get("baseline"):
+        raise SurgeryLoopError("fresh baseline must be established before recording a full-card score")
+    card = load_active_card(state)
+    specs = validate_card_cases(card)
+    evidence = report["saved_life_evidence"]
+    expected = dict(full_score=True, rubric_sha256=pin["sha256"], case_count=len(specs),
+                    source_current_sha256=gate["full_saved_life_current_sha256"],
+                    evaluator_sha256=state["known_good_eval_bin_sha256"], patch_sha256=target["patch_sha256"])
+    candidate_current = evidence.get("candidate_current_sha256")
+    if (report.get("scorecard_id") != pin["id"] or any(evidence.get(k)!=v for k,v in expected.items())
+            or not valid_digest(candidate_current) or candidate_current == expected["source_current_sha256"]
+            or sha256_file(pathlib.Path(target["patch_path"])) != target["patch_sha256"]):
+        raise SurgeryLoopError("report does not match the active card, exact patch and mature arms")
+    results = report["results"]
+    rows = {r["case_id"]:r for r in results}
+    if len(results) != len(specs) or rows.keys() != specs.keys():
+        raise SurgeryLoopError("full-card report does not contain every frozen case exactly once")
+    for name, spec in specs.items():
+        r = rows[name]
+        if (r["decisions"]!=spec["decisions"] or r["scenario_sha256"]!=spec["scenario_sha256"]
+                or r["weight"]!=spec["weight"] or r.get("error")
+                or not all(valid_digest(r.get(k)) for k in ("base_native_receipt_sha256",
+                    "candidate_native_receipt_sha256", "base_rows_sha256", "candidate_rows_sha256"))):
+            raise SurgeryLoopError(f"native matched evidence missing or inconsistent for {name}")
+    base, candidate = [weighted_score(specs, {k:r[arm+"_score"] for k,r in rows.items()})
+                       for arm in ("base","candidate")]
+    epsilon = 1e-8
+    threshold = card["min_improvement"]
+    delta = candidate-base
+    if (not all(math.isclose(x,y,abs_tol=epsilon) for x,y in (
+        (base,state["active_base_score"]),(base,report["base_average"]),
+        (candidate,report["candidate_average"]),(delta,report["delta"]),
+        (threshold,report["min_improvement"])))
+            or report["promoted"] is not (delta > threshold+1e-9)):
+        raise SurgeryLoopError("scores or promotion decision disagree with frozen card and fresh base")
+    return candidate_current
+
+
+def cmd_record_comparison(args: argparse.Namespace) -> dict[str, Any]:
+    path = pathlib.Path(args.state).resolve()
+    proof_path = pathlib.Path(args.evidence).resolve()
+    with state_lock(path):
+        state = load_state(path)
+        failure = verified_state_failure(state)
+        if failure:
+            raise SurgeryLoopError(failure)
+        gate = state["saved_life_controls"]
+        card = load_active_card(state)
+        pin = gate["active_card"]
+        proof = read_json(proof_path, "independent native comparison")
+        key = proof["case_id"]
+        spec = card["cases"].get(key)
+        target = next((p for p in state["in_flight_patches"]
+                       if p["patch_id"] == proof["patch_id"] and p["target_base_id"] == state["active_base_id"]
+                       and p["status"] == "unscored"),None)
+        if not spec or not target or not pin.get("baseline"):
+            raise SurgeryLoopError("comparison lacks frozen case, active baseline or registered candidate")
+        expected = dict(schema="qualia.saved_life_completed_comparison.v1", scorecard_id=pin["id"],
+                        rubric_sha256=pin["sha256"], evaluator_sha256=state["known_good_eval_bin_sha256"],
+                        base_id=state["active_base_id"], source_current_sha256=gate["full_saved_life_current_sha256"],
+                        patch_sha256=target["patch_sha256"], scenario_sha256=spec["scenario_sha256"],
+                        decisions=spec["decisions"])
+        if (any(proof.get(k)!=v for k,v in expected.items())
+                or sha256_file(pathlib.Path(target["patch_path"])) != target["patch_sha256"]
+                or any(proof.get(k) is not True for k in ("independently_accepted","matched","real_game_inputs"))
+                or not all(valid_digest(proof.get(k)) for k in ("candidate_current_sha256",
+                    "base_native_receipt_sha256","candidate_native_receipt_sha256","base_rows_sha256","candidate_rows_sha256"))
+                or proof["candidate_current_sha256"]==expected["source_current_sha256"]):
+            raise SurgeryLoopError("comparison did not match the exact mature card, patch and arms")
+        when = utc_now_iso(proof["completed_at_utc"])
+        if not parse_utc(target["proposed_at_utc"]) <= parse_utc(when) <= parse_utc(utc_now_iso()):
+            raise SurgeryLoopError("native completion time outside registered experiment")
+        items = target.setdefault("completed_comparisons", [])
+        identity = (proof["base_native_receipt_sha256"], proof["candidate_native_receipt_sha256"])
+        if any(tuple(item["native_receipt_sha256"])==identity for item in items):
+            raise SurgeryLoopError("native comparison already recorded")
+        item = dict(case_id=key, completed_at_utc=when, path=str(proof_path), sha256=sha256_file(proof_path),
+                    native_receipt_sha256=list(identity))
+        items.append(item)
+        prev = state.get("last_completed_comparison_utc")
+        if not prev or parse_utc(prev) < parse_utc(when):
+            state["last_completed_comparison_utc"] = when
+        write_json_atomic(path,state)
+        return item
+
+
+def cmd_close_candidate(args: argparse.Namespace) -> dict[str, Any]:
+    path = pathlib.Path(args.state).resolve()
+    with state_lock(path):
+        state = load_state(path)
+        target = next((p for p in state["in_flight_patches"]
+                       if p["patch_id"] == args.patch_id and p["target_base_id"] == state["active_base_id"]
+                       and p["status"] in ("unscored","scored")),None)
+        if not target or not (target.get("completed_comparisons") or target.get("report_path")):
+            raise SurgeryLoopError("closing requires recorded matched evidence")
+        if target.get("promoted_decision"):
+            raise SurgeryLoopError("a winning scored candidate requires a promotion decision, not routine close")
+        if not args.reason.strip():
+            raise SurgeryLoopError("closure must state the measured outcome")
+        now=utc_now_iso()
+        target.update(status="closed",closed_at_utc=now,closure_reason=args.reason)
+        state["last_candidate_closed_utc"]=now
+        write_json_atomic(path,state)
+        return target
+
+
 def cmd_record_score(args: argparse.Namespace) -> dict[str, Any]:
     state_path = pathlib.Path(args.state).resolve()
     with state_lock(state_path):
         state = load_state(state_path)
         report_path = pathlib.Path(args.report).resolve()
         report = read_json(report_path, "comparison report")
-        if "saved_life_controls" in state:
+        if "saved_life_controls" in state and not state["saved_life_controls"].get("active_card"):
             gate = state["saved_life_controls"]
             evidence = report.get("saved_life_evidence", {})
             if (evidence.get("full_score") is not True
@@ -494,6 +718,9 @@ def cmd_record_score(args: argparse.Namespace) -> dict[str, Any]:
         if target["status"] != "unscored":
             raise SurgeryLoopError(f"patch {args.patch_id!r} already has status={target['status']!r}")
 
+        if state.get("saved_life_controls", {}).get("active_card"):
+            target["candidate_current_sha256"] = check_active_comparison(state, report, target)
+            target["active_card_sha256"] = state["saved_life_controls"]["active_card"]["sha256"]
         scored_at = utc_now_iso(args.now_utc)
         target["status"] = "scored"
         target["report_path"] = str(report_path)
@@ -506,6 +733,7 @@ def cmd_record_score(args: argparse.Namespace) -> dict[str, Any]:
         target["promoted_decision"] = bool(report["promoted"])
         target["scored_at_utc"] = scored_at
         state["last_real_score_utc"] = scored_at
+        state["last_completed_comparison_utc"] = scored_at
         write_json_atomic(state_path, state)
         return target
 
@@ -583,6 +811,21 @@ def cmd_promote(args: argparse.Namespace) -> dict[str, Any]:
                     "supplied --reopen-receipt does not match candidate bundle's stamped reopen_receipt.json"
                 )
 
+        gate = state.get("saved_life_controls", {})
+        card_pin = gate.get("active_card")
+        if card_pin:
+            if (patch.get("active_card_sha256") != card_pin["sha256"]
+                    or not valid_digest(patch.get("candidate_current_sha256"))
+                    or cand_manifest.get("full_saved_life_current_sha256") != patch["candidate_current_sha256"]
+                    or not args.drive_id or args.drive_id == state.get("active_base_drive_id")):
+                raise SurgeryLoopError("promotion must bind the exact scored mature Current, card and new off-host backup")
+            reopen = read_json(embedded_receipt_path, "candidate separate-process reopen")
+            if (reopen.get("source_current_sha256") != patch["candidate_current_sha256"]
+                    or reopen.get("evaluator_sha256") != state["known_good_eval_bin_sha256"]
+                    or reopen.get("parent_pid") == reopen.get("child_pid")
+                    or any(type(reopen.get(k)) is not int or reopen[k] <= 0 for k in ("parent_pid","child_pid"))):
+                raise SurgeryLoopError("candidate reopen must verify the exact scored mature Current in a separate process")
+
         backup_root = pathlib.Path(args.backup_dir).resolve()
         backup_dest = backup_root / new_base_id
         if backup_dest.exists():
@@ -629,6 +872,11 @@ def cmd_promote(args: argparse.Namespace) -> dict[str, Any]:
         state["active_base_foundation_digest"] = copied_manifest["foundation_digest"]
         state["active_base_dendritic_sha256"] = copied_manifest["dendritic_branches_sha256"]
         state["active_base_score"] = float(patch["candidate_score"])
+        if card_pin:
+            measured = pathlib.Path(patch["report_path"])
+            gate["full_saved_life_current_sha256"] = copied_manifest["full_saved_life_current_sha256"]
+            card_pin["baseline"] = dict(base_id=new_base_id, score=state["active_base_score"], path=str(measured),
+                                         sha256=sha256_file(measured), measured_at_utc=patch["scored_at_utc"])
         if args.drive_id:
             state["active_base_drive_id"] = args.drive_id
 
@@ -644,7 +892,7 @@ def cmd_promote(args: argparse.Namespace) -> dict[str, Any]:
 
 def cmd_watchdog(args: argparse.Namespace) -> dict[str, Any]:
     state = load_state(pathlib.Path(args.state).resolve())
-    return compute_watchdog(state, args.now_utc)
+    return compute_watchdog(state, args.now_utc, failure=verified_state_failure(state))
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -677,6 +925,19 @@ def build_parser() -> argparse.ArgumentParser:
     p_score.add_argument("--patch-id", required=True)
     p_score.add_argument("--report", required=True)
     p_score.add_argument("--now-utc", default=None)
+
+    p_baseline = sub.add_parser("record-baseline")
+    p_baseline.add_argument("--state", required=True)
+    p_baseline.add_argument("--evidence", required=True)
+
+    p_comparison = sub.add_parser("record-comparison")
+    p_comparison.add_argument("--state", required=True)
+    p_comparison.add_argument("--evidence", required=True)
+
+    p_close = sub.add_parser("close-candidate")
+    p_close.add_argument("--state", required=True)
+    p_close.add_argument("--patch-id", required=True)
+    p_close.add_argument("--reason", required=True)
 
     p_rec = sub.add_parser("record-recovery")
     p_rec.add_argument("--state", required=True)
@@ -711,6 +972,12 @@ def main(argv: list[str] | None = None) -> int:
             result = cmd_propose(args)
         elif args.cmd == "record-score":
             result = cmd_record_score(args)
+        elif args.cmd == "record-baseline":
+            result = cmd_record_baseline(args)
+        elif args.cmd == "record-comparison":
+            result = cmd_record_comparison(args)
+        elif args.cmd == "close-candidate":
+            result = cmd_close_candidate(args)
         elif args.cmd == "record-recovery":
             result = cmd_record_recovery(args)
         elif args.cmd == "promote":
@@ -718,14 +985,17 @@ def main(argv: list[str] | None = None) -> int:
         elif args.cmd == "watchdog":
             result = cmd_watchdog(args)
             print(json.dumps(result, indent=2))
-            if args.fail_on_stall and result["status"] == "ROLLBACK_REQUIRED":
-                return 2
+            if args.fail_on_stall:
+                if result["status"] == "ROLLBACK_REQUIRED":
+                    return 2
+                if result["stalled"]:
+                    return 1
             return 0
         else:
             raise SurgeryLoopError(f"unknown subcommand: {args.cmd}")
         print(json.dumps(result, indent=2))
         return 0
-    except SurgeryLoopError as exc:
+    except (SurgeryLoopError, OSError, KeyError, ValueError, TypeError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
 
