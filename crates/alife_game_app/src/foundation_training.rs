@@ -746,6 +746,7 @@ pub fn run_foundation_training_pilot(
             lesson: None,
             asset_override: None,
             dendritic_branches_override: None,
+            force_deterministic_prior: false,
             silent_request: false,
             food_need_condition: FoundationFoodNeedCondition::default(),
         },
@@ -769,6 +770,7 @@ pub fn run_foundation_teacher_pilot(
             lesson: None,
             asset_override: None,
             dendritic_branches_override: None,
+            force_deterministic_prior: false,
             silent_request: false,
             food_need_condition: FoundationFoodNeedCondition::default(),
         },
@@ -793,6 +795,7 @@ pub fn run_foundation_teacher_pilot_with_scenario(
             lesson: None,
             asset_override: None,
             dendritic_branches_override: None,
+            force_deterministic_prior: false,
             silent_request: false,
             food_need_condition: FoundationFoodNeedCondition::default(),
         },
@@ -818,6 +821,7 @@ pub fn run_foundation_teacher_pilot_with_lesson(
             lesson: Some(lesson),
             asset_override: None,
             dendritic_branches_override: None,
+            force_deterministic_prior: false,
             silent_request: false,
             food_need_condition: FoundationFoodNeedCondition::default(),
         },
@@ -858,6 +862,7 @@ pub fn run_adapted_foundation_teacher_pilot(
             lesson: Some(lesson),
             asset_override: Some(asset),
             dendritic_branches_override: None,
+            force_deterministic_prior: false,
             silent_request: false,
             food_need_condition: FoundationFoodNeedCondition::default(),
         },
@@ -921,6 +926,7 @@ pub fn run_foundation_request_evaluation_with_v11_branches(
             lesson: Some(FoundationTeacherLesson::VocabularyReception),
             asset_override: Some(asset),
             dendritic_branches_override: dendritic_branches,
+            force_deterministic_prior: true,
             silent_request: false,
             food_need_condition: FoundationFoodNeedCondition::default(),
         },
@@ -1057,6 +1063,7 @@ pub fn run_foundation_evaluation_pilot_with_v11_branches(
             lesson: Some(lesson),
             asset_override: Some(asset),
             dendritic_branches_override: dendritic_branches,
+            force_deterministic_prior: true,
             silent_request: evaluation.silent_request,
             food_need_condition: evaluation.food_need_condition,
         },
@@ -1767,6 +1774,7 @@ struct FoundationPilotOptions {
     lesson: Option<FoundationTeacherLesson>,
     asset_override: Option<FoundationWeightAsset>,
     dendritic_branches_override: Option<alife_core::DendriticBranchSet>,
+    force_deterministic_prior: bool,
     silent_request: bool,
     food_need_condition: FoundationFoodNeedCondition,
 }
@@ -1804,6 +1812,7 @@ fn run_foundation_training_pilot_with_request(
         lesson,
         asset_override,
         dendritic_branches_override,
+        force_deterministic_prior,
         silent_request,
         food_need_condition,
     } = options;
@@ -1956,6 +1965,9 @@ fn run_foundation_training_pilot_with_request(
         initial_sampling,
     )
     .map_err(|error| format!("pilot runtime admission: {error}"))?;
+    if force_deterministic_prior {
+        runtime.set_deterministic_semantic_prior_for_surgery(seed);
+    }
     if let Some(branches) = dendritic_branches_override {
         runtime.set_v11_dendritic_branches(learner, branches)?;
     }

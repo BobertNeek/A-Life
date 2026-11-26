@@ -3,8 +3,9 @@ set -euo pipefail
 
 # Zero-drift cloud recovery bootstrap for A-Life weight programming & V11 surgery.
 # Restores software Vulkan (Mesa lavapipe), builds the pinned brain_surgery_eval
-# evaluator, proves the REAL active base bundle (weights + V11 branches) survives a
-# separate-process GPU reopen, and emits current surgery_loop watchdog state.
+# evaluator, runs READ-ONLY separate-process GPU reopen verification on the REAL
+# active base bundle (never modifying manifest.json), optionally records recovery,
+# and enforces the stall fuse via watchdog --fail-on-stall.
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${repo_root}"
@@ -15,6 +16,7 @@ target_subdir="release"
 reopen_seed="${SURGERY_REOPEN_SEED:-700001}"
 allow_dirty_git=0
 skip_reopen=0
+record_recovery=0
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -39,8 +41,12 @@ while [ "$#" -gt 0 ]; do
       skip_reopen=1
       shift
       ;;
+    --recover)
+      record_recovery=1
+      shift
+      ;;
     *)
-      echo "usage: scripts/bootstrap_cloud_surgery.sh [--state PATH] [--debug] [--seed N] [--allow-dirty] [--skip-reopen]" >&2
+      echo "usage: scripts/bootstrap_cloud_surgery.sh [--state PATH] [--debug] [--seed N] [--allow-dirty] [--skip-reopen] [--recover]" >&2
       exit 2
       ;;
   esac
@@ -95,12 +101,12 @@ if [ ! -f "${state_file}" ]; then
   echo "WARNING: ${state_file} does not exist yet."
   echo "Initialize an authentic base bundle first, e.g.:"
   echo "  ${eval_bin} init-base --output surgery/bases/r41 --base-id r41 --from-save SAVE.json --asset-root ASSETS"
-  echo "  ${eval_bin} verify-reopen --bundle surgery/bases/r41"
-  echo "  ${py_cmd} -B scripts/surgery_loop.py init --state ${state_file} --base-dir surgery/bases/r41 --base-score 92.5"
+  echo "  ${eval_bin} verify-reopen --bundle surgery/bases/r41 --stamp-bundle"
+  echo "  ${py_cmd} -B scripts/surgery_loop.py init --state ${state_file} --base-dir surgery/bases/r41 --base-score 92.5 --require-reopen-verified"
   exit 1
 fi
 
-# 4. Resolve active_base_dir from state_file and verify its hashes + REAL separate-process reopen.
+# 4. Resolve active_base_dir from state_file and run READ-ONLY separate-process reopen check.
 active_base_dir="$("${py_cmd}" -c '
 import json, pathlib, sys
 state = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
@@ -113,10 +119,25 @@ if [ ! -d "${active_base_dir}" ]; then
   exit 1
 fi
 
+receipt_tmp=""
+cleanup() {
+  if [ -n "${receipt_tmp}" ] && [ -f "${receipt_tmp}" ]; then
+    rm -f "${receipt_tmp}"
+  fi
+}
+trap cleanup EXIT
+
 if [ "${skip_reopen}" -eq 0 ]; then
-  echo "Running real active-base separate-process reopen check on ${active_base_dir} (no synthetic stock creature)..."
-  "${eval_bin}" verify-reopen --bundle "${active_base_dir}" --seed "${reopen_seed}"
+  receipt_tmp="$(mktemp -t brain-surgery-reopen-XXXXXX.json)"
+  echo "Running read-only separate-process reopen check on ${active_base_dir} (no synthetic stock creature)..."
+  "${eval_bin}" verify-reopen --bundle "${active_base_dir}" --seed "${reopen_seed}" --out "${receipt_tmp}"
+  if [ "${record_recovery}" -eq 1 ]; then
+    "${py_cmd}" -B scripts/surgery_loop.py record-recovery --state "${state_file}" --reopen-receipt "${receipt_tmp}"
+  fi
+elif [ "${record_recovery}" -eq 1 ]; then
+  echo "ERROR: --recover cannot be combined with --skip-reopen" >&2
+  exit 2
 fi
 
-# 5. Print watchdog status and fail if manual rollback is required without recovery.
-"${py_cmd}" -B scripts/surgery_loop.py watchdog --state "${state_file}"
+# 5. Print watchdog status and enforce stall fuse (--fail-on-stall).
+"${py_cmd}" -B scripts/surgery_loop.py watchdog --state "${state_file}" --fail-on-stall

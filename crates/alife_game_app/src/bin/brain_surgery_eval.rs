@@ -14,7 +14,7 @@ fn usage() -> &'static str {
   brain_surgery_eval init-base --output DIR --base-id ID [--founder-seed N] [--foundation PATH] [--branches PATH] [--from-save SAVE --asset-root DIR [--organism-id ID]] [--scorecard PATH]
   brain_surgery_eval validate-patch --base DIR --patch PATH [--candidate-id ID]
   brain_surgery_eval apply-patch --base DIR --patch PATH --out DIR [--candidate-id ID]
-  brain_surgery_eval verify-reopen --bundle DIR [--seed N]
+  brain_surgery_eval verify-reopen --bundle DIR [--seed N] [--stamp-bundle] [--out RECEIPT.json]
   brain_surgery_eval verify-reopen-child SAVE ASSET_ROOT CONFIG ASSETS EXPECTED
   brain_surgery_eval score --base DIR --candidate DIR --out REPORT.json [--scorecard PATH] [--patch-id ID] [--min-improvement F] [--work-dir DIR]"
 }
@@ -172,18 +172,38 @@ fn cmd_apply_patch(args: &[String]) -> Result<()> {
 fn cmd_verify_reopen(args: &[String]) -> Result<()> {
     let mut bundle: Option<PathBuf> = None;
     let mut seed: u64 = 700_001;
+    let mut stamp_bundle = false;
+    let mut out: Option<PathBuf> = None;
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
             "--bundle" => bundle = Some(PathBuf::from(next_flag_value(args, &mut i, "--bundle")?)),
             "--seed" => seed = next_flag_value(args, &mut i, "--seed")?.parse()?,
+            "--stamp-bundle" => {
+                stamp_bundle = true;
+                i += 1;
+            }
+            "--out" => out = Some(PathBuf::from(next_flag_value(args, &mut i, "--out")?)),
             other => {
                 return Err(format!("unknown flag {other} for verify-reopen\n{}", usage()).into())
             }
         }
     }
-    let receipt = verify_bundle_reopen(&bundle.ok_or("verify-reopen requires --bundle")?, seed)?;
-    println!("{}", serde_json::to_string_pretty(&receipt)?);
+    let receipt = verify_bundle_reopen(
+        &bundle.ok_or("verify-reopen requires --bundle")?,
+        seed,
+        stamp_bundle,
+    )?;
+    let encoded = serde_json::to_vec_pretty(&receipt)?;
+    if let Some(out_path) = out {
+        if let Some(parent) = out_path.parent() {
+            if !parent.as_os_str().is_empty() {
+                std::fs::create_dir_all(parent)?;
+            }
+        }
+        alife_storage::write(&out_path, &encoded)?;
+    }
+    println!("{}", String::from_utf8(encoded)?);
     Ok(())
 }
 

@@ -430,6 +430,56 @@ fn compile_n2048_phenotype(asset: &alife_core::FoundationWeightAsset) -> Result<
     Ok(phenotype)
 }
 
+fn normalize_target_path(path: &Path) -> Result<PathBuf> {
+    let abs = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        std::env::current_dir()?.join(path)
+    };
+    let parent = abs
+        .parent()
+        .ok_or_else(|| format!("path must have a parent directory: {}", path.display()))?;
+    std::fs::create_dir_all(parent)?;
+    let canon_parent = parent.canonicalize()?;
+    let name = abs
+        .file_name()
+        .ok_or_else(|| format!("path must name a leaf directory: {}", path.display()))?;
+    Ok(canon_parent.join(name))
+}
+
+fn ensure_absent_output_dir(output_dir: &Path, forbidden_source: Option<&Path>) -> Result<PathBuf> {
+    if output_dir.exists() {
+        return Err(format!(
+            "refusing to overwrite existing bundle directory: {}",
+            output_dir.display()
+        )
+        .into());
+    }
+    let normalized_out = normalize_target_path(output_dir)?;
+    if normalized_out.exists() {
+        return Err(format!(
+            "refusing to overwrite existing bundle directory: {}",
+            output_dir.display()
+        )
+        .into());
+    }
+    if let Some(source) = forbidden_source {
+        let canon_src = source.canonicalize()?;
+        if normalized_out == canon_src
+            || normalized_out.starts_with(&canon_src)
+            || canon_src.starts_with(&normalized_out)
+        {
+            return Err(format!(
+                "refusing bundle output {} overlapping source bundle {}",
+                output_dir.display(),
+                source.display()
+            )
+            .into());
+        }
+    }
+    Ok(normalized_out)
+}
+
 #[allow(clippy::too_many_arguments)]
 fn write_base_bundle(
     output_dir: &Path,
@@ -517,6 +567,52 @@ fn write_base_bundle(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
+fn write_base_bundle_new(
+    output_dir: &Path,
+    forbidden_source: Option<&Path>,
+    base_id: &str,
+    parent_base_id: Option<String>,
+    asset: &alife_core::FoundationWeightAsset,
+    branches: &DendriticBranchSet,
+    scorecard: &BrainSurgeryScorecardV1,
+) -> Result<BrainSurgeryBaseBundle> {
+    let target = ensure_absent_output_dir(output_dir, forbidden_source)?;
+    let parent = target
+        .parent()
+        .ok_or("bundle target must have a parent directory")?;
+    let stage_dir = parent.join(format!(
+        ".brain-surgery-stage-{}-{}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_or(0, |d| d.as_nanos())
+    ));
+    let _ = std::fs::remove_dir_all(&stage_dir);
+    let write_res = write_base_bundle(
+        &stage_dir,
+        base_id,
+        parent_base_id,
+        asset,
+        branches,
+        scorecard,
+        None,
+    );
+    let mut bundle = match write_res {
+        Ok(b) => b,
+        Err(err) => {
+            let _ = std::fs::remove_dir_all(&stage_dir);
+            return Err(err);
+        }
+    };
+    if let Err(err) = std::fs::rename(&stage_dir, &target) {
+        let _ = std::fs::remove_dir_all(&stage_dir);
+        return Err(err.into());
+    }
+    bundle.root = output_dir.to_path_buf();
+    Ok(bundle)
+}
+
 /// Initializes a self-contained surgery base bundle from an explicit
 /// `FoundationWeightAsset` (or procedurally compiled N2048 grounded founder)
 /// plus optional V11 dendritic branches and scorecard.
@@ -548,8 +644,8 @@ pub fn init_base_bundle(
         }
         None => default_starter_scorecard(),
     };
-    write_base_bundle(
-        output_dir, base_id, None, &asset, &branches, &scorecard, None,
+    write_base_bundle_new(
+        output_dir, None, base_id, None, &asset, &branches, &scorecard,
     )
 }
 
@@ -604,14 +700,14 @@ pub fn init_base_bundle_from_save(
         }
         None => default_starter_scorecard(),
     };
-    write_base_bundle(
+    write_base_bundle_new(
         output_dir,
+        None,
         base_id,
         None,
         &asset,
         &exact.dendritic_branches,
         &scorecard,
-        None,
     )
 }
 
@@ -855,14 +951,14 @@ pub fn apply_patch_to_bundle(
     let resolved_id = candidate_id.unwrap_or(&patch.patch_id);
     let (next_asset, next_branches, receipt) =
         validate_and_apply_patch(&base, &patch, resolved_id)?;
-    write_base_bundle(
+    write_base_bundle_new(
         output_dir,
+        Some(base_dir),
         resolved_id,
         Some(base.manifest.base_id.clone()),
         &next_asset,
         &next_branches,
         &base.scorecard,
-        None,
     )?;
     Ok(receipt)
 }
@@ -1162,15 +1258,20 @@ fn branches_bit_exact_eq(left: &DendriticBranchSet, right: &DendriticBranchSet) 
 /// Verifies in a separate OS child process that this bundle's N2048 weights
 /// and V11 dendritic branches survive a real 1-tick GPU run, save capture,
 /// removal of scratch inputs, and clean reload via `GpuLiveBrainRuntime::from_p34_launch`.
-pub fn verify_bundle_reopen(bundle_dir: &Path, seed: u64) -> Result<ReopenVerificationReceiptV1> {
+pub fn verify_bundle_reopen(
+    bundle_dir: &Path,
+    seed: u64,
+    stamp_bundle: bool,
+) -> Result<ReopenVerificationReceiptV1> {
     let exe = std::env::current_exe()?;
-    verify_bundle_reopen_with_child_bin(bundle_dir, seed, &exe)
+    verify_bundle_reopen_with_child_bin(bundle_dir, seed, &exe, stamp_bundle)
 }
 
 pub fn verify_bundle_reopen_with_child_bin(
     bundle_dir: &Path,
     seed: u64,
     child_bin: &Path,
+    stamp_bundle: bool,
 ) -> Result<ReopenVerificationReceiptV1> {
     if seed == 0 {
         return Err("verify-reopen requires a non-zero seed".into());
@@ -1268,6 +1369,7 @@ pub fn verify_bundle_reopen_with_child_bin(
             .arg(&config_path)
             .arg(&asset_manifest_path)
             .arg(&expected_path)
+            .env_remove("ALIFE_SLM_PRIOR")
             .env("ALIFE_SLM_PRIOR_BACKEND", "deterministic")
             .output()?;
         if !child_out.status.success() {
@@ -1284,15 +1386,17 @@ pub fn verify_bundle_reopen_with_child_bin(
             return Err("child reopen verification returned verified=false".into());
         }
         receipt.parent_pid = std::process::id();
-        write_base_bundle(
-            bundle_dir,
-            &bundle.manifest.base_id,
-            bundle.manifest.parent_base_id.clone(),
-            &bundle.asset,
-            &bundle.dendritic_branches,
-            &bundle.scorecard,
-            Some(&receipt),
-        )?;
+        if stamp_bundle {
+            write_base_bundle(
+                bundle_dir,
+                &bundle.manifest.base_id,
+                bundle.manifest.parent_base_id.clone(),
+                &bundle.asset,
+                &bundle.dendritic_branches,
+                &bundle.scorecard,
+                Some(&receipt),
+            )?;
+        }
         Ok(receipt)
     })();
 
@@ -1372,6 +1476,16 @@ pub fn verify_bundle_reopen_child(
         return Err("loaded CAS exact_cognitive_state branches are not bit-exact".into());
     }
 
+    let prior_backend = restored
+        .semantic_prior_metrics()
+        .map_or("none", |m| m.backend.as_str());
+    if prior_backend != "deterministic" {
+        return Err(format!(
+            "reopen verification expected deterministic semantic prior, got {prior_backend}"
+        )
+        .into());
+    }
+
     Ok(ReopenVerificationReceiptV1 {
         schema: BRAIN_SURGERY_REOPEN_SCHEMA.to_string(),
         schema_version: BRAIN_SURGERY_SCHEMA_VERSION,
@@ -1385,10 +1499,7 @@ pub fn verify_bundle_reopen_child(
         verified: true,
         semantic_prior_mode: format!(
             "deterministic_seed_{}_backend_{}",
-            expected.seed,
-            restored
-                .semantic_prior_metrics()
-                .map_or("none", |m| m.backend.as_str())
+            expected.seed, prior_backend
         ),
         verified_at_unix: now_unix_secs(),
     })
@@ -1643,5 +1754,71 @@ mod tests {
 
         let _ = std::fs::remove_dir_all(&dir);
         let _ = std::fs::remove_dir_all(&cand_dir);
+    }
+
+    #[test]
+    fn apply_patch_refuses_to_overwrite_base_or_existing_directory() {
+        let dir = temp_dir("apply-no-overwrite");
+        let base_dir = dir.join("base");
+        let existing_dir = dir.join("existing");
+        let base = init_base_bundle(&base_dir, "r41-base", None, None, None, 33).unwrap();
+        std::fs::create_dir_all(&existing_dir).unwrap();
+        std::fs::write(existing_dir.join("sentinel.txt"), b"keep-me").unwrap();
+
+        let manifest_before = std::fs::read(base_dir.join("manifest.json")).unwrap();
+        let foundation_before =
+            std::fs::read(base_dir.join(&base.manifest.foundation_file)).unwrap();
+        let branches_before =
+            std::fs::read(base_dir.join(&base.manifest.dendritic_branches_file)).unwrap();
+
+        let patch = BrainSurgeryPatchV1 {
+            schema: BRAIN_SURGERY_PATCH_SCHEMA.into(),
+            schema_version: BRAIN_SURGERY_SCHEMA_VERSION,
+            patch_id: "p-no-overwrite".into(),
+            target_base_id: base.manifest.base_id.clone(),
+            target_foundation_digest: base.manifest.foundation_digest.clone(),
+            target_dendritic_branches_sha256: base.manifest.dendritic_branches_sha256.clone(),
+            weight_edits: vec![WeightEdit {
+                index: 0,
+                mode: WeightEditMode::Add,
+                value: 0.01,
+            }],
+            dendritic_edits: DendriticPatchOp::Keep,
+            notes: None,
+        };
+        let patch_path = dir.join("patch.json");
+        std::fs::write(&patch_path, serde_json::to_vec_pretty(&patch).unwrap()).unwrap();
+
+        let err_same = apply_patch_to_bundle(&base_dir, &patch_path, &base_dir, None)
+            .expect_err("overwriting base_dir in place must fail");
+        assert!(
+            err_same.to_string().contains("refusing to overwrite")
+                || err_same.to_string().contains("already exists")
+        );
+
+        let err_existing = apply_patch_to_bundle(&base_dir, &patch_path, &existing_dir, None)
+            .expect_err("writing into existing non-empty output directory must fail");
+        assert!(err_existing
+            .to_string()
+            .contains("refusing to overwrite existing bundle directory"));
+        assert_eq!(
+            std::fs::read(existing_dir.join("sentinel.txt")).unwrap(),
+            b"keep-me"
+        );
+
+        assert_eq!(
+            std::fs::read(base_dir.join("manifest.json")).unwrap(),
+            manifest_before
+        );
+        assert_eq!(
+            std::fs::read(base_dir.join(&base.manifest.foundation_file)).unwrap(),
+            foundation_before
+        );
+        assert_eq!(
+            std::fs::read(base_dir.join(&base.manifest.dendritic_branches_file)).unwrap(),
+            branches_before
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
