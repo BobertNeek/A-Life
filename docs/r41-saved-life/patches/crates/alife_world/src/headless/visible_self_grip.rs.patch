@@ -1,0 +1,194 @@
+diff --git a/crates/alife_world/src/headless/visible_self_grip.rs b/crates/alife_world/src/headless/visible_self_grip.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/alife_world/src/headless/visible_self_grip.rs
+@@ -0,0 +1,189 @@
++//! Opt-in native own-grip proprioception for the existing visible target only.
++use super::*;
++use alife_core::perception::PerceptionFrameDigest;
++use alife_core::{ActionTarget, CandidateObservationRef, TrackedObjectId};
++
++#[derive(Debug)]
++struct ObservedSlot {
++    native_target: ActionTarget,
++    track: TrackedObjectId,
++    own_grip: bool,
++}
++
++/// Transient World-produced receipt. No public construction, cloning or deserialization.
++/// Use exactly once with the final accepted menu at the same live cut.
++#[derive(Debug)]
++pub struct VisibleSelfGripCaptureV1 {
++    observer: OrganismId,
++    tick: Tick,
++    profile: SensorProfile,
++    body: BodySnapshot,
++    observed: Box<[ObservedSlot]>,
++}
++
++/// Candidate-major Boolean words, bound to this exact accepted menu. No stock lane,
++/// scorer, GPU upload, output/action authority or persistence in this slice.
++#[derive(Debug)]
++pub struct BoundVisibleSelfGripV1 {
++    observer: OrganismId,
++    tick: Tick,
++    final_frame: PerceptionFrameDigest,
++    own_grip_words: Box<[u32]>,
++}
++
++impl BoundVisibleSelfGripV1 {
++    pub const SCHEMA_VERSION: u16 = 1;
++
++    pub const fn observer(&self) -> OrganismId {
++        self.observer
++    }
++
++    pub const fn tick(&self) -> Tick {
++        self.tick
++    }
++
++    pub const fn final_frame_digest(&self) -> PerceptionFrameDigest {
++        self.final_frame
++    }
++
++    /// One canonical +0 or +1 f32 word per row in the final candidate order.
++    pub fn words(&self) -> &[u32] {
++        &self.own_grip_words
++    }
++}
++
++fn same_pose(a: Vec3f, b: Vec3f) -> bool {
++    [a.x.to_bits(), a.y.to_bits(), a.z.to_bits()]
++        == [b.x.to_bits(), b.y.to_bits(), b.z.to_bits()]
++}
++
++fn same_transport(a: ActionTarget, b: ActionTarget) -> bool {
++    a.entity == b.entity
++        && match (a.position, b.position) {
++            (Some(a), Some(b)) => same_pose(a, b),
++            (None, None) => true,
++            _ => false,
++        }
++}
++
++impl VisibleSelfGripCaptureV1 {
++    /// Check the independently current host cut, not just the two inputs agreeing
++    /// with one another. Reindexing/focus can change row order, not its physical
++    /// target for a particular raw observed slot and track.
++    pub fn bind_final(
++        self,
++        expected_observer: OrganismId,
++        expected_live_tick: Tick,
++        final_menu: &PerceptionFrame,
++    ) -> Result<BoundVisibleSelfGripV1, ScaffoldContractError> {
++        let invalid = || ScaffoldContractError::InvalidPerceptionFrame;
++        final_menu.validate_contract()?;
++        if self.observer != expected_observer
++            || self.tick != expected_live_tick
++            || final_menu.organism_id() != self.observer
++            || final_menu.tick() != self.tick
++            || final_menu.sensor_profile() != self.profile
++            || final_menu.body() != self.body
++            || final_menu.grounded_object_slots().len() != self.observed.len()
++        {
++            return Err(invalid());
++        }
++        for (index, (slot, source)) in final_menu.grounded_object_slots().iter()
++            .zip(self.observed.iter()).enumerate()
++        {
++            if usize::from(slot.slot_index) != index || slot.tracked_object_id != source.track {
++                return Err(invalid());
++            }
++        }
++        let mut out = Vec::with_capacity(final_menu.candidates().len());
++        for (index, row) in final_menu.candidates().iter().enumerate() {
++            if index != usize::from(row.candidate_index) {
++                return Err(invalid());
++            }
++            let own = match row.observation {
++                CandidateObservationRef::None if row.target == ActionTarget::NONE => false,
++                CandidateObservationRef::ObjectSlot(slot) => {
++                    let source = self.observed.get(usize::from(slot)).ok_or_else(invalid)?;
++                    if !same_transport(row.target, source.native_target) {
++                        return Err(invalid());
++                    }
++                    source.own_grip
++                }
++                _ => return Err(invalid()),
++            };
++            out.push(if own { 1.0_f32.to_bits() } else { 0.0_f32.to_bits() });
++        }
++        Ok(BoundVisibleSelfGripV1 {
++            observer: self.observer,
++            tick: self.tick,
++            final_frame: final_menu.frame_digest(),
++            own_grip_words: out.into_boxed_slice(),
++        })
++    }
++}
++
++impl HeadlessWorld {
++    /// Explicit opt-in sibling to the unmodified indexed GTV producer. There is
++    /// no callback on the old/default path. Every capture originates here.
++    pub fn perception_frame_draft_indexed_with_visible_self_grip_v1(
++        &mut self,
++        observer: OrganismId,
++        tick: Tick,
++        homeostasis: HomeostaticSnapshot,
++        index: &HeadlessPerceptionBatchIndex,
++    ) -> Result<
++        (PerceptionFrameDraft, GroundedCandidateBinding, VisibleSelfGripCaptureV1),
++        ScaffoldContractError,
++    > {
++        let invalid = || ScaffoldContractError::InvalidPerceptionFrame;
++        if tick != self.tick() {
++            return Err(invalid());
++        }
++        let profile = SensorProfile::GroundedTerrainVisionV1;
++        let (draft, binding) = self.perception_frame_draft_indexed_for_retention(
++            observer, tick, profile, homeostasis, index, false,
++        )?;
++        let binding = binding.ok_or_else(invalid)?;
++        let grounded = binding.observed_grounded_frame();
++        if grounded.sensory().organism_id != observer
++            || grounded.sensory().tick != tick
++            || grounded.slots() != draft.grounded_object_slots()
++            || grounded.slots().len() != grounded.transports().len()
++        {
++            return Err(invalid());
++        }
++        let player = self.player_held_object();
++        let mut slots = Vec::with_capacity(grounded.slots().len());
++        let mut seen_keys = BTreeSet::new();
++        let mut seen_tracks = BTreeSet::new();
++        for (index, (slot, transport)) in grounded.slots().iter().zip(grounded.transports())
++            .enumerate()
++        {
++            let key = transport.transport_entity;
++            if usize::from(slot.slot_index) != index
++                || slot.slot_index != transport.slot_index
++                || !seen_keys.insert(key.raw())
++                || !seen_tracks.insert(slot.tracked_object_id.raw())
++            {
++                return Err(invalid());
++            }
++            let item = self.entity(key).ok_or_else(invalid)?;
++            if item.consumed || !same_pose(item.position, transport.target_position) {
++                return Err(invalid());
++            }
++            slots.push(ObservedSlot {
++                native_target: ActionTarget::new(Some(key), Some(transport.target_position)),
++                track: slot.tracked_object_id,
++                own_grip: item.carried_by == Some(observer) && player != Some(key),
++            });
++        }
++        let receipt = VisibleSelfGripCaptureV1 {
++            observer,
++            tick,
++            profile,
++            body: grounded.body(),
++            observed: slots.into_boxed_slice(),
++        };
++        Ok((draft, binding, receipt))
++    }
++}

@@ -1,0 +1,327 @@
+diff --git a/crates/alife_game_app/src/production_voxel_renderer/status_hud/layout_tests.rs b/crates/alife_game_app/src/production_voxel_renderer/status_hud/layout_tests.rs
+--- a/crates/alife_game_app/src/production_voxel_renderer/status_hud/layout_tests.rs
++++ b/crates/alife_game_app/src/production_voxel_renderer/status_hud/layout_tests.rs
+@@ -130,7 +130,7 @@
+ }
+ 
+ fn assert_readout_components(world: &mut World, readout: Option<&Readout>) {
+-    let values = readout.map_or([None; 7], |readout| readout.values);
++    let values = readout.map_or([None; 6], |readout| readout.values);
+     let badge = world
+         .query_filtered::<&Visibility, With<HeldFood>>()
+         .single(world)
+@@ -144,10 +144,10 @@
+         }
+     );
+     let value = |quantity| values[QUANTITIES.iter().position(|q| *q == quantity).unwrap()];
+-    assert_eq!(world.query::<&MeterFill>().iter(world).count(), 7);
+-    assert_eq!(world.query::<&MeterTrack>().iter(world).count(), 7);
+-    assert_eq!(world.query::<&Unknown>().iter(world).count(), 7);
+-    assert_eq!(world.query::<&Warning>().iter(world).count(), 7);
++    assert_eq!(world.query::<&MeterFill>().iter(world).count(), 6);
++    assert_eq!(world.query::<&MeterTrack>().iter(world).count(), 6);
++    assert_eq!(world.query::<&Unknown>().iter(world).count(), 6);
++    assert_eq!(world.query::<&Warning>().iter(world).count(), 6);
+     for (fill, node, color) in world
+         .query::<(&MeterFill, &Node, &BackgroundColor)>()
+         .iter(world)
+@@ -169,7 +169,8 @@
+             }
+         );
+     }
+-    for (unknown, visibility) in world.query::<(&Unknown, &Visibility)>().iter(world) {
++    for (unknown, visibility, text) in world.query::<(&Unknown, &Visibility, &Text)>().iter(world) {
++        assert_eq!(text.0, "?");
+         assert_eq!(
+             *visibility,
+             if value(unknown.0).is_none() {
+@@ -461,9 +462,9 @@
+             else if world.get::<MeterFill>(entity).is_some() { "meter_fill" }
+             else if world.get::<Unknown>(entity).is_some() { "unknown_marker" }
+             else if world.get::<Warning>(entity).is_some() { "warning_badge" }
+-            else if world.get::<Identity>(entity).is_some() { "individual_crest" }
++            else if world.get::<Identity>(entity).is_some() { "stable_identity_text" }
+             else if world.get::<HeldFood>(entity).is_some() { "held_food_badge" }
+-            else if world.get::<Count>(entity).is_some() { "population_glyph" }
++            else if world.get::<Count>(entity).is_some() { "rendered_count_text" }
+             else if world.get::<Playback>(entity).is_some() { "playback_icon" }
+             else if world.get::<ImageNode>(entity).is_some() { "icon" }
+             else { "container" };
+@@ -519,7 +520,6 @@
+         Some(0.78),
+         Some(0.30),
+         Some(0.12),
+-        Some(0.65),
+     ];
+     let cases = [
+         (
+@@ -545,7 +545,6 @@
+                     Some(0.12),
+                     Some(0.90),
+                     Some(0.05),
+-                    Some(0.10),
+                 ],
+             }),
+             false,
+@@ -556,7 +555,7 @@
+                 name: None,
+                 holding_food: false,
+                 stable_id: 42,
+-                values: [None; 7],
++                values: [None; 6],
+             }),
+             false,
+         ),
+@@ -566,7 +565,7 @@
+                 name: None,
+                 holding_food: false,
+                 stable_id: 42,
+-                values: [Some(0.0); 7],
++                values: [Some(0.0); 6],
+             }),
+             false,
+         ),
+@@ -583,7 +582,6 @@
+                     Some(0.60),
+                     Some(1.0),
+                     Some(1.0),
+-                    Some(1.0),
+                 ],
+             }),
+             false,
+@@ -594,15 +592,7 @@
+                 name: None,
+                 holding_food: false,
+                 stable_id: 42,
+-                values: [
+-                    Some(0.25),
+-                    Some(0.82),
+-                    None,
+-                    Some(0.78),
+-                    None,
+-                    Some(0.12),
+-                    None,
+-                ],
++                values: [Some(0.25), Some(0.82), None, Some(0.78), None, Some(0.12)],
+             }),
+             false,
+         ),
+@@ -672,11 +662,11 @@
+             assert_eq!(visible_in_hierarchy(app.world(), status), !debug);
+             let identity = app
+                 .world_mut()
+-                .query_filtered::<&AccessibilityNode, With<Identity>>()
++                .query_filtered::<&Text, With<Identity>>()
+                 .single(app.world())
+                 .unwrap();
+             assert_eq!(
+-                identity.value().unwrap_or_default(),
++                identity.0,
+                 readout
+                     .as_ref()
+                     .map_or_else(String::new, |r| format!("#{}", r.stable_id))
+@@ -706,7 +696,7 @@
+ fn unknown_is_not_valid_zero_and_clear_or_debug_hides_selection() {
+     let mut world = World::new();
+     spawn(&mut world);
+-    for values in [[None; 7], [Some(0.0); 7], [Some(1.0); 7], [None; 7]] {
++    for values in [[None; 6], [Some(0.0); 6], [Some(1.0); 6], [None; 6]] {
+         let readout = Readout {
+             name: None,
+             holding_food: false,
+@@ -720,7 +710,7 @@
+         name: None,
+         holding_food: false,
+         stable_id: u64::MAX,
+-        values: [Some(0.5); 7],
++        values: [Some(0.5); 6],
+     };
+     for (selected, debug, shown) in [
+         (true, true, false),
+@@ -742,11 +732,11 @@
+             .unwrap();
+         assert_eq!(visible_in_hierarchy(&world, playback), !debug);
+         let identity = world
+-            .query_filtered::<&AccessibilityNode, With<Identity>>()
++            .query_filtered::<&Text, With<Identity>>()
+             .single(&world)
+             .unwrap();
+         assert_eq!(
+-            identity.value().unwrap_or_default(),
++            identity.0,
+             if selected {
+                 format!("#{}", u64::MAX)
+             } else {
+@@ -768,15 +758,11 @@
+         (65535, false, false, "playing"),
+     ] {
+         set_status(&mut world, count, paused, fast);
+-        let group = world
+-            .query_filtered::<&AccessibilityNode, With<StatusRoot>>()
++        let text = world
++            .query_filtered::<&Text, With<Count>>()
+             .single(&world)
+             .unwrap();
+-        assert_eq!(
+-            group.label(),
+-            Some(format!("Rendered creatures: {count}. Playback: {expected}").as_str())
+-        );
+-        assert_eq!(world.query::<&Text>().iter(&world).count(), 0);
++        assert_eq!(text.0, count.to_string());
+         let icon = world
+             .query_filtered::<Entity, With<Playback>>()
+             .single(&world)
+@@ -786,7 +772,7 @@
+ }
+ 
+ #[test]
+-fn only_explicit_header_actions_own_pointer_interactions() {
++fn only_rename_control_can_capture_input() {
+     let mut world = World::new();
+     spawn(&mut world);
+     for entity in world.query_filtered::<Entity, With<Node>>().iter(&world) {
+@@ -796,65 +782,10 @@
+         assert!(world.get::<Button>(entity).is_none());
+         assert_eq!(
+             world.get::<Interaction>(entity).is_some(),
+-            world.get::<SelectionAction>(entity).is_some(),
+-            "passive meters and decoration must not own pointer interactions"
+-        );
+-    }
+-}
+-
+-#[cfg(feature = "gpu-runtime")]
+-#[test]
+-fn physical_pointer_hits_the_family_control_in_the_selected_header() {
+-    use crate::production_voxel_renderer::care_dock::tests::{cpu_focus_stack_for, focus_cursor};
+-    use bevy::{camera::RenderTarget, input::touch::Touches, window::PrimaryWindow};
+-    let mut app = layout_app(Vec2::new(960., 540.));
+-    app.init_resource::<ButtonInput<MouseButton>>()
+-        .init_resource::<Touches>();
+-    let w = app.world_mut();
+-    w.spawn((
+-        Window {
+-            resolution: (960, 540).into(),
+-            ..default()
+-        },
+-        PrimaryWindow,
+-    ));
+-    let camera = w
+-        .query_filtered::<Entity, With<Camera>>()
+-        .single(w)
+-        .unwrap();
+-    w.entity_mut(camera).insert(RenderTarget::default());
+-    let row = data_tests::row();
+-    let named = Readout::from_row(row.world_entity_id, row.organism_id, Some(&row), []);
+-    set_readout(w, Some(&named), false);
+-    app.update();
+-    app.update();
+-    let w = app.world_mut();
+-    let root = w
+-        .query_filtered::<Entity, With<HudRoot>>()
+-        .single(w)
+-        .unwrap();
+-    let family = w
+-        .query::<(Entity, &AccessibilityNode)>()
+-        .iter(w)
+-        .find_map(|(e, node)| (node.label() == Some("Open family album")).then_some(e))
+-        .unwrap();
+-    cpu_focus_stack_for(w, &[root]);
+-    let bounds = Box2::of(w, family);
+-    focus_cursor(w, (bounds.min + bounds.max) * 0.5);
+-    app.add_systems(Update, bevy::ui::ui_focus_system);
+-    app.update();
+-    assert_eq!(
+-        app.world().get::<Interaction>(family),
+-        Some(&Interaction::Hovered)
+-    );
+-    app.world_mut()
+-        .resource_mut::<ButtonInput<MouseButton>>()
+-        .press(MouseButton::Left);
+-    app.update();
+-    assert_eq!(
+-        app.world().get::<Interaction>(family),
+-        Some(&Interaction::Pressed)
+-    );
++            world.get::<RenameButton>(entity).is_some(),
++            "only the explicit naming control owns pointer interaction"
++        );
++    }
+ }
+ 
+ #[test]
+@@ -866,7 +797,7 @@
+         name: None,
+         holding_food: false,
+         stable_id: 42,
+-        values: [Some(0.5); 7],
++        values: [Some(0.5); 6],
+     };
+     let panel = world
+         .query_filtered::<Entity, With<HudRoot>>()
+@@ -908,7 +839,7 @@
+         name: None,
+         holding_food: false,
+         stable_id: 42,
+-        values: [Some(0.5); 7],
++        values: [Some(0.5); 6],
+     };
+     set_readout(&mut world, Some(&readout), false);
+     adapt_bottom_controls_visibility(&mut world, Vec2::new(320.0, 240.0), true);
+@@ -932,7 +863,7 @@
+     let readout = Readout {
+         name: None,
+         stable_id: u64::MAX,
+-        values: [Some(0.5); 7],
++        values: [Some(0.5); 6],
+         holding_food: true,
+     };
+     let mut original_box = None;
+@@ -982,17 +913,34 @@
+                 .query_filtered::<Entity, With<CreatureName>>()
+                 .single(world)
+                 .unwrap();
+-            assert!(world.get::<Text>(name_entity).is_none());
++            assert_eq!(world.get::<Text>(name_entity).unwrap().0, name);
+             assert_eq!(
+                 world.get::<AccessibilityNode>(name_entity).unwrap().label(),
+                 Some(name.as_str())
+             );
++            assert_eq!(
++                world.get::<Node>(name_entity).unwrap().overflow,
++                Overflow::clip()
++            );
++            assert_eq!(
++                world.get::<TextLayout>(name_entity).unwrap().linebreak,
++                bevy::text::LineBreak::NoWrap
++            );
+             let identity = world
+-                .query_filtered::<&AccessibilityNode, With<Identity>>()
++                .query_filtered::<Entity, With<Identity>>()
+                 .single(world)
+                 .unwrap();
+-            assert_eq!(identity.value(), Some(format!("#{}", u64::MAX).as_str()));
+-            assert_eq!(world.query::<&CrestBar>().iter(world).count(), 5);
++            assert_eq!(
++                world.get::<Text>(identity).unwrap().0,
++                format!("#{}", u64::MAX)
++            );
++            let name_bounds = Box2::of(world, name_entity);
++            let id_bounds = Box2::of(world, identity);
++            assert!(!name_bounds.overlaps(id_bounds));
++            assert!(
++                id_bounds.size().x >= 150.0,
++                "ID line lost its reserved space at {size:?}"
++            );
+             let header = world
+                 .query_filtered::<Entity, With<IdentityHeader>>()
+                 .single(world)
+@@ -1038,7 +986,7 @@
+         }
+         for entity in world.query_filtered::<Entity, With<Node>>().iter(&world) {
+             let pickable = world.get::<bevy::picking::Pickable>(entity).unwrap();
+-            let input = world.get::<SelectionAction>(entity).is_some() && enabled;
++            let input = entity == button && enabled;
+             assert_eq!(pickable.is_hoverable, input);
+             assert_eq!(pickable.should_block_lower, input);
+             assert_eq!(

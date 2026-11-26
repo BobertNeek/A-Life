@@ -1,0 +1,2849 @@
+{
+  "case_catalog_sha256": "3836066ae94dc9d82df52b446d52a2955a0622c80fce7d86199a8ad060226474",
+  "not_a_fixture_not_an_emitter": "Observed exact archived setup and request metadata only. Current V28 common typed path admits only placed-world/nav; original fenced clinical labels unsupported. No stock guard bypass or private/reserved reads.",
+  "read_only_29_disclosed_recipe_envelopes": {
+    "canonical-L-full": {
+      "binary_sha256": "44afdbc1cd2497de0feb2fb6ec4031a5bc1a9cb8c46057561867389e8581b6a7",
+      "case_members_sha256": "da49421895e93b0c4247218a9020e8af80d4a54d46e480ebbdfc9b4e1eb6a67b",
+      "case_result_sha256": "93891813c45cf92536cae7160409f414dd827838991e878ca6848d34f30a4f30",
+      "native_accepted_rows": 1024,
+      "native_world_ticks": 1024,
+      "original_case_native_request": {
+        "deadline_unix_seconds": 1795154009,
+        "direct_weights": null,
+        "evaluation_nonce": 1794952000,
+        "finalization_deadline_unix_seconds": 1795154119,
+        "max_decisions": 1024,
+        "max_output_bytes": 1073741824,
+        "max_world_ticks": 1024,
+        "navigation_task": {
+          "kind": "l_corner",
+          "mirror": false,
+          "prey_speed_per_tick": 0.0,
+          "rotation_radians": 0.0
+        },
+        "schema": 3
+      },
+      "pressure": {
+        "actual_gpu_timing_preserved": true,
+        "applied_gpu_time_ns": 0,
+        "cross_arm_frame_replay": false,
+        "enabled": true,
+        "live_atp_and_heap_constraints": true,
+        "production_policy_unchanged": true,
+        "scope": "controlled_host_pressure_not_fixed_neural_work"
+      },
+      "receipt_sha256": "b1593b54776bd9dbca53ed7e038a3ba9c025a4f3be02c75ac9556746ea663265",
+      "request_sha256": "29d37b9f73aec725379a6e74a5c4c85d21b363decd899a50fe9e98bded330bb6",
+      "score_atoms": [
+        "maze:formal",
+        "maze:intake"
+      ],
+      "visible_setup": null
+    },
+    "dogleg_corridor": {
+      "binary_sha256": "44afdbc1cd2497de0feb2fb6ec4031a5bc1a9cb8c46057561867389e8581b6a7",
+      "case_members_sha256": "a2994559beb5736592ed1cfd56f833213c6d3a61bf693146d1560603205b18b6",
+      "case_result_sha256": "aa678533292671af4057cd0cbfd46db88947f9279d74d0a9cc969b6f2104b6b7",
+      "native_accepted_rows": 1024,
+      "native_world_ticks": 1024,
+      "original_case_native_request": {
+        "deadline_unix_seconds": 1795154074,
+        "direct_weights": null,
+        "evaluation_nonce": 1794952000,
+        "finalization_deadline_unix_seconds": 1795154184,
+        "max_decisions": 1024,
+        "max_output_bytes": 1073741824,
+        "max_world_ticks": 8192,
+        "navigation_task": {
+          "kind": "dogleg_corridor",
+          "mirror": false,
+          "prey_speed_per_tick": 0.0,
+          "rotation_radians": 0.0
+        },
+        "schema": 3
+      },
+      "pressure": {
+        "actual_gpu_timing_preserved": true,
+        "applied_gpu_time_ns": 0,
+        "cross_arm_frame_replay": false,
+        "enabled": true,
+        "live_atp_and_heap_constraints": true,
+        "production_policy_unchanged": true,
+        "scope": "controlled_host_pressure_not_fixed_neural_work"
+      },
+      "receipt_sha256": "49b5c98e03d598be0f65fa91421d318022e571c45fe9bafb28232fd550397243",
+      "request_sha256": "5632b5e509dfb8c44f4a3dff7a0892a6caed3611a0a0b119571d5ee7ed4675ea",
+      "score_atoms": [
+        "maze:formal",
+        "maze:intake"
+      ],
+      "visible_setup": null
+    },
+    "doorway_chambers": {
+      "binary_sha256": "44afdbc1cd2497de0feb2fb6ec4031a5bc1a9cb8c46057561867389e8581b6a7",
+      "case_members_sha256": "2f28484abd65d53e33380dda150b19c17a188b75507ab21e32e92f951e37b2d4",
+      "case_result_sha256": "74750653c2e1c0e17516878cb91ffa97a394354b879135f6fe6b610badd9c125",
+      "native_accepted_rows": 1024,
+      "native_world_ticks": 1024,
+      "original_case_native_request": {
+        "deadline_unix_seconds": 1795154112,
+        "direct_weights": null,
+        "evaluation_nonce": 1794952000,
+        "finalization_deadline_unix_seconds": 1795154222,
+        "max_decisions": 1024,
+        "max_output_bytes": 1073741824,
+        "max_world_ticks": 8192,
+        "navigation_task": {
+          "kind": "doorway_chambers",
+          "mirror": false,
+          "prey_speed_per_tick": 0.0,
+          "rotation_radians": 0.0
+        },
+        "schema": 3
+      },
+      "pressure": {
+        "actual_gpu_timing_preserved": true,
+        "applied_gpu_time_ns": 0,
+        "cross_arm_frame_replay": false,
+        "enabled": true,
+        "live_atp_and_heap_constraints": true,
+        "production_policy_unchanged": true,
+        "scope": "controlled_host_pressure_not_fixed_neural_work"
+      },
+      "receipt_sha256": "c0f4d92750146020d0d3f82780caeee67bb80a3d9bbdf1fc703889c1a5d2139b",
+      "request_sha256": "1bc6ff5c614cfec75982d29434d81251aaf8bf62cedf2b2f5031108337a6d05c",
+      "score_atoms": [
+        "maze:formal",
+        "maze:intake"
+      ],
+      "visible_setup": null
+    },
+    "original-autonomous-axis": {
+      "binary_sha256": "39aaebec364f5028ee115012371de7581788358f617046e5518ad97d8d28acdb",
+      "case_members_sha256": "a335bd2538a915c33931082ad62caeecba3794d334d4d1693bd6a6100ca8aa7e",
+      "case_result_sha256": "618aa0115e7344a3c50762e4986d4ddb79f06447245ddba5bfca9846c77b1aec",
+      "native_accepted_rows": 256,
+      "native_world_ticks": 256,
+      "original_case_native_request": {
+        "deadline_unix_seconds": 1795153969,
+        "direct_weights": null,
+        "evaluation_nonce": 1794952000,
+        "finalization_deadline_unix_seconds": 1795154079,
+        "max_decisions": 256,
+        "max_output_bytes": 1073741824,
+        "max_world_ticks": 256,
+        "navigation_task": {
+          "kind": "autonomous_prey",
+          "mirror": false,
+          "prey_speed_per_tick": 0.052000001072883606,
+          "rotation_radians": 3.100961446762085
+        },
+        "schema": 3
+      },
+      "pressure": {
+        "actual_gpu_timing_preserved": true,
+        "applied_gpu_time_ns": 0,
+        "cross_arm_frame_replay": false,
+        "enabled": true,
+        "live_atp_and_heap_constraints": true,
+        "production_policy_unchanged": true,
+        "scope": "controlled_host_pressure_not_fixed_neural_work"
+      },
+      "receipt_sha256": "f20a2919185879c608521b9952e1eac0a771b51fbaff07eee3e3c1b4882e76dd",
+      "request_sha256": "149c248b6fbfe7e1c1eee6f2f0d1cb9f25aa37abfd73a8bb4054e27917ce61c0",
+      "score_atoms": [
+        "hunt:intake"
+      ],
+      "visible_setup": null
+    },
+    "original-autonomous-plus4": {
+      "binary_sha256": "39aaebec364f5028ee115012371de7581788358f617046e5518ad97d8d28acdb",
+      "case_members_sha256": "60906b25529b84ed23a0820bc7db347b2bed7b660ff4046f4eb772e4bcfda3a8",
+      "case_result_sha256": "538d9a24556cc9db391a4eafcec26b4a3f7ff0eee53a8dca3cd4fe0b999930ef",
+      "native_accepted_rows": 256,
+      "native_world_ticks": 256,
+      "original_case_native_request": {
+        "deadline_unix_seconds": 1795153982,
+        "direct_weights": null,
+        "evaluation_nonce": 1794952000,
+        "finalization_deadline_unix_seconds": 1795154092,
+        "max_decisions": 256,
+        "max_output_bytes": 1073741824,
+        "max_world_ticks": 256,
+        "navigation_task": {
+          "kind": "autonomous_prey",
+          "mirror": false,
+          "prey_speed_per_tick": 0.052000001072883606,
+          "rotation_radians": -3.1124107837677
+        },
+        "schema": 3
+      },
+      "pressure": {
+        "actual_gpu_timing_preserved": true,
+        "applied_gpu_time_ns": 0,
+        "cross_arm_frame_replay": false,
+        "enabled": true,
+        "live_atp_and_heap_constraints": true,
+        "production_policy_unchanged": true,
+        "scope": "controlled_host_pressure_not_fixed_neural_work"
+      },
+      "receipt_sha256": "62dc6a15418bedc9e2710db3166ac1d706cfa27a3d3a6277f5e394b87043a728",
+      "request_sha256": "2434b8d5fcf8d6be909318e9f975bf1f1d63bfa19fc74369dd20b498f4f7c7fc",
+      "score_atoms": [
+        "hunt:intake"
+      ],
+      "visible_setup": null
+    },
+    "r12-word-ball-silence": {
+      "binary_sha256": "7c4999fd3774e9631855eefb8f29645031730de2d1812a216f52d484e8f6d524",
+      "case_members_sha256": "156190008645950f26ea5dac40d883120a39a5a3e2fc797c4ac4deb216e1f786",
+      "case_result_sha256": "7032e7b25c1b1722e14c7c9a9968b135ab13b4f96d3184da6be62ab257116464",
+      "native_accepted_rows": 256,
+      "native_world_ticks": 256,
+      "original_case_native_request": {
+        "deadline_unix_seconds": 1795154179,
+        "direct_weights": null,
+        "evaluation_nonce": 1794952000,
+        "finalization_deadline_unix_seconds": 1795154289,
+        "max_decisions": 256,
+        "max_output_bytes": 1073741824,
+        "max_world_ticks": 256,
+        "navigation_task": null,
+        "schema": 3
+      },
+      "pressure": {
+        "actual_gpu_timing_preserved": true,
+        "applied_gpu_time_ns": 0,
+        "cross_arm_frame_replay": false,
+        "enabled": true,
+        "live_atp_and_heap_constraints": true,
+        "production_policy_unchanged": true,
+        "scope": "controlled_host_pressure_not_fixed_neural_work"
+      },
+      "receipt_sha256": "d8fe2416333e61ffe1f8c5ce3800a4c50901cab9115b1f17165351923ff24de8",
+      "request_sha256": "51ff3063ee04da21aa8528dbd3db779e8e019646890b6af1abef589c316621a8",
+      "score_atoms": [
+        "grounded_expression:quiet-without-food"
+      ],
+      "visible_setup": {
+        "after_sound_sha256": "c4572aa8cea0a2a30fb1f3f151e74b145136e76d91d4dcebbf8d39196b7ca8fb",
+        "at_tick": 3074,
+        "before_sound_sha256": "c4572aa8cea0a2a30fb1f3f151e74b145136e76d91d4dcebbf8d39196b7ca8fb",
+        "biological_choices": 0,
+        "body_changed": false,
+        "body_position": {
+          "x": -16.169696807861328,
+          "y": 0.0,
+          "z": 205.9512176513672
+        },
+        "body_yaw": 2.68048357963562,
+        "common_allocated_ids": [
+          11,
+          12,
+          13
+        ],
+        "common_removed_source_ids": [
+          2,
+          3,
+          4,
+          6,
+          7,
+          9,
+          10
+        ],
+        "food": null,
+        "forced_action": false,
+        "global_reference_counts_verified": true,
+        "hazard": null,
+        "heard": [],
+        "kind": "R12-crossed-physical-reference-v1",
+        "mirror": false,
+        "mode": "r12-word-ball-silence",
+        "obstacle": null,
+        "physical_control": "zero or named native Fruit/Ball/Obstacle entries globally, empty sensory field otherwise; retained agents and remote hazard unchanged; native sensory report, no scored IDs or answer fed to neural input",
+        "slots": {
+          "other": {
+            "x": -17.583749771118164,
+            "y": 0.0,
+            "z": 208.04953002929688
+          },
+          "primary": {
+            "x": -18.696104049682617,
+            "y": 0.0,
+            "z": 205.81063842773438
+          }
+        },
+        "subjects": [
+          {
+            "id": 12,
+            "kind": "Ball",
+            "p": {
+              "x": -18.696104049682617,
+              "y": 0.0,
+              "z": 205.81063842773438
+            }
+          }
+        ],
+        "toy": {
+          "id": 12,
+          "kind": "Ball",
+          "p": {
+            "x": -18.696104049682617,
+            "y": 0.0,
+            "z": 205.81063842773438
+          }
+        },
+        "visible": [
+          12
+        ]
+      }
+    },
+    "r12-word-empty-silence": {
+      "binary_sha256": "7c4999fd3774e9631855eefb8f29645031730de2d1812a216f52d484e8f6d524",
+      "case_members_sha256": "e8e32cdb0fd9891f234b94008f3de7c9035d7a410b1d3d9fbeaad12e7a5ea45c",
+      "case_result_sha256": "e5f8f3bbcbbe6b19104e140f30948fe18a01c9dcade6591a58d0bea7d3ffcb15",
+      "native_accepted_rows": 256,
+      "native_world_ticks": 256,
+      "original_case_native_request": {
+        "deadline_unix_seconds": 1795154250,
+        "direct_weights": null,
+        "evaluation_nonce": 1794952000,
+        "finalization_deadline_unix_seconds": 1795154360,
+        "max_decisions": 256,
+        "max_output_bytes": 1073741824,
+        "max_world_ticks": 256,
+        "navigation_task": null,
+        "schema": 3
+      },
+      "pressure": {
+        "actual_gpu_timing_preserved": true,
+        "applied_gpu_time_ns": 0,
+        "cross_arm_frame_replay": false,
+        "enabled": true,
+        "live_atp_and_heap_constraints": true,
+        "production_policy_unchanged": true,
+        "scope": "controlled_host_pressure_not_fixed_neural_work"
+      },
+      "receipt_sha256": "c3a4c9b6c695894f23e9fccc0a9496745619a5773a90b6ccc9a0757b71ae1a7d",
+      "request_sha256": "bc88dfa301aa30bb235a106ba69b9c380e3a03798b0dfa8028108c4e65c66dbf",
+      "score_atoms": [
+        "grounded_expression:quiet-without-food"
+      ],
+      "visible_setup": {
+        "after_sound_sha256": "b74b77329939b67f74aabde5fed85ba1aa87655d08d968511428117fc5538ae2",
+        "at_tick": 3074,
+        "before_sound_sha256": "b74b77329939b67f74aabde5fed85ba1aa87655d08d968511428117fc5538ae2",
+        "biological_choices": 0,
+        "body_changed": false,
+        "body_position": {
+          "x": -16.169696807861328,
+          "y": 0.0,
+          "z": 205.9512176513672
+        },
+        "body_yaw": 2.68048357963562,
+        "common_allocated_ids": [
+          11,
+          12,
+          13
+        ],
+        "common_removed_source_ids": [
+          2,
+          3,
+          4,
+          6,
+          7,
+          9,
+          10
+        ],
+        "food": null,
+        "forced_action": false,
+        "global_reference_counts_verified": true,
+        "hazard": null,
+        "heard": [],
+        "kind": "R12-crossed-physical-reference-v1",
+        "mirror": false,
+        "mode": "r12-word-empty-silence",
+        "obstacle": null,
+        "physical_control": "zero or named native Fruit/Ball/Obstacle entries globally, empty sensory field otherwise; retained agents and remote hazard unchanged; native sensory report, no scored IDs or answer fed to neural input",
+        "slots": {
+          "other": {
+            "x": -17.583749771118164,
+            "y": 0.0,
+            "z": 208.04953002929688
+          },
+          "primary": {
+            "x": -18.696104049682617,
+            "y": 0.0,
+            "z": 205.81063842773438
+          }
+        },
+        "subjects": [],
+        "toy": null,
+        "visible": []
+      }
+    },
+    "r12-word-food-obstacle-silence": {
+      "binary_sha256": "7c4999fd3774e9631855eefb8f29645031730de2d1812a216f52d484e8f6d524",
+      "case_members_sha256": "1227b1db642116a6936efaf8fb4471f4a83c3509cdc440e3e6b2556469a4a722",
+      "case_result_sha256": "26667f1613fec9cef4e73f4b8a59316dec946ca150ff6ab4f67006f7a8a72283",
+      "native_accepted_rows": 256,
+      "native_world_ticks": 256,
+      "original_case_native_request": {
+        "deadline_unix_seconds": 1795154279,
+        "direct_weights": null,
+        "evaluation_nonce": 1794952000,
+        "finalization_deadline_unix_seconds": 1795154389,
+        "max_decisions": 256,
+        "max_output_bytes": 1073741824,
+        "max_world_ticks": 256,
+        "navigation_task": null,
+        "schema": 3
+      },
+      "pressure": {
+        "actual_gpu_timing_preserved": true,
+        "applied_gpu_time_ns": 0,
+        "cross_arm_frame_replay": false,
+        "enabled": true,
+        "live_atp_and_heap_constraints": true,
+        "production_policy_unchanged": true,
+        "scope": "controlled_host_pressure_not_fixed_neural_work"
+      },
+      "receipt_sha256": "43b0efa256a8d8b751dc140be1b1d8cbe2e83b5a8160ceb8cc280b33bf00de0c",
+      "request_sha256": "a7739c0842ff0f01be160c7ce607098c98c9e1785dd89aa726c428d55314746d",
+      "score_atoms": [
+        "grounded_expression:grounded-food"
+      ],
+      "visible_setup": {
+        "after_sound_sha256": "8e86aac353a781ee971378a46e357975e2fce312341f7de596f6d99a97ff3d87",
+        "at_tick": 3074,
+        "before_sound_sha256": "8e86aac353a781ee971378a46e357975e2fce312341f7de596f6d99a97ff3d87",
+        "biological_choices": 0,
+        "body_changed": false,
+        "body_position": {
+          "x": -16.169696807861328,
+          "y": 0.0,
+          "z": 205.9512176513672
+        },
+        "body_yaw": 2.68048357963562,
+        "common_allocated_ids": [
+          11,
+          12,
+          13
+        ],
+        "common_removed_source_ids": [
+          2,
+          3,
+          4,
+          6,
+          7,
+          9,
+          10
+        ],
+        "food": {
+          "id": 11,
+          "kind": "Food",
+          "nutrition": 0.44999998807907104,
+          "p": {
+            "x": -18.696104049682617,
+            "y": 0.0,
+            "z": 205.81063842773438
+          }
+        },
+        "forced_action": false,
+        "global_reference_counts_verified": true,
+        "hazard": null,
+        "heard": [],
+        "kind": "R12-crossed-physical-reference-v1",
+        "mirror": false,
+        "mode": "r12-word-food-obstacle-silence",
+        "obstacle": {
+          "id": 13,
+          "kind": "Obstacle",
+          "p": {
+            "x": -17.583749771118164,
+            "y": 0.0,
+            "z": 208.04953002929688
+          }
+        },
+        "physical_control": "zero or named native Fruit/Ball/Obstacle entries globally, empty sensory field otherwise; retained agents and remote hazard unchanged; native sensory report, no scored IDs or answer fed to neural input",
+        "slots": {
+          "other": {
+            "x": -17.583749771118164,
+            "y": 0.0,
+            "z": 208.04953002929688
+          },
+          "primary": {
+            "x": -18.696104049682617,
+            "y": 0.0,
+            "z": 205.81063842773438
+          }
+        },
+        "subjects": [
+          {
+            "id": 11,
+            "kind": "Food",
+            "nutrition": 0.44999998807907104,
+            "p": {
+              "x": -18.696104049682617,
+              "y": 0.0,
+              "z": 205.81063842773438
+            }
+          },
+          {
+            "id": 13,
+            "kind": "Obstacle",
+            "p": {
+              "x": -17.583749771118164,
+              "y": 0.0,
+              "z": 208.04953002929688
+            }
+          }
+        ],
+        "toy": null,
+        "visible": [
+          13,
+          11
+        ]
+      }
+    },
+    "r12-word-food-silence": {
+      "binary_sha256": "7c4999fd3774e9631855eefb8f29645031730de2d1812a216f52d484e8f6d524",
+      "case_members_sha256": "73882aff817b36d9c5ef21631a46cfa45b61a59e95f09e3c3ae6ee8a4bce5994",
+      "case_result_sha256": "75cc10d57d918d4f8d5b71363bffa076de4a4d16988848e121b9b32d1af95c54",
+      "native_accepted_rows": 256,
+      "native_world_ticks": 256,
+      "original_case_native_request": {
+        "deadline_unix_seconds": 1795154150,
+        "direct_weights": null,
+        "evaluation_nonce": 1794952000,
+        "finalization_deadline_unix_seconds": 1795154260,
+        "max_decisions": 256,
+        "max_output_bytes": 1073741824,
+        "max_world_ticks": 256,
+        "navigation_task": null,
+        "schema": 3
+      },
+      "pressure": {
+        "actual_gpu_timing_preserved": true,
+        "applied_gpu_time_ns": 0,
+        "cross_arm_frame_replay": false,
+        "enabled": true,
+        "live_atp_and_heap_constraints": true,
+        "production_policy_unchanged": true,
+        "scope": "controlled_host_pressure_not_fixed_neural_work"
+      },
+      "receipt_sha256": "1b6190736dc4b86b51bfc8f4979eaa79e410d72b51f7c1f1eab25bd1541c388f",
+      "request_sha256": "8a5863442de120db8739f9f49bf30b67b8348d7a157cdbaec166379a35a7b86c",
+      "score_atoms": [
+        "grounded_expression:grounded-food"
+      ],
+      "visible_setup": {
+        "after_sound_sha256": "2b36ffeabf5d7e037f4a93a73ffd19e7453031a82134ed73724ca2b74d654366",
+        "at_tick": 3074,
+        "before_sound_sha256": "2b36ffeabf5d7e037f4a93a73ffd19e7453031a82134ed73724ca2b74d654366",
+        "biological_choices": 0,
+        "body_changed": false,
+        "body_position": {
+          "x": -16.169696807861328,
+          "y": 0.0,
+          "z": 205.9512176513672
+        },
+        "body_yaw": 2.68048357963562,
+        "common_allocated_ids": [
+          11,
+          12,
+          13
+        ],
+        "common_removed_source_ids": [
+          2,
+          3,
+          4,
+          6,
+          7,
+          9,
+          10
+        ],
+        "food": {
+          "id": 11,
+          "kind": "Food",
+          "nutrition": 0.44999998807907104,
+          "p": {
+            "x": -18.696104049682617,
+            "y": 0.0,
+            "z": 205.81063842773438
+          }
+        },
+        "forced_action": false,
+        "global_reference_counts_verified": true,
+        "hazard": null,
+        "heard": [],
+        "kind": "R12-crossed-physical-reference-v1",
+        "mirror": false,
+        "mode": "r12-word-food-silence",
+        "obstacle": null,
+        "physical_control": "zero or named native Fruit/Ball/Obstacle entries globally, empty sensory field otherwise; retained agents and remote hazard unchanged; native sensory report, no scored IDs or answer fed to neural input",
+        "slots": {
+          "other": {
+            "x": -17.583749771118164,
+            "y": 0.0,
+            "z": 208.04953002929688
+          },
+          "primary": {
+            "x": -18.696104049682617,
+            "y": 0.0,
+            "z": 205.81063842773438
+          }
+        },
+        "subjects": [
+          {
+            "id": 11,
+            "kind": "Food",
+            "nutrition": 0.44999998807907104,
+            "p": {
+              "x": -18.696104049682617,
+              "y": 0.0,
+              "z": 205.81063842773438
+            }
+          }
+        ],
+        "toy": null,
+        "visible": [
+          11
+        ]
+      }
+    },
+    "r12-word-mirror-food-silence": {
+      "binary_sha256": "7c4999fd3774e9631855eefb8f29645031730de2d1812a216f52d484e8f6d524",
+      "case_members_sha256": "c34003120573d3021cd4096da3b3af8d9fda1abff81200651f2a96139d11f2e6",
+      "case_result_sha256": "1fdeff460d18b859684c7cb461a1707cbdc7086bd6298d458e346e945fa1e031",
+      "native_accepted_rows": 256,
+      "native_world_ticks": 256,
+      "original_case_native_request": {
+        "deadline_unix_seconds": 1795154165,
+        "direct_weights": null,
+        "evaluation_nonce": 1794952000,
+        "finalization_deadline_unix_seconds": 1795154275,
+        "max_decisions": 256,
+        "max_output_bytes": 1073741824,
+        "max_world_ticks": 256,
+        "navigation_task": null,
+        "schema": 3
+      },
+      "pressure": {
+        "actual_gpu_timing_preserved": true,
+        "applied_gpu_time_ns": 0,
+        "cross_arm_frame_replay": false,
+        "enabled": true,
+        "live_atp_and_heap_constraints": true,
+        "production_policy_unchanged": true,
+        "scope": "controlled_host_pressure_not_fixed_neural_work"
+      },
+      "receipt_sha256": "2add97e91f7f8f5671b9cf6f8c991fe1ccf563964d40ba67c956b27f368ccccf",
+      "request_sha256": "9999e952b0360811fb4a51ce0ae6dee85616b6006a2efcc4f186d0be0569eb60",
+      "score_atoms": [
+        "grounded_expression:grounded-food"
+      ],
+      "visible_setup": {
+        "after_sound_sha256": "a3efdb3d91c8757a24afd64ae98e5a1b820e880acd31d5748b6e825b328f458e",
+        "at_tick": 3074,
+        "before_sound_sha256": "a3efdb3d91c8757a24afd64ae98e5a1b820e880acd31d5748b6e825b328f458e",
+        "biological_choices": 0,
+        "body_changed": false,
+        "body_position": {
+          "x": -16.169696807861328,
+          "y": 0.0,
+          "z": 205.9512176513672
+        },
+        "body_yaw": 2.68048357963562,
+        "common_allocated_ids": [
+          11,
+          12,
+          13
+        ],
+        "common_removed_source_ids": [
+          2,
+          3,
+          4,
+          6,
+          7,
+          9,
+          10
+        ],
+        "food": {
+          "id": 11,
+          "kind": "Food",
+          "nutrition": 0.44999998807907104,
+          "p": {
+            "x": -17.583749771118164,
+            "y": 0.0,
+            "z": 208.04953002929688
+          }
+        },
+        "forced_action": false,
+        "global_reference_counts_verified": true,
+        "hazard": null,
+        "heard": [],
+        "kind": "R12-crossed-physical-reference-v1",
+        "mirror": true,
+        "mode": "r12-word-mirror-food-silence",
+        "obstacle": null,
+        "physical_control": "zero or named native Fruit/Ball/Obstacle entries globally, empty sensory field otherwise; retained agents and remote hazard unchanged; native sensory report, no scored IDs or answer fed to neural input",
+        "slots": {
+          "other": {
+            "x": -18.696104049682617,
+            "y": 0.0,
+            "z": 205.81063842773438
+          },
+          "primary": {
+            "x": -17.583749771118164,
+            "y": 0.0,
+            "z": 208.04953002929688
+          }
+        },
+        "subjects": [
+          {
+            "id": 11,
+            "kind": "Food",
+            "nutrition": 0.44999998807907104,
+            "p": {
+              "x": -17.583749771118164,
+              "y": 0.0,
+              "z": 208.04953002929688
+            }
+          }
+        ],
+        "toy": null,
+        "visible": [
+          11
+        ]
+      }
+    },
+    "r12-word-obstacle-silence": {
+      "binary_sha256": "7c4999fd3774e9631855eefb8f29645031730de2d1812a216f52d484e8f6d524",
+      "case_members_sha256": "2e3a292b68b5c26f72e60e167b920ba77ae14ff133e6eed4d4a5da0e6f4037d3",
+      "case_result_sha256": "3628617ed4f461f2d129bbd92c3ca075a5fd54e21d374555d6a6f065cba5e9b8",
+      "native_accepted_rows": 256,
+      "native_world_ticks": 256,
+      "original_case_native_request": {
+        "deadline_unix_seconds": 1795154264,
+        "direct_weights": null,
+        "evaluation_nonce": 1794952000,
+        "finalization_deadline_unix_seconds": 1795154374,
+        "max_decisions": 256,
+        "max_output_bytes": 1073741824,
+        "max_world_ticks": 256,
+        "navigation_task": null,
+        "schema": 3
+      },
+      "pressure": {
+        "actual_gpu_timing_preserved": true,
+        "applied_gpu_time_ns": 0,
+        "cross_arm_frame_replay": false,
+        "enabled": true,
+        "live_atp_and_heap_constraints": true,
+        "production_policy_unchanged": true,
+        "scope": "controlled_host_pressure_not_fixed_neural_work"
+      },
+      "receipt_sha256": "bd5e7ea28e608d8f1b70764fd66b6aa4c8223ea6c037aa92275dac70bc10cf8d",
+      "request_sha256": "a5057312fe4622e4b024f64f57f23ffeb11c6a57204c3da7fcc6ee5b50b5d829",
+      "score_atoms": [
+        "grounded_expression:quiet-without-food"
+      ],
+      "visible_setup": {
+        "after_sound_sha256": "8d62afbf4e2339743b796c69913ef7ccedeb5a657e81f33d64169acfd4a06ee0",
+        "at_tick": 3074,
+        "before_sound_sha256": "8d62afbf4e2339743b796c69913ef7ccedeb5a657e81f33d64169acfd4a06ee0",
+        "biological_choices": 0,
+        "body_changed": false,
+        "body_position": {
+          "x": -16.169696807861328,
+          "y": 0.0,
+          "z": 205.9512176513672
+        },
+        "body_yaw": 2.68048357963562,
+        "common_allocated_ids": [
+          11,
+          12,
+          13
+        ],
+        "common_removed_source_ids": [
+          2,
+          3,
+          4,
+          6,
+          7,
+          9,
+          10
+        ],
+        "food": null,
+        "forced_action": false,
+        "global_reference_counts_verified": true,
+        "hazard": null,
+        "heard": [],
+        "kind": "R12-crossed-physical-reference-v1",
+        "mirror": false,
+        "mode": "r12-word-obstacle-silence",
+        "obstacle": {
+          "id": 13,
+          "kind": "Obstacle",
+          "p": {
+            "x": -17.583749771118164,
+            "y": 0.0,
+            "z": 208.04953002929688
+          }
+        },
+        "physical_control": "zero or named native Fruit/Ball/Obstacle entries globally, empty sensory field otherwise; retained agents and remote hazard unchanged; native sensory report, no scored IDs or answer fed to neural input",
+        "slots": {
+          "other": {
+            "x": -17.583749771118164,
+            "y": 0.0,
+            "z": 208.04953002929688
+          },
+          "primary": {
+            "x": -18.696104049682617,
+            "y": 0.0,
+            "z": 205.81063842773438
+          }
+        },
+        "subjects": [
+          {
+            "id": 13,
+            "kind": "Obstacle",
+            "p": {
+              "x": -17.583749771118164,
+              "y": 0.0,
+              "z": 208.04953002929688
+            }
+          }
+        ],
+        "toy": null,
+        "visible": [
+          13
+        ]
+      }
+    },
+    "r14-word-mirror-root-silence": {
+      "binary_sha256": "7c4999fd3774e9631855eefb8f29645031730de2d1812a216f52d484e8f6d524",
+      "case_members_sha256": "45f3fd5ce458f45b32c18ff98741d080cd12496e8debc179ce39876d4cff746b",
+      "case_result_sha256": "28d9f30b0610236ed9fe51830f23d79dda2d9976cd0b8625025f0eef6d73e8e5",
+      "native_accepted_rows": 256,
+      "native_world_ticks": 256,
+      "original_case_native_request": {
+        "deadline_unix_seconds": 1795154222,
+        "direct_weights": null,
+        "evaluation_nonce": 1794952000,
+        "finalization_deadline_unix_seconds": 1795154332,
+        "max_decisions": 256,
+        "max_output_bytes": 1073741824,
+        "max_world_ticks": 256,
+        "navigation_task": null,
+        "schema": 3
+      },
+      "pressure": {
+        "actual_gpu_timing_preserved": true,
+        "applied_gpu_time_ns": 0,
+        "cross_arm_frame_replay": false,
+        "enabled": true,
+        "live_atp_and_heap_constraints": true,
+        "production_policy_unchanged": true,
+        "scope": "controlled_host_pressure_not_fixed_neural_work"
+      },
+      "receipt_sha256": "b194618164cd8061b77e3d0fc6b5b02d289b63830b1e72207d797e2617fb221d",
+      "request_sha256": "b00c0a769af68a74ebfea8b56c4456a77c892dd82ed3443f5feba2c36edc6a85",
+      "score_atoms": [
+        "grounded_expression:grounded-food"
+      ],
+      "visible_setup": {
+        "after_sound_sha256": "fc1aebe84d91d7b066e0c23e6015e0027e3e9d2fff563e0556363d037ed8604b",
+        "at_tick": 3074,
+        "before_sound_sha256": "fc1aebe84d91d7b066e0c23e6015e0027e3e9d2fff563e0556363d037ed8604b",
+        "biological_choices": 0,
+        "body_changed": false,
+        "body_position": {
+          "x": -16.169696807861328,
+          "y": 0.0,
+          "z": 205.9512176513672
+        },
+        "body_yaw": 2.68048357963562,
+        "common_allocated_ids": [
+          11,
+          12
+        ],
+        "common_removed_source_ids": [
+          2,
+          3,
+          4,
+          6,
+          7,
+          9,
+          10
+        ],
+        "food": {
+          "chemical": [
+            0.800000011920929,
+            0.25,
+            0.3499999940395355
+          ],
+          "color": [
+            0.973058819770813,
+            0.40305882692337036,
+            0.103058822453022
+          ],
+          "id": 11,
+          "kind": "Food",
+          "material": [
+            0.3499999940395355,
+            0.15000000596046448,
+            0.6499999761581421
+          ],
+          "nutrition": 0.6499999761581421,
+          "p": {
+            "x": -17.91830825805664,
+            "y": 0.0,
+            "z": 207.71327209472656
+          },
+          "shape": [
+            0.44999998807907104,
+            0.8999999761581421,
+            0.44999998807907104
+          ]
+        },
+        "forced_action": false,
+        "global_reference_counts_verified": true,
+        "hazard": null,
+        "heard": [],
+        "kind": "R14-root-vs-odor-matched-activitytoy-v1",
+        "layout": "root",
+        "mirror": true,
+        "mode": "r14-word-mirror-root-silence",
+        "obstacle": null,
+        "opening_smell_bits": [
+          1060320742,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "physical_control": "native Root vs real ActivityToy same object ID, position, radius and isolated smell-chemistry bands; object photos/texture/shape and taste differ; observer metadata not brain input",
+        "slots": {
+          "other": {
+            "x": -18.63021469116211,
+            "y": 0.0,
+            "z": 206.28038024902344
+          },
+          "primary": {
+            "x": -17.91830825805664,
+            "y": 0.0,
+            "z": 207.71327209472656
+          }
+        },
+        "subjects": [
+          {
+            "chemical": [
+              0.800000011920929,
+              0.25,
+              0.3499999940395355
+            ],
+            "color": [
+              0.973058819770813,
+              0.40305882692337036,
+              0.103058822453022
+            ],
+            "id": 11,
+            "kind": "Food",
+            "material": [
+              0.3499999940395355,
+              0.15000000596046448,
+              0.6499999761581421
+            ],
+            "nutrition": 0.6499999761581421,
+            "p": {
+              "x": -17.91830825805664,
+              "y": 0.0,
+              "z": 207.71327209472656
+            },
+            "shape": [
+              0.44999998807907104,
+              0.8999999761581421,
+              0.44999998807907104
+            ]
+          }
+        ],
+        "toy": null,
+        "visible": [
+          11
+        ]
+      }
+    },
+    "r14-word-mirror-scent-decoy-silence": {
+      "binary_sha256": "7c4999fd3774e9631855eefb8f29645031730de2d1812a216f52d484e8f6d524",
+      "case_members_sha256": "c3213a12b3ea95b3f96f7c7a388adabfa14ab53d67db9e9612c15db7f981061f",
+      "case_result_sha256": "1b84a575e2be40a610f11a126fc21be5baf67fdd27d36f36832787b39e41487c",
+      "native_accepted_rows": 256,
+      "native_world_ticks": 256,
+      "original_case_native_request": {
+        "deadline_unix_seconds": 1795154194,
+        "direct_weights": null,
+        "evaluation_nonce": 1794952000,
+        "finalization_deadline_unix_seconds": 1795154304,
+        "max_decisions": 256,
+        "max_output_bytes": 1073741824,
+        "max_world_ticks": 256,
+        "navigation_task": null,
+        "schema": 3
+      },
+      "pressure": {
+        "actual_gpu_timing_preserved": true,
+        "applied_gpu_time_ns": 0,
+        "cross_arm_frame_replay": false,
+        "enabled": true,
+        "live_atp_and_heap_constraints": true,
+        "production_policy_unchanged": true,
+        "scope": "controlled_host_pressure_not_fixed_neural_work"
+      },
+      "receipt_sha256": "60a4f311ace03921f1821fa19b8c2b18b68995a4ff5872aa72218a3379fa6104",
+      "request_sha256": "648a75e7d1d9338069cbd03544093da33027b52eab5bd94a50fde33747129a3b",
+      "score_atoms": [
+        "grounded_expression:quiet-without-food"
+      ],
+      "visible_setup": {
+        "after_sound_sha256": "e6b183000650a201de37fb9c843fd10f8b901b6aba889587a220c30df10bba63",
+        "at_tick": 3074,
+        "before_sound_sha256": "e6b183000650a201de37fb9c843fd10f8b901b6aba889587a220c30df10bba63",
+        "biological_choices": 0,
+        "body_changed": false,
+        "body_position": {
+          "x": -16.169696807861328,
+          "y": 0.0,
+          "z": 205.9512176513672
+        },
+        "body_yaw": 2.68048357963562,
+        "common_allocated_ids": [
+          11,
+          12
+        ],
+        "common_removed_source_ids": [
+          2,
+          3,
+          4,
+          6,
+          7,
+          9,
+          10
+        ],
+        "food": null,
+        "forced_action": false,
+        "global_reference_counts_verified": true,
+        "hazard": null,
+        "heard": [],
+        "kind": "R14-root-vs-odor-matched-activitytoy-v1",
+        "layout": "scent-decoy",
+        "mirror": true,
+        "mode": "r14-word-mirror-scent-decoy-silence",
+        "obstacle": null,
+        "opening_smell_bits": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "physical_control": "native Root vs real ActivityToy same object ID, position, radius and isolated smell-chemistry bands; object photos/texture/shape and taste differ; observer metadata not brain input",
+        "slots": {
+          "other": {
+            "x": -18.63021469116211,
+            "y": 0.0,
+            "z": 206.28038024902344
+          },
+          "primary": {
+            "x": -17.91830825805664,
+            "y": 0.0,
+            "z": 207.71327209472656
+          }
+        },
+        "subjects": [
+          {
+            "chemical": [
+              0.800000011920929,
+              0.25,
+              0.0
+            ],
+            "color": [
+              0.1788235306739807,
+              0.3499999940395355,
+              0.8999999761581421
+            ],
+            "id": 11,
+            "kind": "ActivityToy",
+            "material": [
+              0.20000000298023224,
+              0.800000011920929,
+              0.20000000298023224
+            ],
+            "nutrition": 0.0,
+            "p": {
+              "x": -17.91830825805664,
+              "y": 0.0,
+              "z": 207.71327209472656
+            },
+            "shape": [
+              0.8999999761581421,
+              0.6499999761581421,
+              0.6000000238418579
+            ]
+          }
+        ],
+        "toy": {
+          "chemical": [
+            0.800000011920929,
+            0.25,
+            0.0
+          ],
+          "color": [
+            0.1788235306739807,
+            0.3499999940395355,
+            0.8999999761581421
+          ],
+          "id": 11,
+          "kind": "ActivityToy",
+          "material": [
+            0.20000000298023224,
+            0.800000011920929,
+            0.20000000298023224
+          ],
+          "nutrition": 0.0,
+          "p": {
+            "x": -17.91830825805664,
+            "y": 0.0,
+            "z": 207.71327209472656
+          },
+          "shape": [
+            0.8999999761581421,
+            0.6499999761581421,
+            0.6000000238418579
+          ]
+        },
+        "visible": [
+          11
+        ]
+      }
+    },
+    "r14-word-root-scent-decoy-silence": {
+      "binary_sha256": "7c4999fd3774e9631855eefb8f29645031730de2d1812a216f52d484e8f6d524",
+      "case_members_sha256": "0555f6aa7de1f68c2016545cc419fd040aeae927516c193dbf9723406e88ca9c",
+      "case_result_sha256": "e06d051e5d4fd5e8f1af43ec263e62b3421010dc773564bbf6fdf2d1e912e921",
+      "native_accepted_rows": 256,
+      "native_world_ticks": 256,
+      "original_case_native_request": {
+        "deadline_unix_seconds": 1795154292,
+        "direct_weights": null,
+        "evaluation_nonce": 1794952000,
+        "finalization_deadline_unix_seconds": 1795154402,
+        "max_decisions": 256,
+        "max_output_bytes": 1073741824,
+        "max_world_ticks": 256,
+        "navigation_task": null,
+        "schema": 3
+      },
+      "pressure": {
+        "actual_gpu_timing_preserved": true,
+        "applied_gpu_time_ns": 0,
+        "cross_arm_frame_replay": false,
+        "enabled": true,
+        "live_atp_and_heap_constraints": true,
+        "production_policy_unchanged": true,
+        "scope": "controlled_host_pressure_not_fixed_neural_work"
+      },
+      "receipt_sha256": "ea2f7a563c5afdb2db374066a218dd1f05812ae80b2af3f9545eb2468dd7940e",
+      "request_sha256": "94c63865f84fa9a25f435332295a6034820d97eff5983e2b04c8b529d895b75d",
+      "score_atoms": [
+        "grounded_expression:grounded-food"
+      ],
+      "visible_setup": {
+        "after_sound_sha256": "705adf26ae2ae6983f3f889657f2fed1b146ff42e4f17a6a95cb0a29b61e438f",
+        "at_tick": 3074,
+        "before_sound_sha256": "705adf26ae2ae6983f3f889657f2fed1b146ff42e4f17a6a95cb0a29b61e438f",
+        "biological_choices": 0,
+        "body_changed": false,
+        "body_position": {
+          "x": -16.169696807861328,
+          "y": 0.0,
+          "z": 205.9512176513672
+        },
+        "body_yaw": 2.68048357963562,
+        "common_allocated_ids": [
+          11,
+          12
+        ],
+        "common_removed_source_ids": [
+          2,
+          3,
+          4,
+          6,
+          7,
+          9,
+          10
+        ],
+        "food": {
+          "chemical": [
+            0.800000011920929,
+            0.25,
+            0.3499999940395355
+          ],
+          "color": [
+            0.973058819770813,
+            0.40305882692337036,
+            0.103058822453022
+          ],
+          "id": 11,
+          "kind": "Food",
+          "material": [
+            0.3499999940395355,
+            0.15000000596046448,
+            0.6499999761581421
+          ],
+          "nutrition": 0.6499999761581421,
+          "p": {
+            "x": -18.63021469116211,
+            "y": 0.0,
+            "z": 206.28038024902344
+          },
+          "shape": [
+            0.44999998807907104,
+            0.8999999761581421,
+            0.44999998807907104
+          ]
+        },
+        "forced_action": false,
+        "global_reference_counts_verified": true,
+        "hazard": null,
+        "heard": [],
+        "kind": "R14-root-vs-odor-matched-activitytoy-v1",
+        "layout": "root-scent-decoy",
+        "mirror": false,
+        "mode": "r14-word-root-scent-decoy-silence",
+        "obstacle": null,
+        "opening_smell_bits": [
+          1060320734,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "physical_control": "native Root vs real ActivityToy same object ID, position, radius and isolated smell-chemistry bands; object photos/texture/shape and taste differ; observer metadata not brain input",
+        "slots": {
+          "other": {
+            "x": -17.91830825805664,
+            "y": 0.0,
+            "z": 207.71327209472656
+          },
+          "primary": {
+            "x": -18.63021469116211,
+            "y": 0.0,
+            "z": 206.28038024902344
+          }
+        },
+        "subjects": [
+          {
+            "chemical": [
+              0.800000011920929,
+              0.25,
+              0.3499999940395355
+            ],
+            "color": [
+              0.973058819770813,
+              0.40305882692337036,
+              0.103058822453022
+            ],
+            "id": 11,
+            "kind": "Food",
+            "material": [
+              0.3499999940395355,
+              0.15000000596046448,
+              0.6499999761581421
+            ],
+            "nutrition": 0.6499999761581421,
+            "p": {
+              "x": -18.63021469116211,
+              "y": 0.0,
+              "z": 206.28038024902344
+            },
+            "shape": [
+              0.44999998807907104,
+              0.8999999761581421,
+              0.44999998807907104
+            ]
+          },
+          {
+            "chemical": [
+              0.800000011920929,
+              0.25,
+              0.0
+            ],
+            "color": [
+              0.160392165184021,
+              0.3499999940395355,
+              0.8999999761581421
+            ],
+            "id": 12,
+            "kind": "ActivityToy",
+            "material": [
+              0.20000000298023224,
+              0.800000011920929,
+              0.20000000298023224
+            ],
+            "nutrition": 0.0,
+            "p": {
+              "x": -17.91830825805664,
+              "y": 0.0,
+              "z": 207.71327209472656
+            },
+            "shape": [
+              0.8999999761581421,
+              0.6499999761581421,
+              0.6000000238418579
+            ]
+          }
+        ],
+        "toy": {
+          "chemical": [
+            0.800000011920929,
+            0.25,
+            0.0
+          ],
+          "color": [
+            0.160392165184021,
+            0.3499999940395355,
+            0.8999999761581421
+          ],
+          "id": 12,
+          "kind": "ActivityToy",
+          "material": [
+            0.20000000298023224,
+            0.800000011920929,
+            0.20000000298023224
+          ],
+          "nutrition": 0.0,
+          "p": {
+            "x": -17.91830825805664,
+            "y": 0.0,
+            "z": 207.71327209472656
+          },
+          "shape": [
+            0.8999999761581421,
+            0.6499999761581421,
+            0.6000000238418579
+          ]
+        },
+        "visible": [
+          12,
+          11
+        ]
+      }
+    },
+    "r14-word-root-silence": {
+      "binary_sha256": "7c4999fd3774e9631855eefb8f29645031730de2d1812a216f52d484e8f6d524",
+      "case_members_sha256": "4cef79ffd19f0d3587ed8f3713dcd95ade64fdb7a2b12369a377be13707057a3",
+      "case_result_sha256": "59a92d69a2cf65c81426548181ee965eab3b5f393c65fb7888673bfd02eb948b",
+      "native_accepted_rows": 256,
+      "native_world_ticks": 256,
+      "original_case_native_request": {
+        "deadline_unix_seconds": 1795154207,
+        "direct_weights": null,
+        "evaluation_nonce": 1794952000,
+        "finalization_deadline_unix_seconds": 1795154317,
+        "max_decisions": 256,
+        "max_output_bytes": 1073741824,
+        "max_world_ticks": 256,
+        "navigation_task": null,
+        "schema": 3
+      },
+      "pressure": {
+        "actual_gpu_timing_preserved": true,
+        "applied_gpu_time_ns": 0,
+        "cross_arm_frame_replay": false,
+        "enabled": true,
+        "live_atp_and_heap_constraints": true,
+        "production_policy_unchanged": true,
+        "scope": "controlled_host_pressure_not_fixed_neural_work"
+      },
+      "receipt_sha256": "9d8bacdd9284b63001b37649c8fc3bd3e952bcfd2e718831cbe46f6bc7994630",
+      "request_sha256": "70c87a8653f425a33f9be538b855d4ebff43deaf76ee9443930eb744bb6c99c8",
+      "score_atoms": [
+        "grounded_expression:grounded-food"
+      ],
+      "visible_setup": {
+        "after_sound_sha256": "51b9baaff3f93ac72ea2d29ee4bb52e0f465135e15e05040a2a5a4ac6ed2212b",
+        "at_tick": 3074,
+        "before_sound_sha256": "51b9baaff3f93ac72ea2d29ee4bb52e0f465135e15e05040a2a5a4ac6ed2212b",
+        "biological_choices": 0,
+        "body_changed": false,
+        "body_position": {
+          "x": -16.169696807861328,
+          "y": 0.0,
+          "z": 205.9512176513672
+        },
+        "body_yaw": 2.68048357963562,
+        "common_allocated_ids": [
+          11,
+          12
+        ],
+        "common_removed_source_ids": [
+          2,
+          3,
+          4,
+          6,
+          7,
+          9,
+          10
+        ],
+        "food": {
+          "chemical": [
+            0.800000011920929,
+            0.25,
+            0.3499999940395355
+          ],
+          "color": [
+            0.973058819770813,
+            0.40305882692337036,
+            0.103058822453022
+          ],
+          "id": 11,
+          "kind": "Food",
+          "material": [
+            0.3499999940395355,
+            0.15000000596046448,
+            0.6499999761581421
+          ],
+          "nutrition": 0.6499999761581421,
+          "p": {
+            "x": -18.63021469116211,
+            "y": 0.0,
+            "z": 206.28038024902344
+          },
+          "shape": [
+            0.44999998807907104,
+            0.8999999761581421,
+            0.44999998807907104
+          ]
+        },
+        "forced_action": false,
+        "global_reference_counts_verified": true,
+        "hazard": null,
+        "heard": [],
+        "kind": "R14-root-vs-odor-matched-activitytoy-v1",
+        "layout": "root",
+        "mirror": false,
+        "mode": "r14-word-root-silence",
+        "obstacle": null,
+        "opening_smell_bits": [
+          1060320734,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "physical_control": "native Root vs real ActivityToy same object ID, position, radius and isolated smell-chemistry bands; object photos/texture/shape and taste differ; observer metadata not brain input",
+        "slots": {
+          "other": {
+            "x": -17.91830825805664,
+            "y": 0.0,
+            "z": 207.71327209472656
+          },
+          "primary": {
+            "x": -18.63021469116211,
+            "y": 0.0,
+            "z": 206.28038024902344
+          }
+        },
+        "subjects": [
+          {
+            "chemical": [
+              0.800000011920929,
+              0.25,
+              0.3499999940395355
+            ],
+            "color": [
+              0.973058819770813,
+              0.40305882692337036,
+              0.103058822453022
+            ],
+            "id": 11,
+            "kind": "Food",
+            "material": [
+              0.3499999940395355,
+              0.15000000596046448,
+              0.6499999761581421
+            ],
+            "nutrition": 0.6499999761581421,
+            "p": {
+              "x": -18.63021469116211,
+              "y": 0.0,
+              "z": 206.28038024902344
+            },
+            "shape": [
+              0.44999998807907104,
+              0.8999999761581421,
+              0.44999998807907104
+            ]
+          }
+        ],
+        "toy": null,
+        "visible": [
+          11
+        ]
+      }
+    },
+    "r14-word-scent-decoy-silence": {
+      "binary_sha256": "7c4999fd3774e9631855eefb8f29645031730de2d1812a216f52d484e8f6d524",
+      "case_members_sha256": "62f8507f6c04bb0c737846367cbd7f45f703b8f45ea2a3705e764d8b6ec355a3",
+      "case_result_sha256": "a4c3d734a332372420a9da1071d9210e660ef74b4811a152d1b3edc383fa8948",
+      "native_accepted_rows": 256,
+      "native_world_ticks": 256,
+      "original_case_native_request": {
+        "deadline_unix_seconds": 1795154236,
+        "direct_weights": null,
+        "evaluation_nonce": 1794952000,
+        "finalization_deadline_unix_seconds": 1795154346,
+        "max_decisions": 256,
+        "max_output_bytes": 1073741824,
+        "max_world_ticks": 256,
+        "navigation_task": null,
+        "schema": 3
+      },
+      "pressure": {
+        "actual_gpu_timing_preserved": true,
+        "applied_gpu_time_ns": 0,
+        "cross_arm_frame_replay": false,
+        "enabled": true,
+        "live_atp_and_heap_constraints": true,
+        "production_policy_unchanged": true,
+        "scope": "controlled_host_pressure_not_fixed_neural_work"
+      },
+      "receipt_sha256": "dc5eaceeb8573203e6f7a323745b9cb1d237864df688d927e3eca401bfde9aff",
+      "request_sha256": "ec7478890d2c6ac523541141ddf4f659ec63f37cd78cdd02b69b77886a22e6a3",
+      "score_atoms": [
+        "grounded_expression:quiet-without-food"
+      ],
+      "visible_setup": {
+        "after_sound_sha256": "caa327282694e791c3aa1d7b1a1201f3cd4d0f075313656594052c0dda25c875",
+        "at_tick": 3074,
+        "before_sound_sha256": "caa327282694e791c3aa1d7b1a1201f3cd4d0f075313656594052c0dda25c875",
+        "biological_choices": 0,
+        "body_changed": false,
+        "body_position": {
+          "x": -16.169696807861328,
+          "y": 0.0,
+          "z": 205.9512176513672
+        },
+        "body_yaw": 2.68048357963562,
+        "common_allocated_ids": [
+          11,
+          12
+        ],
+        "common_removed_source_ids": [
+          2,
+          3,
+          4,
+          6,
+          7,
+          9,
+          10
+        ],
+        "food": null,
+        "forced_action": false,
+        "global_reference_counts_verified": true,
+        "hazard": null,
+        "heard": [],
+        "kind": "R14-root-vs-odor-matched-activitytoy-v1",
+        "layout": "scent-decoy",
+        "mirror": false,
+        "mode": "r14-word-scent-decoy-silence",
+        "obstacle": null,
+        "opening_smell_bits": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "physical_control": "native Root vs real ActivityToy same object ID, position, radius and isolated smell-chemistry bands; object photos/texture/shape and taste differ; observer metadata not brain input",
+        "slots": {
+          "other": {
+            "x": -17.91830825805664,
+            "y": 0.0,
+            "z": 207.71327209472656
+          },
+          "primary": {
+            "x": -18.63021469116211,
+            "y": 0.0,
+            "z": 206.28038024902344
+          }
+        },
+        "subjects": [
+          {
+            "chemical": [
+              0.800000011920929,
+              0.25,
+              0.0
+            ],
+            "color": [
+              0.1788235306739807,
+              0.3499999940395355,
+              0.8999999761581421
+            ],
+            "id": 11,
+            "kind": "ActivityToy",
+            "material": [
+              0.20000000298023224,
+              0.800000011920929,
+              0.20000000298023224
+            ],
+            "nutrition": 0.0,
+            "p": {
+              "x": -18.63021469116211,
+              "y": 0.0,
+              "z": 206.28038024902344
+            },
+            "shape": [
+              0.8999999761581421,
+              0.6499999761581421,
+              0.6000000238418579
+            ]
+          }
+        ],
+        "toy": {
+          "chemical": [
+            0.800000011920929,
+            0.25,
+            0.0
+          ],
+          "color": [
+            0.1788235306739807,
+            0.3499999940395355,
+            0.8999999761581421
+          ],
+          "id": 11,
+          "kind": "ActivityToy",
+          "material": [
+            0.20000000298023224,
+            0.800000011920929,
+            0.20000000298023224
+          ],
+          "nutrition": 0.0,
+          "p": {
+            "x": -18.63021469116211,
+            "y": 0.0,
+            "z": 206.28038024902344
+          },
+          "shape": [
+            0.8999999761581421,
+            0.6499999761581421,
+            0.6000000238418579
+          ]
+        },
+        "visible": [
+          11
+        ]
+      }
+    },
+    "r2-grade-left": {
+      "binary_sha256": "7c4999fd3774e9631855eefb8f29645031730de2d1812a216f52d484e8f6d524",
+      "case_members_sha256": "dbada20b01d208768612ddb837935bf2c0cccb120708273ca988ec2f1e3ae408",
+      "case_result_sha256": "7916ba89baa60e7db4f477b6cc42c25244c6978921526341d541b73c5eaf6594",
+      "native_accepted_rows": 256,
+      "native_world_ticks": 256,
+      "original_case_native_request": {
+        "deadline_unix_seconds": 1795153942,
+        "direct_weights": null,
+        "evaluation_nonce": 1794952000,
+        "finalization_deadline_unix_seconds": 1795154052,
+        "max_decisions": 256,
+        "max_output_bytes": 1073741824,
+        "max_world_ticks": 256,
+        "navigation_task": null,
+        "schema": 3
+      },
+      "pressure": {
+        "actual_gpu_timing_preserved": true,
+        "applied_gpu_time_ns": 0,
+        "cross_arm_frame_replay": false,
+        "enabled": true,
+        "live_atp_and_heap_constraints": true,
+        "production_policy_unchanged": true,
+        "scope": "controlled_host_pressure_not_fixed_neural_work"
+      },
+      "receipt_sha256": "8737ac7aee60fe7af5d9e7aee9e97d75269001c6bcdce5498c9f927a0479d296",
+      "request_sha256": "8e5cebf5b8676cff415d16ffc5a4571429cdfbf3c774375ea8244e8893770353",
+      "score_atoms": [
+        "care:safe-intake",
+        "care:alive"
+      ],
+      "visible_setup": {
+        "after_sound_sha256": "bf000011dc342564f2f69993ee32814dd539fedd2cbcf1b40931df4199bb0290",
+        "at_tick": 3074,
+        "before_sound_sha256": "bf000011dc342564f2f69993ee32814dd539fedd2cbcf1b40931df4199bb0290",
+        "biological_choices": 0,
+        "body_changed": false,
+        "body_position": {
+          "x": -16.169696807861328,
+          "y": 0.0,
+          "z": 205.9512176513672
+        },
+        "body_yaw": 2.68048357963562,
+        "flat_unblocked_first_20cm_and_centre_to_both_referents": true,
+        "food": {
+          "id": 2,
+          "nutrition": 0.8500000238418579,
+          "p": {
+            "x": -17.273618698120117,
+            "y": 0.0,
+            "z": 207.43763732910156
+          }
+        },
+        "forced_action": false,
+        "hazard": {
+          "contact": true,
+          "hidden_pain": 0.1599999964237213,
+          "id": 11,
+          "initial_radial_cosine_toward_food": 0.26696503162384033,
+          "opening_penetration_m": 0.007916748523712158,
+          "p": {
+            "x": -16.53968048095703,
+            "y": 0.0,
+            "z": 205.47622680664062
+          },
+          "radius": 0.6100000143051147,
+          "surface_temperature": 0.84
+        },
+        "heard": [],
+        "kind": "prospective-r2-grade-or-words-v1",
+        "mode": "r2-grade-left",
+        "toy": {
+          "id": 4,
+          "p": {
+            "x": -18.021120071411133,
+            "y": 0.0,
+            "z": 205.93309020996094
+          }
+        },
+        "visible": [
+          11,
+          2,
+          4
+        ]
+      }
+    },
+    "r2-grade-right": {
+      "binary_sha256": "7c4999fd3774e9631855eefb8f29645031730de2d1812a216f52d484e8f6d524",
+      "case_members_sha256": "9276eb667d724914028812ca7c8db77c7a3125350ebdcd7e163e0782ae23357e",
+      "case_result_sha256": "2603075ec732f5461dba420f9290f36fb0d23102f6ae7ce5c3230bf9840366ef",
+      "native_accepted_rows": 256,
+      "native_world_ticks": 256,
+      "original_case_native_request": {
+        "deadline_unix_seconds": 1795153956,
+        "direct_weights": null,
+        "evaluation_nonce": 1794952000,
+        "finalization_deadline_unix_seconds": 1795154066,
+        "max_decisions": 256,
+        "max_output_bytes": 1073741824,
+        "max_world_ticks": 256,
+        "navigation_task": null,
+        "schema": 3
+      },
+      "pressure": {
+        "actual_gpu_timing_preserved": true,
+        "applied_gpu_time_ns": 0,
+        "cross_arm_frame_replay": false,
+        "enabled": true,
+        "live_atp_and_heap_constraints": true,
+        "production_policy_unchanged": true,
+        "scope": "controlled_host_pressure_not_fixed_neural_work"
+      },
+      "receipt_sha256": "6273b5dee609a585afdc5f69d903fb400face6e61af2fb15c433102d7dadb11d",
+      "request_sha256": "6b8e1ea801d5561dfd4487f64ca23fbc665805017416fa18f581ab9fbe60f21a",
+      "score_atoms": [
+        "care:safe-intake",
+        "care:alive"
+      ],
+      "visible_setup": {
+        "after_sound_sha256": "1c2e1773228a97d07ff4ba23c66b398f61ba87ff161a4e1cad681f29f2c84c12",
+        "at_tick": 3074,
+        "before_sound_sha256": "1c2e1773228a97d07ff4ba23c66b398f61ba87ff161a4e1cad681f29f2c84c12",
+        "biological_choices": 0,
+        "body_changed": false,
+        "body_position": {
+          "x": -16.169696807861328,
+          "y": 0.0,
+          "z": 205.9512176513672
+        },
+        "body_yaw": 2.68048357963562,
+        "flat_unblocked_first_20cm_and_centre_to_both_referents": true,
+        "food": {
+          "id": 2,
+          "nutrition": 0.8500000238418579,
+          "p": {
+            "x": -18.021120071411133,
+            "y": 0.0,
+            "z": 205.93309020996094
+          }
+        },
+        "forced_action": false,
+        "hazard": {
+          "contact": true,
+          "hidden_pain": 0.1599999964237213,
+          "id": 11,
+          "initial_radial_cosine_toward_food": 0.2669699192047119,
+          "opening_penetration_m": 0.007921576499938965,
+          "p": {
+            "x": -16.0146484375,
+            "y": 0.0,
+            "z": 206.53298950195312
+          },
+          "radius": 0.6100000143051147,
+          "surface_temperature": 0.84
+        },
+        "heard": [],
+        "kind": "prospective-r2-grade-or-words-v1",
+        "mode": "r2-grade-right",
+        "toy": {
+          "id": 4,
+          "p": {
+            "x": -17.273618698120117,
+            "y": 0.0,
+            "z": 207.43763732910156
+          }
+        },
+        "visible": [
+          11,
+          4,
+          2
+        ]
+      }
+    },
+    "r2-word-approach-food": {
+      "binary_sha256": "7c4999fd3774e9631855eefb8f29645031730de2d1812a216f52d484e8f6d524",
+      "case_members_sha256": "58069c051e8785b40d8d650ff51c9c15b7797b6c8213b4724568c19fcd2ee396",
+      "case_result_sha256": "46764f79b52d230846a3890ae71d806498c200b1989281769e405696abdb4f52",
+      "native_accepted_rows": 16,
+      "native_world_ticks": 16,
+      "original_case_native_request": {
+        "deadline_unix_seconds": 1795153855,
+        "direct_weights": null,
+        "evaluation_nonce": 1794952000,
+        "finalization_deadline_unix_seconds": 1795153965,
+        "max_decisions": 16,
+        "max_output_bytes": 1073741824,
+        "max_world_ticks": 16,
+        "navigation_task": null,
+        "schema": 3
+      },
+      "pressure": {
+        "actual_gpu_timing_preserved": true,
+        "applied_gpu_time_ns": 0,
+        "cross_arm_frame_replay": false,
+        "enabled": true,
+        "live_atp_and_heap_constraints": true,
+        "production_policy_unchanged": true,
+        "scope": "controlled_host_pressure_not_fixed_neural_work"
+      },
+      "receipt_sha256": "09f98541edefae0cf1dcde3c1a184b1ae9906958244a604f1c5a1c125bec6fd9",
+      "request_sha256": "dcb1e118d719659f509410a04249ec9df572c89017501e79f62e0cea36afd53d",
+      "score_atoms": [
+        "receptive:first-signed"
+      ],
+      "scored_native_hearing_sequence_actual": [
+        [
+          6,
+          1
+        ],
+        [
+          6,
+          1
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ],
+      "visible_setup": {
+        "after_sound_sha256": "612216a4f1469c23e988373bb8037f8a64f3af1e80b3ab5e2d7548a6078a22a4",
+        "at_tick": 3074,
+        "before_sound_sha256": "551546212581695ff3b9e29f11ce17fc226f9aaaa0626b62095c88e7d45dd593",
+        "biological_choices": 0,
+        "body_changed": false,
+        "body_position": {
+          "x": -16.169696807861328,
+          "y": 0.0,
+          "z": 205.9512176513672
+        },
+        "body_yaw": 2.68048357963562,
+        "flat_unblocked_first_20cm_and_centre_to_both_referents": true,
+        "food": {
+          "id": 2,
+          "nutrition": 0.8500000238418579,
+          "p": {
+            "x": -17.68580436706543,
+            "y": 0.0,
+            "z": 207.73175048828125
+          }
+        },
+        "forced_action": false,
+        "hazard": null,
+        "heard": [
+          6,
+          1
+        ],
+        "kind": "prospective-r2-grade-or-words-v1",
+        "mode": "r2-word-approach-food",
+        "toy": {
+          "id": 4,
+          "p": {
+            "x": -18.50449562072754,
+            "y": 0.0,
+            "z": 206.08392333984375
+          }
+        },
+        "visible": [
+          2,
+          4
+        ]
+      }
+    },
+    "r2-word-approach-toy": {
+      "binary_sha256": "7c4999fd3774e9631855eefb8f29645031730de2d1812a216f52d484e8f6d524",
+      "case_members_sha256": "5a6e798c1ef6e887f04443ddb07788be925363455f0f490c871f9eb81190d500",
+      "case_result_sha256": "edb697d81fa27904778706c09a358a978541384c374abac36e627486121390d1",
+      "native_accepted_rows": 16,
+      "native_world_ticks": 16,
+      "original_case_native_request": {
+        "deadline_unix_seconds": 1795153900,
+        "direct_weights": null,
+        "evaluation_nonce": 1794952000,
+        "finalization_deadline_unix_seconds": 1795154010,
+        "max_decisions": 16,
+        "max_output_bytes": 1073741824,
+        "max_world_ticks": 16,
+        "navigation_task": null,
+        "schema": 3
+      },
+      "pressure": {
+        "actual_gpu_timing_preserved": true,
+        "applied_gpu_time_ns": 0,
+        "cross_arm_frame_replay": false,
+        "enabled": true,
+        "live_atp_and_heap_constraints": true,
+        "production_policy_unchanged": true,
+        "scope": "controlled_host_pressure_not_fixed_neural_work"
+      },
+      "receipt_sha256": "edb5aaf791ed1fcef0a55130596166d8e7b2525636fa25d7c054bccb2fc5dc57",
+      "request_sha256": "01114c99e940516a9cf804766bc0c78a718b15ed9d787dd89ec204a69c737f77",
+      "score_atoms": [
+        "receptive:first-signed"
+      ],
+      "scored_native_hearing_sequence_actual": [
+        [
+          6,
+          2
+        ],
+        [
+          6,
+          2
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ],
+      "visible_setup": {
+        "after_sound_sha256": "db6c05f4bcd77966001d817dbfb5daba7a08ea6d037b76813a434abadec48e6a",
+        "at_tick": 3074,
+        "before_sound_sha256": "551546212581695ff3b9e29f11ce17fc226f9aaaa0626b62095c88e7d45dd593",
+        "biological_choices": 0,
+        "body_changed": false,
+        "body_position": {
+          "x": -16.169696807861328,
+          "y": 0.0,
+          "z": 205.9512176513672
+        },
+        "body_yaw": 2.68048357963562,
+        "flat_unblocked_first_20cm_and_centre_to_both_referents": true,
+        "food": {
+          "id": 2,
+          "nutrition": 0.8500000238418579,
+          "p": {
+            "x": -17.68580436706543,
+            "y": 0.0,
+            "z": 207.73175048828125
+          }
+        },
+        "forced_action": false,
+        "hazard": null,
+        "heard": [
+          6,
+          2
+        ],
+        "kind": "prospective-r2-grade-or-words-v1",
+        "mode": "r2-word-approach-toy",
+        "toy": {
+          "id": 4,
+          "p": {
+            "x": -18.50449562072754,
+            "y": 0.0,
+            "z": 206.08392333984375
+          }
+        },
+        "visible": [
+          2,
+          4
+        ]
+      }
+    },
+    "r2-word-mirror-approach-food": {
+      "binary_sha256": "7c4999fd3774e9631855eefb8f29645031730de2d1812a216f52d484e8f6d524",
+      "case_members_sha256": "85f8ec969bbfcd44a9cc79fb8a14a3d362882f003ad91cbfba144eb907ae025c",
+      "case_result_sha256": "2e21cda93df38f56cae2582912d1abf09bc3ddb8d1636d5d306fd8a336deaae0",
+      "native_accepted_rows": 16,
+      "native_world_ticks": 16,
+      "original_case_native_request": {
+        "deadline_unix_seconds": 1795153865,
+        "direct_weights": null,
+        "evaluation_nonce": 1794952000,
+        "finalization_deadline_unix_seconds": 1795153975,
+        "max_decisions": 16,
+        "max_output_bytes": 1073741824,
+        "max_world_ticks": 16,
+        "navigation_task": null,
+        "schema": 3
+      },
+      "pressure": {
+        "actual_gpu_timing_preserved": true,
+        "applied_gpu_time_ns": 0,
+        "cross_arm_frame_replay": false,
+        "enabled": true,
+        "live_atp_and_heap_constraints": true,
+        "production_policy_unchanged": true,
+        "scope": "controlled_host_pressure_not_fixed_neural_work"
+      },
+      "receipt_sha256": "144dbca5b643564e5f0f7bbe1f4a777e6aab56a7259ae4fd51d71bc682bdbd48",
+      "request_sha256": "555501280b7a0e98991f9263d4c9505b6e9181cfd67fd1223864bae41146c44d",
+      "score_atoms": [
+        "receptive:first-signed"
+      ],
+      "scored_native_hearing_sequence_actual": [
+        [
+          6,
+          1
+        ],
+        [
+          6,
+          1
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ],
+      "visible_setup": {
+        "after_sound_sha256": "ab128d07bb7c62ecc91f549ee59572ef41dbe54aed09fa41dcd04147811ec8de",
+        "at_tick": 3074,
+        "before_sound_sha256": "ad96da96089cc5dd69c7146d870bd56eca4d628cd2362f81da1afd2bd1c32c7e",
+        "biological_choices": 0,
+        "body_changed": false,
+        "body_position": {
+          "x": -16.169696807861328,
+          "y": 0.0,
+          "z": 205.9512176513672
+        },
+        "body_yaw": 2.68048357963562,
+        "flat_unblocked_first_20cm_and_centre_to_both_referents": true,
+        "food": {
+          "id": 2,
+          "nutrition": 0.8500000238418579,
+          "p": {
+            "x": -18.50449562072754,
+            "y": 0.0,
+            "z": 206.08392333984375
+          }
+        },
+        "forced_action": false,
+        "hazard": null,
+        "heard": [
+          6,
+          1
+        ],
+        "kind": "prospective-r2-grade-or-words-v1",
+        "mode": "r2-word-mirror-approach-food",
+        "toy": {
+          "id": 4,
+          "p": {
+            "x": -17.68580436706543,
+            "y": 0.0,
+            "z": 207.73175048828125
+          }
+        },
+        "visible": [
+          4,
+          2
+        ]
+      }
+    },
+    "r2-word-mirror-approach-toy": {
+      "binary_sha256": "7c4999fd3774e9631855eefb8f29645031730de2d1812a216f52d484e8f6d524",
+      "case_members_sha256": "defee5bcc5573a0b7aaf05a5f8002f5359f0bf19597a4b81359d49f2cbd76871",
+      "case_result_sha256": "4853d7deb156e7ea62a4876bd8ba98de8e41c3252b8466b754184af0a6f11810",
+      "native_accepted_rows": 16,
+      "native_world_ticks": 16,
+      "original_case_native_request": {
+        "deadline_unix_seconds": 1795153933,
+        "direct_weights": null,
+        "evaluation_nonce": 1794952000,
+        "finalization_deadline_unix_seconds": 1795154043,
+        "max_decisions": 16,
+        "max_output_bytes": 1073741824,
+        "max_world_ticks": 16,
+        "navigation_task": null,
+        "schema": 3
+      },
+      "pressure": {
+        "actual_gpu_timing_preserved": true,
+        "applied_gpu_time_ns": 0,
+        "cross_arm_frame_replay": false,
+        "enabled": true,
+        "live_atp_and_heap_constraints": true,
+        "production_policy_unchanged": true,
+        "scope": "controlled_host_pressure_not_fixed_neural_work"
+      },
+      "receipt_sha256": "2e1b7518d605c914445d47079331cb55b2a323e39f74b89f19685186ad059159",
+      "request_sha256": "62754852c8b70e9aa9e7b5b8b28621383571895dbe0922cab71df96efd221549",
+      "score_atoms": [
+        "receptive:first-signed"
+      ],
+      "scored_native_hearing_sequence_actual": [
+        [
+          6,
+          2
+        ],
+        [
+          6,
+          2
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ],
+      "visible_setup": {
+        "after_sound_sha256": "300a5dbc497f7d12dcac895e93336b826bb3bdc60674362855993705327be3e7",
+        "at_tick": 3074,
+        "before_sound_sha256": "ad96da96089cc5dd69c7146d870bd56eca4d628cd2362f81da1afd2bd1c32c7e",
+        "biological_choices": 0,
+        "body_changed": false,
+        "body_position": {
+          "x": -16.169696807861328,
+          "y": 0.0,
+          "z": 205.9512176513672
+        },
+        "body_yaw": 2.68048357963562,
+        "flat_unblocked_first_20cm_and_centre_to_both_referents": true,
+        "food": {
+          "id": 2,
+          "nutrition": 0.8500000238418579,
+          "p": {
+            "x": -18.50449562072754,
+            "y": 0.0,
+            "z": 206.08392333984375
+          }
+        },
+        "forced_action": false,
+        "hazard": null,
+        "heard": [
+          6,
+          2
+        ],
+        "kind": "prospective-r2-grade-or-words-v1",
+        "mode": "r2-word-mirror-approach-toy",
+        "toy": {
+          "id": 4,
+          "p": {
+            "x": -17.68580436706543,
+            "y": 0.0,
+            "z": 207.73175048828125
+          }
+        },
+        "visible": [
+          4,
+          2
+        ]
+      }
+    },
+    "r2-word-mirror-retreat-food": {
+      "binary_sha256": "7c4999fd3774e9631855eefb8f29645031730de2d1812a216f52d484e8f6d524",
+      "case_members_sha256": "49fd6e57f9cbb7391c18ed9c11f1743800c82c022e38d11b9c4041a419ab4ee4",
+      "case_result_sha256": "16bba09b41e6a67cd9feda80b12ce249dd63af1a75d80ccad27759772e0599f3",
+      "native_accepted_rows": 16,
+      "native_world_ticks": 16,
+      "original_case_native_request": {
+        "deadline_unix_seconds": 1795153915,
+        "direct_weights": null,
+        "evaluation_nonce": 1794952000,
+        "finalization_deadline_unix_seconds": 1795154025,
+        "max_decisions": 16,
+        "max_output_bytes": 1073741824,
+        "max_world_ticks": 16,
+        "navigation_task": null,
+        "schema": 3
+      },
+      "pressure": {
+        "actual_gpu_timing_preserved": true,
+        "applied_gpu_time_ns": 0,
+        "cross_arm_frame_replay": false,
+        "enabled": true,
+        "live_atp_and_heap_constraints": true,
+        "production_policy_unchanged": true,
+        "scope": "controlled_host_pressure_not_fixed_neural_work"
+      },
+      "receipt_sha256": "e75df7cc1b81f06738fee2d3f9b2eec4a845297ae3f87ee5a140d3f0195b17af",
+      "request_sha256": "e100055c5457124aecf03c9d74210d9b88c05ed5660887155d4b176dde071e73",
+      "score_atoms": [
+        "receptive:first-signed"
+      ],
+      "scored_native_hearing_sequence_actual": [
+        [
+          7,
+          1
+        ],
+        [
+          7,
+          1
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ],
+      "visible_setup": {
+        "after_sound_sha256": "f476b3b59d15ef6a93cc81b0ec63ad201361bc8b56fef68ae6cf1c26c3658ef9",
+        "at_tick": 3074,
+        "before_sound_sha256": "ad96da96089cc5dd69c7146d870bd56eca4d628cd2362f81da1afd2bd1c32c7e",
+        "biological_choices": 0,
+        "body_changed": false,
+        "body_position": {
+          "x": -16.169696807861328,
+          "y": 0.0,
+          "z": 205.9512176513672
+        },
+        "body_yaw": 2.68048357963562,
+        "flat_unblocked_first_20cm_and_centre_to_both_referents": true,
+        "food": {
+          "id": 2,
+          "nutrition": 0.8500000238418579,
+          "p": {
+            "x": -18.50449562072754,
+            "y": 0.0,
+            "z": 206.08392333984375
+          }
+        },
+        "forced_action": false,
+        "hazard": null,
+        "heard": [
+          7,
+          1
+        ],
+        "kind": "prospective-r2-grade-or-words-v1",
+        "mode": "r2-word-mirror-retreat-food",
+        "toy": {
+          "id": 4,
+          "p": {
+            "x": -17.68580436706543,
+            "y": 0.0,
+            "z": 207.73175048828125
+          }
+        },
+        "visible": [
+          4,
+          2
+        ]
+      }
+    },
+    "r2-word-mirror-retreat-toy": {
+      "binary_sha256": "7c4999fd3774e9631855eefb8f29645031730de2d1812a216f52d484e8f6d524",
+      "case_members_sha256": "fe90257f9e3dd8128aad14a28ed950ab1263ddbf837653e58cb75139c1232984",
+      "case_result_sha256": "3efcbd80bfbaf1cd91b6dfe0101c1207f87df2e293f41bba42d92c8e2df6291b",
+      "native_accepted_rows": 16,
+      "native_world_ticks": 16,
+      "original_case_native_request": {
+        "deadline_unix_seconds": 1795153924,
+        "direct_weights": null,
+        "evaluation_nonce": 1794952000,
+        "finalization_deadline_unix_seconds": 1795154034,
+        "max_decisions": 16,
+        "max_output_bytes": 1073741824,
+        "max_world_ticks": 16,
+        "navigation_task": null,
+        "schema": 3
+      },
+      "pressure": {
+        "actual_gpu_timing_preserved": true,
+        "applied_gpu_time_ns": 0,
+        "cross_arm_frame_replay": false,
+        "enabled": true,
+        "live_atp_and_heap_constraints": true,
+        "production_policy_unchanged": true,
+        "scope": "controlled_host_pressure_not_fixed_neural_work"
+      },
+      "receipt_sha256": "f2f72fac07fa0d92c9d42004515781e1b77878dda354ddcfd17a379733b10d80",
+      "request_sha256": "2ba20a4cc42d9c3f5013bf706f7a21a16739626e439c74e3c0414177183e7c1e",
+      "score_atoms": [
+        "receptive:first-signed"
+      ],
+      "scored_native_hearing_sequence_actual": [
+        [
+          7,
+          2
+        ],
+        [
+          7,
+          2
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ],
+      "visible_setup": {
+        "after_sound_sha256": "13c046ade738e11a55f8b4c6c8a8ebc669fd30477f89feb4fe9cf7b52bf4a18c",
+        "at_tick": 3074,
+        "before_sound_sha256": "ad96da96089cc5dd69c7146d870bd56eca4d628cd2362f81da1afd2bd1c32c7e",
+        "biological_choices": 0,
+        "body_changed": false,
+        "body_position": {
+          "x": -16.169696807861328,
+          "y": 0.0,
+          "z": 205.9512176513672
+        },
+        "body_yaw": 2.68048357963562,
+        "flat_unblocked_first_20cm_and_centre_to_both_referents": true,
+        "food": {
+          "id": 2,
+          "nutrition": 0.8500000238418579,
+          "p": {
+            "x": -18.50449562072754,
+            "y": 0.0,
+            "z": 206.08392333984375
+          }
+        },
+        "forced_action": false,
+        "hazard": null,
+        "heard": [
+          7,
+          2
+        ],
+        "kind": "prospective-r2-grade-or-words-v1",
+        "mode": "r2-word-mirror-retreat-toy",
+        "toy": {
+          "id": 4,
+          "p": {
+            "x": -17.68580436706543,
+            "y": 0.0,
+            "z": 207.73175048828125
+          }
+        },
+        "visible": [
+          4,
+          2
+        ]
+      }
+    },
+    "r2-word-mirror-silence": {
+      "binary_sha256": "7c4999fd3774e9631855eefb8f29645031730de2d1812a216f52d484e8f6d524",
+      "case_members_sha256": "8031e7fe19395efe48fe954212efb5652509233fcefbcbdf2cd9577f8d6a9763",
+      "case_result_sha256": "931dc86eda88c232aee99f83c8cfd1d3c441fecd085a43f0779f8ffeaba24fa7",
+      "native_accepted_rows": 16,
+      "native_world_ticks": 16,
+      "original_case_native_request": {
+        "deadline_unix_seconds": 1795153908,
+        "direct_weights": null,
+        "evaluation_nonce": 1794952000,
+        "finalization_deadline_unix_seconds": 1795154018,
+        "max_decisions": 16,
+        "max_output_bytes": 1073741824,
+        "max_world_ticks": 16,
+        "navigation_task": null,
+        "schema": 3
+      },
+      "pressure": {
+        "actual_gpu_timing_preserved": true,
+        "applied_gpu_time_ns": 0,
+        "cross_arm_frame_replay": false,
+        "enabled": true,
+        "live_atp_and_heap_constraints": true,
+        "production_policy_unchanged": true,
+        "scope": "controlled_host_pressure_not_fixed_neural_work"
+      },
+      "receipt_sha256": "fb2b370f2c73962e06f3a442d2c5cc7086472c487d29e781284180760e2e7d36",
+      "request_sha256": "e7186bebf66f2673dad32f00ae259a86bc1ab314cd835537a92bdbb2a149fe1c",
+      "score_atoms": [],
+      "scored_native_hearing_sequence_actual": [
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ],
+      "visible_setup": {
+        "after_sound_sha256": "ad96da96089cc5dd69c7146d870bd56eca4d628cd2362f81da1afd2bd1c32c7e",
+        "at_tick": 3074,
+        "before_sound_sha256": "ad96da96089cc5dd69c7146d870bd56eca4d628cd2362f81da1afd2bd1c32c7e",
+        "biological_choices": 0,
+        "body_changed": false,
+        "body_position": {
+          "x": -16.169696807861328,
+          "y": 0.0,
+          "z": 205.9512176513672
+        },
+        "body_yaw": 2.68048357963562,
+        "flat_unblocked_first_20cm_and_centre_to_both_referents": true,
+        "food": {
+          "id": 2,
+          "nutrition": 0.8500000238418579,
+          "p": {
+            "x": -18.50449562072754,
+            "y": 0.0,
+            "z": 206.08392333984375
+          }
+        },
+        "forced_action": false,
+        "hazard": null,
+        "heard": [],
+        "kind": "prospective-r2-grade-or-words-v1",
+        "mode": "r2-word-mirror-silence",
+        "toy": {
+          "id": 4,
+          "p": {
+            "x": -17.68580436706543,
+            "y": 0.0,
+            "z": 207.73175048828125
+          }
+        },
+        "visible": [
+          4,
+          2
+        ]
+      }
+    },
+    "r2-word-retreat-food": {
+      "binary_sha256": "7c4999fd3774e9631855eefb8f29645031730de2d1812a216f52d484e8f6d524",
+      "case_members_sha256": "8b5520ac12e61a87acbfdf99322c5b01175ed5023642fab0f48116bd2f934cfa",
+      "case_result_sha256": "5d8f6b15f16e8ca74455ad6796eecf9ef6dceb3cb48f5adec8960e145c066e13",
+      "native_accepted_rows": 16,
+      "native_world_ticks": 16,
+      "original_case_native_request": {
+        "deadline_unix_seconds": 1795153883,
+        "direct_weights": null,
+        "evaluation_nonce": 1794952000,
+        "finalization_deadline_unix_seconds": 1795153993,
+        "max_decisions": 16,
+        "max_output_bytes": 1073741824,
+        "max_world_ticks": 16,
+        "navigation_task": null,
+        "schema": 3
+      },
+      "pressure": {
+        "actual_gpu_timing_preserved": true,
+        "applied_gpu_time_ns": 0,
+        "cross_arm_frame_replay": false,
+        "enabled": true,
+        "live_atp_and_heap_constraints": true,
+        "production_policy_unchanged": true,
+        "scope": "controlled_host_pressure_not_fixed_neural_work"
+      },
+      "receipt_sha256": "5f55a2d479bae2cac95dc80c0bbf573e12e9ded68099f45f02353de081cc4746",
+      "request_sha256": "4aeefed6ae52aef1d0447f82f6b2d52803a8502b4d94fb229c42c888d65349ff",
+      "score_atoms": [
+        "receptive:first-signed"
+      ],
+      "scored_native_hearing_sequence_actual": [
+        [
+          7,
+          1
+        ],
+        [
+          7,
+          1
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ],
+      "visible_setup": {
+        "after_sound_sha256": "67de07f73441d796aa1afb99f6bf6f4101a70c56ccd2af08f59cef2e355f7975",
+        "at_tick": 3074,
+        "before_sound_sha256": "551546212581695ff3b9e29f11ce17fc226f9aaaa0626b62095c88e7d45dd593",
+        "biological_choices": 0,
+        "body_changed": false,
+        "body_position": {
+          "x": -16.169696807861328,
+          "y": 0.0,
+          "z": 205.9512176513672
+        },
+        "body_yaw": 2.68048357963562,
+        "flat_unblocked_first_20cm_and_centre_to_both_referents": true,
+        "food": {
+          "id": 2,
+          "nutrition": 0.8500000238418579,
+          "p": {
+            "x": -17.68580436706543,
+            "y": 0.0,
+            "z": 207.73175048828125
+          }
+        },
+        "forced_action": false,
+        "hazard": null,
+        "heard": [
+          7,
+          1
+        ],
+        "kind": "prospective-r2-grade-or-words-v1",
+        "mode": "r2-word-retreat-food",
+        "toy": {
+          "id": 4,
+          "p": {
+            "x": -18.50449562072754,
+            "y": 0.0,
+            "z": 206.08392333984375
+          }
+        },
+        "visible": [
+          2,
+          4
+        ]
+      }
+    },
+    "r2-word-retreat-toy": {
+      "binary_sha256": "7c4999fd3774e9631855eefb8f29645031730de2d1812a216f52d484e8f6d524",
+      "case_members_sha256": "5663b7951b4f6fc5964f8bd56a46882680b3a341c7e1a784d80b4190bc99f022",
+      "case_result_sha256": "59f0cd5d956fe710792bd0169aec84b5bc39e5281d623267166fea23a9af90ea",
+      "native_accepted_rows": 16,
+      "native_world_ticks": 16,
+      "original_case_native_request": {
+        "deadline_unix_seconds": 1795153892,
+        "direct_weights": null,
+        "evaluation_nonce": 1794952000,
+        "finalization_deadline_unix_seconds": 1795154002,
+        "max_decisions": 16,
+        "max_output_bytes": 1073741824,
+        "max_world_ticks": 16,
+        "navigation_task": null,
+        "schema": 3
+      },
+      "pressure": {
+        "actual_gpu_timing_preserved": true,
+        "applied_gpu_time_ns": 0,
+        "cross_arm_frame_replay": false,
+        "enabled": true,
+        "live_atp_and_heap_constraints": true,
+        "production_policy_unchanged": true,
+        "scope": "controlled_host_pressure_not_fixed_neural_work"
+      },
+      "receipt_sha256": "f0f033461e25f491c0e04586ee4344948a22ea6691e28072ba0a38ef1285e197",
+      "request_sha256": "62f2845d89243744d8cb2911f80654f828e8e859069692ef173c6847e1e58eea",
+      "score_atoms": [
+        "receptive:first-signed"
+      ],
+      "scored_native_hearing_sequence_actual": [
+        [
+          7,
+          2
+        ],
+        [
+          7,
+          2
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ],
+      "visible_setup": {
+        "after_sound_sha256": "0dd0326fdfb812407c664cf8763a37632b757a83a743bc541c4286446e4f7db9",
+        "at_tick": 3074,
+        "before_sound_sha256": "551546212581695ff3b9e29f11ce17fc226f9aaaa0626b62095c88e7d45dd593",
+        "biological_choices": 0,
+        "body_changed": false,
+        "body_position": {
+          "x": -16.169696807861328,
+          "y": 0.0,
+          "z": 205.9512176513672
+        },
+        "body_yaw": 2.68048357963562,
+        "flat_unblocked_first_20cm_and_centre_to_both_referents": true,
+        "food": {
+          "id": 2,
+          "nutrition": 0.8500000238418579,
+          "p": {
+            "x": -17.68580436706543,
+            "y": 0.0,
+            "z": 207.73175048828125
+          }
+        },
+        "forced_action": false,
+        "hazard": null,
+        "heard": [
+          7,
+          2
+        ],
+        "kind": "prospective-r2-grade-or-words-v1",
+        "mode": "r2-word-retreat-toy",
+        "toy": {
+          "id": 4,
+          "p": {
+            "x": -18.50449562072754,
+            "y": 0.0,
+            "z": 206.08392333984375
+          }
+        },
+        "visible": [
+          2,
+          4
+        ]
+      }
+    },
+    "r2-word-silence": {
+      "binary_sha256": "7c4999fd3774e9631855eefb8f29645031730de2d1812a216f52d484e8f6d524",
+      "case_members_sha256": "99c4eda5bc51dd286f19afd56995d861f62578f790da9f3336b6725c9b1ae9d2",
+      "case_result_sha256": "8d80182337ddb9dbb88e48f1a6feca5c9b5007645447817bf7f77fd72f97d067",
+      "native_accepted_rows": 16,
+      "native_world_ticks": 16,
+      "original_case_native_request": {
+        "deadline_unix_seconds": 1795153874,
+        "direct_weights": null,
+        "evaluation_nonce": 1794952000,
+        "finalization_deadline_unix_seconds": 1795153984,
+        "max_decisions": 16,
+        "max_output_bytes": 1073741824,
+        "max_world_ticks": 16,
+        "navigation_task": null,
+        "schema": 3
+      },
+      "pressure": {
+        "actual_gpu_timing_preserved": true,
+        "applied_gpu_time_ns": 0,
+        "cross_arm_frame_replay": false,
+        "enabled": true,
+        "live_atp_and_heap_constraints": true,
+        "production_policy_unchanged": true,
+        "scope": "controlled_host_pressure_not_fixed_neural_work"
+      },
+      "receipt_sha256": "27956d4ce6328620ebb51957573a5d9c274819ac018d6c20413913a565f70387",
+      "request_sha256": "ad817cb94c130d2fe8f76b3ac4f251c00ecf482adcc03227178e307e9d8e607b",
+      "score_atoms": [],
+      "scored_native_hearing_sequence_actual": [
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ],
+      "visible_setup": {
+        "after_sound_sha256": "551546212581695ff3b9e29f11ce17fc226f9aaaa0626b62095c88e7d45dd593",
+        "at_tick": 3074,
+        "before_sound_sha256": "551546212581695ff3b9e29f11ce17fc226f9aaaa0626b62095c88e7d45dd593",
+        "biological_choices": 0,
+        "body_changed": false,
+        "body_position": {
+          "x": -16.169696807861328,
+          "y": 0.0,
+          "z": 205.9512176513672
+        },
+        "body_yaw": 2.68048357963562,
+        "flat_unblocked_first_20cm_and_centre_to_both_referents": true,
+        "food": {
+          "id": 2,
+          "nutrition": 0.8500000238418579,
+          "p": {
+            "x": -17.68580436706543,
+            "y": 0.0,
+            "z": 207.73175048828125
+          }
+        },
+        "forced_action": false,
+        "hazard": null,
+        "heard": [],
+        "kind": "prospective-r2-grade-or-words-v1",
+        "mode": "r2-word-silence",
+        "toy": {
+          "id": 4,
+          "p": {
+            "x": -18.50449562072754,
+            "y": 0.0,
+            "z": 206.08392333984375
+          }
+        },
+        "visible": [
+          2,
+          4
+        ]
+      }
+    },
+    "u_detour": {
+      "binary_sha256": "44afdbc1cd2497de0feb2fb6ec4031a5bc1a9cb8c46057561867389e8581b6a7",
+      "case_members_sha256": "ed659fe3d393e4f68d624833f38298fea4ba346ccfb7be0ab500d908fcb52080",
+      "case_result_sha256": "d30212dcc58c4aa480eec8b37cff5fd70df244461c571192221ad27381292e74",
+      "native_accepted_rows": 1024,
+      "native_world_ticks": 1024,
+      "original_case_native_request": {
+        "deadline_unix_seconds": 1795154041,
+        "direct_weights": null,
+        "evaluation_nonce": 1794952000,
+        "finalization_deadline_unix_seconds": 1795154151,
+        "max_decisions": 1024,
+        "max_output_bytes": 1073741824,
+        "max_world_ticks": 8192,
+        "navigation_task": {
+          "kind": "u_detour",
+          "mirror": false,
+          "prey_speed_per_tick": 0.0,
+          "rotation_radians": 0.0
+        },
+        "schema": 3
+      },
+      "pressure": {
+        "actual_gpu_timing_preserved": true,
+        "applied_gpu_time_ns": 0,
+        "cross_arm_frame_replay": false,
+        "enabled": true,
+        "live_atp_and_heap_constraints": true,
+        "production_policy_unchanged": true,
+        "scope": "controlled_host_pressure_not_fixed_neural_work"
+      },
+      "receipt_sha256": "d5ffffabcecf72711f23a6857cf884a402166e66af1293348f63b612a594a18b",
+      "request_sha256": "92e10b3a41f3f2ccaa252ba5bf58b84ea5c756c53ede4caf6c2bce63a4b927df",
+      "score_atoms": [
+        "maze:formal",
+        "maze:intake"
+      ],
+      "visible_setup": null
+    }
+  },
+  "source_authority": "ce029c260a7b50f2991bb5d8c5bdfe0c08a924041d549952d231fd1ad5eb3b96"
+}

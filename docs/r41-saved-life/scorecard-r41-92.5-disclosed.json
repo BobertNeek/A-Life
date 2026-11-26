@@ -1,0 +1,29 @@
+{
+  "schema": "qualia.original-r41-rubric.disclosed.v1",
+  "archived_reference": {
+    "id": "R41",
+    "overall": 92.5,
+    "status": "historical; not certified on the disclosed-only card"
+  },
+  "denominator": {
+    "cases": 30,
+    "score_atoms": 34,
+    "disclosed_cases": 29,
+    "disclosed_atoms": 33
+  },
+  "overall": "arithmetic mean of the five 0-100 domain scores; do not renormalize as if the withheld atom were absent",
+  "points_per_passing_atom": {
+    "maze:formal": "100/8",
+    "maze:intake": "100/8",
+    "hunt:intake": "100/3",
+    "care:alive": "25",
+    "care:safe-intake": "25",
+    "receptive:first-signed": "100/8",
+    "grounded_expression:grounded-food": "50/6",
+    "grounded_expression:quiet-without-food": "50/5"
+  },
+  "disclosed_case_definitions": "original-29-disclosed.json",
+  "complete_source_addressable_disclosed_navigation_specs": "verified-29-six-exact.json",
+  "missing": "One withheld atom is unmeasured; never infer its value. Preserve the original denominator and report attainable lower/upper bounds, not a full original score.",
+  "proof_boundary": "Restored mature saved state, environment, and scorecard used jointly; no component-wise causal ablation backs the 92.5 number."
+}

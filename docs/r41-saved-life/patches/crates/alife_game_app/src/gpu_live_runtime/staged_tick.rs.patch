@@ -1,0 +1,90 @@
+diff --git a/crates/alife_game_app/src/gpu_live_runtime/staged_tick.rs b/crates/alife_game_app/src/gpu_live_runtime/staged_tick.rs
+--- a/crates/alife_game_app/src/gpu_live_runtime/staged_tick.rs
++++ b/crates/alife_game_app/src/gpu_live_runtime/staged_tick.rs
+@@ -6,6 +6,8 @@
+     pub(super) fn tick_with_sleep_progress_staged<F>(
+         &mut self,
+         progress: &mut F,
++        near_field_owner: Option<OrganismId>,
++        visible_self_grip_v1: Option<(OrganismId, [u32; 16])>,
+     ) -> Result<Vec<LiveBrainTickSummary>, GameAppShellError>
+     where
+         F: FnMut(
+@@ -35,6 +37,17 @@
+         self.recent_foundation_activity
+             .retain(|id, _| self.handles.contains_key(id));
+         self.reconcile_population()?;
++        if near_field_owner.is_some_and(|owner| {
++            self.handles.len() != 1 || !self.handles.contains_key(&owner.raw())
++        }) {
++            return Err(ScaffoldContractError::BrainOwnershipMismatch.into());
++        }
++        if visible_self_grip_v1.is_some_and(|(owner, _)| {
++            near_field_owner.is_some() || self.sensor_profile != SensorProfile::GroundedTerrainVisionV1
++                || self.handles.len() != 1 || !self.handles.contains_key(&owner.raw())
++        }) {
++            return Err(ScaffoldContractError::InvalidPerceptionFrame.into());
++        }
+         if let Some(prior) = self.semantic_prior.as_mut() {
+             prior.retain_lives(&self.handles);
+         }
+@@ -191,6 +204,7 @@
+         let mut grounded_perception_wall_ns = 0_u64;
+         let mut cpu_timing = cpu_preparation::CpuPreparationTiming::default();
+         let mut checkpoint_publication_wall_ns = 0_u64;
++        let mut visible_self_grip_capture = None;
+         for (raw, handle, world_entity_id) in scheduled_handles {
+             let sleep_preparation_started = measure_preparation.then(Instant::now);
+             let retained_learning_pending =
+@@ -554,14 +568,25 @@
+                     .neural_receptors
+                     .effects_for(&resident.phenotype, &neural_receptors)?;
+                 preparation_stage = "grounded draft";
+-                let (draft, candidate_binding) =
+-                    self.world.perception_frame_draft_indexed_with_bindings(
++                let (draft, candidate_binding) = if visible_self_grip_v1.is_some() {
++                    let (draft, binding, capture) = self.world
++                        .perception_frame_draft_indexed_with_visible_self_grip_v1(
++                            OrganismId(raw), tick_before, resident.homeostasis, &perception_index,
++                        )?;
++                    if visible_self_grip_capture.replace(capture).is_some() {
++                        return Err(ScaffoldContractError::InvalidPerceptionFrame);
++                    }
++                    (draft, Some(binding))
++                } else {
++                    self.world.perception_frame_draft_indexed_for_retention(
+                         OrganismId(raw),
+                         tick_before,
+                         self.sensor_profile,
+                         resident.homeostasis,
+                         &perception_index,
+-                    )?;
++                        near_field_owner == Some(OrganismId(raw)),
++                    )?
++                };
+                 // This is the owner's hint snapshot boundary for this attempt.
+                 // Poll once in roster order, freeze the returned context in the
+                 // owned draft, and leave replies arriving after this point for
+@@ -753,6 +778,22 @@
+             .performance_metrics
+             .preparation_checkpoint_publication_wall_ns
+             .saturating_add(checkpoint_publication_wall_ns);
++
++        // Bind once to the actual post-attention final menu, before irreversible
++        // World or GPU work. No receipt on sleeping/no-awake-dispatch cuts.
++        if let (Some((owner, weights)), false) = (visible_self_grip_v1, batch.is_empty()) {
++            let [prepared] = batch.as_mut_slice() else {
++                return Err(ScaffoldContractError::InvalidPerceptionFrame.into());
++            };
++            let bound = visible_self_grip_capture
++                .take()
++                .ok_or(ScaffoldContractError::InvalidPerceptionFrame)?
++                .bind_final(owner, self.world.tick(), &prepared.frame)?;
++            prepared.memory_upload.bind_visible_self_grip_v1(
++                &prepared.frame, bound.observer(), bound.tick(),
++                bound.final_frame_digest(), bound.words(), weights,
++            ).map_err(cpu_preparation::upload_error)?;
++        }
+ 
+         // The exact worker must receive every journal consequence from this
+         // canonical tick before Completed promotion grants it permission to

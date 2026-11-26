@@ -1,0 +1,68 @@
+diff --git a/crates/alife_gpu_backend/shaders/visible_self_grip_v1.wgsl b/crates/alife_gpu_backend/shaders/visible_self_grip_v1.wgsl
+new file mode 100644
+--- /dev/null
++++ b/crates/alife_gpu_backend/shaders/visible_self_grip_v1.wgsl
+@@ -0,0 +1,63 @@
++
++// Optional candidate-local body sense on the stock post-context readout.
++// The surrounding host admits one exact current slot only. No new candidates,
++// masks, draws, genes, learned banks or permission to select a command.
++fn visible_self_grip_v1(
++    row_base: u32, header: GpuMemoryContextHeader, brain: GpuBrainSlotRecord,
++    candidate: GpuCandidateRecord, stock_logit: f32
++) -> f32 {
++  let packet = header.neural_receptor_effects_offset + 16u;
++  let max_words = arrayLength(&frame_payload_words);
++  let p = load_perception_header(row_base);
++  if (packet > max_words || 24u + header.candidate_count > max_words - packet
++      || frame_payload_words[packet] != 0x47525031u
++      || frame_payload_words[packet + 1u] != 1u
++      || frame_payload_words[packet + 2u] != p.slot
++      || frame_payload_words[packet + 3u] != p.slot_generation
++      || frame_payload_words[packet + 4u] != p.tick_lo
++      || frame_payload_words[packet + 5u] != p.tick_hi
++      || frame_payload_words[packet + 6u] != p.dispatch_generation_lo
++      || frame_payload_words[packet + 7u] != p.dispatch_generation_hi) {
++    atomicOr(&mutable_state_words[brain.diagnostic_offset + MEMORY_CONTEXT_DIAGNOSTIC_LANE], CONTRACT_INVALID_DIAGNOSTIC_BIT);
++    return stock_logit;
++  }
++  let observed = frame_payload_words[packet + 24u + candidate.candidate_index];
++  let coefficient = frame_payload_words[packet + 8u];
++  if ((observed != 0u && observed != 0x3f800000u)
++      || (coefficient != 0u && coefficient != 0xc1000000u)) {
++    atomicOr(&mutable_state_words[brain.diagnostic_offset + MEMORY_CONTEXT_DIAGNOSTIC_LANE], CONTRACT_INVALID_DIAGNOSTIC_BIT);
++    return stock_logit;
++  }
++  // The positive Boolean is generic. Only this independently authored Ingest
++  // readout listens, gated with its existing contact-chemistry operand.
++  if (observed == 0u || coefficient == 0u || candidate.family != 6u
++      || !finite_memory_value(stock_logit)) { return stock_logit; }
++  let decoder = load_decoder_plan(brain.decoder_plan_offset);
++  let side = load_state_u32(brain.diagnostic_offset + 3u);
++  let chem = bitcast<f32>(frame_payload_words[candidate.feature_offset + 15u]);
++  if (side > 1u || decoder.motor_start != 1728u || decoder.motor_width != 224u
++      || decoder.flattened_input_lane_count != 36u || !finite_memory_value(chem)) {
++    atomicOr(&mutable_state_words[brain.diagnostic_offset + MEMORY_CONTEXT_DIAGNOSTIC_LANE], CONTRACT_INVALID_DIAGNOSTIC_BIT);
++    return stock_logit;
++  }
++  let gate = clamp((chem - 0.4) / 0.6, 0.0, 1.0);
++  if (gate == 0.0) { return stock_logit; }
++  let activation = select(brain.activation_a_offset, brain.activation_b_offset, side == 1u);
++  var sum = 0.0;
++  for (var j = 0u; j < 16u; j++) {
++    let w = frame_payload_words[packet + 8u + j];
++    let a = load_state_f32(activation + decoder.motor_start + 96u + j);
++    if (w != coefficient || !finite_memory_value(a)) {
++      atomicOr(&mutable_state_words[brain.diagnostic_offset + MEMORY_CONTEXT_DIAGNOSTIC_LANE], CONTRACT_INVALID_DIAGNOSTIC_BIT);
++      return stock_logit;
++    }
++    sum += bitcast<f32>(w) * a;
++  }
++  let delta = clamp(gate * sum, -32.0, 32.0);
++  if (!finite_memory_value(delta) || !finite_memory_value(stock_logit + delta)) {
++    atomicOr(&mutable_state_words[brain.diagnostic_offset + MEMORY_CONTEXT_DIAGNOSTIC_LANE], CONTRACT_INVALID_DIAGNOSTIC_BIT);
++    return stock_logit;
++  }
++  if (delta == 0.0) { return stock_logit; }
++  return stock_logit + delta;
++}

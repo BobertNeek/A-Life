@@ -1,0 +1,1517 @@
+diff --git a/crates/alife_world/src/headless.rs b/crates/alife_world/src/headless.rs
+--- a/crates/alife_world/src/headless.rs
++++ b/crates/alife_world/src/headless.rs
+@@ -8,8 +8,8 @@
+ mod awake_translation;
+ mod contact_withdrawal;
+ mod grounded_path;
+-mod orchard;
+-mod rolling_toys;
++mod visible_self_grip;
++pub use visible_self_grip::{BoundVisibleSelfGripV1, VisibleSelfGripCaptureV1};
+ mod translation_endpoint;
+ pub use awake_translation::{
+     AwakeTranslationIntervalReceipt, TranslationTimeMetric, VoluntaryTimeProvenance,
+@@ -28,29 +28,29 @@
+     BodySnapshot, BrainTickInput, BrainTickOutput, CanonicalDigestBuilder, ChannelCommand,
+     Confidence, ContextStreams, DriveDelta, EffectorCapability, EmbodimentState, EndocrineDelta,
+     ExperiencePatch, HeardToken, HomeostaticDelta, HomeostaticSnapshot, Intensity,
+-    JointPhysicalOutcome, LanguageContextSnapshot, LanguageTokenId, MeasuredChannelObservation,
+-    MotorChannel, MotorCommandBundle, NeuralEmissionFrame, NormalizedScalar, OrganismId,
+-    PassiveBodyUpkeepPolicy, PerceptionContextBlock, PerceptionFrame, PerceptionFrameDraft,
+-    PhysicalActionOutcome, PhysicalContactKind, PlayerUtterance, Pose, Quatf,
+-    ReferenceActionExecution, ReferenceActionExecutor, ReferenceActionFailure,
+-    ReferenceOutcomeObservation, ReferenceOutcomeObserver, ReferenceOutcomeRequest,
+-    ReferenceSensoryAdapter, ReferenceSensoryRequest, ScaffoldContractError, SensorCapability,
+-    SensorProfile, SensorProfileProvenance, SensoryAbiVersion, SensoryChannels, SensorySnapshot,
+-    SignedValence, SocialAgentSnapshot, SocialProximityEntry, SpeechActKind, SpeechMotorPayload,
+-    TeacherPerceptionChannel, Tick, UtteranceId, UtteranceSourceKind, Validate, Vec3f, Velocity,
+-    WorldEntityId, MAX_HEARD_TOKENS, MAX_SOCIAL_AGENTS, SENSORY_AUDITORY_CHANNEL_COUNT,
+-    SENSORY_SMELL_CHANNEL_COUNT, SENSORY_TACTILE_CHANNEL_COUNT,
+-    SENSORY_VISUAL_AFFORDANCE_CHANNEL_COUNT,
++    JointPhysicalOutcome, LanguageContextSnapshot, LanguageTokenId, MAX_HEARD_TOKENS,
++    MAX_SOCIAL_AGENTS, MeasuredChannelObservation, MotorChannel, MotorCommandBundle,
++    NeuralEmissionFrame, NormalizedScalar, OrganismId, PassiveBodyUpkeepPolicy,
++    PerceptionContextBlock, PerceptionFrame, PerceptionFrameDraft, PhysicalActionOutcome,
++    PhysicalContactKind, PlayerUtterance, Pose, Quatf, ReferenceActionExecution,
++    ReferenceActionExecutor, ReferenceActionFailure, ReferenceOutcomeObservation,
++    ReferenceOutcomeObserver, ReferenceOutcomeRequest, ReferenceSensoryAdapter,
++    ReferenceSensoryRequest, SENSORY_AUDITORY_CHANNEL_COUNT, SENSORY_SMELL_CHANNEL_COUNT,
++    SENSORY_TACTILE_CHANNEL_COUNT, SENSORY_VISUAL_AFFORDANCE_CHANNEL_COUNT, ScaffoldContractError,
++    SensorCapability, SensorProfile, SensorProfileProvenance, SensoryAbiVersion, SensoryChannels,
++    SensorySnapshot, SignedValence, SocialAgentSnapshot, SocialProximityEntry, SpeechActKind,
++    SpeechMotorPayload, TeacherPerceptionChannel, Tick, UtteranceId, UtteranceSourceKind, Validate,
++    Vec3f, Velocity, WorldEntityId,
+ };
+ 
+ use crate::candidate_enumerator::{
+-    enumerate_grounded_candidates, enumerate_grounded_candidates_with_orientation_v3,
+-    enumerate_privileged_candidates, GroundedCandidateBinding, HEADLESS_VISION_RADIUS,
++    GroundedCandidateBinding, HEADLESS_VISION_RADIUS, enumerate_grounded_candidates,
++    enumerate_grounded_candidates_with_orientation_v3, enumerate_privileged_candidates,
+ };
+ use crate::ecology::{
+-    deterministic_zone_position, EcologyConfig, EcologyMetrics, EcologySensorySummary,
+-    EcologyState, EcologyStepReport, EcologyZoneId, ResourceLifecycle, ResourceSpawnPolicy,
+-    TerrainZone, TerrainZoneKind,
++    EcologyConfig, EcologyMetrics, EcologySensorySummary, EcologyState, EcologyStepReport,
++    EcologyZoneId, ResourceLifecycle, ResourceSpawnPolicy, TerrainZone, TerrainZoneKind,
++    deterministic_zone_position,
+ };
+ use crate::habitat::{
+     HabitatActor, HabitatAuthority, HabitatAuthorityError, HabitatBreedingKind,
+@@ -65,10 +65,10 @@
+     PresentationEvidence,
+ };
+ use crate::{
+-    AudibleUtterance, GroundedPhysicalProperties, GroundedSensorExtractor,
++    AudibleUtterance, DEFAULT_TRACKED_OBJECT_CAPACITY_PER_ORGANISM, GroundedPhysicalProperties,
++    GroundedSensorExtractor, PHYSICAL_TRACKING_PROVENANCE_SCHEMA_VERSION,
+     PhysicalObservationSnapshot, PhysicalObservedObject, PhysicalTrackingKey,
+     PhysicalTrackingProvenance, SpatialSpeechBus, TrackedObjectRegistry,
+-    DEFAULT_TRACKED_OBJECT_CAPACITY_PER_ORGANISM, PHYSICAL_TRACKING_PROVENANCE_SCHEMA_VERSION,
+ };
+ 
+ const DEFAULT_ENTITY_ID_START: u64 = 1;
+@@ -431,9 +431,11 @@
+         let defaults =
+             enumerate_grounded_candidates(&grounded, SensorProfile::GroundedTerrainVisionV1, None)
+                 .unwrap();
+-        assert!(!defaults
+-            .iter()
+-            .any(|candidate| candidate.target.entity == Some(held)));
++        assert!(
++            !defaults
++                .iter()
++                .any(|candidate| candidate.target.entity == Some(held))
++        );
+         let missing = enumerate_grounded_candidates(
+             &grounded,
+             SensorProfile::GroundedTerrainVisionV1,
+@@ -540,22 +542,25 @@
+                 .count(),
+             1
+         );
+-        assert!(!old
+-            .iter()
+-            .any(|c| c.action_id == HeadlessActionIds::LOOK_LEFT));
++        assert!(
++            !old.iter()
++                .any(|c| c.action_id == HeadlessActionIds::LOOK_LEFT)
++        );
+         assert_eq!(
+             old,
+             enumerate_grounded_candidates(&grounded, profile, Some(held)).unwrap()
+         );
+-        assert!(enumerate_grounded_candidates_with_orientation_v3(
+-            &grounded, profile, None, None, &legacy
+-        )
+-        .is_err());
++        assert!(
++            enumerate_grounded_candidates_with_orientation_v3(
++                &grounded, profile, None, None, &legacy
++            )
++            .is_err()
++        );
+         let v2 = legacy.with_independent_orientation_v2(3).unwrap();
+-        assert!(enumerate_grounded_candidates_with_orientation_v3(
+-            &grounded, profile, None, None, &v2
+-        )
+-        .is_err());
++        assert!(
++            enumerate_grounded_candidates_with_orientation_v3(&grounded, profile, None, None, &v2)
++                .is_err()
++        );
+         let terrain_before =
+             enumerate_grounded_candidates(&grounded, SensorProfile::GroundedTerrainVisionV1, None)
+                 .unwrap();
+@@ -571,10 +576,12 @@
+         let (mut world, _, held) = held_world();
+         world.objects.get_mut(&held.raw()).unwrap().radius = 0.1;
+         terrain_wall(&mut world, [0.24, -0.1, 0.26, 0.1, 0.4, 0.8]);
+-        assert!(!draft(&mut world)
+-            .candidates()
+-            .iter()
+-            .any(|candidate| candidate.target.entity == Some(held)));
++        assert!(
++            !draft(&mut world)
++                .candidates()
++                .iter()
++                .any(|candidate| candidate.target.entity == Some(held))
++        );
+         assert!(world.objects[&held.raw()].carried_by.is_some());
+         world.terrain = None;
+         world
+@@ -588,10 +595,12 @@
+         world
+             .editor_move_object(held, Vec3f::new(bearing.cos(), 0.0, bearing.sin()))
+             .unwrap();
+-        assert!(draft(&mut world)
+-            .candidates()
+-            .iter()
+-            .any(|candidate| candidate.target.entity == Some(held)));
++        assert!(
++            draft(&mut world)
++                .candidates()
++                .iter()
++                .any(|candidate| candidate.target.entity == Some(held))
++        );
+         world
+             .apply_command(&command(
+                 HeadlessActionIds::LOOK_RIGHT,
+@@ -599,10 +608,12 @@
+                 None,
+             ))
+             .unwrap();
+-        assert!(!draft(&mut world)
+-            .candidates()
+-            .iter()
+-            .any(|candidate| candidate.target.entity == Some(held)));
++        assert!(
++            !draft(&mut world)
++                .candidates()
++                .iter()
++                .any(|candidate| candidate.target.entity == Some(held))
++        );
+     }
+ 
+     #[test]
+@@ -684,7 +695,7 @@
+     #[test]
+     fn object_port_profile_never_exposes_a_hidden_target() {
+         use alife_core::visible_object_neural::{
+-            visible_object_neural_lanes, NEURAL_VISIBLE_OBJECT_WIDTH,
++            NEURAL_VISIBLE_OBJECT_WIDTH, visible_object_neural_lanes,
+         };
+         let mut world = HeadlessScenarioBuilder::new(91_006)
+             .agent("observer", OrganismId(1), Vec3f::ZERO)
+@@ -714,10 +725,12 @@
+             .unwrap()
+         };
+         let blocked = capture(&mut world);
+-        assert!(blocked
+-            .candidates()
+-            .iter()
+-            .all(|c| c.target.entity != Some(food)));
++        assert!(
++            blocked
++                .candidates()
++                .iter()
++                .all(|c| c.target.entity != Some(food))
++        );
+         let blocked_lanes =
+             visible_object_neural_lanes(blocked.sensor_profile(), blocked.grounded_object_slots())
+                 .unwrap();
+@@ -735,10 +748,12 @@
+             .unwrap();
+         world.editor_set_optical_opacity(wall, 0.0).unwrap();
+         let clear = capture(&mut world);
+-        assert!(clear
+-            .candidates()
+-            .iter()
+-            .any(|c| c.target.entity == Some(food)));
++        assert!(
++            clear
++                .candidates()
++                .iter()
++                .any(|c| c.target.entity == Some(food))
++        );
+         let clear_lanes =
+             visible_object_neural_lanes(clear.sensor_profile(), clear.grounded_object_slots())
+                 .unwrap();
+@@ -1356,14 +1371,264 @@
+             )
+             .unwrap();
+         assert!(frame.grounded_object_slots().is_empty());
+-        assert!(frame
+-            .candidates()
+-            .iter()
+-            .all(|candidate| candidate.target.entity.is_none()));
++        assert!(
++            frame
++                .candidates()
++                .iter()
++                .all(|candidate| candidate.target.entity.is_none())
++        );
+         let channels = &frame.sensory().channels;
+         assert!(channels.smell_chemistry[0] > channels.smell_chemistry[1]);
+         assert!(channels.smell_chemistry[1] > 0.0);
+         assert!(channels.tactile_contact[0] > 0.0);
++    }
++}
++
++#[cfg(test)]
++mod near_field_volatile_tests {
++    use super::*;
++
++    const LEARNER: OrganismId = OrganismId(1);
++    const PROFILE: SensorProfile = SensorProfile::GroundedTerrainVisionV1;
++
++    #[test]
++    fn retained_scent_uses_same_index_and_preserves_nonvolatile_lanes() {
++        let (opening, target) = world(
++            WorldObjectKind::Food,
++            Vec3f::new(0.6, 0.0, 0.0),
++            [0.5; 3],
++            [0.8, -0.5, 0.9],
++        );
++        let tick = opening.tick();
++        let homeostasis = HomeostaticSnapshot::baseline(tick);
++        let mut stock = opening.clone();
++        let mut control = opening.clone();
++        let mut sample = opening;
++        let stock_index = stock.build_perception_batch_index().unwrap();
++        let control_index = control.build_perception_batch_index().unwrap();
++        let sample_index = sample.build_perception_batch_index().unwrap();
++        let (stock, stock_binding) = stock
++            .perception_frame_draft_indexed_with_bindings(LEARNER, tick, PROFILE, homeostasis, &stock_index)
++            .unwrap();
++        let (control, control_binding) = control
++            .perception_frame_draft_indexed_for_retention(LEARNER, tick, PROFILE, homeostasis, &control_index, false)
++            .unwrap();
++        let (sample, _) = sample
++            .perception_frame_draft_indexed_for_retention(LEARNER, tick, PROFILE, homeostasis, &sample_index, true)
++            .unwrap();
++        let stock = stock.finalize(PerceptionContextBlock::empty()).unwrap();
++        let control = control.finalize(PerceptionContextBlock::empty()).unwrap();
++        let sample = sample.finalize(PerceptionContextBlock::empty()).unwrap();
++        assert!(stock_binding.is_some());
++        assert_eq!(stock_binding, control_binding);
++        assert_eq!(serde_json::to_vec(&stock).unwrap(), serde_json::to_vec(&control).unwrap());
++        let off = local(&control, target).unwrap();
++        let on = local(&sample, target).unwrap();
++        assert_eq!(off, [0.0; 4]);
++        assert!(on[0] > 0.0);
++        assert_eq!(off[2].to_bits(), on[2].to_bits());
++        assert_eq!(off[3].to_bits(), on[3].to_bits());
++        assert_eq!(control.sensory(), sample.sensory());
++        assert_eq!(control.candidates().len(), sample.candidates().len());
++        for (off, on) in control.candidates().iter().zip(sample.candidates()) {
++            let mut projected = on.clone();
++            projected.features.0[15..17].copy_from_slice(&off.features.0[15..17]);
++            assert_eq!(serde_json::to_vec(off).unwrap(), serde_json::to_vec(&projected).unwrap());
++        }
++    }
++
++    fn sample(world: &mut HeadlessWorld, experimental: bool) -> PerceptionFrame {
++        let tick = world.tick;
++        let body = HomeostaticSnapshot::baseline(tick);
++        if experimental {
++            world
++                .perception_frame_draft_with_near_field_volatile(LEARNER, tick, PROFILE, body)
++                .unwrap()
++                .0
++                .finalize(PerceptionContextBlock::empty())
++                .unwrap()
++        } else {
++            world.perception_frame(LEARNER, tick, PROFILE, body).unwrap()
++        }
++    }
++
++    fn world(
++        kind: WorldObjectKind,
++        position: Vec3f,
++        appearance: [f32; 3],
++        emitter: [f32; 3],
++    ) -> (HeadlessWorld, WorldEntityId) {
++        let mut world = HeadlessScenarioBuilder::new(60_093)
++            .agent("observer", LEARNER, Vec3f::ZERO)
++            .build()
++            .unwrap();
++        let target = world
++            .editor_spawn_object(WorldEditorSpawnSpec {
++                label: "target".into(),
++                kind,
++                organism_id: None,
++                position,
++                nutrition: if kind == WorldObjectKind::Food { 0.6 } else { 0.0 },
++                hazard_pain: 0.0,
++                radius: 0.25,
++                token_id: None,
++            })
++            .unwrap();
++        let mut props = world.entity(target).unwrap().grounded_physical;
++        props.color = appearance;
++        props.material = appearance;
++        props.shape = appearance;
++        props.chemical = emitter;
++        world.set_grounded_physical_properties(target, props).unwrap();
++        (world, target)
++    }
++
++    fn local(frame: &PerceptionFrame, target: WorldEntityId) -> Option<[f32; 4]> {
++        frame
++            .candidates()
++            .iter()
++            .find(|candidate| candidate.target.entity == Some(target))
++            .map(|candidate| candidate.features.0[15..19].try_into().unwrap())
++    }
++
++    #[test]
++    fn scent_follows_emitters_not_object_kind_or_appearance() {
++        for kind in [WorldObjectKind::Food, WorldObjectKind::Ball] {
++            for appearance in [[0.15, 0.8, 0.1], [0.85, 0.2, 0.9]] {
++                for emitter in [[0.8, -0.5, 0.9], [0.0, 0.0, 0.9]] {
++                    let (mut world, target) =
++                        world(kind, Vec3f::new(0.6, 0.0, 0.0), appearance, emitter);
++                    let stock = sample(&mut world.clone(), false);
++                    let experiment = sample(&mut world, true);
++                    assert_eq!(local(&stock, target), Some([0.0; 4]));
++                    let expected = 1.0 - 0.6 / EAT_RADIUS;
++                    assert_eq!(
++                        local(&experiment, target),
++                        Some([emitter[0] * expected, emitter[1] * expected, 0.0, 0.0])
++                    );
++                    assert_eq!(stock.sensory(), experiment.sensory());
++                }
++            }
++        }
++    }
++
++    #[test]
++    fn clear_reach_cutoff_hidden_and_transparent_solid() {
++        for (x, visible) in [(EAT_RADIUS, true), (1.5, true), (-0.6, false)] {
++            let (mut world, target) = world(
++                WorldObjectKind::Food,
++                Vec3f::new(x, 0.0, 0.0),
++                [0.5; 3],
++                [0.8, -0.5, 0.9],
++            );
++            assert_eq!(local(&sample(&mut world, true), target), visible.then_some([0.0; 4]));
++        }
++        let (mut world, target) = world(
++            WorldObjectKind::Food,
++            Vec3f::new(0.9, 0.0, 0.0),
++            [0.5; 3],
++            [0.8, -0.5, 0.9],
++        );
++        let wall = world.editor_spawn_object(WorldEditorSpawnSpec {
++            label: "wall".into(),
++            kind: WorldObjectKind::Obstacle,
++            organism_id: None,
++            position: Vec3f::new(0.45, 0.0, 0.0),
++            nutrition: 0.0,
++            hazard_pain: 0.0,
++            radius: 0.12,
++            token_id: None,
++        }).unwrap();
++        world.editor_set_optical_opacity(wall, 0.0).unwrap();
++        let stock = sample(&mut world.clone(), false);
++        let experiment = sample(&mut world, true);
++        assert_eq!(local(&experiment, target), Some([0.0; 4]));
++        assert_eq!(stock.sensory(), experiment.sensory());
++    }
++
++    #[test]
++    fn disabled_chemical_receptor_and_stale_slot_do_not_expose_volatile_cues() {
++        let (mut current, target) = world(
++            WorldObjectKind::Food,
++            Vec3f::new(0.6, 0.0, 0.0),
++            [0.5; 3],
++            [0.8, -0.5, 0.9],
++        );
++        assert!(local(&sample(&mut current, true), target).unwrap()[0] > 0.0);
++        // Use constructed, validated embodiment metadata, not a modified acquired save.
++        let genome = alife_core::CreatureGenome::early_mammal_founder(
++            60_094,
++            alife_core::FoundationGeneticIdentity::new(
++                10, 1, 7, alife_core::BrainCapacityClass::N512_ID,
++            ).unwrap(),
++        ).unwrap();
++        let phenotype = genome.express().unwrap();
++        let ordinary = EmbodimentState::from_phenotype(
++            current.agent_entity_id(LEARNER).unwrap(), Tick::ZERO, &phenotype,
++        ).unwrap();
++        let mut wire = serde_json::to_value(&ordinary).unwrap();
++        let ports = wire["sensors"].as_array().unwrap().clone();
++        let old = wire["sensor_calibration"].as_array().unwrap().clone();
++        let mut remaining = Vec::new();
++        let mut values = Vec::new();
++        let mut offset = 0;
++        for port in ports {
++            let width = port["value_lanes"].as_u64().unwrap() as usize;
++            if port["capability"].as_str() != Some("Chemical") {
++                remaining.push(port);
++                values.extend_from_slice(&old[offset..offset + width]);
++            }
++            offset += width;
++        }
++        wire["sensors"] = serde_json::json!(remaining);
++        wire["sensor_calibration"] = serde_json::json!(values);
++        let disabled: EmbodimentState = serde_json::from_value(wire).unwrap();
++        disabled.validate_contract().unwrap();
++        assert_eq!(disabled.sensor_gain(SensorCapability::Chemical), 0.0);
++        let observer = current.agent_for(LEARNER).unwrap();
++        let snapshot = current.physical_observation_snapshot_from_objects(
++            LEARNER, current.tick, observer, current.objects.values(), true,
++        ).unwrap();
++        let mut grounded =
++            GroundedSensorExtractor::extract(&snapshot, &mut current.tracked_objects).unwrap();
++        let exposure = current.near_field_volatile_exposure(&snapshot, &grounded).unwrap();
++        assert!(exposure.iter().any(|value| *value > 0.0));
++        grounded.calibrate_near_field_volatile(Some(&disabled), &exposure).unwrap();
++        assert!(grounded.slots().iter().all(|slot| slot.chemical == [0.0; 3]));
++
++        current.editor_move_object(target, Vec3f::new(-0.6, 0.0, 0.0)).unwrap();
++        current.advance_tick();
++        assert!(local(&sample(&mut current, true), target).is_none());
++    }
++
++    #[test]
++    fn owned_taste_is_unchanged_and_real_pickup_precedes_own_meal() {
++        let (mut world, target) = world(
++            WorldObjectKind::Food,
++            Vec3f::new(0.6, 0.0, 0.0),
++            [0.5; 3],
++            [0.8, -0.5, 0.9],
++        );
++        let free = local(&sample(&mut world, true), target).unwrap();
++        assert!(free[0] > 0.0);
++        assert_eq!(&free[2..], &[0.0, 0.0]);
++        let eat = HeadlessWorldCommand::eat(LEARNER, target).unwrap();
++        let pickup = world.apply_command(&eat).unwrap();
++        assert!(pickup.execution.succeeded);
++        assert_eq!(pickup.execution.physical.energy_cost.raw(), 0.06);
++        assert_eq!(pickup.body_event.nutrition, 0.0);
++        assert_eq!(world.entity(target).unwrap().carried_by, Some(LEARNER));
++
++        world.advance_tick();
++        let owned = local(&sample(&mut world, true), target).unwrap();
++        let stock_owned = local(&sample(&mut world.clone(), false), target).unwrap();
++        assert_eq!(owned.map(f32::to_bits), stock_owned.map(f32::to_bits));
++        assert_eq!(owned, [0.8, -0.5, 0.9, 1.0]);
++        let meal = world.apply_command(&eat).unwrap();
++        assert!(meal.execution.succeeded);
++        assert_eq!(meal.execution.physical.energy_cost.raw(), 0.03);
++        assert_eq!(meal.body_event.nutrition, 0.6);
++        assert!(world.entity(target).unwrap().consumed);
+     }
+ }
+ 
+@@ -1613,30 +1878,6 @@
+         self.bits == 0
+     }
+ 
+-    /// The kinds in a consumed player-only dose. Each of the four dose
+-    /// fields maps to exactly one kind (see `PlayerInteractionV1::apply`),
+-    /// so a mixed dose yields the set it carried. Never call this on a
+-    /// merged body event: a collision's damage is not a slap, and a
+-    /// peer's touch is not a pet. A zero dose yields the empty set, and
+-    /// the dose is validated finite upstream, so NaN cannot reach the
+-    /// comparisons below.
+-    pub fn from_dose(applied: BodyEventDelta) -> Self {
+-        let mut kinds = Self::empty();
+-        if applied.player_reward > 0.0 {
+-            kinds.insert(PlayerCareKind::Praise);
+-        }
+-        if applied.social_contact > 0.0 {
+-            kinds.insert(PlayerCareKind::Pet);
+-        }
+-        if applied.social_disapproval_v1 > 0.0 {
+-            kinds.insert(PlayerCareKind::Scold);
+-        }
+-        if applied.damage > 0.0 {
+-            kinds.insert(PlayerCareKind::Slap);
+-        }
+-        kinds
+-    }
+-
+     /// The kinds in the set, in fixed order (pet, praise, scold, slap),
+     /// for deterministic rendering and tests.
+     pub fn iter(self) -> impl Iterator<Item = PlayerCareKind> {
+@@ -1771,98 +2012,6 @@
+         self.kinds.display_kind()
+     }
+ }
+-
+-/// How much a creature trusts the player, from real interaction history.
+-/// The value runs from -1.0 (wary) through 0.0 (stranger) to +1.0
+-/// (trusting), and is the value at `last_interaction_tick`: it fades
+-/// toward 0 while the game runs without interaction (see `at_tick`),
+-/// never by a per-tick write. This is the player's standing with one
+-/// creature — not the memory bank's `object_familiarity`, which is a
+-/// creature's familiarity with a tracked object. The record is
+-/// world-side history; it never writes learning weights and never tells
+-/// the brain what to do. If a learning input is ever needed, that is a
+-/// Codex question, not a field here.
+-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+-pub struct PlayerFamiliarity {
+-    /// Disposition at `last_interaction_tick`, in [-1, 1].
+-    pub value: f32,
+-    /// The tick the last applied player-care dose was felt.
+-    pub last_interaction_tick: Tick,
+-    /// Applied doses felt so far (one per consumption event, not per kind).
+-    pub interactions: u32,
+-}
+-
+-impl PlayerFamiliarity {
+-    /// Ticks for familiarity to halve without interaction: one game-hour
+-    /// at 20 world ticks per second. Ticks only advance while the game
+-    /// runs, so a creature does not forget the player while the game is
+-    /// off; it fades across a session spent ignoring it.
+-    pub const HALF_LIFE_TICKS: u64 = 72_000;
+-
+-    /// The disposition as of `now`, decayed from the last interaction.
+-    /// The returned record keeps the original last-interaction tick and
+-    /// interaction count: only the value is current.
+-    pub fn at_tick(self, now: Tick) -> Self {
+-        let elapsed = now.raw().saturating_sub(self.last_interaction_tick.raw());
+-        let retention = 0.5f32.powf(elapsed as f32 / Self::HALF_LIFE_TICKS as f32);
+-        Self {
+-            value: (self.value * retention).clamp(-1.0, 1.0),
+-            ..self
+-        }
+-    }
+-
+-    /// The interpretive band for the current value. Thresholds are
+-    /// presentation vocabulary, not measurements: the debug readout
+-    /// carries the exact value. A record decayed to ~0 reads Stranger
+-    /// (history netted neutral), which is distinct from no record at
+-    /// all (Unknown).
+-    pub fn band(self) -> PlayerFamiliarityBand {
+-        if self.value >= 0.5 {
+-            PlayerFamiliarityBand::Trusting
+-        } else if self.value >= 0.15 {
+-            PlayerFamiliarityBand::Familiar
+-        } else if self.value > -0.15 {
+-            PlayerFamiliarityBand::Stranger
+-        } else if self.value > -0.5 {
+-            PlayerFamiliarityBand::Uneasy
+-        } else {
+-            PlayerFamiliarityBand::Wary
+-        }
+-    }
+-}
+-
+-/// The interpretive band of a familiarity value, for debug text only.
+-/// Bands are presentation vocabulary, never a brain input.
+-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+-pub enum PlayerFamiliarityBand {
+-    Trusting,
+-    Familiar,
+-    Stranger,
+-    Uneasy,
+-    Wary,
+-}
+-
+-impl PlayerFamiliarityBand {
+-    pub fn label(self) -> &'static str {
+-        match self {
+-            Self::Trusting => "trusting",
+-            Self::Familiar => "familiar",
+-            Self::Stranger => "stranger",
+-            Self::Uneasy => "uneasy",
+-            Self::Wary => "wary",
+-        }
+-    }
+-}
+-
+-/// Familiarity earned or lost per applied kind. Tuning, debug-visible
+-/// only: the player never sees these numbers. Positive kinds build
+-/// slowly; negative kinds cost roughly twice as much — one slap costs
+-/// more trust than one tickle builds, and a creature that has only ever
+-/// been scolded reads wary, not neutral.
+-const FAMILIARITY_PET_DELTA: f32 = 0.06;
+-const FAMILIARITY_PRAISE_DELTA: f32 = 0.04;
+-const FAMILIARITY_SCOLD_DELTA: f32 = -0.10;
+-const FAMILIARITY_SLAP_DELTA: f32 = -0.15;
+ 
+ #[derive(Debug, Clone, PartialEq)]
+ pub struct HeadlessMotorChannelReceipt {
+@@ -2024,13 +2173,7 @@
+     /// Last applied player-care receipt per organism. Last-only history, not
+     /// a pending obligation: a rejected queue never erases it.
+     last_player_care: BTreeMap<u64, PlayerCareReceipt>,
+-    /// Last familiarity record per organism. History, not a pending
+-    /// obligation: a rejected queue never erases it, and a creature
+-    /// never yet cared for has no entry (unknown, not hostile).
+-    last_familiarity: BTreeMap<u64, PlayerFamiliarity>,
+     player_hold: Option<player_hand::PlayerHold>,
+-    toy_rolls: BTreeMap<u64, [f32; 2]>,
+-    last_chime_strike: Option<(Tick, WorldEntityId)>,
+     tracked_objects: TrackedObjectRegistry,
+     habitats: HabitatAuthority,
+     organism_registry: WorldOrganismRegistry,
+@@ -2052,7 +2195,7 @@
+ pub use local_steering::LocalSteeringState;
+ mod naming;
+ pub(crate) mod player_hand;
+-pub use naming::{RenameAgentError, MAX_AGENT_NAME_CHARS};
++pub use naming::{MAX_AGENT_NAME_CHARS, RenameAgentError};
+ #[cfg(test)]
+ mod prediction_residual_pulse_tests;
+ 
+@@ -2280,10 +2423,7 @@
+             last_creature_utterance_ticks: BTreeMap::new(),
+             pending_player_care: BTreeMap::new(),
+             last_player_care: BTreeMap::new(),
+-            last_familiarity: BTreeMap::new(),
+             player_hold: None,
+-            toy_rolls: BTreeMap::new(),
+-            last_chime_strike: None,
+             tracked_objects: TrackedObjectRegistry::new(
+                 seed,
+                 DEFAULT_TRACKED_OBJECT_CAPACITY_PER_ORGANISM,
+@@ -2412,15 +2552,6 @@
+         self.last_player_care.get(&organism.raw()).copied()
+     }
+ 
+-    /// The last familiarity record for this organism, if any. `None`
+-    /// means the world holds no record for it — unknown, not a confirmed
+-    /// absence. The stored value is the value at the last interaction;
+-    /// use `PlayerFamiliarity::at_tick` or the presentation snapshot
+-    /// for the decayed current value.
+-    pub fn last_player_familiarity(&self, organism: OrganismId) -> Option<PlayerFamiliarity> {
+-        self.last_familiarity.get(&organism.raw()).copied()
+-    }
+-
+     /// Record that a queued player-care dose was applied to this organism's
+     /// biology on `tick`. Call immediately after the biology advance that
+     /// consumed the dose; `before`/`after` are the biochemistry states around
+@@ -2438,12 +2569,25 @@
+         // that was actually consumed, never from which button was pressed
+         // and never from the merged body event: a collision's damage is
+         // not a slap, and a peer's touch is not a pet. Each field maps to
+-        // exactly one kind (see `PlayerCareKindSet::from_dose`), so a
+-        // mixed dose records the set of kinds it carried — no dose is
++        // exactly one kind (see `PlayerInteractionV1::apply`), so a mixed
++        // dose records the set of kinds it carried — no dose is
+         // unattributable, and the old both-negative/mixed-sign ambiguity
+         // is gone. A zero dose records nothing: the dose never arrived,
+-        // so there is no response to report.
+-        let kinds = PlayerCareKindSet::from_dose(applied);
++        // so there is no response to report. (The dose is validated
++        // finite upstream, so NaN cannot reach the comparisons below.)
++        let mut kinds = PlayerCareKindSet::empty();
++        if applied.player_reward > 0.0 {
++            kinds.insert(PlayerCareKind::Praise);
++        }
++        if applied.social_contact > 0.0 {
++            kinds.insert(PlayerCareKind::Pet);
++        }
++        if applied.social_disapproval_v1 > 0.0 {
++            kinds.insert(PlayerCareKind::Scold);
++        }
++        if applied.damage > 0.0 {
++            kinds.insert(PlayerCareKind::Slap);
++        }
+         if kinds.is_empty() {
+             return;
+         }
+@@ -2458,27 +2602,6 @@
+                 loneliness_after: after.homeostasis.drives.loneliness,
+             },
+         );
+-        let delta = kinds
+-            .iter()
+-            .map(|kind| match kind {
+-                PlayerCareKind::Pet => FAMILIARITY_PET_DELTA,
+-                PlayerCareKind::Praise => FAMILIARITY_PRAISE_DELTA,
+-                PlayerCareKind::Scold => FAMILIARITY_SCOLD_DELTA,
+-                PlayerCareKind::Slap => FAMILIARITY_SLAP_DELTA,
+-            })
+-            .sum::<f32>();
+-        let record = self
+-            .last_familiarity
+-            .entry(organism.raw())
+-            .or_insert(PlayerFamiliarity {
+-                value: 0.0,
+-                last_interaction_tick: tick,
+-                interactions: 0,
+-            });
+-        let current = record.at_tick(tick).value;
+-        record.value = (current + delta).clamp(-1.0, 1.0);
+-        record.last_interaction_tick = tick;
+-        record.interactions = record.interactions.saturating_add(1);
+     }
+ 
+     pub fn habitat_authority(&self) -> &HabitatAuthority {
+@@ -2819,7 +2942,6 @@
+                         &care_biology_before,
+                         &care_biology_after,
+                     );
+-
+                     #[cfg(test)]
+                     {
+                         advanced_organism = true;
+@@ -3069,7 +3191,6 @@
+         }
+ 
+         candidate.advance_autonomous_critters();
+-        candidate.advance_toy_rolls();
+         candidate.speech.retire_expired(candidate.tick);
+         let _ = candidate.advance_ecology();
+         Ok(next_tick)
+@@ -3392,13 +3513,6 @@
+         ecology: EcologyState,
+     ) -> Result<(), ScaffoldContractError> {
+         ecology.validate()?;
+-        if ecology
+-            .orchard_beds
+-            .iter()
+-            .any(|bed| bed.cycle_started.raw() > self.tick.raw())
+-        {
+-            return Err(ScaffoldContractError::InvalidId);
+-        }
+         for resource in &ecology.resources {
+             let Some(object) = self.objects.get(&resource.object_id.raw()) else {
+                 return Err(ScaffoldContractError::InvalidId);
+@@ -3574,16 +3688,6 @@
+                 &serde_json::to_vec(hold).map_err(|_| ScaffoldContractError::InvalidId)?,
+             );
+         }
+-        if !self.toy_rolls.is_empty() {
+-            // An unplayed world retains its historical canonical signature.
+-            digest.write_bytes(b"rolling-toys-v1");
+-            digest.write_sequence_len(self.toy_rolls.len());
+-            for (&id, &[x, z]) in &self.toy_rolls {
+-                digest.write_u64(id);
+-                write_f32_bits(&mut digest, x);
+-                write_f32_bits(&mut digest, z);
+-            }
+-        }
+         for object in self.objects.values() {
+             write_world_object_signature(&mut digest, object)?;
+         }
+@@ -3637,13 +3741,6 @@
+             digest.write_bytes(b"player-care-receipt-v1");
+             digest.write_bytes(
+                 &serde_json::to_vec(&self.last_player_care)
+-                    .map_err(|_| ScaffoldContractError::InvalidId)?,
+-            );
+-        }
+-        if !self.last_familiarity.is_empty() {
+-            digest.write_bytes(b"player-familiarity-v1");
+-            digest.write_bytes(
+-                &serde_json::to_vec(&self.last_familiarity)
+                     .map_err(|_| ScaffoldContractError::InvalidId)?,
+             );
+         }
+@@ -4212,7 +4309,6 @@
+             .objects
+             .remove(&id.raw())
+             .ok_or(ScaffoldContractError::InvalidId)?;
+-        self.toy_rolls.remove(&id.raw());
+         self.labels.remove(&object.label);
+         self.last_touched_entities.retain(|touched| *touched != id);
+         if self
+@@ -4271,7 +4367,6 @@
+             .ok_or(ScaffoldContractError::InvalidId)?;
+         object.grounded_physical.velocity = displacement;
+         object.position = position;
+-        self.toy_rolls.remove(&id.raw());
+         if let Some(carrier) = carrier {
+             self.sync_carried_pose(carrier)?;
+         }
+@@ -4457,10 +4552,8 @@
+             audible_utterances: self.speech.snapshot(),
+             pending_player_care: self.pending_player_care.clone(),
+             last_player_care: self.last_player_care.clone(),
+-            last_familiarity: self.last_familiarity.clone(),
+             ingestion_observations: self.ingestion_observations.clone(),
+             player_hold: self.player_hold.clone(),
+-            toy_rolls: self.toy_rolls.clone(),
+             last_creature_utterance_ticks: self
+                 .last_creature_utterance_ticks
+                 .iter()
+@@ -4567,7 +4660,6 @@
+         if state.next_utterance_id == 0 || state.next_utterance_id <= max_utterance_id {
+             return Err(ScaffoldContractError::InvalidId);
+         }
+-        state.validate_toy_rolls()?;
+         let mut cooldown_organisms = std::collections::BTreeSet::new();
+         for (organism, tick) in &state.last_creature_utterance_ticks {
+             organism.validate()?;
+@@ -4576,14 +4668,6 @@
+             }
+         }
+         state.ecology.validate()?;
+-        if state
+-            .ecology
+-            .orchard_beds
+-            .iter()
+-            .any(|b| b.cycle_started.raw() > state.tick.raw())
+-        {
+-            return Err(ScaffoldContractError::InvalidId);
+-        }
+         for c in &state.ecology.autonomous_critters {
+             let o = objects
+                 .get(&c.object_id.raw())
+@@ -4646,10 +4730,7 @@
+             speech: SpatialSpeechBus::restore(state.audible_utterances.clone(), state.tick)?,
+             pending_player_care: state.pending_player_care.clone(),
+             last_player_care: state.last_player_care.clone(),
+-            last_familiarity: state.last_familiarity.clone(),
+             player_hold: state.player_hold.clone(),
+-            toy_rolls: state.toy_rolls.clone(),
+-            last_chime_strike: None,
+             last_creature_utterance_ticks: state
+                 .last_creature_utterance_ticks
+                 .iter()
+@@ -4725,7 +4806,33 @@
+         index: &HeadlessPerceptionBatchIndex,
+     ) -> Result<(PerceptionFrameDraft, Option<GroundedCandidateBinding>), ScaffoldContractError>
+     {
+-        self.perception_frame_draft_with_index(organism_id, tick, profile, homeostasis, Some(index))
++        self.perception_frame_draft_indexed_for_retention(
++            organism_id, tick, profile, homeostasis, index, false,
++        )
++    }
++
++    /// Retained research only: same indexed producer and binding as stock.
++    pub fn perception_frame_draft_indexed_for_retention(
++        &mut self,
++        organism_id: OrganismId,
++        tick: Tick,
++        profile: SensorProfile,
++        homeostasis: HomeostaticSnapshot,
++        index: &HeadlessPerceptionBatchIndex,
++        near_field_volatile: bool,
++    ) -> Result<(PerceptionFrameDraft, Option<GroundedCandidateBinding>), ScaffoldContractError>
++    {
++        self.perception_frame_draft_with_availability_and_coverage(
++            organism_id,
++            tick,
++            profile,
++            homeostasis,
++            Some(index),
++            None,
++            None,
++            false,
++            near_field_volatile,
++        )
+     }
+ 
+     fn perception_frame_draft_with_index(
+@@ -4768,6 +4875,7 @@
+             None,
+             Some(crate::CandidateOpportunityCoveragePlan::new(phase)),
+             false,
++            false,
+         )
+     }
+     pub fn perception_frame_draft_with_maze_heading2346(
+@@ -4791,8 +4899,67 @@
+             None,
+             Some(crate::CandidateOpportunityCoveragePlan::new(phase)),
+             true,
++            false,
+         )
+     }
++    /// Explicit opt-in research lens. Stock callers, including the V1
++    /// all-or-none chemical availability receipt, remain contact-only.
++    pub fn perception_frame_draft_with_near_field_volatile(
++        &mut self,
++        organism_id: OrganismId,
++        tick: Tick,
++        profile: SensorProfile,
++        homeostasis: HomeostaticSnapshot,
++    ) -> Result<(PerceptionFrameDraft, Option<GroundedCandidateBinding>), ScaffoldContractError>
++    {
++        if !profile.has_terrain_vision() {
++            return Err(ScaffoldContractError::SensorProfileMismatch);
++        }
++        self.perception_frame_draft_with_availability_and_coverage(
++            organism_id,
++            tick,
++            profile,
++            homeostasis,
++            None,
++            None,
++            None,
++            false,
++            true,
++        )
++    }
++
++    // Join only this call's actual visible observations to the slots emitted
++    // from that same snapshot. Never recover an emitter from tracking history.
++    fn near_field_volatile_exposure(
++        &self,
++        snapshot: &PhysicalObservationSnapshot,
++        grounded: &crate::GroundedSensingFrame,
++    ) -> Result<Vec<f32>, ScaffoldContractError> {
++        let origin = snapshot.observer_pose.translation;
++        grounded
++            .transports()
++            .iter()
++            .map(|transport| {
++                let source = snapshot
++                    .visible
++                    .iter()
++                    .find(|source| source.transport_entity == transport.transport_entity)
++                    .filter(|source| source.position == transport.target_position)
++                    .ok_or(ScaffoldContractError::InvalidPerceptionFrame)?;
++                let d = distance(origin, source.position);
++                let exposure = if !source.contact
++                    && d < EAT_RADIUS
++                    && self.physical_contact_reachable(origin, source.position)
++                {
++                    (1.0 - d / EAT_RADIUS).clamp(0.0, 1.0)
++                } else {
++                    0.0
++                };
++                Ok(exposure)
++            })
++            .collect()
++    }
++
+     #[allow(clippy::too_many_arguments)]
+     fn perception_frame_draft_with_availability_sink(
+         &mut self,
+@@ -4813,6 +4980,7 @@
+             availability,
+             None,
+             false,
++            false,
+         )
+     }
+ 
+@@ -4827,8 +4995,12 @@
+         availability: Option<&mut Vec<GroundedSourceAvailabilityV1>>,
+         coverage: Option<crate::CandidateOpportunityCoveragePlan>,
+         maze_heading2346: bool,
++        near_field_volatile: bool,
+     ) -> Result<(PerceptionFrameDraft, Option<GroundedCandidateBinding>), ScaffoldContractError>
+     {
++        if near_field_volatile && (availability.is_some() || !profile.has_terrain_vision()) {
++            return Err(ScaffoldContractError::InvalidPerceptionFrame);
++        }
+         homeostasis
+             .validate_contract()
+             .map_err(|_| ScaffoldContractError::InvalidPerceptionFrame)?;
+@@ -4899,7 +5071,10 @@
+                     .organism_registry
+                     .get(organism_id)
+                     .map(WorldOrganismRecord::embodiment);
+-                if terrain_vision {
++                if near_field_volatile {
++                    let exposure = self.near_field_volatile_exposure(&snapshot, &grounded)?;
++                    grounded.calibrate_near_field_volatile(embodiment, &exposure)?;
++                } else if terrain_vision {
+                     grounded.calibrate(embodiment)?;
+                 }
+                 if let Some(sink) = availability {
+@@ -6469,7 +6644,6 @@
+             &care_biology_before,
+             &biology_after,
+         );
+-
+         #[cfg(test)]
+         if self.injected_post_action_failure {
+             return Err(ScaffoldContractError::InvalidDecisionEvidence);
+@@ -8240,11 +8414,7 @@
+ 
+     fn ambient_light_for_tick(&self) -> f32 {
+         let phase = crate::ecology::cycle_phase(self.tick, self.ecology.config.cycle_length_ticks);
+-        if phase < 0.5 {
+-            0.85
+-        } else {
+-            0.35
+-        }
++        if phase < 0.5 { 0.85 } else { 0.35 }
+     }
+ }
+ 
+@@ -10190,18 +10360,20 @@
+     }
+ 
+     fn initial_priority_bundle(rest: bool) -> MotorCommandBundle {
+-        let mut channels = vec![ChannelCommand::new(
+-            MotorChannel::Locomotion,
+-            HeadlessActionIds::STEP_FORWARD,
+-            None,
+-            Vec3f::new(1.0, 0.0, 0.0),
+-            Intensity::new(1.0).unwrap(),
+-            alife_core::DurationTicks::new(1),
+-            0.0,
+-            Confidence::new(1.0).unwrap(),
+-            0,
+-        )
+-        .unwrap()];
++        let mut channels = vec![
++            ChannelCommand::new(
++                MotorChannel::Locomotion,
++                HeadlessActionIds::STEP_FORWARD,
++                None,
++                Vec3f::new(1.0, 0.0, 0.0),
++                Intensity::new(1.0).unwrap(),
++                alife_core::DurationTicks::new(1),
++                0.0,
++                Confidence::new(1.0).unwrap(),
++                0,
++            )
++            .unwrap(),
++        ];
+         if rest {
+             channels.push(
+                 ChannelCommand::new(
+@@ -10529,12 +10701,14 @@
+                         .hypot(actual.voluntary.joint.execution.displacement.z);
+                     assert!(planar <= MOVE_STEP * actual.voluntary_time_allocated + 1e-6);
+                     assert_eq!(actual.allocated_translation_time, 1.0);
+-                    assert!(actual
+-                        .withdrawal
+-                        .as_ref()
+-                        .unwrap()
+-                        .sources
+-                        .contains(&hazard));
++                    assert!(
++                        actual
++                            .withdrawal
++                            .as_ref()
++                            .unwrap()
++                            .sources
++                            .contains(&hazard)
++                    );
+                     eprintln!(
+                         "GROUNDED_POINT_TIME origin={origin} concave={concave} diagonal={diagonal} planar={planar} time={}",
+                         actual.voluntary_time_allocated
+@@ -10648,12 +10822,14 @@
+             .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
+             .unwrap();
+         assert!(actual.voluntary_time_allocated > 0.0 && actual.voluntary_time_allocated < 0.02);
+-        assert!(actual
+-            .withdrawal
+-            .as_ref()
+-            .unwrap()
+-            .sources
+-            .contains(&hazard));
++        assert!(
++            actual
++                .withdrawal
++                .as_ref()
++                .unwrap()
++                .sources
++                .contains(&hazard)
++        );
+         assert_eq!(actual.allocated_translation_time, 1.0);
+     }
+ 
+@@ -10713,13 +10889,15 @@
+             ),
+             Some(0.5)
+         );
+-        assert!(grounded_path::grounded_segment_sphere_entry(
+-            start,
+-            end,
+-            Vec3f::new(0.5, 0.25_f32.next_up(), 0.0),
+-            0.25
+-        )
+-        .is_none());
++        assert!(
++            grounded_path::grounded_segment_sphere_entry(
++                start,
++                end,
++                Vec3f::new(0.5, 0.25_f32.next_up(), 0.0),
++                0.25
++            )
++            .is_none()
++        );
+         assert!(
+             grounded_path::grounded_segment_sphere_entry(
+                 start,
+@@ -10806,9 +10984,11 @@
+             .withdrawal
+             .as_ref()
+             .expect("real ground contact triggers withdrawal");
+-        assert!(reflex
+-            .sources
+-            .contains(&world.entity_id("v19-curved-ground-contact").unwrap()));
++        assert!(
++            reflex
++                .sources
++                .contains(&world.entity_id("v19-curved-ground-contact").unwrap())
++        );
+         assert!(actual.voluntary_time_allocated > 0.4 && actual.voluntary_time_allocated < 0.5);
+         assert_eq!(actual.allocated_translation_time, 1.0);
+         assert!(
+@@ -11259,9 +11439,11 @@
+             .unwrap();
+         let start = world.entity(agent).unwrap().position;
+         assert!(world.physical_contact_reachable(start, world.entity(food).unwrap().position));
+-        assert!(world
+-            .first_motion_blocker(start, Vec3f::new(-0.1, 0.0, 0.0))
+-            .is_some());
++        assert!(
++            world
++                .first_motion_blocker(start, Vec3f::new(-0.1, 0.0, 0.0))
++                .is_some()
++        );
+         let mut ordinary = world.clone();
+         let expected = ordinary
+             .apply_registered_motor_bundle(&bundle, agent)
+@@ -11367,9 +11549,11 @@
+         let (mut failing, agent) = withdrawal_world(Vec3f::new(0.1, 0.0, 0.0), 0.4);
+         failing.injected_post_action_failure = true;
+         let before = failing.canonical_signature_digest().unwrap();
+-        assert!(failing
+-            .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
+-            .is_err());
++        assert!(
++            failing
++                .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
++                .is_err()
++        );
+         assert_eq!(failing.canonical_signature_digest().unwrap(), before);
+     }
+ 
+@@ -11694,18 +11878,20 @@
+             ORGANISM_ID,
+             alife_core::ExperienceSequenceId::new(1).unwrap(),
+             Tick::ZERO,
+-            vec![ChannelCommand::new(
+-                MotorChannel::Locomotion,
+-                ActionKind::Move.canonical_id(),
+-                Some(alife_core::ActionTarget::new(None, Some(target))),
+-                Vec3f::ZERO,
+-                Intensity::new(1.0).unwrap(),
+-                alife_core::DurationTicks::new(1),
+-                0.0,
+-                Confidence::new(1.0).unwrap(),
+-                0,
+-            )
+-            .unwrap()],
++            vec![
++                ChannelCommand::new(
++                    MotorChannel::Locomotion,
++                    ActionKind::Move.canonical_id(),
++                    Some(alife_core::ActionTarget::new(None, Some(target))),
++                    Vec3f::ZERO,
++                    Intensity::new(1.0).unwrap(),
++                    alife_core::DurationTicks::new(1),
++                    0.0,
++                    Confidence::new(1.0).unwrap(),
++                    0,
++                )
++                .unwrap(),
++            ],
+         )
+         .unwrap();
+         let mut quiet = world.clone();
+@@ -11778,10 +11964,12 @@
+             world.entity(agent).unwrap().position,
+             add(before, reflex.displacement)
+         );
+-        assert!(world
+-            .apply_contact_withdrawal(ORGANISM_ID, agent, None, 1.0, 0.0)
+-            .unwrap()
+-            .is_none());
++        assert!(
++            world
++                .apply_contact_withdrawal(ORGANISM_ID, agent, None, 1.0, 0.0)
++                .unwrap()
++                .is_none()
++        );
+     }
+ 
+     #[test]
+@@ -11903,10 +12091,12 @@
+         held.kind = WorldObjectKind::Hazard;
+         held.hazard_pain = 0.4;
+         held.radius = 1.0;
+-        assert!(world
+-            .apply_contact_withdrawal(ORGANISM_ID, agent, None, 1.0, 0.0)
+-            .unwrap()
+-            .is_none());
++        assert!(
++            world
++                .apply_contact_withdrawal(ORGANISM_ID, agent, None, 1.0, 0.0)
++                .unwrap()
++                .is_none()
++        );
+     }
+ 
+     #[test]
+@@ -11947,9 +12137,11 @@
+                 ..BodyEventDelta::zero()
+             },
+         )]);
+-        assert!(world
+-            .try_advance_tick_with_body_contact_candidate(&events)
+-            .is_err());
++        assert!(
++            world
++                .try_advance_tick_with_body_contact_candidate(&events)
++                .is_err()
++        );
+         assert_eq!(world.save_state(), before);
+     }
+ 
+@@ -12169,9 +12361,11 @@
+                 token_id: None,
+             })
+             .unwrap();
+-        assert!(blocked
+-            .first_motion_blocker(Vec3f::ZERO, Vec3f::new(MOVE_STEP, 0.0, 0.0))
+-            .is_none());
++        assert!(
++            blocked
++                .first_motion_blocker(Vec3f::ZERO, Vec3f::new(MOVE_STEP, 0.0, 0.0))
++                .is_none()
++        );
+         assert!(!blocked.carried_pose_reachable(ORGANISM_ID, Vec3f::new(MOVE_STEP, 0.0, 0.0), 0.0));
+         let before = blocked.organism_registry.get(ORGANISM_ID).unwrap().clone();
+         let held_before = blocked.entity(held).unwrap().position;
+@@ -12206,9 +12400,11 @@
+         let (mut rollback, _, _) = own_carried_hazard_withdrawal_world();
+         rollback.injected_tick_late_failure_after_first_organism = true;
+         let before = rollback.save_state();
+-        assert!(rollback
+-            .try_advance_tick_with_body_contact_candidate(&overlap_recovery_event())
+-            .is_err());
++        assert!(
++            rollback
++                .try_advance_tick_with_body_contact_candidate(&overlap_recovery_event())
++                .is_err()
++        );
+         assert_eq!(rollback.save_state(), before);
+     }
+ 
+@@ -13691,7 +13887,9 @@
+             })
+             .unwrap();
+ 
+-        assert!(world.physical_contact_reachable(Vec3f::ZERO, world.entity(food).unwrap().position));
++        assert!(
++            world.physical_contact_reachable(Vec3f::ZERO, world.entity(food).unwrap().position)
++        );
+         assert_eq!(
+             world.blocking_object_between(Vec3f::ZERO, Vec3f::new(MOVE_STEP, 0.0, 0.0), None),
+             Some(blocker),
+@@ -13836,10 +14034,12 @@
+             }
+             let decoded: JointPhysicalOutcome = serde_json::from_value(legacy.clone()).unwrap();
+             decoded.validate_contract().unwrap();
+-            assert!(decoded
+-                .channel_outcomes
+-                .iter()
+-                .all(|c| c.execution_evidence.is_none()));
++            assert!(
++                decoded
++                    .channel_outcomes
++                    .iter()
++                    .all(|c| c.execution_evidence.is_none())
++            );
+             assert_eq!(serde_json::to_value(decoded).unwrap(), legacy);
+         }
+     }
+@@ -13882,12 +14082,14 @@
+         let neural = alife_core::NeuralEmissionFrame::new(
+             Tick::ZERO,
+             1,
+-            vec![alife_core::NeuralEmission::new(
+-                alife_core::NeuralEmissionClass::ExecutiveSustain,
+-                0.9,
+-                0.9,
+-            )
+-            .unwrap()],
++            vec![
++                alife_core::NeuralEmission::new(
++                    alife_core::NeuralEmissionClass::ExecutiveSustain,
++                    0.9,
++                    0.9,
++                )
++                .unwrap(),
++            ],
+         )
+         .unwrap();
+ 
+@@ -13972,23 +14174,25 @@
+             (0.0, 0.0, f32::NAN, None),
+             (0.0, 0.0, 0.0, Some(OrganismId(0))),
+         ] {
+-            assert!(world
+-                .insert_object(SpawnSpec {
+-                    label: "invalid",
+-                    kind: if organism_id.is_some() {
+-                        WorldObjectKind::Agent
+-                    } else {
+-                        WorldObjectKind::Food
+-                    },
+-                    organism_id,
+-                    position: Vec3f::ZERO,
+-                    nutrition,
+-                    hazard_pain,
+-                    token_id: None,
+-                    social_affinity,
+-                    teacher_channel: None,
+-                })
+-                .is_err());
++            assert!(
++                world
++                    .insert_object(SpawnSpec {
++                        label: "invalid",
++                        kind: if organism_id.is_some() {
++                            WorldObjectKind::Agent
++                        } else {
++                            WorldObjectKind::Food
++                        },
++                        organism_id,
++                        position: Vec3f::ZERO,
++                        nutrition,
++                        hazard_pain,
++                        token_id: None,
++                        social_affinity,
++                        teacher_channel: None,
++                    })
++                    .is_err()
++            );
+             assert_eq!(world.save_state(), before);
+         }
+     }
+@@ -14404,11 +14608,13 @@
+             Some(&before_record)
+         );
+         assert!(world.entity_id("voice-token-7").is_none());
+-        assert!(world
+-            .audible_utterances()
+-            .iter()
+-            .flat_map(|utterance| utterance.tokens.iter())
+-            .all(|token| token.raw() != 9));
++        assert!(
++            world
++                .audible_utterances()
++                .iter()
++                .flat_map(|utterance| utterance.tokens.iter())
++                .all(|token| token.raw() != 9)
++        );
+ 
+         world.injected_post_action_failure = false;
+         let retry = world
+@@ -14539,8 +14745,8 @@
+     }
+ 
+     #[test]
+-    fn try_advance_tick_updates_all_registered_biology_and_resource_lifecycle_in_stable_order_and_rolls_back_late_failure(
+-    ) {
++    fn try_advance_tick_updates_all_registered_biology_and_resource_lifecycle_in_stable_order_and_rolls_back_late_failure()
++     {
+         let mut forward = task_4_1_world_with_registration_order(&[
+             TASK_4_1_LOW_ORGANISM,
+             TASK_4_1_HIGH_ORGANISM,
+@@ -14663,8 +14869,8 @@
+     }
+ 
+     #[test]
+-    fn try_advance_tick_advances_development_age_health_and_death_in_stable_order_and_rolls_back_late_failure(
+-    ) {
++    fn try_advance_tick_advances_development_age_health_and_death_in_stable_order_and_rolls_back_late_failure()
++     {
+         let mut forward = task_4_1_world_with_registration_order(&[
+             TASK_4_1_LOW_ORGANISM,
+             TASK_4_1_HIGH_ORGANISM,
+@@ -15561,10 +15767,12 @@
+         // stand at the midpoint inside the rock's rounded clearance margin.
+         assert!(world.solid_segment_clear(maternal_position, paternal_position));
+         assert!(!world.terrain().unwrap().walkable(3.945, 3.945));
+-        assert!(world
+-            .eligible_mating_pair(MATERNAL_ID, PATERNAL_ID, next_tick)
+-            .unwrap()
+-            .is_some());
++        assert!(
++            world
++                .eligible_mating_pair(MATERNAL_ID, PATERNAL_ID, next_tick)
++                .unwrap()
++                .is_some()
++        );
+         let child_id = OrganismId(world.next_organism_id);
+         let parent_genome_ids = [MATERNAL_ID, PATERNAL_ID]
+             .map(|id| world.organism_registry().get(id).unwrap().genome().id);
+@@ -15645,10 +15853,12 @@
+                 *genome = g;
+             },
+         );
+-        assert!(world
+-            .eligible_mating_pair(MATERNAL_ID, PATERNAL_ID, next_tick)
+-            .unwrap()
+-            .is_some());
++        assert!(
++            world
++                .eligible_mating_pair(MATERNAL_ID, PATERNAL_ID, next_tick)
++                .unwrap()
++                .is_some()
++        );
+         let id = OrganismId(world.next_organism_id);
+         assert_eq!(world.try_advance_tick().unwrap(), next_tick);
+         let newborn = world
+@@ -15661,17 +15871,21 @@
+             .as_ref()
+             .unwrap();
+         assert!(inherited.is_n2048_anchored_v2());
+-        assert!(asset
+-            .weights()
+-            .iter()
+-            .zip(inherited.weights())
+-            .any(|(a, b)| a.to_bits() != b.to_bits()));
+-        assert!(newborn
+-            .genome()
+-            .provenance
+-            .mutations
+-            .iter()
+-            .any(|r| matches!(r, alife_core::MutationRecord::GeneticWeight { .. })));
++        assert!(
++            asset
++                .weights()
++                .iter()
++                .zip(inherited.weights())
++                .any(|(a, b)| a.to_bits() != b.to_bits())
++        );
++        assert!(
++            newborn
++                .genome()
++                .provenance
++                .mutations
++                .iter()
++                .any(|r| matches!(r, alife_core::MutationRecord::GeneticWeight { .. }))
++        );
+         let expressed = newborn.genome().express().unwrap();
+         let maturity = expressed
+             .development_state_at(Tick::new(u64::from(
+@@ -15721,14 +15935,18 @@
+                 .id,
+             shared_id
+         );
+-        assert!(world
+-            .eligible_mating_pair(MATERNAL_ID, MATERNAL_ID, next_tick)
+-            .unwrap()
+-            .is_none());
+-        assert!(world
+-            .eligible_mating_pair(MATERNAL_ID, PATERNAL_ID, next_tick)
+-            .unwrap()
+-            .is_some());
++        assert!(
++            world
++                .eligible_mating_pair(MATERNAL_ID, MATERNAL_ID, next_tick)
++                .unwrap()
++                .is_none()
++        );
++        assert!(
++            world
++                .eligible_mating_pair(MATERNAL_ID, PATERNAL_ID, next_tick)
++                .unwrap()
++                .is_some()
++        );
+         let newborn_id = OrganismId(world.next_organism_id);
+         world.try_advance_tick().unwrap();
+         let newborn = world.organism_registry().get(newborn_id).unwrap();
+@@ -16288,7 +16506,9 @@
+             )
+             .unwrap(),
+         );
+-        assert!(world.physical_contact_reachable(Vec3f::ZERO, world.entity(food).unwrap().position));
++        assert!(
++            world.physical_contact_reachable(Vec3f::ZERO, world.entity(food).unwrap().position)
++        );
+         assert_rejected(&mut world, food);
+         assert_eq!(world.entity(food).unwrap().carried_by, None);
+         // Harm never bypasses this physical constraint either.
+@@ -16494,7 +16714,7 @@
+     }
+     #[test]
+     fn profile_transfer_keeps_four_cues_in_present_perception_not_memory() {
+-        use crate::{create_canonical_new_game, CanonicalNewGameConfig, PlayerInteractionV1};
++        use crate::{CanonicalNewGameConfig, PlayerInteractionV1, create_canonical_new_game};
+         let asset = alife_core::FoundationWeightAsset::builtin_nano512_v1(
+             SensorProfile::GroundedObjectSlotsV1,
+         )

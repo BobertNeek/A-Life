@@ -1,0 +1,217 @@
+diff --git a/crates/alife_world/src/persistence.rs b/crates/alife_world/src/persistence.rs
+--- a/crates/alife_world/src/persistence.rs
++++ b/crates/alife_world/src/persistence.rs
+@@ -1053,18 +1053,11 @@
+     /// obligation: older saves predate it and load with an empty map.
+     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+     pub last_player_care: BTreeMap<u64, crate::PlayerCareReceipt>,
+-    /// Last familiarity record per organism. History, not a pending
+-    /// obligation: older saves predate it and load with an empty map,
+-    /// which reads as unknown, never as hostile or trusting.
+-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+-    pub last_familiarity: BTreeMap<u64, crate::PlayerFamiliarity>,
+     /// Older saves predate post-ingestion sensory continuity and have no sample.
+     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+     pub ingestion_observations: BTreeMap<u64, crate::IngestionObservation>,
+     #[serde(default, skip_serializing_if = "Option::is_none")]
+     pub player_hold: Option<crate::headless::player_hand::PlayerHold>,
+-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+-    pub toy_rolls: BTreeMap<u64, [f32; 2]>,
+     #[serde(default, skip_serializing_if = "Option::is_none")]
+     pub organism_records: Option<Vec<WorldOrganismRecord>>,
+     /// Exact saves distinguish external actors from lives whose biology must
+@@ -1265,13 +1258,9 @@
+             #[serde(default)]
+             last_player_care: BTreeMap<u64, crate::PlayerCareReceipt>,
+             #[serde(default)]
+-            last_familiarity: BTreeMap<u64, crate::PlayerFamiliarity>,
+-            #[serde(default)]
+             ingestion_observations: BTreeMap<u64, crate::IngestionObservation>,
+             #[serde(default)]
+             player_hold: Option<crate::headless::player_hand::PlayerHold>,
+-            #[serde(default)]
+-            toy_rolls: BTreeMap<u64, [f32; 2]>,
+             #[serde(default, deserialize_with = "deserialize_present_organism_records")]
+             organism_records: Option<Vec<WorldOrganismRecord>>,
+             #[serde(default)]
+@@ -1362,10 +1351,8 @@
+             last_creature_utterance_ticks: wire.last_creature_utterance_ticks,
+             pending_player_care: wire.pending_player_care,
+             last_player_care: wire.last_player_care,
+-            last_familiarity: wire.last_familiarity,
+             ingestion_observations: wire.ingestion_observations,
+             player_hold: wire.player_hold,
+-            toy_rolls: wire.toy_rolls,
+             organism_records: wire.organism_records,
+             external_actor_ids: wire.external_actor_ids,
+             ecology: wire.ecology,
+@@ -2125,20 +2112,25 @@
+             || max_present_organism_id == u64::MAX
+             || self.next_organism_id <= max_present_organism_id
+         {
++            eprintln!("private-world-diagnostic branch 1");
+             return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));
+         }
+         let Some(records) = &self.organism_records else {
+             if self.external_actor_ids.is_some() {
++                eprintln!("private-world-diagnostic branch 2");
+                 return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));
+             }
+             return Ok(());
+         };
+-        let registry = WorldOrganismRegistry::from_exact_records(records.clone())
+-            .map_err(map_organism_registry_error)?;
++        let registry = WorldOrganismRegistry::from_exact_records(records.clone()).map_err(|e| {
++            eprintln!("private registry admission: {e:?}");
++            map_organism_registry_error(e)
++        })?;
+         let mut objects_by_entity = BTreeMap::new();
+         let mut agent_bindings = BTreeMap::new();
+         for object in &self.objects {
+             if objects_by_entity.insert(object.id.raw(), object).is_some() {
++                eprintln!("private-world-diagnostic branch 3");
+                 return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));
+             }
+             if object.kind != WorldObjectKind::Agent {
+@@ -2152,6 +2144,7 @@
+                 .insert(organism_id.raw(), object.id)
+                 .is_some()
+             {
++                eprintln!("private-world-diagnostic branch 4");
+                 return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));
+             }
+         }
+@@ -2167,6 +2160,7 @@
+         for id in self.external_actor_ids.iter().flatten() {
+             id.validate()?;
+             if !external_ids.insert(id.raw()) || registered_ids.contains(&id.raw()) {
++                eprintln!("private-world-diagnostic branch 5");
+                 return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));
+             }
+         }
+@@ -2175,6 +2169,7 @@
+             .copied()
+             .collect::<BTreeSet<_>>();
+         if sealed_ids != agent_ids {
++            eprintln!("private-world-diagnostic branch 6");
+             return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));
+         }
+         // Habitat membership declares biological creatures, unlike external
+@@ -2185,15 +2180,18 @@
+             .iter()
+             .any(|membership| !registered_ids.contains(&membership.organism_id.raw()))
+         {
++            eprintln!("private-world-diagnostic branch 7");
+             return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));
+         }
+         for record in registry.iter() {
+             let Some(object) = objects_by_entity.get(&record.world_entity_id().raw()) else {
++                eprintln!("private-world-diagnostic branch 8");
+                 return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));
+             };
+             if object.kind != WorldObjectKind::Agent
+                 || object.organism_id != Some(record.organism_id())
+             {
++                eprintln!("private-world-diagnostic branch 9");
+                 return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));
+             }
+         }
+@@ -2208,7 +2206,6 @@
+             });
+         }
+         crate::WorldTerrain::restore(self.terrain, self.terrain_state.as_ref())?;
+-        self.validate_toy_rolls()?;
+         let mut ids = BTreeSet::new();
+         let mut labels = BTreeSet::new();
+         let mut max_id = 0_u64;
+@@ -2217,20 +2214,24 @@
+         for object in &self.objects {
+             object.validate()?;
+             if !ids.insert(object.id.raw()) || !labels.insert(object.label.clone()) {
++                eprintln!("private-world-diagnostic branch 10");
+                 return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));
+             }
+             max_id = max_id.max(object.id.raw());
+             if object.tracking_provenance.world_seed != self.seed
+                 || !spawn_sequences.insert(object.tracking_provenance.spawn_sequence)
+             {
++                eprintln!("private-world-diagnostic branch 11");
+                 return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));
+             }
+             max_spawn_sequence = max_spawn_sequence.max(object.tracking_provenance.spawn_sequence);
+         }
+         if self.next_entity_id <= max_id || (self.objects.is_empty() && self.next_entity_id == 0) {
++            eprintln!("private-world-diagnostic branch 12");
+             return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));
+         }
+         if self.next_spawn_sequence == 0 || self.next_spawn_sequence <= max_spawn_sequence {
++            eprintln!("private-world-diagnostic branch 13");
+             return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));
+         }
+         let max_utterance_id = self
+@@ -2240,18 +2241,21 @@
+             .max()
+             .unwrap_or(0);
+         if self.next_utterance_id == 0 || self.next_utterance_id <= max_utterance_id {
++            eprintln!("private-world-diagnostic branch 14");
+             return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));
+         }
+         let mut cooldown_organisms = BTreeSet::new();
+         for (organism, tick) in &self.last_creature_utterance_ticks {
+             organism.validate()?;
+             if tick.raw() > self.tick.raw() || !cooldown_organisms.insert(organism.raw()) {
++                eprintln!("private-world-diagnostic branch 15");
+                 return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));
+             }
+         }
+         for touched in &self.last_touched_entities {
+             touched.validate()?;
+             if !ids.contains(&touched.raw()) {
++                eprintln!("private-world-diagnostic branch 16");
+                 return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));
+             }
+         }
+@@ -2265,7 +2269,10 @@
+                 ));
+             }
+         }
+-        self.ecology.validate()?;
++        self.ecology.validate().map_err(|e| {
++            eprintln!("private ecology validation: {e}");
++            e
++        })?;
+         for c in &self.ecology.autonomous_critters {
+             if c.last_tick.raw() > self.tick.raw()
+                 || !self.objects.iter().any(|o| {
+@@ -2274,6 +2281,7 @@
+                         && o.organism_id.is_none()
+                 })
+             {
++                eprintln!("private-world-diagnostic branch 17");
+                 return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));
+             }
+         }
+@@ -2290,6 +2298,7 @@
+         }
+         for resource in &self.ecology.resources {
+             if !ids.contains(&resource.object_id.raw()) {
++                eprintln!("private-world-diagnostic branch 18");
+                 return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));
+             }
+         }
+@@ -2303,6 +2312,7 @@
+                     record.organism_id() == OrganismId(*id) && !record.lifecycle().is_alive()
+                 })
+             }) {
++                eprintln!("private-world-diagnostic branch 19");
+                 return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));
+             }
+         }
+@@ -2322,6 +2332,7 @@
+                 || event.sleep_recovery != 0.0
+                 || event.mating_opportunity != 0.0
+             {
++                eprintln!("private-world-diagnostic branch 20");
+                 return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));
+             }
+         }

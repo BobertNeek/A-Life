@@ -1,0 +1,11 @@
+diff --git a/crates/alife_world/src/headless/hands.rs b/crates/alife_world/src/headless/hands.rs
+--- a/crates/alife_world/src/headless/hands.rs
++++ b/crates/alife_world/src/headless/hands.rs
+@@ -230,7 +230,6 @@
+         )?;
+         // No fallible work after finish_action's final velocity commit.
+         for object in staged {
+-            self.toy_rolls.remove(&object.id.raw());
+             self.objects.insert(object.id.raw(), object);
+         }
+         result.grip_transfers = transfers;

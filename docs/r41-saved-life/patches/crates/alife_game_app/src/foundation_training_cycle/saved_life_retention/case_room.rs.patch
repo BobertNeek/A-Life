@@ -1,0 +1,261 @@
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/case_room.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/case_room.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/case_room.rs
+@@ -0,0 +1,256 @@
++//! New matched mixed-room public stimulus. It never calls apply_command, steps time, or changes a body/brain.
++//! Only scenario setup uses object IDs. No ID, label, desired response or hidden consequence enters a neural input.
++use alife_core::{OrganismId,Vec3f,WorldEntityId,LanguageTokenId};
++use alife_world::{HeadlessWorld,WorldEditorSpawnSpec,WorldObjectKind as K};
++use serde_json::{Value,json};
++type R<T>=Result<T,Box<dyn std::error::Error>>;
++// Registered R2 setup. No neural action, body displacement, update, step, reward, forced orientation, or call to an AI provider.
++#[derive(Clone,Copy)]
++struct Graded { layout: i8, danger: Option<bool>, tokens: &'static [u16] }
++fn graded_condition(m:&str)->Option<Graded>{
++ let (layout,danger,tokens):(i8,Option<bool>,&[u16])=match m{
++ "r2-grade-left"=>(1,Some(true),&[]),"r2-grade-right"=>(-1,Some(true),&[]),
++ "r2-grade-inert-left"=>(1,Some(false),&[]),"r2-grade-inert-right"=>(-1,Some(false),&[]),
++ _=>{let x=m.strip_prefix("r2-word-")?;let (side,x)=if let Some(x)=x.strip_prefix("mirror-"){(-1,x)}else{(1,x)};
++ let tokens:&[u16]=match x{"silence"=>&[],"approach-food"=>&[6,1],"approach-toy"=>&[6,2],"retreat-food"=>&[7,1],"retreat-toy"=>&[7,2],_=>return None};
++ (side,None,tokens)}};
++ Some(Graded{layout,danger,tokens})
++}
++fn graded_distance(a:Vec3f,b:Vec3f)->f32{((a.x-b.x).powi(2)+(a.y-b.y).powi(2)+(a.z-b.z).powi(2)).sqrt()}
++fn graded_setup(w:&mut HeadlessWorld,id:OrganismId,mode:&str,c:Graded)->R<Value>{
++ let t=w.tick();if t.raw()!=3074||id.raw()!=3||!w.audible_utterances().is_empty(){return Err("not the clean admitted L starting body".into())}
++ let mut s=w.clone();let old=s.object_snapshots();let body=old.iter().find(|o|o.organism_id==Some(id)).ok_or("missing source body")?.clone();
++ let food=WorldEntityId(2);let toy=WorldEntityId(4);let f=s.entity(food).ok_or("missing original edible")?;let y=s.entity(toy).ok_or("missing original toy")?;
++ if f.kind!=K::Food || !(f.nutrition>0.) || f.hazard_pain!=0. || y.kind!=K::ActivityToy || [f,y].iter().any(|o|o.consumed||o.carried_by.is_some()||o.activity_hold||o.teacher_channel.is_some()){return Err("inadmissible native referents".into())}
++ let (sin,cos)=body.body_yaw.sin_cos();let side=f32::from(c.layout);
++ let at=|forward:f32,left:f32|Vec3f::new(body.position.x+forward*cos-left*sin,body.position.y,body.position.z+forward*sin+left*cos);
++ // Two identical editor moves per object: the second produces zero velocity, rather than an artificial one-tick motion cue.
++ let (fwd,lat)=if c.danger.is_some(){(1.65,0.84)}else{(2.15,0.92)};
++ let fp=at(fwd,-lat*side);let yp=at(fwd,lat*side);
++ for(oid,p) in [(food,fp),(toy,yp)]{s.editor_move_object(oid,p)?;s.editor_move_object(oid,p)?;let z=s.entity(oid).ok_or("lost positioned object")?;
++ if graded_distance(z.position,p)>1e-4 || z.grounded_physical.velocity!=Vec3f::ZERO{return Err("move did not make stationary matched props".into())}}
++ let mut hazard=None;let mut hazard_json=Value::Null;
++ if let Some(dangerous)=c.danger{
++  let hp=at(0.12,0.59*side);let radius=0.61;let dose=if dangerous{0.16}else{0.};
++  let h=s.editor_spawn_object(WorldEditorSpawnSpec{label:"private contact sample".into(),kind:K::Hazard,organism_id:None,position:hp,nutrition:0.,hazard_pain:dose,radius,token_id:None})?;
++  let mut g=s.entity(h).ok_or("missing graded contact surface")?.grounded_physical;g.surface_temperature=0.84;s.set_grounded_physical_properties(h,g)?;
++  let opening_depth=radius-graded_distance(body.position,hp);
++  // From this acute geometry the safe-food ray points OUT immediately, not back through the heat after departure.
++  let vx=fp.x-body.position.x;let vz=fp.z-body.position.z;let nx=body.position.x-hp.x;let nz=body.position.z-hp.z;
++  let outdot=(vx*nx+vz*nz)/(vx.hypot(vz)*nx.hypot(nz));if !(0.007..0.009).contains(&opening_depth) || outdot<=0.20{return Err("missing measured graded clearance or outward food corridor".into())}
++  hazard=Some(h);hazard_json=json!({"id":h,"p":hp,"radius":radius,"surface_temperature":0.84,"contact":true,"hidden_pain":dose,"opening_penetration_m":opening_depth,"initial_radial_cosine_toward_food":outdot});
++ }
++ // This study is registered only for the historical flat/non-heightfield save. A terrain-enabled save needs an independently qualified route.
++ if s.terrain().is_some(){return Err("graded study requires original unbound heightfield".into())}
++ let rr=alife_world::LocomotionLimits::default().body_radius;
++ let segment_distance=|p:Vec3f,q:Vec3f,x:Vec3f|{let (dx,dz)=(q.x-p.x,q.z-p.z);let u=(((x.x-p.x)*dx+(x.z-p.z)*dz)/(dx*dx+dz*dz)).clamp(0.,1.);graded_distance(Vec3f::new(p.x+u*dx,p.y,p.z+u*dz),x)};
++ for o in &old{if o.kind==K::Obstacle&&!o.consumed && ([fp,yp].iter().any(|p|segment_distance(body.position,*p,o.position)<=o.radius+rr)
++ || graded_distance(body.position,o.position)<=o.radius+rr+0.20){return Err("solid blocks first-four-step envelope or straight physical corridor".into())}}
++ let before=s.sensory_report(id,t)?;if !before.visible_entities.iter().any(|v|v.id==food)||!before.visible_entities.iter().any(|v|v.id==toy){return Err("both real referents must be visible at opening".into())}
++ let expected:Vec<_>=hazard.into_iter().collect();if before.contact_entities!=expected{return Err("incorrect opening contact or interfering surface".into())}
++ if before.core_snapshot.language_context.heard_tokens.iter().any(|v|v.is_some()){return Err("pre-existing heard word".into())}
++ let initial=serde_json::to_value(&before.core_snapshot)?;let digest=|v:&Value|->R<String>{Ok(format!("{:x}",<sha2::Sha256 as sha2::Digest>::digest(serde_json::to_vec(v)?)))};
++ if !c.tokens.is_empty(){let a=c.tokens.iter().map(|v|LanguageTokenId::new(*v)).collect::<Result<Vec<_>,_>>()?;s.emit_player_tokens(Some(id),at(0.25,0.),a)?;}
++ let after=s.sensory_report(id,t)?;let heard=after.core_snapshot.language_context.heard_tokens.iter().flatten().map(|u|u.token_id).collect::<Vec<_>>();
++ if heard!=c.tokens.iter().map(|v|u32::from(*v)).collect::<Vec<_>>() || after.contact_entities!=before.contact_entities || s.tick()!=t || s.entity(body.id)!=Some(&body)||s.organism_registry().get(id)!=w.organism_registry().get(id){return Err("cue, body, contact, or time mismatch".into())}
++ for o in &old{if o.id!=food&&o.id!=toy&&s.entity(o.id)!=Some(o){return Err("unrelated original world object changed".into())}}
++ let result=json!({"kind":"prospective-r2-grade-or-words-v1","mode":mode,"at_tick":t,"body_position":body.position,"body_yaw":body.body_yaw,"food":{"id":food,"p":fp,"nutrition":s.entity(food).unwrap().nutrition},"toy":{"id":toy,"p":yp},"hazard":hazard_json,"heard":heard,"before_sound_sha256":digest(&initial)?,"after_sound_sha256":digest(&serde_json::to_value(&after.core_snapshot)?)?,"biological_choices":0,"forced_action":false,"body_changed":false,"flat_unblocked_first_20cm_and_centre_to_both_referents":true,"visible":after.visible_entities.iter().map(|o|o.id.raw()).collect::<Vec<_>>()});
++ *w=s;Ok(result)
++}
++
++// Source-only opt-in. Append inside lv8_matched_room.rs. No steps/sampler, teacher policy, target injection, or brain access.
++fn reference_probe(w: &mut HeadlessWorld, id: OrganismId, mode: &str) -> R<Value> {
++    let tail = mode.strip_prefix("r12-word-").ok_or("wrong R12 namespace")?;
++    let (mirror, tail) = tail.strip_prefix("mirror-").map_or((false, tail), |p| (true, p));
++    let (layout, phrase) = ["food-obstacle", "food", "ball", "obstacle", "empty"]
++        .into_iter().find_map(|n| tail.strip_prefix(n)?.strip_prefix('-').map(|p| (n,p)))
++        .ok_or("unknown R12 physical inventory")?;
++    let tokens: &[u16] = match phrase {
++        "silence" => &[], "approach-food" => &[6,1], "retreat-food" => &[7,1],
++        "approach-toy" => &[6,2], "retreat-toy" => &[7,2], "approach-obstacle" => &[6,4],
++        "retreat-obstacle" => &[7,4], "approach-fruit" => &[6,16], "retreat-fruit" => &[7,16],
++        "approach-ball" => &[6,14], "retreat-ball" => &[7,14],
++        _ => return Err("unregistered literal R12 cue".into()),
++    };
++    let t = w.tick();
++    if t.raw()!=3074 || id.raw()!=3 || !w.audible_utterances().is_empty() || w.terrain().is_some() {
++        return Err("wrong starting room, receiver, or nonquiet prehistory".into());
++    }
++    let mut s=w.clone();
++    let old=w.object_snapshots();
++    let a=old.iter().find(|o|o.organism_id==Some(id)).ok_or("no source receiver")?;
++    let others=[(2,K::Food),(3,K::Ball),(4,K::ActivityToy),(6,K::Obstacle),(7,K::Obstacle),(9,K::Food),(10,K::Food)];
++    let relevant=|k:K|matches!(k,K::Food|K::ActivityToy|K::Ball|K::Obstacle);
++    if old.len()!=10 || old.iter().filter(|o|relevant(o.kind)).count()!=others.len()
++        || others.iter().any(|&(i,k)| !old.iter().any(|o| o.id.raw()==i && o.kind==k && o.consumed==(i==10)
++                && o.carried_by.is_none() && !o.activity_hold && o.teacher_channel.is_none()))
++        || s.player_held_object().is_some() {
++        return Err("unexpected original inventory or carrier".into());
++    }
++    // Native ecology owns the original remote food #2 and spent original moving food #10. Clear these
++    // two fixture registrations identically in every arm; no mutation of any original creature or sensory channel.
++    let mut e=s.ecology().clone();
++    if e.resources.len()!=1 || e.resources[0].object_id.raw()!=2 || e.autonomous_critters.len()!=1
++        || e.autonomous_critters[0].object_id.raw()!=10 || !e.spawn_policies.is_empty(){
++        return Err("unexpected food lifecycle, prey, or active respawn policy".into());
++    }
++    e.resources.clear(); e.autonomous_critters.clear();
++    s.configure_ecology(e)?;
++    for (i,_) in others { s.editor_remove_object(WorldEntityId(i))?; }
++    let (sn,cs)=a.body_yaw.sin_cos();
++    let at=|f:f32,l:f32|Vec3f::new(a.position.x+f*cs-l*sn,a.position.y,a.position.z+f*sn+l*cs);
++    let sign=if mirror {-1.0}else{1.0};
++    // Food and Ball each occupy the IDENTICAL target slot in their one-object arms; neither room ID nor
++    // side determines the correct noun. Across food-only vs food+obstacle the same food keeps its position.
++    let primary=at(2.20,sign*1.25); let other=at(2.20,-sign*1.25);
++    let f=s.editor_spawn_object(WorldEditorSpawnSpec{label:"reference sample A".into(),kind:K::Food,organism_id:None,position:primary,nutrition:0.45,hazard_pain:0.,radius:0.32,token_id:None})?;
++    s.set_food_variety(f,alife_world::FoodVariety::Fruit)?;
++    let y=s.spawn_toy("reference sample B",primary,true)?;
++    let o=s.editor_spawn_object(WorldEditorSpawnSpec{label:"reference sample C".into(),kind:K::Obstacle,organism_id:None,position:other,nutrition:0.,hazard_pain:0.,radius:0.32,token_id:None})?;
++    let mut keep=Vec::new();
++    let mut subjects=Vec::new();
++    let (mut food,mut toy,mut obstacle)=(Value::Null,Value::Null,Value::Null);
++    // Allocate exactly the same three entities in the same order before any removal in every arm.
++    for (entity,kind,p,present) in [(f,K::Food,primary,matches!(layout,"food"|"food-obstacle")),
++            (y,K::Ball,primary,layout=="ball"),(o,K::Obstacle,other,matches!(layout,"obstacle"|"food-obstacle"))] {
++        if !present { s.editor_remove_object(entity)?; continue; }
++        let real=s.entity(entity).ok_or("present referent is absent")?;
++        if real.kind!=kind || real.position!=p || real.consumed || real.carried_by.is_some() || real.hazard_pain!=0. {
++            return Err("invalid actual material, location, ownership or hidden harm".into());
++        }
++        let mut obj=json!({"kind":kind,"id":entity,"p":real.position});
++        if kind==K::Food{obj["nutrition"]=json!(real.nutrition);food=obj.clone();}
++        if kind==K::Ball{toy=obj.clone();}
++        if kind==K::Obstacle{obstacle=obj.clone();}
++        keep.push(entity);subjects.push(obj);
++    }
++    let roster=s.object_snapshots();
++    if roster.len()!=3+keep.len() || roster.iter().filter(|v|relevant(v.kind)).any(|v|!keep.contains(&v.id))
++        || old.iter().filter(|v|!relevant(v.kind)).any(|v|s.entity(v.id)!=Some(v)) {
++        return Err("wrong global physical inventory or changed unrelated body".into());
++    }
++    let pre=s.sensory_report(id,t)?;
++    let vis=pre.visible_entities.iter().map(|v|v.id).collect::<Vec<_>>();
++    if vis.len()!=keep.len()||keep.iter().any(|v|!vis.contains(v))||!pre.contact_entities.is_empty()
++        ||pre.core_snapshot.language_context.heard_tokens.iter().any(Option::is_some) {
++        return Err("visible referents differ from clean physical conditions, unexpected hearing or contact".into());
++    }
++    if !tokens.is_empty() {
++        s.emit_player_tokens(Some(id),at(0.34,0.14),tokens.iter().map(|v|LanguageTokenId::new(*v)).collect::<Result<Vec<_>,_>>()?)?;
++    }
++    let post=s.sensory_report(id,t)?;
++    let heard=post.core_snapshot.language_context.heard_tokens.iter().flatten().map(|u|u.token_id).collect::<Vec<_>>();
++    if heard!=tokens.iter().map(|u|u32::from(*u)).collect::<Vec<_>>() || post.visible_entities.iter().map(|v|v.id).collect::<Vec<_>>()!=vis
++        || post.contact_entities!=pre.contact_entities || s.tick()!=t || s.entity(a.id)!=Some(a)
++        || s.organism_registry().get(id)!=w.organism_registry().get(id) || s.object_snapshots()!=roster {
++        return Err("wrong actual hearing, scene changed, or receiver advanced".into());
++    }
++    let digest=|v:&alife_core::SensorySnapshot|->R<String>{Ok(format!("{:x}",<sha2::Sha256 as sha2::Digest>::digest(serde_json::to_vec(v)?)))};
++    let ans=json!({"kind":"R12-crossed-physical-reference-v1","mode":mode,"mirror":mirror,
++        "at_tick":t,"body_position":a.position,"body_yaw":a.body_yaw,"food":food,"toy":toy,"obstacle":obstacle,"hazard":null,
++        "subjects":subjects,"slots":{"primary":primary,"other":other},"visible":vis,"heard":heard,
++        "before_sound_sha256":digest(&pre.core_snapshot)?,"after_sound_sha256":digest(&post.core_snapshot)?,
++        "biological_choices":0,"forced_action":false,"body_changed":false,"global_reference_counts_verified":true,
++        "common_removed_source_ids":[2,3,4,6,7,9,10],"common_allocated_ids":[f,y,o],
++        "physical_control":"zero or named native Fruit/Ball/Obstacle entries globally, empty sensory field otherwise; retained agents and remote hazard unchanged; native sensory report, no scored IDs or answer fed to neural input"});
++    *w=s;Ok(ans)
++}
++
++// Source-only opt-in. Append inside lv8_matched_room.rs. No steps/sampler, teacher policy, target injection, or brain access.
++fn reference14(w: &mut HeadlessWorld, id: OrganismId, mode: &str) -> R<Value> {
++    let tail = mode.strip_prefix("r14-word-").ok_or("wrong R14 namespace")?;
++    let (mirror, tail) = tail.strip_prefix("mirror-").map_or((false, tail), |p| (true, p));
++    let layout=tail.strip_suffix("-silence").ok_or("R14 accepts only genuine silence")?;
++    if !matches!(layout,"root"|"scent-decoy"|"decoy"|"root-scent-decoy"){return Err("unknown R14 inventory".into());}
++    let tokens:&[u16]=&[];
++    let t = w.tick();
++    if t.raw()!=3074 || id.raw()!=3 || !w.audible_utterances().is_empty() || w.terrain().is_some() {
++        return Err("wrong starting room, receiver, or nonquiet prehistory".into());
++    }
++    let mut s=w.clone();
++    let old=w.object_snapshots();
++    let a=old.iter().find(|o|o.organism_id==Some(id)).ok_or("no source receiver")?;
++    let others=[(2,K::Food),(3,K::Ball),(4,K::ActivityToy),(6,K::Obstacle),(7,K::Obstacle),(9,K::Food),(10,K::Food)];
++    let relevant=|k:K|matches!(k,K::Food|K::ActivityToy|K::Ball|K::Obstacle);
++    if old.len()!=10 || old.iter().filter(|o|relevant(o.kind)).count()!=others.len()
++        || others.iter().any(|&(i,k)| !old.iter().any(|o| o.id.raw()==i && o.kind==k && o.consumed==(i==10)
++                && o.carried_by.is_none() && !o.activity_hold && o.teacher_channel.is_none()))
++        || s.player_held_object().is_some() {
++        return Err("unexpected original inventory or carrier".into());
++    }
++    // Native ecology owns the original remote food #2 and spent original moving food #10. Clear these
++    // two fixture registrations identically in every arm; no mutation of any original creature or sensory channel.
++    let mut e=s.ecology().clone();
++    if e.resources.len()!=1 || e.resources[0].object_id.raw()!=2 || e.autonomous_critters.len()!=1
++        || e.autonomous_critters[0].object_id.raw()!=10 || !e.spawn_policies.is_empty(){
++        return Err("unexpected food lifecycle, prey, or active respawn policy".into());
++    }
++    e.resources.clear(); e.autonomous_critters.clear();
++    s.configure_ecology(e)?;
++    for (i,_) in others { s.editor_remove_object(WorldEntityId(i))?; }
++    let (sn,cs)=a.body_yaw.sin_cos();
++    let at=|f:f32,l:f32|Vec3f::new(a.position.x+f*cs-l*sn,a.position.y,a.position.z+f*sn+l*cs);
++    let sign=if mirror {-1.0}else{1.0};
++    // The single physical subject is allocated FIRST, identically identified, equally sized and positioned across all arms.
++    // The second object is allocated then removed in all single-subject arms to fix allocator state. No word is emitted.
++    let primary=at(2.35,0.80*sign);let other=at(2.35,-0.80*sign);
++    let is_food=matches!(layout,"root"|"root-scent-decoy");
++    let kind=if is_food{K::Food}else{K::ActivityToy};
++    let obj=s.editor_spawn_object(WorldEditorSpawnSpec{label:"sample A".into(),kind,organism_id:None,position:primary,
++        nutrition:if is_food{0.65}else{0.0},hazard_pain:0.,radius:0.32,token_id:None})?;
++    let comp=s.editor_spawn_object(WorldEditorSpawnSpec{label:"sample B".into(),kind:K::ActivityToy,organism_id:None,position:other,
++        nutrition:0.,hazard_pain:0.,radius:0.32,token_id:None})?;
++    if is_food{s.set_food_variety(obj,alife_world::FoodVariety::Root)?;}
++    let mut keep=Vec::new();let mut subjects=Vec::new();
++    let (mut food,mut toy)=(Value::Null,Value::Null);let obstacle=Value::Null;
++    for (ent,k,p,present,odor) in [(obj,kind,primary,true,layout=="scent-decoy"),(comp,K::ActivityToy,other,layout=="root-scent-decoy",true)]{
++        if !present{s.editor_remove_object(ent)?;continue;}
++        if k==K::ActivityToy {
++            let mut mat=s.entity(ent).ok_or("missing R14 decoy")?.grounded_physical;
++            if mat.material!=[0.2,0.8,0.2]||mat.shape!=[0.9,0.65,0.6]||mat.chemical!=[0.;3]{return Err("unrecognized native ActivityToy template".into());}
++            if odor{mat.chemical[0]=0.8;mat.chemical[1]=0.25;s.set_grounded_physical_properties(ent,mat)?;}
++        }
++        let real=s.entity(ent).ok_or("missing R14 physical subject")?;let mat=real.grounded_physical;
++        if real.kind!=k||real.position!=p||real.consumed||real.carried_by.is_some()||real.hazard_pain!=0.
++            ||(k==K::Food&&(real.nutrition!=0.65||mat.chemical!=[0.8,0.25,0.35]||mat.shape!=[0.45,0.9,0.45]||mat.material!=[0.35,0.15,0.65]))
++            ||(k==K::ActivityToy&&(real.nutrition!=0.||mat.chemical!=if odor{[0.8,0.25,0.0]}else{[0.;3]})){
++            return Err("R14 misbound physical appearance, odor, actual nutrition, location or ownership".into());}
++        let m=json!({"kind":k,"id":ent,"p":p,"nutrition":real.nutrition,"material":mat.material,"shape":mat.shape,"color":mat.color,"chemical":mat.chemical});
++        if k==K::Food{food=m.clone();}else{toy=m.clone();}keep.push(ent);subjects.push(m);
++    }
++    let roster=s.object_snapshots();
++    if roster.len()!=3+keep.len() || roster.iter().filter(|v|relevant(v.kind)).any(|v|!keep.contains(&v.id))
++        || old.iter().filter(|v|!relevant(v.kind)).any(|v|s.entity(v.id)!=Some(v)) {
++        return Err("wrong global physical inventory or changed unrelated body".into());
++    }
++    let pre=s.sensory_report(id,t)?;
++    let vis=pre.visible_entities.iter().map(|v|v.id).collect::<Vec<_>>();
++    if vis.len()!=keep.len()||keep.iter().any(|v|!vis.contains(v))||!pre.contact_entities.is_empty()
++        ||pre.core_snapshot.language_context.heard_tokens.iter().any(Option::is_some) {
++        return Err("visible referents differ from clean physical conditions, unexpected hearing or contact".into());
++    }
++    let post=s.sensory_report(id,t)?;
++    let heard=post.core_snapshot.language_context.heard_tokens.iter().flatten().map(|u|u.token_id).collect::<Vec<_>>();
++    if heard!=tokens.iter().map(|u|u32::from(*u)).collect::<Vec<_>>() || post.visible_entities.iter().map(|v|v.id).collect::<Vec<_>>()!=vis
++        || post.contact_entities!=pre.contact_entities || s.tick()!=t || s.entity(a.id)!=Some(a)
++        || s.organism_registry().get(id)!=w.organism_registry().get(id) || s.object_snapshots()!=roster {
++        return Err("wrong actual hearing, scene changed, or receiver advanced".into());
++    }
++    let digest=|v:&alife_core::SensorySnapshot|->R<String>{Ok(format!("{:x}",<sha2::Sha256 as sha2::Digest>::digest(serde_json::to_vec(v)?)))};
++    let ans=json!({"kind":"R14-root-vs-odor-matched-activitytoy-v1","mode":mode,"mirror":mirror,
++        "at_tick":t,"body_position":a.position,"body_yaw":a.body_yaw,"food":food,"toy":toy,"obstacle":obstacle,"hazard":null,
++        "opening_smell_bits":pre.core_snapshot.channels.smell_chemistry.map(f32::to_bits),"layout":layout,"subjects":subjects,"slots":{"primary":primary,"other":other},"visible":vis,"heard":heard,
++        "before_sound_sha256":digest(&pre.core_snapshot)?,"after_sound_sha256":digest(&post.core_snapshot)?,
++        "biological_choices":0,"forced_action":false,"body_changed":false,"global_reference_counts_verified":true,
++        "common_removed_source_ids":[2,3,4,6,7,9,10],"common_allocated_ids":[obj,comp],
++        "physical_control":"native Root vs real ActivityToy same object ID, position, radius and isolated smell-chemistry bands; object photos/texture/shape and taste differ; observer metadata not brain input"});
++    *w=s;Ok(ans)
++}
++
++// The typed manifest registry is the only caller; no historical runner toggles.
++pub(super) fn configure(world: &mut HeadlessWorld, owner: OrganismId, case: &str) -> R<Value> {
++    if let Some(spec) = graded_condition(case) { return graded_setup(world, owner, case, spec); }
++    if case.starts_with("r12-word-") { return reference_probe(world, owner, case); }
++    if case.starts_with("r14-word-") { return reference14(world, owner, case); }
++    Err("unknown released room fixture".into())
++}

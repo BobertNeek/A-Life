@@ -1,0 +1,713 @@
+diff --git a/crates/alife_game_app/src/production_voxel_renderer/menu.rs b/crates/alife_game_app/src/production_voxel_renderer/menu.rs
+--- a/crates/alife_game_app/src/production_voxel_renderer/menu.rs
++++ b/crates/alife_game_app/src/production_voxel_renderer/menu.rs
+@@ -1,15 +1,11 @@
+ //! A small modal player menu. Debug rails remain separate; world truth stays in runtime.
+-mod field_camera;
+-mod garden_survey;
+ use super::*;
+ use accesskit::{Action as AccessibleAction, Role};
+ use bevy::a11y::{AccessibilityNode, ActionRequest};
+ use bevy::ecs::message::MessageCursor;
+ use bevy::input::{keyboard::KeyboardInput, ButtonState};
+ use bevy::prelude::*;
+-#[cfg(test)]
+-use bevy::ui::BorderColor;
+-use bevy::ui::{BorderRadius, FocusPolicy, UiRect};
++use bevy::ui::{BorderColor, BorderRadius, FocusPolicy, UiRect};
+ 
+ #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+ enum Screen {
+@@ -18,8 +14,6 @@
+     Main,
+     Speed,
+     Settings,
+-    Photos,
+-    Garden,
+     ConfirmLoad,
+ }
+ 
+@@ -34,48 +28,19 @@
+     Speed,
+     Settings,
+     Quit,
+-    Photos,
+-    Garden,
+-    VisitBed,
+-    FindSoil,
+-    NextBed,
+-    PreviousBed,
+-    Expose,
+-    Older,
+-    Newer,
+     OneX,
+     Max,
+     Focus,
+     Back,
+ }
+ 
+-const MAIN: [(Action, &str); 8] = [
++const MAIN: [(Action, &str); 6] = [
+     (Action::Play, "Play"),
+     (Action::Save, "Save"),
+     (Action::Load, "Load"),
+     (Action::Speed, "Speed"),
+     (Action::Settings, "Settings"),
+-    (Action::Photos, "Photos"),
+-    (Action::Garden, "Garden"),
+     (Action::Quit, "Quit"),
+-];
+-const GARDEN: [(Action, &str); 5] = [
+-    (Action::PreviousBed, "Previous planted bed"),
+-    (Action::NextBed, "Next planted bed"),
+-    (Action::VisitBed, "Visit the marked bed"),
+-    (Action::FindSoil, "Find soil for another planting"),
+-    (Action::Back, "Back"),
+-];
+-impl Screen {
+-    fn illustrated(self) -> bool {
+-        matches!(self, Self::Photos | Self::Garden)
+-    }
+-}
+-const PHOTOS: [(Action, &str); 4] = [
+-    (Action::Expose, "Take a field photograph"),
+-    (Action::Older, "Previous photograph"),
+-    (Action::Newer, "Next photograph"),
+-    (Action::Back, "Back"),
+ ];
+ const SPEED: [(Action, &str); 3] = [
+     (Action::OneX, "1x"),
+@@ -141,8 +106,6 @@
+     accessible_reader: MessageCursor<ActionRequest>,
+     accessible_action: Option<Action>,
+     pub(super) pending: Option<Action>,
+-    plate_action: Option<Action>,
+-    garden_action: Option<Action>,
+     #[cfg(feature = "gpu-runtime")]
+     quit: Option<QuitCheckpoint>,
+ }
+@@ -198,8 +161,6 @@
+     fn rows(&self) -> &'static [(Action, &'static str)] {
+         match self.screen {
+             Screen::Main => &MAIN,
+-            Screen::Photos => &PHOTOS,
+-            Screen::Garden => &GARDEN,
+             Screen::Speed => &SPEED,
+             Screen::Settings => &SETTINGS,
+             Screen::ConfirmLoad => &CONFIRM_LOAD,
+@@ -309,8 +270,6 @@
+         let mut outcome = InputOutcome::default();
+         // A request belongs to this snapshot only. Gated/busy requests cannot
+         // become consent after the modal or publication state changes.
+-        self.plate_action = None;
+-        self.garden_action = None;
+         let accessible_action = self.accessible_action.take();
+         let gated = self.release_gate;
+         if gated && !left_down && keyboard.get_pressed().next().is_none() {
+@@ -372,11 +331,7 @@
+                 action = Some(Action::Back);
+             }
+         } else if self.screen == Screen::Closed {
+-            if keyboard.just_pressed(KeyCode::F6) {
+-                action = Some(Action::Garden);
+-            } else if keyboard.just_pressed(KeyCode::F5) {
+-                action = Some(Action::Expose);
+-            } else if keyboard.just_pressed(KeyCode::KeyL) {
++            if keyboard.just_pressed(KeyCode::KeyL) {
+                 action = Some(Action::Load);
+             }
+         } else {
+@@ -426,29 +381,6 @@
+             }
+             Some(Action::CancelLoad) => outcome.resume = self.cancel_load(),
+             Some(Action::Play) => outcome.resume = Some(self.close(true)),
+-            Some(Action::Garden) => {
+-                if self.screen == Screen::Closed {
+-                    self.open(paused);
+-                    outcome.opening = true;
+-                }
+-                self.screen = Screen::Garden;
+-                self.selected = 0;
+-                self.garden_action = Some(Action::Garden);
+-            }
+-            Some(
+-                a @ (Action::PreviousBed | Action::NextBed | Action::VisitBed | Action::FindSoil),
+-            ) => {
+-                self.garden_action = Some(a);
+-            }
+-            Some(Action::Photos) => {
+-                self.screen = Screen::Photos;
+-                self.selected = 0;
+-                self.plate_action = Some(Action::Photos);
+-            }
+-            Some(a @ (Action::Expose | Action::Older | Action::Newer)) => {
+-                self.plate_action = Some(a);
+-                self.captured = true;
+-            }
+             Some(Action::Speed) => {
+                 self.screen = Screen::Speed;
+                 self.selected = 0;
+@@ -489,6 +421,8 @@
+ struct MenuRoot(Screen);
+ #[derive(Component)]
+ struct MenuPanel(Screen);
++#[derive(Component)]
++struct StateLabel;
+ #[derive(Component)]
+ struct SelectionLamp(Action);
+ #[derive(Component)]
+@@ -510,7 +444,6 @@
+     }
+     app.insert_resource(state);
+     spawn_ui(app.world_mut());
+-    field_camera::install(app);
+     app.add_systems(
+         Update,
+         handle_input.in_set(ProductionVoxelPresentationSet::Input),
+@@ -553,7 +486,16 @@
+         ..default()
+     }
+ }
+-use crate::production_voxel_renderer::sanctuary_ink::{self as ink, bevel};
++fn bevel(raised: bool) -> BorderColor {
++    let light = Color::srgb(0.44, 0.49, 0.48);
++    let dark = Color::srgb(0.055, 0.080, 0.092);
++    BorderColor {
++        top: if raised { light } else { dark },
++        left: if raised { light } else { dark },
++        right: if raised { dark } else { light },
++        bottom: if raised { dark } else { light },
++    }
++}
+ fn accessible(role: Role, label: &str) -> AccessibilityNode {
+     let mut node = accesskit::Node::new(role);
+     node.set_label(label);
+@@ -567,100 +509,11 @@
+     AccessibilityNode(node)
+ }
+ 
+-#[derive(Resource)]
+-struct MenuGlyphs {
+-    play: Handle<Image>,
+-    fast: Handle<Image>,
+-    pause: Handle<Image>,
+-    back: Handle<Image>,
+-    accept: Handle<Image>,
+-    warning: Handle<Image>,
+-    pending: Handle<Image>,
+-    saved: Handle<Image>,
+-    shutter: Handle<Image>,
+-    earlier: Handle<Image>,
+-    later: Handle<Image>,
+-    visit: Handle<Image>,
+-    sow: Handle<Image>,
+-}
+-
+-impl MenuGlyphs {
+-    fn load(world: &mut World) -> Self {
+-        use bevy::image::{CompressedImageFormats, ImageSampler, ImageType};
+-        world.init_resource::<Assets<Image>>();
+-        let mut load = |png: &[u8]| {
+-            world.resource_mut::<Assets<Image>>().add(
+-                Image::from_buffer(
+-                    png,
+-                    ImageType::Extension("png"),
+-                    CompressedImageFormats::NONE,
+-                    true,
+-                    ImageSampler::linear(),
+-                    RenderAssetUsages::default(),
+-                )
+-                .expect("embedded menu glyph"),
+-            )
+-        };
+-        Self {
+-            visit: load(include_bytes!("../../../../assets/ui/orchard/return.png")),
+-            sow: load(include_bytes!("../../../../assets/ui/orchard/sow.png")),
+-            shutter: load(include_bytes!(
+-                "../../../../assets/ui/field_camera/shutter.png"
+-            )),
+-            earlier: load(include_bytes!("../../../../assets/ui/kinship/previous.png")),
+-            later: load(include_bytes!("../../../../assets/ui/kinship/next.png")),
+-            play: load(include_bytes!(
+-                "../../../../assets/ui/status_hud/playing.png"
+-            )),
+-            fast: load(include_bytes!("../../../../assets/ui/status_hud/fast.png")),
+-            pause: load(include_bytes!(
+-                "../../../../assets/ui/status_hud/paused.png"
+-            )),
+-            back: load(include_bytes!(
+-                "../../../../assets/ui/speech_composer/cancel.png"
+-            )),
+-            accept: load(include_bytes!(
+-                "../../../../assets/ui/speech_composer/send.png"
+-            )),
+-            warning: load(include_bytes!(
+-                "../../../../assets/ui/status_hud/warning.png"
+-            )),
+-            pending: load(include_bytes!(
+-                "../../../../assets/ui/care_dock/pending.png"
+-            )),
+-            saved: load(include_bytes!(
+-                "../../../../assets/ui/care_dock/placement.png"
+-            )),
+-        }
+-    }
+-
+-    fn action(&self, action: Action) -> &Handle<Image> {
+-        match action {
+-            Action::Expose => &self.shutter,
+-            Action::Older | Action::PreviousBed => &self.earlier,
+-            Action::Newer | Action::NextBed => &self.later,
+-            Action::VisitBed => &self.visit,
+-            Action::FindSoil => &self.sow,
+-            Action::OneX => &self.play,
+-            Action::Max => &self.fast,
+-            Action::Focus => &self.pause,
+-            Action::ConfirmLoad => &self.accept,
+-            _ => &self.back,
+-        }
+-    }
+-}
+-
+ fn spawn_ui(world: &mut World) {
+-    let glyphs = MenuGlyphs::load(world);
+-    world.init_resource::<garden_survey::Survey>();
+-    let specimens = garden_survey::Specimens::load(world);
+-    world.insert_resource(specimens);
+     for (screen, rows) in [
+         (Screen::Main, MAIN.as_slice()),
+         (Screen::Speed, SPEED.as_slice()),
+         (Screen::Settings, SETTINGS.as_slice()),
+-        (Screen::Photos, PHOTOS.as_slice()),
+-        (Screen::Garden, GARDEN.as_slice()),
+         (Screen::ConfirmLoad, CONFIRM_LOAD.as_slice()),
+     ] {
+         world
+@@ -675,7 +528,7 @@
+                     justify_content: JustifyContent::Center,
+                     ..default()
+                 },
+-                BackgroundColor(Color::srgba(0.07, 0.105, 0.17, 0.52)),
++                BackgroundColor(Color::srgba(0.027, 0.041, 0.051, 0.94)),
+                 GlobalZIndex(100),
+             ))
+             .with_children(|root| {
+@@ -687,35 +540,29 @@
+                             Screen::Main => "Menu",
+                             Screen::Speed => "Speed",
+                             Screen::Settings => "Settings",
+-                            Screen::Photos => "Your field photographs",
+-                            Screen::Garden => "Map of your planted garden",
+                             Screen::ConfirmLoad => LOAD_WARNING,
+                             Screen::Closed => unreachable!(),
+                         },
+                     ),
+                     panel_node(),
+-                    BackgroundColor(ink::GLASS),
++                    BackgroundColor(Color::srgb(0.13, 0.18, 0.20)),
+                     bevel(true),
+                 ))
+                 .with_children(|panel| {
+-                    if screen == Screen::Garden {
+-                        garden_survey::mount(panel, &glyphs.sow);
+-                    }
+-                    if screen == Screen::Photos {
+-                        field_camera::paper(panel, &glyphs.shutter);
+-                    }
+                     if screen == Screen::ConfirmLoad {
+                         panel.spawn((
+                             Name::new(
+                                 "Load warning: current world replacement and unsaved changes",
+                             ),
+                             LoadWarning,
+-                            ImageNode::new(glyphs.warning.clone()),
+-                            accessible(Role::Image, LOAD_WARNING),
++                            Text::new(LOAD_WARNING),
++                            TextFont {
++                                font_size: 14.0,
++                                ..default()
++                            },
++                            TextColor(Color::srgb(0.96, 0.76, 0.48)),
+                             Node {
+-                                height: Val::Px(36.0),
+-                                width: Val::Px(36.0),
+-                                align_self: AlignSelf::Center,
++                                height: Val::Px(48.0),
+                                 flex_shrink: 0.0,
+                                 ..default()
+                             },
+@@ -745,11 +592,28 @@
+                                     index,
+                                 },
+                                 button_node(),
+-                                BackgroundColor(ink::WELL),
++                                BackgroundColor(Color::srgb(0.047, 0.072, 0.083)),
+                                 bevel(false),
+                             ))
+                             .with_children(|button| {
+-                                if matches!(action, Action::OneX | Action::Max | Action::Focus) {
++                                if action == Action::Focus {
++                                    button.spawn((
++                                        StateLabel,
++                                        Text::new("On"),
++                                        TextFont {
++                                            font_size: 14.0,
++                                            ..default()
++                                        },
++                                        TextColor(Color::srgb(0.55, 0.85, 0.78)),
++                                        Node {
++                                            position_type: PositionType::Absolute,
++                                            right: Val::Px(12.0),
++                                            bottom: Val::Px(4.0),
++                                            ..default()
++                                        },
++                                    ));
++                                }
++                                if matches!(action, Action::OneX | Action::Max) {
+                                     button.spawn((
+                                         SelectionLamp(action),
+                                         Node {
+@@ -760,40 +624,32 @@
+                                             border_radius: BorderRadius::all(Val::Percent(50.0)),
+                                             ..default()
+                                         },
+-                                        BackgroundColor(ink::JADE),
++                                        BackgroundColor(Color::srgb(0.55, 0.85, 0.78)),
+                                     ));
+                                 }
+-                                if screen == Screen::Main {
+-                                    button.spawn((
+-                                        Text::new(label),
+-                                        TextFont {
+-                                            font_size: 20.0,
+-                                            ..default()
++                                button.spawn((
++                                    Text::new(label),
++                                    TextFont {
++                                        font_size: if action == Action::Focus {
++                                            18.0
++                                        } else {
++                                            20.0
+                                         },
+-                                        TextColor(ink::PORCELAIN),
+-                                    ));
+-                                } else {
+-                                    let mut icon = button.spawn((
+-                                        ImageNode::new(glyphs.action(action).clone()),
+-                                        Node {
+-                                            width: Val::Px(24.0),
+-                                            height: Val::Px(24.0),
+-                                            ..default()
+-                                        },
+-                                    ));
+-                                    if screen == Screen::Photos {
+-                                        icon.insert(field_camera::PlateControl(action));
+-                                    }
+-                                }
++                                        ..default()
++                                    },
++                                    TextColor(Color::srgb(0.88, 0.86, 0.72)),
++                                ));
+                             });
+                     }
+                     panel.spawn((
+                         Status,
+-                        ImageNode::new(glyphs.pending.clone()),
+-                        Visibility::Hidden,
++                        Text::new(""),
++                        TextFont {
++                            font_size: 16.0,
++                            ..default()
++                        },
++                        TextColor(Color::srgb(0.88, 0.86, 0.72)),
+                         Node {
+-                            width: Val::Px(22.0),
+-                            height: Val::Px(22.0),
+                             position_type: PositionType::Absolute,
+                             bottom: Val::Px(-30.0),
+                             align_self: AlignSelf::Center,
+@@ -832,7 +688,7 @@
+                 align_items: AlignItems::Center,
+                 ..default()
+             },
+-            BackgroundColor(ink::GLASS),
++            BackgroundColor(Color::srgb(0.13, 0.18, 0.20)),
+             bevel(true),
+             GlobalZIndex(90),
+         ))
+@@ -848,8 +704,6 @@
+                 ));
+             }
+         });
+-    field_camera::shutter_button(world, &glyphs.shutter);
+-    world.insert_resource(glyphs);
+ }
+ 
+ fn load_availability(world: &World) -> LoadAvailability {
+@@ -964,7 +818,7 @@
+                     && node.contains_point(*transform, cursor)
+             })
+     });
+-    let mut outcome = world.resource_scope(|world, mut state: Mut<MenuState>| {
++    let outcome = world.resource_scope(|world, mut state: Mut<MenuState>| {
+         // Drain the whole batch so a second key cannot become later consent.
+         let mut fresh_enter = false;
+         if let Some(messages) = world.get_resource::<bevy::ecs::message::Messages<KeyboardInput>>()
+@@ -989,7 +843,6 @@
+             availability,
+         )
+     });
+-    garden_survey::handle(world, &mut outcome, focused);
+     let InputOutcome {
+         opening,
+         resume,
+@@ -1209,7 +1062,7 @@
+     } else if active {
+         Color::srgb(0.08, 0.16, 0.18)
+     } else {
+-        ink::WELL
++        Color::srgb(0.047, 0.072, 0.083)
+     }
+ }
+ 
+@@ -1223,45 +1076,29 @@
+     ux: Res<Fvr05ProductionUxStateResource>,
+     mut roots: Query<(&MenuRoot, &mut Node)>,
+     mut buttons: Query<(&MenuButton, &Interaction, &mut BackgroundColor)>,
+-    glyphs: Res<MenuGlyphs>,
+-    shelf: Option<Res<field_camera::Shelf>>,
+-    survey: Option<Res<garden_survey::Survey>>,
+-    mut statuses: Query<(&mut ImageNode, &mut Visibility), (With<Status>, Without<SelectionLamp>)>,
++    mut statuses: Query<&mut Text, (With<Status>, Without<StateLabel>)>,
++    mut state_labels: Query<&mut Text, (With<StateLabel>, Without<Status>)>,
+     mut lamps: Query<(&SelectionLamp, &mut Visibility)>,
+     mut accessibility: Query<
+         (
+             Option<&MenuPanel>,
+             Option<&MenuButton>,
+-            Option<&garden_survey::Relief>,
+             &mut AccessibilityNode,
+         ),
+-        Or<(
+-            With<MenuPanel>,
+-            With<MenuButton>,
+-            With<garden_survey::Relief>,
+-        )>,
++        Or<(With<MenuPanel>, With<MenuButton>)>,
+     >,
+ ) {
+-    let available = |action| {
+-        shelf.as_ref().is_none_or(|s| s.available(action))
+-            && survey.as_ref().is_none_or(|s| s.available(action))
+-    };
+-    for (panel, button, relief, mut node) in &mut accessibility {
++    for (panel, button, mut node) in &mut accessibility {
+         let screen = button
+             .map(|button| button.screen)
+-            .or_else(|| panel.map(|panel| panel.0))
+-            .or_else(|| relief.map(|_| Screen::Garden));
++            .or_else(|| panel.map(|panel| panel.0));
+         if screen == Some(state.screen) {
+             node.clear_hidden();
+         } else {
+             node.set_hidden();
+         }
+         if let Some(button) = button {
+-            if state.busy()
+-                || state.conversation_capture
+-                || state.release_gate
+-                || !available(button.action)
+-            {
++            if state.busy() || state.conversation_capture || state.release_gate {
+                 node.set_disabled();
+             } else {
+                 node.clear_disabled();
+@@ -1302,21 +1139,26 @@
+             || matches!(button.action, Action::Max)
+                 && ux.settings.playback_mode() == crate::ProductionRunMode::MaxSpeed
+             || matches!(button.action, Action::Focus) && ux.settings.pause_on_focus_loss;
+-        let color = if available(button.action) {
+-            button_color(*interaction, selected, active)
+-        } else {
+-            ink::WELL
+-        };
++        let color = button_color(*interaction, selected, active);
+         if background.0 != color {
+             background.0 = color;
++        }
++    }
++    for mut text in &mut state_labels {
++        let value = if ux.settings.pause_on_focus_loss {
++            "On"
++        } else {
++            "Off"
++        };
++        if text.0 != value {
++            text.0 = value.into();
+         }
+     }
+     for (lamp, mut visibility) in &mut lamps {
+         let active = (lamp.0 == Action::OneX
+             && ux.settings.playback_mode() == crate::ProductionRunMode::OneX)
+             || (lamp.0 == Action::Max
+-                && ux.settings.playback_mode() == crate::ProductionRunMode::MaxSpeed)
+-            || (lamp.0 == Action::Focus && ux.settings.pause_on_focus_loss);
++                && ux.settings.playback_mode() == crate::ProductionRunMode::MaxSpeed);
+         let desired = if active {
+             Visibility::Visible
+         } else {
+@@ -1343,23 +1185,15 @@
+     } else {
+         ""
+     };
+-    for (mut glyph, mut visibility) in &mut statuses {
+-        *visibility = if status.is_empty() {
+-            Visibility::Hidden
+-        } else {
+-            Visibility::Inherited
+-        };
+-        glyph.image = match status {
+-            "Failed" => &glyphs.warning,
+-            "Saved" | "Loaded" => &glyphs.saved,
+-            _ => &glyphs.pending,
+-        }
+-        .clone();
++    for mut text in &mut statuses {
++        if text.0 != status {
++            text.0 = status.into();
++        }
+     }
+ }
+ 
+ fn apply_layout(world: &mut World, size: Vec2) {
+-    let compact = size.y < 560.0 && size.x >= 320.0;
++    let compact = size.y < 420.0 && size.x >= 320.0;
+     let bottom = if size.y >= 600.0 {
+         100.0
+     } else if size.y >= 420.0 {
+@@ -1379,25 +1213,6 @@
+                 node.padding.bottom = Val::Px(bottom);
+             }
+         } else if let Some(panel) = panel {
+-            if panel.0.illustrated() {
+-                node.width = Val::Px(
+-                    (size.x - 24.)
+-                        .min((size.y - 154.).max(70.) * 16. / 9. + 36.)
+-                        .clamp(
+-                            if panel.0 == Screen::Garden {
+-                                270.
+-                            } else {
+-                                236.
+-                            },
+-                            640.,
+-                        ),
+-                );
+-                node.flex_direction = FlexDirection::Row;
+-                node.flex_wrap = FlexWrap::Wrap;
+-                node.justify_content = JustifyContent::Center;
+-                node.column_gap = Val::Px(6.);
+-                continue;
+-            }
+             let wide = compact && panel.0 == Screen::Main;
+             let width = (if wide { 480.0 } else { 256.0_f32 }).min((size.x - 24.0).max(256.0));
+             let direction = if wide {
+@@ -1425,14 +1240,6 @@
+         } else if let Some(button) = button {
+             if button.screen == Screen::Closed {
+                 continue;
+-            }
+-            if button.screen.illustrated() {
+-                node.width = Val::Px(42.);
+-                node.height = Val::Px(36.);
+-                continue;
+-            }
+-            if button.screen == Screen::Main {
+-                node.height = Val::Px(if size.y < 300. { 32. } else { 46. });
+             }
+             let wide = compact && button.screen == Screen::Main;
+             let width = if wide {
+@@ -1696,8 +1503,6 @@
+                 Screen::Speed,
+                 Screen::Settings,
+                 Screen::ConfirmLoad,
+-                Screen::Photos,
+-                Screen::Garden,
+             ] {
+                 let mut app = App::new();
+                 app.add_plugins(HierarchyPropagatePlugin::<ComputedUiTargetCamera>::new(
+@@ -1764,8 +1569,7 @@
+                     .filter(|(button,_,_)|button.screen==screen).map(|(button,node,transform)| {
+                         let center=transform.affine().translation; let half=node.size()*0.5;
+                         let min=center-half;let max=center+half;
+-                        let (min_w,target_h) = if screen.illustrated() {(42.,36.)} else if screen==Screen::Main && size.y<300. {(110.,32.)} else {(110.,46.)};
+-                        assert!(node.size().x>=min_w && node.size().y==target_h,"{:?} invalid target {:?}",screen,node.size());
++                        assert!(node.size().x>=110.0 && node.size().y==46.0,"{:?} invalid target {:?}",screen,node.size());
+                         assert!(min.x>=0.0 && min.y>=0.0 && max.x<=size.x && max.y<=size.y,"{:?} {:?} outside {:?}: {:?} {:?}",screen,button.action,size,min,max);
+                         assert!(node.contains_point(*transform,center));
+                         assert!(!node.contains_point(*transform,max+Vec2::splat(1.0)));
+@@ -1778,7 +1582,7 @@
+                         .unwrap();
+                     let center = transform.affine().translation;
+                     let half = node.size() * 0.5;
+-                    assert_eq!(node.size(), Vec2::splat(36.0));
++                    assert_eq!(node.size().y, 48.0);
+                     assert!(
+                         center.x - half.x >= 0.0
+                             && center.y - half.y >= 0.0
+@@ -1789,9 +1593,7 @@
+                 assert_eq!(
+                     rows.len(),
+                     match screen {
+-                        Screen::Main => MAIN.len(),
+-                        Screen::Photos => PHOTOS.len(),
+-                        Screen::Garden => GARDEN.len(),
++                        Screen::Main => 6,
+                         Screen::Speed => 3,
+                         Screen::Settings | Screen::ConfirmLoad => 2,
+                         Screen::Closed => 0,
+@@ -1800,7 +1602,7 @@
+                 receipts.push(serde_json::json!({"viewport":[size.x,size.y],"screen":format!("{:?}",screen),"buttons":rows}));
+             }
+         }
+-        for screens in receipts.as_chunks::<6>().0 {
++        for screens in receipts.as_chunks::<4>().0 {
+             let load = |screen: usize, action: &str| {
+                 screens[screen]["buttons"]
+                     .as_array()
+@@ -1862,26 +1664,31 @@
+         ] {
+             apply_layout(&mut world, size);
+             for status_value in ["", "Failed"] {
++                for mut text in world
++                    .query_filtered::<&mut Text, With<Status>>()
++                    .iter_mut(&mut world)
++                {
++                    text.0 = status_value.into();
++                }
+                 let panels = world.query::<(&MenuRoot, &Children)>().iter(&world)
+             .filter(|(root, _)| root.0 != Screen::Closed).map(|(root, children)| {
+                 let panel = children[0]; let node = world.get::<Node>(panel).unwrap();
+                 let background = world.get::<BackgroundColor>(panel).unwrap(); let border = world.get::<BorderColor>(panel).unwrap();
+                 let rows = world.get::<Children>(panel).unwrap().iter().filter_map(|entity| {
+                     let button = world.get::<MenuButton>(entity)?; let node = world.get::<Node>(entity)?;
+-                    let child = world.get::<Children>(entity)?.iter().find(|&child| world.get::<Text>(child).is_some());
+-                    let text = child.and_then(|id| world.get::<Text>(id));
+-                    Some(serde_json::json!({"index":button.index,"focused":button.index==0,"label":text.map(|t|t.0.as_str()).unwrap_or(""),"action":format!("{:?}",button.action),
++                    let child = world.get::<Children>(entity)?.iter().find(|child| world.get::<Text>(*child).is_some() && world.get::<StateLabel>(*child).is_none())?;
++                    Some(serde_json::json!({"index":button.index,"focused":button.index==0,"label":world.get::<Text>(child).unwrap().0,
+                         "width":px(node.width),"height":px(node.height),"radius":px(node.border_radius.top_left),
+                         "border":px(node.border.top),"background":color(world.get::<BackgroundColor>(entity).unwrap().0),
+                         "top":color(world.get::<BorderColor>(entity).unwrap().top),"bottom":color(world.get::<BorderColor>(entity).unwrap().bottom),
+                         "state":if button.action == Action::Focus {Some("On")} else {None},"active":button.action == Action::OneX,
+-                        "font_size":child.and_then(|id|world.get::<TextFont>(id)).map(|v|v.font_size).unwrap_or(0.0),"text_color":color(child.and_then(|id|world.get::<TextColor>(id)).map(|v|v.0).unwrap_or(Color::WHITE))}))
++                        "font_size":world.get::<TextFont>(child).unwrap().font_size,"text_color":color(world.get::<TextColor>(child).unwrap().0)}))
+                 }).collect::<Vec<_>>();
+                 serde_json::json!({"screen":format!("{:?}",root.0),"status":status_value,"status_font_size":16.0,"viewport":[size.x,size.y],"modal_background":color(world.get::<BackgroundColor>(world.get::<ChildOf>(panel).unwrap().parent()).unwrap().0),"root_bottom_padding":px(world.get::<Node>(world.get::<ChildOf>(panel).unwrap().parent()).unwrap().padding.bottom),"columns":if node.flex_direction == FlexDirection::Row {2} else {1},"width":px(node.width),"padding":px(node.padding.top),
+                     "border":px(node.border.top),"radius":px(node.border_radius.top_left),"gap":px(node.row_gap),
+                     "background":color(background.0),"top":color(border.top),"bottom":color(border.bottom),"rows":rows})
+             }).collect::<Vec<_>>();
+-                assert_eq!(panels.len(), 5);
++                assert_eq!(panels.len(), 4);
+                 fixtures.extend(panels);
+             }
+         }

@@ -1,0 +1,47 @@
+diff --git a/crates/alife_gpu_backend/src/closed_loop_runtime/tick.rs b/crates/alife_gpu_backend/src/closed_loop_runtime/tick.rs
+--- a/crates/alife_gpu_backend/src/closed_loop_runtime/tick.rs
++++ b/crates/alife_gpu_backend/src/closed_loop_runtime/tick.rs
+@@ -169,6 +169,8 @@
+                         resident,
+                         &self.admission,
+                         &self.runtime_budget,
++                        #[cfg(feature = "gpu-tests")]
++                        self.controlled_host_pressure_ns,
+                     )?,
+                 };
+                 let capacity = capacity_for_gpu_class(handle.class_id)?;
+@@ -182,6 +184,23 @@
+             })
+             .collect::<Result<Vec<_>, _>>()?;
+         let first_class_id = batch[0].handle.class_id.raw();
++        #[cfg(feature = "gpu-tests")]
++        let controlled_pressure_evidence = if self.controlled_host_pressure_ns.is_some() {
++            batch
++                .iter()
++                .zip(&activity_decisions)
++                .map(|(input, decision)| {
++                    let resident = self
++                        .class_buckets
++                        .get(&input.handle.class_id.raw())
++                        .and_then(|pool| pool.resident(input.handle).ok())
++                        .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
++                    Ok((resident.last_completed_gpu_time_ns, decision.clone()))
++                })
++                .collect::<Result<Vec<_>, ScaffoldContractError>>()?
++        } else {
++            Vec::new()
++        };
+         let timing_class_id = batch
+             .iter()
+             .all(|input| input.handle.class_id.raw() == first_class_id)
+@@ -1287,6 +1306,10 @@
+             resident.pending_eligibility_record = ordered_pending_records[index];
+         }
+ 
++        #[cfg(feature = "gpu-tests")]
++        {
++            self.last_controlled_pressure_evidence = controlled_pressure_evidence;
++        }
+         self.completed_dispatch_count = next_completed_dispatch_count;
+         self.last_compact_readback_bytes = total_readback_bytes;
+         self.next_dispatch_generation = next_dispatch_generation;

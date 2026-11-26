@@ -1,0 +1,181 @@
+diff --git a/crates/alife_gpu_backend/src/closed_loop_pipeline.rs b/crates/alife_gpu_backend/src/closed_loop_pipeline.rs
+--- a/crates/alife_gpu_backend/src/closed_loop_pipeline.rs
++++ b/crates/alife_gpu_backend/src/closed_loop_pipeline.rs
+@@ -651,6 +651,7 @@
+     selector_diagnostic_family_synapse_counts: Vec<Vec<u32>>,
+     memory_context_bindings: Vec<Option<GpuMemoryContextDispatchReceipt>>,
+     object_input_counts: Vec<u32>,
++    visible_self_grip_v1: bool,
+ }
+ 
+ impl GpuActiveBatchUpload {
+@@ -749,6 +750,11 @@
+         let mut seen_slots = BTreeSet::new();
+         let class_id = entries[0].slot.record().class_id;
+ 
++        let visible_self_grip_v1 = entries.iter().any(|entry| entry.memory_upload
++            .is_some_and(|upload| upload.visible_self_grip_v1.is_some()));
++        if visible_self_grip_v1 && entries.len() != 1 {
++            return Err(GpuClosedLoopError::MalformedUpload);
++        }
+         for (row, entry) in entries.iter().enumerate() {
+             if entry.slot.record().class_id != class_id
+                 || entry.slot.record().slot_generation == 0
+@@ -844,6 +850,20 @@
+                 .len()
+                 .checked_mul(crate::GAME_EXPLORATION_IDENTITY_WORDS)
+                 .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
++            let visible_self_grip_words = if let Some(port) = memory_upload.as_ref()
++                .and_then(|upload| upload.visible_self_grip_v1.as_ref())
++            {
++                let decoder = entry.phenotype.candidate_decoder();
++                if entry.slot.decoder_input_stride() != 36
++                    || decoder.motor_start() != 1728 || decoder.motor_width() != 224
++                    || decoder.feature_count() != 24 || port.words.len() != upload.candidates.len()
++                {
++                    return Err(GpuClosedLoopError::MalformedUpload);
++                }
++                crate::closed_loop_memory::VISIBLE_SELF_GRIP_V1_FIXED_WORDS + port.words.len()
++            } else {
++                0
++            };
+             let payload_end = frame_payload_words
+                 .len()
+                 .checked_add(upload.frame_payload_words.len())
+@@ -853,6 +873,7 @@
+                 .and_then(|value| value.checked_add(memory_record_words))
+                 .and_then(|value| value.checked_add(cognitive_record_words))
+                 .and_then(|value| value.checked_add(neural_receptor_effects_words))
++                .and_then(|value| value.checked_add(visible_self_grip_words))
+                 .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+             if payload_end > GPU_REQUIRED_MAX_BUFFER_WORDS
+                 || payload_end > frame_payload_capacity_words
+@@ -973,6 +994,16 @@
+                         .ok_or(GpuClosedLoopError::MalformedUpload)?,
+                 )?;
+                 frame_payload_words.extend_from_slice(receptor_record.words());
++                if let Some(port) = &memory.visible_self_grip_v1 {
++                    frame_payload_words.extend([
++                        crate::closed_loop_memory::VISIBLE_SELF_GRIP_V1_MAGIC, 1,
++                        upload.header.slot, upload.header.slot_generation,
++                        upload.header.tick_lo, upload.header.tick_hi,
++                        dispatch_generation.get() as u32, (dispatch_generation.get() >> 32) as u32,
++                    ]);
++                    frame_payload_words.extend(port.weights);
++                    frame_payload_words.extend(&port.words);
++                }
+                 (Some(memory), Some(receipt))
+             } else {
+                 (None, None)
+@@ -1122,6 +1153,7 @@
+             selector_diagnostic_requests: vec![Vec::new(); entries.len()],
+             selector_diagnostic_family_synapse_counts,
+             memory_context_bindings,
++            visible_self_grip_v1,
+             object_input_counts: entries
+                 .iter()
+                 .map(|entry| {
+@@ -1500,6 +1532,9 @@
+     clear_diagnostics_pipeline: wgpu::ComputePipeline,
+     decode_pipeline: wgpu::ComputePipeline,
+     memory_context_pipeline: wgpu::ComputePipeline,
++    visible_self_grip_pipeline: std::sync::OnceLock<wgpu::ComputePipeline>,
++    visible_self_grip_device: wgpu::Device,
++    visible_self_grip_layout: wgpu::PipelineLayout,
+     select_pipeline: wgpu::ComputePipeline,
+     speech_decode_pipeline: wgpu::ComputePipeline,
+     prevalidate_eligibility_pipeline: wgpu::ComputePipeline,
+@@ -1519,6 +1554,21 @@
+     finalize_sleep_staging_pipeline: wgpu::ComputePipeline,
+     reset_sleep_mutable_state_pipeline: wgpu::ComputePipeline,
+     finalize_sleep_commit_pipeline: wgpu::ComputePipeline,
++}
++
++fn superimpose_visible_self_grip_v1(stock: &str) -> String {
++    // Use exactly the old context kernel, with one insertion at the stock
++    // final-logit write in each supported memory-plan branch. Only active
++    // packets select this specialization; the stock module is not rewritten.
++    let stock = stock.replace(
++        "store_state_f32(logit_index, composed);",
++        "store_state_f32(logit_index, visible_self_grip_v1(row_base, header, brain, candidate, composed));",
++    ).replace(
++        "store_state_f32(logit_index,\n      base_logit\n        + clamp(delta, -plan.max_candidate_gain, plan.max_candidate_gain)\n        + clamp(cognitive_delta, -0.5, 0.5));",
++        "let composed = base_logit + clamp(delta, -plan.max_candidate_gain, plan.max_candidate_gain) + clamp(cognitive_delta, -0.5, 0.5);\n    store_state_f32(logit_index, visible_self_grip_v1(row_base, header, brain, candidate, composed));",
++    );
++    assert_eq!(stock.matches("visible_self_grip_v1(row_base").count(), 2);
++    stock + include_str!("../shaders/visible_self_grip_v1.wgsl")
+ }
+ 
+ fn runtime_shader_source(source: &str) -> std::borrow::Cow<'_, str> {
+@@ -1827,6 +1877,9 @@
+             clear_diagnostics_pipeline,
+             decode_pipeline,
+             memory_context_pipeline,
++            visible_self_grip_pipeline: std::sync::OnceLock::new(),
++            visible_self_grip_device: device.clone(),
++            visible_self_grip_layout: pipeline_layout,
+             select_pipeline,
+             speech_decode_pipeline,
+             prevalidate_eligibility_pipeline,
+@@ -3926,7 +3979,27 @@
+     ) -> Result<(), GpuClosedLoopError> {
+         let rows =
+             u32::try_from(batch.row_count()).map_err(|_| GpuClosedLoopError::CapacityExceeded)?;
+-        pass.set_pipeline(&self.kernels.memory_context_pipeline);
++        let pipeline = if batch.visible_self_grip_v1 {
++            if self.kernels.visible_self_grip_pipeline.get().is_none() {
++                let source = superimpose_visible_self_grip_v1(CLOSED_LOOP_MEMORY_CONTEXT_WGSL);
++                // Run the same stock parser, entry-point and ABI validation.
++                validate_production_shader_contract(&runtime_shader_source(&source), &["add_candidate_memory_context"])?;
++                let device = &self.kernels.visible_self_grip_device;
++                let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
++                    label: Some("closed-loop-visible-self-grip-v1"),
++                    source: wgpu::ShaderSource::Wgsl(runtime_shader_source(&source)),
++                });
++                let specialized = create_compute_pipeline(
++                    device, &self.kernels.visible_self_grip_layout, &shader,
++                    "add_candidate_memory_context", &[],
++                );
++                let _ = self.kernels.visible_self_grip_pipeline.set(specialized);
++            }
++            self.kernels.visible_self_grip_pipeline.get().ok_or(GpuClosedLoopError::LayoutMismatch)?
++        } else {
++            &self.kernels.memory_context_pipeline
++        };
++        pass.set_pipeline(pipeline);
+         pass.set_bind_group(0, &self.bind_group, &[]);
+         pass.dispatch_workgroups(1, rows, 1);
+         pass.set_pipeline(&self.kernels.select_pipeline);
+@@ -4663,6 +4736,24 @@
+                 {
+                     return Err(GpuClosedLoopError::MalformedUpload);
+                 }
++                if batch.visible_self_grip_v1 {
++                    let length = crate::closed_loop_memory::VISIBLE_SELF_GRIP_V1_FIXED_WORDS
++                        .checked_add(candidate_count).ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
++                    let end = receptor_end.checked_add(length)
++                        .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
++                    let side = batch.frame_payload_words.get(receptor_end..end)
++                        .ok_or(GpuClosedLoopError::MalformedUpload)?;
++                    if side[..8] != [
++                        crate::closed_loop_memory::VISIBLE_SELF_GRIP_V1_MAGIC, 1,
++                        header.slot, header.slot_generation, header.tick_lo, header.tick_hi,
++                        header.dispatch_generation_lo, header.dispatch_generation_hi,
++                    ] || !matches!(side[8], 0 | 0xc100_0000)
++                      || side[8..24].iter().any(|&w| w != side[8])
++                      || side[24..].iter().any(|&w| !matches!(w, 0 | 0x3f80_0000))
++                    {
++                        return Err(GpuClosedLoopError::MalformedUpload);
++                    }
++                }
+                 let receptor = GpuNeuralReceptorEffectsRecord::from_words(
+                     &batch.frame_payload_words[receptor_start..receptor_end],
+                 )?;
+@@ -4996,6 +5087,7 @@
+             selector_diagnostic_family_synapse_counts: vec![vec![1]],
+             memory_context_bindings: vec![None],
+             object_input_counts: vec![0],
++            visible_self_grip_v1: false,
+             joint_motor_modes: vec![0],
+         };
+ 

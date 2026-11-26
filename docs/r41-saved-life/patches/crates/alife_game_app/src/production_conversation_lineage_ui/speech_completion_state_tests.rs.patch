@@ -1,0 +1,12 @@
+diff --git a/crates/alife_game_app/src/production_conversation_lineage_ui/speech_completion_state_tests.rs b/crates/alife_game_app/src/production_conversation_lineage_ui/speech_completion_state_tests.rs
+--- a/crates/alife_game_app/src/production_conversation_lineage_ui/speech_completion_state_tests.rs
++++ b/crates/alife_game_app/src/production_conversation_lineage_ui/speech_completion_state_tests.rs
+@@ -27,8 +27,6 @@
+         status: String::new(),
+         lineage_root: PathBuf::new(),
+         lineage_open: false,
+-        family_open: false,
+-        family_capture: false,
+         lineage_source_filter: LineageSourceFilter::All,
+         lineage_data_filter: LineageDataFilter::All,
+         lineage_sort: LineageSort::Overall,

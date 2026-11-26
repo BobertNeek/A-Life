@@ -1,0 +1,706 @@
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs
+--- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs
+@@ -1,6 +1,6 @@
+ //! Opt-in, bounded saved-life observation. No offline optimizer is constructed.
+ use super::*;
+-use crate::foundation_training::food_outcome::{ownership, FoodOutcomeObservation};
++use crate::foundation_training::food_outcome::{FoodOutcomeObservation, ownership};
+ use alife_core::Validate;
+ use sha2::{Digest, Sha256};
+ use std::{
+@@ -10,6 +10,17 @@
+     time::{SystemTime, UNIX_EPOCH},
+ };
+ 
++#[cfg(feature = "gpu-tests")]
++mod experiments;
++#[cfg(feature = "gpu-tests")]
++#[path = "saved_life_retention/card_cases.rs"]
++mod card_cases;
++#[cfg(feature = "gpu-tests")]
++#[path = "saved_life_retention/case_room.rs"]
++mod case_room;
++#[cfg(feature = "gpu-tests")]
++pub use experiments::evaluate_saved_life_retention_experiment;
++
+ const MAX_TRACE_BYTES: usize = 16 * 1024 * 1024;
+ 
+ /// Observer serialization only. The caller supplies the already sealed decision
+@@ -19,7 +30,8 @@
+         "schema_version": 1,
+         "source": "sealed_patch.pre_action.perception.sensory.channels",
+         "visual_affordance": channels.visual_affordance,
+-        "smell_chemistry": channels.smell_chemistry
++        "smell_chemistry": channels.smell_chemistry,
++        "tactile_contact": channels.tactile_contact
+     })
+ }
+ 
+@@ -50,19 +62,29 @@
+ }
+ 
+ impl SavedLifeRetentionRequest {
++    // Explicit extended private assessment; schema2 keeps its original limits.
++    fn trace_byte_limit(&self) -> usize {
++        if self.schema == 3 {
++            64 * 1024 * 1024
++        } else {
++            MAX_TRACE_BYTES
++        }
++    }
++
+     pub fn validate(&self, now: u64) -> Result<()> {
++        let decision_limit = if self.schema == 3 { 1024 } else { 256 };
+         if let Some(task) = self.navigation_task {
+             task.validate()?;
+         }
+         if self.navigation_task.is_some() && self.max_decisions == 0 {
+             return Err("navigation task requires biological steps".into());
+         }
+-        if self.schema != 2
++        if !matches!(self.schema, 2 | 3)
+             || self.evaluation_nonce == 0
+             || (self.cue_free_food_placement
+                 && (self.max_decisions == 0 || self.navigation_task.is_some()))
+             || !((self.max_decisions == 0 && self.max_world_ticks == 0)
+-                || ((1..=256).contains(&self.max_decisions)
++                || ((1..=decision_limit).contains(&self.max_decisions)
+                     && (1..=8192).contains(&self.max_world_ticks)))
+             || self
+                 .finalization_deadline_unix_seconds
+@@ -312,12 +334,90 @@
+ /// Global founder/critic weights, moments and ages are only read. Ordinary
+ /// waking/private learning, sleep and biology remain active; no source save is
+ /// published. Active teacher cues cause refusal rather than world editing; passive labels and all learned history remain.
++#[derive(Debug, Clone, Copy, serde::Serialize)]
++#[serde(rename_all = "snake_case")]
++pub enum RetainedScentArm {
++    Off,
++    On,
++}
++
++#[derive(Debug, Clone, Copy, serde::Serialize)]
++pub struct RetainedScentScope {
++    pub arm: RetainedScentArm,
++    pub owner: u64,
++    pub evaluation_nonce: u64,
++}
++
++impl RetainedScentScope {
++    fn validate(self, request: &SavedLifeRetentionRequest) -> Result<()> {
++        if !cfg!(feature = "gpu-tests")
++            || self.owner == 0
++            || self.evaluation_nonce != request.evaluation_nonce
++            || request.max_decisions == 0
++            || request.direct_weights.is_some()
++        {
++            return Err("invalid retained near-field experiment scope".into());
++        }
++        Ok(())
++    }
++}
++
+ pub fn evaluate_saved_life_retention(
+     source: &Path,
+     output: &Path,
+     request: SavedLifeRetentionRequest,
+ ) -> Result<serde_json::Value> {
++    evaluate_saved_life_retention_inner(
++        source, output, request, None,
++        #[cfg(feature = "gpu-tests")]
++        None,
++    )
++}
++
++#[cfg(feature = "gpu-tests")]
++pub fn evaluate_saved_life_retention_scent_probe(
++    source: &Path,
++    output: &Path,
++    request: SavedLifeRetentionRequest,
++    scope: RetainedScentScope,
++) -> Result<serde_json::Value> {
++    evaluate_saved_life_retention_inner(source, output, request, Some(scope), None)
++}
++
++fn evaluate_saved_life_retention_inner(
++    source: &Path,
++    output: &Path,
++    request: SavedLifeRetentionRequest,
++    scent_scope: Option<RetainedScentScope>,
++    #[cfg(feature = "gpu-tests")] experiment: Option<experiments::ExperimentIdentity>,
++) -> Result<serde_json::Value> {
+     request.validate(now()?)?;
++    if let Some(scope) = scent_scope {
++        scope.validate(&request)?;
++    }
++    let request_identity = match scent_scope {
++        None => digest(&serde_json::to_vec(&request)?),
++        Some(scope) => digest(&serde_json::to_vec(&(
++            "retained-indexed-near-field-v1",
++            &request,
++            scope,
++        ))?),
++    };
++    #[cfg(feature = "gpu-tests")]
++    let request_identity = match &experiment {
++        Some(identity) => digest(&serde_json::to_vec(&(
++            "retained-experiment-manifest-v1",
++            identity,
++            &request,
++        ))?),
++        None => request_identity,
++    };
++    #[cfg(feature = "gpu-tests")]
++    if experiment.is_some()
++        && std::env::var("ALIFE_EXPLICIT_SOFTWARE_RETENTION_TEST").ok().as_deref() != Some("1")
++    {
++        return Err("retained experiment requires explicit software Vulkan mode".into());
++    }
+     if std::env::var("ALIFE_SLM_PRIOR").ok().as_deref() != Some("off")
+         || std::env::var("ALIFE_SLM_PRIOR_BACKEND").ok().as_deref() != Some("off")
+     {
+@@ -332,8 +432,27 @@
+     if !metadata.is_file() || metadata.len() > alife_training::MAX_CURRENT_CHECKPOINT_BYTES {
+         return Err("saved-life retention requires a bounded Current file".into());
+     }
++    #[cfg(feature = "gpu-tests")]
++    let original = if experiment.is_some() {
++        use std::io::Read;
++        let mut original = Vec::new();
++        fs::File::open(&source)?
++            .take(alife_training::MAX_CURRENT_CHECKPOINT_BYTES + 1)
++            .read_to_end(&mut original)?;
++        if original.len() as u64 > alife_training::MAX_CURRENT_CHECKPOINT_BYTES {
++            return Err("retained experiment requires a bounded Current file".into());
++        }
++        original
++    } else {
++        fs::read(&source)?
++    };
++    #[cfg(not(feature = "gpu-tests"))]
+     let original = fs::read(&source)?;
+     let source_sha = digest(&original);
++    #[cfg(feature = "gpu-tests")]
++    if let Some(identity) = &experiment {
++        identity.validate_source(&source_sha)?;
++    }
+     fs::create_dir(&output)?; // Never overwrite, resume or remove previous evidence.
+     let budget = alife_storage::OutputBudget::register(&output, request.max_output_bytes)?;
+     // Protect two bounded private-life/Current copies before any biological step.
+@@ -348,6 +467,17 @@
+         output.join("request.json"),
+         serde_json::to_vec_pretty(&request)?,
+     )?;
++    #[cfg(feature = "gpu-tests")]
++    let mut baseline = if experiment.is_some() {
++        // Decode exactly the bytes already bounded and hash-checked above; do
++        // not reopen a pathname and validate different bytes for this mode.
++        current::admit_current_training_checkpoint(
++            alife_training::CurrentTrainingCheckpointV1::decode(&original)?,
++        )?
++    } else {
++        read_current_training_checkpoint(&source)?
++    };
++    #[cfg(not(feature = "gpu-tests"))]
+     let mut baseline = read_current_training_checkpoint(&source)?;
+     let mut baseline_bytes = original.clone();
+     baseline.require_living_continuation()?;
+@@ -366,6 +496,13 @@
+         }
+         residents[0].organism_id()
+     };
++    #[cfg(feature = "gpu-tests")]
++    if let Some(identity) = &experiment {
++        identity.validate_owner(id)?;
++    }
++    if scent_scope.is_some_and(|scope| scope.owner != id.raw()) {
++        return Err("retained near-field owner does not match sole living resident".into());
++    }
+     let source_world_tick = world.tick().raw();
+     if world.seed() != baseline.seed {
+         return Err("retention source world seed mismatch".into());
+@@ -384,6 +521,24 @@
+         "existing_teacher_cues":cues,"qualified":false,
+         "future_teacher_emitter_constructed":false,"offline_optimizer_constructed":false,
+     });
++    if let Some(scope) = scent_scope {
++        receipt["retained_indexed_near_field"] = serde_json::json!({
++            "kind": "retained-indexed-near-field-v1",
++            "scope": scope,
++            "request_identity_sha256": request_identity,
++            "evaluation_only": true,
++        });
++    }
++    #[cfg(feature = "gpu-tests")]
++    if let Some(identity) = &experiment {
++        receipt["retained_experiment"] = serde_json::json!({
++            "identity": identity,
++            "effective_request_sha256": digest(&serde_json::to_vec(&request)?),
++            "experiment_request_identity_sha256": request_identity,
++            "evaluation_only": true,
++            "scorecard_eligible": false,
++        });
++    }
+     if !cues.clear() {
+         receipt["status"] = serde_json::json!("rejected_existing_teacher_cues_before_gpu");
+         receipt["neural_execution"] = serde_json::json!(false);
+@@ -403,6 +558,15 @@
+     if now()? >= request.deadline_unix_seconds {
+         return Err("retention deadline before GPU restore".into());
+     }
++    #[cfg(feature = "gpu-tests")]
++    if experiment.is_some() {
++        if let Some(edit) = &request.direct_weights {
++            // Give an explicit compatibility result before constructing a backend.
++            // The native installer still rechecks these same coordinates before commit.
++            retained_direct_weights::preflight_manifest_direct_weights(&baseline, &original, edit)
++                .map_err(|e| format!("experiment compatibility: unsupported source ABI or coordinate: {e}"))?;
++        }
++    }
+     let world_seed = world.seed();
+     let store = crate::GpuCheckpointAssetStore::new(&assets)?;
+     let checkpoints = loaded
+@@ -411,7 +575,82 @@
+         .iter()
+         .filter_map(|c| c.gpu_brain.clone())
+         .collect::<Vec<_>>();
++    if scent_scope.is_some() {
++        let [checkpoint] = checkpoints.as_slice() else {
++            return Err("retained near-field requires one exact saved brain".into());
++        };
++        let profile = checkpoint.sensor_profile.profile()?;
++        if checkpoint.organism_id != id
++            || profile != alife_core::SensorProfile::GroundedTerrainVisionV1
++        {
++            return Err("retained near-field requires the sole GroundedTerrainVisionV1 brain".into());
++        }
++        receipt["retained_indexed_near_field"]["saved_sensor_profile"] =
++            serde_json::to_value(checkpoint.sensor_profile)?;
++    }
++    // Private cloud experiment: explicit test-only software execution, never a gameplay fallback.
++    let software_simulation =
++        std::env::var("ALIFE_EXPLICIT_SOFTWARE_RETENTION_TEST").is_ok_and(|v| v == "1");
++    #[cfg(feature = "gpu-tests")]
++    let published_case = experiment.as_ref().and_then(|e| e.card_case());
++    let controlled_pressure = std::env::var("ALIFE_EXPLICIT_FIXED_HOST_PRESSURE_NS")
++        .ok()
++        .map(|v| v.parse::<u64>())
++        .transpose()?;
++    #[cfg(feature = "gpu-tests")]
++    let controlled_pressure = if published_case.is_some() {
++        if controlled_pressure.is_some_and(|value| value != 0) {
++            return Err("published case pressure differs from frozen 0ns condition".into());
++        }
++        Some(0)
++    } else {
++        controlled_pressure
++    };
++    let isolated_archive =
++        std::env::var("ALIFE_EXPLICIT_RETENTION_ARCHIVE_TEST").is_ok_and(|v| v == "1");
++    if (controlled_pressure.is_some() || isolated_archive)
++        && (!software_simulation || !cfg!(feature = "gpu-tests"))
++    {
++        return Err("controlled pressure/archive requires explicit gpu-tests software mode".into());
++    }
++    if controlled_pressure.is_some_and(|v| !matches!(v, 0 | 2_000_000 | 4_000_000 | 8_000_000)) {
++        return Err("unsupported controlled host pressure".into());
++    }
++    if scent_scope.is_some() && !software_simulation {
++        return Err("retained near-field probe requires software Vulkan mode".into());
++    }
++    #[cfg(not(feature = "gpu-tests"))]
++    if software_simulation {
++        return Err("software retention simulation requires the gpu-tests feature".into());
++    }
++    #[cfg(feature = "gpu-tests")]
++    let mut backend = if software_simulation {
++        GpuClosedLoopBackend::new_software_vulkan_runtime_test(GpuRuntimeProfile::production_v1())?
++    } else {
++        GpuClosedLoopBackend::new_required(GpuRuntimeProfile::production_v1())?
++    };
++    #[cfg(not(feature = "gpu-tests"))]
+     let backend = GpuClosedLoopBackend::new_required(GpuRuntimeProfile::production_v1())?;
++    #[cfg(feature = "gpu-tests")]
++    if let Some(ns) = controlled_pressure {
++        backend.set_controlled_host_pressure_for_test(ns)?;
++    }
++    receipt["test_host_pressure_control"] = serde_json::json!({
++        "enabled": controlled_pressure.is_some(), "applied_gpu_time_ns": controlled_pressure,
++        "scope": "controlled_host_pressure_not_fixed_neural_work",
++        "actual_gpu_timing_preserved": true, "live_atp_and_heap_constraints": true,
++        "production_policy_unchanged": true, "cross_arm_frame_replay": false
++    });
++    receipt["software_simulation"] = serde_json::json!(software_simulation);
++    receipt["hardware_gpu_qualification"] = serde_json::json!(!software_simulation);
++    #[cfg(feature = "gpu-tests")]
++    if let Some(info) = backend.software_runtime_test_adapter_info() {
++        receipt["software_adapter"] = serde_json::json!({
++            "name": info.name, "device_type": format!("{:?}", info.device_type),
++            "backend": format!("{:?}", info.backend), "driver": info.driver,
++            "driver_info": info.driver_info,
++        });
++    }
+     receipt["hardware"] = serde_json::to_value(backend.hardware_receipt())?;
+     let mut runtime = GpuLiveBrainRuntime::restore_foundation_observation(
+         backend,
+@@ -462,6 +701,60 @@
+         receipt["direct_weight_calibration"] = calibration;
+         receipt["calibrated_actor_sha256"] = serde_json::json!(actor_sha);
+     }
++    if isolated_archive && request.max_decisions != 0 {
++        let archive_root = output.join("lineage");
++        if archive_root.exists() {
++            return Err("isolated lineage output already exists".into());
++        }
++        runtime.attach_lineage_archive(
++            alife_archive::LineageLibraryConfig::profile_default(&archive_root),
++            alife_core::ArchiveLearnedCapturePolicy::GeneticOnly,
++        )?;
++        receipt["isolated_lineage_archive"] = serde_json::json!({
++            "root": archive_root, "policy": "genetic-only", "attached_before_behavior": true,
++            "terminal_private_state": "requires existing evaluator finalization; not implied by genetic archive"
++        });
++    }
++    #[cfg(feature = "gpu-tests")]
++    let case_stimulus = if let Some(name) = published_case {
++        let spec = card_cases::case(name).ok_or("published case lost its registration")?;
++        let before_sampler = runtime.foundation_training_sampling_state();
++        let before_tick = runtime.world().tick();
++        if !runtime.world().audible_utterances().is_empty() {
++            return Err("published case source must start with an empty utterance bus".into());
++        }
++        if spec.navigation.is_none() {
++            let setup = case_room::configure(runtime.world_mut(), id, name)?;
++            if before_sampler != runtime.foundation_training_sampling_state()
++                || before_tick != runtime.world().tick()
++                || !TeacherCues::observe(runtime.world()).clear()
++            {
++                return Err("published setup advanced the clock/sampler or injected teacher cues".into());
++            }
++            receipt["published_case_setup"] = setup;
++        }
++        let actual = runtime.world().audible_utterances();
++        if spec.player_tokens.is_empty() {
++            if !actual.is_empty() { return Err("published quiet setup emitted speech".into()); }
++        } else {
++            let [said] = actual.as_slice() else {
++                return Err("published spoken setup requires one native Player utterance".into());
++            };
++            if said.source_kind != alife_core::UtteranceSourceKind::Player
++                || said.addressee != Some(id) || said.emitted_tick != before_tick
++                || said.expires_after_tick.raw() != before_tick.raw().saturating_add(1)
++                || !said.tokens.iter().map(|token| token.raw()).eq(spec.player_tokens.iter().copied())
++            {
++                return Err("published spoken setup does not match its registered stimulus".into());
++            }
++            receipt["published_case_player_utterance"] = serde_json::to_value(said)?;
++        }
++        receipt["published_case"] = serde_json::json!(name);
++        receipt["published_case_registry"] = serde_json::json!("disclosed-r41-card-c46270cc-29/v1");
++        Some(spec)
++    } else { None };
++    #[cfg(feature = "gpu-tests")]
++    let mut published_body = Vec::new();
+     let mut task = request
+         .navigation_task
+         .map(|spec| retained_navigation_tasks::configure(runtime.world_mut(), id, spec))
+@@ -552,7 +845,19 @@
+             return Err("retention food observation bound exceeded".into());
+         }
+         calls += 1;
+-        let tick_error = runtime.tick_outcome().err().map(|e| e.to_string());
++        #[cfg(feature = "gpu-tests")]
++        let tick = match (
++            scent_scope.map(|scope| scope.arm),
++            experiment.as_ref().and_then(|scope| scope.visible_self_grip_v1()),
++        ) {
++            (None, Some(words)) => runtime.tick_outcome_with_visible_self_grip_v1(id, words),
++            (Some(RetainedScentArm::On), None) => runtime.tick_outcome_with_retention_near_field(id),
++            (_, None) => runtime.tick_outcome(),
++            (Some(_), Some(_)) => return Err("visible self grip cannot coexist with scent scope".into()),
++        };
++        #[cfg(not(feature = "gpu-tests"))]
++        let tick = runtime.tick_outcome();
++        let tick_error = tick.err().map(|e| e.to_string());
+         let after_tick = runtime.world().tick();
+         let after_pose = runtime
+             .world()
+@@ -571,6 +876,28 @@
+             || (after_tick == before_tick && !steps.is_empty())
+         {
+             return Err("retention observed a non-canonical tick/row boundary".into());
++        }
++        #[cfg(feature = "gpu-tests")]
++        if published_case.is_some_and(|name| name.starts_with("r2-grade-")) && after_tick != before_tick {
++            if published_body.len() >= 256 {
++                return Err("published body observations exceed the registered bound".into());
++            }
++            let rec = runtime.world().organism_registry().get(id);
++            let alive = rec.is_some_and(|record| record.lifecycle().is_alive());
++            let bio = rec.map(|record| record.biochemistry());
++            let contacts = if alive {
++                Some(runtime.world().sensory_report(id, after_tick)?.contact_entities)
++            } else { None };
++            let food = runtime.world().entity(alife_core::WorldEntityId(2));
++            published_body.push(serde_json::json!({
++                "tick": after_tick, "registry_present": rec.is_some(), "alive": alive,
++                "pose": after_pose, "health": bio.map(|b| b.body.health),
++                "pain": bio.map(|b| b.homeostasis.drives.pain),
++                "sleeping": bio.map(|b| b.body.sleeping), "injury": bio.map(|b| b.body.injury),
++                "native_contacts": contacts, "registered_food_consumed": food.map(|o| o.consumed),
++                "registered_food_carried_by": food.and_then(|o| o.carried_by),
++                "neural_action": !steps.is_empty()
++            }));
+         }
+         if after_tick != before_tick {
+             if let Some(state) = &mut task {
+@@ -696,12 +1023,39 @@
+                 "cognitive_work":step.patch.cognitive_work(),"full_outcome":step.patch.outcome(),
+                 "observer_pose_before":before_pose,"observer_pose_after":after_pose,
+                 "observer_diagnostics_not_biologically_charged":true});
++            #[cfg(feature = "gpu-tests")]
++            let row = {
++                let mut row = row;
++                if let Some(spec) = case_stimulus {
++                    let heard = &step.frame.sensory().language_context.heard_tokens;
++                    let expected = if before_tick.raw().saturating_sub(source_world_tick) < 2 {
++                        spec.player_tokens
++                    } else {
++                        &[]
++                    };
++                    if !heard.iter().flatten()
++                        .filter(|word| word.source_kind == alife_core::UtteranceSourceKind::Player)
++                        .map(|word| word.token_id)
++                        .eq(expected.iter().copied().map(u32::from))
++                    {
++                        return Err("published step did not observe the registered Player sequence".into());
++                    }
++                    row["observed_native_heard_tokens"] = serde_json::to_value(heard)?;
++                    row["observed_world_utterances_after"] =
++                        serde_json::to_value(runtime.world().audible_utterances())?;
++                }
++                if controlled_pressure.is_some() {
++                    row["observer_host_pressure_control"] =
++                        runtime.controlled_pressure_evidence_for_test();
++                }
++                row
++            };
+             let mut bytes = serde_json::to_vec(&row)?;
+             bytes.push(b'\n');
+             rows_bytes = rows_bytes
+                 .checked_add(bytes.len())
+                 .ok_or("retention trace size overflow")?;
+-            if rows_bytes > MAX_TRACE_BYTES {
++            if rows_bytes > request.trace_byte_limit() {
+                 return Err("retention trace byte bound exceeded".into());
+             }
+             rows_writer.write_all(&bytes)?;
+@@ -731,6 +1085,10 @@
+             std::thread::sleep(std::time::Duration::from_millis(1));
+         }
+     };
++    #[cfg(feature = "gpu-tests")]
++    if published_case.is_some_and(|name| name.starts_with("r2-grade-")) {
++        receipt["private_post_tick_body_observations"] = serde_json::to_value(published_body)?;
++    }
+     rows_writer.flush()?;
+     sync_rows.sync_all()?;
+     drop(rows_writer);
+@@ -751,14 +1109,23 @@
+     receipt["gpu_restored"] = serde_json::json!(true);
+     receipt["neural_execution"] = serde_json::json!(calls > 0);
+     receipt["captured_decisions"] = serde_json::json!(rows);
+-    receipt["world_ticks"] = serde_json::json!(runtime
+-        .world()
+-        .tick()
+-        .raw()
+-        .saturating_sub(source_world_tick));
++    receipt["world_ticks"] = serde_json::json!(
++        runtime
++            .world()
++            .tick()
++            .raw()
++            .saturating_sub(source_world_tick)
++    );
+     receipt["control_calls"] = serde_json::json!(calls);
+     receipt["alive"] = serde_json::json!(alive);
+     receipt["cue_free"] = serde_json::json!(cue_free);
++    #[cfg(feature = "gpu-tests")]
++    if let Some(spec) = case_stimulus {
++        receipt["published_case_external_suggestion"] = serde_json::json!(!spec.player_tokens.is_empty());
++        if !spec.player_tokens.is_empty() {
++            receipt["cue_free"] = serde_json::json!(false);
++        }
++    }
+     receipt["source_unchanged"] = serde_json::json!(unchanged);
+     receipt["saved_policy_base_unchanged"] = serde_json::json!(base_unchanged);
+     receipt["prior_remained_off"] = serde_json::json!(prior_clear);
+@@ -782,7 +1149,7 @@
+         source_world_tick,
+         request.evaluation_nonce,
+         sampling_temperature,
+-        &digest(&serde_json::to_vec(&request)?),
++        &request_identity,
+         endpoint_seeds,
+         request
+             .finalization_deadline_unix_seconds
+@@ -811,18 +1178,34 @@
+             && cue_free
+             && endpoint_preserved
+     );
+-    receipt["retention_scope"] = serde_json::json!("Frozen-head native observation after optional direct-weight edit; moving prey is moving-food proxy; single-layout outcomes are not generalization");
++    receipt["retention_scope"] = serde_json::json!(
++        "Frozen-head native observation after optional direct-weight edit; moving prey is moving-food proxy; single-layout outcomes are not generalization"
++    );
+     let complete = matches!(
+         stop,
+         "decision_limit" | "world_tick_limit" | "natural_death" | "restore_only"
+     ) && error.is_none()
+         && base_unchanged
+         && prior_clear;
+-    receipt["qualified"] =
+-        serde_json::json!(qualified(complete, unchanged, cue_free, endpoint_preserved));
++    receipt["software_simulation_integrity_valid"] = serde_json::json!(
++        software_simulation && qualified(complete, unchanged, cue_free, endpoint_preserved)
++    );
++    receipt["qualified"] = serde_json::json!(
++        !software_simulation && qualified(complete, unchanged, cue_free, endpoint_preserved)
++    );
+     receipt["retention_demonstrated"] = serde_json::json!(
+-        qualified(complete, unchanged, cue_free, endpoint_preserved) && alive && meals > 0
++        !software_simulation
++            && qualified(complete, unchanged, cue_free, endpoint_preserved)
++            && alive
++            && meals > 0
+     );
++    #[cfg(feature = "gpu-tests")]
++    if case_stimulus.is_some_and(|case| !case.player_tokens.is_empty()) {
++        receipt["qualified"] = serde_json::json!(false);
++        receipt["retention_demonstrated"] = serde_json::json!(false);
++        receipt["published_case_software_integrity"] = receipt["software_simulation_integrity_valid"].clone();
++        receipt["software_simulation_integrity_valid"] = serde_json::json!(false);
++    }
+     alife_storage::write(
+         output.join("retention.json"),
+         serde_json::to_vec_pretty(&receipt)?,
+@@ -833,6 +1216,34 @@
+ #[cfg(test)]
+ mod tests {
+     use super::*;
++
++    #[cfg(feature = "gpu-tests")]
++    #[test]
++    fn retained_scent_scope_does_not_relax_legacy_request_or_admission() {
++        let value = serde_json::json!({
++            "schema": 3, "evaluation_nonce": 2, "max_decisions": 4,
++            "max_world_ticks": 8, "deadline_unix_seconds": 10, "max_output_bytes": 67108864,
++        });
++        let request: SavedLifeRetentionRequest = serde_json::from_value(value.clone()).unwrap();
++        let mut unscoped = value;
++        unscoped["near_field_volatile"] = serde_json::json!(true);
++        assert!(serde_json::from_value::<SavedLifeRetentionRequest>(unscoped).is_err());
++        let scope = RetainedScentScope {
++            arm: RetainedScentArm::On,
++            owner: 3,
++            evaluation_nonce: 2,
++        };
++        assert!(scope.validate(&request).is_ok());
++        assert!(RetainedScentScope { evaluation_nonce: 3, ..scope }.validate(&request).is_err());
++        assert!(RetainedScentScope { owner: 0, ..scope }.validate(&request).is_err());
++        let restore_only = SavedLifeRetentionRequest {
++            max_decisions: 0,
++            max_world_ticks: 0,
++            ..request
++        };
++        assert!(scope.validate(&restore_only).is_err());
++    }
++
+     #[test]
+     fn saved_retention_preserves_fixture_heads_private_bytes_and_rejects_teacher_before_gpu() {
+         // Synthetic storage/admission fixture only. No GPU or biological claim.
+@@ -957,23 +1368,25 @@
+         assert_eq!(restored.handoff.actor, checkpoint.handoff.actor);
+         assert_eq!(restored.handoff.value, checkpoint.handoff.value);
+         assert_eq!(restored.life, checkpoint.life);
+-        assert!(evaluate_saved_life_retention(
+-            &current,
+-            &output,
+-            SavedLifeRetentionRequest {
+-                schema: 2,
+-                evaluation_nonce: 71,
+-                cue_free_food_placement: false,
+-                direct_weights: None,
+-                navigation_task: None,
+-                max_decisions: 0,
+-                max_world_ticks: 8,
+-                deadline_unix_seconds: now().unwrap() + 600,
+-                finalization_deadline_unix_seconds: None,
+-                max_output_bytes: 512 * 1024 * 1024,
+-            }
+-        )
+-        .is_err());
++        assert!(
++            evaluate_saved_life_retention(
++                &current,
++                &output,
++                SavedLifeRetentionRequest {
++                    schema: 2,
++                    evaluation_nonce: 71,
++                    cue_free_food_placement: false,
++                    direct_weights: None,
++                    navigation_task: None,
++                    max_decisions: 0,
++                    max_world_ticks: 8,
++                    deadline_unix_seconds: now().unwrap() + 600,
++                    finalization_deadline_unix_seconds: None,
++                    max_output_bytes: 512 * 1024 * 1024,
++                }
++            )
++            .is_err()
++        );
+     }
+     #[test]
+     fn observer_sensory_serializes_exact_existing_channels_without_mutation() {
+@@ -984,6 +1397,8 @@
+         for (i, v) in channels.smell_chemistry.iter_mut().enumerate() {
+             *v = i as f32 / 8.0;
+         }
++        channels.tactile_contact[0] = 1.0;
++        channels.tactile_contact[2] = 0.5;
+         let before = channels;
+         let encoded = observer_sealed_sensory(&channels);
+         assert_eq!(channels, before);
+@@ -995,6 +1410,11 @@
+             encoded["smell_chemistry"],
+             serde_json::json!(before.smell_chemistry)
+         );
++        assert_eq!(
++            encoded["tactile_contact"],
++            serde_json::json!(before.tactile_contact)
++        );
++        assert_eq!(encoded["tactile_contact"].as_array().unwrap().len(), 8);
+         assert_eq!(encoded["visual_affordance"].as_array().unwrap().len(), 16);
+         assert_eq!(encoded["smell_chemistry"].as_array().unwrap().len(), 8);
+         assert!(serde_json::to_vec(&encoded).unwrap().len() < 2048);
+@@ -1084,6 +1504,20 @@
+             max_output_bytes: 2 * 1024 * 1024 * 1024,
+         };
+         r.validate(100).unwrap();
++        assert_eq!(r.trace_byte_limit(), 16 * 1024 * 1024);
++        let mut extended = r.clone();
++        extended.schema = 3;
++        extended.max_decisions = 1024;
++        extended.validate(100).unwrap();
++        assert_eq!(extended.trace_byte_limit(), 64 * 1024 * 1024);
++        extended.max_decisions = 1025;
++        assert!(extended.validate(100).is_err());
++        extended.max_decisions = 1024;
++        extended.deadline_unix_seconds = 701;
++        assert!(extended.validate(100).is_err());
++        extended.schema = 4;
++        extended.deadline_unix_seconds = 200;
++        assert!(extended.validate(100).is_err());
+         let mut finalization = r.clone();
+         finalization.finalization_deadline_unix_seconds = Some(320);
+         finalization.validate(100).unwrap();

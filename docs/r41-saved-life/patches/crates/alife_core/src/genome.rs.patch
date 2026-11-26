@@ -1,0 +1,56 @@
+diff --git a/crates/alife_core/src/genome.rs b/crates/alife_core/src/genome.rs
+--- a/crates/alife_core/src/genome.rs
++++ b/crates/alife_core/src/genome.rs
+@@ -20,13 +20,6 @@
+     pub genetic_prior_seed: u64,
+     #[serde(default, skip_serializing_if = "InnatePriorityGenes::is_default")]
+     pub innate_priority: InnatePriorityGenes,
+-    /// Birth-only gain for procedural distance readouts. Missing legacy values
+-    /// retain the original compiler output; acquired/foundation weights are separate.
+-    #[serde(
+-        default = "legacy_distance_gain",
+-        skip_serializing_if = "is_legacy_distance_gain"
+-    )]
+-    pub procedural_distance_gain: f32,
+     pub seeds: GenomeSeedSet,
+     pub lobe_ratios: LobeRatioPlan,
+     pub macro_connectome_masks: Vec<MacroConnectomeMask>,
+@@ -42,22 +35,6 @@
+     pub crossover: CrossoverPolicy,
+     pub developmental_schedule: DevelopmentalSchedule,
+     pub inheritance: InheritancePolicy,
+-}
+-
+-pub(crate) fn legacy_distance_gain() -> f32 {
+-    1.0
+-}
+-
+-pub(crate) fn is_legacy_distance_gain(value: &f32) -> bool {
+-    *value == 1.0
+-}
+-
+-pub(crate) fn validate_distance_gain(value: f32) -> Result<(), ScaffoldContractError> {
+-    if value.is_finite() && (1.0..=16.0).contains(&value) {
+-        Ok(())
+-    } else {
+-        Err(ScaffoldContractError::ScalarOutOfRange)
+-    }
+ }
+ 
+ /// Expressed diploid predispositions used by the neural action decoder at birth.
+@@ -783,7 +760,6 @@
+             brain_class_id,
+             genetic_prior_seed: seeds.genetic_prior_seed,
+             innate_priority: InnatePriorityGenes::canonical_founder(),
+-            procedural_distance_gain: legacy_distance_gain(),
+             seeds,
+             lobe_ratios: LobeRatioPlan::ClassDefault,
+             macro_connectome_masks: if brain_class_id == crate::BrainCapacityClass::N2048_ID {
+@@ -857,7 +833,6 @@
+         }
+         self.seeds.validate_contract()?;
+         self.innate_priority.validate_contract()?;
+-        validate_distance_gain(self.procedural_distance_gain)?;
+         if self.genetic_prior_seed == 0 || self.genetic_prior_seed != self.seeds.genetic_prior_seed
+         {
+             return Err(ScaffoldContractError::InvalidId);

@@ -1,0 +1,34 @@
+diff --git a/crates/alife_game_app/src/production_voxel_renderer/hungry_ear_tests.rs b/crates/alife_game_app/src/production_voxel_renderer/hungry_ear_tests.rs
+--- a/crates/alife_game_app/src/production_voxel_renderer/hungry_ear_tests.rs
++++ b/crates/alife_game_app/src/production_voxel_renderer/hungry_ear_tests.rs
+@@ -139,7 +139,6 @@
+         walk_seconds: 0.7,
+         moved: false,
+         feedback: OutcomeFeedback::default(),
+-        familiarity: None,
+         hungry_ears: HungryEars { blend: 1.0 },
+         hungry_ears_eligible: true,
+     };
+@@ -195,13 +194,7 @@
+             } else {
+                 base
+             };
+-            let expected = outcome_rotation(
+-                offset,
+-                part,
+-                &visual.feedback,
+-                visual.familiarity,
+-                marker.animation,
+-            );
++            let expected = outcome_rotation(offset, part, &visual.feedback, marker.animation);
+             assert!(app
+                 .world()
+                 .get::<Transform>(bone)
+@@ -333,7 +326,6 @@
+                 walk_seconds: 0.0,
+                 moved: false,
+                 feedback: OutcomeFeedback::default(),
+-                familiarity: None,
+                 hungry_ears: HungryEars { blend: 1.0 },
+                 hungry_ears_eligible: true,
+             },

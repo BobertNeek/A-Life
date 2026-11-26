@@ -1,0 +1,45 @@
+diff --git a/crates/alife_world/src/persistent_voxel.rs b/crates/alife_world/src/persistent_voxel.rs
+--- a/crates/alife_world/src/persistent_voxel.rs
++++ b/crates/alife_world/src/persistent_voxel.rs
+@@ -585,35 +585,14 @@
+         &self,
+         anchors: &[CreatureWorldAnchor],
+     ) -> Result<PersistentVoxelWorldSnapshot, ScaffoldContractError> {
+-        self.snapshot_for_view(anchors, None)
+-    }
+-
+-    /// A player can look at the landscape after its last resident is gone.
+-    /// An observing tile activates only terrain, never an artificial creature or its content.
+-    pub fn snapshot_for_view(
+-        &self,
+-        anchors: &[CreatureWorldAnchor],
+-        empty_focus: Option<VoxelTileCoord>,
+-    ) -> Result<PersistentVoxelWorldSnapshot, ScaffoldContractError> {
++        let active_coords = self.active_chunk_coords(anchors)?;
++        let mut visible_chunks = Vec::new();
++        for coord in active_coords {
++            visible_chunks.push(self.chunk_metadata(coord, self.dirty_generation(coord))?);
++        }
++        visible_chunks.sort_by_key(|chunk| chunk.coord);
+         let procedural_config = self.procedural_config();
+         let activation = activate_procedural_chunks_around_creatures(procedural_config, anchors)?;
+-        let mut active_coords: Vec<_> = activation
+-            .active_chunks
+-            .iter()
+-            .map(|c| VoxelChunkCoord::from(c.coord))
+-            .collect();
+-        if let Some(focus) = empty_focus.filter(|_| anchors.is_empty()) {
+-            active_coords.extend(
+-                crate::procedural_chunks::chunks_in_view(procedural_config, focus.into())?
+-                    .take(procedural_config.max_active_chunks)
+-                    .map(VoxelChunkCoord::from),
+-            );
+-        }
+-        active_coords.sort_unstable();
+-        let visible_chunks = active_coords
+-            .into_iter()
+-            .map(|coord| self.chunk_metadata(coord, self.dirty_generation(coord)))
+-            .collect::<Result<Vec<_>, _>>()?;
+         let content = generate_procedural_world_content(procedural_config, &activation)?;
+ 
+         let creatures = anchors

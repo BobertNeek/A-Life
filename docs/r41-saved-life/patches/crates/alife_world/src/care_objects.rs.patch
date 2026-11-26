@@ -1,0 +1,34 @@
+diff --git a/crates/alife_world/src/care_objects.rs b/crates/alife_world/src/care_objects.rs
+--- a/crates/alife_world/src/care_objects.rs
++++ b/crates/alife_world/src/care_objects.rs
+@@ -41,30 +41,6 @@
+ }
+ 
+ impl HeadlessWorld {
+-    /// A planted harvest and a direct offering use the same existing physical food recipes.
+-    pub fn spawn_player_food(
+-        &mut self,
+-        position: Vec3f,
+-        variety: FoodVariety,
+-    ) -> Result<WorldEntityId, ScaffoldContractError> {
+-        let label = (0..=self.object_count())
+-            .map(|suffix| format!("player-food-t{}-{suffix}", self.tick().raw()))
+-            .find(|label| self.entity_id(label).is_none())
+-            .ok_or(ScaffoldContractError::InvalidId)?;
+-        let id = self.editor_spawn_object(WorldEditorSpawnSpec {
+-            label,
+-            kind: WorldObjectKind::Food,
+-            organism_id: None,
+-            position,
+-            nutrition: variety.nutrition(),
+-            radius: 0.5,
+-            hazard_pain: 0.,
+-            token_id: None,
+-        })?;
+-        self.set_food_variety(id, variety)?;
+-        Ok(id)
+-    }
+-
+     /// Saved objects keep the resulting values; loading never reruns recipes.
+     pub fn set_food_variety(
+         &mut self,

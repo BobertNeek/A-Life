@@ -1,0 +1,147 @@
+diff --git a/crates/alife_game_app/src/production_voxel_renderer/island.rs b/crates/alife_game_app/src/production_voxel_renderer/island.rs
+--- a/crates/alife_game_app/src/production_voxel_renderer/island.rs
++++ b/crates/alife_game_app/src/production_voxel_renderer/island.rs
+@@ -1,5 +1,4 @@
+ //! Island chunk and prop rendering for the playable world.
+-mod nursery;
+ use super::*;
+ use bevy::{
+     gltf::{Gltf, GltfMesh},
+@@ -23,7 +22,6 @@
+     props: BTreeMap<String, Handle<Gltf>>,
+     surface: std::sync::Arc<alife_world::TerrainSurface>,
+     spawned: bool,
+-    bootstrap_ground: Option<Entity>,
+     next_update: f64,
+ }
+ #[derive(Component)]
+@@ -201,35 +199,13 @@
+         0.0,
+         surface.origin_z + (surface.depth - 1) as f32 * surface.spacing * 0.5,
+     );
+-    let bootstrap_mesh = world
+-        .resource_mut::<Assets<Mesh>>()
+-        .add(bootstrap_surface(&surface));
+-    let bootstrap_material =
+-        world
+-            .resource_mut::<Assets<StandardMaterial>>()
+-            .add(StandardMaterial {
+-                perceptual_roughness: 1.0,
+-                ..default()
+-            });
+-    let bootstrap_ground = world
+-        .spawn((
+-            Name::new("Island while detailed terrain streams"),
+-            Mesh3d(bootstrap_mesh),
+-            MeshMaterial3d(bootstrap_material),
+-            NotShadowCaster,
+-            bevy::picking::Pickable::IGNORE,
+-            Fvr04ProductionRuntimeSceneRoot,
+-        ))
+-        .id();
+     world.insert_resource(IslandAssets {
+         terrain,
+         props: handles,
+         surface: surface.clone(),
+         spawned: false,
+-        bootstrap_ground: Some(bootstrap_ground),
+         next_update: 0.0,
+     });
+-    nursery::plant(world, &surface);
+     let (mesh, mut material, images) = terrain_water::island_water(&surface, size, center);
+     let [shore, ripple] = images.map(|image| world.resource_mut::<Assets<Image>>().add(image));
+     material.base_color_texture = Some(shore);
+@@ -247,53 +223,6 @@
+         Fvr04ProductionRuntimeSceneRoot,
+     ));
+ }
+-/// The real island is immediately visible, even while the authored glTF is
+-/// streaming. The coarse mesh samples the same immutable heightfield and never
+-/// participates in picking, collision, or the simulation.
+-fn bootstrap_surface(surface: &alife_world::TerrainSurface) -> Mesh {
+-    let samples = |count| {
+-        (0..count - 1)
+-            .step_by(4)
+-            .chain(std::iter::once(count - 1))
+-            .collect::<Vec<usize>>()
+-    };
+-    let xs = samples(surface.width);
+-    let zs = samples(surface.depth);
+-    let mut positions = Vec::with_capacity(xs.len() * zs.len());
+-    let mut colors = Vec::with_capacity(positions.capacity());
+-    let mut indices = Vec::with_capacity((xs.len() - 1) * (zs.len() - 1) * 6);
+-    for (j, &z) in zs.iter().enumerate() {
+-        for (i, &x) in xs.iter().enumerate() {
+-            let wx = surface.origin_x + x as f32 * surface.spacing;
+-            let wz = surface.origin_z + z as f32 * surface.spacing;
+-            let h = surface.height(wx, wz).unwrap_or(0.0);
+-            positions.push([wx, h, wz]);
+-            let grass = ((h - 1.0) / 2.5).clamp(0., 1.);
+-            let grain = (wx * 0.23 + wz * 0.41).sin() * 0.014;
+-            colors.push([
+-                0.46 - 0.23 * grass + grain,
+-                0.40 - 0.085 * grass + grain,
+-                0.26 - 0.12 * grass + grain,
+-                1.0,
+-            ]);
+-            if i + 1 < xs.len() && j + 1 < zs.len() {
+-                let a = positions.len() as u32 - 1;
+-                let b = a + xs.len() as u32;
+-                indices.extend_from_slice(&[a, b, a + 1, a + 1, b, b + 1]);
+-            }
+-        }
+-    }
+-    let mut mesh = Mesh::new(
+-        PrimitiveTopology::TriangleList,
+-        RenderAssetUsages::default(),
+-    );
+-    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+-    mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors);
+-    mesh.insert_indices(Indices::U32(indices));
+-    mesh.compute_smooth_normals();
+-    mesh
+-}
+-
+ pub(super) fn view_height(projection: &Projection) -> f32 {
+     match projection {
+         Projection::Orthographic(p) => match p.scaling_mode {
+@@ -439,9 +368,6 @@
+             }
+         }
+         info!("Island loaded: {nx}x{nz} terrain chunks, shared prop meshes, 3 LODs");
+-        if let Some(ground) = assets.bootstrap_ground.take() {
+-            commands.entity(ground).despawn();
+-        }
+         assets.spawned = true;
+     }
+     if time.elapsed_secs_f64() < assets.next_update {
+@@ -563,29 +489,6 @@
+ #[cfg(test)]
+ mod tests {
+     use super::*;
+-
+-    #[test]
+-    fn bootstrap_ground_spans_the_real_island_and_uses_its_elevation() {
+-        let terrain = alife_world::island_terrain();
+-        let surface = terrain.surface();
+-        let mesh = bootstrap_surface(surface);
+-        let bevy::mesh::VertexAttributeValues::Float32x3(points) =
+-            mesh.attribute(Mesh::ATTRIBUTE_POSITION).unwrap()
+-        else {
+-            panic!("positions");
+-        };
+-        assert!(points.len() < surface.width * surface.depth / 8);
+-        assert!(mesh.attribute(Mesh::ATTRIBUTE_NORMAL).is_some());
+-        assert_eq!(points[0][0], surface.origin_x);
+-        assert_eq!(
+-            points.last().unwrap()[2],
+-            surface.origin_z + (surface.depth - 1) as f32 * surface.spacing
+-        );
+-        assert!(points
+-            .iter()
+-            .all(|&[x, y, z]| (surface.height(x, z).unwrap() - y).abs() < 1e-5));
+-        assert_eq!(mesh.indices().unwrap().len() % 3, 0);
+-    }
+ 
+     #[test]
+     fn corrected_boulder_placements_load_without_regrounding() {

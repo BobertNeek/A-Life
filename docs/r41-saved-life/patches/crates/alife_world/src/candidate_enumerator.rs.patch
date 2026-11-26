@@ -1,0 +1,15 @@
+diff --git a/crates/alife_world/src/candidate_enumerator.rs b/crates/alife_world/src/candidate_enumerator.rs
+--- a/crates/alife_world/src/candidate_enumerator.rs
++++ b/crates/alife_world/src/candidate_enumerator.rs
+@@ -127,6 +127,11 @@
+ }
+ 
+ impl GroundedCandidateBinding {
++    /// Only an existing same-snapshot transport view, not another physical lookup.
++    pub(crate) fn observed_grounded_frame(&self) -> &GroundedSensingFrame {
++        &self.grounded
++    }
++
+     pub(crate) fn new(
+         grounded: GroundedSensingFrame,
+         profile: SensorProfile,

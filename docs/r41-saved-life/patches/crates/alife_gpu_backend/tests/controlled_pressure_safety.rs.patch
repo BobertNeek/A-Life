@@ -1,0 +1,68 @@
+diff --git a/crates/alife_gpu_backend/tests/controlled_pressure_safety.rs b/crates/alife_gpu_backend/tests/controlled_pressure_safety.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/alife_gpu_backend/tests/controlled_pressure_safety.rs
+@@ -0,0 +1,63 @@
++use alife_core::{
++    BrainActivityPolicyV1, BrainDispatchIdentity, GpuPressureSample, GpuPressureSampleInput,
++    NeuralThrottleLevel,
++};
++
++#[test]
++fn zero_host_time_keeps_real_atp_and_heap_throttling() {
++    let policy = BrainActivityPolicyV1::production_v1();
++    let base = GpuPressureSampleInput {
++        identity: BrainDispatchIdentity {
++            organism_id_raw: 3,
++            tick: 3074,
++            class_id_raw: 1,
++            handle_slot: 0,
++            handle_generation: 1,
++            sequence_cursor: 1,
++            dispatch_generation: 1,
++            frame_digest: [1, 2, 3, 4],
++        },
++        source_dispatch_generation: 0,
++        source_frame_digest: [0; 4],
++        completed_gpu_time_ns: 0,
++        queue_depth: 0,
++        logical_heap_used: 0,
++        logical_heap_capacity: 100,
++        brain_atp_remaining_q16: 65535,
++        brain_atp_capacity_q16: 65535,
++    };
++    let full = GpuPressureSample::try_new(&policy, base).unwrap();
++    assert_eq!(full.throttle_level(), NeuralThrottleLevel::Full);
++    let depleted = GpuPressureSample::try_new(
++        &policy,
++        GpuPressureSampleInput {
++            brain_atp_remaining_q16: 0,
++            ..base
++        },
++    )
++    .unwrap();
++    assert_eq!(depleted.completed_gpu_time_ns, 0);
++    assert_eq!(
++        depleted.throttle_level(),
++        NeuralThrottleLevel::EssentialOnly
++    );
++    let heap = GpuPressureSample::try_new(
++        &policy,
++        GpuPressureSampleInput {
++            logical_heap_used: 100,
++            ..base
++        },
++    )
++    .unwrap();
++    assert_eq!(heap.completed_gpu_time_ns, 0);
++    assert_eq!(heap.throttle_level(), NeuralThrottleLevel::EssentialOnly);
++    let queued = GpuPressureSample::try_new(
++        &policy,
++        GpuPressureSampleInput {
++            queue_depth: 100,
++            ..base
++        },
++    )
++    .unwrap();
++    assert_eq!(queued.throttle_level(), NeuralThrottleLevel::EssentialOnly);
++}

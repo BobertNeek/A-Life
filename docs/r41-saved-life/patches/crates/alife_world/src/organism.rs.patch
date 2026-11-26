@@ -1,0 +1,97 @@
+diff --git a/crates/alife_world/src/organism.rs b/crates/alife_world/src/organism.rs
+--- a/crates/alife_world/src/organism.rs
++++ b/crates/alife_world/src/organism.rs
+@@ -374,6 +374,31 @@
+     pub phenotype: CreaturePhenotype,
+     pub biochemistry: BiochemistryState,
+     pub age: Tick,
++}
++
++// `f32::exp2` has platform-dependent rounding. A saved phenotype remains
++// authoritative; tolerate one adjacent positive f32 only for this derived field.
++// Every other phenotype field and all original state digests must still agree.
++fn expressed_phenotype_matches_saved(
++    saved: &CreaturePhenotype,
++    expressed: &CreaturePhenotype,
++) -> bool {
++    if saved == expressed {
++        return true;
++    }
++    let a = saved.body.metabolic_turnover;
++    let b = expressed.body.metabolic_turnover;
++    if !a.is_finite()
++        || !b.is_finite()
++        || a <= 0.0
++        || b <= 0.0
++        || a.to_bits().abs_diff(b.to_bits()) > 1
++    {
++        return false;
++    }
++    let mut comparison = expressed.clone();
++    comparison.body.metabolic_turnover = a;
++    saved == &comparison
+ }
+ 
+ impl WorldOrganismRecord {
+@@ -632,7 +657,7 @@
+         }
+         if self.genetic_validation.genetics.get().is_none() {
+             self.genome.validate_contract()?;
+-            if *self.phenotype != self.genome.express()? {
++            if !expressed_phenotype_matches_saved(&self.phenotype, &self.genome.express()?) {
+                 return Err(ScaffoldContractError::InvalidId);
+             }
+             // Concurrent readers may race to install the same immutable proof.
+@@ -1699,6 +1724,52 @@
+     use alife_core::{BrainCapacityClass, FoundationGeneticIdentity, LineageId};
+ 
+     #[test]
++    fn phenotype_exp2_rounding_accepts_one_ulp_only_and_keeps_saved_bits() {
++        let genome = CreatureGenome::early_mammal_founder(
++            0xE10_31FF,
++            FoundationGeneticIdentity::new(10, 1, 7, BrainCapacityClass::N512_ID).unwrap(),
++        )
++        .unwrap();
++        let expressed = genome.express().unwrap();
++        let mut saved = expressed.clone();
++        let bits = expressed.body.metabolic_turnover.to_bits();
++        saved.body.metabolic_turnover = f32::from_bits(bits + 1);
++        assert!(expressed_phenotype_matches_saved(&saved, &expressed));
++        assert_eq!(saved.body.metabolic_turnover.to_bits(), bits + 1);
++        saved.body.metabolic_turnover = f32::from_bits(bits + 2);
++        assert!(!expressed_phenotype_matches_saved(&saved, &expressed));
++        saved.body.metabolic_turnover = f32::NAN;
++        assert!(!expressed_phenotype_matches_saved(&saved, &expressed));
++        saved = expressed.clone();
++        saved.body.metabolic_turnover = f32::from_bits(bits + 1);
++        saved.body.size_scale += 0.01;
++        assert!(!expressed_phenotype_matches_saved(&saved, &expressed));
++    }
++
++    #[test]
++    fn phenotype_exp2_tolerance_does_not_accept_a_changed_digest() {
++        let genome = CreatureGenome::early_mammal_founder(
++            0xE10_31FF,
++            FoundationGeneticIdentity::new(10, 1, 7, BrainCapacityClass::N512_ID).unwrap(),
++        )
++        .unwrap();
++        let record = WorldOrganismRecord::newborn(
++            OrganismId(1),
++            WorldEntityId(101),
++            genome.clone(),
++            genome.express().unwrap(),
++            Tick(0),
++        )
++        .unwrap();
++        let mut wire = serde_json::to_value(&record).unwrap();
++        let original = record.phenotype().body.metabolic_turnover;
++        wire["phenotype"]["body"]["metabolic_turnover"] =
++            serde_json::json!(f32::from_bits(original.to_bits() + 1));
++        let restored: WorldOrganismRecord = serde_json::from_value(wire).unwrap();
++        assert!(restored.validate_contract().is_err());
++    }
++
++    #[test]
+     fn biochemistry_digest_preserves_signed_zero_round_trip() {
+         let genome = CreatureGenome::early_mammal_founder(
+             0xE10_31FF,

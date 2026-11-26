@@ -1,0 +1,15 @@
+diff --git a/crates/alife_world/src/headless/player_hand.rs b/crates/alife_world/src/headless/player_hand.rs
+--- a/crates/alife_world/src/headless/player_hand.rs
++++ b/crates/alife_world/src/headless/player_hand.rs
+@@ -51,10 +51,7 @@
+             last_ground: ground,
+         });
+         match self.move_player_hold_to(ground, true) {
+-            Ok(position) => {
+-                self.toy_rolls.remove(&id.raw());
+-                Ok(position)
+-            }
++            Ok(position) => Ok(position),
+             Err(error) => {
+                 self.player_hold = None;
+                 Err(error)

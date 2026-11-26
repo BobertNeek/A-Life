@@ -1,0 +1,449 @@
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
+@@ -0,0 +1,444 @@
++//! Versioned, data-only diagnostic registry. It cannot select private fixtures or scorecards.
++use super::*;
++use alife_core::OrganismId;
++use serde::{Deserialize, Serialize};
++
++const MAX_CONFIG_BYTES: usize = 1024 * 1024;
++const MAX_SMALL_CONFIG_BYTES: usize = 256 * 1024;
++const MAX_SCOPED_DECISIONS: usize = 256;
++const MAX_SCOPED_WORLD_TICKS: u64 = 2_048;
++const MAX_SCOPED_OUTPUT_BYTES: u64 = 512 * 1024 * 1024;
++
++#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
++#[serde(rename_all = "snake_case")]
++enum ScenarioV1 {
++    RetainedOpening,
++    CueFreeFoodPlacement,
++    LCorner,
++    PublishedCardCase,
++}
++
++#[derive(Debug, Clone, Serialize, Deserialize)]
++#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
++enum InterventionV1 {
++    Control {},
++    IndexedNearField {},
++    DirectWeights { edit: DirectWeightEditRequest },
++    VisibleSelfGripV1 { edit: DirectWeightEditRequest, words: [u32; 16] },
++}
++
++#[derive(Debug, Clone, Deserialize)]
++#[serde(deny_unknown_fields)]
++struct ManifestV1 {
++    schema: u16,
++    run_id: String,
++    owner: u64,
++    source_current_sha256: String,
++    scenario: ScenarioV1,
++    #[serde(default)]
++    card_case: Option<String>,
++    intervention: InterventionV1,
++    evaluation_nonce: u64,
++    max_decisions: usize,
++    max_world_ticks: u64,
++    deadline_unix_seconds: u64,
++    #[serde(default)]
++    finalization_deadline_unix_seconds: Option<u64>,
++    max_output_bytes: u64,
++}
++
++/// Produced only by the strict manifest registry; none of these fields is a grant.
++pub(super) struct ResolvedExperiment {
++    identity: ExperimentIdentity,
++    request: SavedLifeRetentionRequest,
++    scent: Option<RetainedScentScope>,
++}
++
++#[derive(Serialize)]
++pub(super) struct ExperimentIdentity {
++    schema: u16,
++    run_id: String,
++    manifest_sha256: String,
++    // Stable across run labels, whitespace, particular deadlines and evaluation nonces.
++    // Direct edit list order is retained as typed, even for disjoint coordinates.
++    // This is a comparison aid, not proof of identical restored sampler.
++    semantic_settings_sha256: String,
++    owner: u64,
++    source_current_sha256: String,
++    scenario: ScenarioV1,
++    #[serde(skip_serializing_if = "Option::is_none")]
++    card_case: Option<String>,
++    /// Only the registered name is duplicated in the receipt. Typed weight payload lives in request.
++    intervention: &'static str,
++    #[serde(skip_serializing_if = "Option::is_none")]
++    visible_self_grip_v1: Option<[u32; 16]>,
++}
++
++impl ExperimentIdentity {
++    pub(super) fn card_case(&self) -> Option<&str> {
++        self.card_case.as_deref()
++    }
++
++    pub(super) fn visible_self_grip_v1(&self) -> Option<[u32; 16]> {
++        self.visible_self_grip_v1
++    }
++
++    pub(super) fn validate_source(&self, actual_digest: &str) -> Result<()> {
++        if self.source_current_sha256 != actual_digest {
++            return Err("experiment compatibility: source Current hash mismatch".into());
++        }
++        Ok(())
++    }
++
++    pub(super) fn validate_owner(&self, actual_owner: OrganismId) -> Result<()> {
++        if self.owner != actual_owner.raw() {
++            return Err("experiment compatibility: owner does not match sole living resident".into());
++        }
++        Ok(())
++    }
++}
++
++fn exact_sha256(value: &str) -> bool {
++    value.len() == 64 && value.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
++}
++
++fn resolve(bytes: &[u8]) -> Result<ResolvedExperiment> {
++    if bytes.len() > MAX_CONFIG_BYTES {
++        return Err("experiment manifest exceeds 1048576 bytes".into());
++    }
++    // Decode directly from original bytes; typed serde rejects repeated fields.
++    let config: ManifestV1 = serde_json::from_slice(bytes)
++        .map_err(|e| format!("experiment compatibility: invalid or unsupported typed settings: {e}"))?;
++    let is_card = config.scenario == ScenarioV1::PublishedCardCase;
++    if config.schema != 1 || is_card != config.card_case.is_some() {
++        return Err("experiment compatibility: unsupported manifest schema".into());
++    }
++    let card = config.card_case.as_deref().map(|name| {
++        super::card_cases::case(name).ok_or("unsupported published report card case")
++    }).transpose()?;
++    if let Some(card) = card {
++        if config.max_decisions != card.decisions || config.max_world_ticks != card.ticks {
++            return Err("listed card case must keep its frozen decision/tick bounds".into());
++        }
++    }
++    if config.run_id.is_empty()
++        || config.run_id.len() > 64
++        || !config.run_id.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-'))
++        || config.owner == 0
++        || !exact_sha256(&config.source_current_sha256)
++        || config.evaluation_nonce == 0
++        || (!is_card && !(1..=MAX_SCOPED_DECISIONS).contains(&config.max_decisions))
++        || (!is_card && !(1..=MAX_SCOPED_WORLD_TICKS).contains(&config.max_world_ticks))
++        || config.max_output_bytes > MAX_SCOPED_OUTPUT_BYTES
++    {
++        return Err("experiment manifest identity or diagnostic bounds refused".into());
++    }
++    let semantic_settings_sha256 = digest(&serde_json::to_vec(&(
++        "retained-experiment-settings-v1",
++        config.owner,
++        &config.source_current_sha256,
++        config.scenario,
++        &config.intervention,
++        config.max_decisions,
++        config.max_world_ticks,
++        config.max_output_bytes,
++    ))?);
++    // Preserve V3 semantics of the existing cases. The new case ID is a full digest input.
++    let semantic_settings_sha256 = if let Some(name) = &config.card_case {
++        digest(&serde_json::to_vec(&("published-card-case-v1", name, &semantic_settings_sha256))?)
++    } else {
++        semantic_settings_sha256
++    };
++    // Exactly one intervention and one named scenario; extend only by registering another
++    // compiled implementation and versioning any incompatible contract change.
++    let (intervention, scent, direct_weights, visible_self_grip_v1) = match config.intervention {
++        InterventionV1::Control {} => ("control", None, None, None),
++        InterventionV1::IndexedNearField {} => {
++            if config.scenario != ScenarioV1::CueFreeFoodPlacement {
++                return Err("experiment compatibility: indexed near-field requires cue-free food placement".into());
++            }
++            (
++                "indexed_near_field",
++                Some(RetainedScentScope {
++                    arm: RetainedScentArm::On,
++                    owner: config.owner,
++                    evaluation_nonce: config.evaluation_nonce,
++                }),
++                None,
++                None,
++            )
++        }
++        InterventionV1::DirectWeights { edit } => {
++            if edit.source_current_sha256 != config.source_current_sha256 {
++                return Err("experiment compatibility: typed edit/source hash mismatch".into());
++            }
++            retained_direct_weights::validate_experiment_edit_shape(&edit)?;
++            ("direct_weights", None, Some(edit), None)
++        }
++        InterventionV1::VisibleSelfGripV1 { edit, words } => {
++            if edit.source_current_sha256 != config.source_current_sha256
++                || !matches!(words[0], 0 | 0xc100_0000)
++                || !words.iter().all(|&word| word == words[0])
++            {
++                return Err("visible-self-grip V1 requires the signed, bounded common-start plane".into());
++            }
++            retained_direct_weights::validate_experiment_edit_shape(&edit)?;
++            ("visible_self_grip_v1", None, Some(edit), Some(words))
++        }
++    };
++    if bytes.len() > MAX_SMALL_CONFIG_BYTES
++        && !direct_weights.as_ref().is_some_and(|edit| edit.schema == 3)
++    {
++        return Err("experiment manifest exceeds 262144 bytes for this intervention".into());
++    }
++    let navigation_task = match config.scenario {
++        ScenarioV1::LCorner => Some(RetainedNavigationTaskSpec {
++            kind: RetainedNavigationTaskKind::LCorner,
++            rotation_radians: 0.0,
++            mirror: false,
++            prey_speed_per_tick: 0.0,
++        }),
++        ScenarioV1::RetainedOpening | ScenarioV1::CueFreeFoodPlacement => None,
++        ScenarioV1::PublishedCardCase => card.and_then(|c| c.navigation),
++    };
++    let request = SavedLifeRetentionRequest {
++        schema: 3,
++        evaluation_nonce: config.evaluation_nonce,
++        cue_free_food_placement: config.scenario == ScenarioV1::CueFreeFoodPlacement,
++        direct_weights,
++        navigation_task,
++        max_decisions: config.max_decisions,
++        max_world_ticks: config.max_world_ticks,
++        deadline_unix_seconds: config.deadline_unix_seconds,
++        finalization_deadline_unix_seconds: config.finalization_deadline_unix_seconds,
++        max_output_bytes: config.max_output_bytes,
++    };
++    request.validate(now()?)?;
++    Ok(ResolvedExperiment {
++        identity: ExperimentIdentity {
++            schema: config.schema,
++            run_id: config.run_id,
++            manifest_sha256: digest(bytes),
++            semantic_settings_sha256,
++            owner: config.owner,
++            source_current_sha256: config.source_current_sha256,
++            scenario: config.scenario,
++            card_case: config.card_case,
++            intervention,
++            visible_self_grip_v1,
++        },
++        request,
++        scent,
++    })
++}
++
++fn canonical_inside(root: &Path, path: &Path) -> Result<std::path::PathBuf> {
++    let actual = path.canonicalize()?;
++    if actual != path || actual == root || !actual.starts_with(root) {
++        return Err("experiment path is redirected or outside its admission root".into());
++    }
++    Ok(actual)
++}
++
++fn admitted_paths(
++    root: &Path,
++    source: &Path,
++    output: &Path,
++    manifest_path: &Path,
++) -> Result<()> {
++    if !root.is_absolute() || root.parent().is_none() || root.canonicalize()? != root
++        || !fs::metadata(root)?.is_dir()
++    {
++        return Err("experiment requires a canonical operator admission directory".into());
++    }
++    let source = canonical_inside(root, source)?;
++    let manifest = canonical_inside(root, manifest_path)?;
++    if source == manifest || !fs::metadata(&source)?.is_file() || !fs::metadata(&manifest)?.is_file()
++    {
++        return Err("experiment requires distinct regular local Current and manifest files".into());
++    }
++    let parent = output.parent().ok_or("experiment output has no parent directory")?;
++    let actual_parent = parent.canonicalize()?;
++    if actual_parent != parent || !actual_parent.starts_with(root)
++        || !fs::metadata(&actual_parent)?.is_dir() || output.file_name().is_none()
++    {
++        return Err("experiment output must be inside its operator admission directory".into());
++    }
++    match fs::symlink_metadata(output) {
++        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
++        Ok(_) => Err("experiment output already exists".into()),
++        Err(e) => Err(e.into()),
++    }
++}
++
++pub fn evaluate_saved_life_retention_experiment(
++    admission_root: &Path,
++    source: &Path,
++    output: &Path,
++    manifest_path: &Path,
++) -> Result<serde_json::Value> {
++    use std::io::Read;
++    admitted_paths(admission_root, source, output, manifest_path)?;
++    let mut bytes = Vec::new();
++    fs::File::open(manifest_path)?
++        .take((MAX_CONFIG_BYTES + 1) as u64)
++        .read_to_end(&mut bytes)?;
++    let resolved = resolve(&bytes)?;
++    evaluate_saved_life_retention_inner(
++        source,
++        output,
++        resolved.request,
++        resolved.scent,
++        Some(resolved.identity),
++    )
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    fn base(intervention: serde_json::Value) -> serde_json::Value {
++        serde_json::json!({
++            "schema": 1,
++            "run_id": "paired-01_A",
++            "owner": 3,
++            "source_current_sha256": "a".repeat(64),
++            "scenario": "cue_free_food_placement",
++            "intervention": intervention,
++            "evaluation_nonce": 5,
++            "max_decisions": 1,
++            "max_world_ticks": 1,
++            "deadline_unix_seconds": now().unwrap() + 240,
++            "max_output_bytes": 268435456
++        })
++    }
++
++    fn resolved(value: &serde_json::Value) -> Result<ResolvedExperiment> {
++        resolve(&serde_json::to_vec(value)?)
++    }
++
++    fn edit(bits: u32) -> serde_json::Value {
++        serde_json::json!({"kind": "direct_weights", "edit": {
++            "schema": 2, "source_current_sha256": "a".repeat(64),
++            "generator_id": "candidate-01", "edits": [[7, bits]]
++        }})
++    }
++
++    #[test]
++    fn published_case_carries_exact_frozen_bounds_and_rejects_unknown_modes() {
++        let mut x = base(serde_json::json!({"kind":"control"}));
++        x["scenario"] = serde_json::json!("published_card_case");
++        x["card_case"] = serde_json::json!("r2-word-approach-food");
++        x["max_decisions"] = serde_json::json!(16);
++        x["max_world_ticks"] = serde_json::json!(16);
++        let a = resolved(&x).unwrap();
++        assert_eq!(a.identity.card_case(), Some("r2-word-approach-food"));
++        assert!(a.request.navigation_task.is_none());
++        x["intervention"] = edit(0.25_f32.to_bits());
++        let b = resolved(&x).unwrap();
++        assert_eq!(b.identity.card_case(), a.identity.card_case());
++        assert_ne!(a.identity.semantic_settings_sha256, b.identity.semantic_settings_sha256);
++        x["card_case"] = serde_json::json!("r2-word-retreat-food");
++        assert_ne!(b.identity.semantic_settings_sha256, resolved(&x).unwrap().identity.semantic_settings_sha256);
++        x["card_case"] = serde_json::json!("unregistered-private-name");
++        assert!(resolved(&x).is_err());
++        x["card_case"] = serde_json::json!("dogleg_corridor");
++        assert!(resolved(&x).is_err());
++        x["max_decisions"] = serde_json::json!(1024);
++        x["max_world_ticks"] = serde_json::json!(8192);
++        let maze = resolved(&x).unwrap();
++        assert_eq!(maze.request.navigation_task.unwrap().kind, RetainedNavigationTaskKind::DoglegCorridor);
++        x["scenario"] = serde_json::json!("l_corner");
++        assert!(resolved(&x).is_err());
++    }
++
++    #[test]
++    fn registered_settings_overlap_only_in_the_intended_intervention() {
++        let control = base(serde_json::json!({"kind": "control"}));
++        let mut scent = control.clone();
++        scent["intervention"] = serde_json::json!({"kind": "indexed_near_field"});
++        let control = resolved(&control).unwrap();
++        let scent = resolved(&scent).unwrap();
++        assert_eq!(
++            serde_json::to_vec(&control.request).unwrap(),
++            serde_json::to_vec(&scent.request).unwrap()
++        );
++        assert!(control.scent.is_none());
++        assert!(matches!(scent.scent.unwrap().arm, RetainedScentArm::On));
++        assert_ne!(control.identity.manifest_sha256, scent.identity.manifest_sha256);
++        assert_ne!(control.identity.semantic_settings_sha256, scent.identity.semantic_settings_sha256);
++        let mut rep = base(serde_json::json!({"kind": "control"}));
++        rep["run_id"] = serde_json::json!("repeat-02");
++        rep["evaluation_nonce"] = serde_json::json!(19);
++        rep["deadline_unix_seconds"] = serde_json::json!(now().unwrap() + 300);
++        let rep = resolve(&serde_json::to_vec_pretty(&rep).unwrap()).unwrap();
++        assert_ne!(control.identity.manifest_sha256, rep.identity.manifest_sha256);
++        assert_eq!(control.identity.semantic_settings_sha256, rep.identity.semantic_settings_sha256);
++        let direct = resolved(&base(edit(0.25_f32.to_bits()))).unwrap();
++        assert!(direct.scent.is_none());
++        assert_eq!(direct.request.direct_weights.unwrap().edits, [(7, 0.25_f32.to_bits())]);
++        assert!(direct.identity.validate_source(&"a".repeat(64)).is_ok());
++        assert!(direct.identity.validate_source(&"b".repeat(64)).is_err());
++        assert!(direct.identity.validate_owner(OrganismId(3)).is_ok());
++        assert!(direct.identity.validate_owner(OrganismId(4)).is_err());
++    }
++
++    #[test]
++    fn rejects_unsupported_and_nested_duplicate_wire_before_open() {
++        let value = base(serde_json::json!({"kind": "control"}));
++        let wire = serde_json::to_string(&value).unwrap();
++        assert!(resolve(wire.replacen(r#""owner":3"#, r#""owner":3,"owner":4"#, 1).as_bytes()).is_err());
++        assert!(resolve(wire.replacen(r#""kind":"control""#, r#""kind":"control","kind":"indexed_near_field""#, 1).as_bytes()).is_err());
++        for key in ["plugin", "script", "scorecard", "source_path", "host_pressure"] {
++            let mut bad = value.clone();
++            bad[key] = serde_json::json!(true);
++            assert!(resolved(&bad).is_err(), "accepted {key}");
++        }
++        for kind in ["topology", "engine_abi", "arbitrary_code"] {
++            assert!(resolved(&base(serde_json::json!({"kind": kind}))).is_err());
++        }
++        assert!(resolved(&base(edit(f32::NAN.to_bits()))).is_err());
++        assert!(resolved(&base(serde_json::json!({"kind":"control","edit":edit(0)}))).is_err());
++        let mut duplicate = edit(0);
++        duplicate["edit"]["edits"] = serde_json::json!([[7, 0], [7, 0]]);
++        assert!(resolved(&base(duplicate)).is_err());
++        let mut unsupported = base(serde_json::json!({"kind":"indexed_near_field"}));
++        unsupported["scenario"] = serde_json::json!("l_corner");
++        assert!(resolved(&unsupported).is_err());
++        let mut oversized = value.clone();
++        oversized["max_world_ticks"] = serde_json::json!(2049);
++        assert!(resolved(&oversized).is_err());
++    }
++
++    #[test]
++    fn canonical_local_admission_rejects_escape_alias_and_overwrite() {
++        let path = std::env::temp_dir().canonicalize().unwrap().join(format!(
++            "alife-experiment-boundary-test-{}-{}",
++            std::process::id(),
++            SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()
++        ));
++        fs::create_dir(&path).unwrap();
++        let stage = path.join("stage");
++        fs::create_dir(&stage).unwrap();
++        let source = stage.join("Current");
++        let config = stage.join("request.json");
++        let outside = path.join("outside.json");
++        let output = stage.join("result");
++        for item in [&source, &config, &outside] {
++            fs::write(item, b"test only").unwrap();
++        }
++        assert!(admitted_paths(&stage, &source, &output, &config).is_ok());
++        assert!(admitted_paths(&stage, &source, &output, &outside).is_err());
++        assert!(admitted_paths(&stage, &source, &output, &source).is_err());
++        assert!(admitted_paths(&stage, &source, &path.join("escaped"), &config).is_err());
++        #[cfg(unix)]
++        {
++            let alias = stage.join("alias");
++            std::os::unix::fs::symlink(&config, &alias).unwrap();
++            assert!(admitted_paths(&stage, &source, &output, &alias).is_err());
++        }
++        fs::create_dir(&output).unwrap();
++        assert!(admitted_paths(&stage, &source, &output, &config).is_err());
++        fs::remove_dir_all(&path).unwrap();
++    }
++}

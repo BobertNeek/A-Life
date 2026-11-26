@@ -1,0 +1,53 @@
+diff --git a/crates/alife_world/src/grounded_sensing.rs b/crates/alife_world/src/grounded_sensing.rs
+--- a/crates/alife_world/src/grounded_sensing.rs
++++ b/crates/alife_world/src/grounded_sensing.rs
+@@ -276,18 +276,42 @@
+         &mut self,
+         embodiment: Option<&alife_core::EmbodimentState>,
+     ) -> Result<(), ScaffoldContractError> {
++        self.calibrate_inner(embodiment, None)
++    }
++
++    pub(crate) fn calibrate_near_field_volatile(
++        &mut self,
++        embodiment: Option<&alife_core::EmbodimentState>,
++        exposure: &[f32],
++    ) -> Result<(), ScaffoldContractError> {
++        if exposure.len() != self.slots.len()
++            || exposure.iter().any(|value| !(0.0..=1.0).contains(value))
++        {
++            return Err(ScaffoldContractError::InvalidPerceptionFrame);
++        }
++        self.calibrate_inner(embodiment, Some(exposure))
++    }
++
++    fn calibrate_inner(
++        &mut self,
++        embodiment: Option<&alife_core::EmbodimentState>,
++        volatile_exposure: Option<&[f32]>,
++    ) -> Result<(), ScaffoldContractError> {
+         let gain = |capability| embodiment.map_or(1.0, |body| body.sensor_gain(capability));
+-        for slot in &mut self.slots {
++        for (index, slot) in self.slots.iter_mut().enumerate() {
+             slot.confidence = Confidence::new(
+                 (slot.confidence.raw() * gain(alife_core::SensorCapability::Vision))
+                     .clamp(0.0, 1.0),
+             )?;
+-            for chemical in &mut slot.chemical {
+-                // Source-specific chemistry is a contact/taste observation.
+-                // Distant smell is the anonymous bilateral field, not chemical GPS.
+-                *chemical =
+-                    (*chemical * slot.contact * gain(alife_core::SensorCapability::Chemical))
+-                        .clamp(-1.0, 1.0);
++            for (band, chemical) in slot.chemical.iter_mut().enumerate() {
++                // Taste and ordinary source-specific chemistry remain contact-only.
++                // The experiment additionally permits two volatile bands at close range.
++                let exposure = match volatile_exposure {
++                    Some(values) if band < 2 => slot.contact.max(values[index]),
++                    _ => slot.contact,
++                };
++                *chemical = (*chemical * exposure * gain(alife_core::SensorCapability::Chemical))
++                    .clamp(-1.0, 1.0);
+             }
+             slot.temperature *= slot.contact;
+             slot.contact =

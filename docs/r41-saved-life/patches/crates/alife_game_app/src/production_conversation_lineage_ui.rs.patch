@@ -1,0 +1,136 @@
+diff --git a/crates/alife_game_app/src/production_conversation_lineage_ui.rs b/crates/alife_game_app/src/production_conversation_lineage_ui.rs
+--- a/crates/alife_game_app/src/production_conversation_lineage_ui.rs
++++ b/crates/alife_game_app/src/production_conversation_lineage_ui.rs
+@@ -49,12 +49,12 @@
+     gpu_live_runtime::{
+         CuratedFounderGpuResidencyState, CuratedFounderResetDispatchResult, LiveAgentResetIntent,
+     },
+-    Fvr03ProductionVoxelSelectionResource, Fvr04ProductionCreatureSceneResource,
+-    Fvr05ProductionUxStateResource, GameAppShellError, ProductionVoxelLaunchSummary,
++    Fvr03ProductionVoxelSceneResource, Fvr03ProductionVoxelSelectionResource,
++    Fvr04ProductionCreatureSceneResource, Fvr05ProductionUxStateResource, GameAppShellError,
++    ProductionVoxelLaunchSummary,
+ };
+ 
+ pub(crate) mod composer;
+-pub(crate) mod kinship;
+ mod naming;
+ 
+ const MAX_TYPED_CHARS: usize = 512;
+@@ -824,8 +824,6 @@
+     status: String,
+     lineage_root: PathBuf,
+     lineage_open: bool,
+-    family_open: bool,
+-    family_capture: bool,
+     lineage_source_filter: LineageSourceFilter,
+     lineage_data_filter: LineageDataFilter,
+     lineage_sort: LineageSort,
+@@ -865,8 +863,6 @@
+             status: "Lineage Library loads when opened".to_string(),
+             lineage_root,
+             lineage_open: false,
+-            family_open: false,
+-            family_capture: false,
+             lineage_source_filter: LineageSourceFilter::All,
+             lineage_data_filter: LineageDataFilter::All,
+             lineage_sort: LineageSort::Overall,
+@@ -884,11 +880,7 @@
+     }
+ 
+     pub(crate) const fn captures_menu_input(&self) -> bool {
+-        self.input_open
+-            || self.lineage_open
+-            || self.input_capture_held
+-            || self.family_open
+-            || self.family_capture
++        self.input_open || self.lineage_open || self.input_capture_held
+     }
+ 
+     pub(crate) fn speech_input_cue(&self) -> SpeechInputCue {
+@@ -1117,7 +1109,6 @@
+     let layout = LineageLabLayout::for_resolution(summary.resolution.0, summary.resolution.1);
+     app.insert_resource(layout);
+     spawn_ui(app, layout);
+-    kinship::install(app);
+     app.add_systems(
+         Update,
+         composer::collect_input
+@@ -1979,10 +1970,6 @@
+     mut state: ResMut<ProductionConversationLineageUiState>,
+ ) {
+     let pointer = composer_input.pending.take();
+-    if state.family_open || state.family_capture {
+-        key_messages.clear();
+-        return;
+-    }
+     if crate::production_voxel_renderer::menu::captures_input(menu) {
+         key_messages.clear();
+         return;
+@@ -2036,7 +2023,7 @@
+             state.open_player_speech_input();
+             // Only raw text after this frame's opening Enter belongs to the composer.
+             append_player_speech_key_text(&mut state.input, key_messages.read(), true);
+-        } else if state.developer_overlay && keyboard.just_pressed(KeyCode::KeyY) {
++        } else if keyboard.just_pressed(KeyCode::KeyY) {
+             state.ensure_lineage_loaded();
+             state.lineage_open = true;
+             state.input_open = false;
+@@ -2959,14 +2946,7 @@
+ #[allow(clippy::type_complexity)]
+ fn sync_production_conversation_lineage_ui(
+     state: Res<ProductionConversationLineageUiState>,
+-    map: Option<Res<crate::BevyEntityMap>>,
+-    roots: bevy::prelude::Query<
+-        (
+-            &crate::production_voxel_renderer::ProductionCreatureAssemblyRoot,
+-            &Transform,
+-        ),
+-        bevy::prelude::Without<ProductionCreatureSpeechBubble>,
+-    >,
++    scene: Res<Fvr03ProductionVoxelSceneResource>,
+     creatures: Res<Fvr04ProductionCreatureSceneResource>,
+     mut panels: ParamSet<(
+         bevy::prelude::Query<(&mut Text, &mut Visibility), With<ProductionSpeechEntryPanel>>,
+@@ -2978,7 +2958,9 @@
+         >,
+     )>,
+ ) {
+-    if !state.is_changed() && !state.creature_utterance_active {
++    if !state.is_changed()
++        && !(state.creature_utterance_active && (scene.is_changed() || creatures.is_changed()))
++    {
+         return;
+     }
+     for (mut text, mut visibility) in &mut panels.p0() {
+@@ -3080,10 +3062,6 @@
+                 .find(|sample| sample.organism_id == speaker)
+                 .map(|sample| sample.stable_id)
+         });
+-        let position = stable_id.and_then(|id| {
+-            let (root, pose) = roots.get(map.as_ref()?.bevy_entity(id)?).ok()?;
+-            (root.stable_id == id).then_some(pose.translation)
+-        });
+         let show_for_frequency =
+             state
+                 .last_creature_utterance_id
+@@ -3098,7 +3076,7 @@
+             state.creature_utterance_active,
+             show_for_frequency,
+             receipt.is_some(),
+-            position.is_some(),
++            stable_id.is_some(),
+         ) {
+             if *visibility != Visibility::Hidden {
+                 *visibility = Visibility::Hidden;
+@@ -3126,8 +3104,8 @@
+         if text.0 != next_text {
+             text.0 = next_text;
+         }
+-        if let Some(position) = position {
+-            let next_translation = position + bevy::prelude::Vec3::Y * 1.95;
++        if let Some(position) = scene.selection_position(stable_id.expect("checked above")) {
++            let next_translation = position + bevy::prelude::Vec3::Y * 1.55;
+             if transform.translation != next_translation {
+                 transform.translation = next_translation;
+             }

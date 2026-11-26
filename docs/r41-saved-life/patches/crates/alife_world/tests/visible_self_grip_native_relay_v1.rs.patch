@@ -1,0 +1,139 @@
+diff --git a/crates/alife_world/tests/visible_self_grip_native_relay_v1.rs b/crates/alife_world/tests/visible_self_grip_native_relay_v1.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/alife_world/tests/visible_self_grip_native_relay_v1.rs
+@@ -0,0 +1,134 @@
++use alife_core::{
++    ActionCommand, ActionKind, ActionTarget, CandidateObservationRef, Confidence, DurationTicks,
++    HomeostaticSnapshot, Intensity, OrganismId, PerceptionContextBlock, PerceptionFrameDraft,
++    PhysicalContactKind, ScaffoldContractError, SensorProfile, Tick, Vec3f, WorldEntityId,
++};
++use alife_world::{
++    GroundedCandidateBinding, HeadlessActionIds, HeadlessScenarioBuilder, HeadlessWorld,
++    VisibleSelfGripCaptureV1,
++};
++
++const ACTOR: OrganismId = OrganismId(1);
++const PROFILE: SensorProfile = SensorProfile::GroundedTerrainVisionV1;
++
++fn capture(
++    world: &HeadlessWorld,
++) -> (PerceptionFrameDraft, GroundedCandidateBinding, VisibleSelfGripCaptureV1) {
++    let mut clone = world.clone();
++    let index = clone.build_perception_batch_index().unwrap();
++    let now = clone.tick();
++    clone.perception_frame_draft_indexed_with_visible_self_grip_v1(
++        ACTOR, now, HomeostaticSnapshot::baseline(now), &index,
++    ).unwrap()
++}
++
++fn eat_row(draft: &PerceptionFrameDraft, key: WorldEntityId) -> usize {
++    draft.candidates().iter().position(|row| row.action_id == HeadlessActionIds::EAT
++        && row.target.entity == Some(key)).expect("actual native observed menu row")
++}
++
++#[test]
++fn visible_self_grip_native_final_menu_and_fail_closed_v1() {
++    let mut world = HeadlessScenarioBuilder::new(191_019)
++        .agent("actor", ACTOR, Vec3f::ZERO)
++        .food("meal", Vec3f::new(0.42, 0.0, 0.0), 0.6)
++        .food("free-touch", Vec3f::new(-0.22, 0.22, 0.65), 0.6)
++        .obstacle("wall", Vec3f::new(-0.44, 0.0, -1.56), 0.22)
++        .build().unwrap();
++    let meal = world.entity_id("meal").unwrap();
++    let free = world.entity_id("free-touch").unwrap();
++    let wall = world.entity_id("wall").unwrap();
++    let grab = ActionCommand::structured(
++        ACTOR, HeadlessActionIds::GRAB, ActionKind::Hold, ActionTarget::new(Some(meal), None),
++        Intensity::new(1.0).unwrap(), DurationTicks::new(1), Confidence::new(0.9).unwrap(),
++        0, None, None, None,
++    ).unwrap();
++
++    let (d0, _, before) = capture(&world);
++    assert!(d0.candidates()[eat_row(&d0, meal)].features.0[18] > 0.0);
++    let f0 = d0.finalize(PerceptionContextBlock::empty()).unwrap();
++    assert!(before.bind_final(ACTOR, world.tick(), &f0).unwrap().words().iter().all(|x| *x == 0));
++    let got = world.apply_command(&grab).unwrap();
++    assert!(got.execution.succeeded);
++    assert_eq!(got.execution.physical.contact, PhysicalContactKind::Touch);
++    assert_eq!(got.execution.physical.energy_cost.raw().to_bits(), 0.06_f32.to_bits());
++    world.try_advance_tick().unwrap();
++
++    let current = world.tick();
++    let (draft, binding, good) = capture(&world);
++    let mut stock = world.clone();
++    let index = stock.build_perception_batch_index().unwrap();
++    let (stock_draft, stock_binding) = stock.perception_frame_draft_indexed_for_retention(
++        ACTOR, current, PROFILE, HomeostaticSnapshot::baseline(current), &index, false,
++    ).unwrap();
++    assert_eq!(stock_binding.unwrap(), binding);
++    assert_eq!(serde_json::to_vec(&draft).unwrap(), serde_json::to_vec(&stock_draft).unwrap());
++    let f = eat_row(&draft, free);
++    assert!(draft.sensory().channels.tactile_contact[2] > 0.0);
++    assert!(draft.candidates()[f].features.0[18] > 0.0);
++    // Use the real focal-menu function; bind the physical target, not the old row.
++    let CandidateObservationRef::ObjectSlot(s) = draft.candidates()[f].observation else {
++        panic!("required grounded free-contact control")
++    };
++    let focus = draft.grounded_object_slots()[usize::from(s)].tracked_object_id;
++    let mut final_rows = binding.candidates_for_focus(&draft, Some(focus)).unwrap();
++    let old_meal = final_rows.iter().position(|row| row.action_id == HeadlessActionIds::EAT
++        && row.target.entity == Some(meal)).unwrap();
++    let old_free = final_rows.iter().position(|row| row.action_id == HeadlessActionIds::EAT
++        && row.target.entity == Some(free)).unwrap();
++    final_rows.swap(old_meal, old_free);
++    for (index, row) in final_rows.iter_mut().enumerate() {
++        row.candidate_index = u16::try_from(index).unwrap();
++    }
++    let fresh = draft.clone().with_candidates(final_rows).unwrap();
++    assert_eq!(eat_row(&fresh, meal), old_free);
++    assert_eq!(eat_row(&fresh, free), old_meal);
++    let good_frame = fresh.clone().finalize(PerceptionContextBlock::empty()).unwrap();
++    let words = good.bind_final(ACTOR, current, &good_frame).unwrap();
++    assert_eq!(words.observer(), ACTOR);
++    assert_eq!(words.tick(), current);
++    assert_eq!(words.final_frame_digest(), good_frame.frame_digest());
++    assert_eq!(words.words()[eat_row(&fresh, meal)], 1.0_f32.to_bits());
++    assert_eq!(words.words()[eat_row(&fresh, free)], 0);
++    assert_eq!(words.words()[eat_row(&fresh, wall)], 0);
++    for (row, bit) in good_frame.candidates().iter().zip(words.words()) {
++        assert_eq!(*bit, if row.target.entity == Some(meal) {1.0_f32.to_bits()} else {0});
++    }
++
++    let (_, _, foreign) = capture(&world);
++    assert!(matches!(foreign.bind_final(OrganismId(2), current, &good_frame),
++        Err(ScaffoldContractError::InvalidPerceptionFrame)));
++    let (_, _, old) = capture(&world);
++    assert!(matches!(old.bind_final(ACTOR, Tick::ZERO, &good_frame),
++        Err(ScaffoldContractError::InvalidPerceptionFrame)));
++    let (_, _, retarget) = capture(&world);
++    let mut wrong = fresh.candidates().to_vec();
++    let own = eat_row(&fresh, meal);
++    wrong[own].target = wrong[eat_row(&fresh, free)].target;
++    let bad = fresh.clone().with_candidates(wrong).unwrap().finalize(PerceptionContextBlock::empty()).unwrap();
++    assert!(matches!(retarget.bind_final(ACTOR, current, &bad),
++        Err(ScaffoldContractError::InvalidPerceptionFrame)));
++    let (_, _, reslot) = capture(&world);
++    let mut wrong = fresh.candidates().to_vec();
++    // Slots can have different physical features, so transplant the genuine
++    // alternate slot descriptors too, but deliberately leave the old transport key.
++    let free_row = wrong[eat_row(&fresh, free)];
++    wrong[own] = free_row;
++    wrong[own].candidate_index = own as u16;
++    wrong[own].target = fresh.candidates()[own].target;
++    let bad = fresh.with_candidates(wrong).unwrap().finalize(PerceptionContextBlock::empty()).unwrap();
++    assert!(matches!(reslot.bind_final(ACTOR, current, &bad),
++        Err(ScaffoldContractError::InvalidPerceptionFrame)));
++
++    let (_, _, stale) = capture(&world);
++    let released = world.apply_command(&grab).unwrap();
++    assert!(released.execution.succeeded);
++    world.try_advance_tick().unwrap();
++    let (d2, _, released) = capture(&world);
++    assert_eq!(d2.candidates()[eat_row(&d2, meal)].features.0[18].to_bits(), 1.0_f32.to_bits());
++    let after = d2.finalize(PerceptionContextBlock::empty()).unwrap();
++    assert!(matches!(stale.bind_final(ACTOR, world.tick(), &after),
++        Err(ScaffoldContractError::InvalidPerceptionFrame)));
++    let exact = released.bind_final(ACTOR, world.tick(), &after).unwrap();
++    assert!(exact.words().iter().all(|b| *b == 0));
++}

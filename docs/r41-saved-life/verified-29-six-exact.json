@@ -1,0 +1,1269 @@
+{
+  "eligibility": "Native result/verifier and historical method equivalence not yet established. No reserved entry opened, no execution, no new card.",
+  "exact_existing_manifest_registry": [
+    "retained_opening",
+    "cue_free_food_placement",
+    "l_corner"
+  ],
+  "exact_source_addressable6": {
+    "canonical-L-full": {
+      "actual_baseline_reference": {
+        "first_grip": 3252,
+        "registered_food": 21,
+        "registered_food_meals": [
+          [
+            3253,
+            21,
+            0.6000000238418579
+          ]
+        ],
+        "rows": 1024,
+        "world_ticks": 1024
+      },
+      "historical_binary_sha256": "44afdbc1cd2497de0feb2fb6ec4031a5bc1a9cb8c46057561867389e8581b6a7",
+      "historical_complete_native_setup": {
+        "actor": 3,
+        "autonomous_controller_seed": null,
+        "consecutive_held_ticks": 0,
+        "crossed_wall_outside_span": false,
+        "elapsed_ticks": 0,
+        "first_capture_tick": null,
+        "first_meal_tick": null,
+        "first_traversal_tick": null,
+        "food_outcome": {
+          "consumption_events": 0,
+          "explicit_grab_acquisition_events": 0,
+          "nourished_meal_events": 0,
+          "ordinary_acquisition_events": 0,
+          "organism": 3,
+          "target": 21
+        },
+        "geometry_yaw": 2.68048357963562,
+        "goal_position": {
+          "x": -19.751934051513672,
+          "y": 0.0,
+          "z": 207.73098754882812
+        },
+        "held_ticks": 0,
+        "last_target_motion": null,
+        "last_tick": 3074,
+        "longest_held_ticks": 0,
+        "maze_gates_completed": 0,
+        "maze_route_invalid": false,
+        "minimum_target_distance": 4.000000476837158,
+        "motion_direction": 1.0,
+        "origin": {
+          "x": -16.169696807861328,
+          "y": 0.0,
+          "z": 205.9512176513672
+        },
+        "path_length": 0.0,
+        "preserved_held_entities": [],
+        "previous_actor_position": {
+          "x": -16.169696807861328,
+          "y": 0.0,
+          "z": 205.9512176513672
+        },
+        "previous_ownership": {
+          "consumed": false,
+          "owner": null
+        },
+        "release_count": 0,
+        "relocations": [],
+        "spec": {
+          "kind": "l_corner",
+          "mirror": false,
+          "prey_speed_per_tick": 0.0,
+          "rotation_radians": 0.0
+        },
+        "start_tick": 3074,
+        "target": 21,
+        "walls": [
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20
+        ]
+      },
+      "historical_controlled_host_pressure": {
+        "actual_gpu_timing_preserved": true,
+        "applied_gpu_time_ns": 0,
+        "cross_arm_frame_replay": false,
+        "enabled": true,
+        "live_atp_and_heap_constraints": true,
+        "production_policy_unchanged": true,
+        "scope": "controlled_host_pressure_not_fixed_neural_work"
+      },
+      "historical_horizon_accepted_and_world_ticks": 1024,
+      "historical_native_manifest_sha256": "da49421895e93b0c4247218a9020e8af80d4a54d46e480ebbdfc9b4e1eb6a67b",
+      "historical_native_receipt_sha256": "b1593b54776bd9dbca53ed7e038a3ba9c025a4f3be02c75ac9556746ea663265",
+      "historical_result_sha256": "93891813c45cf92536cae7160409f414dd827838991e878ca6848d34f30a4f30",
+      "historical_software_adapter": {
+        "backend": "Vulkan",
+        "device_type": "Cpu",
+        "driver": "llvmpipe",
+        "driver_info": "Mesa 25.0.7-2+deb13u1 (LLVM 19.1.7)",
+        "name": "llvmpipe (LLVM 19.1.7, 256 bits)"
+      },
+      "request": {
+        "cue_free_food_placement": false,
+        "max_decisions": 1024,
+        "max_world_ticks": 1024,
+        "navigation_task": {
+          "kind": "l_corner",
+          "mirror": false,
+          "prey_speed_per_tick": 0.0,
+          "rotation_radians": 0.0
+        },
+        "schema": 3
+      },
+      "rubric_atoms": [
+        "maze:formal",
+        "maze:intake"
+      ],
+      "tested_original_ordinary_frozen_sampler": {
+        "counter": 3074,
+        "demonstrator": null,
+        "seed": 644580003,
+        "temperature": 1.0
+      }
+    },
+    "dogleg_corridor": {
+      "actual_baseline_reference": {
+        "first_grip": 3412,
+        "registered_food": 73,
+        "registered_food_meals": [
+          [
+            3413,
+            73,
+            0.6000000238418579
+          ]
+        ],
+        "rows": 1024,
+        "world_ticks": 1024
+      },
+      "historical_binary_sha256": "44afdbc1cd2497de0feb2fb6ec4031a5bc1a9cb8c46057561867389e8581b6a7",
+      "historical_complete_native_setup": {
+        "actor": 3,
+        "autonomous_controller_seed": null,
+        "consecutive_held_ticks": 0,
+        "crossed_wall_outside_span": false,
+        "elapsed_ticks": 0,
+        "first_capture_tick": null,
+        "first_meal_tick": null,
+        "first_traversal_tick": null,
+        "food_outcome": {
+          "consumption_events": 0,
+          "explicit_grab_acquisition_events": 0,
+          "nourished_meal_events": 0,
+          "ordinary_acquisition_events": 0,
+          "organism": 3,
+          "target": 73
+        },
+        "geometry_yaw": 2.68048357963562,
+        "goal_position": {
+          "x": -21.973804473876953,
+          "y": 0.0,
+          "z": 202.13516235351562
+        },
+        "held_ticks": 0,
+        "last_target_motion": null,
+        "last_tick": 3074,
+        "longest_held_ticks": 0,
+        "maze_gates_completed": 0,
+        "maze_route_invalid": false,
+        "minimum_target_distance": 6.946218013763428,
+        "motion_direction": 1.0,
+        "origin": {
+          "x": -16.169696807861328,
+          "y": 0.0,
+          "z": 205.9512176513672
+        },
+        "path_length": 0.0,
+        "preserved_held_entities": [],
+        "previous_actor_position": {
+          "x": -16.169696807861328,
+          "y": 0.0,
+          "z": 205.9512176513672
+        },
+        "previous_ownership": {
+          "consumed": false,
+          "owner": null
+        },
+        "release_count": 0,
+        "relocations": [],
+        "spec": {
+          "kind": "dogleg_corridor",
+          "mirror": false,
+          "prey_speed_per_tick": 0.0,
+          "rotation_radians": 0.0
+        },
+        "start_tick": 3074,
+        "target": 73,
+        "walls": [
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24,
+          25,
+          26,
+          27,
+          28,
+          29,
+          30,
+          31,
+          32,
+          33,
+          34,
+          35,
+          36,
+          37,
+          38,
+          39,
+          40,
+          41,
+          42,
+          43,
+          44,
+          45,
+          46,
+          47,
+          48,
+          49,
+          50,
+          51,
+          52,
+          53,
+          54,
+          55,
+          56,
+          57,
+          58,
+          59,
+          60,
+          61,
+          62,
+          63,
+          64,
+          65,
+          66,
+          67,
+          68,
+          69,
+          70,
+          71,
+          72
+        ]
+      },
+      "historical_controlled_host_pressure": {
+        "actual_gpu_timing_preserved": true,
+        "applied_gpu_time_ns": 0,
+        "cross_arm_frame_replay": false,
+        "enabled": true,
+        "live_atp_and_heap_constraints": true,
+        "production_policy_unchanged": true,
+        "scope": "controlled_host_pressure_not_fixed_neural_work"
+      },
+      "historical_horizon_accepted_and_world_ticks": 1024,
+      "historical_native_manifest_sha256": "a2994559beb5736592ed1cfd56f833213c6d3a61bf693146d1560603205b18b6",
+      "historical_native_receipt_sha256": "49b5c98e03d598be0f65fa91421d318022e571c45fe9bafb28232fd550397243",
+      "historical_result_sha256": "aa678533292671af4057cd0cbfd46db88947f9279d74d0a9cc969b6f2104b6b7",
+      "historical_software_adapter": {
+        "backend": "Vulkan",
+        "device_type": "Cpu",
+        "driver": "llvmpipe",
+        "driver_info": "Mesa 25.0.7-2+deb13u1 (LLVM 19.1.7)",
+        "name": "llvmpipe (LLVM 19.1.7, 256 bits)"
+      },
+      "request": {
+        "cue_free_food_placement": false,
+        "max_decisions": 1024,
+        "max_world_ticks": 1024,
+        "navigation_task": {
+          "kind": "dogleg_corridor",
+          "mirror": false,
+          "prey_speed_per_tick": 0.0,
+          "rotation_radians": 0.0
+        },
+        "schema": 3
+      },
+      "rubric_atoms": [
+        "maze:formal",
+        "maze:intake"
+      ],
+      "tested_original_ordinary_frozen_sampler": {
+        "counter": 3074,
+        "demonstrator": null,
+        "seed": 644580003,
+        "temperature": 1.0
+      }
+    },
+    "doorway_chambers": {
+      "actual_baseline_reference": {
+        "first_grip": 3594,
+        "registered_food": 98,
+        "registered_food_meals": [
+          [
+            3598,
+            98,
+            0.6000000238418579
+          ]
+        ],
+        "rows": 1024,
+        "world_ticks": 1024
+      },
+      "historical_binary_sha256": "44afdbc1cd2497de0feb2fb6ec4031a5bc1a9cb8c46057561867389e8581b6a7",
+      "historical_complete_native_setup": {
+        "actor": 3,
+        "autonomous_controller_seed": null,
+        "consecutive_held_ticks": 0,
+        "crossed_wall_outside_span": false,
+        "elapsed_ticks": 0,
+        "first_capture_tick": null,
+        "first_meal_tick": null,
+        "first_traversal_tick": null,
+        "food_outcome": {
+          "consumption_events": 0,
+          "explicit_grab_acquisition_events": 0,
+          "nourished_meal_events": 0,
+          "ordinary_acquisition_events": 0,
+          "organism": 3,
+          "target": 98
+        },
+        "geometry_yaw": 2.68048357963562,
+        "goal_position": {
+          "x": -20.4165096282959,
+          "y": 0.0,
+          "z": 205.26962280273438
+        },
+        "held_ticks": 0,
+        "last_target_motion": null,
+        "last_tick": 3074,
+        "longest_held_ticks": 0,
+        "maze_gates_completed": 0,
+        "maze_route_invalid": false,
+        "minimum_target_distance": 4.301161766052246,
+        "motion_direction": 1.0,
+        "origin": {
+          "x": -16.169696807861328,
+          "y": 0.0,
+          "z": 205.9512176513672
+        },
+        "path_length": 0.0,
+        "preserved_held_entities": [],
+        "previous_actor_position": {
+          "x": -16.169696807861328,
+          "y": 0.0,
+          "z": 205.9512176513672
+        },
+        "previous_ownership": {
+          "consumed": false,
+          "owner": null
+        },
+        "release_count": 0,
+        "relocations": [],
+        "spec": {
+          "kind": "doorway_chambers",
+          "mirror": false,
+          "prey_speed_per_tick": 0.0,
+          "rotation_radians": 0.0
+        },
+        "start_tick": 3074,
+        "target": 98,
+        "walls": [
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24,
+          25,
+          26,
+          27,
+          28,
+          29,
+          30,
+          31,
+          32,
+          33,
+          34,
+          35,
+          36,
+          37,
+          38,
+          39,
+          40,
+          41,
+          42,
+          43,
+          44,
+          45,
+          46,
+          47,
+          48,
+          49,
+          50,
+          51,
+          52,
+          53,
+          54,
+          55,
+          56,
+          57,
+          58,
+          59,
+          60,
+          61,
+          62,
+          63,
+          64,
+          65,
+          66,
+          67,
+          68,
+          69,
+          70,
+          71,
+          72,
+          73,
+          74,
+          75,
+          76,
+          77,
+          78,
+          79,
+          80,
+          81,
+          82,
+          83,
+          84,
+          85,
+          86,
+          87,
+          88,
+          89,
+          90,
+          91,
+          92,
+          93,
+          94,
+          95,
+          96,
+          97
+        ]
+      },
+      "historical_controlled_host_pressure": {
+        "actual_gpu_timing_preserved": true,
+        "applied_gpu_time_ns": 0,
+        "cross_arm_frame_replay": false,
+        "enabled": true,
+        "live_atp_and_heap_constraints": true,
+        "production_policy_unchanged": true,
+        "scope": "controlled_host_pressure_not_fixed_neural_work"
+      },
+      "historical_horizon_accepted_and_world_ticks": 1024,
+      "historical_native_manifest_sha256": "2f28484abd65d53e33380dda150b19c17a188b75507ab21e32e92f951e37b2d4",
+      "historical_native_receipt_sha256": "c0f4d92750146020d0d3f82780caeee67bb80a3d9bbdf1fc703889c1a5d2139b",
+      "historical_result_sha256": "74750653c2e1c0e17516878cb91ffa97a394354b879135f6fe6b610badd9c125",
+      "historical_software_adapter": {
+        "backend": "Vulkan",
+        "device_type": "Cpu",
+        "driver": "llvmpipe",
+        "driver_info": "Mesa 25.0.7-2+deb13u1 (LLVM 19.1.7)",
+        "name": "llvmpipe (LLVM 19.1.7, 256 bits)"
+      },
+      "request": {
+        "cue_free_food_placement": false,
+        "max_decisions": 1024,
+        "max_world_ticks": 1024,
+        "navigation_task": {
+          "kind": "doorway_chambers",
+          "mirror": false,
+          "prey_speed_per_tick": 0.0,
+          "rotation_radians": 0.0
+        },
+        "schema": 3
+      },
+      "rubric_atoms": [
+        "maze:formal",
+        "maze:intake"
+      ],
+      "tested_original_ordinary_frozen_sampler": {
+        "counter": 3074,
+        "demonstrator": null,
+        "seed": 644580003,
+        "temperature": 1.0
+      }
+    },
+    "original-autonomous-axis": {
+      "actual_baseline_reference": {
+        "first_grip": 3235,
+        "registered_food": 11,
+        "registered_food_meals": [
+          [
+            3236,
+            11,
+            0.6000000238418579
+          ]
+        ],
+        "rows": 256,
+        "world_ticks": 256
+      },
+      "historical_binary_sha256": "39aaebec364f5028ee115012371de7581788358f617046e5518ad97d8d28acdb",
+      "historical_complete_native_setup": {
+        "actor": 3,
+        "autonomous_controller_seed": 15341957889482077629,
+        "consecutive_held_ticks": 0,
+        "crossed_wall_outside_span": false,
+        "elapsed_ticks": 0,
+        "first_capture_tick": null,
+        "first_meal_tick": null,
+        "first_traversal_tick": null,
+        "food_outcome": {
+          "consumption_events": 0,
+          "explicit_grab_acquisition_events": 0,
+          "nourished_meal_events": 0,
+          "ordinary_acquisition_events": 0,
+          "organism": 3,
+          "target": 11
+        },
+        "geometry_yaw": 5.781445026397705,
+        "goal_position": {
+          "x": -14.260884284973145,
+          "y": 0.0,
+          "z": 203.1932373046875
+        },
+        "held_ticks": 0,
+        "last_target_motion": null,
+        "last_tick": 3074,
+        "longest_held_ticks": 0,
+        "maze_gates_completed": 0,
+        "maze_route_invalid": false,
+        "minimum_target_distance": 3.354104995727539,
+        "motion_direction": 1.0,
+        "origin": {
+          "x": -16.169696807861328,
+          "y": 0.0,
+          "z": 205.9512176513672
+        },
+        "path_length": 0.0,
+        "preserved_held_entities": [],
+        "previous_actor_position": {
+          "x": -16.169696807861328,
+          "y": 0.0,
+          "z": 205.9512176513672
+        },
+        "previous_ownership": {
+          "consumed": false,
+          "owner": null
+        },
+        "release_count": 0,
+        "relocations": [],
+        "spec": {
+          "kind": "autonomous_prey",
+          "mirror": false,
+          "prey_speed_per_tick": 0.052000001072883606,
+          "rotation_radians": 3.100961446762085
+        },
+        "start_tick": 3074,
+        "target": 11,
+        "walls": []
+      },
+      "historical_controlled_host_pressure": {
+        "actual_gpu_timing_preserved": true,
+        "applied_gpu_time_ns": 0,
+        "cross_arm_frame_replay": false,
+        "enabled": true,
+        "live_atp_and_heap_constraints": true,
+        "production_policy_unchanged": true,
+        "scope": "controlled_host_pressure_not_fixed_neural_work"
+      },
+      "historical_horizon_accepted_and_world_ticks": 256,
+      "historical_native_manifest_sha256": "a335bd2538a915c33931082ad62caeecba3794d334d4d1693bd6a6100ca8aa7e",
+      "historical_native_receipt_sha256": "f20a2919185879c608521b9952e1eac0a771b51fbaff07eee3e3c1b4882e76dd",
+      "historical_result_sha256": "618aa0115e7344a3c50762e4986d4ddb79f06447245ddba5bfca9846c77b1aec",
+      "historical_software_adapter": {
+        "backend": "Vulkan",
+        "device_type": "Cpu",
+        "driver": "llvmpipe",
+        "driver_info": "Mesa 25.0.7-2+deb13u1 (LLVM 19.1.7)",
+        "name": "llvmpipe (LLVM 19.1.7, 256 bits)"
+      },
+      "request": {
+        "cue_free_food_placement": false,
+        "max_decisions": 256,
+        "max_world_ticks": 256,
+        "navigation_task": {
+          "kind": "autonomous_prey",
+          "mirror": false,
+          "prey_speed_per_tick": 0.052000001072883606,
+          "rotation_radians": 3.100961446762085
+        },
+        "schema": 3
+      },
+      "rubric_atoms": [
+        "hunt:intake"
+      ],
+      "tested_original_ordinary_frozen_sampler": {
+        "counter": 3074,
+        "demonstrator": null,
+        "seed": 644580003,
+        "temperature": 1.0
+      }
+    },
+    "original-autonomous-plus4": {
+      "actual_baseline_reference": {
+        "first_grip": 3233,
+        "registered_food": 11,
+        "registered_food_meals": [
+          [
+            3235,
+            11,
+            0.6000000238418579
+          ]
+        ],
+        "rows": 256,
+        "world_ticks": 256
+      },
+      "historical_binary_sha256": "39aaebec364f5028ee115012371de7581788358f617046e5518ad97d8d28acdb",
+      "historical_complete_native_setup": {
+        "actor": 3,
+        "autonomous_controller_seed": 15341957889482077629,
+        "consecutive_held_ticks": 0,
+        "crossed_wall_outside_span": false,
+        "elapsed_ticks": 0,
+        "first_capture_tick": null,
+        "first_meal_tick": null,
+        "first_traversal_tick": null,
+        "food_outcome": {
+          "consumption_events": 0,
+          "explicit_grab_acquisition_events": 0,
+          "nourished_meal_events": 0,
+          "ordinary_acquisition_events": 0,
+          "organism": 3,
+          "target": 11
+        },
+        "geometry_yaw": -0.4319272041320801,
+        "goal_position": {
+          "x": -14.073147773742676,
+          "y": 0.0,
+          "z": 203.33311462402344
+        },
+        "held_ticks": 0,
+        "last_target_motion": null,
+        "last_tick": 3074,
+        "longest_held_ticks": 0,
+        "maze_gates_completed": 0,
+        "maze_route_invalid": false,
+        "minimum_target_distance": 3.3540992736816406,
+        "motion_direction": 1.0,
+        "origin": {
+          "x": -16.169696807861328,
+          "y": 0.0,
+          "z": 205.9512176513672
+        },
+        "path_length": 0.0,
+        "preserved_held_entities": [],
+        "previous_actor_position": {
+          "x": -16.169696807861328,
+          "y": 0.0,
+          "z": 205.9512176513672
+        },
+        "previous_ownership": {
+          "consumed": false,
+          "owner": null
+        },
+        "release_count": 0,
+        "relocations": [],
+        "spec": {
+          "kind": "autonomous_prey",
+          "mirror": false,
+          "prey_speed_per_tick": 0.052000001072883606,
+          "rotation_radians": -3.1124107837677
+        },
+        "start_tick": 3074,
+        "target": 11,
+        "walls": []
+      },
+      "historical_controlled_host_pressure": {
+        "actual_gpu_timing_preserved": true,
+        "applied_gpu_time_ns": 0,
+        "cross_arm_frame_replay": false,
+        "enabled": true,
+        "live_atp_and_heap_constraints": true,
+        "production_policy_unchanged": true,
+        "scope": "controlled_host_pressure_not_fixed_neural_work"
+      },
+      "historical_horizon_accepted_and_world_ticks": 256,
+      "historical_native_manifest_sha256": "60906b25529b84ed23a0820bc7db347b2bed7b660ff4046f4eb772e4bcfda3a8",
+      "historical_native_receipt_sha256": "62dc6a15418bedc9e2710db3166ac1d706cfa27a3d3a6277f5e394b87043a728",
+      "historical_result_sha256": "538d9a24556cc9db391a4eafcec26b4a3f7ff0eee53a8dca3cd4fe0b999930ef",
+      "historical_software_adapter": {
+        "backend": "Vulkan",
+        "device_type": "Cpu",
+        "driver": "llvmpipe",
+        "driver_info": "Mesa 25.0.7-2+deb13u1 (LLVM 19.1.7)",
+        "name": "llvmpipe (LLVM 19.1.7, 256 bits)"
+      },
+      "request": {
+        "cue_free_food_placement": false,
+        "max_decisions": 256,
+        "max_world_ticks": 256,
+        "navigation_task": {
+          "kind": "autonomous_prey",
+          "mirror": false,
+          "prey_speed_per_tick": 0.052000001072883606,
+          "rotation_radians": -3.1124107837677
+        },
+        "schema": 3
+      },
+      "rubric_atoms": [
+        "hunt:intake"
+      ],
+      "tested_original_ordinary_frozen_sampler": {
+        "counter": 3074,
+        "demonstrator": null,
+        "seed": 644580003,
+        "temperature": 1.0
+      }
+    },
+    "u_detour": {
+      "actual_baseline_reference": {
+        "first_grip": 3451,
+        "registered_food": 108,
+        "registered_food_meals": [
+          [
+            3452,
+            108,
+            0.6000000238418579
+          ]
+        ],
+        "rows": 1024,
+        "world_ticks": 1024
+      },
+      "historical_binary_sha256": "44afdbc1cd2497de0feb2fb6ec4031a5bc1a9cb8c46057561867389e8581b6a7",
+      "historical_complete_native_setup": {
+        "actor": 3,
+        "autonomous_controller_seed": null,
+        "consecutive_held_ticks": 0,
+        "crossed_wall_outside_span": false,
+        "elapsed_ticks": 0,
+        "first_capture_tick": null,
+        "first_meal_tick": null,
+        "first_traversal_tick": null,
+        "food_outcome": {
+          "consumption_events": 0,
+          "explicit_grab_acquisition_events": 0,
+          "nourished_meal_events": 0,
+          "ordinary_acquisition_events": 0,
+          "organism": 3,
+          "target": 108
+        },
+        "geometry_yaw": 2.68048357963562,
+        "goal_position": {
+          "x": -19.751934051513672,
+          "y": 0.0,
+          "z": 207.73098754882812
+        },
+        "held_ticks": 0,
+        "last_target_motion": null,
+        "last_tick": 3074,
+        "longest_held_ticks": 0,
+        "maze_gates_completed": 0,
+        "maze_route_invalid": false,
+        "minimum_target_distance": 4.000000476837158,
+        "motion_direction": 1.0,
+        "origin": {
+          "x": -16.169696807861328,
+          "y": 0.0,
+          "z": 205.9512176513672
+        },
+        "path_length": 0.0,
+        "preserved_held_entities": [],
+        "previous_actor_position": {
+          "x": -16.169696807861328,
+          "y": 0.0,
+          "z": 205.9512176513672
+        },
+        "previous_ownership": {
+          "consumed": false,
+          "owner": null
+        },
+        "release_count": 0,
+        "relocations": [],
+        "spec": {
+          "kind": "u_detour",
+          "mirror": false,
+          "prey_speed_per_tick": 0.0,
+          "rotation_radians": 0.0
+        },
+        "start_tick": 3074,
+        "target": 108,
+        "walls": [
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24,
+          25,
+          26,
+          27,
+          28,
+          29,
+          30,
+          31,
+          32,
+          33,
+          34,
+          35,
+          36,
+          37,
+          38,
+          39,
+          40,
+          41,
+          42,
+          43,
+          44,
+          45,
+          46,
+          47,
+          48,
+          49,
+          50,
+          51,
+          52,
+          53,
+          54,
+          55,
+          56,
+          57,
+          58,
+          59,
+          60,
+          61,
+          62,
+          63,
+          64,
+          65,
+          66,
+          67,
+          68,
+          69,
+          70,
+          71,
+          72,
+          73,
+          74,
+          75,
+          76,
+          77,
+          78,
+          79,
+          80,
+          81,
+          82,
+          83,
+          84,
+          85,
+          86,
+          87,
+          88,
+          89,
+          90,
+          91,
+          92,
+          93,
+          94,
+          95,
+          96,
+          97,
+          98,
+          99,
+          100,
+          101,
+          102,
+          103,
+          104,
+          105,
+          106,
+          107
+        ]
+      },
+      "historical_controlled_host_pressure": {
+        "actual_gpu_timing_preserved": true,
+        "applied_gpu_time_ns": 0,
+        "cross_arm_frame_replay": false,
+        "enabled": true,
+        "live_atp_and_heap_constraints": true,
+        "production_policy_unchanged": true,
+        "scope": "controlled_host_pressure_not_fixed_neural_work"
+      },
+      "historical_horizon_accepted_and_world_ticks": 1024,
+      "historical_native_manifest_sha256": "ed659fe3d393e4f68d624833f38298fea4ba346ccfb7be0ab500d908fcb52080",
+      "historical_native_receipt_sha256": "d5ffffabcecf72711f23a6857cf884a402166e66af1293348f63b612a594a18b",
+      "historical_result_sha256": "d30212dcc58c4aa480eec8b37cff5fd70df244461c571192221ad27381292e74",
+      "historical_software_adapter": {
+        "backend": "Vulkan",
+        "device_type": "Cpu",
+        "driver": "llvmpipe",
+        "driver_info": "Mesa 25.0.7-2+deb13u1 (LLVM 19.1.7)",
+        "name": "llvmpipe (LLVM 19.1.7, 256 bits)"
+      },
+      "request": {
+        "cue_free_food_placement": false,
+        "max_decisions": 1024,
+        "max_world_ticks": 1024,
+        "navigation_task": {
+          "kind": "u_detour",
+          "mirror": false,
+          "prey_speed_per_tick": 0.0,
+          "rotation_radians": 0.0
+        },
+        "schema": 3
+      },
+      "rubric_atoms": [
+        "maze:formal",
+        "maze:intake"
+      ],
+      "tested_original_ordinary_frozen_sampler": {
+        "counter": 3074,
+        "demonstrator": null,
+        "seed": 644580003,
+        "temperature": 1.0
+      }
+    }
+  },
+  "method_sha256": "897b06b1fbda5ded0b92cd3b47ece4827b44d52df6ac5cb10b1741b68c44c56e",
+  "roster": {
+    "canonical-L-full": {
+      "literal_archived_envelope_members": {
+        "members.json": 14856,
+        "result.json": 2676,
+        "retention.json": 199213
+      },
+      "score_atoms": [
+        "maze:formal",
+        "maze:intake"
+      ]
+    },
+    "dogleg_corridor": {
+      "literal_archived_envelope_members": {
+        "members.json": 14856,
+        "result.json": 2396,
+        "retention.json": 199973
+      },
+      "score_atoms": [
+        "maze:formal",
+        "maze:intake"
+      ]
+    },
+    "doorway_chambers": {
+      "literal_archived_envelope_members": {
+        "members.json": 14857,
+        "result.json": 2399,
+        "retention.json": 200259
+      },
+      "score_atoms": [
+        "maze:formal",
+        "maze:intake"
+      ]
+    },
+    "original-autonomous-axis": {
+      "literal_archived_envelope_members": {
+        "members.json": 14861,
+        "result.json": 2396,
+        "retention.json": 199835
+      },
+      "score_atoms": [
+        "hunt:intake"
+      ]
+    },
+    "original-autonomous-plus4": {
+      "literal_archived_envelope_members": {
+        "members.json": 14862,
+        "result.json": 2398,
+        "retention.json": 199833
+      },
+      "score_atoms": [
+        "hunt:intake"
+      ]
+    },
+    "r12-word-ball-silence": {
+      "literal_archived_envelope_members": {
+        "members.json": 14859,
+        "result.json": 2131,
+        "retention.json": 197721
+      },
+      "score_atoms": [
+        "grounded_expression:quiet-without-food"
+      ]
+    },
+    "r12-word-empty-silence": {
+      "literal_archived_envelope_members": {
+        "members.json": 14859,
+        "result.json": 2126,
+        "retention.json": 197375
+      },
+      "score_atoms": [
+        "grounded_expression:quiet-without-food"
+      ]
+    },
+    "r12-word-food-obstacle-silence": {
+      "literal_archived_envelope_members": {
+        "members.json": 14868,
+        "result.json": 2590,
+        "retention.json": 198384
+      },
+      "score_atoms": [
+        "grounded_expression:grounded-food"
+      ]
+    },
+    "r12-word-food-silence": {
+      "literal_archived_envelope_members": {
+        "members.json": 14858,
+        "result.json": 3836,
+        "retention.json": 197966
+      },
+      "score_atoms": [
+        "grounded_expression:grounded-food"
+      ]
+    },
+    "r12-word-mirror-food-silence": {
+      "literal_archived_envelope_members": {
+        "members.json": 14865,
+        "result.json": 3970,
+        "retention.json": 197996
+      },
+      "score_atoms": [
+        "grounded_expression:grounded-food"
+      ]
+    },
+    "r12-word-obstacle-silence": {
+      "literal_archived_envelope_members": {
+        "members.json": 14863,
+        "result.json": 2439,
+        "retention.json": 197736
+      },
+      "score_atoms": [
+        "grounded_expression:quiet-without-food"
+      ]
+    },
+    "r14-word-mirror-root-silence": {
+      "literal_archived_envelope_members": {
+        "members.json": 14865,
+        "result.json": 3817,
+        "retention.json": 198996
+      },
+      "score_atoms": [
+        "grounded_expression:grounded-food"
+      ]
+    },
+    "r14-word-mirror-scent-decoy-silence": {
+      "literal_archived_envelope_members": {
+        "members.json": 14873,
+        "result.json": 2452,
+        "retention.json": 198779
+      },
+      "score_atoms": [
+        "grounded_expression:quiet-without-food"
+      ]
+    },
+    "r14-word-root-scent-decoy-silence": {
+      "literal_archived_envelope_members": {
+        "members.json": 14872,
+        "result.json": 4161,
+        "retention.json": 200276
+      },
+      "score_atoms": [
+        "grounded_expression:grounded-food"
+      ]
+    },
+    "r14-word-root-silence": {
+      "literal_archived_envelope_members": {
+        "members.json": 14858,
+        "result.json": 2541,
+        "retention.json": 199011
+      },
+      "score_atoms": [
+        "grounded_expression:grounded-food"
+      ]
+    },
+    "r14-word-scent-decoy-silence": {
+      "literal_archived_envelope_members": {
+        "members.json": 14865,
+        "result.json": 2445,
+        "retention.json": 198759
+      },
+      "score_atoms": [
+        "grounded_expression:quiet-without-food"
+      ]
+    },
+    "r2-grade-left": {
+      "literal_archived_envelope_members": {
+        "members.json": 14850,
+        "result.json": 2756,
+        "retention.json": 330033
+      },
+      "score_atoms": [
+        "care:safe-intake",
+        "care:alive"
+      ]
+    },
+    "r2-grade-right": {
+      "literal_archived_envelope_members": {
+        "members.json": 14854,
+        "result.json": 2959,
+        "retention.json": 329184
+      },
+      "score_atoms": [
+        "care:safe-intake",
+        "care:alive"
+      ]
+    },
+    "r2-word-approach-food": {
+      "literal_archived_envelope_members": {
+        "members.json": 15929,
+        "result.json": 5075,
+        "retention.json": 19807
+      },
+      "score_atoms": [
+        "receptive:first-signed"
+      ]
+    },
+    "r2-word-approach-toy": {
+      "literal_archived_envelope_members": {
+        "members.json": 15476,
+        "result.json": 4385,
+        "retention.json": 19803
+      },
+      "score_atoms": [
+        "receptive:first-signed"
+      ]
+    },
+    "r2-word-mirror-approach-food": {
+      "literal_archived_envelope_members": {
+        "members.json": 15936,
+        "result.json": 5078,
+        "retention.json": 19826
+      },
+      "score_atoms": [
+        "receptive:first-signed"
+      ]
+    },
+    "r2-word-mirror-approach-toy": {
+      "literal_archived_envelope_members": {
+        "members.json": 15327,
+        "result.json": 4329,
+        "retention.json": 19822
+      },
+      "score_atoms": [
+        "receptive:first-signed"
+      ]
+    },
+    "r2-word-mirror-retreat-food": {
+      "literal_archived_envelope_members": {
+        "members.json": 15483,
+        "result.json": 4304,
+        "retention.json": 19824
+      },
+      "score_atoms": [
+        "receptive:first-signed"
+      ]
+    },
+    "r2-word-mirror-retreat-toy": {
+      "literal_archived_envelope_members": {
+        "members.json": 15327,
+        "result.json": 4301,
+        "retention.json": 19820
+      },
+      "score_atoms": [
+        "receptive:first-signed"
+      ]
+    },
+    "r2-word-mirror-silence": {
+      "literal_archived_envelope_members": {
+        "members.json": 14857,
+        "result.json": 4243,
+        "retention.json": 19629
+      },
+      "score_atoms": []
+    },
+    "r2-word-retreat-food": {
+      "literal_archived_envelope_members": {
+        "members.json": 15631,
+        "result.json": 4321,
+        "retention.json": 19815
+      },
+      "score_atoms": [
+        "receptive:first-signed"
+      ]
+    },
+    "r2-word-retreat-toy": {
+      "literal_archived_envelope_members": {
+        "members.json": 15320,
+        "result.json": 4311,
+        "retention.json": 19802
+      },
+      "score_atoms": [
+        "receptive:first-signed"
+      ]
+    },
+    "r2-word-silence": {
+      "literal_archived_envelope_members": {
+        "members.json": 14851,
+        "result.json": 4355,
+        "retention.json": 19604
+      },
+      "score_atoms": []
+    },
+    "u_detour": {
+      "literal_archived_envelope_members": {
+        "members.json": 14849,
+        "result.json": 2396,
+        "retention.json": 200369
+      },
+      "score_atoms": [
+        "maze:formal",
+        "maze:intake"
+      ]
+    }
+  },
+  "rubric_sha256": "c46270cc725b56f04ae3edb172424026e0b1959ece7fd397a9abf42d57fdb207",
+  "same_receiving_binary_current": "36e864a6a0819d7c035ef12497f815c1c7e31ef215eb43d21265e9f70df045f7",
+  "source_archive_sha256": "ce029c260a7b50f2991bb5d8c5bdfe0c08a924041d549952d231fd1ad5eb3b96",
+  "source_current_sha256": "e785e79c581dbc29bb9e4b66ab2b3ae63d31a16db9c44b262753dfe319fbe841"
+}

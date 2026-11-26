@@ -1,0 +1,11 @@
+diff --git a/crates/alife_world/src/lib.rs b/crates/alife_world/src/lib.rs
+--- a/crates/alife_world/src/lib.rs
++++ b/crates/alife_world/src/lib.rs
+@@ -10,7 +10,6 @@
+ pub mod habitat;
+ pub mod headless;
+ pub mod new_game;
+-pub mod orchard;
+ pub mod organism;
+ pub mod persistence;
+ pub mod persistent_voxel;

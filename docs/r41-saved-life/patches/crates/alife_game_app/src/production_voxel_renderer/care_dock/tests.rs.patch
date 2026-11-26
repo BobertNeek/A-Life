@@ -1,0 +1,334 @@
+diff --git a/crates/alife_game_app/src/production_voxel_renderer/care_dock/tests.rs b/crates/alife_game_app/src/production_voxel_renderer/care_dock/tests.rs
+--- a/crates/alife_game_app/src/production_voxel_renderer/care_dock/tests.rs
++++ b/crates/alife_game_app/src/production_voxel_renderer/care_dock/tests.rs
+@@ -365,10 +365,7 @@
+         0,
+         "care dock must be wordless"
+     );
+-    assert_eq!(
+-        world.query::<&bevy::prelude::Text2d>().iter(world).count(),
+-        0
+-    );
++    assert_eq!(world.query::<&Text2d>().iter(world).count(), 0);
+ }
+ fn rgba(color: Color) -> [f32; 4] {
+     let c = color.to_srgba();
+@@ -409,10 +406,9 @@
+             json!({"top":rgba(b.top),"right":rgba(b.right),"bottom":rgba(b.bottom),"left":rgba(b.left)})});
+         let image=world.get::<ImageNode>(e).map(|image|{
+             let name=image_name(world,e);
+-            let source_path = name.map(|n| format!("assets/ui/care_dock/{n}.png"))
+-                .or_else(|| super::orchard::image_path(world, &image.image));
++            let source_path = name.map(|n| format!("assets/ui/care_dock/{n}.png"));
+             #[cfg(feature = "gpu-runtime")]
+-            let source_path = source_path.or_else(|| super::field_signs::glass::image_path(world, &image.image)).or_else(|| crate::production_conversation_lineage_ui::composer::image_path(world, &image.image));
++            let source_path = source_path.or_else(|| crate::production_conversation_lineage_ui::composer::image_path(world, &image.image));
+             let source_path = source_path.expect("embedded UI icon");
+             let asset=world.resource::<Assets<Image>>().get(&image.image).unwrap();
+             json!({"name":name,"source_path":source_path,
+@@ -434,29 +430,6 @@
+                 "background":background,"border_colors":border},"image":image})
+     }).collect()
+ }
+-#[test]
+-fn first_gesture_waits_for_a_real_target_retires_and_can_be_recalled() {
+-    let mut hint = FirstGesture::default();
+-    assert!(!hint.visible(false, true, 40.));
+-    assert!(!hint.visible(true, false, 1.));
+-    assert!(hint.visible(true, true, 1.));
+-    for _ in 0..16 {
+-        hint.visible(true, true, 1.);
+-    }
+-    assert!(!hint.visible(true, true, 0.));
+-    hint.recall();
+-    assert!(hint.visible(true, false, 0.));
+-    let mut dock = State {
+-        invitation: hint,
+-        ..default()
+-    };
+-    dock.record(Action::Pet, Evidence::Queued);
+-    assert!(
+-        !dock.invitation.visible(true, true, 0.),
+-        "queueing dismisses the teaching prompt, not a claim the creature felt it"
+-    );
+-}
+-
+ #[test]
+ fn cpu_layout_fits_four_viewports_and_exports_actual_wordless_feedback_nodes() {
+     let mut queued = [Evidence::None; 7];
+@@ -527,14 +500,12 @@
+     let mut digests = BTreeSet::new();
+     for (name, bytes) in EMBEDDED {
+         let icon = image::load_from_memory(bytes).unwrap().to_rgba8();
+-        let edge = match name {
+-            "select" => 96, // Shared with the selected-creature HUD.
+-            "toward" => 48,
+-            "roll" => 64,
+-            action if ACTIONS.iter().any(|a| a.icon() == action) => 64,
+-            _ => 16, // Compact evidence markers.
++        let edge = if ACTIONS.iter().any(|action| action.icon() == name) {
++            64
++        } else {
++            16
+         };
+-        assert_eq!(icon.dimensions(), (edge, edge), "{name}");
++        assert_eq!(icon.dimensions(), (edge, edge));
+         assert!(icon.pixels().any(|p| p[3] > 0));
+         assert!(icon.pixels().any(|p| p[3] == 0));
+         assert!(digests.insert(blake3::hash(bytes).to_hex().to_string()));
+@@ -582,47 +553,6 @@
+     assert!(chunk.is_stable());
+     assert_eq!(food_tile(Some(chunk)), None);
+ }
+-#[test]
+-fn offerings_follow_live_gaze_but_explicit_ground_never_moves() {
+-    let mut world = authoritative_world();
+-    let id = world.entity_id("agent").unwrap();
+-    let selected = reference(StableVoxelRefKind::Creature, Some(id));
+-    let ahead = contextual_target(Action::Food, Some(selected), None, None, &world)
+-        .unwrap()
+-        .tile
+-        .unwrap();
+-    assert_eq!(ahead, VoxelTileCoord::new(1, 0));
+-    world
+-        .editor_spawn_object(alife_world::WorldEditorSpawnSpec {
+-            label: "closed-stone".into(),
+-            kind: WorldObjectKind::Obstacle,
+-            organism_id: None,
+-            position: Vec3f::new(1.5, 0.5, 0.0),
+-            radius: 0.35,
+-            nutrition: 0.0,
+-            hazard_pain: 0.0,
+-            token_id: None,
+-        })
+-        .unwrap();
+-    let alternate = contextual_target(Action::Food, Some(selected), None, None, &world).unwrap();
+-    assert_ne!(alternate.tile, Some(ahead));
+-    let ground = StableVoxelObjectRef {
+-        kind: StableVoxelRefKind::Tile,
+-        stable_id: None,
+-        tile: Some(ahead),
+-        ..selected
+-    };
+-    assert!(contextual_target(Action::Food, Some(selected), Some(ground), None, &world).is_none());
+-    assert_eq!(
+-        contextual_target(Action::Pet, None, None, Some(id), &world)
+-            .unwrap()
+-            .stable_id,
+-        Some(id)
+-    );
+-    let stale = reference(StableVoxelRefKind::Creature, Some(WorldEntityId(12345)));
+-    assert!(contextual_target(Action::Scold, Some(stale), None, Some(id), &world).is_none());
+-}
+-
+ #[test]
+ fn care_target_uses_current_living_canonical_world_object_position() {
+     let mut world = authoritative_world();
+@@ -726,9 +656,6 @@
+     }
+ }
+ impl CarePort for TestPort {
+-    fn roll(&mut self, id: WorldEntityId, offset: [f32; 2]) -> Result<(), GameAppShellError> {
+-        Ok(self.world.roll_player_toy(id, offset)?)
+-    }
+     fn world(&self) -> &HeadlessWorld {
+         &self.world
+     }
+@@ -1108,59 +1035,6 @@
+         }
+     }
+ }
+-#[cfg(feature = "gpu-runtime")]
+-#[test]
+-fn garden_and_fieldglass_fit_without_covering_care_and_looking_never_dispatches_care() {
+-    for size in VIEWPORTS {
+-        let mut app = layout_app(size);
+-        let world = app.world_mut();
+-        let tools: Vec<_> = world
+-            .query::<(Entity, &Accessory)>()
+-            .iter(world)
+-            .map(|(e, a)| (e, *a))
+-            .collect();
+-        assert_eq!(tools.len(), 2);
+-        for (e, _) in &tools {
+-            world.entity_mut(*e).insert(Visibility::Inherited);
+-        }
+-        app.update();
+-        let world = app.world_mut();
+-        let area = Box2 {
+-            min: Vec2::ZERO,
+-            max: size,
+-        };
+-        let a = Box2::of(world, tools[0].0);
+-        let b = Box2::of(world, tools[1].0);
+-        assert!(area.contains(a) && area.contains(b) && !a.overlaps(b));
+-        for (e, _) in world.query::<(Entity, &Action)>().iter(world) {
+-            let button = Box2::of(world, e);
+-            assert!(!a.overlaps(button) && !b.overlaps(button));
+-        }
+-    }
+-    let mut app = input_app();
+-    app.init_resource::<Messages<ActionRequest>>();
+-    let world = app.world_mut();
+-    let lens = world
+-        .query::<(Entity, &Accessory)>()
+-        .iter(world)
+-        .find(|(_, a)| **a == Accessory::Fieldglass)
+-        .unwrap()
+-        .0;
+-    world.entity_mut(lens).insert(Visibility::Inherited);
+-    world
+-        .resource_mut::<Messages<ActionRequest>>()
+-        .write(ActionRequest(accesskit::ActionRequest {
+-            action: accesskit::Action::Click,
+-            target: accesskit::NodeId(lens.to_bits()),
+-            data: None,
+-        }));
+-    app.update();
+-    let dock = app.world().resource::<State>();
+-    assert!(dock.fieldglass_pending && dock.captured);
+-    assert!(dock.pending.is_none() && !dock.garden_pending);
+-    assert_eq!(app.world().resource::<WorldReaderRuns>().0, 0);
+-}
+-
+ #[test]
+ fn actual_collect_input_captures_hover_press_wheel_and_release_without_repeat_dispatch() {
+     let mut app = input_app();
+@@ -1679,24 +1553,6 @@
+ // hit-test, cursor conversion, clipping, Interaction updates and input capture
+ // themselves use Bevy's production ui_focus_system and collect_input.
+ pub(crate) fn cpu_focus_fixture_stack(world: &mut World) {
+-    let root = world
+-        .query_filtered::<Entity, With<DockRoot>>()
+-        .single(world)
+-        .unwrap();
+-    let mut roots = vec![root];
+-    #[cfg(feature = "gpu-runtime")]
+-    {
+-        let composers = world.query_filtered::<Entity, With<crate::production_conversation_lineage_ui::ProductionSpeechComposerBounds>>().iter(world).collect::<Vec<_>>();
+-        roots.extend(composers);
+-    }
+-    let modals = world
+-        .query_filtered::<Entity, With<CpuFocusModal>>()
+-        .iter(world)
+-        .collect::<Vec<_>>();
+-    roots.extend(modals);
+-    cpu_focus_stack_for(world, &roots);
+-}
+-pub(crate) fn cpu_focus_stack_for(world: &mut World, roots: &[Entity]) {
+     fn walk(world: &World, entity: Entity, nodes: &mut Vec<Entity>) {
+         nodes.push(entity);
+         if let Some(children) = world.get::<Children>(entity) {
+@@ -1705,9 +1561,25 @@
+             }
+         }
+     }
++    let root = world
++        .query_filtered::<Entity, With<DockRoot>>()
++        .single(world)
++        .unwrap();
+     let mut nodes = Vec::new();
+-    for &root in roots {
+-        walk(world, root, &mut nodes);
++    walk(world, root, &mut nodes);
++    #[cfg(feature = "gpu-runtime")]
++    {
++        let composers = world.query_filtered::<Entity, With<crate::production_conversation_lineage_ui::ProductionSpeechComposerBounds>>().iter(world).collect::<Vec<_>>();
++        for composer in composers {
++            walk(world, composer, &mut nodes);
++        }
++    }
++    let modals = world
++        .query_filtered::<Entity, With<CpuFocusModal>>()
++        .iter(world)
++        .collect::<Vec<_>>();
++    for modal in modals {
++        walk(world, modal, &mut nodes);
+     }
+     for &entity in &nodes {
+         let inherited = if visible(world, entity) {
+@@ -1955,7 +1827,6 @@
+                 let mut ux = app
+                     .world_mut()
+                     .resource_mut::<Fvr05ProductionUxStateResource>();
+-                ux.debug_mode = true;
+                 ux.show_help = true;
+                 ux.settings.paused = paused;
+                 // Use the status emitted by the real successful care dispatcher.
+@@ -2007,7 +1878,6 @@
+                 let mut ux = app
+                     .world_mut()
+                     .resource_mut::<Fvr05ProductionUxStateResource>();
+-                ux.debug_mode = true;
+                 ux.show_help = true;
+                 ux.settings.paused = paused;
+                 ux.update_selection_snapshot(original, false);
+@@ -2088,7 +1958,6 @@
+                     let mut ux = app
+                         .world_mut()
+                         .resource_mut::<Fvr05ProductionUxStateResource>();
+-                    ux.debug_mode = true;
+                     ux.show_help = true;
+                     ux.settings.paused = paused;
+                     // Preserve the error and status conversion used by dispatch.
+@@ -2153,7 +2022,6 @@
+                 let mut ux = app
+                     .world_mut()
+                     .resource_mut::<Fvr05ProductionUxStateResource>();
+-                ux.debug_mode = true;
+                 ux.show_help = true;
+                 ux.settings.paused = true;
+                 ux.last_error = Some(error.to_string());
+@@ -2176,7 +2044,6 @@
+             let mut ux = app
+                 .world_mut()
+                 .resource_mut::<Fvr05ProductionUxStateResource>();
+-            ux.debug_mode = true;
+             ux.show_help = true;
+             ux.settings.paused = true;
+             ux.last_action = Action::Praise.queued_status();
+@@ -2192,7 +2059,6 @@
+                 .resource_mut::<Fvr05ProductionUxStateResource>();
+             ux.last_error = None;
+             ux.show_help = false;
+-            ux.debug_mode = false;
+         }
+         app.update();
+         assert_eq!(
+@@ -2441,36 +2307,3 @@
+         }
+     }
+ }
+-
+-#[test]
+-fn selected_ball_reuses_the_toy_control_without_reoffering_to_the_followed_resident() {
+-    let mut port = TestPort::new();
+-    let ball = port
+-        .world
+-        .spawn_toy("rattle", Vec3f::new(8., 0., 0.), true)
+-        .unwrap();
+-    let station = port
+-        .world
+-        .spawn_toy("player-activity-toy", Vec3f::new(8., 0., 3.), false)
+-        .unwrap();
+-    let selected = Some(reference(StableVoxelRefKind::Resource, Some(ball)));
+-    let followed = port.world.entity_id("agent");
+-    let target = contextual_target(Action::Toy, selected, None, followed, &port.world);
+-    assert_eq!(target, selected);
+-    assert_eq!(
+-        dispatch_core(&mut port, Action::Toy, target).unwrap(),
+-        Evidence::Rolled(ball)
+-    );
+-    assert!(port.calls.is_empty());
+-    for _ in 0..60 {
+-        port.world.try_advance_tick().unwrap();
+-    }
+-    assert_eq!(port.world.last_chime_strike().map(|x| x.1), Some(station));
+-    port.world.begin_player_hold(ball).unwrap();
+-    assert_eq!(
+-        contextual_target(Action::Toy, selected, None, followed, &port.world),
+-        selected
+-    );
+-    assert!(dispatch_core(&mut port, Action::Toy, selected).is_err());
+-    assert!(port.calls.is_empty());
+-}

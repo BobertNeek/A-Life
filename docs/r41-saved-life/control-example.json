@@ -1,0 +1,15 @@
+{
+  "card_case": "r2-word-approach-food",
+  "evaluation_nonce": 1794935016,
+  "intervention": {
+    "kind": "control"
+  },
+  "max_decisions": 16,
+  "max_output_bytes": 268435456,
+  "max_world_ticks": 16,
+  "owner": 3,
+  "run_id": "shared-r41-rhc1-r2-approach-food-A",
+  "scenario": "published_card_case",
+  "schema": 1,
+  "source_current_sha256": "e785e79c581dbc29bb9e4b66ab2b3ae63d31a16db9c44b262753dfe319fbe841"
+}

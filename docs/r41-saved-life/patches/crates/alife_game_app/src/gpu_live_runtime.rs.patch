@@ -1,0 +1,553 @@
+diff --git a/crates/alife_game_app/src/gpu_live_runtime.rs b/crates/alife_game_app/src/gpu_live_runtime.rs
+--- a/crates/alife_game_app/src/gpu_live_runtime.rs
++++ b/crates/alife_game_app/src/gpu_live_runtime.rs
+@@ -52,8 +52,8 @@
+ mod sleeping_body_contact_tests;
+ mod staged_tick;
+ use cpu_preparation::{
+-    preparation_worker_count, prepare_cpu_rows, CapturedCpuPreparation, CapturedLivePreparation,
+-    CpuPreparationJob, CpuPreparationOutcome,
++    CapturedCpuPreparation, CapturedLivePreparation, CpuPreparationJob, CpuPreparationOutcome,
++    preparation_worker_count, prepare_cpu_rows,
+ };
+ #[cfg(feature = "foundation-training")]
+ pub use foundation_worlds::*;
+@@ -61,8 +61,8 @@
+ 
+ use appearance::CreatureAppearanceCache;
+ use durability_hold::{
+-    brain_atp_world_tick_mode, motor_eligible, sleep_recovery_body_event_due,
+-    sleeping_body_contact_due, BrainAtpWorldTickMode,
++    BrainAtpWorldTickMode, brain_atp_world_tick_mode, motor_eligible,
++    sleep_recovery_body_event_due, sleeping_body_contact_due,
+ };
+ use neural_receptor_cache::ResidentNeuralReceptors;
+ 
+@@ -84,17 +84,17 @@
+ use alife_core::predictive::{GroundedSuccessorPredictor, SuccessorPrediction};
+ use alife_core::sleep::{SleepReplayEvidence, SleepWorkReceipt};
+ use alife_core::{
+-    factorized_motor_bundle_for_candidates, select_focal_targets, ArchiveCheckpointRetention,
+-    ArchiveLearnedCapturePolicy, ArchiveRetirementReceipt, AttentionSelectionPolicy,
+-    BiochemistryState, Blake3Digest, BodyEventDelta, BoundedReplayBatch, BrainCapacityClass,
+-    BrainGenome, BrainScaleTier, BrainTickStatus, BrainWorkCounters, BrainWorkReceipt,
+-    CanonicalDigestBuilder, CognitiveConceptActivation, CognitiveContextFrame,
++    ArchiveCheckpointRetention, ArchiveLearnedCapturePolicy, ArchiveRetirementReceipt,
++    AttentionSelectionPolicy, BiochemistryState, Blake3Digest, BodyEventDelta, BoundedReplayBatch,
++    BrainCapacityClass, BrainGenome, BrainScaleTier, BrainTickStatus, BrainWorkCounters,
++    BrainWorkReceipt, CanonicalDigestBuilder, CognitiveConceptActivation, CognitiveContextFrame,
+     CognitiveGapActivation, CognitiveWorkReceipt, Confidence, ConsolidationDriverEvent,
+     ConsolidationIntent, ConsolidationState, DecisionSnapshot, DevelopmentState,
+     EnvironmentalRegime, ExperiencePatch, ExperienceSequenceId, FinalizedMemoryRecall,
+     FoundationCompatibilityFamilyId, FoundationGeneticIdentity, FoundationId, FoundationVersion,
+     FoundationWeightApplication, FoundationWeightAsset, HomeostaticParameters, HomeostaticSnapshot,
+-    JointMotorCondition, LanguageGroundingLedger, LegacyNano512CompatibilityReceipt, LineageId,
++    JointMotorCondition, LEGACY_NANO512_V1_COORDINATE_SEED, LanguageGroundingLedger,
++    LegacyNano512CompatibilityReceipt, LineageId, MAX_ACTIVE_CONCEPTS, MAX_ACTIVE_GAPS,
+     MemoryBankConfig, MemoryCompactionCheckpoint, MemoryCompactionReceipt, MemoryRecallReceipt,
+     MemorySidecarState, MemoryUpdateReceipt, MotorCommandBundle, N512FounderFoundationProjection,
+     NeuralActionSelection, NeuralEmission, NeuralEmissionClass, NeuralEmissionFrame,
+@@ -105,25 +105,25 @@
+     SensoryAbiVersion, SignedValence, SleepConsolidationConfig, SleepConsolidator, SleepPhase,
+     SleepState, SleepTransition, Tick, TopologicalMapConfig, TopologyObservationReceipt,
+     TopologySidecar, UtteranceSourceKind, Validate, Vec3f, WorldEntityId,
+-    LEGACY_NANO512_V1_COORDINATE_SEED, MAX_ACTIVE_CONCEPTS, MAX_ACTIVE_GAPS,
++    factorized_motor_bundle_for_candidates, select_focal_targets,
+ };
+ #[cfg(test)]
+ use alife_core::{
+-    finalized_memory_attention_evidence, AttentionFrame, CandidateObservationRef,
+-    NeuralReceptorPhenotype, SemanticStateVector,
++    AttentionFrame, CandidateObservationRef, NeuralReceptorPhenotype, SemanticStateVector,
++    finalized_memory_attention_evidence,
+ };
+ #[cfg(feature = "gpu-tests")]
+ use alife_gpu_backend::GpuExactPopulationCaptureMetricsV1;
+ use alife_gpu_backend::{
+-    decode_exact_population_sleep_replay, GpuActivityRuntimeSnapshot, GpuAuthorityReceiptV1,
+-    GpuBrainHandle, GpuClosedLoopBackend, GpuClosedLoopMemoryBatchInput,
+-    GpuClosedLoopMemoryTickInput, GpuClosedLoopTick, GpuCompactCheckpointAuthorityV1,
+-    GpuCuratedResidencyCohort, GpuCuratedResidencyEntry, GpuCuratedResidencyOutcome,
+-    GpuCuratedResidencyReceipt, GpuCuratedResidencyTargetIdentity, GpuExactPopulationCapturePollV1,
+-    GpuExactPopulationCaptureTicketV1, GpuExactPopulationCaptureV1, GpuLearningReceipt,
+-    GpuMemoryContextUpload, GpuV11WorkReceipt, PendingEligibilityDiscardReceipt,
+-    PendingEligibilityIdentity, PendingEligibilityReceipt, GPU_CLOSED_LOOP_TICK_READBACK_BYTES,
+-    GPU_FAST_PLASTICITY_COMMIT_BYTES,
++    GPU_CLOSED_LOOP_TICK_READBACK_BYTES, GPU_FAST_PLASTICITY_COMMIT_BYTES,
++    GpuActivityRuntimeSnapshot, GpuAuthorityReceiptV1, GpuBrainHandle, GpuClosedLoopBackend,
++    GpuClosedLoopMemoryBatchInput, GpuClosedLoopMemoryTickInput, GpuClosedLoopTick,
++    GpuCompactCheckpointAuthorityV1, GpuCuratedResidencyCohort, GpuCuratedResidencyEntry,
++    GpuCuratedResidencyOutcome, GpuCuratedResidencyReceipt, GpuCuratedResidencyTargetIdentity,
++    GpuExactPopulationCapturePollV1, GpuExactPopulationCaptureTicketV1,
++    GpuExactPopulationCaptureV1, GpuLearningReceipt, GpuMemoryContextUpload, GpuV11WorkReceipt,
++    PendingEligibilityDiscardReceipt, PendingEligibilityIdentity, PendingEligibilityReceipt,
++    decode_exact_population_sleep_replay,
+ };
+ use alife_runtime::{
+     DurableGpuCheckpointMonotonicityPermit, DurableGpuCheckpointRef, GpuAuthoritativeSession,
+@@ -132,35 +132,36 @@
+     GpuSleepTransactionJournalV2, SleepPhaseReceipt, SleepWorkDue,
+ };
+ use alife_world::{
++    CreatureAppearanceGenome, HabitatActor, HabitatAuthorityError, HabitatBreedingKind,
++    HabitatBreedingReceipt, HabitatBreedingRequest, HabitatId, HabitatMode, HabitatOperation,
++    HabitatOperationRequest, HabitatPermissionReceipt, HeadlessWorld, HeadlessWorldSignatureDigest,
++    WorldEditorSpawnSpec, WorldObjectKind, WorldOrganismAdmissionSnapshot, WorldOrganismRecord,
+     grounded_peripheral_summaries,
+     persistence::{
+         AssetManifest, CreatureMindSaveSummary, CreatureSaveState, ExactCognitiveCheckpointState,
+         GpuBrainSaveState, LearningTraceSaveSummary, PortableAssetDigest, PortableSaveFile,
+-        RuntimeConfig, WeightLayerSaveSummary, V11_EXACT_COGNITIVE_STATE_SCHEMA_VERSION,
++        RuntimeConfig, V11_EXACT_COGNITIVE_STATE_SCHEMA_VERSION, WeightLayerSaveSummary,
+     },
+-    CreatureAppearanceGenome, HabitatActor, HabitatAuthorityError, HabitatBreedingKind,
+-    HabitatBreedingReceipt, HabitatBreedingRequest, HabitatId, HabitatMode, HabitatOperation,
+-    HabitatOperationRequest, HabitatPermissionReceipt, HeadlessWorld, HeadlessWorldSignatureDigest,
+-    WorldEditorSpawnSpec, WorldObjectKind, WorldOrganismAdmissionSnapshot, WorldOrganismRecord,
+ };
+ use thiserror::Error;
+ 
+ use crate::{
++    AppShellLaunchConfig, CURATED_FOUNDER_RESET_POLICY, CuratedFounderAgentInput,
++    CuratedFounderResetError, CuratedFounderResetRequest, G03_LIVE_BRAIN_LOOP_SCHEMA,
++    G03_LIVE_BRAIN_LOOP_SCHEMA_VERSION, GameAppShellError, GpuBrainAuthorityTelemetry,
++    GpuBrainCheckpointWrite, GpuBrainSidecarCapture, GpuCheckpointAssetStore,
++    GpuDurableSaveManifest, GpuLoadedSaveManifest, GpuSleepConsolidationDriver,
++    GpuSleepScheduleEvent, GpuSleepScheduler, LiveBrainCausalStage, LiveBrainTickSummary,
++    LiveCognitivePresentationSnapshot, RetainedLearningCapture,
+     curated_founder_materializer::{
+-        materialize_curated_founder_bundle, CuratedFounderMaterializationError,
++        CuratedFounderMaterializationError, materialize_curated_founder_bundle,
+     },
+     curated_founder_staging::{
+         CuratedFounderDurableOperation, CuratedFounderDurableOperationAttempt,
+         CuratedFounderDurablePublicationReceipt, CuratedFounderPublicationStatus,
+         CuratedFounderSaveState, CuratedFounderStagingError,
+     },
+-    merge_gpu_checkpoint_manifest_entries, plan_curated_founder_reset, AppShellLaunchConfig,
+-    CuratedFounderAgentInput, CuratedFounderResetError, CuratedFounderResetRequest,
+-    GameAppShellError, GpuBrainAuthorityTelemetry, GpuBrainCheckpointWrite, GpuBrainSidecarCapture,
+-    GpuCheckpointAssetStore, GpuDurableSaveManifest, GpuLoadedSaveManifest,
+-    GpuSleepConsolidationDriver, GpuSleepScheduleEvent, GpuSleepScheduler, LiveBrainCausalStage,
+-    LiveBrainTickSummary, LiveCognitivePresentationSnapshot, RetainedLearningCapture,
+-    CURATED_FOUNDER_RESET_POLICY, G03_LIVE_BRAIN_LOOP_SCHEMA, G03_LIVE_BRAIN_LOOP_SCHEMA_VERSION,
++    merge_gpu_checkpoint_manifest_entries, plan_curated_founder_reset,
+ };
+ #[cfg(test)]
+ use alife_core::channel_command_for_action;
+@@ -3868,6 +3869,7 @@
+ }
+ 
+ pub const PLAYER_RESOURCE_PLACEMENT_SCHEMA_VERSION: u16 = 1;
++const PLAYER_FOOD_RADIUS: f32 = 0.5;
+ 
+ #[derive(Debug, Clone, Copy, PartialEq)]
+ pub struct PlayerResourcePlacementRequest {
+@@ -4837,16 +4839,6 @@
+         launch: &AppShellLaunchConfig,
+     ) -> Result<Self, GameAppShellError> {
+         let config = RuntimeConfig::from_json_file(&launch.config_path)?;
+-        Self::from_validated_launch_config(backend, launch, &config)
+-    }
+-
+-    /// A resumed world supplies its own configuration, not the scenario template's
+-    /// seed. The same durable manifest, asset, policy and seed checks apply.
+-    pub(crate) fn from_validated_launch_config(
+-        backend: GpuClosedLoopBackend,
+-        launch: &AppShellLaunchConfig,
+-        config: &RuntimeConfig,
+-    ) -> Result<Self, GameAppShellError> {
+         config.validate()?;
+         let manifest = AssetManifest::from_json_file(&launch.asset_manifest_path)?;
+         manifest.validate_with_root(&launch.asset_root)?;
+@@ -4882,8 +4874,7 @@
+         let save = &loaded_save.save;
+         if save.config.deterministic_seed != save.deterministic_seed {
+             return Err(GameAppShellError::InvalidGraphicalLaunch {
+-                message:
+-                    "GPU neural runtime requires matching persisted configuration and save seed",
++                message: "GPU neural runtime requires matching persisted configuration and save seed",
+             });
+         }
+         validate_replacement_policy(
+@@ -7637,9 +7628,34 @@
+     }
+ 
+     pub fn tick_outcome(&mut self) -> Result<GpuLiveTickOutcome, GameAppShellError> {
++        self.tick_outcome_with_retention_scent(None, None)
++    }
++
++    #[cfg(all(feature = "foundation-training", feature = "gpu-tests"))]
++    pub(crate) fn tick_outcome_with_retention_near_field(
++        &mut self,
++        owner: OrganismId,
++    ) -> Result<GpuLiveTickOutcome, GameAppShellError> {
++        self.tick_outcome_with_retention_scent(Some(owner), None)
++    }
++
++    #[cfg(all(feature = "foundation-training", feature = "gpu-tests"))]
++    pub(crate) fn tick_outcome_with_visible_self_grip_v1(
++        &mut self,
++        owner: OrganismId,
++        weights: [u32; 16],
++    ) -> Result<GpuLiveTickOutcome, GameAppShellError> {
++        self.tick_outcome_with_retention_scent(None, Some((owner, weights)))
++    }
++
++    fn tick_outcome_with_retention_scent(
++        &mut self,
++        near_field_owner: Option<OrganismId>,
++        visible_self_grip_v1: Option<(OrganismId, [u32; 16])>,
++    ) -> Result<GpuLiveTickOutcome, GameAppShellError> {
+         let started = Instant::now();
+-        let result =
+-            self.tick_with_sleep_progress_outcome(|backend, handle, organism_id, state, intent| {
++        let result = self.tick_with_sleep_progress_outcome_scent(
++            |backend, handle, organism_id, state, intent| {
+                 let mut driver = AuthoritativeGpuSleepDriver {
+                     backend,
+                     handle,
+@@ -7650,7 +7666,10 @@
+                     fail_stop_armed: None,
+                 };
+                 driver.progress(organism_id, state, intent)
+-            });
++            },
++            near_field_owner,
++            visible_self_grip_v1,
++        );
+         self.performance_metrics.tick_calls = self.performance_metrics.tick_calls.saturating_add(1);
+         self.performance_metrics.tick_wall_ns = self
+             .performance_metrics
+@@ -7791,7 +7810,25 @@
+ 
+     fn tick_with_sleep_progress_outcome<F>(
+         &mut self,
++        progress: F,
++    ) -> Result<GpuLiveTickOutcome, GameAppShellError>
++    where
++        F: FnMut(
++            &mut GpuClosedLoopBackend,
++            GpuBrainHandle,
++            OrganismId,
++            SleepState,
++            Option<ConsolidationIntent>,
++        ) -> SleepProgressResult,
++    {
++        self.tick_with_sleep_progress_outcome_scent(progress, None, None)
++    }
++
++    fn tick_with_sleep_progress_outcome_scent<F>(
++        &mut self,
+         mut progress: F,
++        near_field_owner: Option<OrganismId>,
++        visible_self_grip_v1: Option<(OrganismId, [u32; 16])>,
+     ) -> Result<GpuLiveTickOutcome, GameAppShellError>
+     where
+         F: FnMut(
+@@ -7846,7 +7883,7 @@
+         let staged_sleep = StagedSleepAuthority::capture(self);
+         let (result, clone_sample) =
+             tick_with_sleep_progress_inner(self, measure_clone_wall_time, |runtime| {
+-                runtime.tick_with_sleep_progress_staged(&mut progress)
++                runtime.tick_with_sleep_progress_staged(&mut progress, near_field_owner, visible_self_grip_v1)
+             });
+         if result.is_err() {
+             #[cfg(feature = "foundation-training")]
+@@ -8170,22 +8207,6 @@
+         place_food_in_world(&mut self.world, position)
+     }
+ 
+-    /// The Hand acts on a world-owned garden bed; no organism is instructed to eat.
+-    pub fn tend_player_orchard(
+-        &mut self,
+-        tile: alife_world::VoxelTileCoord,
+-    ) -> Result<alife_world::orchard::OrchardReceipt, GameAppShellError> {
+-        Ok(self.world.tend_orchard(tile)?)
+-    }
+-
+-    pub fn offer_orchard_fruit(
+-        &mut self,
+-        recipient: WorldEntityId,
+-        tile: alife_world::VoxelTileCoord,
+-    ) -> Result<WorldEntityId, GameAppShellError> {
+-        Ok(self.world.offer_orchard_fruit(recipient, tile)?)
+-    }
+-
+     /// Reposition loose food without changing its identity or creature state.
+     pub fn move_player_food(
+         &mut self,
+@@ -8193,14 +8214,6 @@
+         position: Vec3f,
+     ) -> Result<Vec3f, GameAppShellError> {
+         move_food_in_world(&mut self.world, source, position)
+-    }
+-
+-    pub fn roll_player_toy(
+-        &mut self,
+-        id: WorldEntityId,
+-        offset: [f32; 2],
+-    ) -> Result<(), GameAppShellError> {
+-        Ok(self.world.roll_player_toy(id, offset)?)
+     }
+ 
+     pub fn begin_player_hold(&mut self, source: WorldEntityId) -> Result<Vec3f, GameAppShellError> {
+@@ -8253,28 +8266,9 @@
+             .filter(|record| record.lifecycle().is_alive())
+             .and_then(|record| self.world.entity(record.world_entity_id()))
+             .ok_or(ScaffoldContractError::InvalidId)?;
+-        let ground = |mut p: Vec3f, radius: f32| -> Result<Vec3f, ScaffoldContractError> {
+-            if let Some(terrain) = self.world.terrain() {
+-                let mut limits = terrain.limits();
+-                limits.body_radius = radius;
+-                let surface = terrain.surface();
+-                if !surface.walkable_with(p.x, p.z, limits) {
+-                    return Err(ScaffoldContractError::InvalidActionDecision);
+-                }
+-                p.y = surface
+-                    .height(p.x, p.z)
+-                    .ok_or(ScaffoldContractError::InvalidId)?;
+-            }
+-            Ok(p)
+-        };
+-        let position = ground(
+-            Vec3f::new(
+-                object.position.x + 1.5 * object.body_yaw.cos(),
+-                object.position.y,
+-                object.position.z + 1.5 * object.body_yaw.sin(),
+-            ),
+-            0.3,
+-        )?;
++        let mut position = object.position;
++        position.x += 1.5 * object.body_yaw.cos();
++        position.z += 1.5 * object.body_yaw.sin();
+         let mut staged = self.world.clone();
+         let toy = if let Some(id) = staged.entity_id("player-plaything") {
+             let toy = staged.entity(id).ok_or(ScaffoldContractError::InvalidId)?;
+@@ -8297,10 +8291,7 @@
+         };
+         // The activity toy has a persistent fixed location after placement.
+         if staged.entity_id("player-activity-toy").is_none() {
+-            let station_position = ground(
+-                Vec3f::new(position.x + 1.5, position.y, position.z + 1.5),
+-                0.5,
+-            )?;
++            let station_position = Vec3f::new(position.x + 1.5, position.y, position.z + 1.5);
+             staged.spawn_toy("player-activity-toy", station_position, false)?;
+         }
+         self.world = staged;
+@@ -8703,6 +8694,15 @@
+     ) -> Result<alife_gpu_backend::GpuActivityRuntimeSnapshot, ScaffoldContractError> {
+         let handle = self.evidence_handle(organism_id)?;
+         self.backend.snapshot_activity_state(handle)
++    }
++
++    #[cfg(feature = "gpu-tests")]
++    pub(crate) fn controlled_pressure_evidence_for_test(&self) -> serde_json::Value {
++        serde_json::json!({
++            "scope": "controlled_host_pressure_not_fixed_neural_work",
++            "tuple_fields": ["actual_previous_gpu_time_ns", "applied_throttle_decision"],
++            "samples": self.backend.backend().controlled_pressure_evidence_for_test()
++        })
+     }
+ 
+     pub(crate) fn install_recorded_pressure_replay(
+@@ -10338,16 +10338,32 @@
+ ) -> Result<PlayerResourcePlacementReceipt, GameAppShellError> {
+     validate_player_resource_position(world, position)?;
+ 
+-    let mut candidate = world.clone();
++    // Repeated placement at the same tick and tile must still have a fresh identity.
++    let label = (0..=world.object_count())
++        .map(|suffix| format!("player-food-t{}-{suffix}", world.tick().raw()))
++        .find(|label| world.entity_id(label).is_none())
++        .ok_or(ScaffoldContractError::InvalidId)?;
+     let variety =
+         alife_world::FoodVariety::from_seed(world.seed().wrapping_add(world.object_count() as u64));
+-    let world_entity_id = candidate.spawn_player_food(position, variety)?;
+-    let placed = candidate
++    let nutrition = variety.nutrition();
++
++    let mut candidate = world.clone();
++    let world_entity_id = candidate.editor_spawn_object(WorldEditorSpawnSpec {
++        label: label.clone(),
++        kind: WorldObjectKind::Food,
++        organism_id: None,
++        position,
++        nutrition,
++        hazard_pain: 0.0,
++        radius: PLAYER_FOOD_RADIUS,
++        token_id: None,
++    })?;
++    candidate.set_food_variety(world_entity_id, variety)?;
++    candidate.validate_organism_bindings()?;
++    let placed_position = candidate
+         .entity(world_entity_id)
+-        .ok_or(ScaffoldContractError::InvalidId)?;
+-    let label = placed.label.clone();
+-    let (nutrition, radius, placed_position) = (placed.nutrition, placed.radius, placed.position);
+-    candidate.validate_organism_bindings()?;
++        .ok_or(ScaffoldContractError::InvalidId)?
++        .position;
+     let world_signature = candidate.canonical_signature_digest()?;
+     *world = candidate;
+ 
+@@ -10357,7 +10373,7 @@
+         label,
+         position: placed_position,
+         nutrition,
+-        radius,
++        radius: PLAYER_FOOD_RADIUS,
+         world_signature,
+     })
+ }
+@@ -10377,9 +10393,9 @@
+ 
+     use super::*;
+     use crate::{
++        CURATED_FOUNDER_RESET_POLICY, CuratedFounderAgentInput, CuratedFounderResetRequest,
+         curated_founder_materializer::materialize_curated_founder_bundle,
+-        plan_curated_founder_reset, CuratedFounderAgentInput, CuratedFounderResetRequest,
+-        CURATED_FOUNDER_RESET_POLICY,
++        plan_curated_founder_reset,
+     };
+     use alife_archive::{LineageLibrary, LineageLibraryConfig};
+     use alife_core::{
+@@ -10395,8 +10411,8 @@
+     };
+     use alife_runtime::{GpuDurableSaveManifest, GpuSessionAuthority, GpuSessionConsumerKind};
+     use alife_world::{
++        HeadlessScenarioBuilder, HeadlessWorld, HeadlessWorldCommand, WorldOrganismRecord,
+         persistence::{AssetManifest, PortableSaveFile, RuntimeConfig},
+-        HeadlessScenarioBuilder, HeadlessWorld, HeadlessWorldCommand, WorldOrganismRecord,
+     };
+ 
+     #[test]
+@@ -10418,9 +10434,11 @@
+         assert_eq!(world.object_count(), 22);
+         assert_ne!(first.world_entity_id, second.world_entity_id);
+         assert_ne!(first.label, second.label);
+-        assert!(existing
+-            .iter()
+-            .all(|object| world.entity(object.id) == Some(object)));
++        assert!(
++            existing
++                .iter()
++                .all(|object| world.entity(object.id) == Some(object))
++        );
+         assert_eq!(first.position, position);
+         assert_eq!(second.position, position);
+         assert_eq!(world.tick(), Tick::ZERO);
+@@ -12189,12 +12207,14 @@
+         let failed_root = fixture.archive_root.join("failed-backfill");
+         let mut failed = archive_attachment_test_carrier(&fixture, None);
+         failed.residents = malformed_residents;
+-        assert!(failed
+-            .attach(
+-                LineageLibraryConfig::profile_default(failed_root),
+-                ArchiveLearnedCapturePolicy::GeneticOnly,
+-            )
+-            .is_err());
++        assert!(
++            failed
++                .attach(
++                    LineageLibraryConfig::profile_default(failed_root),
++                    ArchiveLearnedCapturePolicy::GeneticOnly,
++                )
++                .is_err()
++        );
+         assert!(failed.lineage_library.is_none());
+         assert!(failed.lineage_run_id.is_none());
+         assert!(failed.archive_birth_manifests.is_empty());
+@@ -13128,10 +13148,12 @@
+         )
+         .unwrap();
+         assert_eq!(phenotype.brain_class_id(), BrainCapacityClass::N2048_ID);
+-        assert!(phenotype
+-            .foundation_abi()
+-            .foundation_payload_digest()
+-            .is_some());
++        assert!(
++            phenotype
++                .foundation_abi()
++                .foundation_payload_digest()
++                .is_some()
++        );
+         let capacity = BrainCapacityClass::production_for_id(phenotype.brain_class_id()).unwrap();
+         // Birth returns live development; immutable topology uses its normalized
+         // construction projection, just as the production compiler path does.
+@@ -13367,9 +13389,11 @@
+         runtime.reconcile_population().unwrap();
+ 
+         assert!(runtime.handle_for(OrganismId(1)).is_none());
+-        assert!(runtime
+-            .test_tick_retired_handle(retired, retired_frame)
+-            .is_err());
++        assert!(
++            runtime
++                .test_tick_retired_handle(retired, retired_frame)
++                .is_err()
++        );
+     }
+ 
+     #[test]
+@@ -14194,9 +14218,11 @@
+         runtime.residents.get_mut(&1).unwrap().next_sequence = 1;
+         let summaries = runtime.tick().unwrap();
+         assert_eq!(summaries.len(), 2);
+-        assert!(summaries
+-            .iter()
+-            .all(|summary| summary.learning_updates == 1));
++        assert!(
++            summaries
++                .iter()
++                .all(|summary| summary.learning_updates == 1)
++        );
+     }
+ 
+     #[test]
+@@ -14418,9 +14444,11 @@
+                 runtime.take_foundation_terminal_biology(organism_id),
+                 Some(*final_record.biochemistry())
+             );
+-            assert!(runtime
+-                .take_foundation_terminal_biology(organism_id)
+-                .is_none());
++            assert!(
++                runtime
++                    .take_foundation_terminal_biology(organism_id)
++                    .is_none()
++            );
+         }
+         assert_eq!(
+             runtime.archive_retirement_receipt(organism_id),
+@@ -14548,9 +14576,11 @@
+         let before_signature = runtime.world.canonical_signature_digest().unwrap();
+         let before_handle = runtime.handle_for(organism_id).unwrap();
+         let archive = runtime.lineage_library.take();
+-        assert!(runtime
+-            .retire_organism(organism_id, "pre-receipt-failure")
+-            .is_err());
++        assert!(
++            runtime
++                .retire_organism(organism_id, "pre-receipt-failure")
++                .is_err()
++        );
+         runtime.lineage_library = archive;
+         assert!(runtime.archive_retirement_receipt(organism_id).is_none());
+         assert_eq!(
+@@ -14580,9 +14610,11 @@
+         assert!(runtime.take_presentation_retirements().is_empty());
+ 
+         runtime.forced_retirement_post_receipt_failure = true;
+-        assert!(runtime
+-            .retire_organism(organism_id, "post-receipt-failure")
+-            .is_err());
++        assert!(
++            runtime
++                .retire_organism(organism_id, "post-receipt-failure")
++                .is_err()
++        );
+         let receipt = runtime
+             .archive_retirement_receipt(organism_id)
+             .unwrap()

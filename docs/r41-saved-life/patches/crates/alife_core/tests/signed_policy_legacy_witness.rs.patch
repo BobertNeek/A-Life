@@ -1,0 +1,31 @@
+diff --git a/crates/alife_core/tests/signed_policy_legacy_witness.rs b/crates/alife_core/tests/signed_policy_legacy_witness.rs
+--- a/crates/alife_core/tests/signed_policy_legacy_witness.rs
++++ b/crates/alife_core/tests/signed_policy_legacy_witness.rs
+@@ -78,11 +78,7 @@
+         BrainCapacityClass::N2048_ID,
+     )
+     .unwrap();
+-    // This witness predates the explicit procedural-distance birth prior.
+-    // Reconstruct the historical parents, rather than today's new founders.
+-    let mut raw = CreatureGenome::early_mammal_founder(701, identity).unwrap();
+-    raw.brain.construction.maternal_distance_gain = 1.0;
+-    raw.brain.construction.paternal_distance_gain = 1.0;
++    let raw = CreatureGenome::early_mammal_founder(701, identity).unwrap();
+     let e = raw.express().unwrap();
+     let d = e
+         .development_state_at(Tick::new(u64::from(
+@@ -102,10 +98,10 @@
+     )
+     .unwrap();
+     let mother = raw.with_n2048_foundation_candidate(a.clone()).unwrap();
+-    let mut father = CreatureGenome::early_mammal_founder(702, identity).unwrap();
+-    father.brain.construction.maternal_distance_gain = 1.0;
+-    father.brain.construction.paternal_distance_gain = 1.0;
+-    let father = father.with_n2048_foundation_candidate(a).unwrap();
++    let father = CreatureGenome::early_mammal_founder(702, identity)
++        .unwrap()
++        .with_n2048_foundation_candidate(a)
++        .unwrap();
+     rows.push(digest(
+         &CreatureGenome::reproduce(&mother, &father, 703).unwrap(),
+     ));

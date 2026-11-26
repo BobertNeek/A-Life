@@ -1,0 +1,584 @@
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/retained_navigation_tasks.rs b/crates/alife_game_app/src/foundation_training_cycle/retained_navigation_tasks.rs
+--- a/crates/alife_game_app/src/foundation_training_cycle/retained_navigation_tasks.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle/retained_navigation_tasks.rs
+@@ -13,9 +13,17 @@
+ pub enum TaskKind {
+     LCorner,
+     TwoTurnMaze,
++    /// Isolated optical-control variant: identical ground footprint plus eye-height wall layers.
++    TwoTurnVisibleMaze,
+     MovingPrey,
+     /// Native world-owned reactive/wandering edible critter, not a neural organism.
+     AutonomousPrey,
++    /// Experiment-only fixed geometry: a right-angle corridor.
++    DoglegCorridor,
++    /// Experiment-only fixed geometry: enter an away-facing U by reversing course.
++    UDetour,
++    /// Experiment-only fixed geometry: two perpendicular room doorways.
++    DoorwayChambers,
+ }
+ #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+ #[serde(deny_unknown_fields)]
+@@ -200,6 +208,204 @@
+         }
+     }
+ }
++// Experiment-only fixed public geometry. Existing fixture paths remain unchanged.
++#[derive(Clone, Copy)]
++struct ShapeGate {
++    axis: usize,
++    plane: f32,
++    direction: f32,
++    low: f32,
++    high: f32,
++}
++struct ShapeLayout {
++    walls: Vec<[f32; 2]>,
++    regions: Vec<[f32; 4]>, // inclusive x_min, x_max, z_min, z_max
++    gates: Vec<ShapeGate>,
++    goal: [f32; 2],
++    route: Vec<[f32; 2]>, // geometry-test witness, never supplied to the organism
++}
++fn wall_line(walls: &mut Vec<[f32; 2]>, p: [f32; 2], q: [f32; 2]) {
++    let steps = ((q[0] - p[0]).abs().max((q[1] - p[1]).abs()) * 2.0).round() as usize;
++    for i in 0..=steps {
++        let t = i as f32 / steps.max(1) as f32;
++        let v = [p[0] + t * (q[0] - p[0]), p[1] + t * (q[1] - p[1])];
++        if !walls.contains(&v) {
++            walls.push(v);
++        }
++    }
++}
++fn shape_layout(kind: TaskKind) -> Option<ShapeLayout> {
++    let mut walls = Vec::new();
++    let (regions, gates, goal, route) = match kind {
++        TaskKind::DoglegCorridor => {
++            let corners = [
++                [-1.5, -2.0],
++                [5.0, -2.0],
++                [5.0, 7.0],
++                [2.0, 7.0],
++                [2.0, 2.0],
++                [-1.5, 2.0],
++                [-1.5, -2.0],
++            ];
++            for s in corners.windows(2) {
++                wall_line(&mut walls, s[0], s[1]);
++            }
++            (
++                vec![[-1.5, 5.0, -2.0, 2.0], [2.0, 5.0, 2.0, 7.0]],
++                vec![
++                    ShapeGate {
++                        axis: 0,
++                        plane: 2.0,
++                        direction: 1.0,
++                        low: -2.0,
++                        high: 2.0,
++                    },
++                    ShapeGate {
++                        axis: 1,
++                        plane: 2.0,
++                        direction: 1.0,
++                        low: 2.0,
++                        high: 5.0,
++                    },
++                ],
++                [3.5, 6.0],
++                vec![[0.0, 0.0], [3.5, 0.0], [3.5, 6.0]],
++            )
++        }
++        TaskKind::UDetour => {
++            let corners = [
++                [-1.5, -4.0],
++                [8.5, -4.0],
++                [8.5, 4.0],
++                [-1.5, 4.0],
++                [-1.5, -4.0],
++            ];
++            for s in corners.windows(2) {
++                wall_line(&mut walls, s[0], s[1]);
++            }
++            wall_line(&mut walls, [2.0, -2.0], [2.0, 2.0]);
++            wall_line(&mut walls, [2.0, -2.0], [6.0, -2.0]);
++            wall_line(&mut walls, [2.0, 2.0], [6.0, 2.0]);
++            (
++                vec![[-1.5, 8.5, -4.0, 4.0]],
++                vec![ShapeGate {
++                    axis: 0,
++                    plane: 6.0,
++                    direction: -1.0,
++                    low: -2.0,
++                    high: 2.0,
++                }],
++                [4.0, 0.0],
++                vec![[0.0, 0.0], [0.0, 3.0], [7.0, 3.0], [7.0, 0.0], [4.0, 0.0]],
++            )
++        }
++        TaskKind::DoorwayChambers => {
++            let corners = [
++                [-1.5, -3.5],
++                [8.5, -3.5],
++                [8.5, 3.5],
++                [-1.5, 3.5],
++                [-1.5, -3.5],
++            ];
++            for s in corners.windows(2) {
++                wall_line(&mut walls, s[0], s[1]);
++            }
++            wall_line(&mut walls, [2.0, -3.5], [2.0, -1.0]);
++            wall_line(&mut walls, [2.0, 1.0], [2.0, 3.5]);
++            wall_line(&mut walls, [2.0, 1.5], [5.0, 1.5]);
++            wall_line(&mut walls, [7.0, 1.5], [8.5, 1.5]);
++            (
++                vec![[-1.5, 8.5, -3.5, 3.5]],
++                vec![
++                    ShapeGate {
++                        axis: 0,
++                        plane: 2.0,
++                        direction: 1.0,
++                        low: -1.0,
++                        high: 1.0,
++                    },
++                    ShapeGate {
++                        axis: 1,
++                        plane: 1.5,
++                        direction: 1.0,
++                        low: 5.0,
++                        high: 7.0,
++                    },
++                ],
++                [3.5, 2.5],
++                vec![[0.0, 0.0], [6.0, 0.0], [6.0, 2.5], [3.5, 2.5]],
++            )
++        }
++        _ => return None,
++    };
++    Some(ShapeLayout {
++        walls,
++        regions,
++        gates,
++        goal,
++        route,
++    })
++}
++fn segment_distance(p: [f32; 2], q: [f32; 2], w: [f32; 2]) -> f32 {
++    let d = [q[0] - p[0], q[1] - p[1]];
++    let norm = d[0] * d[0] + d[1] * d[1];
++    let t = if norm > 0.0 {
++        (((w[0] - p[0]) * d[0] + (w[1] - p[1]) * d[1]) / norm).clamp(0.0, 1.0)
++    } else {
++        0.0
++    };
++    (p[0] + t * d[0] - w[0]).hypot(p[1] + t * d[1] - w[1])
++}
++fn score_shape_segment(
++    layout: &ShapeLayout,
++    gates: &mut u8,
++    invalid: &mut bool,
++    p: [f32; 2],
++    q: [f32; 2],
++) {
++    let inside = |v: [f32; 2]| {
++        layout
++            .regions
++            .iter()
++            .any(|r| v[0] >= r[0] && v[0] <= r[1] && v[1] >= r[2] && v[1] <= r[3])
++    };
++    if p.iter().chain(q.iter()).any(|x| !x.is_finite())
++        || !inside(p)
++        || !inside(q)
++        || layout
++            .walls
++            .iter()
++            .any(|&w| segment_distance(p, q, w) <= 0.35)
++    {
++        *invalid = true;
++        return;
++    }
++    // Check gates in physical crossing order, not list order, including reverse-facing portals.
++    let mut crossings = Vec::new();
++    for (i, g) in layout.gates.iter().enumerate() {
++        let before = g.direction * (p[g.axis] - g.plane);
++        let after = g.direction * (q[g.axis] - g.plane);
++        if before < 0.0 && after >= 0.0 {
++            let t = (g.plane - p[g.axis]) / (q[g.axis] - p[g.axis]);
++            let other = 1 - g.axis;
++            let v = p[other] + t * (q[other] - p[other]);
++            // Crossing the extended plane outside the portal is ordinary exploration,
++            // not a completed gate. Actual walls and enclosure are checked above.
++            if v > g.low && v < g.high {
++                crossings.push((t, i as u8));
++            }
++        }
++    }
++    crossings.sort_by(|a, b| a.0.total_cmp(&b.0));
++    for (_, i) in crossings {
++        if *gates < i {
++            *invalid = true;
++        } else if *gates == i {
++            *gates += 1;
++        }
++    }
++}
++
+ fn spawn(
+     world: &mut HeadlessWorld,
+     label: String,
+@@ -267,8 +473,14 @@
+         }
+     }
+     let mut walls = Vec::new();
+-    if matches!(spec.kind, TaskKind::LCorner | TaskKind::TwoTurnMaze) {
+-        let layout = if spec.kind == TaskKind::TwoTurnMaze {
++    if matches!(
++        spec.kind,
++        TaskKind::LCorner | TaskKind::TwoTurnMaze | TaskKind::TwoTurnVisibleMaze
++    ) {
++        let layout = if matches!(
++            spec.kind,
++            TaskKind::TwoTurnMaze | TaskKind::TwoTurnVisibleMaze
++        ) {
+             maze_layout()
+         } else {
+             wall_layout()
+@@ -284,7 +496,25 @@
+             )?);
+         }
+     }
+-    let target_local = if spec.kind == TaskKind::TwoTurnMaze {
++    // Append-only experimental task setup; old variants take precisely the old path.
++    if let Some(layout) = shape_layout(spec.kind) {
++        for (i, p) in layout.walls.iter().enumerate() {
++            walls.push(spawn(
++                &mut staged,
++                format!("retained-navigation-{}-shape-wall-{i}", world.tick().raw()),
++                WorldObjectKind::Obstacle,
++                position(origin, yaw, p[0], sign * p[1]),
++                0.35,
++                0.0,
++            )?);
++        }
++    }
++    let target_local = if let Some(layout) = shape_layout(spec.kind) {
++        layout.goal
++    } else if matches!(
++        spec.kind,
++        TaskKind::TwoTurnMaze | TaskKind::TwoTurnVisibleMaze
++    ) {
+         [7.5, 0.0]
+     } else if spec.kind == TaskKind::LCorner {
+         [4.0, 0.0]
+@@ -295,10 +525,40 @@
+         &mut staged,
+         format!("retained-navigation-{}-target", world.tick().raw()),
+         WorldObjectKind::Food,
+-        position(origin, yaw, target_local[0], target_local[1]),
++        position(
++            origin,
++            yaw,
++            target_local[0],
++            if shape_layout(spec.kind).is_some() {
++                sign * target_local[1]
++            } else {
++                target_local[1]
++            },
++        ),
+         0.3,
+         0.6,
+     )?;
++    // Keep original ground-wall and goal identities unchanged. Extra visible
++    // layers are public geometry only; the old task remains an independent control.
++    if spec.kind == TaskKind::TwoTurnVisibleMaze {
++        for (i, p) in maze_layout().iter().enumerate() {
++            for (layer, height) in [0.5_f32, 1.0].into_iter().enumerate() {
++                let mut elevated = position(origin, yaw, p[0], sign * p[1]);
++                elevated.y += height;
++                walls.push(spawn(
++                    &mut staged,
++                    format!(
++                        "retained-navigation-{}-visible-wall-{i}-{layer}",
++                        world.tick().raw()
++                    ),
++                    WorldObjectKind::Obstacle,
++                    elevated,
++                    0.35,
++                    0.0,
++                )?);
++            }
++        }
++    }
+     let autonomous_controller_seed = if spec.kind == TaskKind::AutonomousPrey {
+         let seed = (world.seed()
+             ^ world.tick().raw().wrapping_mul(0x9e3779b97f4a7c15)
+@@ -467,7 +727,10 @@
+     {
+         next.first_traversal_tick = Some(world.tick());
+     }
+-    if state.spec.kind == TaskKind::TwoTurnMaze {
++    if matches!(
++        state.spec.kind,
++        TaskKind::TwoTurnMaze | TaskKind::TwoTurnVisibleMaze
++    ) {
+         let sign = if state.spec.mirror { -1.0 } else { 1.0 };
+         score_maze_segment(
+             &mut next.maze_gates_completed,
+@@ -476,6 +739,23 @@
+             [q[0], sign * q[1]],
+         );
+         if next.maze_gates_completed == 2
++            && !next.maze_route_invalid
++            && distance(a.position, state.goal_position) <= 0.75
++            && next.first_traversal_tick.is_none()
++        {
++            next.first_traversal_tick = Some(world.tick());
++        }
++    }
++    if let Some(layout) = shape_layout(state.spec.kind) {
++        let sign = if state.spec.mirror { -1.0 } else { 1.0 };
++        score_shape_segment(
++            &layout,
++            &mut next.maze_gates_completed,
++            &mut next.maze_route_invalid,
++            [p[0], sign * p[1]],
++            [q[0], sign * q[1]],
++        );
++        if next.maze_gates_completed as usize == layout.gates.len()
+             && !next.maze_route_invalid
+             && distance(a.position, state.goal_position) <= 0.75
+             && next.first_traversal_tick.is_none()
+@@ -695,6 +975,72 @@
+         assert_eq!(gates, 2);
+         assert!(!invalid);
+     }
++    #[test]
++    fn visible_maze_is_separate_same_footprint_and_near_walls_are_sensed() {
++        use alife_core::{HomeostaticSnapshot, SensorProfile};
++        let base = HeadlessScenarioBuilder::new(701)
++            .agent("subject", OrganismId(1), Vec3f::ZERO)
++            .build()
++            .unwrap();
++        let mut original = base.clone();
++        let mut visible = base;
++        let actor_before = own(&original, OrganismId(1)).unwrap();
++        let spec = TaskSpec {
++            kind: TaskKind::TwoTurnMaze,
++            rotation_radians: 0.0,
++            mirror: false,
++            prey_speed_per_tick: 0.0,
++        };
++        let low = configure(&mut original, OrganismId(1), spec).unwrap();
++        let high = configure(
++            &mut visible,
++            OrganismId(1),
++            TaskSpec {
++                kind: TaskKind::TwoTurnVisibleMaze,
++                ..spec
++            },
++        )
++        .unwrap();
++        assert_eq!(low.target, high.target);
++        assert_eq!(low.goal_position, high.goal_position);
++        assert_eq!(high.walls.len(), low.walls.len() * 3);
++        assert_eq!(own(&original, OrganismId(1)).unwrap(), actor_before);
++        assert_eq!(own(&visible, OrganismId(1)).unwrap(), actor_before);
++        for id in &low.walls {
++            assert_eq!(original.entity(*id), visible.entity(*id));
++        }
++        for id in &high.walls {
++            let wall = visible.entity(*id).unwrap();
++            assert!(low.walls.iter().any(|low_id| {
++                let ground = original.entity(*low_id).unwrap();
++                ground.position.x == wall.position.x
++                    && ground.position.z == wall.position.z
++                    && ground.radius == wall.radius
++            }));
++        }
++        let mut rays = Vec::new();
++        for world in [&mut original, &mut visible] {
++            world
++                .editor_move_object(actor_before.id, Vec3f::new(1.3, 0.0, 0.0))
++                .unwrap();
++            let frame = world
++                .perception_frame(
++                    OrganismId(1),
++                    Tick::ZERO,
++                    SensorProfile::GroundedTerrainVisionV1,
++                    HomeostaticSnapshot::baseline(Tick::ZERO),
++                )
++                .unwrap();
++            rays.push(frame.sensory().channels.visual_affordance[7]);
++        }
++        // Corrected downward vision also detects the original low wall.
++        assert!(rays[0] < 0.2, "low wall must shorten near depth: {rays:?}");
++        assert!(
++            rays[1] < 0.2,
++            "visible wall must shorten near depth: {rays:?}"
++        );
++    }
++
+     #[test]
+     fn two_turn_score_rejects_direct_skip_and_outside_routes() {
+         for route in [
+@@ -901,4 +1247,161 @@
+             assert!((q[0] - 4.0).abs() < 1e-5 && (q[1] + 2.0).abs() < 1e-5);
+         }
+     }
+-}
++    #[test]
++    fn novel_shapes_have_clear_routes_blocked_shortcuts_and_valid_scoring() {
++        for kind in [
++            TaskKind::DoglegCorridor,
++            TaskKind::UDetour,
++            TaskKind::DoorwayChambers,
++        ] {
++            let layout = shape_layout(kind).unwrap();
++            assert!(layout.walls.iter().all(|p| p[0].hypot(p[1]) < 10.0));
++            assert!(layout
++                .walls
++                .iter()
++                .all(|&w| segment_distance(layout.goal, layout.goal, w) > 0.9));
++            let (mut gates, mut invalid) = (0, false);
++            for segment in layout.route.windows(2) {
++                assert!(
++                    layout
++                        .walls
++                        .iter()
++                        .all(|&w| segment_distance(segment[0], segment[1], w) > 0.9),
++                    "insufficient body clearance {kind:?}"
++                );
++                score_shape_segment(&layout, &mut gates, &mut invalid, segment[0], segment[1]);
++            }
++            assert_eq!(gates as usize, layout.gates.len(), "{kind:?}");
++            assert!(!invalid, "{kind:?}");
++            let (mut direct_gates, mut direct_invalid) = (0, false);
++            score_shape_segment(
++                &layout,
++                &mut direct_gates,
++                &mut direct_invalid,
++                [0.0, 0.0],
++                layout.goal,
++            );
++            assert!(
++                direct_invalid,
++                "straight shortcut must hit actual wall geometry {kind:?}"
++            );
++            assert_eq!(direct_gates, 0);
++            let (mut reverse_gates, mut reverse_invalid) = (0, false);
++            score_shape_segment(
++                &layout,
++                &mut reverse_gates,
++                &mut reverse_invalid,
++                layout.goal,
++                [0.0, 0.0],
++            );
++            assert!(
++                reverse_invalid,
++                "reverse wall shortcut not rejected {kind:?}"
++            );
++            assert_eq!(reverse_gates, 0);
++            // Reversing the same physically clear route is legal backtracking,
++            // not a fresh gate or a bogus wall-crossing violation.
++            for segment in layout.route.windows(2).rev() {
++                score_shape_segment(&layout, &mut gates, &mut invalid, segment[1], segment[0]);
++            }
++            assert!(!invalid, "backtracking rejected {kind:?}");
++            assert_eq!(gates as usize, layout.gates.len());
++            let wall = layout.walls[0];
++            let (mut gates, mut invalid) = (0, false);
++            score_shape_segment(
++                &layout,
++                &mut gates,
++                &mut invalid,
++                [wall[0] - 1.0, wall[1]],
++                [wall[0] + 1.0, wall[1]],
++            );
++            assert!(invalid, "teleport across wall not rejected {kind:?}");
++            let (mut gates, mut invalid) = (0, false);
++            score_shape_segment(&layout, &mut gates, &mut invalid, [0.0, 0.0], [99.0, 99.0]);
++            assert!(invalid, "exterior shortcut not rejected {kind:?}");
++        }
++    }
++    #[test]
++    fn novel_gate_order_reversal_and_skips_are_explicit() {
++        let dog = shape_layout(TaskKind::DoglegCorridor).unwrap();
++        let (mut gates, mut invalid) = (0, false);
++        score_shape_segment(&dog, &mut gates, &mut invalid, [3.5, 0.0], [3.5, 4.0]);
++        assert!(invalid);
++        assert_eq!(gates, 0);
++        let u = shape_layout(TaskKind::UDetour).unwrap();
++        let (mut gates, mut invalid) = (0, false);
++        score_shape_segment(&u, &mut gates, &mut invalid, [4.0, 0.0], [7.0, 0.0]);
++        assert_eq!(gates, 0);
++        assert!(!invalid);
++        score_shape_segment(&u, &mut gates, &mut invalid, [7.0, 0.0], [4.0, 0.0]);
++        assert_eq!(gates, 1);
++        assert!(!invalid);
++        // Passing the extended gate plane outside its portal is exploration.
++        let (mut gates, mut invalid) = (0, false);
++        score_shape_segment(&u, &mut gates, &mut invalid, [7.0, 3.0], [4.0, 3.0]);
++        assert_eq!(gates, 0);
++        assert!(!invalid);
++    }
++    #[test]
++    fn novel_public_setups_preserve_actor_teacher_tick_and_transform_geometry() {
++        for kind in [
++            TaskKind::DoglegCorridor,
++            TaskKind::UDetour,
++            TaskKind::DoorwayChambers,
++        ] {
++            for mirror in [false, true] {
++                let mut w = HeadlessScenarioBuilder::new(911)
++                    .agent("subject", OrganismId(1), Vec3f::ZERO)
++                    .agent(
++                        "nursery-teacher",
++                        OrganismId(2),
++                        Vec3f::new(-10.0, 0.0, 0.0),
++                    )
++                    .build()
++                    .unwrap();
++                let actor = own(&w, OrganismId(1)).unwrap();
++                let teacher = own(&w, OrganismId(2)).unwrap();
++                let tick = w.tick();
++                let state = configure(
++                    &mut w,
++                    OrganismId(1),
++                    TaskSpec {
++                        kind,
++                        rotation_radians: 0.4,
++                        mirror,
++                        prey_speed_per_tick: 0.0,
++                    },
++                )
++                .unwrap();
++                assert_eq!(own(&w, OrganismId(1)).unwrap(), actor);
++                assert_eq!(own(&w, OrganismId(2)).unwrap(), teacher);
++                assert_eq!(w.tick(), tick);
++                let layout = shape_layout(kind).unwrap();
++                let sign = if mirror { -1.0 } else { 1.0 };
++                assert_eq!(state.walls.len(), layout.walls.len());
++                for (id, p) in state.walls.iter().zip(layout.walls.iter()) {
++                    let actual = w.entity(*id).unwrap();
++                    assert_eq!(actual.kind, WorldObjectKind::Obstacle);
++                    assert!(
++                        distance(
++                            actual.position,
++                            position(state.origin, state.geometry_yaw, p[0], sign * p[1])
++                        ) < 1e-5
++                    );
++                }
++                assert!(
++                    distance(
++                        state.goal_position,
++                        position(
++                            state.origin,
++                            state.geometry_yaw,
++                            layout.goal[0],
++                            sign * layout.goal[1]
++                        )
++                    ) < 1e-5
++                );
++                assert!(!observe(&w, OrganismId(1), &state).unwrap().traversed);
++            }
++        }
++    }
++}

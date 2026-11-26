@@ -1,0 +1,28 @@
+diff --git a/crates/alife_world/src/ecology.rs b/crates/alife_world/src/ecology.rs
+--- a/crates/alife_world/src/ecology.rs
++++ b/crates/alife_world/src/ecology.rs
+@@ -264,8 +264,6 @@
+ #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+ pub struct EcologyState {
+     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+-    pub orchard_beds: Vec<crate::orchard::OrchardBed>,
+-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+     pub autonomous_critters: Vec<AutonomousCritterState>,
+     pub schema: String,
+     pub schema_version: u16,
+@@ -282,7 +280,6 @@
+             schema: G07_ECOLOGY_SCHEMA.to_string(),
+             schema_version: G07_ECOLOGY_SCHEMA_VERSION,
+             autonomous_critters: Vec::new(),
+-            orchard_beds: Vec::new(),
+             config: EcologyConfig::default(),
+             zones: Vec::new(),
+             resources: Vec::new(),
+@@ -298,7 +295,6 @@
+             return Err(ScaffoldContractError::ScalarOutOfRange);
+         }
+         self.config.validate()?;
+-        crate::orchard::validate_beds(&self.orchard_beds)?;
+         if self.autonomous_critters.len() > self.config.max_resource_records {
+             return Err(ScaffoldContractError::ScalarOutOfRange);
+         }

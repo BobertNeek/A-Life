@@ -1,0 +1,52 @@
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/card_cases.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/card_cases.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/card_cases.rs
+@@ -0,0 +1,47 @@
++//! One published case roster, derived from exact disclosed request metadata.
++//! No expected brain outcome, withheld case, or hidden answer is in this registry.
++use super::{RetainedNavigationTaskKind, RetainedNavigationTaskSpec};
++
++#[derive(Clone, Copy)]
++pub(super) struct CaseSpec {
++    pub(super) decisions: usize,
++    pub(super) ticks: u64,
++    pub(super) navigation: Option<RetainedNavigationTaskSpec>,
++    pub(super) player_tokens: &'static [u16],
++}
++
++pub(super) fn case(name: &str) -> Option<CaseSpec> {
++    let (decisions, ticks, navigation, player_tokens): (_, _, _, &'static [u16]) = match name {
++    "canonical-L-full" => (1024, 1024, Some(RetainedNavigationTaskSpec { kind: RetainedNavigationTaskKind::LCorner, rotation_radians: 0.0, mirror: false, prey_speed_per_tick: 0.0 }), &[]),
++    "dogleg_corridor" => (1024, 8192, Some(RetainedNavigationTaskSpec { kind: RetainedNavigationTaskKind::DoglegCorridor, rotation_radians: 0.0, mirror: false, prey_speed_per_tick: 0.0 }), &[]),
++    "doorway_chambers" => (1024, 8192, Some(RetainedNavigationTaskSpec { kind: RetainedNavigationTaskKind::DoorwayChambers, rotation_radians: 0.0, mirror: false, prey_speed_per_tick: 0.0 }), &[]),
++    "original-autonomous-axis" => (256, 256, Some(RetainedNavigationTaskSpec { kind: RetainedNavigationTaskKind::AutonomousPrey, rotation_radians: 3.100961446762085, mirror: false, prey_speed_per_tick: 0.052000001072883606 }), &[]),
++    "original-autonomous-plus4" => (256, 256, Some(RetainedNavigationTaskSpec { kind: RetainedNavigationTaskKind::AutonomousPrey, rotation_radians: -3.1124107837677, mirror: false, prey_speed_per_tick: 0.052000001072883606 }), &[]),
++    "r12-word-ball-silence" => (256, 256, None, &[]),
++    "r12-word-empty-silence" => (256, 256, None, &[]),
++    "r12-word-food-obstacle-silence" => (256, 256, None, &[]),
++    "r12-word-food-silence" => (256, 256, None, &[]),
++    "r12-word-mirror-food-silence" => (256, 256, None, &[]),
++    "r12-word-obstacle-silence" => (256, 256, None, &[]),
++    "r14-word-mirror-root-silence" => (256, 256, None, &[]),
++    "r14-word-mirror-scent-decoy-silence" => (256, 256, None, &[]),
++    "r14-word-root-scent-decoy-silence" => (256, 256, None, &[]),
++    "r14-word-root-silence" => (256, 256, None, &[]),
++    "r14-word-scent-decoy-silence" => (256, 256, None, &[]),
++    "r2-grade-left" => (256, 256, None, &[]),
++    "r2-grade-right" => (256, 256, None, &[]),
++    "r2-word-approach-food" => (16, 16, None, &[6, 1]),
++    "r2-word-approach-toy" => (16, 16, None, &[6, 2]),
++    "r2-word-mirror-approach-food" => (16, 16, None, &[6, 1]),
++    "r2-word-mirror-approach-toy" => (16, 16, None, &[6, 2]),
++    "r2-word-mirror-retreat-food" => (16, 16, None, &[7, 1]),
++    "r2-word-mirror-retreat-toy" => (16, 16, None, &[7, 2]),
++    "r2-word-mirror-silence" => (16, 16, None, &[]),
++    "r2-word-retreat-food" => (16, 16, None, &[7, 1]),
++    "r2-word-retreat-toy" => (16, 16, None, &[7, 2]),
++    "r2-word-silence" => (16, 16, None, &[]),
++    "u_detour" => (1024, 8192, Some(RetainedNavigationTaskSpec { kind: RetainedNavigationTaskKind::UDetour, rotation_radians: 0.0, mirror: false, prey_speed_per_tick: 0.0 }), &[]),
++        _ => return None,
++    };
++    Some(CaseSpec { decisions, ticks, navigation, player_tokens })
++}

@@ -1,0 +1,305 @@
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/retained_direct_weights.rs b/crates/alife_game_app/src/foundation_training_cycle/retained_direct_weights.rs
+--- a/crates/alife_game_app/src/foundation_training_cycle/retained_direct_weights.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle/retained_direct_weights.rs
+@@ -13,8 +13,63 @@
+     pub generator_id: String,
+     pub edits: Vec<(usize, u32)>,
+ }
++// Schema 1 retains decoder-only admission. Schema 2 explicitly opts into
++// existing recurrent genetic coordinates; topology, dynamics and mutable state
++// remain protected by the native weight-only policy transition.
++// Schema 3 is an isolated research opt-in for the full trainable neural policy.
++// Speech is never admitted by schema 3, even if a future stage were to train it.
++const LEGACY_EDIT_LIMIT: usize = 8192;
++const FULL_EDIT_LIMIT: usize = 31_744;
++
++fn direct_edit_limit(schema: u16) -> usize {
++    match schema {
++        1 | 2 => LEGACY_EDIT_LIMIT,
++        3 => FULL_EDIT_LIMIT,
++        _ => 0,
++    }
++}
++
++/// Cheap registry admission, before opening Current. The native transition still
++/// checks every coordinate against the actual compiled phenotype and stage mask.
++#[cfg(feature = "gpu-tests")]
++pub(super) fn validate_experiment_edit_shape(request: &DirectWeightEditRequest) -> Result<()> {
++    if direct_edit_limit(request.schema) == 0
++        || request.generator_id.is_empty()
++        || request.generator_id.len() > 256
++        || request.edits.is_empty()
++        || request.edits.len() > direct_edit_limit(request.schema)
++    {
++        return Err("experiment compatibility: unsupported direct-weight schema or edit bounds".into());
++    }
++    let mut seen = std::collections::BTreeSet::new();
++    if request.edits.iter().any(|(index, bits)| !seen.insert(*index) || !f32::from_bits(*bits).is_finite()) {
++        return Err("experiment direct-weight edits require unique finite typed coordinates".into());
++    }
++    Ok(())
++}
++fn admitted_direct_kind(schema: u16, kind: CompiledSynapseKind) -> bool {
++    match (schema, kind) {
++        (1 | 2, CompiledSynapseKind::Decoder(c)) => c.head() == DecoderHeadKind::ActionCandidate,
++        (2 | 3, CompiledSynapseKind::Recurrent) => true,
++        (3, CompiledSynapseKind::Decoder(c)) => c.head() != DecoderHeadKind::SpeechPayload,
++        _ => false,
++    }
++}
++
+ fn sha(bytes: &[u8]) -> String {
+     format!("{:x}", Sha256::digest(bytes))
++}
++
++fn validate_direct_request(bytes: &[u8], request: &DirectWeightEditRequest) -> Result<()> {
++    if direct_edit_limit(request.schema) == 0
++        || request.source_current_sha256 != sha(bytes)
++        || request.generator_id.is_empty()
++        || request.generator_id.len() > 256
++        || request.edits.len() > direct_edit_limit(request.schema)
++    {
++        return Err("invalid direct-weight request/source/generator/bound".into());
++    }
++    Ok(())
+ }
+ 
+ pub(super) fn checked_direct_weights(
+@@ -22,20 +77,29 @@
+     bytes: &[u8],
+     request: &DirectWeightEditRequest,
+ ) -> Result<Vec<f32>> {
+-    if request.schema != 1
+-        || request.source_current_sha256 != sha(bytes)
+-        || request.generator_id.is_empty()
+-        || request.generator_id.len() > 256
+-        || request.edits.len() > 8192
+-    {
+-        return Err("invalid direct-weight request/source/generator/bound".into());
+-    }
++    validate_direct_request(bytes, request)?;
+     baseline.validate()?;
+     let phenotype = alife_training::compile_validated_n2048_cached(
+         &baseline.handoff.compiler_inputs,
+         &alife_core::BrainCapacityClass::n2048(),
+     )?;
+-    let mut weights = baseline.handoff.actor.weights.clone();
++    apply_checked_direct_edits(
++        &phenotype,
++        &baseline.handoff.actor.weights,
++        &baseline.handoff.actor.stage_mask,
++        request,
++    )
++}
++
++// The caller must check the source binding and validate the checkpoint before
++// supplying its authoritative graph, actor weights and admitted stage mask.
++fn apply_checked_direct_edits(
++    phenotype: &alife_core::BrainPhenotype,
++    old_weights: &[f32],
++    stage_mask: &alife_training::StageTrainableMask,
++    request: &DirectWeightEditRequest,
++) -> Result<Vec<f32>> {
++    let mut weights = old_weights.to_vec();
+     let mut seen = std::collections::BTreeSet::new();
+     for &(index, bits) in &request.edits {
+         let synapse = phenotype
+@@ -43,18 +107,39 @@
+             .get(index)
+             .ok_or("direct-weight coordinate out of bounds")?;
+         if !seen.insert(index)
+-            || !baseline.handoff.actor.stage_mask.is_trainable(index)
+-            || !matches!(synapse.kind(), CompiledSynapseKind::Decoder(c) if c.head() == DecoderHeadKind::ActionCandidate)
++            || !stage_mask.is_trainable(index)
++            || !admitted_direct_kind(request.schema, synapse.kind())
+             || !f32::from_bits(bits).is_finite()
+         {
+             return Err(
+-                "direct-weight edit is not a unique finite admitted ActionCandidate coordinate"
++                "direct-weight edit is not a unique finite admitted genetic-weight coordinate"
+                     .into(),
+             );
+         }
+         weights[index] = f32::from_bits(bits);
+     }
+     Ok(weights)
++}
++
++fn count_changed_weight_bits(before: &[f32], after: &[f32]) -> usize {
++    before
++        .iter()
++        .zip(after)
++        .filter(|(a, b)| a.to_bits() != b.to_bits())
++        .count()
++}
++
++#[cfg(feature = "gpu-tests")]
++pub(super) fn preflight_manifest_direct_weights(
++    baseline: &CurrentTrainingCheckpointV1,
++    source_bytes: &[u8],
++    request: &DirectWeightEditRequest,
++) -> Result<()> {
++    let proposed = checked_direct_weights(baseline, source_bytes, request)?;
++    if count_changed_weight_bits(&baseline.handoff.actor.weights, &proposed) == 0 {
++        return Err("nonempty direct-weight request changes no actual bits".into());
++    }
++    Ok(())
+ }
+ 
+ #[allow(clippy::too_many_arguments)]
+@@ -71,11 +156,7 @@
+     deadline: u64,
+ ) -> Result<(CurrentTrainingCheckpointV1, Vec<u8>, serde_json::Value)> {
+     let weights = checked_direct_weights(baseline, source_bytes, request)?;
+-    let changed = weights
+-        .iter()
+-        .zip(&baseline.handoff.actor.weights)
+-        .filter(|(a, b)| a.to_bits() != b.to_bits())
+-        .count();
++    let changed = count_changed_weight_bits(&baseline.handoff.actor.weights, &weights);
+     if request.edits.is_empty() {
+         return Ok((
+             baseline.clone(),
+@@ -180,3 +261,142 @@
+     )?;
+     Ok((next, bytes, receipt))
+ }
++
++#[cfg(test)]
++mod direct_admission_tests {
++    use super::*;
++    use alife_core::{
++        BrainCapacityClass, BrainGenome, DevelopmentState, NormalizedScalar, PhenotypeCompiler,
++        SensorProfile, Tick,
++    };
++    use alife_training::StageTrainableMask;
++
++    #[test]
++    fn full_schema_admits_all_non_speech_and_rejects_bad_coordinates() {
++        let g = BrainGenome::scaffold(0x2048_2026, BrainCapacityClass::N2048_ID);
++        let d = DevelopmentState::new(g.id, Tick::ZERO, NormalizedScalar::new(1.0).unwrap());
++        let (p, _) = PhenotypeCompiler::compile_n2048_anchored_v2_graph(
++            g,
++            d,
++            SensorProfile::GroundedObjectSlotsV1,
++        )
++        .unwrap();
++        let old: Vec<_> = p.synapses().iter().map(|s| s.genetic_weight()).collect();
++        let coordinate = |head| {
++            p.synapses()
++                .iter()
++                .position(|s| {
++                    matches!(s.kind(),
++            CompiledSynapseKind::Decoder(c) if c.head() == head)
++                })
++                .unwrap()
++        };
++        let recurrent = p
++            .synapses()
++            .iter()
++            .position(|s| s.kind() == CompiledSynapseKind::Recurrent)
++            .unwrap();
++        let action = coordinate(DecoderHeadKind::ActionCandidate);
++        let memory = coordinate(DecoderHeadKind::MemoryContext);
++        let speech = coordinate(DecoderHeadKind::SpeechPayload);
++        let all = (0..old.len() as u32).collect::<Vec<_>>();
++        let non_speech: Vec<_> = all
++            .iter()
++            .copied()
++            .filter(|&i| {
++                !matches!(p.synapses()[i as usize].kind(),
++            CompiledSynapseKind::Decoder(c) if c.head() == DecoderHeadKind::SpeechPayload)
++            })
++            .collect();
++        assert_eq!(non_speech.len(), direct_edit_limit(3));
++        assert_eq!(all.len() - non_speech.len(), 1024);
++        let stage = StageTrainableMask::from_synapse_indices(&p, &non_speech).unwrap();
++        let overbroad_stage = StageTrainableMask::from_synapse_indices(&p, &all).unwrap();
++        let action_stage = StageTrainableMask::from_synapse_indices(&p, &[action as u32]).unwrap();
++        let request = |schema, edits| DirectWeightEditRequest {
++            schema,
++            source_current_sha256: sha(b"bound source"),
++            generator_id: "test".into(),
++            edits,
++        };
++        let full = request(
++            3,
++            non_speech
++                .iter()
++                .map(|&i| {
++                    let i = i as usize;
++                    let value: f32 = if old[i] == 0.25 { -0.25 } else { 0.25 };
++                    (i, value.to_bits())
++                })
++                .collect(),
++        );
++        assert!(validate_direct_request(b"bound source", &full).is_ok());
++        assert!(validate_direct_request(b"wrong source", &full).is_err());
++        let mut bounded = full.clone();
++        bounded.edits.push(bounded.edits[0]);
++        assert!(validate_direct_request(b"bound source", &bounded).is_err());
++        bounded.edits.truncate(8193);
++        for old_schema in [1, 2] {
++            bounded.schema = old_schema;
++            assert!(validate_direct_request(b"bound source", &bounded).is_err());
++        }
++        bounded.schema = 3;
++        bounded.generator_id.clear();
++        assert!(validate_direct_request(b"bound source", &bounded).is_err());
++        bounded.generator_id = "x".repeat(257);
++        assert!(validate_direct_request(b"bound source", &bounded).is_err());
++        assert!(validate_direct_request(b"bound source", &request(4, vec![])).is_err());
++        let next = apply_checked_direct_edits(&p, &old, &stage, &full).unwrap();
++        for (i, (a, b)) in old.iter().zip(&next).enumerate() {
++            assert_eq!(a.to_bits() != b.to_bits(), stage.is_trainable(i));
++        }
++        let no_op = request(3, vec![(action, old[action].to_bits())]);
++        let no_op_proposal = apply_checked_direct_edits(&p, &old, &stage, &no_op).unwrap();
++        assert_eq!(count_changed_weight_bits(&old, &no_op_proposal), 0);
++        assert_eq!(count_changed_weight_bits(&[0.0], &[-0.0]), 1);
++        let v = 0.25_f32.to_bits();
++        assert!(
++            apply_checked_direct_edits(&p, &old, &stage, &request(3, vec![(memory, v)])).is_ok()
++        );
++        assert!(apply_checked_direct_edits(
++            &p,
++            &old,
++            &action_stage,
++            &request(3, vec![(memory, v)])
++        )
++        .is_err());
++        for edits in [
++            vec![(speech, v)],
++            vec![(action, v), (action, v)],
++            vec![(old.len(), v)],
++            vec![(action, f32::NAN.to_bits())],
++            vec![(action, f32::INFINITY.to_bits())],
++        ] {
++            assert!(
++                apply_checked_direct_edits(&p, &old, &overbroad_stage, &request(3, edits)).is_err()
++            );
++        }
++        assert_eq!(direct_edit_limit(1), 8192);
++        assert_eq!(direct_edit_limit(2), 8192);
++        assert_eq!(direct_edit_limit(4), 0);
++        for (schema, allowed) in [
++            (1, [true, false, false, false]),
++            (2, [true, true, false, false]),
++            (3, [true, true, true, false]),
++            (4, [false; 4]),
++        ] {
++            for (index, allowed) in [action, recurrent, memory, speech].into_iter().zip(allowed) {
++                assert_eq!(
++                    apply_checked_direct_edits(
++                        &p,
++                        &old,
++                        &overbroad_stage,
++                        &request(schema, vec![(index, v)])
++                    )
++                    .is_ok(),
++                    allowed
++                );
++            }
++        }
++    }
++}

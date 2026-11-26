@@ -1,0 +1,208 @@
+diff --git a/crates/alife_gpu_backend/src/closed_loop_runtime.rs b/crates/alife_gpu_backend/src/closed_loop_runtime.rs
+--- a/crates/alife_gpu_backend/src/closed_loop_runtime.rs
++++ b/crates/alife_gpu_backend/src/closed_loop_runtime.rs
+@@ -23,33 +23,33 @@
+ 
+ use std::collections::{BTreeMap, BTreeSet, VecDeque};
+ use std::num::NonZeroU64;
++use std::sync::Arc;
+ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+-use std::sync::Arc;
+ 
+ use alife_core::{
+-    ActionId, ActionTarget, Blake3Digest, BrainActivityPolicyV1, BrainCapacityClass, BrainClassId,
+-    BrainDispatchIdentity, BrainPhenotype, BrainWorkCounters, BrainWorkReceipt,
++    ActionId, ActionTarget, BRAIN_ATP_BASAL_DEBIT_Q16, BRAIN_ATP_Q16_MAX,
++    BRAIN_ATP_SLEEP_RECOVERY_Q16, Blake3Digest, BrainActivityPolicyV1, BrainCapacityClass,
++    BrainClassId, BrainDispatchIdentity, BrainPhenotype, BrainWorkCounters, BrainWorkReceipt,
+     CandidateActionFamily, CanonicalDigestBuilder, CoactivationEvidence, Confidence,
+     DendriticBranchSet, ExperiencePatch, FinalizedMemoryRecall, GpuPressureSample,
+     GpuPressureSampleInput, LearningCommitToken, LearningSequenceGuard, NeuralActionSelection,
+     NeuralReceptorFrame, NeuralThrottleDecision, NeuralThrottleLevel, OrganismId,
+     OutcomeCreditPacket, PerceptionBaseDigest, PerceptionFrame, PerceptionFrameDigest,
+-    PhenotypeHash, ScaffoldContractError, SensorProfile, SpeechMotorPayload, Validate,
+-    BRAIN_ATP_BASAL_DEBIT_Q16, BRAIN_ATP_Q16_MAX, BRAIN_ATP_SLEEP_RECOVERY_Q16,
+-    REQUIRED_GPU_FEATURE_MASK,
++    PhenotypeHash, REQUIRED_GPU_FEATURE_MASK, ScaffoldContractError, SensorProfile,
++    SpeechMotorPayload, Validate,
+ };
+ use serde::{Deserialize, Serialize};
+ 
+ use crate::closed_loop_buffers::GpuFixedSlotUpload;
+ use crate::closed_loop_pipeline::{
++    GPU_SELECTOR_DIAGNOSTIC_RECORD_WORDS,
+     GpuDecodeMappedRecordsDiagnostic as PipelineDecodeMappedRecordsDiagnostic,
+     GpuSelectorDiagnosticEnableError as PipelineSelectorDiagnosticEnableError,
+     GpuSelectorDiagnosticErrorReceipt as PipelineSelectorDiagnosticErrorReceipt,
+     GpuSelectorDiagnosticFailureClass as PipelineSelectorDiagnosticFailureClass,
+-    GPU_SELECTOR_DIAGNOSTIC_RECORD_WORDS,
+ };
+ use crate::{
+-    derive_executed_work, AddLifetimeSynapse, GpuActiveBatchEntry, GpuActiveBatchUpload,
++    AddLifetimeSynapse, GPU_CLOSED_LOOP_LAYOUT_VERSION, GpuActiveBatchEntry, GpuActiveBatchUpload,
+     GpuAdmissionReceipt, GpuAllocationEventKind, GpuAllocationEventReceipt, GpuAuthorityReceiptV1,
+     GpuBrainSlot, GpuClosedLoopError, GpuClosedLoopKernelSet, GpuClosedLoopPipelines,
+     GpuCompactMapTicket, GpuFastPlasticityBatchEntry, GpuFixedClassArenaBuffers,
+@@ -58,7 +58,7 @@
+     GpuPendingEligibilityRecord, GpuPerceptionUpload, GpuPreparedActiveBatch, GpuRuntimeBudget,
+     GpuRuntimeProfile, GpuSelectorLogitCapture, GpuTimestampQueryResources, GpuV11CausalState,
+     GpuV11Checkpoint, GpuV11WorkReceipt, GpuValidatedClassBatch, PendingEligibilityDiscardReceipt,
+-    PendingEligibilityIdentity, PendingEligibilityReceipt, GPU_CLOSED_LOOP_LAYOUT_VERSION,
++    PendingEligibilityIdentity, PendingEligibilityReceipt, derive_executed_work,
+ };
+ 
+ pub const GPU_HARDWARE_RECEIPT_SCHEMA_VERSION: u16 = 1;
+@@ -1560,11 +1560,13 @@
+     fn non_unicode_backend_request_is_rejected() {
+         use std::os::unix::ffi::OsStringExt;
+         assert!(requested_backends(Some(std::ffi::OsString::from_vec(vec![0xff]))).is_err());
+-        assert!(requested_dx12_compiler(
+-            wgpu::Backends::DX12,
+-            Some(std::ffi::OsString::from_vec(vec![0xff]))
+-        )
+-        .is_err());
++        assert!(
++            requested_dx12_compiler(
++                wgpu::Backends::DX12,
++                Some(std::ffi::OsString::from_vec(vec![0xff]))
++            )
++            .is_err()
++        );
+     }
+ }
+ 
+@@ -2631,6 +2633,7 @@
+     resident: &ResidentBrainSlot,
+     admission: &GpuAdmissionReceipt,
+     runtime_budget: &GpuRuntimeBudget,
++    #[cfg(feature = "gpu-tests")] controlled_host_pressure_ns: Option<u64>,
+ ) -> Result<GpuPressureSample, ScaffoldContractError> {
+     GpuPressureSample::try_new(
+         policy,
+@@ -2638,7 +2641,16 @@
+             identity,
+             source_dispatch_generation: resident.last_activity_source().0,
+             source_frame_digest: resident.last_activity_source().1,
+-            completed_gpu_time_ns: resident.last_completed_gpu_time_ns,
++            completed_gpu_time_ns: {
++                #[cfg(feature = "gpu-tests")]
++                {
++                    controlled_host_pressure_ns.unwrap_or(resident.last_completed_gpu_time_ns)
++                }
++                #[cfg(not(feature = "gpu-tests"))]
++                {
++                    resident.last_completed_gpu_time_ns
++                }
++            },
+             // The runtime waits for the submitted mixed-class batch before it
+             // accepts another neural dispatch, so no older neural work is queued.
+             queue_depth: 0,
+@@ -2764,6 +2776,10 @@
+     forced_learning_rejections_remaining: u8,
+     #[cfg(feature = "gpu-tests")]
+     forced_discard_rejections_remaining: u8,
++    #[cfg(feature = "gpu-tests")]
++    controlled_host_pressure_ns: Option<u64>,
++    #[cfg(feature = "gpu-tests")]
++    last_controlled_pressure_evidence: Vec<(u64, NeuralThrottleDecision)>,
+     recorded_pressure_replay: VecDeque<GpuPressureSample>,
+     completed_dispatch_count: u64,
+     perception_upload_count: u64,
+@@ -2926,6 +2942,10 @@
+             forced_learning_rejections_remaining: 0,
+             #[cfg(feature = "gpu-tests")]
+             forced_discard_rejections_remaining: 0,
++            #[cfg(feature = "gpu-tests")]
++            controlled_host_pressure_ns: None,
++            #[cfg(feature = "gpu-tests")]
++            last_controlled_pressure_evidence: Vec::new(),
+             recorded_pressure_replay: VecDeque::new(),
+             completed_dispatch_count: 0,
+             perception_upload_count: 0,
+@@ -2995,6 +3015,10 @@
+             forced_learning_rejections_remaining: 0,
+             #[cfg(feature = "gpu-tests")]
+             forced_discard_rejections_remaining: 0,
++            #[cfg(feature = "gpu-tests")]
++            controlled_host_pressure_ns: self.controlled_host_pressure_ns,
++            #[cfg(feature = "gpu-tests")]
++            last_controlled_pressure_evidence: Vec::new(),
+             recorded_pressure_replay: VecDeque::new(),
+             completed_dispatch_count: 0,
+             perception_upload_count: 0,
+@@ -3033,15 +3057,37 @@
+         Ok((&self.device, &self.queue))
+     }
+ 
+-    /// Installs an exact pressure sequence for same-adapter evidence replay.
+-    ///
+-    /// This exact-replay boundary replaces only the host pressure sample;
+-    /// perception, recurrent execution, logits, selection, world outcomes, and
+-    /// learning remain GPU-authoritative and run through the production path.
++    /// Explicit software-only test host-pressure control; ATP and heap stay live.
++    #[cfg(feature = "gpu-tests")]
++    pub fn set_controlled_host_pressure_for_test(
++        &mut self,
++        ns: u64,
++    ) -> Result<(), ScaffoldContractError> {
++        validate_controlled_host_pressure(
++            self.offline_software_runtime_test,
++            !self.recorded_pressure_replay.is_empty(),
++            self.completed_dispatch_count,
++            ns,
++        )?;
++        self.ensure_ready()?;
++        self.controlled_host_pressure_ns = Some(ns);
++        Ok(())
++    }
++
++    #[cfg(feature = "gpu-tests")]
++    pub fn controlled_pressure_evidence_for_test(&self) -> &[(u64, NeuralThrottleDecision)] {
++        &self.last_controlled_pressure_evidence
++    }
++
++    /// Installs frame-bound pressure evidence; mutually exclusive with test control.
+     pub fn install_recorded_pressure_replay(
+         &mut self,
+         samples: Vec<GpuPressureSample>,
+     ) -> Result<(), ScaffoldContractError> {
++        #[cfg(feature = "gpu-tests")]
++        if self.controlled_host_pressure_ns.is_some() {
++            return Err(ScaffoldContractError::BrainActivitySequenceMismatch);
++        }
+         if samples.is_empty() || !self.recorded_pressure_replay.is_empty() {
+             return Err(ScaffoldContractError::BrainActivitySequenceMismatch);
+         }
+@@ -7061,3 +7107,32 @@
+         }
+     }
+ }
++
++#[cfg(feature = "gpu-tests")]
++fn validate_controlled_host_pressure(
++    software: bool,
++    replay: bool,
++    completed: u64,
++    ns: u64,
++) -> Result<(), ScaffoldContractError> {
++    if !software || replay || completed != 0 || !matches!(ns, 0 | 2_000_000 | 4_000_000 | 8_000_000)
++    {
++        return Err(ScaffoldContractError::BrainActivitySequenceMismatch);
++    }
++    Ok(())
++}
++
++#[cfg(all(test, feature = "gpu-tests"))]
++mod controlled_host_pressure_tests {
++    use super::*;
++    #[test]
++    fn explicit_software_only_before_dispatch_and_without_replay() {
++        for ns in [0, 2_000_000, 4_000_000, 8_000_000] {
++            assert!(validate_controlled_host_pressure(true, false, 0, ns).is_ok());
++            assert!(validate_controlled_host_pressure(false, false, 0, ns).is_err());
++            assert!(validate_controlled_host_pressure(true, true, 0, ns).is_err());
++            assert!(validate_controlled_host_pressure(true, false, 1, ns).is_err());
++        }
++        assert!(validate_controlled_host_pressure(true, false, 0, 1).is_err());
++    }
++}

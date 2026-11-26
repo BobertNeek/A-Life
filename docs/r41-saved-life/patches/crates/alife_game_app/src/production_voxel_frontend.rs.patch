@@ -1,0 +1,314 @@
+diff --git a/crates/alife_game_app/src/production_voxel_frontend.rs b/crates/alife_game_app/src/production_voxel_frontend.rs
+--- a/crates/alife_game_app/src/production_voxel_frontend.rs
++++ b/crates/alife_game_app/src/production_voxel_frontend.rs
+@@ -131,24 +131,8 @@
+         diagnostics: &ProductionRuntimeDiagnostics,
+         save_metadata: &ProductionSaveMetadata,
+     ) -> Self {
+-        let artifact_dir = launch.world_data_directory();
++        let artifact_dir = fvr08_launch_artifact_dir(launch, FVR05_PRODUCTION_UX_SETTINGS_DIR);
+         let profile = launch.profile_id.label();
+-        let canonical_world = artifact_dir.join(format!(
+-            "phase3-new-game-{}.json",
+-            save_metadata.deterministic_seed
+-        ));
+-        // The live world already owns a durable save and its generation journal.
+-        // Resume it in place. Bundled and imported sources remain read-only.
+-        let runtime_save = if launch.app_launch.save_path == canonical_world {
+-            canonical_world
+-        } else {
+-            artifact_dir.join(fvr05_world_runtime_save_name(
+-                profile,
+-                &save_metadata.save_id,
+-                save_metadata.deterministic_seed,
+-            ))
+-        };
+-
+         Self {
+             schema: FVR05_PRODUCTION_UX_SCHEMA.to_string(),
+             schema_version: FVR05_PRODUCTION_UX_SCHEMA_VERSION,
+@@ -169,7 +153,14 @@
+             pause_on_focus_loss: true,
+             selected_stable_id: None,
+             source_save_path: launch.app_launch.save_path.display().to_string(),
+-            runtime_save_path: runtime_save.display().to_string(),
++            runtime_save_path: artifact_dir
++                .join(fvr05_world_runtime_save_name(
++                    profile,
++                    &save_metadata.save_id,
++                    save_metadata.deterministic_seed,
++                ))
++                .display()
++                .to_string(),
+             created_world_save_path: artifact_dir
+                 .join(format!("{profile}_created_world_save.json"))
+                 .display()
+@@ -628,15 +619,6 @@
+         })
+     }
+ 
+-    /// Scope all writable player files to the chosen profile directory.
+-    fn world_data_directory(&self) -> PathBuf {
+-        self.ui_settings_path
+-            .as_deref()
+-            .and_then(Path::parent)
+-            .map(Path::to_path_buf)
+-            .unwrap_or_else(|| fvr08_launch_artifact_dir(self, FVR05_PRODUCTION_UX_SETTINGS_DIR))
+-    }
+-
+     #[cfg(feature = "bevy-app")]
+     pub(crate) fn canonical_new_game_save_path(&self) -> Result<PathBuf, GameAppShellError> {
+         let ProductionWorldSource::NewGame { seed } = self.world_source else {
+@@ -650,9 +632,15 @@
+                 message: "canonical New Game seed must be nonzero".to_string(),
+             });
+         }
+-        Ok(self
+-            .world_data_directory()
+-            .join(format!("phase3-new-game-{seed}.json")))
++        let directory = match self.ui_settings_path.as_ref() {
++            Some(path) => path.parent().map(Path::to_path_buf).ok_or_else(|| {
++                GameAppShellError::InvalidProductionFrontend {
++                    message: "production UI settings path requires a parent directory".to_string(),
++                }
++            })?,
++            None => fvr08_launch_artifact_dir(self, FVR05_PRODUCTION_UX_SETTINGS_DIR),
++        };
++        Ok(directory.join(format!("phase3-new-game-{seed}.json")))
+     }
+ 
+     pub fn effective_graphics_backend(&self) -> Result<String, GameAppShellError> {
+@@ -854,8 +842,7 @@
+             hot_slots: budget.hot_brain_slots,
+             warm_slots: budget.warm_brain_slots,
+             cold_slots: budget.cold_brain_slots,
+-            // This describes allocation capacity, not the number of living residents.
+-            max_creatures: launch.effective_population().max(1),
++            max_creatures: launch.effective_population(),
+         }],
+         active_profile_caps: GpuRuntimeActiveProfileCaps {
+             target_fps: budget.target_fps,
+@@ -952,9 +939,8 @@
+         });
+     }
+     let budget = launch.profile_id.budget();
+-    let save = PortableSaveFile::from_json_file(&launch.app_launch.save_path)?;
+-    let population = launch_population(launch, &save)?;
+-    if population == 0 && matches!(launch.world_source, ProductionWorldSource::NewGame { .. }) {
++    let population = launch.effective_population();
++    if population == 0 {
+         return Err(GameAppShellError::InvalidProductionFrontend {
+             message: "production population must be nonzero".to_string(),
+         });
+@@ -991,9 +977,8 @@
+         });
+     }
+ 
+-    // The template still must be valid; a resumed world's own configuration
+-    // controls the save it actually opens, including its deterministic seed.
+-    RuntimeConfig::from_json_file(&launch.app_launch.config_path)?.validate()?;
++    let launch_config = RuntimeConfig::from_json_file(&launch.app_launch.config_path)?;
++    launch_config.validate()?;
+     let manifest = AssetManifest::from_json_file(&launch.app_launch.asset_manifest_path)?;
+     manifest.validate_with_root(&launch.app_launch.asset_root)?;
+     let production_asset_manifest_path =
+@@ -1001,6 +986,7 @@
+     let production_assets = validate_production_assets(&production_asset_manifest_path)?;
+     trace.transition(ProductionAppState::LoadAssets)?;
+ 
++    let save = PortableSaveFile::from_json_file(&launch.app_launch.save_path)?;
+     let (config, production_save, gpu_runtime_state) = match launch.world_source {
+         ProductionWorldSource::LoadExisting => {
+             let production_save = production_voxel_save_with_population(
+@@ -1009,12 +995,11 @@
+                 launch.profile_id,
+                 population,
+             )?;
+-            let config = production_save.config.clone();
+             let gpu_runtime_state =
+-                fvr06_gpu_runtime_save_state(launch, &runtime, &config, &production_save)?;
++                fvr06_gpu_runtime_save_state(launch, &runtime, &launch_config, &production_save)?;
+             let production_save =
+                 production_save.with_gpu_runtime_state(gpu_runtime_state.clone())?;
+-            (config, production_save, gpu_runtime_state)
++            (launch_config, production_save, gpu_runtime_state)
+         }
+         ProductionWorldSource::NewGame { seed } => {
+             let founder_class = match launch.new_game_founder {
+@@ -1198,9 +1183,14 @@
+     profile_id: ProductionFrontendProfileId,
+     target_population: u16,
+ ) -> Result<PortableSaveFile, GameAppShellError> {
++    if target_population == 0 {
++        return Err(GameAppShellError::InvalidProductionFrontend {
++            message: "production population must be nonzero".to_string(),
++        });
++    }
+     save.validate_with_asset_root(asset_root)?;
+     let mut production_save = save.clone();
+-    validate_production_population_target(&production_save, usize::from(target_population))?;
++    apply_production_population_target(&mut production_save, usize::from(target_population))?;
+     if production_save.world.organism_records.is_none() {
+         return Err(GameAppShellError::InvalidProductionFrontend {
+             message: "production save is missing canonical organism records; frontend synthesis is prohibited"
+@@ -1214,38 +1204,22 @@
+     Ok(production_save)
+ }
+ 
+-/// Unqualified Load opens the roster that actually exists. An explicit target is
+-/// still checked against the save; neither path creates or removes a resident.
+-fn launch_population(
+-    launch: &ProductionVoxelLaunchConfig,
+-    save: &PortableSaveFile,
+-) -> Result<u16, GameAppShellError> {
+-    if matches!(launch.world_source, ProductionWorldSource::LoadExisting)
+-        && launch.population.is_none()
+-    {
+-        u16::try_from(saved_residents(save)).map_err(|_| {
+-            GameAppShellError::InvalidProductionFrontend {
+-                message: "saved population exceeds all production profiles".into(),
+-            }
+-        })
+-    } else {
+-        Ok(launch.effective_population())
+-    }
+-}
+-
+-fn saved_residents(save: &PortableSaveFile) -> usize {
+-    save.world
++fn apply_production_population_target(
++    save: &mut PortableSaveFile,
++    target_population: usize,
++) -> Result<(), GameAppShellError> {
++    let agent_count = save
++        .world
+         .objects
+         .iter()
+         .filter(|object| object.kind == WorldObjectKind::Agent)
+-        .count()
+-}
+-
+-fn validate_production_population_target(
+-    save: &PortableSaveFile,
+-    target_population: usize,
+-) -> Result<(), GameAppShellError> {
+-    let agent_count = saved_residents(save);
++        .count();
++    if agent_count == 0 {
++        return Err(GameAppShellError::InvalidProductionFrontend {
++            message: "production save must contain at least one real creature agent".to_string(),
++        });
++    }
++
+     if target_population != agent_count {
+         return Err(GameAppShellError::InvalidProductionFrontend {
+             message: format!(
+@@ -1314,10 +1288,10 @@
+     }
+ }
+ 
+-pub(crate) fn saved_terrain_view(
++fn production_voxel_backend_evidence(
+     save: &PortableSaveFile,
+-) -> Result<alife_world::PersistentVoxelWorldSnapshot, GameAppShellError> {
+-    let backend_state = save.require_voxel_backend()?;
++) -> Result<ProductionVoxelBackendEvidence, GameAppShellError> {
++    let backend_state = save.require_voxel_backend()?.clone();
+     let backend = PersistentVoxelWorldBackend::from_save_state(backend_state.clone())?;
+     let anchors = backend_state
+         .creature_anchors
+@@ -1329,25 +1303,9 @@
+             )
+         })
+         .collect::<Result<Vec<_>, _>>()?;
+-    let focus = save
+-        .world
+-        .ecology
+-        .orchard_beds
+-        .iter()
+-        .max_by_key(|b| (b.cycle_started.raw(), b.tile))
+-        .map(|b| b.tile)
+-        .or_else(|| backend_state.world_resource_refs.first().map(|r| r.tile))
+-        .unwrap_or(alife_world::VoxelTileCoord::new(0, 0));
+-    Ok(backend.snapshot_for_view(&anchors, Some(focus))?)
+-}
+-
+-fn production_voxel_backend_evidence(
+-    save: &PortableSaveFile,
+-) -> Result<ProductionVoxelBackendEvidence, GameAppShellError> {
+-    let backend_state = save.require_voxel_backend()?;
+-    let snapshot = saved_terrain_view(save)?;
++    let snapshot = backend.snapshot_for_anchors(&anchors)?;
+     Ok(ProductionVoxelBackendEvidence {
+-        schema: backend_state.schema.clone(),
++        schema: backend_state.schema,
+         visible_chunk_signatures: snapshot.visible_chunks.len(),
+         materialized_chunks: backend_state.materialized_chunk_count,
+         resource_hazard_refs: snapshot.resources_and_hazards.len(),
+@@ -2035,66 +1993,6 @@
+     }
+ 
+     #[test]
+-    fn a_saved_sanctuary_can_be_empty_without_synthesizing_or_deleting_residents() {
+-        let root = production_fixture_root();
+-        let mut empty = crate::tests::fixtures::current_scene_save(&root, 0);
+-        let tile = alife_world::VoxelTileCoord::new(79, 251);
+-        empty
+-            .world
+-            .ecology
+-            .orchard_beds
+-            .push(alife_world::orchard::OrchardBed {
+-                tile,
+-                cycle_started: empty.world.tick,
+-                watered: false,
+-                last_fruit: None,
+-                offered: false,
+-            });
+-        let occupied = crate::tests::fixtures::current_scene_save(&root, 1);
+-        let profile = ProductionFrontendProfileId::MinimumSettings30x30;
+-        let restored = production_voxel_save_with_population(&empty, &root, profile, 0).unwrap();
+-        assert_eq!(restored.world.objects, empty.world.objects);
+-        assert!(restored.creatures.is_empty());
+-        let view = saved_terrain_view(&restored).unwrap();
+-        assert!(view.lookup_tile(tile).is_some());
+-        assert!(view.creatures.is_empty());
+-        assert!(restored
+-            .require_voxel_backend()
+-            .unwrap()
+-            .creature_anchors
+-            .is_empty());
+-        assert!(production_voxel_save_with_population(&occupied, &root, profile, 0).is_err());
+-        assert!(production_voxel_save_with_population(&empty, &root, profile, 1).is_err());
+-        let (fixture, mut launch) = fvr05_test_launch();
+-        let chosen = fixture.root.join("isolated-profile");
+-        launch.ui_settings_path = Some(chosen.join("settings.json"));
+-        let settings = Fvr05ProductionUxSettings::default_for_launch(
+-            &launch,
+-            &fvr05_test_diagnostics(&launch),
+-            &fvr05_test_save_metadata(),
+-        );
+-        assert!(Path::new(&settings.runtime_save_path).starts_with(&chosen));
+-        let metadata = fvr05_test_save_metadata();
+-        let owned = chosen.join(format!(
+-            "phase3-new-game-{}.json",
+-            metadata.deterministic_seed
+-        ));
+-        launch.app_launch.save_path = owned.clone();
+-        let settings = Fvr05ProductionUxSettings::default_for_launch(
+-            &launch,
+-            &fvr05_test_diagnostics(&launch),
+-            &metadata,
+-        );
+-        assert_eq!(PathBuf::from(settings.runtime_save_path), owned);
+-
+-        launch.population = None;
+-        assert_eq!(launch_population(&launch, &empty).unwrap(), 0);
+-        assert_eq!(launch_population(&launch, &occupied).unwrap(), 1);
+-        launch.world_source = ProductionWorldSource::NewGame { seed: 1 };
+-        assert_ne!(launch_population(&launch, &empty).unwrap(), 0);
+-    }
+-
+-    #[test]
+     fn fvr04_population_view_supports_owned_one_and_500() {
+         let root = production_fixture_root();
+         let save = crate::tests::fixtures::current_scene_save(&root, 1);

@@ -1,0 +1,566 @@
+diff --git a/crates/alife_game_app/src/production_voxel_renderer.rs b/crates/alife_game_app/src/production_voxel_renderer.rs
+--- a/crates/alife_game_app/src/production_voxel_renderer.rs
++++ b/crates/alife_game_app/src/production_voxel_renderer.rs
+@@ -17,9 +17,10 @@
+ use alife_world::CreatureAppearanceGenome;
+ use alife_world::{
+     persistence::{CreatureSaveState, GpuRuntimeSaveState, PortableSaveFile},
+-    PersistentVoxelWorldSnapshot, PresentationOutcomeSnapshot, ProceduralTerrainMaterial,
+-    ProceduralTileCoord, ProceduralWorldConfig, StableVoxelObjectRef, StableVoxelRefKind,
+-    VoxelChunkCoord, VoxelTileCoord, WorldObjectKind, WorldOrganismPresentationRow,
++    CreatureWorldAnchor, PersistentVoxelWorldBackend, PersistentVoxelWorldSnapshot,
++    PresentationOutcomeSnapshot, ProceduralTerrainMaterial, ProceduralTileCoord,
++    ProceduralWorldConfig, StableVoxelObjectRef, StableVoxelRefKind, VoxelChunkCoord,
++    VoxelTileCoord, WorldObjectKind, WorldOrganismPresentationRow,
+     FVR02_PERSISTENT_VOXEL_WORLD_SCHEMA,
+ };
+ use bevy::{
+@@ -31,12 +32,11 @@
+     mesh::Indices,
+     prelude::{
+         default, AlphaMode, App, Assets, BackgroundColor, ButtonInput, Camera, ChildOf, Children,
+-        Color, Commands, Component, Cuboid, DetectChanges, DetectChangesMut, DirectionalLight,
+-        Entity, EulerRot, GlobalTransform, Handle, Image, KeyCode, Local, Mesh, Mesh3d,
+-        MeshMaterial3d, MessageReader, MessageWriter, MouseButton, Name, Node, ParamSet,
+-        PositionType, Projection, Quat, Res, ResMut, Resource, StandardMaterial, Text, TextColor,
+-        TextFont, Time, Torus, Transform, Update, Val, Vec3, Visibility, Window, With, Without,
+-        World,
++        Color, Commands, Component, Cuboid, DetectChanges, DirectionalLight, Entity, EulerRot,
++        GlobalTransform, Handle, Image, KeyCode, Local, Mesh, Mesh3d, MeshMaterial3d,
++        MessageReader, MessageWriter, MouseButton, Name, Node, ParamSet, PositionType, Projection,
++        Quat, Res, ResMut, Resource, StandardMaterial, Text, Text2d, TextColor, TextFont, Time,
++        Torus, Transform, Update, Val, Vec3, Visibility, Window, With, Without, World,
+     },
+     render::{
+         render_resource::PrimitiveTopology,
+@@ -65,33 +65,26 @@
+ mod camera_navigation;
+ pub(crate) mod care_dock;
+ mod creature_grounding;
+-#[cfg(feature = "gpu-runtime")]
+-mod field_signs;
+ mod god_hand;
+ mod graphics_capture;
+ mod hearthling;
+ #[cfg(test)]
+ mod hearthling_asset_retirement_tests;
+ mod island;
+-mod landmarks;
+ mod landscape;
+ mod live_care_feedback;
+ mod live_creature_projection;
+ mod live_food_projection;
+ mod live_sleep_feedback;
+ pub(crate) mod menu;
+-mod orchard;
+ #[cfg(feature = "gpu-runtime")]
+ mod performance_receipt;
+ #[cfg(feature = "gpu-runtime")]
+ mod phase31_performance_health;
+ #[cfg(feature = "gpu-runtime")]
+ mod phase31_slow_frame_ranking;
+-pub(crate) mod sanctuary_ink;
+ pub(crate) mod status_hud;
+ mod terrain_water;
+-#[cfg(any(feature = "gpu-runtime", test))]
+-mod toy_play;
+ mod ux_input;
+ use crate::{
+     creature_visual_snapshot_from_parts_with_appearance,
+@@ -1686,11 +1679,12 @@
+         }
+         despawn_production_entity_hierarchy(world, root);
+     }
+-    for mut visible in world
+-        .query_filtered::<&mut Visibility, With<Fvr04ProductionCreatureWorldLabel>>()
+-        .iter_mut(world)
+-    {
+-        *visible = Visibility::Hidden;
++    let mut labels = world
++        .query_filtered::<(&mut Text2d, &mut Visibility), With<Fvr04ProductionCreatureWorldLabel>>(
++        );
++    for (mut text, mut visibility) in labels.iter_mut(world) {
++        text.0 = "creature".to_string();
++        *visibility = Visibility::Hidden;
+     }
+ }
+ 
+@@ -1872,9 +1866,6 @@
+             menu.note_loaded_pause(candidate_settings.paused);
+         }
+         world.insert_resource(candidate_frame);
+-        if let Some(mut trace) = world.get_resource_mut::<field_signs::Trail>() {
+-            trace.clear();
+-        }
+         if let Some(mut dock) = world.get_resource_mut::<care_dock::State>() {
+             dock.reset();
+         }
+@@ -2019,30 +2010,6 @@
+             .before(bevy::transform::TransformSystems::Propagate),
+     );
+     graphics_capture::install(app);
+-    #[cfg(feature = "gpu-runtime")]
+-    toy_play::install(app);
+-    #[cfg(feature = "gpu-runtime")]
+-    app.init_resource::<field_signs::Trail>();
+-    #[cfg(feature = "gpu-runtime")]
+-    app.add_systems(
+-        Update,
+-        orchard::fx::frame_hand_focus
+-            .after(sync_fvr04_camera_follow)
+-            .before(island::constrain_camera)
+-            .in_set(ProductionVoxelPresentationSet::RootReaders),
+-    );
+-    #[cfg(feature = "gpu-runtime")]
+-    app.add_systems(
+-        Update,
+-        (
+-            (field_signs::sample, field_signs::draw).chain(),
+-            orchard::sync_plants,
+-            orchard::fx::project,
+-            orchard::fx::drift,
+-        )
+-            .in_set(ProductionVoxelPresentationSet::AuthoritativeProjection),
+-    );
+-    landmarks::install(app);
+     app.add_systems(
+         Update,
+         (
+@@ -2061,7 +2028,6 @@
+                 .run_if(menu::world_input_allowed)
+                 .run_if(care_dock::world_input_allowed),
+             god_hand::input
+-                .run_if(orchard::ordinary_hand)
+                 .before(handle_fvr05_production_ux_input)
+                 .after(menu::handle_input)
+                 .run_if(menu::world_input_allowed)
+@@ -2074,7 +2040,6 @@
+                 .run_if(menu::world_input_allowed)
+                 .run_if(care_dock::world_input_allowed),
+             camera_navigation::pan_camera
+-                .run_if(orchard::ordinary_hand)
+                 .after(handle_fvr03_camera_mode_input)
+                 .after(handle_fvr04_camera_follow_input)
+                 .before(handle_fvr05_production_ux_input)
+@@ -2219,7 +2184,7 @@
+     menu::install(app, summary);
+     spawn_fvr05_production_ux_ui(app);
+     spawn_v0_player_experience_ui(app);
+-    spawn_creature_focus_lantern(app);
++    spawn_fvr04_creature_world_label(app, selected);
+     Ok(())
+ }
+ 
+@@ -2243,7 +2208,19 @@
+ ) -> Result<Fvr04RuntimeSceneState, GameAppShellError> {
+     let production_save =
+         production_voxel_save_with_population(save, asset_root, profile_id, population)?;
+-    let snapshot = crate::saved_terrain_view(&production_save)?;
++    let backend_state = production_save.require_voxel_backend()?.clone();
++    let backend = PersistentVoxelWorldBackend::from_save_state(backend_state.clone())?;
++    let anchors = backend_state
++        .creature_anchors
++        .iter()
++        .map(|anchor| {
++            CreatureWorldAnchor::new(
++                anchor.stable_id,
++                Vec3f::new(anchor.tile.x as f32, 0.0, anchor.tile.z as f32),
++            )
++        })
++        .collect::<Result<Vec<_>, _>>()?;
++    let snapshot = backend.snapshot_for_anchors(&anchors)?;
+     if snapshot.schema != FVR02_PERSISTENT_VOXEL_WORLD_SCHEMA {
+         return Err(GameAppShellError::InvalidProductionFrontend {
+             message: format!(
+@@ -2711,7 +2688,6 @@
+                 lighting.shadow_cascades
+             )),
+             light,
+-            crate::terrain_lighting::player_view_layers(),
+             bevy::light::CascadeShadowConfigBuilder {
+                 num_cascades: lighting.shadow_cascades,
+                 minimum_distance: PRODUCTION_SHADOW_MINIMUM_DISTANCE,
+@@ -2728,7 +2704,6 @@
+     world.spawn((
+         Name::new("A-Life FVR11 minimum-profile warm directional sun"),
+         light,
+-        crate::terrain_lighting::player_view_layers(),
+         transform,
+         Fvr04ProductionRuntimeSceneRoot,
+     ));
+@@ -4302,17 +4277,8 @@
+             .map_or(position, |root| root.translation);
+         transform.translation.x = position.x;
+         transform.translation.z = position.z;
+-        let ground = highlands
+-            .as_deref()
+-            .and_then(|land| land.0.surface().height(position.x, position.z))
+-            .or_else(|| {
+-                scene
+-                    .tile_summaries_by_tile
+-                    .get(&tile)
+-                    .map(|summary| summary.height_units)
+-            });
+-        if let Some(height) = ground {
+-            transform.translation.y = height + 0.018;
++        if let Some(summary) = scene.tile_summaries_by_tile.get(&tile) {
++            transform.translation.y = summary.height_units + 0.018;
+         }
+     }
+ }
+@@ -4543,38 +4509,27 @@
+         Transform::from_xyz(tile.x as f32 + 0.5, 1.45, tile.z as f32 + 0.5),
+         Visibility::Visible,
+         Fvr03ProductionVoxelSelectionMarker,
+-        crate::terrain_lighting::player_guide_layer(),
+         Fvr04ProductionRuntimeSceneRoot,
+     ));
+ }
+ 
+-fn spawn_creature_focus_lantern(app: &mut App) {
+-    use bevy::prelude::Meshable;
+-    let world = app.world_mut();
+-    // A small pendant, not a nameplate: it stays clear of the eyes and ears.
+-    let mesh = world.resource_mut::<Assets<Mesh>>().add(
+-        bevy::math::primitives::Sphere::new(1.0)
+-            .mesh()
+-            .ico(0)
+-            .expect("valid icosahedron"),
+-    );
+-    let material = world
+-        .resource_mut::<Assets<StandardMaterial>>()
+-        .add(StandardMaterial {
+-            base_color: Color::srgb(0.93, 0.78, 0.44),
+-            emissive: bevy::color::LinearRgba::rgb(0.35, 0.19, 0.04),
+-            perceptual_roughness: 0.4,
++fn spawn_fvr04_creature_world_label(app: &mut App, selected: Option<StableVoxelObjectRef>) {
++    let visible = selected.is_some_and(|selection| selection.kind == StableVoxelRefKind::Creature);
++    app.world_mut().spawn((
++        Name::new("A-Life FVR04 selected creature world label"),
++        Text2d::new("creature"),
++        TextFont {
++            font_size: 18.0,
+             ..default()
+-        });
+-    world.spawn((
+-        Name::new("Creature focus lantern"),
+-        Mesh3d(mesh),
+-        MeshMaterial3d(material),
+-        Transform::from_scale(Vec3::new(0.085, 0.125, 0.085)),
+-        Visibility::Hidden,
+-        bevy::light::NotShadowCaster,
++        },
++        TextColor(Color::srgb(0.96, 0.93, 0.72)),
++        Transform::from_xyz(0.0, 2.35, 0.0),
++        if visible {
++            Visibility::Visible
++        } else {
++            Visibility::Hidden
++        },
+         Fvr04ProductionCreatureWorldLabel,
+-        crate::terrain_lighting::player_guide_layer(),
+     ));
+ }
+ 
+@@ -4729,7 +4684,7 @@
+     if !ux.is_changed() && !authority_changed {
+         return;
+     }
+-    if !ux.debug_mode {
++    if !ux.show_help && !ux.debug_mode {
+         for (_, mut visibility, _) in &mut strips {
+             if *visibility != Visibility::Hidden {
+                 *visibility = Visibility::Hidden;
+@@ -5501,37 +5456,21 @@
+             .then_some((tick, position))
+     });
+     let body = match ux.settings.active_inspector_tab {
+-        Fvr05ProductionInspectorTab::Creature => {
+-            let row = live_state.and_then(|_| {
+-                frame
+-                    .as_ref()?
+-                    .current
+-                    .organism(selection.selected?.stable_id?)
+-            });
+-            let care = row
+-                .map(|r| &r.last_player_care)
+-                .unwrap_or(&alife_world::PresentationEvidence::Unknown);
+-            let history = row
+-                .map(|r| &r.familiarity)
+-                .unwrap_or(&alife_world::PresentationEvidence::Unknown);
+-            format!(
+-                "{}\n\nPRESENTATION DETAIL\n{}\n{}\n{}",
+-                fvr04_live_creature_inspector_text(
+-                    selection.selected,
+-                    &creatures,
+-                    live_state,
+-                    frame.as_deref(),
+-                ),
+-                selection
+-                    .selected
+-                    .and_then(|r| r.stable_id)
+-                    .and_then(|id| creatures.sample_for_stable_id(id))
+-                    .map(v0_selected_creature_text)
+-                    .unwrap_or_else(|| "unavailable".to_string()),
+-                status_hud::debug_care_line(care),
+-                status_hud::debug_familiarity_line(history)
+-            )
+-        }
++        Fvr05ProductionInspectorTab::Creature => format!(
++            "{}\n\nPRESENTATION DETAIL\n{}",
++            fvr04_live_creature_inspector_text(
++                selection.selected,
++                &creatures,
++                live_state,
++                frame.as_deref(),
++            ),
++            selection
++                .selected
++                .and_then(|r| r.stable_id)
++                .and_then(|id| creatures.sample_for_stable_id(id))
++                .map(v0_selected_creature_text)
++                .unwrap_or_else(|| "unavailable".to_string()),
++        ),
+         Fvr05ProductionInspectorTab::Tile => {
+             scene.tile_panel_text(selection.selected.or(selection.hovered))
+         }
+@@ -5828,81 +5767,46 @@
+     }
+ }
+ 
+-/// Approaching a followed individual moves from the field camera into an eye-level
+-/// three-quarter portrait. The heading is latched on entry so a head turn is an
+-/// expression, not a camera cut. Normal field framing is unchanged at all profiles.
+-fn encounter_camera(field: Transform, body: Vec3, yaw: f32, amount: f32) -> Transform {
+-    let t = amount.clamp(0.0, 1.0);
+-    if t == 0.0 {
+-        return field;
+-    }
+-    let t = t * t * (3.0 - 2.0 * t);
+-    let focus = body + Vec3::Y * 0.70;
+-    let angle = yaw + 0.43;
+-    let portrait = Transform::from_translation(focus + Vec3::new(angle.cos(), 0.42, angle.sin()))
+-        .looking_at(focus, Vec3::Y);
+-    let rotation = field.rotation.slerp(portrait.rotation, t);
+-    Transform {
+-        translation: focus + rotation * Vec3::Z * field.translation.distance(focus),
+-        rotation,
+-        ..field
+-    }
+-}
+-
+ fn sync_fvr04_camera_follow(
+     scene: Res<Fvr03ProductionVoxelSceneResource>,
+     follow: Res<Fvr04ProductionCreatureFollowResource>,
+-    frame: Option<Res<LiveBrainPresentationFrameResource>>,
+     entity_map: Res<BevyEntityMap>,
+     roots: bevy::prelude::Query<
+         (&ProductionCreatureAssemblyRoot, &Transform),
+         Without<Fvr03ProductionVoxelCamera>,
+     >,
+     mut cameras: bevy::prelude::Query<
+-        (
+-            &mut Transform,
+-            &Fvr03ProductionVoxelCamera,
+-            Option<&Projection>,
+-        ),
++        (&mut Transform, &Fvr03ProductionVoxelCamera),
+         Without<ProductionCreatureAssemblyRoot>,
+     >,
+-    mut portrait: Local<Option<(WorldEntityId, f32)>>,
+ ) {
+-    let Some(id) = follow.target_stable_id.filter(|_| follow.enabled) else {
+-        *portrait = None;
++    if !follow.enabled {
++        return;
++    }
++    let Some(target) = follow.target_stable_id else {
+         return;
+     };
+-    let Some(body) = entity_map
+-        .bevy_entity(id)
+-        .and_then(|e| roots.get(e).ok())
+-        .filter(|(root, _)| root.stable_id == id)
+-        .map(|(_, pose)| pose.translation)
++    let Some(position) = entity_map
++        .bevy_entity(target)
++        .and_then(|entity| roots.get(entity).ok())
++        .filter(|(root, _)| root.stable_id == target)
++        .map(|(_, transform)| transform.translation)
+     else {
+-        *portrait = None;
+         return;
+     };
++    let target = position;
+     let extent = production_camera_extent(scene.profile_id);
+-    for (mut transform, camera, projection) in &mut cameras {
+-        let height = projection.map_or(extent, island::view_height);
+-        let amount = (camera_navigation::FIELD_HEIGHT - height)
+-            / (camera_navigation::FIELD_HEIGHT - camera_navigation::ENCOUNTER_HEIGHT);
+-        let field = production_follow_camera_transform(camera.mode, extent, body);
+-        if amount <= 0.0 {
+-            *portrait = None;
+-        } else if portrait.is_none_or(|(shown, _)| shown != id) {
+-            *portrait = frame
+-                .as_deref()
+-                .and_then(|f| f.current.object(id))
+-                .filter(|o| o.kind == WorldObjectKind::Agent && !o.consumed)
+-                .map(|o| (id, o.body_yaw));
+-        }
+-        let next = portrait.map_or(field, |(_, yaw)| encounter_camera(field, body, yaw, amount));
+-        transform.set_if_neq(next);
++    for (mut transform, camera) in &mut cameras {
++        let next_transform = production_follow_camera_transform(camera.mode, extent, target);
++        if *transform != next_transform {
++            *transform = next_transform;
++        }
+     }
+ }
+ 
+ fn sync_fvr04_creature_label(
+     selection: Res<Fvr03ProductionVoxelSelectionResource>,
++    creatures: Res<Fvr04ProductionCreatureSceneResource>,
+     frame: Option<Res<LiveBrainPresentationFrameResource>>,
+     entity_map: Res<BevyEntityMap>,
+     roots: bevy::prelude::Query<
+@@ -5913,36 +5817,86 @@
+         ),
+         Without<Fvr04ProductionCreatureWorldLabel>,
+     >,
+-    mut lanterns: bevy::prelude::Query<
+-        (&mut Transform, &mut Visibility),
++    mut labels: bevy::prelude::Query<
++        (&mut Text2d, &mut Transform, &mut Visibility),
+         With<Fvr04ProductionCreatureWorldLabel>,
+     >,
+ ) {
+-    let live_position = |target: StableVoxelObjectRef| {
+-        let id = target
+-            .stable_id
+-            .filter(|_| target.kind == StableVoxelRefKind::Creature)?;
+-        let object = frame.as_ref()?.current.object(id)?;
+-        let (root, visual, pose) = roots.get(entity_map.bevy_entity(id)?).ok()?;
+-        (object.kind == WorldObjectKind::Agent
+-            && !object.consumed
+-            && object.organism_id == Some(visual.organism_id)
+-            && root.stable_id == id
+-            && visual.stable_id == id)
+-            .then_some(pose.translation + Vec3::Y * 1.55)
++    let refresh_text = selection.is_changed() || creatures.is_changed();
++    let target = selection
++        .hovered
++        .filter(|hovered| hovered.kind == StableVoxelRefKind::Creature)
++        .or_else(|| {
++            selection
++                .selected
++                .filter(|selected| selected.kind == StableVoxelRefKind::Creature)
++        });
++    let Some(target) = target else {
++        for (_, _, mut visibility) in &mut labels {
++            if *visibility != Visibility::Hidden {
++                *visibility = Visibility::Hidden;
++            }
++        }
++        return;
+     };
+-    let position = selection
+-        .hovered
+-        .and_then(live_position)
+-        .or_else(|| selection.selected.and_then(live_position));
+-    for (mut transform, mut visibility) in &mut lanterns {
+-        if let Some(position) = position {
+-            if transform.translation != position {
+-                transform.translation = position;
++    let Some(stable_id) = target.stable_id else {
++        for (_, _, mut visibility) in &mut labels {
++            if *visibility != Visibility::Hidden {
++                *visibility = Visibility::Hidden;
+             }
+-            visibility.set_if_neq(Visibility::Visible);
+-        } else {
+-            visibility.set_if_neq(Visibility::Hidden);
++        }
++        return;
++    };
++    let Some(sample) = creatures.sample_for_stable_id(stable_id) else {
++        for (_, _, mut visibility) in &mut labels {
++            if *visibility != Visibility::Hidden {
++                *visibility = Visibility::Hidden;
++            }
++        }
++        return;
++    };
++    let Some((_, _, position)) = entity_map
++        .bevy_entity(stable_id)
++        .and_then(|entity| roots.get(entity).ok())
++        .filter(|(root, visual, _)| {
++            let Some(frame) = frame.as_deref() else {
++                return false;
++            };
++            let Some(object) = frame.current.object(stable_id) else {
++                return false;
++            };
++            object.kind == WorldObjectKind::Agent
++                && object.organism_id == Some(visual.organism_id)
++                && root.stable_id == stable_id
++                && visual.stable_id == stable_id
++                && root.stable_id == visual.stable_id
++        })
++    else {
++        for (_, _, mut visibility) in &mut labels {
++            if *visibility != Visibility::Hidden {
++                *visibility = Visibility::Hidden;
++            }
++        }
++        return;
++    };
++    let label_text = refresh_text.then(|| {
++        format!(
++            "{}\n{}  |  {}",
++            v0_player_creature_name(&sample.display_label, sample.stable_id.raw()),
++            sample.animation.label(),
++            sample.expression.label()
++        )
++    });
++    for (mut text, mut transform, mut visibility) in &mut labels {
++        if let Some(label_text) = &label_text {
++            text.0.clone_from(label_text);
++        }
++        let next_translation = position.translation + Vec3::Y * 1.55;
++        if transform.translation != next_translation {
++            transform.translation = next_translation;
++        }
++        if *visibility != Visibility::Visible {
++            *visibility = Visibility::Visible;
+         }
+     }
+ }
+@@ -6638,28 +6592,6 @@
+     use alife_world::{HeadlessScenarioBuilder, WorldObjectKind};
+ 
+     #[cfg(feature = "gpu-runtime")]
+-    #[test]
+-    fn encounter_zoom_preserves_the_field_pose_and_keeps_the_face_framed() {
+-        let body = Vec3::new(83.0, 7.0, 250.0);
+-        let field =
+-            production_follow_camera_transform(Fvr03ProductionVoxelCameraMode::Orbit, 9.8, body);
+-        assert_eq!(encounter_camera(field, body, 1.5, 0.), field);
+-        for fraction in [0.1, 0.5, 1.] {
+-            let camera = encounter_camera(field, body, 1.5, fraction);
+-            let focus = body + Vec3::Y * 0.70;
+-            assert!(camera.translation.y > focus.y);
+-            assert!(
+-                (camera.translation.distance(focus) - field.translation.distance(focus)).abs()
+-                    < 1e-4
+-            );
+-            assert!(
+-                camera
+-                    .forward()
+-                    .dot((focus - camera.translation).normalize())
+-                    > 0.999
+-            );
+-        }
+-    }
+     #[test]
+     fn care_feedback_requires_confirmed_consequences() {
+         use alife_core::{

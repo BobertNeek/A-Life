@@ -1,0 +1,143 @@
+diff --git a/crates/alife_game_app/src/production_voxel_renderer/ux_input.rs b/crates/alife_game_app/src/production_voxel_renderer/ux_input.rs
+--- a/crates/alife_game_app/src/production_voxel_renderer/ux_input.rs
++++ b/crates/alife_game_app/src/production_voxel_renderer/ux_input.rs
+@@ -21,29 +21,6 @@
+     requested
+ }
+ 
+-fn requested_speed(keyboard: &ButtonInput<KeyCode>) -> Option<crate::ProductionRunMode> {
+-    if fvr05_overlay_modifier_pressed(keyboard) {
+-        return None;
+-    }
+-    // Brackets alias the numbered playback modes. Retain the former priority
+-    // if multiple keys arrive together, but apply the winning mode only once.
+-    [
+-        (KeyCode::Digit1, crate::ProductionRunMode::OneX),
+-        (KeyCode::Digit2, crate::ProductionRunMode::MaxSpeed),
+-        (KeyCode::Digit3, crate::ProductionRunMode::HeadlessMaxSpeed),
+-        (KeyCode::BracketLeft, crate::ProductionRunMode::OneX),
+-        (KeyCode::BracketRight, crate::ProductionRunMode::MaxSpeed),
+-    ]
+-    .into_iter()
+-    .rev()
+-    .find_map(|(key, mode)| keyboard.just_pressed(key).then_some(mode))
+-}
+-
+-#[cfg(feature = "gpu-runtime")]
+-fn requested_fieldglass(keyboard: &ButtonInput<KeyCode>, clicked: bool) -> bool {
+-    clicked || keyboard.just_pressed(KeyCode::KeyZ)
+-}
+-
+ #[allow(
+     clippy::too_many_arguments,
+     reason = "Bevy injects independent ECS system parameters."
+@@ -56,8 +33,7 @@
+     #[cfg(feature = "gpu-runtime")] conversation: Option<
+         Res<crate::ProductionConversationLineageUiState>,
+     >,
+-    #[cfg(feature = "gpu-runtime")] mut selection: ResMut<Fvr03ProductionVoxelSelectionResource>,
+-    #[cfg(not(feature = "gpu-runtime"))] selection: Res<Fvr03ProductionVoxelSelectionResource>,
++    selection: Res<Fvr03ProductionVoxelSelectionResource>,
+     mut follow: ResMut<Fvr04ProductionCreatureFollowResource>,
+     #[cfg(feature = "gpu-runtime")] mut frame: ResMut<LiveBrainPresentationFrameResource>,
+     mut ux: ResMut<Fvr05ProductionUxStateResource>,
+@@ -206,13 +182,9 @@
+         ux.last_action = "Food move cancelled".to_string();
+     }
+     if keyboard.just_pressed(KeyCode::F1) {
+-        if ux.debug_mode {
+-            ux.show_help = !ux.show_help;
+-        } else {
+-            dock.recall_invitation();
+-        }
+-    }
+-    if frontend.summary.developer_overlay && keyboard.just_pressed(KeyCode::F3) {
++        ux.show_help = !ux.show_help;
++    }
++    if keyboard.just_pressed(KeyCode::F3) {
+         ux.debug_mode = !ux.debug_mode;
+         ux.settings.show_menu = ux.debug_mode;
+     }
+@@ -267,37 +239,24 @@
+         ux.settings.show_overlays = !ux.settings.show_overlays;
+         ux.last_action = format!("Overlays visible: {}", ux.settings.show_overlays);
+     }
+-    if let Some(mode) = requested_speed(&keyboard) {
+-        menu::speed(
+-            mode,
+-            &mut ux,
+-            #[cfg(feature = "gpu-runtime")]
+-            schedule.as_deref_mut(),
+-            frontend.summary.record_performance,
+-            false,
+-        );
+-    }
+-    #[cfg(feature = "gpu-runtime")]
+-    if !ux.debug_mode {
+-        if requested_fieldglass(&keyboard, dock.fieldglass_pending) {
+-            if let Some(runtime) = gpu_runtime.as_ref() {
+-                field_signs::glass::look(
+-                    runtime.runtime.world(),
+-                    selection.selected,
+-                    &mut dock,
+-                    &mut follow,
+-                );
+-            }
+-        }
+-        orchard::drive(
+-            &keyboard,
+-            &mut selection,
+-            &mut follow,
+-            &mut dock,
+-            gpu_runtime.as_deref_mut().map(|r| &mut r.runtime),
+-            &mut frame,
+-            &mut ux,
+-        );
++    // These are the only playback modes. Brackets are aliases, not multipliers.
++    for (key, mode) in [
++        (KeyCode::Digit1, crate::ProductionRunMode::OneX),
++        (KeyCode::Digit2, crate::ProductionRunMode::MaxSpeed),
++        (KeyCode::Digit3, crate::ProductionRunMode::HeadlessMaxSpeed),
++        (KeyCode::BracketLeft, crate::ProductionRunMode::OneX),
++        (KeyCode::BracketRight, crate::ProductionRunMode::MaxSpeed),
++    ] {
++        if keyboard.just_pressed(key) && !fvr05_overlay_modifier_pressed(&keyboard) {
++            menu::speed(
++                mode,
++                &mut ux,
++                #[cfg(feature = "gpu-runtime")]
++                schedule.as_deref_mut(),
++                frontend.summary.record_performance,
++                false,
++            );
++        }
+     }
+     dock.observe_selection(selection.selected);
+     let pointer_action = dock.take_pending();
+@@ -306,25 +265,9 @@
+         .filter(|a| *a != care_dock::Action::Speech)
+     {
+         if care_dock::requested(action, pointer_action, &keyboard, ux.debug_mode) {
+-            #[cfg(feature = "gpu-runtime")]
+-            let target = gpu_runtime.as_ref().and_then(|r| {
+-                care_dock::contextual_target(
+-                    action,
+-                    selection.selected,
+-                    if pointer_action.is_some() {
+-                        None
+-                    } else {
+-                        selection.hovered
+-                    },
+-                    follow.enabled.then_some(follow.target_stable_id).flatten(),
+-                    r.runtime.world(),
+-                )
+-            });
+-            #[cfg(not(feature = "gpu-runtime"))]
+-            let target = selection.selected;
+             let evidence = care_dock::dispatch(
+                 action,
+-                target,
++                selection.selected,
+                 &mut ux,
+                 #[cfg(feature = "gpu-runtime")]
+                 gpu_runtime.as_deref_mut().map(|r| &mut r.runtime),

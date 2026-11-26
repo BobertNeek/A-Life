@@ -1,0 +1,69 @@
+diff --git a/crates/alife_gpu_backend/src/closed_loop_memory.rs b/crates/alife_gpu_backend/src/closed_loop_memory.rs
+--- a/crates/alife_gpu_backend/src/closed_loop_memory.rs
++++ b/crates/alife_gpu_backend/src/closed_loop_memory.rs
+@@ -63,8 +63,18 @@
+     pub(crate) final_frame_digest: PerceptionFrameDigest,
+     pub(crate) perception_binding: GpuPerceptionFrameBinding,
+     pub(crate) neural_receptor_effects: Option<NeuralReceptorEffects>,
++    pub(crate) visible_self_grip_v1: Option<VisibleSelfGripFrameV1>,
+     offset_domain: GpuMemoryOffsetDomain,
+ }
++
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub(crate) struct VisibleSelfGripFrameV1 {
++    pub(crate) words: Vec<u32>,
++    pub(crate) weights: [u32; 16],
++}
++
++pub(crate) const VISIBLE_SELF_GRIP_V1_MAGIC: u32 = 0x4752_5031;
++pub(crate) const VISIBLE_SELF_GRIP_V1_FIXED_WORDS: usize = 24;
+ 
+ /// An owned local upload checked against its immutable frame and live slot.
+ /// Immutable access prevents edits between validation and consuming rebasing.
+@@ -138,6 +148,38 @@
+     ) -> Result<ValidatedLocalMemoryUpload, GpuClosedLoopError> {
+         self.validate_for_frame_and_slot(frame, slot)?;
+         Ok(ValidatedLocalMemoryUpload(self))
++    }
++
++    /// Attach the already World-bound exact finalized candidate rows. The
++    /// retaining App is the trusted producer. This is not a raw policy input.
++    pub fn bind_visible_self_grip_v1(
++        &mut self,
++        frame: &PerceptionFrame,
++        observer: alife_core::OrganismId,
++        tick: Tick,
++        final_digest: PerceptionFrameDigest,
++        words: &[u32],
++        weights: [u32; 16],
++    ) -> Result<(), GpuClosedLoopError> {
++        if self.offset_domain != GpuMemoryOffsetDomain::Local
++            || self.visible_self_grip_v1.is_some()
++            || frame.organism_id() != observer || frame.tick() != tick
++            || self.perception_binding.tick != tick || frame.frame_digest() != final_digest
++            || self.final_frame_digest != final_digest
++            || frame.sensor_profile() != alife_core::SensorProfile::GroundedTerrainVisionV1
++            || words.len() != frame.candidates().len()
++            || !(1..=32).contains(&words.len())
++            || words.iter().any(|&w| !matches!(w, 0 | 0x3f80_0000))
++            || words.iter().zip(frame.candidates()).any(|(&w, candidate)| {
++                w != 0 && !matches!(candidate.observation, alife_core::CandidateObservationRef::ObjectSlot(_))
++            })
++            || !matches!(weights[0], 0 | 0xc100_0000)
++            || weights.iter().any(|&v| v != weights[0])
++        {
++            return Err(GpuClosedLoopError::MalformedUpload);
++        }
++        self.visible_self_grip_v1 = Some(VisibleSelfGripFrameV1 { words: words.to_vec(), weights });
++        Ok(())
+     }
+ 
+     pub fn bind_neural_receptor_effects(
+@@ -438,6 +480,7 @@
+             final_frame_digest: frame.frame_digest(),
+             perception_binding,
+             neural_receptor_effects: None,
++            visible_self_grip_v1: None,
+             offset_domain: GpuMemoryOffsetDomain::Local,
+         })
+     }

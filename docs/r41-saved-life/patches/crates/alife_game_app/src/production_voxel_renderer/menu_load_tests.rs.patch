@@ -1,0 +1,34 @@
+diff --git a/crates/alife_game_app/src/production_voxel_renderer/menu_load_tests.rs b/crates/alife_game_app/src/production_voxel_renderer/menu_load_tests.rs
+--- a/crates/alife_game_app/src/production_voxel_renderer/menu_load_tests.rs
++++ b/crates/alife_game_app/src/production_voxel_renderer/menu_load_tests.rs
+@@ -939,7 +939,6 @@
+             (Screen::Main, MAIN.as_slice()),
+             (Screen::Speed, SPEED.as_slice()),
+             (Screen::Settings, SETTINGS.as_slice()),
+-            (Screen::Photos, PHOTOS.as_slice()),
+         ] {
+             for (selected, &(action, _)) in rows.iter().enumerate() {
+                 let mut app = keypad_input_app();
+@@ -962,10 +961,6 @@
+                     assert_eq!(state.screen, screen, "repeat activated {action:?}");
+                     assert_eq!(state.selected, selected);
+                     assert_eq!(state.pending, None, "repeat queued {action:?}");
+-                    assert_eq!(
+-                        state.plate_action, None,
+-                        "repeat exposed or moved a photograph"
+-                    );
+                     assert!(state.captured);
+                 }
+                 // Release and a new physical press must still activate that exact row.
+@@ -977,11 +972,6 @@
+                     Action::Load => assert_eq!(state.screen, Screen::ConfirmLoad),
+                     Action::Speed => assert_eq!(state.screen, Screen::Speed),
+                     Action::Settings => assert_eq!(state.screen, Screen::Settings),
+-                    Action::Garden => assert_eq!(state.screen, Screen::Garden),
+-                    Action::Photos => assert_eq!(state.screen, Screen::Photos),
+-                    Action::Older | Action::Newer | Action::Expose => {
+-                        assert_eq!(state.plate_action, Some(action))
+-                    }
+                     Action::Back => assert_eq!(state.screen, Screen::Main),
+                     _ => assert_eq!(state.pending, Some(action)),
+                 }

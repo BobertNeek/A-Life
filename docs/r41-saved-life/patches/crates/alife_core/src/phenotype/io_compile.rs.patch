@@ -1,0 +1,41 @@
+diff --git a/crates/alife_core/src/phenotype/io_compile.rs b/crates/alife_core/src/phenotype/io_compile.rs
+--- a/crates/alife_core/src/phenotype/io_compile.rs
++++ b/crates/alife_core/src/phenotype/io_compile.rs
+@@ -363,7 +363,6 @@
+                     motor_index,
+                 );
+                 let weight = candidate_decoder_weight(
+-                    genome.procedural_distance_gain,
+                     genome.genetic_prior_seed,
+                     route_index,
+                     neuron,
+@@ -542,7 +541,6 @@
+                     neuron,
+                     neuron,
+                     candidate_decoder_weight(
+-                        genome.procedural_distance_gain,
+                         genome.genetic_prior_seed,
+                         action_route_index,
+                         neuron,
+@@ -809,19 +807,10 @@
+ // Candidate distance keeps its physical V1 meaning. Fresh readouts penalize
+ // distance instead of rewarding it through positive motor activations. These
+ // are mathematical readouts, not sign-constrained recurrent excitation.
+-// The persisted birth gain strengthens the initial proximity disposition when
+-// broader depth observations also change recurrent activation. Legacy inputs
+-// retain gain 1; exact foundation assets overwrite these procedural defaults.
+-fn candidate_decoder_weight(
+-    distance_gain: f32,
+-    seed: u64,
+-    route: u16,
+-    source: u32,
+-    lane: u32,
+-) -> f32 {
++fn candidate_decoder_weight(seed: u64, route: u16, source: u32, lane: u32) -> f32 {
+     let magnitude = genetic_weight(seed, route, source, lane);
+     if lane == 2 {
+-        -magnitude * distance_gain
++        -magnitude
+     } else {
+         magnitude
+     }

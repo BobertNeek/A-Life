@@ -1,0 +1,15 @@
+diff --git a/crates/alife_game_app/src/foundation_training_cycle.rs b/crates/alife_game_app/src/foundation_training_cycle.rs
+--- a/crates/alife_game_app/src/foundation_training_cycle.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle.rs
+@@ -46,6 +46,11 @@
+ };
+ mod saved_life_retention;
+ pub use saved_life_retention::{evaluate_saved_life_retention, SavedLifeRetentionRequest};
++#[cfg(feature = "gpu-tests")]
++pub use saved_life_retention::{
++    evaluate_saved_life_retention_experiment, evaluate_saved_life_retention_scent_probe,
++    RetainedScentArm, RetainedScentScope,
++};
+ 
+ mod critic_residual;
+ mod group;

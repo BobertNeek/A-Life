@@ -1,0 +1,11 @@
+diff --git a/crates/alife_game_app/src/production_voxel_renderer/island_update_tests.rs b/crates/alife_game_app/src/production_voxel_renderer/island_update_tests.rs
+--- a/crates/alife_game_app/src/production_voxel_renderer/island_update_tests.rs
++++ b/crates/alife_game_app/src/production_voxel_renderer/island_update_tests.rs
+@@ -58,7 +58,6 @@
+             props: BTreeMap::new(),
+             surface: std::sync::Arc::new(flat_surface()),
+             spawned: true,
+-            bootstrap_ground: None,
+             next_update: 0.0,
+         })
+         .add_systems(Update, (update, record_changes).chain());

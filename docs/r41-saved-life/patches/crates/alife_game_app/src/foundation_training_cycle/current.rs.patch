@@ -1,0 +1,12 @@
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/current.rs b/crates/alife_game_app/src/foundation_training_cycle/current.rs
+--- a/crates/alife_game_app/src/foundation_training_cycle/current.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle/current.rs
+@@ -44,7 +44,7 @@
+     admit_current_training_checkpoint(checkpoint)
+ }
+ 
+-fn admit_current_training_checkpoint(
++pub(super) fn admit_current_training_checkpoint(
+     checkpoint: CurrentTrainingCheckpointV1,
+ ) -> Result<CurrentTrainingCheckpointV1> {
+     life::validate(
