@@ -616,6 +616,8 @@ def cmd_record_comparison(args: argparse.Namespace) -> dict[str, Any]:
                         base_id=state["active_base_id"], source_current_sha256=gate["full_saved_life_current_sha256"],
                         patch_sha256=target["patch_sha256"], scenario_sha256=spec["scenario_sha256"],
                         decisions=spec["decisions"])
+        candidate_current = proof.get("candidate_current_sha256")
+        candidate_actor = proof.get("candidate_actor_sha256")
         if (any(proof.get(k)!=v for k,v in expected.items())
                 or sha256_file(pathlib.Path(target["patch_path"])) != target["patch_sha256"]
                 or any(proof.get(k) is not True for k in ("independently_accepted","matched","real_game_inputs"))
@@ -631,7 +633,8 @@ def cmd_record_comparison(args: argparse.Namespace) -> dict[str, Any]:
         if any(tuple(item["native_receipt_sha256"])==identity for item in items):
             raise SurgeryLoopError("native comparison already recorded")
         item = dict(case_id=key, completed_at_utc=when, path=str(proof_path), sha256=sha256_file(proof_path),
-                    native_receipt_sha256=list(identity))
+                    native_receipt_sha256=list(identity), candidate_actor_sha256=candidate_actor,
+                    candidate_current_sha256=candidate_current)
         items.append(item)
         prev = state.get("last_completed_comparison_utc")
         if not prev or parse_utc(prev) < parse_utc(when):
