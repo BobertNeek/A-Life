@@ -63,6 +63,7 @@ pub(super) fn handle_fvr05_production_ux_input(
     mut ux: ResMut<Fvr05ProductionUxStateResource>,
     mut menu_state: ResMut<menu::MenuState>,
     mut dock: ResMut<care_dock::State>,
+    #[cfg(feature = "gpu-runtime")] hand: Option<Res<god_hand::HandInteraction>>,
     #[cfg(feature = "gpu-runtime")] mut gpu_runtime: Option<
         bevy::prelude::NonSendMut<crate::bevy_shell::ProductionGpuBrainRuntimeResource>,
     >,
@@ -290,7 +291,10 @@ pub(super) fn handle_fvr05_production_ux_input(
             }
         }
         orchard::drive(
-            &keyboard,
+            orchard::DriveInput {
+                keyboard: &keyboard,
+                hand_ground: hand.as_ref().and_then(|hand| hand.ground),
+            },
             &mut selection,
             &mut follow,
             &mut dock,
