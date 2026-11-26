@@ -17,3 +17,59 @@ Refresh registrations with `python scripts/register_approved_art.py`, then run
 the game app's `validate-production-assets` command. Historical audits and render
 receipts remain in Git history; the removed snapshot validators are not current
 gates. Inspect new exports visually before shipping them.
+
+### Terrain finish: salt meadow and tidecut stone
+
+The base Blender file still owns the full-resolution island. After a base export,
+run `python scripts/build_island_geology.py` to bake the two lossless 2048px
+world maps and the three 768px close-ground maps under `geology/` and rebuild the middle and far representations
+from the existing near mesh. NumPy, SciPy and Pillow are required. Then run
+`python scripts/register_approved_art.py` and `python scripts/test_island_geology.py`.
+The finish does not write to `island-v1.bin`, prop placements, or saves.
+Keep these PNGs alongside the GLB when copying it between art tools.
+
+Pigment follows catchments, tidal elevation, exposure and soil depth cues.
+Crevices and broken sills live in the corresponding tangent-space normal map,
+not in the collision mesh. A separate fine roughness/cavity tile breaks up
+close highlights without painting repeating dark dots into the overview. The
+near level trades the overview material for separate gravel chips, curled leaf
+litter, broken stems and soil clods painted with corresponding normals and
+roughness. The 4.7 m tile uses continuous, warped world UVs (~6 mm per texel);
+each vertex multiplies it by its original linear island pigment. The middle
+and far meshes keep the large maps. The renderer swaps the two standard glTF
+materials along with its existing mesh handoff. Still one primitive per
+chunk/level and no extra draw pass.
+
+An absolute sine in the original northern heightfield produced repeated fins.
+The bake detects that phase where it is actually present and removes its local
+lighting and albedo emphasis. It does not lower peaks, alter triangle positions
+or remove genuine skyline teeth. An offline trial capped at 0.75 m, using only
+vertices with no adjacent walkable triangle, changed the wide skyline by at
+most one pixel. Baking out the source wave could change that outline by seven
+pixels but would move the underlying world by up to 10.2 m. A real contour
+redesign needs a versioned heightfield, not invisible terrain under creatures.
+
+The source is 321 × 385 samples. On the shipping overview, sampling the actual
+indexed mesh at every source lattice point reduces the largest height mismatch
+from 92.51 m to 2.77 m; the corresponding middle mismatch falls from 66.89 m
+to 0.76 m. Most of the initial error was not this severe. Far mean error is
+0.086 m (previously 0.339); within 2 m of sea level, far RMS error is 0.102 m
+(previously 2.255). The number of samples on the wrong side of
+sea level falls from 612 to 33 far and 160 to 10 middle. The near mesh does not
+move. Far costs 43,946 triangles instead of 23,040, middle 104,318 instead of
+76,800; near remains 276,480. These are full-island counts including skirts,
+not measured frame times.
+
+[Wide comparison](../../../../../docs/media/island-geology/wide.jpg) ·
+[Low headland](../../../../../docs/media/island-geology/headland.jpg) ·
+[Estuary](../../../../../docs/media/island-geology/estuary.jpg).
+These locked CPU Blender studies isolate the real terrain GLBs using a neutral
+sea plane; they are not game, RTX, or performance captures. Rebuild with
+`blender -b -t 2 --python-exit-code 1 -P scripts/render_island_geology.py -- <GLB> <output-directory>`.
+Append `--handoff` to render the same view of the river head at each LOD.
+
+[Marked ridge, matched crop](../../../../../docs/media/island-geology/marked-ridge.jpg) ·
+[Creature-height ground, dressed habitat](../../../../../docs/media/island-geology/creature-height.jpg).
+For the dressed view append `--creature-height`. The perspective lens is 88 cm
+above the source surface. It uses approved production prop GLBs and their
+placements, but the lighting and camera are Blender, not Bevy.
