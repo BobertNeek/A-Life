@@ -1191,11 +1191,8 @@ mod tests {
             1.0,
         );
         surface.set_surface(Some(world.terrain().unwrap().surface().clone()));
-        let chime_center = live_food_projection::care_object_center(
-            world.entity(chime).unwrap().position,
-            true,
-            &surface,
-        );
+        let chime_center =
+            live_food_projection::care_object_center(world.entity(chime).unwrap(), true, &surface);
         let press = camera.world_to_viewport(&before_eye, chime_center).unwrap();
         window.set_cursor_position(Some(press));
         let press = window.cursor_position().unwrap();

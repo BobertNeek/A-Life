@@ -73,9 +73,11 @@ impl PreviewInput<'_, '_> {
             // Standing inside the existing place does not stack a second translucent aisle.
             return None;
         }
-        let [x, y, z] = world.entity(id)?.grounded_physical.shape;
+        let object = world.entity(id)?;
+        let [x, y, z] = object.grounded_physical.shape;
         let body_size = Vec3::new(x, y, z) * 0.3 + Vec3::splat(0.1);
-        let center = live_food_projection::care_object_center(at, true, surface);
+        let center = live_food_projection::grounded_object_origin(at, true, surface)
+            + Vec3::Y * live_food_projection::keepsake_lift(object);
         Some(Ghost {
             court,
             table_pose: Transform::from_translation(center).with_scale(body_size),
@@ -357,7 +359,8 @@ mod tests {
 
         ecs.resource_mut::<ButtonInput<MouseButton>>()
             .press(MouseButton::Left);
-        let contact = live_food_projection::care_object_center(initial, true, &surface);
+        let contact =
+            live_food_projection::care_object_center(world.entity(chime).unwrap(), true, &surface);
         let (_, hit) = aim_screen(&mut ecs, window, &camera, &eye, &world, &surface, contact);
         assert_eq!(
             (hit.kind, hit.stable_id),

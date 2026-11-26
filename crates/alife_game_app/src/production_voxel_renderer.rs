@@ -5163,11 +5163,7 @@ fn pick_live_object_body_with_chime(
             let chime_shape = [(0.0, object.radius)];
             let (base, samples): (Vec3, &[(f32, f32)]) = match object.kind {
                 WorldObjectKind::ActivityToy => (
-                    live_food_projection::care_object_center(
-                        object.position,
-                        terrain_bound,
-                        surface,
-                    ),
+                    live_food_projection::care_object_center(object, terrain_bound, surface),
                     &chime_shape,
                 ),
                 WorldObjectKind::Agent => (position, &[(0.35, 0.40), (0.90, 0.48), (1.35, 0.38)]),
@@ -7649,7 +7645,8 @@ mod tests {
         let chime = world
             .spawn_toy("player-activity-toy", ground, false)
             .unwrap();
-        let table = live_food_projection::care_object_center(ground, true, &surface);
+        let table =
+            live_food_projection::care_object_center(world.entity(chime).unwrap(), true, &surface);
         let camera =
             production_follow_camera_transform(Fvr03ProductionVoxelCameraMode::Orbit, 9.8, table);
         let direction = bevy::math::Dir3::new(camera.rotation * Vec3::NEG_Z).unwrap();
@@ -7676,7 +7673,8 @@ mod tests {
         assert_ne!(ball, chime);
         // Keep the stock eye orientation. Translating the ray along itself
         // gives a local orthographic segment through both actual proxy volumes.
-        let peer = live_food_projection::care_object_center(ball_position, true, &surface);
+        let peer =
+            live_food_projection::care_object_center(world.entity(ball).unwrap(), true, &surface);
         let through = (table + peer) * 0.5 + Vec3::Y * 0.06;
         let origin = through - forward * 6.0;
         let ray = bevy::math::Ray3d::new(origin, direction);
@@ -7698,7 +7696,7 @@ mod tests {
                 .editor_move_object(ball, Vec3f::new(sideways.x, 0.0, sideways.z))
                 .unwrap();
             let p = live_food_projection::care_object_center(
-                world.entity(ball).unwrap().position,
+                world.entity(ball).unwrap(),
                 true,
                 &surface,
             );
