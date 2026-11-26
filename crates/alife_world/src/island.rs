@@ -2,8 +2,13 @@
 use crate::{LocomotionLimits, TerrainData, WorldTerrain};
 use std::sync::OnceLock;
 
+static TERRAIN: OnceLock<WorldTerrain> = OnceLock::new();
+
+pub(crate) fn cached_island_terrain() -> Option<&'static WorldTerrain> {
+    TERRAIN.get()
+}
+
 pub fn island_terrain() -> WorldTerrain {
-    static TERRAIN: OnceLock<WorldTerrain> = OnceLock::new();
     TERRAIN
         .get_or_init(|| {
             let bytes = include_bytes!("../assets/island-v1.bin");
