@@ -1,7 +1,7 @@
 name: Qualia detached WSP Approach V2 source qualification
 on:
   push:
-    branches: ["bob/qualia-wsp-approach-v2-newline-fix-20261127"]
+    branches: ["bob/qualia-wsp-approach-v2-version-buffer-20261127"]
     paths: [".github/workflows/qualia-wsp-approach-v2-check.yml"]
 
 permissions:
@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   source-only:
-    if: github.ref == 'refs/heads/bob/qualia-wsp-approach-v2-newline-fix-20261127'
+    if: github.ref == 'refs/heads/bob/qualia-wsp-approach-v2-version-buffer-20261127'
     runs-on: ubuntu-24.04
     timeout-minutes: 65
     env:
@@ -190,9 +190,11 @@ jobs:
         run: |
           set -euo pipefail
           rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --target "$TARGET"
-          rustc +"$RUST_TOOLCHAIN" -vV | tee -a "$EVIDENCE/build.log"
-          rustc +"$RUST_TOOLCHAIN" -vV | grep -Fqx "commit-hash: $PIN_RUSTC_COMMIT"
-          rustc +"$RUST_TOOLCHAIN" -vV | grep -Fqx "host: $TARGET"
+          version="$(rustc +"$RUST_TOOLCHAIN" -vV)"
+          grep -Fqx "release: $RUST_TOOLCHAIN" <<< "$version"
+          grep -Fqx "commit-hash: $PIN_RUSTC_COMMIT" <<< "$version"
+          grep -Fqx "host: $TARGET" <<< "$version"
+          printf '%s\n' "$version" | tee -a "$EVIDENCE/build.log"
           cd "$EXACT_SRC"
           mkdir -p "$CARGO_TARGET_DIR"
           test "$(df -PB1 "$CARGO_TARGET_DIR" | awk 'NR==2 {print $4}')" -ge 10737418240
