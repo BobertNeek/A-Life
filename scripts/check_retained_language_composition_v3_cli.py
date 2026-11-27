@@ -136,9 +136,17 @@ def v3(exe, name, expected, *, phase="geometry", layout="a", edit=None, marker=T
 
 def ttl_bad_case(kind):
     def edit(m,a,f,geo,original,root):
-        fields = ("fixture_id","source_current_sha256","evaluator_sha256","fixture_sha256","rubric_sha256")
+        fields = ("fixture_id","source_current_sha256","evaluator_sha256","fixture_sha256")
         base = {k:a[k] for k in fields}
-        p = dict(base,schema=SCOPED+"opening_pair_proof.v1",phase="opening",owner=f["owner"],
+        phase_pins = dict(geometry_rubric_sha256="0"*64, opening_rubric_sha256="5"*64,
+                          independent_opening_pair_closure_sha256="6"*64)
+        if kind == "same-phase-rubric":
+            phase_pins["geometry_rubric_sha256"] = phase_pins["opening_rubric_sha256"]
+        if kind == "ttl-reuses-geometry-rubric":
+            phase_pins["geometry_rubric_sha256"] = a["rubric_sha256"]
+        if kind == "ttl-reuses-opening-rubric":
+            phase_pins["opening_rubric_sha256"] = a["rubric_sha256"]
+        p = dict(base, **phase_pins, schema=SCOPED+"opening_pair_proof.v2",phase="opening",owner=f["owner"],
                  opening_tick=f["tick"], opening_player_tokens=[9])
         def arm(layout, number, geohash):
             unique = str(number)*64
@@ -152,10 +160,21 @@ def ttl_bad_case(kind):
             p["layouts"][1] = dict(p["layouts"][0])
         if kind == "bad-pair-parent-id":
             p["evaluator_sha256"] = "9" * 64
+        if kind == "old-v1-proof":
+            p["schema"] = SCOPED + "opening_pair_proof.v1"
+        if kind == "wrong-opening-rubric":
+            p["opening_rubric_sha256"] = "3"*64
+        if kind == "wrong-geometry-rubric":
+            p["geometry_rubric_sha256"] = "2"*64
+        if kind == "wrong-independent-closure":
+            p["independent_opening_pair_closure_sha256"] = "4"*64
         wire_proof = wire(p)
         pin = ("f" * 64) if kind == "bad-pair-hash" else sha(wire_proof)
-        g = dict(base, schema=SCOPED+"ttl_operator_grant.v1", phase="ttl", run_id=m["run_id"],
-                 cell=m["cell"], geometry_proof_sha256=a["geometry_proof_sha256"], opening_pair_proof_sha256=pin)
+        g = dict(base, **phase_pins, schema=SCOPED+"ttl_operator_grant.v2", phase="ttl", run_id=m["run_id"],
+                 rubric_sha256=a["rubric_sha256"],cell=m["cell"],
+                 geometry_proof_sha256=a["geometry_proof_sha256"], opening_pair_proof_sha256=pin)
+        if kind == "old-v1-grant":
+            g["schema"] = SCOPED + "ttl_operator_grant.v1"
         if kind == "wrong-operator-grant":
             g["opening_pair_proof_sha256"] = "8"*64
         if kind != "absent-pair":
@@ -294,8 +313,22 @@ def main(off_path, on_path, v2_source):
        "duplicate field `setup`",phase="opening",geometry_wire=lexical_geometry("duplicate"))
     v3(on,"TTL geometry-only is inadmissible","only TTL requires its own independently approved 1/1 opening pair",
        phase="ttl")
+    v3(on,"TTL preserves long original geometry lexemes without admitting any opening pair",
+       "only TTL requires its own independently approved 1/1 opening pair",
+       phase="ttl",geometry_wire=lexical_geometry("good"))
+    v3(on,"TTL refuses one changed original geometry byte despite exact outer digest",
+       "v3 predecessor is not exact zero-dispatch geometry",
+       phase="ttl",geometry_wire=lexical_geometry("tamper"))
     for n,e in (
         ("absent-pair",NO_FILE),("bad-pair-hash","TTL paired opening predecessor bytes differ"),
+        ("wrong-opening-rubric","TTL operator grant or independently verified opening pair has a different identity"),
+        ("wrong-geometry-rubric","TTL operator grant or independently verified opening pair has a different identity"),
+        ("same-phase-rubric","TTL operator grant or independently verified opening pair has a different identity"),
+        ("ttl-reuses-geometry-rubric","TTL operator grant or independently verified opening pair has a different identity"),
+        ("ttl-reuses-opening-rubric","TTL operator grant or independently verified opening pair has a different identity"),
+        ("wrong-independent-closure","TTL operator grant or independently verified opening pair has a different identity"),
+        ("old-v1-proof","TTL operator grant or independently verified opening pair has a different identity"),
+        ("old-v1-grant","TTL operator grant or independently verified opening pair has a different identity"),
         ("wrong-operator-grant","TTL operator grant or independently verified opening pair has a different identity"),
         ("bad-pair-parent-id","TTL operator grant or independently verified opening pair has a different identity"),
         ("bad-pair-alias","TTL predecessor must be two distinct crossed opening witnesses"),

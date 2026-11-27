@@ -301,7 +301,7 @@ diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_rete
 new file mode 100644
 --- /dev/null
 +++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/language_composition_v3.rs
-@@ -0,0 +1,926 @@
+@@ -0,0 +1,976 @@
 +//! Detached schema-6 opening witnesses. No full composition trial or policy port.
 +use super::{digest, Result};
 +use alife_core::{
@@ -419,6 +419,8 @@ new file mode 100644
 +    geometry_proof_sha256: Option<String>,
 +    #[serde(skip_serializing_if = "Option::is_none")]
 +    opening_pair_proof_sha256: Option<String>,
++    #[serde(skip_serializing_if = "Option::is_none")]
++    ttl_predecessor_pins: Option<TtlPredecessorPins>,
 +    #[serde(skip)]
 +    parent_geometry_setup_sha256: Option<String>,
 +    #[serde(skip)]
@@ -461,6 +463,16 @@ new file mode 100644
 +    rubric_sha256: String,
 +    geometry_proof_sha256: String,
 +    opening_pair_proof_sha256: String,
++    geometry_rubric_sha256: String,
++    opening_rubric_sha256: String,
++    independent_opening_pair_closure_sha256: String,
++}
++
++#[derive(Serialize)]
++struct TtlPredecessorPins {
++    geometry_rubric_sha256: String,
++    opening_rubric_sha256: String,
++    independent_opening_pair_closure_sha256: String,
 +}
 +
 +#[derive(Deserialize)]
@@ -472,7 +484,9 @@ new file mode 100644
 +    source_current_sha256: String,
 +    evaluator_sha256: String,
 +    fixture_sha256: String,
-+    rubric_sha256: String,
++    geometry_rubric_sha256: String,
++    opening_rubric_sha256: String,
++    independent_opening_pair_closure_sha256: String,
 +    owner: u64,
 +    opening_tick: u64,
 +    opening_player_tokens: Vec<LanguageTokenId>,
@@ -497,18 +511,25 @@ new file mode 100644
 +
 +fn check_ttl_predecessor(
 +    m: &Manifest, a: &Admission, f: &Fixture, grant: &TtlOperatorGrant, p: &OpeningPairProof,
-+) -> Result<()> {
++) -> Result<TtlPredecessorPins> {
 +    let pin = a.opening_pair_proof_sha256.as_deref().ok_or("TTL has no opening pair pin")?;
-+    if grant.schema != "qualia.saved_life.language_composition_ttl_operator_grant.v1"
++    if grant.schema != "qualia.saved_life.language_composition_ttl_operator_grant.v2"
 +        || grant.phase != Phase::Ttl || grant.fixture_id != a.fixture_id || grant.run_id != m.run_id
 +        || grant.cell != m.cell || grant.source_current_sha256 != a.source_current_sha256
 +        || grant.evaluator_sha256 != a.evaluator_sha256 || grant.fixture_sha256 != a.fixture_sha256
 +        || grant.rubric_sha256 != a.rubric_sha256 || grant.opening_pair_proof_sha256 != pin
 +        || a.geometry_proof_sha256.as_deref() != Some(grant.geometry_proof_sha256.as_str())
-+        || p.schema != "qualia.saved_life.language_composition_opening_pair_proof.v1"
++        || p.schema != "qualia.saved_life.language_composition_opening_pair_proof.v2"
 +        || p.phase != Phase::Opening || p.fixture_id != a.fixture_id
 +        || p.source_current_sha256 != a.source_current_sha256 || p.evaluator_sha256 != a.evaluator_sha256
-+        || p.fixture_sha256 != a.fixture_sha256 || p.rubric_sha256 != a.rubric_sha256
++        || p.fixture_sha256 != a.fixture_sha256
++        || p.geometry_rubric_sha256 != grant.geometry_rubric_sha256
++        || p.opening_rubric_sha256 != grant.opening_rubric_sha256
++        || p.independent_opening_pair_closure_sha256 != grant.independent_opening_pair_closure_sha256
++        || ![&p.geometry_rubric_sha256, &p.opening_rubric_sha256,
++            &p.independent_opening_pair_closure_sha256].iter().all(|s| is_digest(s))
++        || p.geometry_rubric_sha256 == p.opening_rubric_sha256
++        || p.geometry_rubric_sha256 == a.rubric_sha256 || p.opening_rubric_sha256 == a.rubric_sha256
 +        || p.owner != f.owner || p.opening_tick != f.tick || !Phase::Opening.accepts(&p.opening_player_tokens)
 +    {
 +        return Err("TTL operator grant or independently verified opening pair has a different identity".into());
@@ -533,7 +554,11 @@ new file mode 100644
 +            return Err("TTL predecessor is not the two exact separately granted 1/1 openings".into());
 +        }
 +    }
-+    Ok(())
++    Ok(TtlPredecessorPins {
++        geometry_rubric_sha256: p.geometry_rubric_sha256.clone(),
++        opening_rubric_sha256: p.opening_rubric_sha256.clone(),
++        independent_opening_pair_closure_sha256: p.independent_opening_pair_closure_sha256.clone(),
++    })
 +}
 +
 +fn is_digest(pin: &str) -> bool {
@@ -697,12 +722,7 @@ new file mode 100644
 +                || v.evaluator_sha256 != a.evaluator_sha256 || v.layout != m.cell.layout
 +                || v.owner != f.owner || v.world_tick != f.tick || v.accepted_decisions != 0 || v.world_ticks != 0
 +                || v.backend_constructed || v.runtime_or_queue_constructed || v.player_utterances_emitted != 0
-+                || if m.phase == Phase::Opening {
-+                    !geometry_setup_pin_matches(&b, &v)?
-+                } else {
-+                    // TTL is not qualified by this Opening-only successor.
-+                    digest(&serde_json::to_vec(&v.setup)?) != v.setup_sha256
-+                }
++                || !geometry_setup_pin_matches(&b, &v)?
 +            {
 +                return Err("v3 predecessor is not exact zero-dispatch geometry".into());
 +            }
@@ -710,17 +730,19 @@ new file mode 100644
 +        }
 +        _ => return Err("v3 phase requires its own independent geometry predecessor".into()),
 +    };
-+    match (m.phase, a.opening_pair_proof_sha256.as_deref()) {
++    let ttl_predecessor_pins = match (m.phase, a.opening_pair_proof_sha256.as_deref()) {
 +        (Phase::Ttl, Some(pin)) if is_digest(pin) => {
 +            let proof = read_leaf(root, OPENING_PAIR_LEAF, 16_384)?;
 +            if digest(&proof) != pin {
 +                return Err("TTL paired opening predecessor bytes differ".into());
 +            }
-+            check_ttl_predecessor(&m, &a, &f, &serde_json::from_slice(&grant)?, &serde_json::from_slice(&proof)?)?;
++            Some(check_ttl_predecessor(
++                &m, &a, &f, &serde_json::from_slice(&grant)?, &serde_json::from_slice(&proof)?,
++            )?)
 +        }
-+        (Phase::Geometry | Phase::Opening, None) => {}
++        (Phase::Geometry | Phase::Opening, None) => None,
 +        _ => return Err("only TTL requires its own independently approved 1/1 opening pair".into()),
-+    }
++    };
 +    let identity = Identity {
 +        phase: m.phase, cell: m.cell.clone(), fixture_id: m.fixture_id.clone(),
 +        evaluator_sha256: a.evaluator_sha256, fixture_sha256: a.fixture_sha256,
@@ -728,6 +750,7 @@ new file mode 100644
 +        operator_grant_sha256: a.operator_grant_sha256, source_current_sha256: m.source_current_sha256.clone(),
 +        geometry_proof_sha256: a.geometry_proof_sha256,
 +        opening_pair_proof_sha256: a.opening_pair_proof_sha256,
++        ttl_predecessor_pins,
 +        parent_geometry_setup_sha256: setup_pin, fixture: f,
 +    };
 +    Ok((m, identity))
@@ -1168,11 +1191,13 @@ new file mode 100644
 +            "nonce":4,"props_food_ball":[8,9],"berths_forward_left_mm":[[1200,1320],[1700,-1320]]
 +        })).unwrap();
 +        let wire = json!({
-+            "schema":"qualia.saved_life.language_composition_ttl_operator_grant.v1",
++            "schema":"qualia.saved_life.language_composition_ttl_operator_grant.v2",
 +            "phase":"ttl","fixture_id":"synthetic-v3","run_id":"check",
 +            "cell":{"layout":"a","player_tokens":[9]},"source_current_sha256":tag,
 +            "evaluator_sha256":pin('b'),"fixture_sha256":pin('c'),"rubric_sha256":pin('d'),
-+            "geometry_proof_sha256":pin('f'),"opening_pair_proof_sha256":pin('0')
++            "geometry_proof_sha256":pin('f'),"opening_pair_proof_sha256":pin('0'),
++            "geometry_rubric_sha256":pin('7'),"opening_rubric_sha256":pin('8'),
++            "independent_opening_pair_closure_sha256":pin('9')
 +        });
 +        let g: TtlOperatorGrant = serde_json::from_value(wire.clone()).unwrap();
 +        let arm = |layout: &str, run: &str, geo: char, seed: char| json!({
@@ -1182,9 +1207,11 @@ new file mode 100644
 +            "retention_sha256":pin(seed),"rows_sha256":pin(seed),"final_current_sha256":pin(seed)
 +        });
 +        let base = json!({
-+            "schema":"qualia.saved_life.language_composition_opening_pair_proof.v1",
++            "schema":"qualia.saved_life.language_composition_opening_pair_proof.v2",
 +            "phase":"opening","fixture_id":"synthetic-v3","source_current_sha256":tag,
-+            "evaluator_sha256":pin('b'),"fixture_sha256":pin('c'),"rubric_sha256":pin('d'),
++            "evaluator_sha256":pin('b'),"fixture_sha256":pin('c'),
++            "geometry_rubric_sha256":pin('7'),"opening_rubric_sha256":pin('8'),
++            "independent_opening_pair_closure_sha256":pin('9'),
 +            "owner":3,"opening_tick":6,"opening_player_tokens":[9],
 +            "layouts":[arm("a","start_a",'f','1'),arm("b","start_b",'2','3')]
 +        });
@@ -1193,6 +1220,29 @@ new file mode 100644
 +            check_ttl_predecessor(&m, &a, &f, &g, &p).is_ok()
 +        };
 +        assert!(validate(base.clone()));
++        let mut old = base.clone();
++        old["schema"] = json!("qualia.saved_life.language_composition_opening_pair_proof.v1");
++        assert!(!validate(old));
++        for (k, wrong) in [
++            ("geometry_rubric_sha256", '4'), ("opening_rubric_sha256", '4'),
++            ("independent_opening_pair_closure_sha256", '4'),
++        ] {
++            let mut bad = base.clone();
++            bad[k] = json!(pin(wrong));
++            assert!(!validate(bad));
++        }
++        for (name, peer_pin) in [
++            ("geometry_rubric_sha256", 'd'), ("opening_rubric_sha256", 'd'), ("opening_rubric_sha256", '7'),
++        ] {
++            let mut pair = base.clone();
++            let mut grant_value = wire.clone();
++            pair[name] = json!(pin(peer_pin));
++            grant_value[name] = json!(pin(peer_pin));
++            assert!(check_ttl_predecessor(
++                &m, &a, &f, &serde_json::from_value(grant_value).unwrap(),
++                &serde_json::from_value(pair).unwrap(),
++            ).is_err());
++        }
 +        for (k, value) in [
 +            ("layout",json!("a")),("accepted_decisions",json!(3)),("world_ticks",json!(0)),
 +            ("run_id",json!("check")),("rows_sha256",json!(pin('1'))),
