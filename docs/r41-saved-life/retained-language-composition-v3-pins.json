@@ -14,7 +14,7 @@
       "before": "2af91d86c48bf9e95ccb41b6176db080c94d0e58d7b4afb98cb2020d5816b159"
     },
     "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/language_composition_v3.rs": {
-      "after": "8866cd2a629d2dee43154663f00d282b0fd3dfd7a063da3b12594846b9fb60af",
+      "after": "4eef389ad039399a2267c0ea5919d007bb76d58b386d91210e0821e380f7335a",
       "before": null
     },
     "crates/alife_world/Cargo.toml": {
@@ -27,13 +27,14 @@
     }
   },
   "exact_v2_git_parent": "b00de30b27b8d501c5e01f8df527ffa3471a2d10",
+  "preceding_v3_hosted_git": "5f0f31ad10a507a9e2c9d0352b39ef5fe3b87020",
   "public_b00_support_leaves": {
     ".github/workflows/qualia-retained-language-pilot-build.yml": "e13561fcf78ed92c3ab0a67b42930901b2ac76550ec317bc68957239a9819dfe",
     "docs/r41-saved-life/retained-language-pilot-source-pins.json": "0ca357bc54e8d997c1f3d12a3cbe697959d87c910f8ac257b9019febeb157349",
     "docs/r41-saved-life/retained-language-pilot-source.patch": "f0a836086d20e47e434eb947ebc9083f52dc50c344403d24e8ede08ae23ad657",
     "scripts/check_retained_language_pilot_cli.py": "7a4f6e6781ae1e318c87486c94e78cf7ab78d5a9745359eabd141c373917d5e4"
   },
-  "reviewed_v3_patch_sha256": "a848a8028bad018424be269a1969c06dfa6113e0e8da6ff1b288000288656c78",
+  "reviewed_v3_patch_sha256": "b34160133edb5c55076d83d54934a1f36418c0fc467aa97f473953e94718a8b7",
   "rust_release": "1.100.0",
   "schema": "qualia.hosted.retained_language_composition_source_pins.v1",
   "unchanged_source": {

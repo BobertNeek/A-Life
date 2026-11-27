@@ -301,7 +301,7 @@ diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_rete
 new file mode 100644
 --- /dev/null
 +++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/language_composition_v3.rs
-@@ -0,0 +1,785 @@
+@@ -0,0 +1,926 @@
 +//! Detached schema-6 opening witnesses. No full composition trial or policy port.
 +use super::{digest, Result};
 +use alife_core::{
@@ -580,6 +580,87 @@ new file mode 100644
 +        && (-1800..=-1300).contains(&right) && left == -right
 +}
 +
++fn json_whitespace(b: u8) -> bool {
++    matches!(b, b' ' | b'\t' | b'\r' | b'\n')
++}
++
++fn trim_json_prefix(mut raw: &[u8]) -> &[u8] {
++    while raw.first().copied().is_some_and(json_whitespace) {
++        raw = &raw[1..];
++    }
++    raw
++}
++
++fn take_json_value<'a, T: Deserialize<'a>>(remaining: &mut &'a [u8]) -> Result<T> {
++    let raw = *remaining;
++    let mut stream = serde_json::Deserializer::from_slice(raw).into_iter::<T>();
++    let value = stream.next().ok_or("missing v3 geometry JSON member")??;
++    *remaining = &raw[stream.byte_offset()..];
++    Ok(value)
++}
++
++/// Borrow just the original top-level setup value. This runs only after the
++/// full, bounded GeometryProof has been deserialized with its typed strict
++/// header. A serde stream locates valid value boundaries without decoding/
++/// re-encoding floating-point payloads. Decoded keys include JSON escapes.
++fn geometry_setup_lexemes(raw: &[u8]) -> Result<&[u8]> {
++    let mut remaining = trim_json_prefix(raw).strip_prefix(b"{")
++        .ok_or("v3 geometry witness must be a JSON object")?;
++    let mut setup = None;
++    loop {
++        remaining = trim_json_prefix(remaining);
++        let key: String = take_json_value(&mut remaining)?;
++        remaining = trim_json_prefix(remaining).strip_prefix(b":")
++            .ok_or("missing v3 geometry JSON colon")?;
++        remaining = trim_json_prefix(remaining);
++        let start = remaining;
++        take_json_value::<serde::de::IgnoredAny>(&mut remaining)?;
++        if key == "setup" {
++            if setup.replace(&start[..start.len() - remaining.len()]).is_some() {
++                return Err("duplicate v3 geometry setup field".into());
++            }
++        }
++        remaining = trim_json_prefix(remaining);
++        if let Some(after) = remaining.strip_prefix(b",") {
++            remaining = after;
++        } else if let Some(after) = remaining.strip_prefix(b"}") {
++            if !trim_json_prefix(after).is_empty() {
++                return Err("trailing bytes in v3 geometry witness".into());
++            }
++            break;
++        } else {
++            return Err("missing v3 geometry JSON delimiter".into());
++        }
++    }
++    setup.ok_or_else(|| "missing v3 geometry setup field".into())
++}
++
++/// Only the four JSON layout whitespace bytes outside strings are omitted.
++/// Never normalize numbers, keys, ordering, string encodings or escapes.
++fn compact_setup_lexemes(raw: &[u8]) -> Vec<u8> {
++    let mut result = Vec::with_capacity(raw.len());
++    let (mut quoted, mut escaped) = (false, false);
++    for b in raw.iter().copied() {
++        if !quoted && json_whitespace(b) {
++            continue;
++        }
++        result.push(b);
++        if escaped {
++            escaped = false;
++        } else if quoted && b == b'\\' {
++            escaped = true;
++        } else if b == b'"' {
++            quoted = !quoted;
++        }
++    }
++    result
++}
++
++fn geometry_setup_pin_matches(raw: &[u8], proof: &GeometryProof) -> Result<bool> {
++    Ok(proof.setup.is_object()
++        && digest(&compact_setup_lexemes(geometry_setup_lexemes(raw)?)) == proof.setup_sha256)
++}
++
 +pub(super) fn resolve(root: &Path, bytes: &[u8]) -> Result<(Manifest, Identity)> {
 +    let m = parse_manifest(bytes)?;
 +    let raw = read_leaf(root, "language-composition-admission.v3.json", 8192)?;
@@ -616,7 +697,12 @@ new file mode 100644
 +                || v.evaluator_sha256 != a.evaluator_sha256 || v.layout != m.cell.layout
 +                || v.owner != f.owner || v.world_tick != f.tick || v.accepted_decisions != 0 || v.world_ticks != 0
 +                || v.backend_constructed || v.runtime_or_queue_constructed || v.player_utterances_emitted != 0
-+                || digest(&serde_json::to_vec(&v.setup)?) != v.setup_sha256
++                || if m.phase == Phase::Opening {
++                    !geometry_setup_pin_matches(&b, &v)?
++                } else {
++                    // TTL is not qualified by this Opening-only successor.
++                    digest(&serde_json::to_vec(&v.setup)?) != v.setup_sha256
++                }
 +            {
 +                return Err("v3 predecessor is not exact zero-dispatch geometry".into());
 +            }
@@ -984,6 +1070,61 @@ new file mode 100644
 +            let v=parse_manifest(&serde_json::to_vec(&m(phase,t)).unwrap()).unwrap();
 +            assert_eq!(v.phase.decisions(),expected);
 +        }
++    }
++
++    fn synthetic_geometry_wire(setup: &str, compact: &[u8]) -> Vec<u8> {
++        // Real producer serializes a typed Value object to compact JSON first;
++        // the archival geometry sidecar renders that same Value with formatting.
++        format!(r#"{{
++            "schema": "qualia.saved_life.language_composition_geometry.v3",
++            "fixture_sha256": "fixture", "source_current_sha256": "current",
++            "evaluator_sha256": "evaluator", "layout": "a", "owner": 7,
++            "world_tick": 9, "accepted_decisions": 0,
++            "backend_constructed": false, "runtime_or_queue_constructed": false,
++            "player_utterances_emitted": 0, "setup_sha256": "{}",
++            "setup": {},
++            "world_ticks": 0
++        }}"#, digest(compact), setup).into_bytes()
++    }
++
++    #[test]
++    fn v3_geometry_preserves_long_number_string_and_order_words() {
++        let compact = br#"{"draw":123.45678901234567,"label":"  \" \\ \t \u0020 ","nested":{"x":-0.0,"y":7e-10}}"#;
++        let setup = r#"{ "draw" : 123.45678901234567,
++            "label" : "  \" \\ \t \u0020 ",
++            "nested": { "x": -0.0, "y": 7e-10 }
++        }"#;
++        let raw = synthetic_geometry_wire(setup, compact);
++        let v: GeometryProof = serde_json::from_slice(&raw).unwrap();
++        assert_eq!(compact_setup_lexemes(geometry_setup_lexemes(&raw).unwrap()), compact);
++        assert!(geometry_setup_pin_matches(&raw, &v).unwrap());
++        let with_escaped_key = String::from_utf8(raw).unwrap().replace("\"setup\":", r#""\u0073etup":"#);
++        let v: GeometryProof = serde_json::from_str(&with_escaped_key).unwrap();
++        assert!(geometry_setup_pin_matches(with_escaped_key.as_bytes(), &v).unwrap());
++    }
++
++    #[test]
++    fn v3_geometry_rejects_one_byte_tamper_and_duplicate_or_nontyped_setup() {
++        let compact = br#"{"draw":123.45678901234567}"#;
++        let raw = synthetic_geometry_wire(r#"{ "draw": 123.45678901234567 }"#, compact);
++        let text = String::from_utf8(raw).unwrap();
++        let tampered = text.replace("123.45678901234567", "123.45678901234566");
++        assert_eq!(text.bytes().zip(tampered.bytes()).filter(|(a,b)| a != b).count(), 1);
++        let typed: GeometryProof = serde_json::from_str(&tampered).unwrap();
++        assert!(!geometry_setup_pin_matches(tampered.as_bytes(), &typed).unwrap());
++
++        let duplicate = text.replace("\"setup\":", r#""setup": {}, "\u0073etup":"#);
++        assert!(serde_json::from_str::<GeometryProof>(&duplicate).is_err());
++        assert!(geometry_setup_lexemes(duplicate.as_bytes()).is_err());
++        assert!(serde_json::from_str::<GeometryProof>(&text.replace("\"setup\":", "\"absent\":")).is_err());
++        // Ambiguous nested bytes cannot match an unambiguous producer pin;
++        // a separately changed embedded pin still must match both stock scenes.
++        let ambiguous = text.replace("{ \"draw\":", "{ \"draw\": 0, \"draw\":");
++        let typed: GeometryProof = serde_json::from_str(&ambiguous).unwrap();
++        assert!(!geometry_setup_pin_matches(ambiguous.as_bytes(), &typed).unwrap());
++        let raw_array = synthetic_geometry_wire("[]", b"[]");
++        let typed: GeometryProof = serde_json::from_slice(&raw_array).unwrap();
++        assert!(!geometry_setup_pin_matches(&raw_array, &typed).unwrap());
 +    }
 +
 +    #[test]

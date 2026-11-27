@@ -1,7 +1,7 @@
 name: Qualia detached language composition v3
 on:
   push:
-    branches: ["bob/qualia-retained-language-composition-v3-20261127"]
+    branches: ["bob/qualia-retained-language-composition-v3-open-lexical-20261127"]
     paths:
       - ".github/workflows/qualia-retained-language-composition-v3-build.yml"
       - "docs/r41-saved-life/retained-language-composition-v3-source.patch"
@@ -17,10 +17,12 @@ concurrency:
 
 jobs:
   source-only:
-    if: github.ref == 'refs/heads/bob/qualia-retained-language-composition-v3-20261127'
+    if: github.ref == 'refs/heads/bob/qualia-retained-language-composition-v3-open-lexical-20261127'
     runs-on: ubuntu-24.04
     timeout-minutes: 58
     env:
+      PIN_V3_PARENT: 5f0f31ad10a507a9e2c9d0352b39ef5fe3b87020
+      PIN_V3_PARENT_TREE: e30a6b8b7e0e40416a98723884ccb4a1321d817f
       PIN_V2_HOST: b00de30b27b8d501c5e01f8df527ffa3471a2d10
       PIN_V2_TREE: a1f474ce9feb2dd70356d93004698525fe7d2bad
       PIN_RESTORE_PARENT: 7a5061285be79275d914f3f8852eaace75c9af1b
@@ -32,8 +34,8 @@ jobs:
       PIN_V2_ADAPTER: f0a836086d20e47e434eb947ebc9083f52dc50c344403d24e8ede08ae23ad657
       PIN_V2_ADAPTER_GIT_BLOB: caadc6a85c1a3b9f0b8ae78b2ed8772211b8974d
       PIN_V2_LEAVES_GIT_BLOB: f5262a7072d2ff6ba35fc5d9cf14b7a3507fbb24
-      PIN_V3_ADAPTER: a848a8028bad018424be269a1969c06dfa6113e0e8da6ff1b288000288656c78
-      PIN_V3_LEAVES: 4b37ded02ca68970c641124fa372f5a4ad20dc255ca831d2ef820b2c38c67a31
+      PIN_V3_ADAPTER: b34160133edb5c55076d83d54934a1f36418c0fc467aa97f473953e94718a8b7
+      PIN_V3_LEAVES: 8529922232e543cb4f923498432cc12bdd21cd2e6d87849539914f29d517cb4e
       PIN_LOCK: 155699e9274f8890bc8c335669a62de48203ba315a33388a8f0caca71f0f7f37
       PIN_RUSTC_COMMIT: 0ef1bc386059596dada8fb65b50425aab2ea637a
       RUST_TOOLCHAIN: "1.100.0"
@@ -57,18 +59,20 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git show -s --format=%P HEAD)" = "$PIN_V2_HOST"
+          test "$(git show -s --format=%P HEAD)" = "$PIN_V3_PARENT"
+          test "$(git rev-parse "$PIN_V3_PARENT^{tree}")" = "$PIN_V3_PARENT_TREE"
+          test "$(git show -s --format=%P "$PIN_V3_PARENT")" = "$PIN_V2_HOST"
           test "$(git rev-parse "$PIN_V2_HOST^{tree}")" = "$PIN_V2_TREE"
           git merge-base --is-ancestor "$PIN_RESTORE_PARENT" "$PIN_V2_HOST"
           git merge-base --is-ancestor "$PIN_RESTORE_SOURCE" "$PIN_RESTORE_PARENT"
           git merge-base --is-ancestor "$PIN_RESEARCH_COMMIT" "$PIN_RESTORE_PARENT"
           git diff --exit-code "$PIN_RESTORE_SOURCE" HEAD -- docs/r41-saved-life/{restore_source.py,SOURCE.json,patches}
           diff -u <(printf '%s\n' \
-            $'A\t.github/workflows/qualia-retained-language-composition-v3-build.yml' \
-            $'A\tdocs/r41-saved-life/retained-language-composition-v3-pins.json' \
-            $'A\tdocs/r41-saved-life/retained-language-composition-v3-source.patch' \
-            $'A\tscripts/check_retained_language_composition_v3_cli.py') \
-            <(git diff --name-status --no-renames "$PIN_V2_HOST" HEAD | LC_ALL=C sort)
+            $'M\t.github/workflows/qualia-retained-language-composition-v3-build.yml' \
+            $'M\tdocs/r41-saved-life/retained-language-composition-v3-pins.json' \
+            $'M\tdocs/r41-saved-life/retained-language-composition-v3-source.patch' \
+            $'M\tscripts/check_retained_language_composition_v3_cli.py') \
+            <(git diff --name-status --no-renames "$PIN_V3_PARENT" HEAD | LC_ALL=C sort)
           export EXACT_SRC="$RUNNER_TEMP/qualia-language-composition-source"
           export CARGO_TARGET_DIR="$RUNNER_TEMP/qualia-language-composition-target"
           export EVIDENCE="$RUNNER_TEMP/qualia-language-composition-evidence"
@@ -102,6 +106,7 @@ jobs:
           python3 - "$pins" "$v3" <<'PY' | tee -a "$EVIDENCE/build.log"
           import hashlib, json, os, pathlib, subprocess, sys
           pins = json.loads(pathlib.Path(sys.argv[1]).read_bytes())
+          assert pins["preceding_v3_hosted_git"] == os.environ["PIN_V3_PARENT"]
           assert pins["exact_v2_git_parent"] == os.environ["PIN_V2_HOST"]
           assert pins["reviewed_v3_patch_sha256"] == os.environ["PIN_V3_ADAPTER"]
           assert pins["cargo_lock_sha256"] == os.environ["PIN_LOCK"]

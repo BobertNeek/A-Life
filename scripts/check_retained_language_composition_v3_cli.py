@@ -85,7 +85,7 @@ def fixture_id(scope):
 
 
 def v3(exe, name, expected, *, phase="geometry", layout="a", edit=None, marker=True,
-       preexisting=False, symlink=False):
+       preexisting=False, symlink=False, geometry_wire=None):
     with TemporaryDirectory(prefix="qualia-v3-no-checkpoint-") as tmp:
         path = Path(tmp).resolve(strict=True)
         a = {"schema": SCOPED + "admission.v3", "phase": phase, "run_id": "inert-case",
@@ -117,7 +117,12 @@ def v3(exe, name, expected, *, phase="geometry", layout="a", edit=None, marker=T
         if edit:
             grant = edit(m, a, f, geo, grant, path) or grant
         if a.get("geometry_proof_sha256") is not None:
-            (path / GEOMETRY).write_bytes(wire(geo))
+            gbytes = wire(geo)
+            if geometry_wire is not None:
+                gbytes = geometry_wire(geo)
+                # Outer proof follows these literal bytes even in hostile controls.
+                a["geometry_proof_sha256"] = sha(gbytes)
+            (path / GEOMETRY).write_bytes(gbytes)
         for leaf, obj in ((ADMISSION,a),(RUBRIC,rubric),(FIXTURE,f),(GRANT,grant)):
             (path / leaf).write_bytes(wire(obj))
         if symlink:
@@ -160,6 +165,33 @@ def ttl_bad_case(kind):
         return g
     return edit
 
+
+def lexical_geometry(mode):
+    # Artificial default serde_json 1.0.150 non-float_roundtrip boundary:
+    # converting the mantissa integer then dividing rounds one ULP differently.
+    compact = br'{"draw":123.45678901234567,"label":"  \" \\ \t \u0020 ","nested":{"x":-0.0,"y":7e-10}}'
+    pretty = br'''{
+      "draw": 123.45678901234567,
+      "label": "  \" \\ \t \u0020 ",
+      "nested": { "x": -0.0, "y": 7e-10 }
+    }'''
+    def raw(geo):
+        geo["setup_sha256"] = sha(compact)
+        h = wire(geo)
+        marker = b'"setup":{"inert":true}'
+        require(h.count(marker) == 1, "wrong synthetic geometry marker")
+        baseline = h.replace(marker, b'"setup":' + pretty)
+        if mode == "good":
+            return baseline
+        if mode == "tamper":
+            mutated = baseline.replace(b"123.45678901234567", b"123.45678901234566")
+            require(len(mutated) == len(baseline) and sum(x != y for x,y in zip(mutated,baseline)) == 1,
+                    "synthetic tamper must change exactly one signed byte")
+            return mutated
+        if mode == "duplicate":
+            return h.replace(marker, br'"setup":{},"\u0073etup":' + pretty)
+        raise AssertionError("unknown exact lexical negative")
+    return raw
 
 def change_geo(m,a,f,geo,grant,root):
     geo["layout"] = "b"
@@ -254,6 +286,12 @@ def main(off_path, on_path, v2_source):
        edit=lambda m,a,*_:a.update(geometry_proof_sha256="0"*64))
     v3(on,"crossed private geometry is not this layout","v3 predecessor is not exact zero-dispatch geometry",
        phase="opening",edit=change_geo)
+    v3(on,"lossless long-number and escaped-string predecessor reaches only software-off fence",
+       SOFTWARE_OFF,phase="opening",geometry_wire=lexical_geometry("good"))
+    v3(on,"exact inner pin rejects one lexical byte despite valid outer sidecar pin",
+       "v3 predecessor is not exact zero-dispatch geometry",phase="opening",geometry_wire=lexical_geometry("tamper"))
+    v3(on,"typed predecessor refuses duplicate escaped setup key despite valid outer sidecar pin",
+       "duplicate field `setup`",phase="opening",geometry_wire=lexical_geometry("duplicate"))
     v3(on,"TTL geometry-only is inadmissible","only TTL requires its own independently approved 1/1 opening pair",
        phase="ttl")
     for n,e in (
