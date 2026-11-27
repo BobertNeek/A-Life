@@ -7,6 +7,7 @@ on:
       - "docs/r41-saved-life/sleep-boundary-diagnostic-source.patch"
       - "docs/r41-saved-life/sleep-boundary-repair-source.patch"
       - "docs/r41-saved-life/sleep-legacy-publication-source.patch"
+      - "docs/r41-saved-life/sleep-late-archive-retirement-source.patch"
 
 permissions:
   contents: read
@@ -30,6 +31,7 @@ jobs:
       PIN_DIAGNOSTIC_PATCH: 913563c8ea7ebbebe25ba9a4bce8571d74feb407b21017857f1d38cf5fb8bdf9
       PIN_REPAIR_PATCH: c2815992c4e3e70a7b7bc42b307dc1d96e8c34483ea36cf2c98e06b9920282e6
       PIN_LEGACY_PUBLICATION_PATCH: 692ec25acc620f502581e7299d952471c039812646e41f85cdd1d6f87ed5c66d
+      PIN_LATE_ARCHIVE_PATCH: ed46a3cedb6f0bfdcba54660be6e1645ea6ea9cc71c6b7015b255b790b66a17d
       PIN_LOCK: 155699e9274f8890bc8c335669a62de48203ba315a33388a8f0caca71f0f7f37
       PIN_RUSTC_COMMIT: 0ef1bc386059596dada8fb65b50425aab2ea637a
       RUST_TOOLCHAIN: "1.100.0"
@@ -71,6 +73,8 @@ jobs:
           echo "$PIN_REPAIR_PATCH  $fix" | sha256sum -c -
           legacy="$GITHUB_WORKSPACE/docs/r41-saved-life/sleep-legacy-publication-source.patch"
           echo "$PIN_LEGACY_PUBLICATION_PATCH  $legacy" | sha256sum -c -
+          late="$GITHUB_WORKSPACE/docs/r41-saved-life/sleep-late-archive-retirement-source.patch"
+          echo "$PIN_LATE_ARCHIVE_PATCH  $late" | sha256sum -c -
           python3 docs/r41-saved-life/restore_source.py "$GITHUB_WORKSPACE" "$EXACT_SRC" | tee "$EVIDENCE/build.log"
           cd "$EXACT_SRC"
           git apply --check "$research"
@@ -82,6 +86,10 @@ jobs:
             repair) git apply "$fix"; git apply --check "$legacy"; git apply "$legacy" ;;
             *) exit 2 ;;
           esac
+          test "$VARIANT" = repair
+          git apply --check --whitespace=error "$late"
+          git apply --whitespace=error "$late"
+          printf 'late_archive_diagnostic_source=%s\n' "$PIN_LATE_ARCHIVE_PATCH" | tee -a "$EVIDENCE/build.log"
           echo "$PIN_LOCK  Cargo.lock" | sha256sum -c -
           printf 'legacy_publication_patch=%s\n' "$PIN_LEGACY_PUBLICATION_PATCH" | tee -a "$EVIDENCE/build.log"
           printf 'branch_commit=%s\nsource_pin=%s\nresearch_commit=%s\nresearch_patch=%s\nvariant=%s\ndiagnostic_patch=%s\nrepair_patch=%s\n' \
@@ -104,12 +112,10 @@ jobs:
             -- first_sleep_generation_regression --test-threads=1 2>&1 | tee -a "$EVIDENCE/build.log"
           # Avoid a successful no-test build or accidentally testing a crate-wide cfg(test) closure.
           grep -F 'test result: ok. 2 passed; 0 failed;' "$EVIDENCE/build.log"
-          if [[ "$VARIANT" == repair ]]; then
-            timeout 8m cargo +"$RUST_TOOLCHAIN" test --frozen --offline --release --target "$TARGET" -j 1 \
-              -p alife_runtime --features training-rollout,gpu-tests --test gpu_checkpoint_manifest_cas \
-              -- first_legacy_sleep_journal_commits_exact_payload_and_later_reuses_save --test-threads=1 2>&1 | tee -a "$EVIDENCE/build.log"
-            grep -F 'test result: ok. 1 passed; 0 failed;' "$EVIDENCE/build.log"
-          fi
+          timeout 15m cargo +"$RUST_TOOLCHAIN" test --frozen --offline --release --target "$TARGET" -j 1 \
+            -p alife_game_app --features foundation-training,gpu-tests --lib \
+            -- late_archive_requires_its_distinct_explicit_operator_admission --test-threads=1 2>&1 | tee -a "$EVIDENCE/build.log"
+          grep -E '^test .*late_archive_requires_its_distinct_explicit_operator_admission \.\.\. ok$' "$EVIDENCE/build.log"
           timeout 7m cargo +"$RUST_TOOLCHAIN" build --frozen --offline --release --target "$TARGET" -j 1 \
             -p alife_game_app --features foundation-training,gpu-tests --bin evaluate_saved_life_retention 2>&1 | tee -a "$EVIDENCE/build.log"
           install -m 0755 "$CARGO_TARGET_DIR/$TARGET/release/evaluate_saved_life_retention" "$EVIDENCE/evaluate_saved_life_retention"
@@ -123,7 +129,7 @@ jobs:
       - name: Publish detached source-built evaluator and exact test log
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: qualia-detached-sleep-boundary-${{ env.VARIANT }}-${{ github.sha }}
+          name: qualia-detached-late-archive-diagnostic-${{ github.sha }}
           path: |
             ${{ runner.temp }}/sleep-boundary-evidence/evaluate_saved_life_retention
             ${{ runner.temp }}/sleep-boundary-evidence/build.log

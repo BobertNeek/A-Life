@@ -1,0 +1,342 @@
+--- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/research_catalog.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/research_catalog.rs
+@@ -12,6 +12,20 @@
+ pub(super) const CATALOG_FILE: &str = "research-catalog.v1.json";
+ pub(super) const ADMISSION_FILE: &str = "operator-research-admission.v1.json";
+ pub(super) const FOUNDATION_FILE: &str = "input.alife-foundation";
++const STANDARD_PROFILE: &str = "research_catalog_v1";
++const LATE_ARCHIVE_PROFILE: &str = "research_late_archive_retirement_v1";
++const STRICT_ORIGINAL_PROFILE: &str = "research_strict_original_retirement_v1";
++const STANDARD_ADMISSION: &str = "qualia.saved_life.operator_research_admission.v1";
++const LATE_ARCHIVE_ADMISSION: &str = "qualia.saved_life.operator_research_late_archive_admission.v1";
++
++fn archive_profile(profile: &str) -> Result<(&'static str, &'static str)> {
++    match profile {
++        STANDARD_PROFILE => Ok((STANDARD_PROFILE, STANDARD_ADMISSION)),
++        LATE_ARCHIVE_PROFILE => Ok((LATE_ARCHIVE_PROFILE, LATE_ARCHIVE_ADMISSION)),
++        STRICT_ORIGINAL_PROFILE => Err("strict-original retirement is unavailable: it requires an authenticated immutable original birth manifest and complete assets, never late enrollment".into()),
++        _ => Err("unsupported research manifest profile".into()),
++    }
++}
+ const RUBRIC_FILE: &str = "research-rubric.v1.json";
+ const MAX_CATALOG_BYTES: usize = 256 * 1024;
+ const MAX_FOUNDATION_BYTES: usize = 1024 * 1024;
+@@ -173,13 +187,20 @@
+ }
+ 
+ pub(super) fn resolve(root: &Path, config: &Manifest, exact_sha: fn(&str) -> bool) -> Result<Identity> {
+-    if config.schema != 2 || config.profile != "research_catalog_v1" || !slug(&config.case_id)
++    // Resolve profile before any caller Current opening or archive side effects.
++    let (profile, admission_schema) = archive_profile(&config.profile)?;
++    let late = profile == LATE_ARCHIVE_PROFILE;
++    if late && (!matches!(&config.input, Input::CompleteSavedLife {})
++        || config.case_id != "exposed-recover-harmful")
++    { return Err("late archive supports only the disclosed harmful case on a complete same-life Current".into()); }
++    if config.schema != 2 || !slug(&config.case_id)
+         || ![&config.catalog_sha256, &config.rubric_sha256, &config.evaluator_sha256].iter().all(|v| exact_sha(v))
+     { return Err("invalid research manifest identity".into()); }
+     let admission_bytes = read_inside(root, ADMISSION_FILE, MAX_CATALOG_BYTES)?;
+     let admission: Admission = serde_json::from_slice(&admission_bytes)?;
+     let admitted_ids = admission.admitted_case_ids.iter().map(String::as_str).collect::<BTreeSet<_>>();
+-    if admission.schema != "qualia.saved_life.operator_research_admission.v1"
++    if admission.schema != admission_schema
++        || (late && admitted_ids.len() != 1)
+         || admission.catalog_sha256 != config.catalog_sha256 || admission.rubric_sha256 != config.rubric_sha256
+         || admission.evaluator_sha256 != config.evaluator_sha256 || !admitted_ids.contains(config.case_id.as_str())
+         || admitted_ids.len() != admission.admitted_case_ids.len() || admitted_ids.len() > 64
+@@ -220,7 +241,7 @@
+     };
+     let fixture = format!("qualia-research-fixture/v1\0{}\0{}", config.catalog_sha256, case.id);
+     Ok(Identity {
+-        profile: "research_catalog_v1", catalog_id: catalog.catalog_id, catalog_sha256: config.catalog_sha256.clone(),
++        profile, catalog_id: catalog.catalog_id, catalog_sha256: config.catalog_sha256.clone(),
+         rubric_sha256: config.rubric_sha256.clone(), admission_sha256: digest(&admission_bytes), case_id: case.id.clone(),
+         fixture_sha256: digest(fixture.as_bytes()), evaluator_sha256: config.evaluator_sha256.clone(),
+         expected_world_seed: config.expected_world_seed, evaluation_nonce: config.evaluation_nonce,
+@@ -229,6 +250,10 @@
+ }
+ 
+ impl Identity {
++    pub(super) fn late_archive_enrolled(&self) -> bool {
++        self.profile == LATE_ARCHIVE_PROFILE
++    }
++
+     pub(super) fn validate_world_seed(&self, world_seed: u64) -> Result<()> {
+         if world_seed != self.expected_world_seed { return Err("research source world seed differs from the matched contract".into()); }
+         Ok(())
+@@ -365,3 +390,17 @@
+         assert!(validate_case(&catalog.cases[0]).is_err());
+     }
+ }
++
++#[cfg(test)]
++mod late_archive_profile_tests {
++    use super::*;
++
++    #[test]
++    fn late_archive_requires_its_distinct_explicit_operator_admission() {
++        assert_eq!(archive_profile(STANDARD_PROFILE).unwrap().1, STANDARD_ADMISSION);
++        assert_eq!(archive_profile(LATE_ARCHIVE_PROFILE).unwrap().1, LATE_ARCHIVE_ADMISSION);
++        assert_ne!(STANDARD_ADMISSION, LATE_ARCHIVE_ADMISSION);
++        assert!(archive_profile(STRICT_ORIGINAL_PROFILE).is_err());
++        assert!(archive_profile("research_catalog_v2").is_err());
++    }
++}
+--- a/crates/alife_game_app/src/gpu_live_runtime.rs
++++ b/crates/alife_game_app/src/gpu_live_runtime.rs
+@@ -7327,6 +7327,21 @@
+         self.archive_birth_manifests
+             .get(&organism_id.raw())
+             .copied()
++    }
++
++    /// Read the exact content-addressed object and validate its declared assets
++    /// through the already-attached library, without reopening it or mutating its index.
++    #[cfg(all(feature = "foundation-training", feature = "gpu-tests"))]
++    pub(crate) fn research_read_attached_archive_manifest(
++        &self,
++        digest: Blake3Digest,
++    ) -> Result<alife_core::CreatureArchiveManifest, GameAppShellError> {
++        let library = self.lineage_library.as_ref().ok_or_else(|| {
++            GameAppShellError::InvalidProductionFrontend {
++                message: "late research archive is not attached".to_string(),
++            }
++        })?;
++        Ok(library.load_manifest(digest)?)
+     }
+ 
+     pub fn archive_retirement_receipt(
+--- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs
+@@ -21,6 +21,9 @@
+ #[cfg(feature = "gpu-tests")]
+ #[path = "saved_life_retention/research_catalog.rs"]
+ mod research_catalog;
++#[cfg(feature = "gpu-tests")]
++#[path = "saved_life_retention/late_archive_retirement.rs"]
++mod late_archive_retirement;
+ #[cfg(feature = "gpu-tests")]
+ pub use experiments::evaluate_saved_life_retention_experiment;
+ 
+@@ -740,6 +743,21 @@
+             "exact_asset_installed":true,"effective_current_sha256":digest(&baseline_bytes),
+             "same_individual_and_acquired_state_retained":true});
+     }
++    #[cfg(feature = "gpu-tests")]
++    let late_archive = if research.is_some_and(|profile| profile.late_archive_enrolled()) {
++        if !software_simulation || isolated_archive || request.max_decisions == 0
++            || request.direct_weights.is_some() || request.navigation_task.is_some()
++        {
++            return Err("late-archive retirement requires an isolated admitted complete-Current software research arm".into());
++        }
++        let (binding, opening) = late_archive_retirement::enroll(
++            &mut runtime, id, &output, &save_path, &source_sha,
++        )?;
++        receipt["late_archive_enrolled_retirement"] = opening;
++        Some(binding)
++    } else {
++        None
++    };
+     if isolated_archive && request.max_decisions != 0 {
+         let archive_root = output.join("lineage");
+         if archive_root.exists() {
+@@ -1269,6 +1287,10 @@
+         receipt["published_case_software_integrity"] = receipt["software_simulation_integrity_valid"].clone();
+         receipt["software_simulation_integrity_valid"] = serde_json::json!(false);
+     }
++    #[cfg(feature = "gpu-tests")]
++    if let Some(binding) = late_archive {
++        late_archive_retirement::append_diagnostic(&runtime, &binding, stop, &mut receipt);
++    }
+     alife_storage::write(
+         output.join("retention.json"),
+         serde_json::to_vec_pretty(&receipt)?,
+--- /dev/null
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/late_archive_retirement.rs
+@@ -0,0 +1,186 @@
++//! Distinct, non-scoring late enrollment. Never attest original-birth custody.
++use super::*;
++use alife_core::{
++    ArchiveCheckpointDisposition, ArchiveLearnedCapturePolicy, Blake3Digest, OrganismId, Tick,
++};
++use std::path::Path;
++
++pub(super) struct Binding {
++    owner: OrganismId,
++    original_birth: Blake3Digest,
++    actual_new_birth: Blake3Digest,
++    birth_tick: Tick,
++    registration_tick: Tick,
++    run_id: String,
++}
++
++fn birth_hex(digest: Blake3Digest) -> String {
++    digest.bytes().iter().map(|b| format!("{b:02x}")).collect()
++}
++
++fn live_world_binding(runtime: &GpuLiveBrainRuntime, owner: OrganismId) -> Result<Vec<u8>> {
++    let world = runtime.world();
++    let record = world.organism_registry().get(owner).ok_or("missing live archival subject")?;
++    Ok(serde_json::to_vec(&(world.canonical_signature_digest()?, record))?)
++}
++
++// Reads observable live anchors, not a second inference or an eager GPU
++// capture. The production archive helper receives immutable residents and
++// only mutable library/run-ID/policy/map fields, no backend, world or sampler.
++pub(super) fn enroll(
++    runtime: &mut GpuLiveBrainRuntime,
++    owner: OrganismId,
++    output: &Path,
++    save_path: &Path,
++    source_sha: &str,
++) -> Result<(Binding, serde_json::Value)> {
++    let (original_birth, birth_tick, composite_genome_id, lineage_id) = {
++        let r = runtime.world().organism_registry().get(owner)
++            .ok_or("late archival enrollment lost the exact saved resident")?;
++        if !r.lifecycle().is_alive() || r.archive().life_manifest_digest().is_some() {
++            return Err("late archival enrollment requires one living saved individual".into());
++        }
++        let original_birth = r.archive().birth_manifest_digest()
++            .ok_or("late archival enrollment must disclose the original saved birth pointer")?;
++        (original_birth, r.birth_tick(), r.genome().id, r.genome().lineage_id)
++    };
++    let registration_tick = runtime.world().tick();
++    if birth_tick >= registration_tick || runtime.archive_birth_manifest(owner).is_some() {
++        return Err("late archival enrollment is for an unattached mature resident".into());
++    }
++    let before_world = live_world_binding(runtime, owner)?;
++    let before_sampler = runtime.foundation_training_sampling_state()
++        .ok_or("late archive requires the real restored sampler")?;
++    let before_policy = runtime.live_foundation_compiler_inputs(owner)?.clone();
++    let save_hash = digest(&fs::read(save_path)?);
++    let journal = save_path.with_file_name(".world.json.sleep-journal-v2.json");
++    let journal_hash = digest(&fs::read(&journal)?);
++    let archive_root = output.join("lineage-late-enrolled");
++    // No existing archive, ambient path, symlink, caller-supplied identity or
++    // mixed-arm contents. The enclosing output is already isolated and budgeted.
++    fs::create_dir(&archive_root)?;
++    runtime.attach_lineage_archive(
++        alife_archive::LineageLibraryConfig::profile_default(&archive_root),
++        ArchiveLearnedCapturePolicy::GeneticOnly,
++    )?;
++    let actual_new_birth = runtime.archive_birth_manifest(owner)
++        .ok_or("late archive did not bind the actual resident")?;
++    let manifest = runtime.research_read_attached_archive_manifest(actual_new_birth)?;
++    if actual_new_birth == original_birth
++        || manifest.previous_manifest_digest.is_some() || manifest.life.is_some()
++        || manifest.genetic.birth_tick != registration_tick
++        || manifest.genetic.organism_id != owner
++        || !manifest.genetic.source_run_id.starts_with("runtime-save-v1-")
++        || runtime.world().tick() != registration_tick
++        || live_world_binding(runtime, owner)? != before_world
++        || runtime.foundation_training_sampling_state() != Some(before_sampler)
++        || runtime.live_foundation_compiler_inputs(owner)? != &before_policy
++        || digest(&fs::read(save_path)?) != save_hash
++        || digest(&fs::read(&journal)?) != journal_hash
++    {
++        return Err("late archive did not establish distinct, zero-cut ancestry diagnostics".into());
++    }
++    let run_id = manifest.genetic.source_run_id.clone();
++    let opening = serde_json::json!({
++        "schema": "qualia.research.late_archive_enrolled_retirement.v1",
++        "original_lineage_evidence": false,
++        "scorecard_eligible": false,
++        "promotion_eligible": false,
++        "policy": "genetic-only",
++        "owner": owner.raw(),
++        "admitted_source_current_sha256": source_sha,
++        "stored_original_birth_manifest_blake3": birth_hex(original_birth),
++        "runtime_late_birth_manifest_blake3": birth_hex(actual_new_birth),
++        "biological_birth_tick": birth_tick.raw(),
++        "late_registration_tick": registration_tick.raw(),
++        "late_enrollment_run_id": run_id,
++        "saved_composite_genome_id": composite_genome_id,
++        "saved_composite_lineage_id": lineage_id,
++        "late_archived_brain_genome_id": manifest.genetic.genome_id,
++        "late_archived_brain_lineage_id": manifest.genetic.lineage_id,
++        "archive_subdir": "lineage-late-enrolled",
++        "opening_invariants": {
++            "decisions": 0,
++            "world_ticks": 0,
++            "saved_world_sha256_before_and_after": save_hash,
++            "saved_sleep_journal_sha256_before_and_after": journal_hash,
++            "live_world_and_body_sha256_before_and_after": digest(&before_world),
++            "live_sampler_before_and_after": before_sampler,
++            "live_compiler_inputs_equal": true,
++            "live_compiler_inputs_sha256_before_and_after": digest(&serde_json::to_vec(&before_policy)?),
++            "brain_acquired_state_boundary": "archive helper cannot write GPU, resident cognition, memory, optimizer or sampler; no additional native bank capture is implied"
++        }
++    });
++    Ok((Binding { owner, original_birth, actual_new_birth, birth_tick, registration_tick, run_id }, opening))
++}
++
++fn terminal(
++    runtime: &GpuLiveBrainRuntime,
++    binding: &Binding,
++    stop: &str,
++    no_runtime_error: bool,
++) -> Result<serde_json::Value> {
++    let Some(retired) = runtime.archive_retirement_receipt(binding.owner) else {
++        if stop == "natural_death" {
++            return Err("native natural-death label lacks a committed retirement receipt".into());
++        }
++        return Ok(serde_json::json!({"status": "retirement_not_observed", "native_stop_reason": stop}));
++    };
++    retired.validate_contract()?;
++    let life = runtime.research_read_attached_archive_manifest(retired.committed_manifest_digest)?;
++    let disposition = life.life.as_ref().ok_or("committed archive lacks life data")?;
++    let opening = runtime.research_read_attached_archive_manifest(binding.actual_new_birth)?;
++    if life.previous_manifest_digest != Some(binding.actual_new_birth)
++        || life.previous_manifest_digest == Some(binding.original_birth)
++        || life.genetic != opening.genetic
++        || life.genetic.source_run_id != binding.run_id
++        || life.genetic.birth_tick != binding.registration_tick
++        || retired.organism_id != binding.owner || disposition.death_tick != retired.death_tick
++        || retired.death_tick <= binding.registration_tick
++        || retired.learned_checkpoint_digest.is_some()
++        || !matches!(&disposition.checkpoint, ArchiveCheckpointDisposition::NotSelected)
++    {
++        return Err("actual terminal archive does not extend the exact separate late-enrollment record".into());
++    }
++    let retired_in_world = runtime.world().organism_registry().get(binding.owner).is_none();
++    let complete = stop == "natural_death" && no_runtime_error && retired_in_world;
++    Ok(serde_json::json!({
++        "status": if complete { "native_retirement_verified_late_enrollment_only" }
++                  else { "exact_archive_receipt_present_but_retirement_not_fully_observed" },
++        "native_stop_reason": stop,
++        "native_retirement_receipt": retired,
++        "native_terminal_predecessor_blake3": life.previous_manifest_digest.map(birth_hex),
++        "stored_original_birth_manifest_blake3": birth_hex(binding.original_birth),
++        "biological_birth_tick": binding.birth_tick.raw(),
++        "late_registration_tick": binding.registration_tick.raw(),
++        "late_enrollment_run_id": binding.run_id,
++        "actual_retirement_observed": complete,
++        "original_lineage_retirement": false,
++        "genuine_statistics_asset": disposition.statistics_asset
++    }))
++}
++
++pub(super) fn append_diagnostic(
++    runtime: &GpuLiveBrainRuntime,
++    binding: &Binding,
++    stop: &str,
++    receipt: &mut serde_json::Value,
++) {
++    let no_runtime_error = receipt["error"].is_null();
++    let diagnostic = terminal(runtime, binding, stop, no_runtime_error).unwrap_or_else(|e| {
++        serde_json::json!({"status": "native_retirement_diagnostic_invalid", "error": e.to_string()})
++    });
++    receipt["late_archive_enrolled_retirement"]["terminal"] = diagnostic;
++    // Preserve actual native evidence even if portable endpoint serialization
++    // fails. Existing typed generic scorers must never ingest this diagnostic.
++    receipt["late_archive_enrolled_retirement"]["native_retention_validation"] = serde_json::json!({
++        "measurement_valid": receipt["measurement_valid"],
++        "coverage_complete": receipt["coverage_complete"],
++        "software_simulation_integrity_valid": receipt["software_simulation_integrity_valid"],
++        "reported_endpoint": receipt["final_endpoint"],
++        "endpoint_error": receipt["final_endpoint_error"]
++    });
++    for name in ["measurement_valid", "software_simulation_integrity_valid", "qualified", "retention_demonstrated"] {
++        receipt[name] = serde_json::Value::Bool(false);
++    }
++}
