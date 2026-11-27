@@ -71,15 +71,17 @@ jobs:
           printf '%s\n' "$version" | tee -a "$EVIDENCE/build.log"
           cargo +"$RUST_TOOLCHAIN" -V | tee -a "$EVIDENCE/build.log"
 
-      - name: Fetch locked dependencies then run bounded offline Rust tests and build
+      - name: Fetch locked dependencies, build the production-closure ELF, and test its CLI
         run: |
           set -euo pipefail
           cd "$EXACT_SRC"
           timeout 8m cargo +"$RUST_TOOLCHAIN" fetch --locked --target "$TARGET" 2>&1 | tee -a "$EVIDENCE/build.log"
-          timeout 22m cargo +"$RUST_TOOLCHAIN" test --frozen --offline --release --target "$TARGET" -j 1 \
-            -p alife_game_app --features foundation-training,gpu-tests --lib research_catalog::tests -- --test-threads=1 2>&1 | tee -a "$EVIDENCE/build.log"
-          timeout 12m cargo +"$RUST_TOOLCHAIN" build --frozen --offline --release --target "$TARGET" -j 1 \
+          timeout 22m cargo +"$RUST_TOOLCHAIN" build --frozen --offline --release --target "$TARGET" -j 1 \
             -p alife_game_app --features foundation-training,gpu-tests --bin evaluate_saved_life_retention 2>&1 | tee -a "$EVIDENCE/build.log"
+          # The reconstructed 827-file production closure is deliberately not a crate-wide
+          # cfg(test) testdata checkout. The binary harness links the normal library instead.
+          timeout 8m cargo +"$RUST_TOOLCHAIN" test --frozen --offline --release --target "$TARGET" -j 1 \
+            -p alife_game_app --features foundation-training,gpu-tests --bin evaluate_saved_life_retention -- --test-threads=1 2>&1 | tee -a "$EVIDENCE/build.log"
           PYTHONDONTWRITEBYTECODE=1 python3 scripts/test_research_saved_life_catalog.py -v 2>&1 | tee -a "$EVIDENCE/build.log"
           install -m 0755 "$CARGO_TARGET_DIR/$TARGET/release/evaluate_saved_life_retention" "$EVIDENCE/evaluate_saved_life_retention"
           readelf -h -d "$EVIDENCE/evaluate_saved_life_retention" | tee -a "$EVIDENCE/build.log"
