@@ -1,0 +1,127 @@
+diff --git a/crates/alife_game_app/tests/external_completed_sleep_recommit.rs b/crates/alife_game_app/tests/external_completed_sleep_recommit.rs
+index 462aeaf..59395c8 100644
+--- a/crates/alife_game_app/tests/external_completed_sleep_recommit.rs
++++ b/crates/alife_game_app/tests/external_completed_sleep_recommit.rs
+@@ -1,6 +1,7 @@
+ #![cfg(feature = "gpu-tests")]
+ 
+ use std::{
++    collections::BTreeSet,
+     env, fs,
+     io::Write,
+     path::{Path, PathBuf},
+@@ -12,6 +13,7 @@ use alife_game_app::{
+     AppShellLaunchConfig, GpuDurableSaveManifest, GpuLiveBrainRuntime, GpuLiveTickOutcome,
+ };
+ use alife_gpu_backend::{GpuClosedLoopBackend, GpuLearningStateSnapshot, GpuRuntimeProfile};
++use alife_world::{HeadlessWorldSignatureDigest, HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION};
+ use serde_json::{Value, json};
+ 
+ // The supplied root must be a small, immutable private snapshot closure. Only
+@@ -46,6 +48,22 @@ fn input_path(name: &str) -> PathBuf {
+     PathBuf::from(env::var_os(name).unwrap_or_else(|| panic!("{name} is required")))
+ }
+ 
++// Private operator pins come from the separately authenticated historical
++// failure; neither missing nor arbitrary replacement signatures are defaults.
++fn recorded_world_signature(name: &str) -> HeadlessWorldSignatureDigest {
++    let wire = env::var(name).unwrap_or_else(|_| panic!("{name} is required"));
++    assert!(wire.len() <= 160, "recorded world signature exceeds its bound");
++    let value: HeadlessWorldSignatureDigest =
++        serde_json::from_str(&wire).expect("typed recorded canonical world signature");
++    assert_eq!(value.schema_version, HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION);
++    assert_eq!(
++        serde_json::to_string(&value).expect("canonical signature wire"),
++        wire,
++        "recorded world signature must be the exact canonical typed wire"
++    );
++    value
++}
++
+ fn write_launch_input(path: &Path, value: &impl serde::Serialize) {
+     fs::OpenOptions::new()
+         .create_new(true)
+@@ -126,6 +144,9 @@ fn externally_supplied_completed_sleep_recommits_one_cut() {
+         .expect("explicit packaged authority generation")
+         .parse()
+         .expect("numeric packaged authority generation");
++    let recorded_bare = recorded_world_signature("QUALIA_RECOMMIT_RECORDED_BARE_WORLD_SIGNATURE");
++    let recorded_live = recorded_world_signature("QUALIA_RECOMMIT_RECORDED_LIVE_WORLD_SIGNATURE");
++    assert_ne!(recorded_bare, recorded_live, "requires the recorded historical mismatch");
+ 
+     fs::create_dir(&destination).expect("scratch destination must not already exist");
+     copy_input(&source, &destination, &mut (512 * 1024 * 1024, 2048), 0);
+@@ -143,7 +164,41 @@ fn externally_supplied_completed_sleep_recommits_one_cut() {
+     let saved_world = exact.save.restore_headless_world().expect("exact snapshot world");
+     let owner_record = saved_world.organism_registry().get(owner).expect("original owner");
+     assert!(owner_record.lifecycle().is_alive(), "source owner is not alive");
+-    let world_identity = saved_world.canonical_signature_digest().expect("world identity");
++    let bare_identity = saved_world.canonical_signature_digest().expect("bare world identity");
++    assert_eq!(bare_identity, recorded_bare, "saved reference differs from the historical bare world");
++
++    // The portable world already validates biological records and all sealed
++    // external actors. Mirror production's tracking import on a clone only.
++    // External actors remain in both worlds/signatures; they are not residents
++    // and acquire no synthetic sidecar here.
++    let registry_ids: BTreeSet<_> = saved_world.organism_registry().iter()
++        .map(|record| record.organism_id().raw()).collect();
++    let mut sidecar_ids = BTreeSet::new();
++    let tracked_sidecars: Vec<_> = exact.save.creatures.iter().map(|creature| {
++        let id = creature.organism_id;
++        let tracked = &creature.gpu_brain.as_ref()
++            .expect("exact biological resident lacks its GPU save").tracked_objects;
++        assert_eq!(tracked.organism_id, id, "tracked sidecar belongs to another organism");
++        assert!(sidecar_ids.insert(id.raw()), "duplicate resident tracking sidecar");
++        (*tracked).clone()
++    }).collect();
++    assert_eq!(sidecar_ids, registry_ids, "tracked sidecars must cover exactly the biological registry");
++    let mut expected_restored_world = saved_world.clone();
++    expected_restored_world.restore_tracked_object_states(tracked_sidecars.iter().cloned())
++        .expect("restore exact resident tracking into the expected world only");
++    for tracked in &tracked_sidecars {
++        assert_eq!(
++            expected_restored_world.tracked_objects().save_state(tracked.organism_id)
++                .expect("read back expected registry's tracked sidecar"),
++            *tracked,
++            "expected tracked state changed on typed roundtrip"
++        );
++    }
++    assert_eq!(expected_restored_world.tick(), saved_world.tick());
++    assert_eq!(expected_restored_world.organism_entity_ids(), saved_world.organism_entity_ids());
++    let world_identity = expected_restored_world.canonical_signature_digest()
++        .expect("tracked expected world identity");
++    assert_eq!(world_identity, recorded_live, "saved tracking does not reproduce the recorded restored world");
+     let brain = exact.save.creatures.iter()
+         .find(|creature| creature.organism_id == owner)
+         .and_then(|creature| creature.gpu_brain.as_ref())
+@@ -180,6 +235,9 @@ fn externally_supplied_completed_sleep_recommits_one_cut() {
+     assert_eq!(format!("{:?}", adapter.device_type), "Cpu");
+     let mut runtime = GpuLiveBrainRuntime::from_p34_launch(backend, &launch)
+         .expect("normal durable game-runtime startup");
++    let initial_observation = live_observation(&mut runtime, owner);
++    let actual_world_identity = runtime.world_snapshot().canonical_signature_digest()
++        .expect("actual restored world identity");
+     println!("{}", json!({
+         "schema": "alife.external_completed_sleep_recommit_probe.v1",
+         "phase": "restored_before_only_tick",
+@@ -197,11 +255,18 @@ fn externally_supplied_completed_sleep_recommits_one_cut() {
+         "cycle": request.cycle_id,
+         "expected_generation": staged.output_generation,
+         "expected_bank": staged.output_weight_bank,
+-        "observed": live_observation(&mut runtime, owner),
++        "canonical_world_identity": {
++            "recorded_bare": recorded_bare,
++            "computed_bare": bare_identity,
++            "recorded_live": recorded_live,
++            "computed_tracked_reference": world_identity,
++            "actual_restored": actual_world_identity,
++        },
++        "observed": initial_observation,
+     }));
+     assert_eq!(runtime.world_tick_for_test(), exact.save.world.tick);
+     assert_eq!(
+-        runtime.world_snapshot().canonical_signature_digest().expect("restored world"),
++        actual_world_identity,
+         world_identity,
+         "restore changed the same-life world before the probe"
+     );
