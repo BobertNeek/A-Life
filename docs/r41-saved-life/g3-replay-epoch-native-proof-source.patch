@@ -1,0 +1,3009 @@
+diff --git a/crates/alife_game_app/Cargo.toml b/crates/alife_game_app/Cargo.toml
+index dadf70d05041316f34c3e2108d2380f83548ed51..d9c5e6014da74b61cd42876f5c0dd4aa3fde96eb 100644
+--- a/crates/alife_game_app/Cargo.toml
++++ b/crates/alife_game_app/Cargo.toml
+@@ -115,6 +115,8 @@ bevy-app = [
+     "dep:wgpu",
+ ]
+ gpu-runtime = ["dep:alife_archive", "dep:alife_gpu_backend", "dep:alife_runtime"]
++# Detached replay-epoch qualification only. Do not enable in shipping profiles.
++replay-epoch-research = ["gpu-runtime"]
+ foundation-training = ["gpu-runtime", "dep:alife_training", "alife_training/receipt-lineage", "alife_runtime/training-rollout", "dep:sha2", "dep:bytemuck"]
+ cpu-training = ["foundation-training", "alife_training/cpu-backend"]
+ gpu-tests = [
+diff --git a/crates/alife_game_app/src/gpu_live_runtime/checkpoint_poll.rs b/crates/alife_game_app/src/gpu_live_runtime/checkpoint_poll.rs
+index 40bdde2aa9f87dd6f0465f5adff645575dd00efd..f72d0b1cd0343c31d0c26030b4127fd179143f56 100644
+--- a/crates/alife_game_app/src/gpu_live_runtime/checkpoint_poll.rs
++++ b/crates/alife_game_app/src/gpu_live_runtime/checkpoint_poll.rs
+@@ -119,6 +119,16 @@ impl GpuLiveBrainRuntime {
+                         let capture_transaction_generation =
+                             capture.capture_transaction_generation();
+                         let population_set_digest = capture.population_set_digest();
++                        #[cfg(all(feature = "gpu-tests", feature = "replay-epoch-research"))]
++                        let replay_epoch_gate = if !host.replay_epoch_completions.is_empty() {
++                            self.replay_epoch_test_worker_gate.take()
++                        } else { None };
++                        #[cfg(all(test, feature = "gpu-tests", not(feature = "replay-epoch-research")))]
++                        let checkpoint_gate = self.next_checkpoint_worker_start_gate.take();
++                        #[cfg(all(test, feature = "gpu-tests", feature = "replay-epoch-research"))]
++                        let checkpoint_gate = replay_epoch_gate.or_else(|| self.next_checkpoint_worker_start_gate.take());
++                        #[cfg(all(not(test), feature = "gpu-tests", feature = "replay-epoch-research"))]
++                        let checkpoint_gate = replay_epoch_gate;
+                         let worker = spawn_exact_population_checkpoint_worker(
+                             transaction_id,
+                             expected_base_digest.clone(),
+@@ -126,8 +136,8 @@ impl GpuLiveBrainRuntime {
+                             capture,
+                             context,
+                             durability,
+-                            #[cfg(all(test, feature = "gpu-tests"))]
+-                            self.next_checkpoint_worker_start_gate.take(),
++                            #[cfg(all(feature = "gpu-tests", any(test, feature = "replay-epoch-research")))]
++                            checkpoint_gate,
+                         );
+                         self.exact_checkpoint_work =
+                             ExactPopulationCheckpointRuntimeWorkV1::Worker {
+@@ -449,6 +459,7 @@ impl GpuLiveBrainRuntime {
+                                     entry_count: journal_entry_count,
+                                     authorities,
+                                     contains_completed_promotion: false,
++                                    contains_sealed_replay_epoch: false,
+                                 }),
+                             };
+                     }
+diff --git a/crates/alife_game_app/src/gpu_live_runtime/checkpoint_runtime.rs b/crates/alife_game_app/src/gpu_live_runtime/checkpoint_runtime.rs
+index df41fac014f68d1da9fed35ee0c9c86ce1f59c6e..5df73a53a010fc90c1a6cc40ff9f6bdf9936d571 100644
+--- a/crates/alife_game_app/src/gpu_live_runtime/checkpoint_runtime.rs
++++ b/crates/alife_game_app/src/gpu_live_runtime/checkpoint_runtime.rs
+@@ -68,6 +68,209 @@ impl GpuLiveBrainRuntime {
+             .collect()
+     }
+ 
++    pub(super) fn active_sealed_replay_epoch(&self) -> bool {
++        matches!(&self.exact_checkpoint_work,
++            ExactPopulationCheckpointRuntimeWorkV1::AwaitingJournal { permit, .. }
++                if permit.published().replay_epoch_status() == GpuReplayEpochStatusV2::Unconsumed)
++            || matches!(&self.exact_checkpoint_work,
++                ExactPopulationCheckpointRuntimeWorkV1::JournalWorker { journal_commit: Some(commit), .. }
++                    if commit.contains_sealed_replay_epoch)
++    }
++
++    pub(super) fn require_single_living_replay_epoch_resident(&self)
++        -> Result<OrganismId, GameAppShellError>
++    {
++        let denied = || alife_runtime::GpuRuntimeError::ReplayEpochRequiresSingleLivingResident;
++        let mut records = self.world.organism_registry().iter();
++        let first = records.next().ok_or_else(denied)?;
++        let id = first.organism_id();
++        if !first.lifecycle().is_alive() || records.next().is_some()
++            || self.handles.len() != 1 || self.residents.len() != 1
++            || !self.handles.contains_key(&id.raw()) || !self.residents.contains_key(&id.raw())
++        {
++            return Err(denied().into());
++        }
++        Ok(id)
++    }
++
++    // Only marked genesis holds the whole world. After a neutral shutdown
++    // drain, this old runtime cannot silently continue; freshly reopen G1.
++    pub(super) fn replay_epoch_before_tick(
++        &self,
++    ) -> Result<Option<GpuLiveNoProgressReason>, GameAppShellError> {
++        let Some(cut) = self.replay_epoch_execution_cut else { return Ok(None); };
++        self.require_single_living_replay_epoch_resident()?;
++        if !self.schedule_sleep || self.world.tick() != cut.source_tick
++            || self.world.canonical_signature_digest()? != cut.world_signature
++            || self.exact_checkpoint_coordinator.active_identity().is_none_or(|id|
++                id.transaction_id != cut.transaction_id || id.checkpoint_tick != cut.source_tick)
++        {
++            return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
++        }
++        match &self.exact_checkpoint_work {
++            ExactPopulationCheckpointRuntimeWorkV1::Capture { .. }
++            | ExactPopulationCheckpointRuntimeWorkV1::Worker { .. }
++            | ExactPopulationCheckpointRuntimeWorkV1::CommitWorker { .. } =>
++                Ok(Some(GpuLiveNoProgressReason::CheckpointPublicationPending)),
++            ExactPopulationCheckpointRuntimeWorkV1::AwaitingJournal { permit, .. }
++                if permit.transaction_id() == cut.transaction_id
++                    && permit.epoch_commit_scope().is_some()
++                    && permit.published().replay_epoch_live_world_signature()? == cut.world_signature =>
++                Ok(None),
++            _ => Err(ScaffoldContractError::ConsolidationGenerationMismatch.into()),
++        }
++    }
++
++    pub(super) fn defer_restored_replay_epoch(
++        &mut self, journal: GpuSleepTransactionJournalV2,
++    ) -> Result<(), GameAppShellError> {
++        self.require_single_living_replay_epoch_resident()?;
++        if self.deferred_replay_epoch.is_some() || !self.persistence_idle_for_shutdown()
++            || !journal.entries.is_empty()
++        {
++            return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
++        }
++        let durability = self.checkpoint_durability.as_ref()
++            .ok_or(ScaffoldContractError::MissingPhaseData)?;
++        if durability.published.replay_epoch_status() != GpuReplayEpochStatusV2::Unconsumed
++            || durability.published.save.world.tick != self.world.tick()
++            || durability.durable_manifest.load_sleep_transaction_journal(&durability.published)? != journal
++        {
++            return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
++        }
++        let digest = durability.published.digest.clone();
++        let manifest_path = durability.durable_manifest.save_path().to_path_buf();
++        let world_signature = self.world.canonical_signature_digest()?;
++        if world_signature != durability.published.replay_epoch_live_world_signature()? {
++            return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
++        }
++        let handles = self.handles.clone();
++        let neural_authority = self.validate_replay_epoch_residents()?;
++        self.deferred_replay_epoch = Some(DeferredReplayEpochV2 {
++            digest, manifest_path, world_signature, handles, journal, neural_authority,
++        });
++        Ok(())
++    }
++
++    fn validate_replay_epoch_residents(
++        &mut self,
++    ) -> Result<BTreeMap<u64, SleepJournalNeuralAuthority>, GameAppShellError> {
++        let durability = self.checkpoint_durability.as_ref()
++            .ok_or(ScaffoldContractError::MissingPhaseData)?;
++        if self.world.organism_registry().iter().any(|r| !r.lifecycle().is_alive()) {
++            // Retirement owns its own writes. This exact replay arm refuses
++            // a pending death before handing ownership to that staged path.
++            return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
++        }
++        let found = self.prospective_live_organism_ids();
++        if found.len() != self.handles.len() || !self.handles.keys().all(|id| found.contains(id)) {
++            return Err(ScaffoldContractError::BrainOwnershipMismatch.into());
++        }
++        let mut staged_rows = BTreeMap::new();
++        for creature in &durability.published.save.creatures {
++            let raw = creature.organism_id.raw();
++            let Some(brain) = &creature.gpu_brain else {
++                return Err(ScaffoldContractError::BrainOwnershipMismatch.into());
++            };
++            let handle = *self.handles.get(&raw).ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
++            let resident = self.residents.get(&raw).ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
++            if resident.sleep_scheduler.state() != brain.sleep || handle.phenotype_hash() != brain.phenotype_hash {
++                return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
++            }
++            if let ConsolidationState::Completed { request, staged } = brain.sleep.consolidation {
++                // This existing poll reads the owned staging receipt, not a
++                // commit or a new job. Restore already validated the staged buffers.
++                let receipt = self.backend.poll_sleep_consolidation(handle, staged.job_id)?
++                    .ok_or(ScaffoldContractError::ConsolidationGenerationMismatch)?;
++                if receipt.staged != staged || receipt.handle != handle
++                    || receipt.phenotype_hash != request.phenotype_hash
++                    || receipt.input_digest != request.input_digest || receipt.replay_digest != request.replay_digest
++                {
++                    return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
++                }
++                let authority = capture_sleep_journal_neural_authority(&mut self.backend, handle)?;
++                if staged_rows.insert(raw, authority).is_some() {
++                    return Err(ScaffoldContractError::BrainOwnershipMismatch.into());
++                }
++            }
++        }
++        if staged_rows.is_empty() || self.handles.len() != durability.published.save.creatures.len() {
++            return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
++        }
++        Ok(staged_rows)
++    }
++
++    pub(super) fn admit_deferred_replay_epoch_before_tick(
++        &mut self,
++    ) -> Result<Option<GpuLiveNoProgressReason>, GameAppShellError> {
++        if self.deferred_replay_epoch.is_none() {
++            return Ok(None);
++        }
++        if !self.schedule_sleep {
++            self.deferred_replay_epoch = None;
++            return Ok(None);
++        }
++        if !self.persistence_idle_for_shutdown()
++            || !self.pending_exact_sleep_journal_entries.is_empty()
++            || self.manual_checkpoint_waiting_for_sleep_journal.is_some()
++        {
++            return Ok(Some(GpuLiveNoProgressReason::CheckpointPublicationPending));
++        }
++        let intent = self.deferred_replay_epoch.as_ref().expect("deferred intent checked above");
++        let durability = self.checkpoint_durability.as_ref()
++            .ok_or(ScaffoldContractError::MissingPhaseData)?;
++        let current = durability.durable_manifest.load()?;
++        if current.replay_epoch_status() != GpuReplayEpochStatusV2::Unconsumed
++            || current.digest != intent.digest || durability.published.digest != intent.digest
++            || durability.durable_manifest.save_path() != intent.manifest_path.as_path()
++            || current.save.world.tick != self.world.tick()
++            || self.world.canonical_signature_digest()? != intent.world_signature
++            || self.handles != intent.handles
++            || durability.durable_manifest.load_sleep_transaction_journal(&current)? != intent.journal
++        {
++            return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
++        }
++        let population = self.prospective_live_organism_ids().len();
++        let reserve = validate_sleep_journal_population(
++            population, self.backend.runtime_profile().max_hot_brains,
++        )?;
++        let capacity = self.prospective_sleep_journal_capacity(population)?;
++        if !exact_sleep_journal_tick_fits(
++            self.pending_exact_sleep_journal_entries.len(), reserve, capacity, true,
++        )? {
++            return Ok(Some(GpuLiveNoProgressReason::CheckpointPublicationPending));
++        }
++        let actual = self.validate_replay_epoch_residents()?;
++        let intent = self.deferred_replay_epoch.as_ref().expect("deferred intent retained");
++        if actual.len() != intent.neural_authority.len() {
++            return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
++        }
++        for (&raw, sealed) in &intent.neural_authority {
++            let handle = *intent.handles.get(&raw).ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
++            if actual.get(&raw).is_none() {
++                return Err(ScaffoldContractError::BrainOwnershipMismatch.into());
++            }
++            validate_sleep_journal_neural_authority(&mut self.backend, handle, sealed)?;
++        }
++        let journal = intent.journal.clone();
++        let world_signature = intent.world_signature;
++        self.admit_restored_durable_completed_recommit(journal)?;
++        if !self.active_sealed_replay_epoch() {
++            return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
++        }
++        let ExactPopulationCheckpointRuntimeWorkV1::AwaitingJournal { permit, .. } =
++            &self.exact_checkpoint_work else {
++                return Err(ScaffoldContractError::MissingPhaseData.into());
++            };
++        self.replay_epoch_execution_cut = Some(ReplayEpochExecutionCutV2 {
++            transaction_id: permit.transaction_id(),
++            source_tick: self.world.tick(),
++            world_signature,
++        });
++        self.deferred_replay_epoch = None;
++        Ok(None)
++    }
++
+     pub(super) fn preflight_sleep_journal_tick(
+         &mut self,
+     ) -> Result<Option<GpuLiveNoProgressReason>, GameAppShellError> {
+@@ -516,6 +719,7 @@ impl GpuLiveBrainRuntime {
+         }
+         Ok(ExactPopulationHostSnapshotV1 {
+             checkpoint_tick,
++            replay_epoch_completions: Vec::new(),
+             replacement,
+             brains,
+             restored_replay_patches: self.restored_replay_patches.clone(),
+@@ -818,6 +1022,24 @@ impl GpuLiveBrainRuntime {
+     }
+ 
+     pub(super) fn request_exact_population_checkpoint(&mut self) -> Result<(), GameAppShellError> {
++        self.request_exact_population_checkpoint_for_completed(Vec::new())
++    }
++
++    pub(super) fn request_exact_population_checkpoint_for_completed(
++        &mut self, completed_edges: Vec<GpuReplayEpochCompletionV2>,
++    ) -> Result<(), GameAppShellError> {
++        if !completed_edges.is_empty() {
++            let only = self.require_single_living_replay_epoch_resident()?;
++            if !self.replay_epoch_research_enabled || completed_edges.len() != 1
++                || !completed_edges[0].matches_captured(
++                    only, self.world.tick(),
++                    self.residents.get(&only.raw()).ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
++                        .sleep_scheduler.state(),
++                )
++            {
++                return Err(alife_runtime::GpuRuntimeError::ReplayEpochRequiresSingleLivingResident.into());
++            }
++        }
+         self.backend.ensure_neural_actions_available()?;
+         if let Some(active) = self.exact_checkpoint_coordinator.active_identity() {
+             let expected_base_digest = active.expected_base_digest.clone();
+@@ -859,18 +1081,48 @@ impl GpuLiveBrainRuntime {
+                 .published
+                 .save
+                 .clone();
+-            let host = self.freeze_exact_population_host_snapshot(base)?;
++            let mut host = self.freeze_exact_population_host_snapshot(base)?;
++            // Only the immediately adopted exact capture can own the same-cut
++            // transition proof; active/coalesced requests returned above.
++            let captured_completed = host.brains.iter().filter(|brain| matches!(
++                brain.sleep.consolidation, ConsolidationState::Completed { .. }
++            )).collect::<Vec<_>>();
++            if !completed_edges.is_empty()
++                && captured_completed.len() == completed_edges.len()
++                && captured_completed.iter().all(|brain| completed_edges.iter().any(|edge|
++                    edge.matches_captured(brain.handle.organism_id(), checkpoint_tick, brain.sleep)))
++            {
++                host.replay_epoch_completions = completed_edges;
++            }
+             let capacity =
+                 BrainCapacityClass::production_for_id(self.brain_class.default_class_id())?;
++            let epoch_cut = if !host.replay_epoch_completions.is_empty() {
++                Some(ReplayEpochExecutionCutV2 {
++                    transaction_id,
++                    source_tick: checkpoint_tick,
++                    world_signature: self.world.canonical_signature_digest()?,
++                })
++            } else { None };
+             let context =
+                 GpuExactCheckpointTransactionContextV1::capture(self.backend.backend(), &capacity)?;
+             let handles = self.handles.values().copied().collect::<Vec<_>>();
+             self.post_irreversible_gpu_commit_fail_stop_armed = true;
+-            let ticket = self.backend.submit_exact_population_capture(
+-                checkpoint_tick,
+-                transaction_id,
+-                &handles,
+-            )?;
++            let durable = self.checkpoint_durability.as_ref()
++                .ok_or(ScaffoldContractError::MissingPhaseData)?;
++            let ticket = if !host.replay_epoch_completions.is_empty()
++                || durable.published.replay_epoch_status() == GpuReplayEpochStatusV2::Consumed
++            {
++                let scope = durable.durable_manifest.replay_epoch_capture_scope(
++                    &durable.published, &host.replacement,
++                )?;
++                self.backend.submit_replay_epoch_population_capture(
++                    checkpoint_tick, transaction_id, &handles, scope,
++                )?
++            } else {
++                self.backend.submit_exact_population_capture(
++                    checkpoint_tick, transaction_id, &handles,
++                )?
++            };
+             let captured_recovery_edges = host
+                 .brains
+                 .iter()
+@@ -898,6 +1150,9 @@ impl GpuLiveBrainRuntime {
+                 context,
+                 ticket,
+             };
++            if let Some(cut) = epoch_cut {
++                self.replay_epoch_execution_cut = Some(cut);
++            }
+             // Only an adopted capture owns these edges. A portable export does not.
+             // An older active capture returns above and leaves its later edges queued.
+             for raw in captured_recovery_edges {
+@@ -1099,18 +1354,25 @@ impl GpuLiveBrainRuntime {
+     }
+ 
+     pub(super) fn promote_durable_completed_sleep_batch(
+-        &mut self,
+-        promotions: &[(OrganismId, SleepState)],
++        &mut self, promotions: &[(OrganismId, SleepState)],
++        native_epoch_commits: BTreeMap<u64, GpuNativeReplayEpochCommitV2>,
+     ) -> Result<(), GameAppShellError> {
+-        if promotions.is_empty() {
++        if promotions.is_empty() && native_epoch_commits.is_empty() {
+             return Ok(());
+         }
+-        self.finalize_awaiting_exact_checkpoint(promotions)
++        self.finalize_awaiting_exact_checkpoint_inner(promotions, native_epoch_commits)
+     }
+ 
+     pub(super) fn finalize_awaiting_exact_checkpoint(
+         &mut self,
+         promotions: &[(OrganismId, SleepState)],
++    ) -> Result<(), GameAppShellError> {
++        self.finalize_awaiting_exact_checkpoint_inner(promotions, BTreeMap::new())
++    }
++
++    fn finalize_awaiting_exact_checkpoint_inner(
++        &mut self, promotions: &[(OrganismId, SleepState)],
++        mut native_epoch_commits: BTreeMap<u64, GpuNativeReplayEpochCommitV2>,
+     ) -> Result<(), GameAppShellError> {
+         let work = std::mem::take(&mut self.exact_checkpoint_work);
+         let ExactPopulationCheckpointRuntimeWorkV1::AwaitingJournal { permit, worker } = work
+@@ -1176,19 +1438,36 @@ impl GpuLiveBrainRuntime {
+                     .get(&organism_id.raw())
+                     .cloned()
+                     .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
++                let native_epoch_commit = native_epoch_commits.remove(&organism_id.raw());
++                if native_epoch_commit.is_some() != permit.epoch_commit_scope().is_some() {
++                    return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
++                }
++                let transition_tick = if let Some(native) = &native_epoch_commit {
++                    // V2 uses the observed proposed staged boundary recorded by
++                    // the physical GPU dispatch; no reconstruction from disk.
++                    if native.source_tick() != self.world.tick()
++                        || native.source_tick() != completed.checkpoint_tick
++                    {
++                        return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
++                    }
++                    native.staged_transition_tick()
++                } else {
++                    Tick::new(completed.checkpoint_tick.raw().saturating_add(1))
++                };
+                 let entry = GpuSleepTransactionJournalEntryV2::try_new(
+-                    organism_id,
+-                    Tick::new(completed.checkpoint_tick.raw().saturating_add(1)),
+-                    completed.sleep,
+-                    committed_sleep,
++                    organism_id, transition_tick, completed.sleep, committed_sleep,
+                 )?;
+                 worker_promotions.push(ExactPopulationCheckpointJournalPromotionV1 {
+                     entry,
++                    native_epoch_commit,
+                     authority: authority.clone(),
+                     phenotype: (*resident.phenotype).clone(),
+                 });
+                 authorities.insert(organism_id.raw(), authority);
+             }
++            if !native_epoch_commits.is_empty() {
++                return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
++            }
+             worker_promotions.sort_unstable_by_key(|write| {
+                 (
+                     write.entry.organism_id.raw(),
+@@ -1256,6 +1535,8 @@ impl GpuLiveBrainRuntime {
+                 authorities,
+                 entry_count,
+                 contains_completed_promotion: !promotions.is_empty(),
++                contains_sealed_replay_epoch: permit.published().replay_epoch_status()
++                    == GpuReplayEpochStatusV2::Unconsumed,
+             }),
+         };
+         Ok(())
+@@ -1264,7 +1545,23 @@ impl GpuLiveBrainRuntime {
+ 
+ #[cfg(test)]
+ mod checkpoint_world_compatibility_tests {
+-    use super::durable_world_snapshots_match;
++    use super::{
++        durable_world_snapshots_match, exact_sleep_journal_tick_fits,
++        sleep_journal_pending_capacity_for_population, validate_sleep_journal_population,
++    };
++
++    #[test]
++    fn deferred_epoch_projects_awaiting_capacity_before_the_staged_tick() {
++        let population = 4;
++        let reserve = validate_sleep_journal_population(population, 4).unwrap();
++        assert!(validate_sleep_journal_population(population, 3).is_err());
++        let capacity = sleep_journal_pending_capacity_for_population(population).unwrap();
++        let pending = capacity - reserve;
++        assert!(exact_sleep_journal_tick_fits(pending, reserve, capacity, true).unwrap());
++        assert!(!exact_sleep_journal_tick_fits(pending + 1, reserve, capacity, true).unwrap());
++        assert!(!exact_sleep_journal_tick_fits(pending, reserve, capacity, false).unwrap());
++        assert!(exact_sleep_journal_tick_fits(usize::MAX, reserve, capacity, true).is_err());
++    }
+     use alife_core::{BrainScaleTier, OrganismId, Tick, Vec3f};
+     use alife_world::{
+         persistence::{AssetManifest, PortableSaveFile, RuntimeConfig},
+diff --git a/crates/alife_game_app/src/gpu_live_runtime/sleep_atomicity_tests.rs b/crates/alife_game_app/src/gpu_live_runtime/sleep_atomicity_tests.rs
+index e52974b896ae20c4b7eb1aa4a794acab5ec8d0a7..84e99e7e5e51e8bdb19310eb8875efd9c44871eb 100644
+--- a/crates/alife_game_app/src/gpu_live_runtime/sleep_atomicity_tests.rs
++++ b/crates/alife_game_app/src/gpu_live_runtime/sleep_atomicity_tests.rs
+@@ -85,6 +85,7 @@ fn production_progress(
+         sleep_config: None,
+         context: None,
+         replay_evidence_before_commit: None,
++        epoch_commit: None,
+         last_sleep_work: None,
+         fail_stop_armed: None,
+     }
+diff --git a/crates/alife_game_app/src/gpu_live_runtime/staged_tick.rs b/crates/alife_game_app/src/gpu_live_runtime/staged_tick.rs
+index 5a672e41479362ad68627c3c09598bed732a5ab3..6a1fff402caa0b4a68c5f3ca99ad4b54a177a288 100644
+--- a/crates/alife_game_app/src/gpu_live_runtime/staged_tick.rs
++++ b/crates/alife_game_app/src/gpu_live_runtime/staged_tick.rs
+@@ -8,6 +8,7 @@ impl GpuLiveBrainRuntime {
+         progress: &mut F,
+         near_field_owner: Option<OrganismId>,
+         visible_self_grip_v1: Option<(OrganismId, [u32; 16])>,
++        ordinary_sleep_driver: bool,
+     ) -> Result<Vec<LiveBrainTickSummary>, GameAppShellError>
+     where
+         F: FnMut(
+@@ -18,6 +19,9 @@ impl GpuLiveBrainRuntime {
+             Option<ConsolidationIntent>,
+         ) -> SleepProgressResult,
+     {
++        let sole_replay_resident = if self.replay_epoch_research_enabled {
++            Some(self.require_single_living_replay_epoch_resident()?)
++        } else { None };
+         #[cfg(feature = "foundation-training")]
+         self.last_foundation_training_steps.clear();
+         #[cfg(feature = "foundation-training")]
+@@ -152,6 +156,13 @@ impl GpuLiveBrainRuntime {
+         let mut journaled_recovery_edges = Vec::new();
+         let mut sleep_journal_neural_authority_updates = BTreeMap::new();
+         let mut completed_promotions = Vec::new();
++        let mut native_epoch_commits = BTreeMap::new();
++        let epoch_commit_scope = match &self.exact_checkpoint_work {
++            ExactPopulationCheckpointRuntimeWorkV1::AwaitingJournal { permit, .. } =>
++                permit.epoch_commit_scope(),
++            _ => None,
++        };
++        let mut replay_epoch_completions = Vec::new();
+         let scheduled_handles = if let Some(first) = curated_first_tick_resident {
+             vec![(
+                 first.organism_id.raw(),
+@@ -276,6 +287,28 @@ impl GpuLiveBrainRuntime {
+             {
+                 resident.sleep_scheduler.force_recovery_sleep(tick_before)?;
+             }
++            let mut native_epoch_commit = None;
++            let native_dispatch = if let Some(scope) = epoch_commit_scope.filter(|_| {
++                matches!(sleep_before.consolidation, ConsolidationState::Completed { .. })
++                    && allow_sleep_progress && self.schedule_sleep
++            }) {
++                let cut = self.replay_epoch_execution_cut
++                    .ok_or(ScaffoldContractError::MissingPhaseData)?;
++                let world_signature = self.world.canonical_signature_digest()?;
++                let source_tick = self.world.tick();
++                if sole_replay_resident != Some(OrganismId(raw))
++                    || self.world.organism_registry().iter().count() != 1
++                    || !self.world.organism_registry().get(OrganismId(raw))
++                        .is_some_and(|record| record.lifecycle().is_alive())
++                    || self.handles.len() != 1
++                    || source_tick != cut.source_tick || source_tick != tick_before
++                    || world_signature != cut.world_signature
++                    || Some(tick_after.raw()) != source_tick.raw().checked_add(1)
++                {
++                    return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
++                }
++                Some(ReplayEpochNativeDispatchV2 { scope, source_tick, target_tick: tick_after, world_signature })
++            } else { None };
+             let sleep_event = if self.schedule_sleep && allow_sleep_progress {
+                 let sleep_config = sleep_consolidation_config_for(&resident.phenotype)?;
+                 let mut routed_driver = RoutedGpuSleepDriver {
+@@ -298,6 +331,7 @@ impl GpuLiveBrainRuntime {
+                             last_sealed_patches: &self.last_sealed_patches,
+                         }),
+                         replay_evidence_before_commit: None,
++                        epoch_commit: native_dispatch.map(|dispatch| (dispatch, &mut native_epoch_commit)),
+                         last_sleep_work: Some(&mut resident.last_sleep_work),
+                         fail_stop_armed: Some(
+                             &mut self.post_irreversible_gpu_commit_fail_stop_armed,
+@@ -371,6 +405,11 @@ impl GpuLiveBrainRuntime {
+                     },
+                 );
+             }
++            if let Some(commit) = native_epoch_commit {
++                if native_epoch_commits.insert(raw, commit).is_some() {
++                    return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
++                }
++            }
+             let checkpoint_preparation_started = measure_preparation.then(Instant::now);
+             let journal_start = sleep_journal_entries.len();
+             if let Some(edge) = recovery_edge {
+@@ -400,7 +439,14 @@ impl GpuLiveBrainRuntime {
+                     (
+                         ConsolidationState::Submitted { .. },
+                         ConsolidationState::Completed { .. },
+-                    ) => persist_exact_sleep_boundary = true,
++                    ) => {
++                        persist_exact_sleep_boundary = true;
++                        if self.replay_epoch_research_enabled && ordinary_sleep_driver {
++                            replay_epoch_completions.push(GpuReplayEpochCompletionV2::try_new(
++                                OrganismId(raw), tick_after, sleep_before, sleep_after,
++                            )?);
++                        }
++                    }
+                     (ConsolidationState::None, ConsolidationState::Pending { .. })
+                     | (ConsolidationState::Pending { .. }, ConsolidationState::Prepared { .. })
+                     | (ConsolidationState::Prepared { .. }, ConsolidationState::Submitted { .. })
+@@ -812,6 +858,13 @@ impl GpuLiveBrainRuntime {
+         // the exact tick named by the durable Completed checkpoint. Publish
+         // the manifest-side selector/ref promotion before any world action or
+         // subsequent poll can occur.
++        if epoch_commit_scope.is_some()
++            && (completed_promotions.is_empty() || completed_promotions.len() != native_epoch_commits.len())
++        {
++            // A marked ordinary tick must not advance the world without its
++            // physical commit. The outer staged guard fail-stops if needed.
++            return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
++        }
+         let sleep_promotion_started = Instant::now();
+         let mut memory_commits = Vec::with_capacity(completed_promotions.len());
+         for (organism_id, committed_sleep) in &completed_promotions {
+@@ -829,7 +882,7 @@ impl GpuLiveBrainRuntime {
+             }
+             memory_commits.push((*organism_id, memory, receipt));
+         }
+-        if let Err(error) = self.promote_durable_completed_sleep_batch(&completed_promotions) {
++        if let Err(error) = self.promote_durable_completed_sleep_batch(&completed_promotions, native_epoch_commits) {
+             // The backend's Completed -> Committed transaction precedes the
+             // manifest CAS. The staged tick wrapper restores world and host
+             // sleep authority to Completed; GPU authority must fail-stop
+@@ -1140,7 +1193,7 @@ impl GpuLiveBrainRuntime {
+             self.live_policy_exact_base_required && !sleep_journal_entries.is_empty();
+         if persist_exact_sleep_boundary {
+             let sleep_persistence_started = Instant::now();
+-            self.request_exact_population_checkpoint()?;
++            self.request_exact_population_checkpoint_for_completed(replay_epoch_completions)?;
+             // Installation is forbidden while an old exact worker is active.
+             // Any capture now active therefore includes the installed heads.
+             if self.exact_checkpoint_coordinator.is_active() {
+diff --git a/crates/alife_game_app/src/gpu_live_runtime.rs b/crates/alife_game_app/src/gpu_live_runtime.rs
+index 24747ff97ca806b72349a3348cd65c16957732af..123c9e9f7b6a4536c9a23fef122c2f567c69946d 100644
+--- a/crates/alife_game_app/src/gpu_live_runtime.rs
++++ b/crates/alife_game_app/src/gpu_live_runtime.rs
+@@ -121,13 +121,15 @@ use alife_gpu_backend::{
+     GpuCompactCheckpointAuthorityV1, GpuCuratedResidencyCohort, GpuCuratedResidencyEntry,
+     GpuCuratedResidencyOutcome, GpuCuratedResidencyReceipt, GpuCuratedResidencyTargetIdentity,
+     GpuExactPopulationCapturePollV1, GpuExactPopulationCaptureTicketV1,
+-    GpuExactPopulationCaptureV1, GpuLearningReceipt, GpuMemoryContextUpload, GpuV11WorkReceipt,
++    GpuExactPopulationCaptureV1, GpuLearningReceipt, GpuMemoryContextUpload,
++    GpuNativeReplayEpochCommitV2, GpuV11WorkReceipt,
+     PendingEligibilityDiscardReceipt, PendingEligibilityIdentity, PendingEligibilityReceipt,
+     decode_exact_population_sleep_replay,
+ };
+ use alife_runtime::{
+     DurableGpuCheckpointMonotonicityPermit, DurableGpuCheckpointRef, GpuAuthoritativeSession,
+-    GpuExactCheckpointTransactionContextV1, GpuSessionAuthority, GpuSessionConsumerKind,
++    GpuExactCheckpointTransactionContextV1, GpuReplayEpochCompletionV2, GpuReplayEpochStatusV2,
++    GpuSaveManifestDigest, GpuSessionAuthority, GpuSessionConsumerKind,
+     GpuSessionFailStopCause, GpuSleepJournalPublicationTiming, GpuSleepTransactionJournalEntryV2,
+     GpuSleepTransactionJournalV2, SleepPhaseReceipt, SleepWorkDue,
+ };
+@@ -1205,7 +1207,31 @@ fn append_bounded_sleep_journal_entries(
+     Ok(())
+ }
+ 
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++struct ReplayEpochExecutionCutV2 {
++    transaction_id: u64,
++    source_tick: Tick,
++    world_signature: HeadlessWorldSignatureDigest,
++}
++
++#[derive(Debug, Clone, Copy)]
++struct ReplayEpochNativeDispatchV2 {
++    scope: [u64; 4],
++    source_tick: Tick,
++    target_tick: Tick,
++    world_signature: HeadlessWorldSignatureDigest,
++}
++
+ #[derive(Debug, Clone)]
++struct DeferredReplayEpochV2 {
++    digest: GpuSaveManifestDigest,
++    manifest_path: PathBuf,
++    world_signature: HeadlessWorldSignatureDigest,
++    handles: BTreeMap<u64, GpuBrainHandle>,
++    journal: GpuSleepTransactionJournalV2,
++    neural_authority: BTreeMap<u64, SleepJournalNeuralAuthority>,
++}
++
+ struct GpuLiveCheckpointDurability {
+     store: GpuCheckpointAssetStore,
+     durable_manifest: GpuDurableSaveManifest,
+@@ -1227,6 +1253,7 @@ struct GpuLiveSleepJournalPublicationTiming {
+ #[derive(Debug, Clone)]
+ struct ExactPopulationHostSnapshotV1 {
+     checkpoint_tick: Tick,
++    replay_epoch_completions: Vec<GpuReplayEpochCompletionV2>,
+     replacement: PortableSaveFile,
+     brains: Vec<ExactBrainHostSnapshotV1>,
+     restored_replay_patches: Vec<ExperiencePatch>,
+@@ -1327,6 +1354,7 @@ enum ExactPopulationCheckpointRuntimeWorkV1 {
+ 
+ struct ExactPopulationCheckpointWorkerSuccessV1 {
+     transaction_id: u64,
++    epoch_commit_scope: Option<[u64; 4]>,
+     checkpoint_tick: Tick,
+     expected_base_digest: String,
+     capture_transaction_generation: u64,
+@@ -1339,6 +1367,7 @@ struct ExactPopulationCheckpointWorkerSuccessV1 {
+ 
+ struct RestoredDurableCompletedPermitV1 {
+     transaction_id: u64,
++    epoch_commit_scope: Option<[u64; 4]>,
+     checkpoint_tick: Tick,
+     published: GpuLoadedSaveManifest,
+     rollback_journal: GpuSleepTransactionJournalV2,
+@@ -1372,6 +1401,13 @@ impl DurableCompletedCheckpointPermitV1 {
+         }
+     }
+ 
++    fn epoch_commit_scope(&self) -> Option<[u64; 4]> {
++        match self {
++            Self::Captured(success) => success.epoch_commit_scope,
++            Self::Restored(permit) => permit.epoch_commit_scope,
++        }
++    }
++
+     fn captured_journal_authorities(&self) -> &BTreeMap<u64, SleepJournalNeuralAuthority> {
+         match self {
+             Self::Captured(success) => &success.captured_journal_authorities,
+@@ -1417,6 +1453,7 @@ enum ExactPopulationCheckpointWorkerCommandV1 {
+ 
+ struct ExactPopulationCheckpointJournalPromotionV1 {
+     entry: GpuSleepTransactionJournalEntryV2,
++    native_epoch_commit: Option<GpuNativeReplayEpochCommitV2>,
+     authority: SleepJournalNeuralAuthority,
+     phenotype: alife_core::BrainPhenotype,
+ }
+@@ -1425,6 +1462,7 @@ struct ExactPopulationCheckpointJournalCommitV1 {
+     authorities: Vec<(u64, SleepJournalNeuralAuthority)>,
+     entry_count: u64,
+     contains_completed_promotion: bool,
++    contains_sealed_replay_epoch: bool,
+ }
+ 
+ enum ExactPopulationCheckpointWorkerEventV1 {
+@@ -1761,18 +1799,19 @@ fn spawn_exact_population_checkpoint_worker(
+     capture: GpuExactPopulationCaptureV1,
+     context: GpuExactCheckpointTransactionContextV1,
+     mut durability: GpuLiveCheckpointDurability,
+-    #[cfg(all(test, feature = "gpu-tests"))] start_gate: Option<Receiver<()>>,
++    #[cfg(all(feature = "gpu-tests", any(test, feature = "replay-epoch-research")))] start_gate: Option<Receiver<()>>,
+ ) -> ExactPopulationCheckpointWorkerOwnerV1 {
+     let (event_sender, event_receiver) = mpsc::sync_channel(1);
+     let (command_sender, command_receiver) = mpsc::sync_channel(1);
+     let join_handle = thread::spawn(move || {
+         configure_persistence_worker_priority();
+-        #[cfg(all(test, feature = "gpu-tests"))]
++        #[cfg(all(feature = "gpu-tests", any(test, feature = "replay-epoch-research")))]
+         if let Some(gate) = start_gate {
+             // Disconnect releases normal work, including after a test panic.
+             let _ = gate.recv();
+         }
+         let checkpoint_tick = host.checkpoint_tick;
++        let replay_epoch_completions = host.replay_epoch_completions.clone();
+         let capture_transaction_generation = capture.capture_transaction_generation();
+         let population_set_digest = capture.population_set_digest();
+         let prepared = (|| {
+@@ -1859,12 +1898,15 @@ fn spawn_exact_population_checkpoint_worker(
+             }
+         }
+         let published = (|| {
+-            let durable_reference = durability.publish(replacement)?;
++            let durable_reference = durability.publish_with_replay_epoch(
++                replacement, Some(&capture), replay_epoch_completions,
++            )?;
+             if durable_reference != prepared.prospective_durable_reference {
+                 return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
+             }
+             Ok(ExactPopulationCheckpointWorkerSuccessV1 {
+                 transaction_id: prepared.transaction_id,
++                epoch_commit_scope: durability.epoch_commit_scope()?,
+                 checkpoint_tick: prepared.checkpoint_tick,
+                 expected_base_digest: prepared.expected_base_digest.clone(),
+                 capture_transaction_generation: prepared.capture_transaction_generation,
+@@ -1967,6 +2009,7 @@ fn run_exact_population_checkpoint_finalize_worker(
+         Ok(ExactPopulationCheckpointWorkerCommandV1::Finalize { promotions, manual }) => {
+             let validated_entries = (|| {
+                 let mut entries = Vec::with_capacity(promotions.len());
++                let mut native_epoch_commits = Vec::new();
+                 let mut current_sleep_by_organism = BTreeMap::new();
+                 for promotion in promotions {
+                     let creature = durability
+@@ -2002,14 +2045,20 @@ fn run_exact_population_checkpoint_finalize_worker(
+                         &promotion.authority.activity,
+                     )?;
+                     *current_sleep = promotion.entry.target;
++                    if let Some(commit) = promotion.native_epoch_commit {
++                        native_epoch_commits.push(commit);
++                    }
+                     entries.push(promotion.entry);
+                 }
+-                Ok::<_, GameAppShellError>(entries)
++                Ok::<_, GameAppShellError>((entries, native_epoch_commits))
+             })();
+             // Journal publication already validates the immutable artifacts and
+             // atomically installs the generation-checked pointer.
+-            let result = validated_entries
+-                .and_then(|entries| durability.publish_sleep_journal_entries(entries, false));
++            // The same exact finalizer handles an adopted warm capture and a
++            // restored promotion; only the real worker can consume an epoch.
++            let result = validated_entries.and_then(|(entries, native_epoch_commits)| {
++                durability.publish_sleep_journal_entries_inner(entries, false, native_epoch_commits)
++            });
+             match result {
+                 Err(error) => (Err(error), None),
+                 Ok(_) => match manual {
+@@ -2019,6 +2068,12 @@ fn run_exact_population_checkpoint_finalize_worker(
+                             checkpoint_tick: durability.published.save.world.tick,
+                         };
+                         let manual_result = (|| {
++                            durability.published.require_playable_replay_epoch()?;
++                            if durability.published.replay_epoch_status()
++                                != GpuReplayEpochStatusV2::Unknown
++                            {
++                                return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
++                            }
+                             GpuDurableSaveManifest::publish_snapshot(
+                                 &request.destination,
+                                 durability.store.root(),
+@@ -2151,6 +2206,13 @@ impl GpuLiveCheckpointDurability {
+         &mut self,
+         entries: Vec<GpuSleepTransactionJournalEntryV2>,
+         measure: bool,
++    ) -> Result<GpuLiveSleepJournalPublicationTiming, GameAppShellError> {
++        self.publish_sleep_journal_entries_inner(entries, measure, Vec::new())
++    }
++
++    fn publish_sleep_journal_entries_inner(
++        &mut self, entries: Vec<GpuSleepTransactionJournalEntryV2>, measure: bool,
++        native_epoch_commits: Vec<GpuNativeReplayEpochCommitV2>,
+     ) -> Result<GpuLiveSleepJournalPublicationTiming, GameAppShellError> {
+         let mut timing = GpuLiveSleepJournalPublicationTiming::default();
+         if entries.is_empty() {
+@@ -2190,9 +2252,15 @@ impl GpuLiveCheckpointDurability {
+             combined,
+         )?;
+         record_optional_elapsed_ns(&mut timing.journal_build_validation_wall_ns, started);
+-        let receipt = self
+-            .durable_manifest
+-            .publish_sleep_transaction_journal_profiled(&self.published, &journal, measure)?;
++        let receipt = if !native_epoch_commits.is_empty() {
++            self.durable_manifest.publish_replay_epoch_commit_profiled(
++                &self.published, &journal, measure, native_epoch_commits,
++            )?
++        } else {
++            self.durable_manifest.publish_sleep_transaction_journal_profiled(
++                &self.published, &journal, measure,
++            )?
++        };
+         timing.durable = receipt.timing;
+         self.published = receipt.published;
+         self.sleep_journal_entry_count = next_count;
+@@ -2250,9 +2318,39 @@ impl GpuLiveCheckpointDurability {
+         &mut self,
+         replacement: PortableSaveFile,
+     ) -> Result<DurableGpuCheckpointRef, GameAppShellError> {
+-        self.durable_manifest
+-            .compare_and_swap(&self.published.digest, &replacement)?;
++        self.publish_with_replay_epoch(replacement, None, Vec::new())
++    }
++
++    fn epoch_commit_scope(&self) -> Result<Option<[u64; 4]>, GameAppShellError> {
++        if self.published.replay_epoch_status() == GpuReplayEpochStatusV2::Unconsumed {
++            Ok(Some(self.durable_manifest.replay_epoch_commit_scope(&self.published)?))
++        } else {
++            Ok(None)
++        }
++    }
++
++    fn publish_with_replay_epoch(
++        &mut self, replacement: PortableSaveFile, capture: Option<&GpuExactPopulationCaptureV1>,
++        completions: Vec<GpuReplayEpochCompletionV2>,
++    ) -> Result<DurableGpuCheckpointRef, GameAppShellError> {
++        let has_epoch = !completions.is_empty();
++        if has_epoch {
++            let capture = capture.ok_or(ScaffoldContractError::MissingPhaseData)?;
++            self.durable_manifest.compare_and_swap_replay_epoch(
++                &self.published.digest, &replacement, capture, completions,
++            )?;
++        } else if self.published.replay_epoch_status() == GpuReplayEpochStatusV2::Consumed {
++            let capture = capture.ok_or(ScaffoldContractError::MissingPhaseData)?;
++            self.durable_manifest.compare_and_swap_full_replay_epoch_successor(
++                &self.published.digest, &replacement, capture,
++            )?;
++        } else {
++            self.durable_manifest.compare_and_swap(&self.published.digest, &replacement)?;
++        }
+         let published = self.durable_manifest.load()?;
++        if has_epoch && published.replay_epoch_status() != GpuReplayEpochStatusV2::Unconsumed {
++            return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
++        }
+         if published.save != replacement {
+             return Err(GameAppShellError::InvalidProductionFrontend {
+                 message: "published GPU checkpoint save differs from its validated replacement"
+@@ -2300,6 +2398,7 @@ struct AuthoritativeGpuSleepDriver<'a> {
+     sleep_config: Option<SleepConsolidationConfig>,
+     context: Option<AuthoritativeSleepContext<'a>>,
+     replay_evidence_before_commit: Option<SleepReplayEvidence>,
++    epoch_commit: Option<(ReplayEpochNativeDispatchV2, &'a mut Option<GpuNativeReplayEpochCommitV2>)>,
+     last_sleep_work: Option<&'a mut Option<SleepWorkReceipt>>,
+     fail_stop_armed: Option<&'a mut bool>,
+ }
+@@ -2507,9 +2606,20 @@ impl GpuSleepConsolidationDriver for AuthoritativeGpuSleepDriver<'_> {
+                 }
+             }
+             (ConsolidationState::Completed { request, staged }, None) => {
+-                let receipt =
+-                    self.backend
+-                        .commit_sleep_consolidation(self.handle, &request, &staged)?;
++                let receipt = if let Some((dispatch, output)) = self.epoch_commit.as_mut() {
++                    if output.is_some() {
++                        return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
++                    }
++                    let native = self.backend.commit_replay_epoch_sleep(
++                        self.handle, &request, &staged, dispatch.scope, dispatch.source_tick,
++                        dispatch.target_tick, dispatch.world_signature.words,
++                    )?;
++                    let receipt = *native.receipt();
++                    **output = Some(native);
++                    receipt
++                } else {
++                    self.backend.commit_sleep_consolidation(self.handle, &request, &staged)?
++                };
+                 ConsolidationDriverEvent::Committed {
+                     cycle_id: request.cycle_id,
+                     output_generation: receipt.output_generation,
+@@ -3804,6 +3914,8 @@ pub struct GpuLiveBrainRuntime {
+     sleep_journal_capacity: SleepJournalCapacity,
+     #[cfg(all(test, feature = "gpu-tests"))]
+     next_checkpoint_worker_start_gate: Option<Receiver<()>>,
++    #[cfg(all(feature = "gpu-tests", feature = "replay-epoch-research"))]
++    replay_epoch_test_worker_gate: Option<Receiver<()>>,
+     exact_checkpoint_waiting_for_sleep_journal: bool,
+     manual_checkpoint_waiting_for_sleep_journal: Option<PathBuf>,
+     post_irreversible_gpu_commit_fail_stop_armed: bool,
+@@ -3845,6 +3957,9 @@ pub struct GpuLiveBrainRuntime {
+     performance_measurement_enabled: bool,
+     exact_checkpoint_transaction_started_at: Option<Instant>,
+     checkpoint_durability: Option<GpuLiveCheckpointDurability>,
++    deferred_replay_epoch: Option<DeferredReplayEpochV2>,
++    replay_epoch_research_enabled: bool,
++    replay_epoch_execution_cut: Option<ReplayEpochExecutionCutV2>,
+     canonical_save_id: Option<String>,
+     manual_checkpoint_status: GpuManualCheckpointStatus,
+     exact_checkpoint_coordinator: ExactPopulationCheckpointCoordinatorV1,
+@@ -4837,6 +4952,15 @@ impl GpuLiveBrainRuntime {
+     pub fn from_p34_launch(
+         backend: GpuClosedLoopBackend,
+         launch: &AppShellLaunchConfig,
++    ) -> Result<Self, GameAppShellError> {
++        Self::from_p34_launch_with_backend(launch, || Ok(backend))
++    }
++
++    /// Same normal durable launcher, but the backend factory is not opened
++    /// until authenticated full-save admission and policy checks pass.
++    pub fn from_p34_launch_with_backend(
++        launch: &AppShellLaunchConfig,
++        open_backend: impl FnOnce() -> Result<GpuClosedLoopBackend, ScaffoldContractError>,
+     ) -> Result<Self, GameAppShellError> {
+         let config = RuntimeConfig::from_json_file(&launch.config_path)?;
+         config.validate()?;
+@@ -4844,6 +4968,16 @@ impl GpuLiveBrainRuntime {
+         manifest.validate_with_root(&launch.asset_root)?;
+         let (durable_manifest, loaded_save) =
+             GpuDurableSaveManifest::open_loaded(&launch.save_path, &launch.asset_root)?;
++        loaded_save.require_playable_replay_epoch()?;
++        if loaded_save.replay_epoch_status() == GpuReplayEpochStatusV2::Unconsumed {
++            loaded_save.require_single_living_replay_epoch_resident()?;
++            if !cfg!(feature = "replay-epoch-research") {
++                return Err(GameAppShellError::InvalidProductionFrontend {
++                    message: "sealed replay epoch requires the detached replay-epoch-research build"
++                        .to_string(),
++                });
++            }
++        }
+         let save = loaded_save.save.clone();
+         save.validate_with_asset_root(&launch.asset_root)?;
+         if launch.brain_policy != alife_core::PolicyBackend::NeuralClosedLoopGpu
+@@ -4856,7 +4990,7 @@ impl GpuLiveBrainRuntime {
+             });
+         }
+         Self::restore_loaded_save(
+-            backend,
++            open_backend()?,
+             durable_manifest,
+             loaded_save,
+             save.deterministic_seed,
+@@ -4871,6 +5005,8 @@ impl GpuLiveBrainRuntime {
+         deterministic_seed: u64,
+         brain_class: BrainScaleTier,
+     ) -> Result<Self, GameAppShellError> {
++        // Fail before world restore, GPU upload or legacy journal clearing.
++        loaded_save.require_playable_replay_epoch()?;
+         let save = &loaded_save.save;
+         if save.config.deterministic_seed != save.deterministic_seed {
+             return Err(GameAppShellError::InvalidGraphicalLaunch {
+@@ -4884,6 +5020,15 @@ impl GpuLiveBrainRuntime {
+             deterministic_seed,
+             brain_class,
+         )?;
++        let replay_epoch_at_load = loaded_save.replay_epoch_status();
++        if replay_epoch_at_load == GpuReplayEpochStatusV2::Unconsumed
++            && !cfg!(feature = "replay-epoch-research")
++        {
++            return Err(GameAppShellError::InvalidProductionFrontend {
++                message: "sealed replay epoch requires the detached replay-epoch-research build"
++                    .to_string(),
++            });
++        }
+         let rollback_journal = durable_manifest.load_sleep_transaction_journal(&loaded_save)?;
+         let world = save.restore_headless_world()?;
+         let store = GpuCheckpointAssetStore::new(durable_manifest.asset_root().to_path_buf())?;
+@@ -4951,7 +5096,25 @@ impl GpuLiveBrainRuntime {
+             durability.published = refreshed;
+             durability.sleep_journal_entry_count = cleared.entries.len();
+         }
+-        runtime.admit_restored_durable_completed_recommit(rollback_journal)?;
++        match replay_epoch_at_load {
++            GpuReplayEpochStatusV2::Unknown => {
++                runtime.admit_restored_durable_completed_recommit(rollback_journal)?;
++            }
++            GpuReplayEpochStatusV2::Unconsumed => {
++                if requires_checkpoint_reconciliation || !rollback_journal.entries.is_empty() {
++                    return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
++                }
++                runtime.require_single_living_replay_epoch_resident()?;
++                runtime.replay_epoch_research_enabled = true;
++                runtime.defer_restored_replay_epoch(rollback_journal)?;
++            }
++            GpuReplayEpochStatusV2::Consumed => {
++                // Defensive typed refusal; the same check precedes upload.
++                runtime.checkpoint_durability.as_ref()
++                    .ok_or(ScaffoldContractError::MissingPhaseData)?
++                    .published.require_playable_replay_epoch()?;
++            }
++        }
+         if requires_checkpoint_reconciliation {
+             runtime.persist_sleep_checkpoint_boundary()?;
+         }
+@@ -5073,6 +5236,7 @@ impl GpuLiveBrainRuntime {
+                 return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
+             }
+         }
++        let epoch_commit_scope = durability.epoch_commit_scope()?;
+         let checkpoint_tick = durability.published.save.world.tick;
+         let expected_base_digest = durability.published.digest.as_str().to_string();
+         let transaction_id = self
+@@ -5095,6 +5259,7 @@ impl GpuLiveBrainRuntime {
+             permit: DurableCompletedCheckpointPermitV1::Restored(
+                 RestoredDurableCompletedPermitV1 {
+                     transaction_id,
++                    epoch_commit_scope,
+                     checkpoint_tick,
+                     published,
+                     rollback_journal,
+@@ -5115,6 +5280,15 @@ impl GpuLiveBrainRuntime {
+         backend: GpuClosedLoopBackend,
+         durable_manifest: GpuDurableSaveManifest,
+     ) -> Result<(), GameAppShellError> {
++        if self.active_sealed_replay_epoch()
++            || self.replay_epoch_execution_cut.is_some()
++            || (cfg!(feature = "replay-epoch-research")
++                && self.exact_checkpoint_coordinator.is_active())
++        {
++            // In the research mode an in-flight exact worker may hold
++            // same-cut evidence even before its marked pointer is committed.
++            return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
++        }
+         self.flush_sleep_journal_publication_blocking()?;
+         let loaded_save = durable_manifest.load()?;
+         let deterministic_seed = self.deterministic_seed;
+@@ -5137,6 +5311,10 @@ impl GpuLiveBrainRuntime {
+             candidate.homeostatic_parameters = homeostatic_parameters;
+             candidate.cognitive_work_cost_policy = cognitive_work_cost_policy;
+             candidate.schedule_sleep = schedule_sleep;
++            if !schedule_sleep {
++                candidate.deferred_replay_epoch = None;
++                candidate.replay_epoch_research_enabled = false;
++            }
+             candidate.observe_sidecars = observe_sidecars;
+             candidate.retain_sealed_patch_history = retain_sealed_patch_history;
+             candidate.archive_learned_capture_policy = archive_learned_capture_policy;
+@@ -6112,6 +6290,8 @@ impl GpuLiveBrainRuntime {
+             sleep_journal_durable_capacity_override: None,
+             #[cfg(all(test, feature = "gpu-tests"))]
+             next_checkpoint_worker_start_gate: None,
++            #[cfg(all(feature = "gpu-tests", feature = "replay-epoch-research"))]
++            replay_epoch_test_worker_gate: None,
+             exact_checkpoint_waiting_for_sleep_journal: false,
+             manual_checkpoint_waiting_for_sleep_journal: None,
+             post_irreversible_gpu_commit_fail_stop_armed: false,
+@@ -6153,6 +6333,9 @@ impl GpuLiveBrainRuntime {
+             performance_measurement_enabled: false,
+             exact_checkpoint_transaction_started_at: None,
+             checkpoint_durability: None,
++            deferred_replay_epoch: None,
++            replay_epoch_research_enabled: false,
++            replay_epoch_execution_cut: None,
+             canonical_save_id: None,
+             manual_checkpoint_status: GpuManualCheckpointStatus::Idle,
+             exact_checkpoint_coordinator: ExactPopulationCheckpointCoordinatorV1::default(),
+@@ -7635,6 +7818,25 @@ impl GpuLiveBrainRuntime {
+         Ok(Some(receipt))
+     }
+ 
++    /// Explicit opt-in for a detached owned single-resident session. Compiling
++    /// the feature alone makes no change to normal Unknown/legacy runtime.
++    #[cfg(feature = "replay-epoch-research")]
++    pub fn enable_one_resident_replay_epoch_research(&mut self) -> Result<(), GameAppShellError> {
++        let owner = self.require_single_living_replay_epoch_resident()?;
++        let durability = self.checkpoint_durability.as_ref()
++            .ok_or(ScaffoldContractError::MissingPhaseData)?;
++        if durability.published.require_single_living_replay_epoch_resident()? != owner {
++            return Err(alife_runtime::GpuRuntimeError::ReplayEpochRequiresSingleLivingResident.into());
++        }
++        if !self.schedule_sleep || !self.persistence_idle_for_shutdown()
++            || durability.published.replay_epoch_status() != GpuReplayEpochStatusV2::Unknown
++        {
++            return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
++        }
++        self.replay_epoch_research_enabled = true;
++        Ok(())
++    }
++
+     pub fn tick(&mut self) -> Result<Vec<LiveBrainTickSummary>, GameAppShellError> {
+         Ok(match self.tick_outcome()? {
+             GpuLiveTickOutcome::Progressed(summaries) => summaries,
+@@ -7677,6 +7879,7 @@ impl GpuLiveBrainRuntime {
+                     sleep_config: None,
+                     context: None,
+                     replay_evidence_before_commit: None,
++                    epoch_commit: None,
+                     last_sleep_work: None,
+                     fail_stop_armed: None,
+                 };
+@@ -7684,6 +7887,7 @@ impl GpuLiveBrainRuntime {
+             },
+             near_field_owner,
+             visible_self_grip_v1,
++            near_field_owner.is_none() && visible_self_grip_v1.is_none(),
+         );
+         self.performance_metrics.tick_calls = self.performance_metrics.tick_calls.saturating_add(1);
+         self.performance_metrics.tick_wall_ns = self
+@@ -7836,7 +8040,7 @@ impl GpuLiveBrainRuntime {
+             Option<ConsolidationIntent>,
+         ) -> SleepProgressResult,
+     {
+-        self.tick_with_sleep_progress_outcome_scent(progress, None, None)
++        self.tick_with_sleep_progress_outcome_scent(progress, None, None, false)
+     }
+ 
+     fn tick_with_sleep_progress_outcome_scent<F>(
+@@ -7844,6 +8048,7 @@ impl GpuLiveBrainRuntime {
+         mut progress: F,
+         near_field_owner: Option<OrganismId>,
+         visible_self_grip_v1: Option<(OrganismId, [u32; 16])>,
++        ordinary_sleep_driver: bool,
+     ) -> Result<GpuLiveTickOutcome, GameAppShellError>
+     where
+         F: FnMut(
+@@ -7854,6 +8059,11 @@ impl GpuLiveBrainRuntime {
+             Option<ConsolidationIntent>,
+         ) -> SleepProgressResult,
+     {
++        if self.replay_epoch_research_enabled {
++            // Reject misplaced opt-in/cohort changes before polling an exact
++            // worker, visiting the scheduler or advancing body/world state.
++            self.require_single_living_replay_epoch_resident()?;
++        }
+         self.backend.ensure_neural_actions_available()?;
+         self.post_irreversible_gpu_commit_fail_stop_armed = false;
+         self.poll_sleep_journal_publication()?;
+@@ -7878,6 +8088,22 @@ impl GpuLiveBrainRuntime {
+         {
+             return Ok(GpuLiveTickOutcome::NoProgress(reason));
+         }
++        if ordinary_sleep_driver {
++            if let Some(reason) = self.admit_deferred_replay_epoch_before_tick()? {
++                return Ok(GpuLiveTickOutcome::NoProgress(reason));
++            }
++            if let Some(reason) = self.replay_epoch_before_tick()? {
++                return Ok(GpuLiveTickOutcome::NoProgress(reason));
++            }
++        } else if self.deferred_replay_epoch.is_some() || self.active_sealed_replay_epoch()
++            || self.replay_epoch_execution_cut.is_some()
++        {
++            // Injected sleep drivers and fixture-only sensory modes cannot
++            // author or spend a sealed ordinary-scheduler capability.
++            return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
++        }
++        // Run the actual AwaitingJournal preflight after the projected check
++        // and real admission, still before any staged world mutation.
+         match self.preflight_sleep_journal_tick() {
+             Ok(Some(reason)) => return Ok(GpuLiveTickOutcome::NoProgress(reason)),
+             Ok(None) => {}
+@@ -7893,12 +8119,15 @@ impl GpuLiveBrainRuntime {
+                 return Err(error);
+             }
+         }
++        let paid_epoch_cut = self.replay_epoch_execution_cut;
+         let world_tick_before = self.world.tick().raw();
+         let measure_clone_wall_time = self.performance_measurement_enabled;
+         let staged_sleep = StagedSleepAuthority::capture(self);
+         let (result, clone_sample) =
+             tick_with_sleep_progress_inner(self, measure_clone_wall_time, |runtime| {
+-                runtime.tick_with_sleep_progress_staged(&mut progress, near_field_owner, visible_self_grip_v1)
++                runtime.tick_with_sleep_progress_staged(
++                    &mut progress, near_field_owner, visible_self_grip_v1, ordinary_sleep_driver,
++                )
+             });
+         if result.is_err() {
+             #[cfg(feature = "foundation-training")]
+@@ -7910,6 +8139,9 @@ impl GpuLiveBrainRuntime {
+             staged_sleep.restore(self);
+         } else {
+             self.staged_sealed_patches_rollback = StagedSealedPatchesRollback::Inactive;
++            if paid_epoch_cut.is_some() {
++                self.replay_epoch_execution_cut = None;
++            }
+         }
+         self.performance_metrics.rollback_clone_calls = self
+             .performance_metrics
+@@ -9870,6 +10102,19 @@ impl GpuLiveBrainRuntime {
+             )
+     }
+ 
++    #[cfg(all(feature = "gpu-tests", feature = "replay-epoch-research"))]
++    pub fn delay_next_marked_epoch_publisher_for_test(&mut self) -> mpsc::Sender<()> {
++        assert!(self.replay_epoch_test_worker_gate.is_none());
++        let (release, gate) = mpsc::channel();
++        self.replay_epoch_test_worker_gate = Some(gate);
++        release
++    }
++
++    #[cfg(all(feature = "gpu-tests", feature = "replay-epoch-research"))]
++    pub fn marked_replay_epoch_source_pending_for_test(&self) -> bool {
++        self.replay_epoch_execution_cut.is_some()
++    }
++
+     #[cfg(feature = "gpu-tests")]
+     pub fn request_exact_checkpoint_for_test(&mut self) -> Result<(), GameAppShellError> {
+         self.request_exact_population_checkpoint()
+diff --git a/crates/alife_game_app/src/new_game_lifecycle.rs b/crates/alife_game_app/src/new_game_lifecycle.rs
+index 1ffd4a3bb9754fa8a217f5e8cb9126a160b3f179..3545bbe385f19e541ae42d04bf1e96cb08198de4 100644
+--- a/crates/alife_game_app/src/new_game_lifecycle.rs
++++ b/crates/alife_game_app/src/new_game_lifecycle.rs
+@@ -210,10 +210,10 @@ fn create_canonical_new_game_runtime_inner(
+     )
+ }
+ 
+-/// Explicit fixed-fixture seam. Absent from non-test app builds; normal New
+-/// Game keeps its required-hardware constructor and never falls back here.
+-#[cfg(all(test, feature = "gpu-tests"))]
+-pub(crate) fn create_canonical_new_game_software_runtime_test(
++/// Explicit fixed-fixture seam for tests and the detached opt-in probe.
++/// Normal New Game still requires hardware and never falls back here.
++#[cfg(all(any(test, feature = "replay-epoch-research"), feature = "gpu-tests"))]
++pub fn create_canonical_new_game_software_runtime_test(
+     request: CanonicalNewGameLaunchRequest,
+ ) -> Result<CanonicalNewGameLaunchResult, GameAppShellError> {
+     create_canonical_new_game_runtime_using_backend(
+diff --git a/crates/alife_game_app/tests/external_replay_epoch_live.rs b/crates/alife_game_app/tests/external_replay_epoch_live.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..6e7663a47a045075e9f708f41ae06611b7d53cb2
+--- /dev/null
++++ b/crates/alife_game_app/tests/external_replay_epoch_live.rs
+@@ -0,0 +1,292 @@
++//! Compile-only in hosted CI. These opt-in tests own a real ordinary gameplay
++//! runtime and original backend (one writer). Never point them at a live save.
++#![cfg(all(feature = "gpu-tests", feature = "replay-epoch-research"))]
++
++use std::{fs, path::Path, time::{Duration, Instant}};
++
++use alife_core::{BrainScaleTier, ConsolidationState, OrganismId, PolicyBackend, SleepPhase, Tick};
++use alife_game_app::{
++    AppShellLaunchConfig, CanonicalNewGameLaunchRequest, GameAppShellError, GpuLiveBrainRuntime,
++    GpuLiveTickOutcome, create_canonical_new_game_software_runtime_test,
++};
++use alife_gpu_backend::{GpuClosedLoopBackend, GpuRuntimeProfile};
++use alife_runtime::{GpuDurableSaveManifest, GpuLoadedSaveManifest, GpuReplayEpochStatusV2, GpuRuntimeError};
++use alife_world::{AssetManifest, RuntimeConfig};
++
++fn wait_step(deadline: Instant) {
++    assert!(Instant::now() < deadline, "bounded replay epoch probe timed out");
++    std::thread::sleep(Duration::from_millis(2));
++}
++
++fn resident_brain(
++    opened: &GpuLoadedSaveManifest,
++    owner: OrganismId,
++) -> &alife_world::persistence::GpuBrainSaveState {
++    opened.save.creatures.iter().find(|c| c.organism_id == owner)
++        .unwrap().gpu_brain.as_ref().unwrap()
++}
++
++fn software_backend() -> Result<GpuClosedLoopBackend, alife_core::ScaffoldContractError> {
++    let backend =
++        GpuClosedLoopBackend::new_software_vulkan_runtime_test(GpuRuntimeProfile::production_v1())?;
++    let adapter = backend.software_runtime_test_adapter_info().expect("actual test adapter");
++    assert_eq!(format!("{:?}", adapter.backend), "Vulkan");
++    assert_eq!(format!("{:?}", adapter.device_type), "Cpu");
++    Ok(backend)
++}
++
++fn launch_config(
++    scratch: &Path, assets: &Path, current: &Path, opened: &GpuLoadedSaveManifest, name: &str,
++) -> AppShellLaunchConfig {
++    let launch = AppShellLaunchConfig {
++        fixture_root: scratch.to_path_buf(),
++        config_path: scratch.join(format!("{name}.config.json")),
++        asset_manifest_path: scratch.join(format!("{name}.assets.json")),
++        save_path: current.to_path_buf(),
++        asset_root: assets.to_path_buf(),
++        start_paused: false,
++        brain_policy: PolicyBackend::NeuralClosedLoopGpu,
++    };
++    fs::write(&launch.config_path, serde_json::to_vec_pretty(&opened.save.config).unwrap()).unwrap();
++    fs::write(&launch.asset_manifest_path, serde_json::to_vec_pretty(&opened.save.assets).unwrap()).unwrap();
++    launch
++}
++
++fn check_playable_full_cut(cold: bool) {
++    assert_eq!(std::env::var("QUALIA_REPLAY_EPOCH_VULKAN_MODE").ok().as_deref(),
++        Some("isolated-software-vulkan-runtime-test"));
++
++    let scratch = std::env::current_dir().unwrap().join(format!(
++        "replay-epoch-live-{}-{}", std::process::id(), if cold { "cold" } else { "warm" },
++    ));
++    // Do not overwrite a prior trial, even if it failed.
++    fs::create_dir(&scratch).unwrap();
++    let assets = scratch.join("assets");
++    fs::create_dir(&assets).unwrap();
++    let current = scratch.join("current.json");
++    let mut config = RuntimeConfig::deterministic_default(31_117, BrainScaleTier::Nano512);
++    config.features.gpu_backend_enabled = true;
++    let mut live = create_canonical_new_game_software_runtime_test(CanonicalNewGameLaunchRequest {
++        world_seed: 31_117,
++        population: alife_world::PHASE3_MIN_POPULATION,
++        disable_age_death: false,
++        save_path: current.clone(),
++        asset_root: assets.clone(),
++        config,
++        assets: AssetManifest::empty(),
++    }).unwrap().runtime;
++    let durable = GpuDurableSaveManifest::open(&current, &assets).unwrap();
++    let owner = OrganismId(1);
++    assert_eq!(alife_world::PHASE3_MIN_POPULATION, 1);
++    live.enable_one_resident_replay_epoch_research().unwrap();
++    live.tick().unwrap();
++    assert_eq!(live.world_tick_for_test(), Tick::new(1));
++    live.request_recovery_sleep(owner).unwrap();
++    let publisher_release = live.delay_next_marked_epoch_publisher_for_test();
++
++    // Let the ordinary scheduler and exact worker create their own sealed old
++    // boundary. Do not fabricate a durable replay permit or step beyond it.
++    let deadline = Instant::now() + Duration::from_secs(90);
++    let mut saw_submitted = false;
++    while !live.marked_replay_epoch_source_pending_for_test() {
++        let sleep = live.sleep_state_for_test(owner).unwrap();
++        saw_submitted |= matches!(sleep.consolidation, ConsolidationState::Submitted { .. });
++        live.tick_outcome().unwrap();
++        wait_step(deadline);
++    }
++    let held_tick = live.world_tick_for_test();
++    let held_world = live.world_snapshot().canonical_signature_digest().unwrap();
++    let held_sleep = live.sleep_state_for_test(owner).unwrap();
++    let visible_before_publication = durable.load().unwrap();
++    assert_ne!(visible_before_publication.replay_epoch_status(), GpuReplayEpochStatusV2::Unconsumed);
++    // Wait for the *actual* worker to take its test gate. This is poll-only.
++    while live.exact_checkpoint_state_for_test().1 != "Worker" {
++        live.poll_exact_checkpoint_for_test().unwrap();
++        wait_step(deadline);
++    }
++    let held_dispatch_count = live.completed_dispatch_count_for_test();
++    for _ in 0..2 {
++        assert!(matches!(live.tick_outcome().unwrap(),
++            GpuLiveTickOutcome::NoProgress(alife_game_app::GpuLiveNoProgressReason::CheckpointPublicationPending)));
++        assert_eq!(live.world_tick_for_test(), held_tick);
++        assert_eq!(live.world_snapshot().canonical_signature_digest().unwrap(), held_world);
++        assert_eq!(live.sleep_state_for_test(owner).unwrap(), held_sleep);
++        assert_eq!(live.completed_dispatch_count_for_test(), held_dispatch_count);
++        assert_eq!(durable.load().unwrap().digest, visible_before_publication.digest);
++        assert!(live.durable_completed_sleep_permitted_ids_for_test().is_empty());
++    }
++    publisher_release.send(()).expect("release actual exact worker");
++    let sealed = loop {
++        live.poll_exact_checkpoint_for_test().unwrap();
++        let base = durable.load().unwrap();
++        if base.replay_epoch_status() == GpuReplayEpochStatusV2::Unconsumed
++            && live.durable_completed_sleep_permitted_ids_for_test().contains(&owner)
++        {
++            break base;
++        }
++        assert_eq!(live.world_tick_for_test(), held_tick);
++        wait_step(deadline);
++    };
++    assert!(saw_submitted);
++    assert_eq!(sealed.save.world.tick, live.world_tick_for_test());
++    assert!(durable.load_sleep_transaction_journal(&sealed).unwrap().entries.is_empty());
++    let (request, output) = match resident_brain(&sealed, owner).sleep.consolidation {
++        ConsolidationState::Completed { request, staged } => (request, staged),
++        other => panic!("production exact worker published no completed stage: {other:?}"),
++    };
++    let prior_bank = live.learning_state_for_test(owner).unwrap();
++    assert_eq!(prior_bank.active_weight_generation, request.input_generation);
++
++    if cold {
++        // Return the exact durability owner without authorizing the next tick,
++        // close the old writer, then use the actual normal durable launcher.
++        while !live.persistence_idle_for_shutdown_for_test() {
++            live.poll_persistence_for_shutdown_for_test().unwrap();
++            wait_step(deadline);
++        }
++        assert_eq!(durable.load().unwrap().digest, sealed.digest);
++        drop(live);
++        let launch = launch_config(&scratch, &assets, &current, &sealed, "cold");
++        let mut reopened =
++            GpuLiveBrainRuntime::from_p34_launch_with_backend(&launch, software_backend).unwrap();
++        assert!(reopened.persistence_idle_for_shutdown_for_test());
++        assert!(reopened.durable_completed_sleep_permitted_ids_for_test().is_empty());
++        reopened.poll_persistence_for_shutdown_for_test().unwrap();
++        struct ForbiddenDriver;
++        impl alife_runtime::GpuSleepConsolidationDriver for ForbiddenDriver {
++            fn progress(
++                &mut self, _: OrganismId, _: alife_core::SleepState,
++                _: Option<alife_core::ConsolidationIntent>,
++            ) -> Result<Option<alife_core::sleep::ConsolidationDriverEvent>, alife_core::ScaffoldContractError> {
++                panic!("an injected driver may not spend the sealed epoch");
++            }
++        }
++        assert!(reopened.tick_with_sleep_driver(&mut ForbiddenDriver).is_err());
++        assert_eq!(durable.load().unwrap().digest, sealed.digest);
++        assert_eq!(reopened.world_tick_for_test(), sealed.save.world.tick);
++        assert_eq!(reopened.learning_state_for_test(owner).unwrap(), prior_bank);
++        live = reopened;
++    }
++
++    loop {
++        if matches!(live.tick_outcome().unwrap(), GpuLiveTickOutcome::Progressed(_)) {
++            break;
++        }
++        wait_step(deadline);
++    }
++    assert_eq!(live.world_tick_for_test().raw(), sealed.save.world.tick.raw() + 1);
++    let after_commit = live.learning_state_for_test(owner).unwrap();
++    assert_eq!(after_commit.active_weight_generation, output.output_generation);
++    assert_eq!(after_commit.active_eligibility_generation, output.eligibility_reset_generation);
++    assert_eq!(after_commit.replay_journal_generation, output.replay_journal_generation);
++    assert_eq!(after_commit.replay_journal_event_count, output.replay_journal_event_count);
++    assert_eq!(after_commit.transaction_generation, prior_bank.transaction_generation + 1);
++
++    while !live.persistence_idle_for_shutdown_for_test() {
++        live.poll_persistence_for_shutdown_for_test().unwrap();
++        wait_step(deadline);
++    }
++    let receipt_only = durable.load().unwrap();
++    assert_eq!(receipt_only.authority_generation().unwrap(), sealed.authority_generation().unwrap() + 1);
++    assert_eq!(receipt_only.replay_epoch_status(), GpuReplayEpochStatusV2::Consumed);
++    assert_eq!(receipt_only.save, sealed.save);
++    let journal = durable.load_sleep_transaction_journal(&receipt_only).unwrap();
++    let physical_edges = journal.entries.iter().filter(|e| e.organism_id == owner
++        && matches!(e.target.consolidation, ConsolidationState::Committed { .. })).collect::<Vec<_>>();
++    assert_eq!(physical_edges.len(), 1);
++    assert_eq!(physical_edges[0].transition_tick, live.world_tick_for_test());
++    let launch = launch_config(&scratch, &assets, &current, &receipt_only, "consumed");
++    let mut factory_called = false;
++    assert!(matches!(
++        GpuLiveBrainRuntime::from_p34_launch_with_backend(&launch, || {
++            factory_called = true;
++            software_backend()
++        }),
++        Err(GameAppShellError::GpuRuntime(GpuRuntimeError::ConsumedReplayEpochRequiresFullCheckpoint { .. }))
++    ));
++    assert!(!factory_called, "consumed typed refusal must precede adapter creation");
++    assert!(matches!(durable.compare_and_swap(&receipt_only.digest, &receipt_only.save),
++        Err(GpuRuntimeError::ConsumedReplayEpochRequiresFullCheckpoint { .. })));
++    assert!(durable.publish_replay_epoch_commit_profiled(&receipt_only, &journal, false, Vec::new()).is_err());
++
++    // Isolated copy of the fully authenticated genuine receipt stream; an
++    // empty legacy clear and a second fresh open still do not make it playable.
++    let receipt_fork = scratch.join("receipt-only-proof");
++    fs::create_dir(&receipt_fork).unwrap();
++    for entry in fs::read_dir(&scratch).unwrap() {
++        let entry = entry.unwrap();
++        if entry.file_type().unwrap().is_file() {
++            fs::copy(entry.path(), receipt_fork.join(entry.file_name())).unwrap();
++        }
++    }
++    let fork_current = receipt_fork.join(current.file_name().unwrap());
++    let (fork, pre_clear) = GpuDurableSaveManifest::open_loaded(&fork_current, &assets).unwrap();
++    assert_eq!(pre_clear, receipt_only);
++    let empty = alife_runtime::GpuSleepTransactionJournalV2::empty(&pre_clear).unwrap();
++    fork.publish_sleep_transaction_journal(&pre_clear, &empty).unwrap();
++    let (_, first_open) = GpuDurableSaveManifest::open_loaded(&fork_current, &assets).unwrap();
++    let (_, second_open) = GpuDurableSaveManifest::open_loaded(&fork_current, &assets).unwrap();
++    assert_eq!(first_open, second_open);
++    assert_eq!(second_open.authority_generation().unwrap(), receipt_only.authority_generation().unwrap() + 1);
++    assert_eq!(second_open.replay_epoch_status(), GpuReplayEpochStatusV2::Consumed);
++    assert_eq!(second_open.save, receipt_only.save);
++    assert_eq!(fork.load_sleep_transaction_journal(&second_open).unwrap(), empty);
++    assert!(matches!(second_open.require_playable_replay_epoch(),
++        Err(GpuRuntimeError::ConsumedReplayEpochRequiresFullCheckpoint { .. })));
++    assert!(fork.publish_sleep_transaction_journal(&second_open, &journal).is_err());
++
++    // Only the still-live truly committed runtime can supply this later complete
++    // native cut; a journal-only restart cannot manufacture it.
++    loop {
++        let current_sleep = live.sleep_state_for_test(owner).unwrap();
++        if current_sleep.phase == SleepPhase::Awake {
++            assert_eq!(current_sleep.last_consolidated_cycle_id, request.cycle_id);
++            assert_eq!(current_sleep.cycles_completed, 1);
++            break;
++        }
++        live.tick_outcome().unwrap();
++        wait_step(deadline);
++    }
++    live.request_exact_checkpoint_for_test().unwrap();
++    while !live.persistence_idle_for_shutdown_for_test() {
++        live.poll_persistence_for_shutdown_for_test().unwrap();
++        wait_step(deadline);
++    }
++    let full = durable.load().unwrap();
++    full.require_playable_replay_epoch().unwrap();
++    assert!(full.authority_generation() > receipt_only.authority_generation());
++    assert!(full.save.world.tick > receipt_only.save.world.tick);
++    assert!(durable.load_sleep_transaction_journal(&full).unwrap().entries.is_empty());
++    let frozen_neural = live.learning_state_for_test(owner).unwrap();
++    let frozen_weights = live.active_lifetime_weights_for_test(owner).unwrap();
++    let frozen_fast = live.active_fast_weights_for_test(owner).unwrap();
++    let frozen_sleep = live.sleep_state_for_test(owner).unwrap();
++    let frozen_memory = live.memory_sidecar_for_test(owner).unwrap().clone();
++    let frozen_world = live.world_snapshot().canonical_signature_digest().unwrap();
++    drop(live);
++    let launch = launch_config(&scratch, &assets, &current, &full, "fully-committed");
++    let mut resumed = GpuLiveBrainRuntime::from_p34_launch_with_backend(&launch, software_backend).unwrap();
++    assert_eq!(resumed.world_tick_for_test(), full.save.world.tick);
++    assert_eq!(resumed.world_snapshot().canonical_signature_digest().unwrap(), frozen_world);
++    assert_eq!(resumed.learning_state_for_test(owner).unwrap(), frozen_neural);
++    assert_eq!(resumed.active_lifetime_weights_for_test(owner).unwrap(), frozen_weights);
++    assert_eq!(resumed.active_fast_weights_for_test(owner).unwrap(), frozen_fast);
++    assert_eq!(resumed.sleep_state_for_test(owner).unwrap(), frozen_sleep);
++    // Avoid asserting metrics/caches that the memory contract does not
++    // persist; compare the serialized production bank/source state.
++    assert_eq!(resumed.memory_sidecar_for_test(owner).unwrap().bank(), frozen_memory.bank());
++    drop(resumed);
++    // Preserve receipt directory, even after success, for independent review.
++}
++
++#[test]
++#[ignore = "requires explicit detached writer lease and a qualified real Vulkan backend"]
++fn warm_epoch_consumes_once_then_normal_exact_save_reopens() {
++    check_playable_full_cut(false);
++}
++
++#[test]
++#[ignore = "requires explicit detached writer lease and a qualified real Vulkan backend"]
++fn restored_epoch_admits_on_first_ordinary_tick_then_normal_exact_save_reopens() {
++    check_playable_full_cut(true);
++}
+diff --git a/crates/alife_gpu_backend/src/closed_loop_exact_capture.rs b/crates/alife_gpu_backend/src/closed_loop_exact_capture.rs
+index b3f97e5818f005847b98d8353e190651b61191fe..68220572326d6ad08b625fd92c44e77a64006d95 100644
+--- a/crates/alife_gpu_backend/src/closed_loop_exact_capture.rs
++++ b/crates/alife_gpu_backend/src/closed_loop_exact_capture.rs
+@@ -168,6 +168,7 @@ pub struct GpuExactCompletedSleepCaptureV1 {
+ #[derive(Debug, Clone, PartialEq)]
+ pub struct GpuExactPopulationCaptureV1 {
+     schema_version: u16,
++    replay_epoch_scope: Option<[u64; 4]>,
+     capture_transaction_generation: u64,
+     population_set_digest: [u64; 4],
+     checkpoint_tick: Tick,
+@@ -176,6 +177,11 @@ pub struct GpuExactPopulationCaptureV1 {
+ }
+ 
+ impl GpuExactPopulationCaptureV1 {
++    /// Only the owner of a device-mapped exact readback can supply this.
++    pub const fn replay_epoch_scope(&self) -> Option<[u64; 4]> {
++        self.replay_epoch_scope
++    }
++
+     pub const fn checkpoint_tick(&self) -> Tick {
+         self.checkpoint_tick
+     }
+@@ -238,6 +244,7 @@ struct CapturedRowLayout {
+ 
+ pub struct GpuExactPopulationCaptureTicketV1 {
+     backend_instance_id: std::num::NonZeroU64,
++    replay_epoch_scope: Option<[u64; 4]>,
+     capture_transaction_generation: u64,
+     population_set_digest: [u64; 4],
+     checkpoint_tick: Tick,
+@@ -301,6 +308,33 @@ impl GpuClosedLoopBackend {
+         checkpoint_tick: Tick,
+         capture_transaction_generation: u64,
+         handles: &[GpuBrainHandle],
++    ) -> Result<GpuExactPopulationCaptureTicketV1, ScaffoldContractError> {
++        self.submit_exact_population_capture_inner(
++            checkpoint_tick, capture_transaction_generation, handles, None,
++        )
++    }
++
++    pub fn submit_replay_epoch_population_capture(
++        &mut self,
++        checkpoint_tick: Tick,
++        capture_transaction_generation: u64,
++        handles: &[GpuBrainHandle],
++        scope: [u64; 4],
++    ) -> Result<GpuExactPopulationCaptureTicketV1, ScaffoldContractError> {
++        if scope == [0; 4] || handles.is_empty() {
++            return Err(ScaffoldContractError::InvalidId);
++        }
++        self.submit_exact_population_capture_inner(
++            checkpoint_tick, capture_transaction_generation, handles, Some(scope),
++        )
++    }
++
++    fn submit_exact_population_capture_inner(
++        &mut self,
++        checkpoint_tick: Tick,
++        capture_transaction_generation: u64,
++        handles: &[GpuBrainHandle],
++        replay_epoch_scope: Option<[u64; 4]>,
+     ) -> Result<GpuExactPopulationCaptureTicketV1, ScaffoldContractError> {
+         self.ensure_ready()?;
+         if capture_transaction_generation == 0
+@@ -343,6 +377,7 @@ impl GpuClosedLoopBackend {
+             self.next_exact_population_capture_generation = next_capture_transaction_generation;
+             return Ok(GpuExactPopulationCaptureTicketV1 {
+                 backend_instance_id: self.backend_instance_id,
++                replay_epoch_scope,
+                 capture_transaction_generation,
+                 population_set_digest,
+                 checkpoint_tick,
+@@ -526,6 +561,7 @@ impl GpuClosedLoopBackend {
+             .saturating_add(destination_cursor);
+         Ok(GpuExactPopulationCaptureTicketV1 {
+             backend_instance_id: self.backend_instance_id,
++            replay_epoch_scope,
+             capture_transaction_generation,
+             population_set_digest,
+             checkpoint_tick,
+@@ -565,6 +601,7 @@ impl GpuClosedLoopBackend {
+             return Ok(GpuExactPopulationCapturePollV1::Ready(
+                 GpuExactPopulationCaptureV1 {
+                     schema_version: GPU_EXACT_POPULATION_CAPTURE_SCHEMA_VERSION,
++                    replay_epoch_scope: ticket.replay_epoch_scope,
+                     capture_transaction_generation: ticket.capture_transaction_generation,
+                     population_set_digest: ticket.population_set_digest,
+                     checkpoint_tick: ticket.checkpoint_tick,
+@@ -622,6 +659,7 @@ impl GpuClosedLoopBackend {
+         Ok(GpuExactPopulationCapturePollV1::Ready(
+             GpuExactPopulationCaptureV1 {
+                 schema_version: GPU_EXACT_POPULATION_CAPTURE_SCHEMA_VERSION,
++                replay_epoch_scope: ticket.replay_epoch_scope,
+                 capture_transaction_generation: ticket.capture_transaction_generation,
+                 population_set_digest: ticket.population_set_digest,
+                 checkpoint_tick: ticket.checkpoint_tick,
+diff --git a/crates/alife_gpu_backend/src/closed_loop_sleep.rs b/crates/alife_gpu_backend/src/closed_loop_sleep.rs
+index 81751509802765b93c2003c2cadc1e983164b540..fb9562832f83fe4867823b9d15709c429b3b805a 100644
+--- a/crates/alife_gpu_backend/src/closed_loop_sleep.rs
++++ b/crates/alife_gpu_backend/src/closed_loop_sleep.rs
+@@ -175,6 +175,26 @@ pub struct GpuSleepConsolidationReceipt {
+     pub commit_digest: [u64; 4],
+ }
+ 
++/// Opaque affine witness. There is no constructor, Clone, or wire decoder.
++#[derive(Debug)]
++pub struct GpuNativeReplayEpochCommitV2 {
++    scope: [u64; 4],
++    source_tick: Tick,
++    staged_transition_tick: Tick,
++    source_world_words: [u64; 4],
++    request: GpuConsolidationRequest,
++    receipt: GpuSleepConsolidationReceipt,
++}
++
++impl GpuNativeReplayEpochCommitV2 {
++    pub const fn scope(&self) -> [u64; 4] { self.scope }
++    pub const fn source_tick(&self) -> Tick { self.source_tick }
++    pub const fn staged_transition_tick(&self) -> Tick { self.staged_transition_tick }
++    pub const fn source_world_words(&self) -> [u64; 4] { self.source_world_words }
++    pub const fn request(&self) -> &GpuConsolidationRequest { &self.request }
++    pub const fn receipt(&self) -> &GpuSleepConsolidationReceipt { &self.receipt }
++}
++
+ #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+ pub struct GpuLearningStateSnapshot {
+     pub active_weight_bank: u8,
+@@ -486,6 +506,41 @@ impl GpuClosedLoopBackend {
+         result
+     }
+ 
++    /// Permit-bound epoch consumption may use only a fresh dispatch, never
++    /// an idempotent cached receipt. Inner success is after GPU-state readback,
++    /// resident generation update, and successful native staged job removal.
++    pub fn commit_replay_epoch_sleep(
++        &mut self,
++        handle: GpuBrainHandle,
++        request: &GpuConsolidationRequest,
++        staged: &ConsolidationStagedOutput,
++        scope: [u64; 4],
++        source_tick: Tick,
++        staged_transition_tick: Tick,
++        source_world_words: [u64; 4],
++    ) -> Result<GpuNativeReplayEpochCommitV2, ScaffoldContractError> {
++        if scope == [0; 4] || source_world_words == [0; 4]
++            || Some(staged_transition_tick.raw()) != source_tick.raw().checked_add(1)
++            || !self.sleep_jobs.contains_key(&staged.job_id.raw())
++            || self.committed_sleep.contains_key(&sleep_commit_key(handle, request.cycle_id))
++        {
++            return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
++        }
++        let mut submission_started = false;
++        match self.commit_sleep_consolidation_inner(handle, request, staged, &mut submission_started) {
++            Ok(receipt) if submission_started => Ok(GpuNativeReplayEpochCommitV2 {
++                scope, source_tick, staged_transition_tick, source_world_words,
++                request: *request, receipt,
++            }),
++            Ok(_) => Err(ScaffoldContractError::ConsolidationGenerationMismatch),
++            Err(_) if submission_started => {
++                self.mark_device_lost();
++                Err(ScaffoldContractError::NeuralBackendUnavailable)
++            }
++            Err(error) => Err(error),
++        }
++    }
++
+     fn commit_sleep_consolidation_inner(
+         &mut self,
+         handle: GpuBrainHandle,
+diff --git a/crates/alife_runtime/src/checkpoint_assets/durable_manifest.rs b/crates/alife_runtime/src/checkpoint_assets/durable_manifest.rs
+index 7c2ae3644b8d59f78ec3bfda8296f5b55fb8eca3..a7b080774da9d08ea39447a3b8ee96eb30e2de22 100644
+--- a/crates/alife_runtime/src/checkpoint_assets/durable_manifest.rs
++++ b/crates/alife_runtime/src/checkpoint_assets/durable_manifest.rs
+@@ -15,6 +15,7 @@ use alife_core::{
+     CanonicalDigestBuilder, ConsolidationState, OrganismId, ScaffoldContractError, SleepState,
+     SleepTrigger, Tick, Validate,
+ };
++use alife_gpu_backend::{GpuExactPopulationCaptureV1, GpuNativeReplayEpochCommitV2};
+ use alife_world::persistence::{PortableAssetDigest, PortableSaveFile};
+ use serde::{Deserialize, Serialize};
+ 
+@@ -31,6 +32,9 @@ const GPU_CHECKPOINT_AUTHORITY_FIELD: &str = "gpu_checkpoint_authority";
+ const GPU_CHECKPOINT_AUTHORITY_SCHEMA: &str = "alife.gpu-checkpoint-authority";
+ const GPU_CHECKPOINT_AUTHORITY_SCHEMA_VERSION: u16 = 1;
+ const GPU_CHECKPOINT_AUTHORITY_DIGEST_DOMAIN: &[u8] = b"alife.gpu-checkpoint-authority.v1";
++const GPU_CHECKPOINT_REPLAY_EPOCH_VERSION: u16 = 2;
++const GPU_CHECKPOINT_REPLAY_EPOCH_DOMAIN: &[u8] = b"alife.gpu-checkpoint-authority.replay-epoch.v2";
++
+ const AUTHORITY_STAGE_SAVE_PREPARED: u64 = 1;
+ const AUTHORITY_STAGE_JOURNAL_PREPARED: u64 = 2;
+ const AUTHORITY_STAGE_POINTER_COMMIT: u64 = 3;
+@@ -573,6 +577,183 @@ struct GpuCheckpointAuthorityJournalArtifactV1 {
+     journal_schema_version: u16,
+ }
+ 
++/// Capture provenance, produced only by the ordinary scheduler's actual
++/// Submitted -> Completed transition in the staged tick adopted by its worker.
++#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++pub struct GpuReplayEpochCompletionV2 {
++    organism_id: OrganismId,
++    tick: Tick,
++    source: SleepState,
++    completed: SleepState,
++}
++
++impl GpuReplayEpochCompletionV2 {
++    pub fn try_new(
++        organism_id: OrganismId,
++        tick: Tick,
++        source: SleepState,
++        completed: SleepState,
++    ) -> Result<Self, ScaffoldContractError> {
++        let evidence = Self { organism_id, tick, source, completed };
++        evidence.validate()?;
++        Ok(evidence)
++    }
++
++    pub fn matches_captured(&self, owner: OrganismId, tick: Tick, sleep: SleepState) -> bool {
++        self.organism_id == owner && self.tick == tick && self.completed == sleep
++    }
++
++    fn validate(&self) -> Result<(), ScaffoldContractError> {
++        self.organism_id.validate()?;
++        self.source.validate_contract()?;
++        self.completed.validate_contract()?;
++        if self.tick.raw() == 0
++            || self.source.phase_started_tick > self.tick
++            || !sleep_identity_unchanged_except_consolidation(self.source, self.completed)
++        {
++            return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
++        }
++        match (self.source.consolidation, self.completed.consolidation) {
++            (ConsolidationState::Submitted { request, job_id },
++             ConsolidationState::Completed { request: completed_request, staged })
++                if request == completed_request && job_id == staged.job_id => Ok(()),
++            _ => Err(ScaffoldContractError::ConsolidationGenerationMismatch),
++        }
++    }
++}
++
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub enum GpuReplayEpochStatusV2 {
++    Unknown,
++    Unconsumed,
++    Consumed,
++}
++
++#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++struct GpuReplayEpochSealV2 {
++    original_generation: u64,
++    capture_transaction: u64,
++    origin_population_digest: [u64; 4],
++    origin_predecessor_digest: Option<[u64; 4]>,
++    completions: Vec<GpuReplayEpochCompletionV2>,
++    // Complete validated authentic edge proof survives journal-clear successors.
++    consumed_edges: Option<Vec<GpuSleepTransactionJournalEntryV2>>,
++    native_commit_digests: Vec<[u64; 4]>,
++}
++
++impl GpuReplayEpochSealV2 {
++    fn validate_shape(&self, generation: u64, predecessor: Option<[u64; 4]>)
++        -> Result<(), ScaffoldContractError>
++    {
++        let next = self.original_generation.checked_add(1)
++            .ok_or(ScaffoldContractError::ConsolidationGenerationMismatch)?;
++        if self.original_generation == 0 || self.capture_transaction == 0
++            || self.origin_population_digest == [0; 4]
++            || self.completions.len() != 1
++            || self.completions.windows(2).any(|r| r[0].organism_id.raw() >= r[1].organism_id.raw())
++            || (self.consumed_edges.is_none()
++                && (generation != self.original_generation || predecessor != self.origin_predecessor_digest))
++            || (self.consumed_edges.is_some() && generation < next)
++            || self.native_commit_digests.len() != self.consumed_edges.as_ref().map_or(0, Vec::len)
++            || self.native_commit_digests.contains(&[0; 4])
++        {
++            return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
++        }
++        for item in &self.completions {
++            item.validate()?;
++        }
++        if let Some(edges) = &self.consumed_edges {
++            if edges.len() != self.completions.len() {
++                return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
++            }
++            for (edge, item) in edges.iter().zip(&self.completions) {
++                edge.validate()?;
++                if edge.organism_id != item.organism_id || edge.source != item.completed
++                    || edge.transition_ordinal != 0
++                    || Some(edge.transition_tick.raw()) != item.tick.raw().checked_add(1)
++                    || !matches!(edge.target.consolidation, ConsolidationState::Committed { .. })
++                {
++                    return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
++                }
++            }
++        }
++        Ok(())
++    }
++
++    fn validate_save_and_journal(
++        &self, generation: u64, save: &PortableSaveFile, journal: &GpuSleepTransactionJournalV2,
++    ) -> Result<(), GameAppShellError> {
++        let resident = require_single_living_replay_epoch_resident(save)?;
++        if self.completions.len() != 1 || self.completions[0].organism_id != resident {
++            return Err(GameAppShellError::ReplayEpochRequiresSingleLivingResident);
++        }
++        let failed = || GameAppShellError::from(ScaffoldContractError::ConsolidationGenerationMismatch);
++        let mut staged = save.creatures.iter().filter_map(|c| {
++            let gpu = c.gpu_brain.as_ref()?;
++            matches!(gpu.sleep.consolidation, ConsolidationState::Completed { .. })
++                .then_some((c.organism_id, gpu.sleep))
++        }).collect::<Vec<_>>();
++        staged.sort_by_key(|item| item.0.raw());
++        if staged.len() != self.completions.len() {
++            return Err(failed());
++        }
++        for (item, actual) in self.completions.iter().zip(staged) {
++            if (item.organism_id, item.completed) != actual || item.tick != save.world.tick
++                || !save.world.organism_records.as_ref().is_some_and(|records| {
++                    records.iter().any(|r| r.organism_id() == item.organism_id && r.lifecycle().is_alive())
++                })
++            {
++                return Err(failed());
++            }
++        }
++        match &self.consumed_edges {
++            None if journal.entries.is_empty() => Ok(()),
++            Some(edges) => {
++                let actual = completed_promotion_edges(&journal.entries);
++                let next = self.original_generation.checked_add(1).ok_or_else(failed)?;
++                if (generation == next && actual.as_slice() != edges.as_slice())
++                    || actual.iter().any(|e| !edges.contains(e)) {
++                    return Err(failed());
++                }
++                Ok(())
++            }
++            None => Err(failed()),
++        }
++    }
++}
++
++// In this narrow detached research lane the permanently authoritative living
++// roster is the saved biological registry, not the perceived world actor map.
++// An explicitly nonresident teacher, prey or prop is not another resident.
++fn require_single_living_replay_epoch_resident(
++    save: &PortableSaveFile,
++) -> Result<OrganismId, GameAppShellError> {
++    let failed = || GameAppShellError::ReplayEpochRequiresSingleLivingResident;
++    let records = save.world.organism_records.as_ref().ok_or_else(failed)?;
++    let [record] = records.as_slice() else { return Err(failed()); };
++    let [creature] = save.creatures.as_slice() else { return Err(failed()); };
++    let owner = record.organism_id();
++    if !record.lifecycle().is_alive()
++        || creature.organism_id != owner
++        || creature.gpu_brain.as_ref().is_none_or(|brain| brain.organism_id != owner)
++        || save.world.external_actor_ids.as_ref().is_some_and(|ids| ids.contains(&owner))
++    {
++        return Err(failed());
++    }
++    Ok(owner)
++}
++
++fn completed_promotion_edges(entries: &[GpuSleepTransactionJournalEntryV2])
++    -> Vec<GpuSleepTransactionJournalEntryV2>
++{
++    entries.iter().filter(|edge| matches!(
++        (edge.source.consolidation, edge.target.consolidation),
++        (ConsolidationState::Completed { .. }, ConsolidationState::Committed { .. })
++    )).cloned().collect()
++}
++
+ #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+ #[serde(deny_unknown_fields)]
+ struct GpuCheckpointAuthorityPointerV1 {
+@@ -584,6 +765,8 @@ struct GpuCheckpointAuthorityPointerV1 {
+     asset_manifest_identity: PortableAssetDigest,
+     save: GpuCheckpointAuthoritySaveArtifactV1,
+     journal: GpuCheckpointAuthorityJournalArtifactV1,
++    #[serde(default, skip_serializing_if = "Option::is_none")]
++    replay_epoch: Option<GpuReplayEpochSealV2>,
+     authority_digest: [u64; 4],
+ }
+ 
+@@ -594,16 +777,22 @@ impl GpuCheckpointAuthorityPointerV1 {
+         asset_manifest_identity: PortableAssetDigest,
+         save: GpuCheckpointAuthoritySaveArtifactV1,
+         journal: GpuCheckpointAuthorityJournalArtifactV1,
++        replay_epoch: Option<GpuReplayEpochSealV2>,
+     ) -> Result<Self, GameAppShellError> {
+         let mut pointer = Self {
+             schema: GPU_CHECKPOINT_AUTHORITY_SCHEMA.to_string(),
+-            schema_version: GPU_CHECKPOINT_AUTHORITY_SCHEMA_VERSION,
++            schema_version: if replay_epoch.is_some() {
++                GPU_CHECKPOINT_REPLAY_EPOCH_VERSION
++            } else {
++                GPU_CHECKPOINT_AUTHORITY_SCHEMA_VERSION
++            },
+             generation,
+             prior_generation: prior.map(|value| value.generation),
+             prior_authority_digest: prior.map(|value| value.authority_digest),
+             asset_manifest_identity,
+             save,
+             journal,
++            replay_epoch,
+             authority_digest: [0; 4],
+         };
+         pointer.authority_digest = pointer.recompute_digest();
+@@ -621,8 +810,16 @@ impl GpuCheckpointAuthorityPointerV1 {
+             self.prior_generation == Some(self.generation - 1)
+                 && self.prior_authority_digest.is_some()
+         };
++        let correct_wire = matches!(
++            (self.schema_version, self.replay_epoch.is_some()),
++            (GPU_CHECKPOINT_AUTHORITY_SCHEMA_VERSION, false)
++                | (GPU_CHECKPOINT_REPLAY_EPOCH_VERSION, true)
++        );
++        if let Some(epoch) = &self.replay_epoch {
++            epoch.validate_shape(self.generation, self.prior_authority_digest)?;
++        }
+         if self.schema != GPU_CHECKPOINT_AUTHORITY_SCHEMA
+-            || self.schema_version != GPU_CHECKPOINT_AUTHORITY_SCHEMA_VERSION
++            || !correct_wire
+             || self.generation == 0
+             || !prior_is_valid
+             || self.save.size_bytes == 0
+@@ -642,7 +839,11 @@ impl GpuCheckpointAuthorityPointerV1 {
+     }
+ 
+     fn recompute_digest(&self) -> [u64; 4] {
+-        let mut digest = CanonicalDigestBuilder::new(GPU_CHECKPOINT_AUTHORITY_DIGEST_DOMAIN);
++        let mut digest = CanonicalDigestBuilder::new(if self.replay_epoch.is_some() {
++            GPU_CHECKPOINT_REPLAY_EPOCH_DOMAIN
++        } else {
++            GPU_CHECKPOINT_AUTHORITY_DIGEST_DOMAIN
++        });
+         digest.write_u16(self.schema_version);
+         digest.write_u64(self.generation);
+         match (self.prior_generation, self.prior_authority_digest) {
+@@ -665,6 +866,12 @@ impl GpuCheckpointAuthorityPointerV1 {
+         digest.write_utf8(&self.journal.digest.0);
+         digest.write_u64(self.journal.size_bytes);
+         digest.write_u16(self.journal.journal_schema_version);
++        if let Some(epoch) = &self.replay_epoch {
++            // Epoch wire is a closed, integer/digest-only typed value. V1
++            // serialization and V1 digest remain byte-for-byte unchanged.
++            let bytes = serde_json::to_vec(epoch).expect("serialize typed replay epoch");
++            digest.write_bytes(&bytes);
++        }
+         digest.finish256()
+     }
+ }
+@@ -708,6 +915,119 @@ impl GpuLoadedSaveManifest {
+             GpuCheckpointAuthoritySource::GenerationV1(pointer) => Some(pointer.generation),
+         }
+     }
++    pub fn replay_epoch_status(&self) -> GpuReplayEpochStatusV2 {
++        match self.authority.generation().and_then(|p| p.replay_epoch.as_ref()) {
++            None => GpuReplayEpochStatusV2::Unknown,
++            Some(seal) if seal.consumed_edges.is_none() => GpuReplayEpochStatusV2::Unconsumed,
++            Some(_) => GpuReplayEpochStatusV2::Consumed,
++        }
++    }
++
++    /// Storage callers may inspect an authenticated consumed generation. It
++    /// is deliberately not a playable state: journal-only publication reuses
++    /// the older exact CPU/GPU/body cut and cannot supply post-tick cognition.
++    pub fn require_playable_replay_epoch(&self) -> Result<(), crate::GpuRuntimeError> {
++        if let Some(pointer) = self.authority.generation() {
++            if pointer.replay_epoch.as_ref().is_some_and(|e| e.consumed_edges.is_some()) {
++                return Err(crate::GpuRuntimeError::ConsumedReplayEpochRequiresFullCheckpoint {
++                    authority_generation: pointer.generation,
++                });
++            }
++        }
++        Ok(())
++    }
++
++    /// Explicit narrow detached-profile admission check, not a way to mint
++    /// replay provenance for ordinary saves.
++    pub fn require_single_living_replay_epoch_resident(&self)
++        -> Result<OrganismId, GameAppShellError>
++    {
++        require_single_living_replay_epoch_resident(&self.save)
++    }
++
++    /// Production restored-world signature including exactly the saved
++    /// tracked-object sidecars, rather than the bare portable world.
++    pub fn replay_epoch_live_world_signature(
++        &self,
++    ) -> Result<alife_world::HeadlessWorldSignatureDigest, GameAppShellError> {
++        if self.replay_epoch_status() != GpuReplayEpochStatusV2::Unconsumed {
++            return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
++        }
++        self.require_single_living_replay_epoch_resident()?;
++        let mut world = self.save.restore_headless_world()?;
++        let mut tracked = Vec::with_capacity(self.save.creatures.len());
++        for creature in &self.save.creatures {
++            let state = creature.gpu_brain.as_ref().ok_or(ScaffoldContractError::MissingPhaseData)?;
++            if state.tracked_objects.organism_id != creature.organism_id
++                || world.organism_registry().get(creature.organism_id).is_none()
++            {
++                return Err(ScaffoldContractError::BrainOwnershipMismatch.into());
++            }
++            tracked.push(state.tracked_objects.clone());
++        }
++        if tracked.len() != world.organism_registry().iter().count() {
++            return Err(ScaffoldContractError::BrainOwnershipMismatch.into());
++        }
++        world.restore_tracked_object_states(tracked)?;
++        Ok(world.canonical_signature_digest()?)
++    }
++
++    fn validate_full_successor(&self, replacement: &PortableSaveFile)
++        -> Result<(), crate::GpuRuntimeError>
++    {
++        let Some(pointer) = self.authority.generation() else { return Ok(()); };
++        let Some(epoch) = &pointer.replay_epoch else { return Ok(()); };
++        let Some(edges) = &epoch.consumed_edges else {
++            // A new manual snapshot must not erase unconsumed authority.
++            return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
++        };
++        let blocked = || crate::GpuRuntimeError::ConsumedReplayEpochRequiresFullCheckpoint {
++            authority_generation: pointer.generation,
++        };
++        if replacement.save_id != self.save.save_id
++            || replacement.deterministic_seed != self.save.deterministic_seed
++            || replacement.config != self.save.config
++        {
++            return Err(blocked());
++        }
++        for edge in edges {
++            let retained = |save: &PortableSaveFile| {
++                save.creatures.iter().position(|c| c.organism_id == edge.organism_id)
++            };
++            let old = retained(&self.save).ok_or_else(blocked)?;
++            let fresh = retained(replacement).ok_or_else(blocked)?;
++            let old_creature = &self.save.creatures[old];
++            let fresh_creature = &replacement.creatures[fresh];
++            let before = old_creature.gpu_brain.as_ref().ok_or_else(blocked)?;
++            let after = fresh_creature.gpu_brain.as_ref().ok_or_else(blocked)?;
++            let (request, staged) = match before.sleep.consolidation {
++                ConsolidationState::Completed { request, staged } => (request, staged),
++                _ => return Err(blocked()),
++            };
++            // Only a later, entirely captured live cut can replace this
++            // nonplayable authority through the exact checkpoint worker.
++            // Matching its post-cycle state is necessary, not a claim that a
++            // relink of these asset IDs can reconstruct that cut.
++            if replacement.world.tick < edge.transition_tick
++                || after.checkpoint_tick != replacement.world.tick
++                || old_creature.genome_id != fresh_creature.genome_id
++                || before.phenotype_hash != after.phenotype_hash
++                || after.active_weight_generation < staged.output_generation
++                || after.replay_journal_generation < staged.replay_journal_generation
++                || after.learning_transaction_generation <= before.learning_transaction_generation
++                || after.sleep.last_consolidated_cycle_id < request.cycle_id
++                || after.sleep.cycles_completed <= before.sleep.cycles_completed
++                || matches!(after.sleep.consolidation,
++                    ConsolidationState::Completed { request: other, .. }
++                    if other.cycle_id <= request.cycle_id)
++            {
++                return Err(blocked());
++            }
++        }
++        Ok(())
++    }
++
++
+ }
+ 
+ #[derive(Debug, Clone, PartialEq, Eq)]
+@@ -941,6 +1261,9 @@ impl GpuDurableSaveManifest {
+         {
+             return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
+         }
++        if let Some(epoch) = &pointer.replay_epoch {
++            epoch.validate_save_and_journal(pointer.generation, save, &journal)?;
++        }
+         Ok(journal)
+     }
+ 
+@@ -972,6 +1295,99 @@ impl GpuDurableSaveManifest {
+         base: &GpuLoadedSaveManifest,
+         journal: &GpuSleepTransactionJournalV2,
+         measure: bool,
++    ) -> Result<GpuSleepJournalPublicationReceipt, GameAppShellError> {
++        self.publish_sleep_journal_inner(base, journal, measure, None)
++    }
++
++    /// Bind an in-flight native operation to this owned path, exact save
++    /// authority (including v2 pointer), and immutable host boundary.
++    pub fn replay_epoch_capture_scope(
++        &self, base: &GpuLoadedSaveManifest, replacement: &PortableSaveFile,
++    ) -> Result<[u64; 4], GameAppShellError> {
++        self.replay_epoch_scope(base, replacement, b"capture")
++    }
++
++    pub fn replay_epoch_commit_scope(
++        &self, base: &GpuLoadedSaveManifest,
++    ) -> Result<[u64; 4], GameAppShellError> {
++        if base.replay_epoch_status() != GpuReplayEpochStatusV2::Unconsumed {
++            return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
++        }
++        self.replay_epoch_scope(base, &base.save, b"commit")
++    }
++
++    fn replay_epoch_scope(
++        &self, base: &GpuLoadedSaveManifest, replacement: &PortableSaveFile, purpose: &[u8],
++    ) -> Result<[u64; 4], GameAppShellError> {
++        let mut digest = CanonicalDigestBuilder::new(b"alife.gpu.replay-epoch-operation.v2");
++        digest.write_bytes(purpose);
++        digest.write_bytes(self.save_path.as_os_str().as_encoded_bytes());
++        digest.write_bytes(self.asset_root.as_os_str().as_encoded_bytes());
++        digest.write_utf8(base.digest.as_str());
++        if let Some(pointer) = base.authority.generation() {
++            digest.write_some();
++            digest.write_u64(pointer.generation);
++            for word in pointer.authority_digest { digest.write_u64(word); }
++        } else {
++            digest.write_none();
++        }
++        digest.write_utf8(&replacement.save_id);
++        digest.write_u64(replacement.deterministic_seed);
++        digest.write_bytes(&serde_json::to_vec(&replacement.config)?);
++        digest.write_bytes(&serde_json::to_vec(&replacement.world)?);
++        Ok(digest.finish256())
++    }
++
++    /// Takes affine attestations from fresh GPU commits, not adaptable typed
++    /// journal shapes, copied receipts, cached results, or a worker flag.
++    /// ```compile_fail
++    /// # fn journal_only(store: &alife_runtime::GpuDurableSaveManifest,
++    /// #                 base: &alife_runtime::GpuLoadedSaveManifest,
++    /// #                 journal: &alife_runtime::GpuSleepTransactionJournalV2) {
++    /// store.publish_replay_epoch_commit_profiled(base, journal, false, true);
++    /// # }
++    /// ```
++    pub fn publish_replay_epoch_commit_profiled(
++        &self,
++        base: &GpuLoadedSaveManifest,
++        journal: &GpuSleepTransactionJournalV2,
++        measure: bool,
++        commits: Vec<GpuNativeReplayEpochCommitV2>,
++    ) -> Result<GpuSleepJournalPublicationReceipt, GameAppShellError> {
++        let scope = self.replay_epoch_commit_scope(base)?;
++        let world = base.replay_epoch_live_world_signature()?;
++        let edges = completed_promotion_edges(&journal.entries);
++        let mut commits = commits;
++        commits.sort_unstable_by_key(|commit| commit.receipt().staged.handle.organism_id().raw());
++        if edges.is_empty() || edges.len() != commits.len() {
++            return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
++        }
++        let mut native_commit_digests = Vec::with_capacity(commits.len());
++        for (edge, commit) in edges.iter().zip(commits) {
++            let ConsolidationState::Completed { request, staged } = edge.source.consolidation else {
++                return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
++            };
++            let receipt = commit.receipt();
++            if commit.scope() != scope || commit.request() != &request
++                || commit.source_tick() != base.save.world.tick
++                || commit.staged_transition_tick() != edge.transition_tick
++                || commit.source_world_words() != world.words
++                || receipt.staged.handle.organism_id() != edge.organism_id
++                || receipt.staged.handle.phenotype_hash() != request.phenotype_hash
++                || receipt.staged.staged != staged || receipt.output_generation != staged.output_generation
++                || receipt.output_digest != staged.output_digest || receipt.commit_digest == [0; 4]
++                || receipt.generation_swaps != 1
++            {
++                return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
++            }
++            native_commit_digests.push(receipt.commit_digest);
++        }
++        self.publish_sleep_journal_inner(base, journal, measure, Some(native_commit_digests))
++    }
++
++    fn publish_sleep_journal_inner(
++        &self, base: &GpuLoadedSaveManifest, journal: &GpuSleepTransactionJournalV2,
++        measure: bool, native_commit_digests: Option<Vec<[u64; 4]>>,
+     ) -> Result<GpuSleepJournalPublicationReceipt, GameAppShellError> {
+         let mut timing = GpuSleepJournalPublicationTiming::default();
+         let started = measure.then(Instant::now);
+@@ -1006,11 +1422,14 @@ impl GpuDurableSaveManifest {
+                 actual: actual_digest.as_str().to_string(),
+             });
+         }
++        if base.replay_epoch_status() != GpuReplayEpochStatusV2::Unknown
++            && self.load()? != *base
++        {
++            return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
++        }
++        let replay_epoch = self.next_journal_epoch(base, journal, native_commit_digests)?;
+         let pointer = self.prepare_journal_authority_generation_profiled(
+-            base,
+-            journal,
+-            measure,
+-            &mut timing,
++            base, journal, measure, &mut timing, replay_epoch,
+         )?;
+         let reopened = match &base.authority {
+             GpuCheckpointAuthoritySource::GenerationV1(_) => self
+@@ -1033,6 +1452,42 @@ impl GpuDurableSaveManifest {
+         })
+     }
+ 
++    fn next_journal_epoch(
++        &self, base: &GpuLoadedSaveManifest, journal: &GpuSleepTransactionJournalV2,
++        native_commit_digests: Option<Vec<[u64; 4]>>,
++    ) -> Result<Option<GpuReplayEpochSealV2>, GameAppShellError> {
++        let prior = base.authority.generation();
++        let Some(mut epoch) = prior.and_then(|p| p.replay_epoch.clone()) else {
++            return if native_commit_digests.is_some() {
++                Err(ScaffoldContractError::ConsolidationGenerationMismatch.into())
++            } else {
++                Ok(None)
++            };
++        };
++        let next = prior.expect("epoch is present only on a generation")
++            .generation.checked_add(1)
++            .ok_or(ScaffoldContractError::ConsolidationGenerationMismatch)?;
++        let requested = completed_promotion_edges(&journal.entries);
++        if epoch.consumed_edges.is_none() {
++            let recorded = native_commit_digests
++                .ok_or(ScaffoldContractError::ConsolidationGenerationMismatch)?;
++            if requested.is_empty() || recorded.len() != requested.len() {
++                return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
++            }
++            epoch.consumed_edges = Some(requested);
++            epoch.native_commit_digests = recorded;
++        } else {
++            let current = self.load_sleep_transaction_journal(base)?;
++            if native_commit_digests.is_some() || requested.iter().any(|edge| !current.entries.contains(edge)) {
++                return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
++            }
++        }
++        // Validate the complete pair before preparing either output leaf.
++        epoch.validate_shape(next, prior.map(|p| p.authority_digest))?;
++        epoch.validate_save_and_journal(next, &base.save, journal)?;
++        Ok(Some(epoch))
++    }
++
+     fn prepare_authority_generation(
+         &self,
+         base: &GpuLoadedSaveManifest,
+@@ -1043,6 +1498,7 @@ impl GpuDurableSaveManifest {
+             journal,
+             false,
+             &mut GpuSleepJournalPublicationTiming::default(),
++            None,
+         )
+     }
+ 
+@@ -1052,9 +1508,10 @@ impl GpuDurableSaveManifest {
+         journal: &GpuSleepTransactionJournalV2,
+         measure: bool,
+         timing: &mut GpuSleepJournalPublicationTiming,
++        replay_epoch: Option<GpuReplayEpochSealV2>,
+     ) -> Result<GpuCheckpointAuthorityPointerV1, GameAppShellError> {
+         let Some(prior) = base.authority.generation() else {
+-            return self.prepare_authority_generation_profiled(base, journal, measure, timing);
++            return self.prepare_authority_generation_profiled(base, journal, measure, timing, None);
+         };
+         let generation = prior.generation.checked_add(1).ok_or_else(|| {
+             GameAppShellError::InvalidProductionFrontend {
+@@ -1086,6 +1543,7 @@ impl GpuDurableSaveManifest {
+                 size_bytes: u64::try_from(journal_bytes.len()).unwrap_or(u64::MAX),
+                 journal_schema_version: GPU_SLEEP_TRANSACTION_JOURNAL_SCHEMA_VERSION,
+             },
++            replay_epoch,
+         )?;
+         record_elapsed_ns(&mut timing.pointer_build_validation_wall_ns, started);
+         Ok(pointer)
+@@ -1097,6 +1555,7 @@ impl GpuDurableSaveManifest {
+         journal: &GpuSleepTransactionJournalV2,
+         measure: bool,
+         timing: &mut GpuSleepJournalPublicationTiming,
++        birth: Option<(u64, [u64; 4], Vec<GpuReplayEpochCompletionV2>)>,
+     ) -> Result<GpuCheckpointAuthorityPointerV1, GameAppShellError> {
+         let prior = base.authority.generation();
+         let generation = match prior {
+@@ -1107,6 +1566,23 @@ impl GpuDurableSaveManifest {
+             })?,
+             None => 1,
+         };
++        let replay_epoch = if let Some((capture_transaction, origin_population_digest, mut completions)) = birth {
++            completions.sort_by_key(|item| item.organism_id.raw());
++            let epoch = GpuReplayEpochSealV2 {
++                original_generation: generation,
++                capture_transaction,
++                origin_population_digest,
++                origin_predecessor_digest: prior.map(|p| p.authority_digest),
++                completions,
++                consumed_edges: None,
++                native_commit_digests: Vec::new(),
++            };
++            epoch.validate_shape(generation, prior.map(|p| p.authority_digest))?;
++            epoch.validate_save_and_journal(generation, &base.save, journal)?;
++            Some(epoch)
++        } else {
++            None
++        };
+         let started = measure.then(Instant::now);
+         let save_bytes = serde_json::to_vec_pretty(&base.save)?;
+         let save_digest = PortableAssetDigest::for_bytes(&save_bytes);
+@@ -1150,6 +1626,7 @@ impl GpuDurableSaveManifest {
+                 size_bytes: u64::try_from(journal_bytes.len()).unwrap_or(u64::MAX),
+                 journal_schema_version: GPU_SLEEP_TRANSACTION_JOURNAL_SCHEMA_VERSION,
+             },
++            replay_epoch,
+         )?;
+         record_elapsed_ns(&mut timing.pointer_build_validation_wall_ns, started);
+         Ok(pointer)
+@@ -1237,7 +1714,7 @@ impl GpuDurableSaveManifest {
+         );
+ 
+         self.commit_prevalidated_authority_pointer_profiled(
+-            &base.save, pointer, measure, timing, false,
++            &base.save, pointer, measure, timing, pointer.replay_epoch.is_some(),
+         )
+     }
+ 
+@@ -1407,7 +1884,12 @@ impl GpuDurableSaveManifest {
+                     message: "GPU checkpoint save CAS lock was poisoned".to_string(),
+                 })?;
+         let prior = if save_path.exists() {
+-            durable.load()?.authority
++            let opened = durable.load()?;
++            // Manual/import publication is not the exact worker. Even a
++            // superficially later payload may not clear this authority.
++            opened.require_playable_replay_epoch()?;
++            opened.validate_full_successor(replacement)?;
++            opened.authority
+         } else {
+             GpuCheckpointAuthoritySource::LegacyDirectV1
+         };
+@@ -1448,6 +1930,101 @@ impl GpuDurableSaveManifest {
+         &self,
+         expected: &GpuSaveManifestDigest,
+         replacement: &PortableSaveFile,
++    ) -> Result<GpuSaveManifestCasOutcome, GameAppShellError> {
++        self.compare_and_swap_inner(expected, replacement, None, None)
++    }
++
++    /// Dedicated adopted exact-worker publication. A raw typed transition
++    /// is not authority; the real device capture must also prove its stage.
++    /// ```compile_fail
++    /// # fn fabricated(store: &alife_runtime::GpuDurableSaveManifest, base: &alife_runtime::GpuLoadedSaveManifest) {
++    /// store.compare_and_swap_replay_epoch(&base.digest, &base.save, 12_u64, Vec::new());
++    /// # }
++    /// ```
++    pub fn compare_and_swap_replay_epoch(
++        &self, expected: &GpuSaveManifestDigest, replacement: &PortableSaveFile,
++        capture: &GpuExactPopulationCaptureV1, completions: Vec<GpuReplayEpochCompletionV2>,
++    ) -> Result<GpuSaveManifestCasOutcome, GameAppShellError> {
++        self.compare_and_swap_inner(expected, replacement, Some(completions), Some(capture))
++    }
++
++    /// The owned exact capture worker may replace a consumed receipt with a
++    /// fresh full cut. The marker is checked before ordinary/manual publication
++    /// can accept a cosmetic or reserialized pre-commit save.
++    /// ```compile_fail
++    /// # fn scalar(store: &alife_runtime::GpuDurableSaveManifest, base: &alife_runtime::GpuLoadedSaveManifest) {
++    /// store.compare_and_swap_full_replay_epoch_successor(&base.digest, &base.save, 17_u64);
++    /// # }
++    /// ```
++    pub fn compare_and_swap_full_replay_epoch_successor(
++        &self, expected: &GpuSaveManifestDigest, replacement: &PortableSaveFile,
++        capture: &GpuExactPopulationCaptureV1,
++    ) -> Result<GpuSaveManifestCasOutcome, GameAppShellError> {
++        self.compare_and_swap_inner(expected, replacement, None, Some(capture))
++    }
++
++    fn validate_native_replay_epoch_capture(
++        &self, prior: &GpuLoadedSaveManifest, replacement: &PortableSaveFile,
++        capture: &GpuExactPopulationCaptureV1,
++        completions: Option<&[GpuReplayEpochCompletionV2]>,
++    ) -> Result<(), GameAppShellError> {
++        let failed = || ScaffoldContractError::ConsolidationGenerationMismatch;
++        if capture.checkpoint_tick() != replacement.world.tick
++            || capture.capture_transaction_generation() == 0
++            || capture.bytes_copied() == 0 || capture.rows().is_empty()
++            || capture.rows().len() != replacement.creatures.len()
++            || (completions.is_none() && prior.replay_epoch_status() != GpuReplayEpochStatusV2::Consumed)
++        {
++            return Err(failed().into());
++        }
++        let resident = require_single_living_replay_epoch_resident(replacement)?;
++        if capture.rows().len() != 1 || capture.rows()[0].identity().organism_id != resident {
++            return Err(GameAppShellError::ReplayEpochRequiresSingleLivingResident);
++        }
++        let scope = self.replay_epoch_capture_scope(prior, replacement)?;
++        if capture.replay_epoch_scope() != Some(scope) {
++            return Err(failed().into());
++        }
++        let store = super::GpuCheckpointAssetStore::new(&self.asset_root)?;
++        for row in capture.rows() {
++            let id = row.identity();
++            let brain = replacement.creatures.iter().find(|c| c.organism_id == id.organism_id)
++                .and_then(|c| c.gpu_brain.as_ref()).ok_or_else(failed)?;
++            if brain.phenotype_hash != id.phenotype_hash
++                || brain.capacity_class_id != id.class_id
++                || brain.checkpoint_tick != capture.checkpoint_tick()
++                || brain.active_weight_generation != id.active_weight_generation
++                || brain.active_weight_bank != id.active_weight_bank
++                || brain.active_eligibility_bank != id.active_eligibility_bank
++                || brain.learning_transaction_generation != id.transaction_generation
++                || brain.replay_journal_generation != id.replay_journal_generation
++                || brain.replay_journal_cursor != id.replay_journal_cursor
++                || brain.replay_journal_event_count != id.replay_journal_event_count
++                || brain.exact_cognitive_state.is_none()
++            {
++                return Err(failed().into());
++            }
++            store.validate_replay_epoch_capture_banks(&replacement.assets, brain, row)?;
++            if let Some(completions) = completions {
++                let completing = completions.iter().find(|edge| edge.organism_id == id.organism_id);
++                match (brain.sleep.consolidation, completing, row.completed_sleep()) {
++                    (ConsolidationState::Completed { request, staged }, Some(edge), Some(native))
++                        if edge.matches_captured(id.organism_id, replacement.world.tick, brain.sleep)
++                            && !native.restored_completed && native.receipt.hardware_receipt_generation > 0
++                            && native.request == request && native.receipt.staged == staged
++                            && native.receipt.handle.organism_id() == id.organism_id => {}
++                    (state, None, None) if !matches!(state, ConsolidationState::Completed { .. }) => {}
++                    _ => return Err(failed().into()),
++                }
++            }
++        }
++        Ok(())
++    }
++
++    fn compare_and_swap_inner(
++        &self, expected: &GpuSaveManifestDigest, replacement: &PortableSaveFile,
++        completions: Option<Vec<GpuReplayEpochCompletionV2>>,
++        capture: Option<&GpuExactPopulationCaptureV1>,
+     ) -> Result<GpuSaveManifestCasOutcome, GameAppShellError> {
+         replacement.validate_with_asset_root(&self.asset_root)?;
+         let replacement_bytes = serde_json::to_vec_pretty(replacement)?;
+@@ -1461,6 +2038,12 @@ impl GpuDurableSaveManifest {
+ 
+         let current = self.load()?;
+         if current.digest.as_str() == replacement_content_digest.as_str() {
++            current.require_playable_replay_epoch()?;
++            if current.replay_epoch_status() == GpuReplayEpochStatusV2::Unconsumed
++                || completions.is_some() || capture.is_some()
++            {
++                return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
++            }
+             return Ok(GpuSaveManifestCasOutcome::AlreadyApplied {
+                 replacement_digest: current.digest,
+             });
+@@ -1479,13 +2062,28 @@ impl GpuDurableSaveManifest {
+                 actual: pre_replace.digest.as_str().to_string(),
+             });
+         }
++        let birth = if let Some(capture) = capture {
++            self.validate_native_replay_epoch_capture(
++                &pre_replace, replacement, capture, completions.as_deref(),
++            )?;
++            completions.map(|rows| (
++                capture.capture_transaction_generation(), capture.population_set_digest(), rows,
++            ))
++        } else {
++            pre_replace.require_playable_replay_epoch()?;
++            None
++        };
++        pre_replace.validate_full_successor(replacement)?;
+         let replacement_base = GpuLoadedSaveManifest {
+             save: replacement.clone(),
+             digest: replacement_content_digest,
+             authority: pre_replace.authority,
+         };
+         let reset_journal = GpuSleepTransactionJournalV2::empty(&replacement_base)?;
+-        let pointer = self.prepare_authority_generation(&replacement_base, &reset_journal)?;
++        let pointer = self.prepare_authority_generation_profiled(
++            &replacement_base, &reset_journal, false,
++            &mut GpuSleepJournalPublicationTiming::default(), birth,
++        )?;
+         let published = self.commit_authority_pointer(replacement, &pointer)?;
+         if published.save != *replacement
+             || published.authority.generation() != Some(&pointer)
+diff --git a/crates/alife_runtime/src/checkpoint_assets/mod.rs b/crates/alife_runtime/src/checkpoint_assets/mod.rs
+index 2caa61796ec1fdf8aeccbd8c6928bd2b36b70217..233e0c4b7cc2f213ec89da2b65e4f080841e1a28 100644
+--- a/crates/alife_runtime/src/checkpoint_assets/mod.rs
++++ b/crates/alife_runtime/src/checkpoint_assets/mod.rs
+@@ -14,7 +14,7 @@ pub use content_store::{
+ };
+ pub use durable_manifest::{
+     GpuDurableSaveManifest, GpuLoadedSaveManifest, GpuSaveManifestCasOutcome,
+-    GpuSaveManifestDigest, GpuSleepJournalPublicationReceipt, GpuSleepJournalPublicationTiming,
++    GpuSaveManifestDigest, GpuReplayEpochCompletionV2, GpuReplayEpochStatusV2, GpuSleepJournalPublicationReceipt, GpuSleepJournalPublicationTiming,
+     GpuSleepTransactionJournalEntryV2, GpuSleepTransactionJournalV2,
+     GPU_SLEEP_TRANSACTION_JOURNAL_MAX_ENTRIES,
+ };
+diff --git a/crates/alife_runtime/src/checkpoint_assets/state_codec.rs b/crates/alife_runtime/src/checkpoint_assets/state_codec.rs
+index 0e306bbaa42971c93160eca4fbd057f14afd37b9..3f686573f8662ba39644e984000337a31fbf7b93 100644
+--- a/crates/alife_runtime/src/checkpoint_assets/state_codec.rs
++++ b/crates/alife_runtime/src/checkpoint_assets/state_codec.rs
+@@ -23,7 +23,7 @@ use alife_world::persistence::{
+     AssetManifest, AssetManifestEntry, DurableFounderCognitiveState, ExactCognitiveCheckpointState,
+     GpuBackendProvenanceSave, GpuBrainAssetRef, GpuBrainSaveState, GpuSleepAssetState,
+     MemorySidecarSaveState, NeuralGpuBackendApi, PendingEligibilityCheckpoint,
+-    PortableActivationBanksV1, PortableDualWeightBankV1, PortableEligibilityBanksV1,
++    PortableActivationBanksV1, PortableAssetDigest, PortableDualWeightBankV1, PortableEligibilityBanksV1,
+     PortableNeuronHomeostasisV1, PortableReplayJournalV1, PortableThrottleCheckpoint,
+     RetainedLearningRecoverySaveState, ThrottleReplaySaveInput, ThrottleReplaySaveState,
+     TopologySidecarSaveSummary, GPU_BACKEND_PROVENANCE_SAVE_SCHEMA_VERSION,
+@@ -373,6 +373,110 @@ impl GpuCheckpointAssetStore {
+         )
+     }
+ 
++    /// Compare physical checkpoint bank assets to the same opaque device
++    /// capture using the production exporters. This does not create files or
++    /// infer CPU memory/topology sidecars from GPU state.
++    pub(super) fn validate_replay_epoch_capture_banks(
++        &self,
++        manifest: &AssetManifest,
++        state: &GpuBrainSaveState,
++        row: &GpuExactPopulationCaptureRowV1,
++    ) -> Result<(), GameAppShellError> {
++        let capacity = BrainCapacityClass::production_for_id(state.capacity_class_id)?;
++        let (topology, snapshot) = decode_exact_population_capture_row(
++            row, state.checkpoint_tick, &capacity,
++        )?;
++        let mut parts = snapshot.into_parts();
++        let activation = activation_asset(&mut parts, topology.neuron_count)?;
++        let homeostasis = homeostasis_asset(&mut parts, topology.neuron_count)?;
++        let lifetime = weight_asset(
++            &mut parts, state.phenotype_hash, topology.total_synapse_count,
++            GPU_BRAIN_WEIGHT_LAYER_LIFETIME,
++        )?;
++        let fast = weight_asset(
++            &mut parts, state.phenotype_hash, topology.total_synapse_count,
++            GPU_BRAIN_WEIGHT_LAYER_FAST,
++        )?;
++        let eligibility = eligibility_asset(
++            &mut parts, state.phenotype_hash, topology.recurrent_synapse_count,
++            topology.decoder_synapse_count,
++        )?;
++        let (phenotype, _): (BrainPhenotype, Vec<u8>) = self.read_json(manifest, &state.immutable_phenotype)?;
++        if phenotype.phenotype_hash() != state.phenotype_hash {
++            return Err(ScaffoldContractError::PhenotypeCompile.into());
++        }
++        let replay = encode_portable_replay(
++            state.phenotype_hash, phenotype.replay_capture_plan().canonical_digest(),
++            parts.replay_journal_generation, parts.replay_journal_cursor,
++            parts.replay_journal_event_count, &PhysicalReplayParts {
++                events: parts.replay_events,
++                spans: parts.replay_spans,
++                samples: parts.replay_samples,
++            },
++        )?;
++        let (replay_wire, _): (PortableRuntimeReplayStateWire, Vec<u8>) =
++            self.read_json(manifest, &state.replay_journal)?;
++        let PortableRuntimeReplayStateWire::Runtime(exact_replay) = replay_wire else {
++            return Err(ScaffoldContractError::MissingPhaseData.into());
++        };
++        validate_runtime_replay_state(state.organism_id, &exact_replay)?;
++        if exact_replay.journal != replay {
++            return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
++        }
++        for (bytes, asset) in [
++            (serde_json::to_vec(&topology)?, state.live_structural_topology.as_ref()
++                .ok_or(ScaffoldContractError::MissingPhaseData)?),
++            (serde_json::to_vec(&activation)?, &state.activation_state),
++            (serde_json::to_vec(&homeostasis)?, &state.neuron_homeostasis),
++            (serde_json::to_vec(&lifetime)?, &state.lifetime_weights),
++            (serde_json::to_vec(&fast)?, &state.fast_weights),
++            (serde_json::to_vec(&eligibility)?, &state.eligibility),
++        ] {
++            if PortableAssetDigest::for_bytes(&bytes) != asset.digest {
++                return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
++            }
++        }
++        let compare = |bytes: Vec<u8>, asset: Option<&GpuBrainAssetRef>| {
++            let matches = asset.is_some_and(|asset| asset.digest == PortableAssetDigest::for_bytes(&bytes));
++            matches.then_some(()).ok_or(ScaffoldContractError::ConsolidationGenerationMismatch)
++        };
++        if !matches!(state.sleep.consolidation, ConsolidationState::None | ConsolidationState::Committed { .. }) {
++            let replay = decode_exact_population_sleep_replay(row, state.checkpoint_tick, &capacity)?;
++            validate_sleep_replay_state(state.sleep.consolidation, &replay)?;
++            compare(serde_json::to_vec(&replay)?, state.sleep_assets.replay_batch.as_ref())?;
++        }
++        if let ConsolidationState::Completed { request, staged } = state.sleep.consolidation {
++            let mut captured = decode_exact_population_completed_sleep_staging(
++                row, state.checkpoint_tick, &capacity, &request, &staged,
++            )?.into_parts();
++            let lifetime = staged_weight_asset(
++                &mut captured, state.phenotype_hash, topology.total_synapse_count,
++                GPU_BRAIN_WEIGHT_LAYER_LIFETIME,
++            )?;
++            let fast = staged_weight_asset(
++                &mut captured, state.phenotype_hash, topology.total_synapse_count,
++                GPU_BRAIN_WEIGHT_LAYER_FAST,
++            )?;
++            let eligibility = staged_eligibility_asset(
++                &mut captured, state.phenotype_hash, topology.recurrent_synapse_count,
++                topology.decoder_synapse_count,
++            )?;
++            let replay = encode_portable_replay(
++                state.phenotype_hash, phenotype.replay_capture_plan().canonical_digest(),
++                captured.replay_journal_generation, captured.replay_journal_cursor,
++                captured.replay_journal_event_count, &PhysicalReplayParts {
++                    events: captured.replay_events, spans: captured.replay_spans,
++                    samples: captured.replay_samples,
++                },
++            )?;
++            compare(serde_json::to_vec(&lifetime)?, state.sleep_assets.lifetime_staging.as_ref())?;
++            compare(serde_json::to_vec(&fast)?, state.sleep_assets.fast_staging.as_ref())?;
++            compare(serde_json::to_vec(&eligibility)?, state.sleep_assets.eligibility_staging.as_ref())?;
++            compare(serde_json::to_vec(&replay)?, state.sleep_assets.replay_journal_staging.as_ref())?;
++        }
++        Ok(())
++    }
++
+     /// Validates worker-owned immutable compact authority against one exact
+     /// published checkpoint. The caller must capture `compact` and `activity`
+     /// from the backend before handing them to the sole persistence worker.
+diff --git a/crates/alife_runtime/src/lib.rs b/crates/alife_runtime/src/lib.rs
+index 8f18bfba0050b282c34a96f8ce981d200387b729..c4c2d365aee166ac784fdee67fd3a53760b30b6e 100644
+--- a/crates/alife_runtime/src/lib.rs
++++ b/crates/alife_runtime/src/lib.rs
+@@ -10,7 +10,7 @@ pub use checkpoint_assets::{
+     retain_current_gpu_checkpoint_manifest_entries, GpuBrainCheckpointWrite,
+     GpuBrainSidecarCapture, GpuCheckpointAssetStore, GpuDurableFounderWrite,
+     GpuDurableSaveManifest, GpuExactCheckpointTransactionContextV1, GpuLoadedSaveManifest,
+-    GpuSaveManifestCasOutcome, GpuSaveManifestDigest, GpuSleepJournalPublicationReceipt,
++    GpuSaveManifestCasOutcome, GpuSaveManifestDigest, GpuReplayEpochCompletionV2, GpuReplayEpochStatusV2, GpuSleepJournalPublicationReceipt,
+     GpuSleepJournalPublicationTiming, GpuSleepTransactionJournalEntryV2,
+     GpuSleepTransactionJournalV2, RestoredGpuBrainCheckpoint, RestoredRetainedLearning,
+     RetainedLearningCapture, GPU_SLEEP_TRANSACTION_JOURNAL_MAX_ENTRIES,
+@@ -40,6 +40,12 @@ pub enum GpuRuntimeError {
+         last_known_good_generation: u64,
+         message: String,
+     },
++    #[error(
++        "GPU checkpoint authority generation {authority_generation} consumed its replay epoch but still references its pre-commit exact save; a full post-commit checkpoint is required to resume play"
++    )]
++    ConsumedReplayEpochRequiresFullCheckpoint { authority_generation: u64 },
++    #[error("detached replay epochs require exactly one living authoritative GPU resident")]
++    ReplayEpochRequiresSingleLivingResident,
+     #[error("invalid GPU checkpoint boundary: {message}")]
+     InvalidProductionFrontend { message: String },
+ }
+diff --git a/crates/alife_runtime/tests/gpu_checkpoint_manifest_cas.rs b/crates/alife_runtime/tests/gpu_checkpoint_manifest_cas.rs
+index 857f4ae419d9fedbc9dd053d41d08645a2920339..a72e8af9d37f295470356f8a679b778d2331eaeb 100644
+--- a/crates/alife_runtime/tests/gpu_checkpoint_manifest_cas.rs
++++ b/crates/alife_runtime/tests/gpu_checkpoint_manifest_cas.rs
+@@ -7,7 +7,7 @@ use alife_core::{
+ };
+ use alife_runtime::{
+     GpuDurableSaveManifest, GpuRuntimeError, GpuSaveManifestCasOutcome,
+-    GpuSleepTransactionJournalV2,
++    GpuReplayEpochCompletionV2, GpuReplayEpochStatusV2, GpuSleepTransactionJournalV2,
+ };
+ use alife_world::{
+     persistence::{AssetManifest, PortableAssetDigest, PortableSaveFile, RuntimeConfig},
+@@ -43,12 +43,23 @@ fn current_save(save_id: &str) -> PortableSaveFile {
+ }
+ 
+ fn current_organism_save(save_id: &str) -> PortableSaveFile {
++    current_organism_save_at(save_id, Tick::ZERO)
++}
++
++fn current_organism_save_at(save_id: &str, tick: Tick) -> PortableSaveFile {
++    current_organism_save_roster(save_id, tick, None)
++}
++
++fn current_organism_save_roster(save_id: &str, tick: Tick, extra_living: Option<bool>) -> PortableSaveFile {
+     let organism_id = OrganismId(1);
+-    let mut world = HeadlessScenarioBuilder::new(73_127)
++    let extra_owner = OrganismId(2);
++    let mut builder = HeadlessScenarioBuilder::new(73_127)
+         .agent("authority-fixture-agent", organism_id, Vec3f::ZERO)
+-        .food("authority-fixture-food", Vec3f::new(1.0, 0.0, 0.0), 0.25)
+-        .build()
+-        .unwrap();
++        .food("authority-fixture-food", Vec3f::new(1.0, 0.0, 0.0), 0.25);
++    if extra_living.is_some() {
++        builder = builder.agent("authority-fixture-extra", extra_owner, Vec3f::new(3.0, 0.0, 0.0));
++    }
++    let mut world = builder.build().unwrap();
+     let genome = CreatureGenome::early_mammal_founder(
+         73_128,
+         FoundationGeneticIdentity::new(10, 1, 7, BrainCapacityClass::N512_ID).unwrap(),
+@@ -65,6 +76,21 @@ fn current_organism_save(save_id: &str) -> PortableSaveFile {
+     )
+     .unwrap();
+     world.register_organism_record(record).unwrap();
++    if extra_living == Some(true) {
++        let genome = CreatureGenome::early_mammal_founder(
++            73_129,
++            FoundationGeneticIdentity::new(10, 1, 7, BrainCapacityClass::N512_ID).unwrap(),
++        ).unwrap();
++        let phenotype = genome.express().unwrap();
++        let extra = WorldOrganismRecord::newborn(
++            extra_owner, world.entity_id("authority-fixture-extra").unwrap(),
++            genome, phenotype, Tick::ZERO,
++        ).unwrap();
++        world.register_organism_record(extra).unwrap();
++    }
++    while world.tick() < tick {
++        world.try_advance_tick().unwrap();
++    }
+     let save = PortableSaveFile::from_headless_world(
+         save_id,
+         &world,
+@@ -73,7 +99,7 @@ fn current_organism_save(save_id: &str) -> PortableSaveFile {
+         Vec::new(),
+     )
+     .unwrap();
+-    assert_eq!(save.world.organism_records.as_ref().unwrap().len(), 1);
++    assert_eq!(save.world.organism_records.as_ref().unwrap().len(), if extra_living == Some(true) { 2 } else { 1 });
+     save
+ }
+ 
+@@ -469,15 +495,17 @@ fn pre_pointer_artifact_failure_leaves_old_authority_bytes_unchanged() {
+     fs::remove_dir_all(root).unwrap();
+ }
+ 
+-#[test]
+-fn first_legacy_sleep_journal_commits_exact_payload_and_later_reuses_save() {
++fn sleep_storage_fixture(
++    root: &Path,
++    save_id: &str,
++    tick: Tick,
++    staged_sleep: Option<alife_core::SleepState>,
++) -> (PortableSaveFile, alife_core::SleepState) {
+     use alife_core::{
+-        sleep::{ConsolidationDriverEvent, SleepConsolidationConfig, SleepController},
+-        BrainActivityPolicyV1, Confidence, ConsolidationIntent, MemoryBankConfig, MemorySidecarState,
+-        PhenotypeHash, ScaffoldContractError, SensorProfile, SensorProfileIdentity, SensoryAbiVersion,
+-        SleepState, SleepTrigger, TopologicalMapConfig, TopologySidecar,
++        BrainActivityPolicyV1, Confidence, MemoryBankConfig, MemorySidecarState,
++        PhenotypeHash, SensorProfile, SensorProfileIdentity, SensoryAbiVersion,
++        SleepState, TopologicalMapConfig, TopologySidecar,
+     };
+-    use alife_runtime::GpuSleepTransactionJournalEntryV2;
+     use alife_world::{
+         persistence::{
+             AssetKind, AssetManifestEntry, AssetPresence, CreatureMindSaveSummary, CreatureSaveState,
+@@ -489,16 +517,7 @@ fn first_legacy_sleep_journal_commits_exact_payload_and_later_reuses_save() {
+         TrackedObjectRegistry,
+     };
+ 
+-    let root = std::env::temp_dir().join(format!(
+-        "alife-legacy-first-sleep-publication-{}",
+-        std::process::id()
+-    ));
+-    if root.exists() {
+-        fs::remove_dir_all(&root).unwrap();
+-    }
+-    fs::create_dir(&root).unwrap();
+-    let save_path = root.join("current.json");
+-    let mut save = current_organism_save("legacy-first-sleep");
++    let mut save = current_organism_save_at(save_id, tick);
+     let record = &save.world.organism_records.as_ref().unwrap()[0];
+     let (organism, genome, biology) = (record.organism_id(), record.genome().id, record.biochemistry());
+     let awake = SleepState::awake_at(save.world.tick);
+@@ -549,7 +568,7 @@ fn first_legacy_sleep_journal_commits_exact_payload_and_later_reuses_save() {
+         });
+         GpuBrainAssetRef { asset_id: label.to_string(), digest }
+     };
+-    let brain = GpuBrainSaveState {
++    let mut brain = GpuBrainSaveState {
+         schema_version: GPU_BRAIN_SAVE_STATE_SCHEMA_VERSION,
+         organism_id: organism,
+         phenotype_hash: PhenotypeHash([1, 2, 3, 4]),
+@@ -592,6 +611,18 @@ fn first_legacy_sleep_journal_commits_exact_payload_and_later_reuses_save() {
+         activity_policy_digest: policy.policy_digest,
+         throttle_replay: ThrottleReplaySaveState::bootstrap(asset("throttle")).unwrap(),
+     };
++    if let Some(sleep) = staged_sleep {
++        use alife_core::ConsolidationState;
++        assert!(matches!(sleep.consolidation, ConsolidationState::Completed { .. }));
++        brain.sleep = sleep;
++        brain.sleep_assets = GpuSleepAssetState {
++            replay_batch: Some(asset("completed-replay-batch")),
++            lifetime_staging: Some(asset("completed-lifetime")),
++            fast_staging: Some(asset("completed-fast")),
++            eligibility_staging: Some(asset("completed-eligibility")),
++            replay_journal_staging: Some(asset("completed-replay-ring")),
++        };
++    }
+     save.creatures.push(CreatureSaveState {
+         organism_id: organism,
+         genome_id: genome,
+@@ -635,6 +666,28 @@ fn first_legacy_sleep_journal_commits_exact_payload_and_later_reuses_save() {
+         .register_creature(organism, alife_world::HabitatId::DEFAULT_WILD, Tick::ZERO)
+         .unwrap();
+     save.validate_with_asset_root(&root).expect("complete legacy fixture");
++    (save, awake)
++}
++
++#[test]
++fn first_legacy_sleep_journal_commits_exact_payload_and_later_reuses_save() {
++    use alife_core::{
++        sleep::{ConsolidationDriverEvent, SleepConsolidationConfig, SleepController},
++        ConsolidationIntent, ScaffoldContractError, SleepTrigger,
++    };
++    use alife_runtime::GpuSleepTransactionJournalEntryV2;
++
++    let root = std::env::temp_dir().join(format!(
++        "alife-legacy-first-sleep-publication-{}",
++        std::process::id()
++    ));
++    if root.exists() {
++        fs::remove_dir_all(&root).unwrap();
++    }
++    fs::create_dir(&root).unwrap();
++    let save_path = root.join("current.json");
++    let (save, awake) = sleep_storage_fixture(&root, "legacy-first-sleep", Tick::ZERO, None);
++    let organism = save.creatures[0].organism_id;
+     let legacy_bytes = serde_json::to_vec_pretty(&save).unwrap();
+     fs::write(&save_path, &legacy_bytes).unwrap();
+     let (durable, legacy) = GpuDurableSaveManifest::open_loaded(&save_path, &root).unwrap();
+@@ -665,6 +718,8 @@ fn first_legacy_sleep_journal_commits_exact_payload_and_later_reuses_save() {
+     durable.publish_sleep_transaction_journal(&legacy, &first_journal).unwrap();
+     let first = durable.load().unwrap();
+     assert_eq!(first.authority_generation(), Some(1));
++    assert_eq!(first.replay_epoch_status(), GpuReplayEpochStatusV2::Unknown);
++    first.require_playable_replay_epoch().unwrap();
+     assert_eq!(first.save, save);
+     assert_eq!(first.exact_save_anchor_digest().unwrap().0, anchor);
+     let (save1, journal1, generation1) = authority_artifact_names(&save_path);
+@@ -713,5 +768,135 @@ fn first_legacy_sleep_journal_commits_exact_payload_and_later_reuses_save() {
+         assert_eq!(fs::read(&save_path).unwrap(), pointer);
+     }
+     assert_eq!(fs::read(&sidecar).unwrap(), sidecar_bytes);
++    let empty = GpuSleepTransactionJournalV2::empty(&second).unwrap();
++    durable.publish_sleep_transaction_journal(&second, &empty).unwrap();
++    let (_, legacy_cleared) = GpuDurableSaveManifest::open_loaded(&save_path, &root).unwrap();
++    assert_eq!(legacy_cleared.authority_generation(), Some(3));
++    assert_eq!(legacy_cleared.replay_epoch_status(), GpuReplayEpochStatusV2::Unknown);
++    legacy_cleared.require_playable_replay_epoch().unwrap();
+     fs::remove_dir_all(root).unwrap();
+ }
++
++
++// This is a storage/CAS fixture, not a GPU or a played creature. Its replay
++// state is evolved through the production typed controller and represented by
++// role-labeled local fixture assets. The separate ignored native integration
++// owns proof of a genuine GPU completion/capture and normal full reopen.
++#[test]
++fn fabricated_typed_completion_and_journal_never_mint_or_consume_an_epoch() {
++    use alife_core::{
++        sleep::{ConsolidationDriverEvent, SleepConsolidationConfig, SleepController,
++            GPU_CONSOLIDATION_REQUEST_SCHEMA_VERSION},
++        ConsolidationIntent, ConsolidationJobId, ConsolidationStagedOutput,
++        GpuConsolidationRequest, PhenotypeHash, SleepState, SleepTrigger,
++    };
++    use alife_runtime::GpuSleepTransactionJournalEntryV2;
++
++    let root = std::env::temp_dir().join(format!("alife-replay-epoch-v2-{}", std::process::id()));
++    fs::create_dir(&root).unwrap();
++    let path = root.join("current.json");
++    let cut = Tick::new(12);
++    let organism = OrganismId(1);
++    let mut controller = SleepController::restore(
++        SleepConsolidationConfig::reference(), SleepState::awake_at(Tick::ZERO),
++    ).unwrap();
++    controller.force_sleep(Tick::new(2), SleepTrigger::SeizureHyperactivity).unwrap();
++    controller.advance(Tick::new(10)).unwrap().unwrap();
++    let cycle_id = controller.state().active_cycle_id;
++    let phenotype_hash = PhenotypeHash([1, 2, 3, 4]);
++    let input_digest = [7, 6, 5, 4];
++    let replay_digest = [2, 3, 4, 5];
++    controller.apply_consolidation_driver_event(ConsolidationDriverEvent::ReplayAssetPersisted {
++        intent: ConsolidationIntent { cycle_id }, replay_digest,
++        replay_event_count: 1, replay_eligibility_sample_count: 1,
++    }).unwrap();
++    let mut request = GpuConsolidationRequest {
++        schema_version: GPU_CONSOLIDATION_REQUEST_SCHEMA_VERSION,
++        request_flags: 0, cycle_id, phenotype_hash, input_generation: 1,
++        expected_output_generation: 2, input_digest, replay_digest,
++        max_replay_events: 16, max_replay_eligibility_samples: 16,
++        request_digest: [0; 4],
++    };
++    request.request_digest = request.recompute_request_digest().unwrap();
++    controller.apply_consolidation_driver_event(ConsolidationDriverEvent::Prepared { request }).unwrap();
++    let job_id = ConsolidationJobId::try_from_raw(9).unwrap();
++    controller.apply_consolidation_driver_event(ConsolidationDriverEvent::Submitted { request, job_id }).unwrap();
++    let submitted = controller.state();
++    let mut staged = ConsolidationStagedOutput {
++        job_id, output_generation: 2, output_weight_bank: 1, output_digest: [9; 4],
++        eligibility_reset_generation: 2, output_eligibility_bank: 1, eligibility_output_digest: [5; 4],
++        replay_journal_generation: 2, replay_journal_cursor: 0, replay_journal_event_count: 0,
++        replay_journal_output_digest: [6; 4], staging_digest: [0; 4],
++        promoted_fast_l1_bits: 1.0f32.to_bits(), replay_induced_fast_l1_bits: 0,
++    };
++    staged.staging_digest = staged.recompute_staging_digest(&request, 1, 1).unwrap();
++    controller.apply_consolidation_driver_event(ConsolidationDriverEvent::Completed { request, staged }).unwrap();
++    let completed = controller.state();
++    let proof = GpuReplayEpochCompletionV2::try_new(organism, cut, submitted, completed).unwrap();
++    assert!(GpuReplayEpochCompletionV2::try_new(organism, cut, completed, completed).is_err());
++
++
++    // This exact Completed shape is only a legacy save. A real device readback
++    // is a type requirement at the marked APIs, so plain storage cannot mint.
++    let (exact, _) = sleep_storage_fixture(&root, "epoch-storage-fixture", cut, Some(completed));
++    fs::write(&path, serde_json::to_vec_pretty(&exact).unwrap()).unwrap();
++    let (durable, initial) = GpuDurableSaveManifest::open_loaded(&path, &root).unwrap();
++    assert!(proof.matches_captured(organism, cut, resident_sleep(&initial)));
++    assert_eq!(initial.replay_epoch_status(), GpuReplayEpochStatusV2::Unknown);
++    let legacy_empty = GpuSleepTransactionJournalV2::empty(&initial).unwrap();
++    durable.publish_sleep_transaction_journal(&initial, &legacy_empty).unwrap();
++    let (_, false_g1) = GpuDurableSaveManifest::open_loaded(&path, &root).unwrap();
++    assert_eq!(false_g1.authority_generation(), Some(1));
++    assert_eq!(false_g1.save, exact);
++    assert_eq!(false_g1.replay_epoch_status(), GpuReplayEpochStatusV2::Unknown);
++    false_g1.require_playable_replay_epoch().unwrap();
++    assert_eq!(false_g1.require_single_living_replay_epoch_resident().unwrap(), organism);
++
++    // The exact admission code counts biological residents, not supervised
++    // actors. These alternate typed shapes never mutate the original pointer.
++    let mut multi = false_g1.clone();
++    multi.save.world = current_organism_save_roster("two-live", cut, Some(true)).world;
++    assert!(matches!(multi.require_single_living_replay_epoch_resident(),
++        Err(GpuRuntimeError::ReplayEpochRequiresSingleLivingResident)));
++    let mut none = false_g1.clone();
++    none.save.world.organism_records = Some(Vec::new());
++    assert!(matches!(none.require_single_living_replay_epoch_resident(),
++        Err(GpuRuntimeError::ReplayEpochRequiresSingleLivingResident)));
++    let mut external_only = false_g1.clone();
++    external_only.save.world = current_organism_save_roster("one-and-external", cut, Some(false)).world;
++    assert_eq!(external_only.save.world.external_actor_ids.as_deref(), Some(&[OrganismId(2)][..]));
++    assert_eq!(external_only.require_single_living_replay_epoch_resident().unwrap(), organism);
++    let mut owner_alias = external_only.clone();
++    owner_alias.save.world.external_actor_ids = Some(vec![organism]);
++    assert!(matches!(owner_alias.require_single_living_replay_epoch_resident(),
++        Err(GpuRuntimeError::ReplayEpochRequiresSingleLivingResident)));
++
++    controller.apply_consolidation_driver_event(ConsolidationDriverEvent::Committed {
++        cycle_id, output_generation: staged.output_generation, output_digest: staged.output_digest,
++    }).unwrap();
++    let edge = GpuSleepTransactionJournalEntryV2::try_new(
++        organism, Tick::new(13), completed, controller.state(),
++    ).unwrap();
++    let next = GpuSleepTransactionJournalV2::try_new(
++        legacy_empty.exact_base_manifest_digest.clone(), cut, vec![edge],
++    ).unwrap();
++    let original_pointer = fs::read(&path).unwrap();
++    assert!(durable.publish_replay_epoch_commit_profiled(&false_g1, &next, false, Vec::new()).is_err());
++    assert_eq!(fs::read(&path).unwrap(), original_pointer);
++    // Legacy playback's documented policy remains compatible, but even a
++    // complete legacy journal edge and its empty rewrite stay Unknown.
++    durable.publish_sleep_transaction_journal(&false_g1, &next).unwrap();
++    let g2 = durable.load().unwrap();
++    assert_eq!(g2.replay_epoch_status(), GpuReplayEpochStatusV2::Unknown);
++    durable.publish_sleep_transaction_journal(&g2, &legacy_empty).unwrap();
++    let g3 = durable.load().unwrap();
++    assert_eq!(g3.authority_generation(), Some(3));
++    assert_eq!(g3.replay_epoch_status(), GpuReplayEpochStatusV2::Unknown);
++    assert_eq!(g3.save, exact);
++    assert_eq!(durable.load_sleep_transaction_journal(&g3).unwrap(), legacy_empty);
++    fs::remove_dir_all(root).unwrap();
++}
++
++fn resident_sleep(base: &alife_runtime::GpuLoadedSaveManifest) -> alife_core::SleepState {
++    base.save.creatures[0].gpu_brain.as_ref().unwrap().sleep
++}

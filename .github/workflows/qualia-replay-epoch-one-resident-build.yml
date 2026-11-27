@@ -1,0 +1,296 @@
+name: Qualia detached single-resident replay epoch source gates
+on:
+  push:
+    branches: ["bob/qualia-replay-epoch-one-resident-20261127"]
+    paths:
+      - ".github/workflows/qualia-replay-epoch-one-resident-build.yml"
+      - "docs/r41-saved-life/g3-replay-epoch-native-proof-source.patch"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qualia-replay-epoch-one-resident-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compile-integration:
+    if: github.ref == 'refs/heads/bob/qualia-replay-epoch-one-resident-20261127'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    env:
+      PIN_BASE: f466b83791cccb97568e6f718b92b052999cfb2b
+      PIN_SLEEP_PARENT: cbe4e85cbfe5e5194de1fd3bf30bd17a7121fa3d
+      PIN_WRAPPER_PARENT: 5cb8ebea10aed1fa6428c5166f27bf8b8eac5dd3
+      PIN_WRAPPER_WORKFLOW: 6971fd0d112e8841f175990d79a019f612cf3743
+      PIN_RESEARCH_COMMIT: 0cd14f12a8012a9b00119a7b33939ca5e3dbeb53
+      PIN_RESEARCH_PATCH: 3dcf657b2b1149a7da52e7867c3bdbc4c4dfe8d4785b53c95f429c78aa1cd490
+      PIN_SLEEP_REPAIR_PATCH: c2815992c4e3e70a7b7bc42b307dc1d96e8c34483ea36cf2c98e06b9920282e6
+      PIN_LEGACY_PUBLICATION_PATCH: 692ec25acc620f502581e7299d952471c039812646e41f85cdd1d6f87ed5c66d
+      PIN_LATE_ARCHIVE_PATCH: ed46a3cedb6f0bfdcba54660be6e1645ea6ea9cc71c6b7015b255b790b66a17d
+      PIN_WRAPPER_PATCH: ab8b07f7ac688ff56e8ca4dfb59f2e44c492be8b3b3710601d77dea035675af6
+      PIN_PROBE_PATCH: 45d98eb14b7eca2cbf7973fc6962cb141768f34be23e4b25f3bd112cef0c5b6a
+      PIN_ADMISSION_PATCH: 0d4a7d4499803c3f4c769d89bfdbb12406d9cf69dd87bc65a6a89d8b0f20ea64
+      PIN_PROBE_PARENT: 3f5e70cbf65f631a3ee51f5856140abb9b8b1954
+      PIN_PROBE_PARENT_WORKFLOW: 167884bae2b50706a9e0a7795c1dd4dc4cb9b77e
+      PIN_TEST_PREIMAGE: 7b794ed46dae5a4d1309a47704d9853d929d239bfe4918eb74280d2b261b86d5
+      PIN_TRACKED_REFERENCE_PATCH: 4105e9a762f14955fe9bb0a33e73b3ce6d817c112d1b8472ba3f125a3a3fc7a3
+      PIN_TEST_SOURCE: de4ac3e009e6c9420fed1b486ecba53a23ed8d6d53e0aa94a74b5bdf4321aaab
+      PIN_TRACKED_PARENT: 04a0d8980eb48ed362530ab663ac91b01e596185
+      PIN_TRACKED_WORKFLOW: a4bb1999dbd593ba19fcd58166a77592b09181ab
+      PIN_REPLAY_EPOCH_PATCH: 10ccf78bdbed943f123ee71c433b419edc1a40bfc8f084a3202b3fd0bc77632d
+      PIN_LOCK: 155699e9274f8890bc8c335669a62de48203ba315a33388a8f0caca71f0f7f37
+      PIN_RUSTC_COMMIT: 0ef1bc386059596dada8fb65b50425aab2ea637a
+      RUST_TOOLCHAIN: "1.100.0"
+      TARGET: x86_64-unknown-linux-gnu
+      CARGO_BUILD_JOBS: "1"
+      CARGO_INCREMENTAL: "0"
+      CARGO_PROFILE_RELEASE_DEBUG: "0"
+      CARGO_PROFILE_RELEASE_INCREMENTAL: "false"
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Read only the detached source branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Reconstruct exact qualified tracked source and apply only the replay-epoch overlay
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD^)" = "$PIN_TRACKED_PARENT"
+          test "$(git rev-parse "$PIN_TRACKED_PARENT^")" = "$PIN_PROBE_PARENT"
+          test "$(git rev-parse "$PIN_TRACKED_PARENT:.github/workflows/qualia-g3-recommit-tracked-reference-build.yml")" = "$PIN_TRACKED_WORKFLOW"
+          test "$(git rev-parse "$PIN_PROBE_PARENT:.github/workflows/qualia-g3-recommit-probe-build.yml")" = "$PIN_PROBE_PARENT_WORKFLOW"
+          git merge-base --is-ancestor "$PIN_WRAPPER_PARENT" "$PIN_PROBE_PARENT"
+          git merge-base --is-ancestor "$PIN_SLEEP_PARENT" "$PIN_WRAPPER_PARENT"
+          git merge-base --is-ancestor "$PIN_BASE" "$PIN_SLEEP_PARENT"
+          git merge-base --is-ancestor "$PIN_RESEARCH_COMMIT" "$PIN_SLEEP_PARENT"
+          test "$(git rev-parse "$PIN_WRAPPER_PARENT:.github/workflows/qualia-derived-completed-authority-build.yml")" = "$PIN_WRAPPER_WORKFLOW"
+          git diff --exit-code "$PIN_TRACKED_PARENT" HEAD -- . \
+            ':(exclude).github/workflows/qualia-replay-epoch-one-resident-build.yml' \
+            ':(exclude)docs/r41-saved-life/g3-replay-epoch-native-proof-source.patch'
+          git diff --exit-code "$PIN_BASE" HEAD -- \
+            docs/r41-saved-life/restore_source.py docs/r41-saved-life/SOURCE.json docs/r41-saved-life/patches
+          exact="$RUNNER_TEMP/qualia-epoch-source"
+          target_dir="$RUNNER_TEMP/qualia-epoch-target"
+          evidence="$RUNNER_TEMP/qualia-epoch-build-evidence"
+          printf 'EXACT_SRC=%s\nCARGO_TARGET_DIR=%s\nEVIDENCE=%s\n' "$exact" "$target_dir" "$evidence" >> "$GITHUB_ENV"
+          mkdir "$evidence"
+          python3 docs/r41-saved-life/restore_source.py "$GITHUB_WORKSPACE" "$exact"
+          patches="$(mktemp -d "$RUNNER_TEMP/qualia-epoch-patches.XXXXXXXX")"
+          extract() {
+            git show "$1:docs/r41-saved-life/$2" > "$patches/$2"
+            printf '%s  %s\n' "$3" "$patches/$2" | sha256sum -c -
+          }
+          extract "$PIN_RESEARCH_COMMIT" research-catalog-source-only.patch "$PIN_RESEARCH_PATCH"
+          extract "$PIN_SLEEP_PARENT" sleep-boundary-repair-source.patch "$PIN_SLEEP_REPAIR_PATCH"
+          extract "$PIN_SLEEP_PARENT" sleep-legacy-publication-source.patch "$PIN_LEGACY_PUBLICATION_PATCH"
+          extract "$PIN_SLEEP_PARENT" sleep-late-archive-retirement-source.patch "$PIN_LATE_ARCHIVE_PATCH"
+          extract "$PIN_WRAPPER_PARENT" publish-derived-completed-save-source.patch "$PIN_WRAPPER_PATCH"
+          extract "$PIN_PROBE_PARENT" g3-recommit-probe-source.patch "$PIN_PROBE_PATCH"
+          extract "$PIN_PROBE_PARENT" g3-recommit-explicit-software-vulkan.patch "$PIN_ADMISSION_PATCH"
+          extract "$PIN_TRACKED_PARENT" g3-recommit-tracked-reference-source.patch "$PIN_TRACKED_REFERENCE_PATCH"
+          extract "$GITHUB_SHA" g3-replay-epoch-native-proof-source.patch "$PIN_REPLAY_EPOCH_PATCH"
+          cd "$exact"
+          for patch in research-catalog-source-only.patch sleep-boundary-repair-source.patch \
+             sleep-legacy-publication-source.patch sleep-late-archive-retirement-source.patch \
+             publish-derived-completed-save-source.patch g3-recommit-probe-source.patch \
+             g3-recommit-explicit-software-vulkan.patch; do
+            git apply --check --whitespace=error "$patches/$patch"
+            git apply --whitespace=error "$patches/$patch"
+          done
+          test_rel=crates/alife_game_app/tests/external_completed_sleep_recommit.rs
+          printf '%s  %s\n' "$PIN_TEST_PREIMAGE" "$test_rel" | sha256sum -c -
+          git apply --check --whitespace=error "$patches/g3-recommit-tracked-reference-source.patch"
+          git apply --whitespace=error "$patches/g3-recommit-tracked-reference-source.patch"
+          printf '%s  %s\n' "$PIN_TEST_SOURCE" crates/alife_game_app/tests/external_completed_sleep_recommit.rs \
+            "$PIN_LOCK" Cargo.lock | sha256sum -c -
+          verify_epoch_leaves() {
+            python3 - "$1" <<'PY_EMBEDDED'
+          import hashlib
+          from pathlib import Path
+          import sys
+
+          rows = """
+          crates/alife_game_app/Cargo.toml 3905 e2bc4c9122b8bc1ffb1f9e647df34e99ea7d8905d82437329f8aac20e5089bc3 4025 fbbcbebe362a4c3bd09783f70066bd6973f80801e5b78d5d2824ccd7c85a7ac0
+          crates/alife_game_app/src/gpu_live_runtime.rs 594869 2344a33a4f8feab876fd462fed28f7e4117bbed29864bcbbfc32cc6e8a958f9b 607083 ac41618c76463974bd3b645d6625c5e295d4ea5eb3f92fb80a0c2588c7f63ea8
+          crates/alife_game_app/src/gpu_live_runtime/checkpoint_poll.rs 33441 f6f5b17f0df4493c9f1784784c6be5c189dfb681f6e2b4a7057d4da2dd5d774b 34415 fe1c1f8eb5d50cb0db839c9561691a473117374dc9edbfca494cabda40b05c8e
+          crates/alife_game_app/src/gpu_live_runtime/checkpoint_runtime.rs 58219 d39134670f13233547d86114b64fc4068398d22e21fc3220a6c7fdaebd6929d1 74696 ad4a00f88952157672dfbf8b3e035cc9a2aae0b1b3f0d465f0fe553e653c6fab
+          crates/alife_game_app/src/gpu_live_runtime/sleep_atomicity_tests.rs 14844 5fe05714e9f33b456b23fac9d5c703ef0de7ef25246ef55564620d68ad67e793 14872 00ac6b3384268550ba6364dc47491c69b0bcf23fe5fdee3c8daec7ea5a9f93f3
+          crates/alife_game_app/src/gpu_live_runtime/staged_tick.rs 69231 c16b350a3d21c782b7bc6915ca6e9b6af94554dced49e2054e6e2890ec72be7f 72408 629cb5e207c2ea25d4b7782644a58205585c8888c1c50ac04211df2238e3b686
+          crates/alife_game_app/src/new_game_lifecycle.rs 40269 154da2c59600235d1646a59be63a6c3fa333c7cdd5549710c508b1f7c4177232 40293 f8761b7d85d2a24bda0daab7dc248a2e5ad570ae0771a4ab2fbcc020d21ee763
+          crates/alife_game_app/tests/external_replay_epoch_live.rs - - 15639 7bbe44c91dcd88cc3d98eb315b800fe6f30e9492993a6fe6f986754fe49574d9
+          crates/alife_gpu_backend/src/closed_loop_exact_capture.rs 34256 3501f660c9139ccbc0f33fcee969c663d59d097f354399a5d9d792f20bc6106f 35714 8943cfcfa9b2974c562a471ee1df35fa549aada5af350d4863253a0e2745eef6
+          crates/alife_gpu_backend/src/closed_loop_sleep.rs 76414 0573a76a717753be220c6cfca598d1fd1541423b5c4773a2411afedbb432faf1 78931 5c552cc917412755424407fbab7fa56962fb73f977aeaa8028011de097bc711d
+          crates/alife_runtime/src/checkpoint_assets/durable_manifest.rs 87450 1d9a3711329cf91fa5713193bb8d8166a41ae34a014aaa487e10d4a1561215b5 117037 4230865f27b948ebf4c62b2f6f8363f13718eddfc85468c003b63008b3631cff
+          crates/alife_runtime/src/checkpoint_assets/mod.rs 1045 af3fcf833163bbed5fa83afae0b780eeb9344dfb61fd4c8a3c041d9e5c4cd002 1097 f7b40dd67a159a361ab87d2a230c32a302118b45547dc5fb5ad4fcb1192d9632
+          crates/alife_runtime/src/checkpoint_assets/state_codec.rs 92652 aeac33b8efee36bbc096f0462c84e4d2e906f72fa91922965bf2f9d641150de9 98466 4393422d94371a30f58ebcf3bf94ef2b978439cf062b3cdefeee20baf98139f1
+          crates/alife_runtime/src/lib.rs 1980 6a1cba3feba2b53ed9c286d23b990d315891fff56e4bdc236e00774959179259 2467 1a6c623298dbfde9b5e451e5f1723a1f6f2b3466f93ec81221cf042bfcb87c6b
+          crates/alife_runtime/tests/gpu_checkpoint_manifest_cas.rs 28651 54c5f200e852c7ca64e87d71ee6541ac577f2092d0ba75a249d1a13ac173c819 38852 50bffd999cac6f51296e1b9a7fa1e456cb7c90ea5f049e1b067485f4cd1a7567
+          """
+          before = sys.argv[1] == "before"
+          if sys.argv[1] not in {"before", "after"}:
+              raise SystemExit("invalid preimage mode")
+          for row in rows.strip().splitlines():
+              rel, pre_size, pre_sha, post_size, post_sha = row.split()
+              p = Path(rel)
+              size, sha = (pre_size, pre_sha) if before else (post_size, post_sha)
+              if p.is_symlink():
+                  raise SystemExit(f"symbolic link in exact source: {rel}")
+              if sha == "-":
+                  if p.exists():
+                      raise SystemExit(f"unexpected pre-existing exact source: {rel}")
+              elif (not p.is_file() or p.stat().st_size != int(size)
+                    or hashlib.sha256(p.read_bytes()).hexdigest() != sha):
+                  raise SystemExit(f"exact source leaf mismatch: {rel}")
+          PY_EMBEDDED
+          }
+          verify_epoch_leaves before
+          git apply --check --whitespace=error "$patches/g3-replay-epoch-native-proof-source.patch"
+          git apply --whitespace=error "$patches/g3-replay-epoch-native-proof-source.patch"
+          verify_epoch_leaves after
+          printf '%s  %s\n' "$PIN_LOCK" Cargo.lock | sha256sum -c -
+          printf '%s\n' \
+            "branch_commit=$GITHUB_SHA" "base=$PIN_BASE" "sleep_parent=$PIN_SLEEP_PARENT" \
+            "wrapper_parent=$PIN_WRAPPER_PARENT" "wrapper_workflow_blob=$PIN_WRAPPER_WORKFLOW" \
+            "research_commit=$PIN_RESEARCH_COMMIT" "research_patch=$PIN_RESEARCH_PATCH" \
+            "sleep_repair_patch=$PIN_SLEEP_REPAIR_PATCH" "legacy_publication_patch=$PIN_LEGACY_PUBLICATION_PATCH" \
+            "late_archive_patch=$PIN_LATE_ARCHIVE_PATCH" "wrapper_patch=$PIN_WRAPPER_PATCH" \
+            "probe_parent=$PIN_PROBE_PARENT" "probe_parent_workflow_blob=$PIN_PROBE_PARENT_WORKFLOW" \
+            "probe_patch=$PIN_PROBE_PATCH" "admission_patch=$PIN_ADMISSION_PATCH" \
+            "test_preimage=$PIN_TEST_PREIMAGE" "tracked_reference_patch=$PIN_TRACKED_REFERENCE_PATCH" "test_source=$PIN_TEST_SOURCE" \
+            "tracked_parent=$PIN_TRACKED_PARENT" "tracked_workflow_blob=$PIN_TRACKED_WORKFLOW" \
+            "replay_epoch_patch=$PIN_REPLAY_EPOCH_PATCH" "physical_replay_epoch_scope=one_owned_resident" \
+            "cargo_lock=$PIN_LOCK" "rustc_commit=$PIN_RUSTC_COMMIT" "rust_toolchain=$RUST_TOOLCHAIN" "target=$TARGET" \
+            > "$evidence/SOURCE-PINS.txt"
+
+      - name: Run only device-free storage gates then link the ignored native integration
+        run: |
+          set -euo pipefail
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --target "$TARGET"
+          version="$(rustc +"$RUST_TOOLCHAIN" -vV)"
+          grep -Fqx "release: $RUST_TOOLCHAIN" <<< "$version"
+          grep -Fqx "commit-hash: $PIN_RUSTC_COMMIT" <<< "$version"
+          grep -Fqx "host: $TARGET" <<< "$version"
+          cd "$EXACT_SRC"
+          timeout 8m cargo +"$RUST_TOOLCHAIN" fetch --locked --target "$TARGET"
+          cpu_log="$RUNNER_TEMP/qualia-epoch-cpu-test.log"
+          cargo_gate=(cargo +"$RUST_TOOLCHAIN" test --frozen --offline --release --target "$TARGET" -j 1)
+          if ! timeout 22m "${cargo_gate[@]}" -p alife_runtime --test gpu_checkpoint_manifest_cas \
+              -- --test-threads=1 > "$cpu_log" 2>&1; then
+            tail -c 32000 "$cpu_log" >&2
+            exit 1
+          fi
+          grep -Fq 'test fabricated_typed_completion_and_journal_never_mint_or_consume_an_epoch ... ok' "$cpu_log"
+          grep -Fq 'test first_legacy_sleep_journal_commits_exact_payload_and_later_reuses_save ... ok' "$cpu_log"
+          for proof in compare_and_swap_replay_epoch compare_and_swap_full_replay_epoch_successor publish_replay_epoch_commit_profiled; do
+            doc_log="$RUNNER_TEMP/qualia-epoch-doc-$proof.log"
+            if ! timeout 6m "${cargo_gate[@]}" -p alife_runtime --doc "$proof" > "$doc_log" 2>&1; then
+              tail -c 10000 "$doc_log" >&2
+              exit 1
+            fi
+            grep -Eq '^test result: ok[.] [1-9][0-9]* passed;' "$doc_log"
+            grep -Fq "$proof" "$doc_log"
+          done
+          log="$RUNNER_TEMP/qualia-epoch-cargo.jsonl"
+          if ! timeout 30m cargo +"$RUST_TOOLCHAIN" test --frozen --offline --release --target "$TARGET" -j 1 \
+            -p alife_game_app --features foundation-training,gpu-tests,replay-epoch-research --test external_replay_epoch_live \
+            --no-run --message-format=json-render-diagnostics > "$log"; then
+            tail -c 40000 "$log" >&2
+            exit 1
+          fi
+          executable="$(python3 - "$log" <<'PY'
+          import json
+          import os
+          from collections import Counter
+          from pathlib import Path
+          import stat
+          import sys
+
+          events = [json.loads(line) for line in Path(sys.argv[1]).read_text().splitlines() if line.startswith("{")]
+          done = [e for e in events if e.get("reason") == "build-finished"]
+          if len(done) != 1 or done[0].get("success") is not True:
+              raise SystemExit("targeted compile/link not completed")
+
+          name = "external_replay_epoch_live"
+          source = (Path(os.environ["EXACT_SRC"]) / "crates/alife_game_app/tests" / (name + ".rs")).resolve(strict=True)
+          root = Path(os.environ["CARGO_TARGET_DIR"]).resolve(strict=True)
+          release = root / os.environ["TARGET"] / "release"
+          if release.resolve(strict=True) != release or not release.is_dir():
+              raise SystemExit("pinned release directory is not canonical")
+
+          # Cargo's compiler-artifact message identifies the executable; Cargo 1.100
+          # changed the internal layout. Do not assume the parent is release/deps.
+          selected, rejected = set(), Counter()
+          bad_executable = False
+          for e in events:
+              if e.get("reason") != "compiler-artifact" or e.get("target", {}).get("name") != name:
+                  continue
+              target = e["target"]
+              if target.get("kind") != ["test"]:
+                  rejected["wrong_target_kind"] += 1
+                  continue
+              if target.get("src_path") != str(source):
+                  rejected["wrong_target_source"] += 1
+                  continue
+              if e.get("profile", {}).get("test") is not True:
+                  rejected["not_test_profile"] += 1
+                  continue
+              raw = e.get("executable")
+              if not isinstance(raw, str) or not raw:
+                  rejected["no_executable_reported"] += 1
+                  continue
+              p = Path(raw)
+              try:
+                  if not p.is_absolute() or not p.is_relative_to(release) or p.resolve(strict=True) != p:
+                      rejected["outside_release_or_noncanonical"] += 1
+                      bad_executable = True
+                      continue
+                  mode = p.lstat().st_mode
+              except (OSError, RuntimeError):
+                  rejected["unreadable_executable"] += 1
+                  bad_executable = True
+                  continue
+              if not stat.S_ISREG(mode) or not (mode & 0o111) or mode & (stat.S_ISUID | stat.S_ISGID):
+                  rejected["not_regular_ordinary_executable"] += 1
+                  bad_executable = True
+                  continue
+              selected.add(p)
+          if bad_executable or len(selected) != 1:
+              raise SystemExit(f"exact integration executable selector: distinct={len(selected)}, rejected={dict(rejected)}")
+          exe = next(iter(selected))
+          print(f"matched exact integration test artifact: {exe.relative_to(release)}", file=sys.stderr)
+          print(exe)
+          PY
+          )"
+          install -m 0755 "$executable" "$EVIDENCE/external_replay_epoch_live"
+          LC_ALL=C readelf -h "$EVIDENCE/external_replay_epoch_live" > "$RUNNER_TEMP/qualia-epoch-elf-header.txt"
+          grep -Eq 'Class:[[:space:]]+ELF64' "$RUNNER_TEMP/qualia-epoch-elf-header.txt"
+          grep -Eq 'Machine:[[:space:]]+Advanced Micro Devices X86-64' "$RUNNER_TEMP/qualia-epoch-elf-header.txt"
+          printf '%s\n' \
+            'device_free_checkpoint_manifest_cas=passed' \
+            'all_three_opaque_api_compile_fail_refusals=passed' \
+            'locked_targeted_integration_link=passed' 'linked_elf=ELF64-x86_64' \
+            'ignored_native_tests_executed=false' 'device_initialized=false' 'private_fixture_inputs=false' \
+            > "$EVIDENCE/BUILD-CHECKS.txt"
+          cd "$EVIDENCE"
+          sha256sum external_replay_epoch_live SOURCE-PINS.txt BUILD-CHECKS.txt > SHA256SUMS
+          sha256sum -c SHA256SUMS
+
+      - name: Upload only the linked test executable and redacted build checks
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: qualia-replay-epoch-one-resident-build-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/qualia-epoch-build-evidence/external_replay_epoch_live
+            ${{ runner.temp }}/qualia-epoch-build-evidence/SOURCE-PINS.txt
+            ${{ runner.temp }}/qualia-epoch-build-evidence/BUILD-CHECKS.txt
+            ${{ runner.temp }}/qualia-epoch-build-evidence/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 5
+          compression-level: 3
