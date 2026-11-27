@@ -125,27 +125,65 @@ jobs:
           executable="$(python3 - "$log" <<'PY'
           import json
           import os
+          from collections import Counter
           from pathlib import Path
+          import stat
           import sys
 
-          events = []
-          for line in Path(sys.argv[1]).read_text().splitlines():
-              if line.startswith("{"):
-                  events.append(json.loads(line))
+          events = [json.loads(line) for line in Path(sys.argv[1]).read_text().splitlines() if line.startswith("{")]
           done = [e for e in events if e.get("reason") == "build-finished"]
           if len(done) != 1 or done[0].get("success") is not True:
               raise SystemExit("targeted compile/link not completed")
+
           name = "external_completed_sleep_recommit"
-          selected = [Path(e["executable"]) for e in events
-                      if e.get("reason") == "compiler-artifact" and e.get("executable")
-                      and "test" in e.get("target", {}).get("kind", [])
-                      and e["target"].get("name") == name and e.get("profile", {}).get("test") is True]
-          expected = (Path(os.environ["CARGO_TARGET_DIR"]) / os.environ["TARGET"] / "release" / "deps").resolve()
-          if (len(selected) != 1 or selected[0].parent.resolve() != expected
-                  or not selected[0].name.startswith(name + "-")
-                  or not selected[0].is_file() or selected[0].is_symlink()):
-              raise SystemExit("could not uniquely identify the exact integration-test executable")
-          print(selected[0])
+          source = (Path(os.environ["EXACT_SRC"]) / "crates/alife_game_app/tests" / (name + ".rs")).resolve(strict=True)
+          root = Path(os.environ["CARGO_TARGET_DIR"]).resolve(strict=True)
+          release = root / os.environ["TARGET"] / "release"
+          if release.resolve(strict=True) != release or not release.is_dir():
+              raise SystemExit("pinned release directory is not canonical")
+
+          # Cargo's compiler-artifact message identifies the executable; Cargo 1.100
+          # changed the internal layout. Do not assume the parent is release/deps.
+          selected, rejected = set(), Counter()
+          bad_executable = False
+          for e in events:
+              if e.get("reason") != "compiler-artifact" or e.get("target", {}).get("name") != name:
+                  continue
+              target = e["target"]
+              if target.get("kind") != ["test"]:
+                  rejected["wrong_target_kind"] += 1
+                  continue
+              if target.get("src_path") != str(source):
+                  rejected["wrong_target_source"] += 1
+                  continue
+              if e.get("profile", {}).get("test") is not True:
+                  rejected["not_test_profile"] += 1
+                  continue
+              raw = e.get("executable")
+              if not isinstance(raw, str) or not raw:
+                  rejected["no_executable_reported"] += 1
+                  continue
+              p = Path(raw)
+              try:
+                  if not p.is_absolute() or not p.is_relative_to(release) or p.resolve(strict=True) != p:
+                      rejected["outside_release_or_noncanonical"] += 1
+                      bad_executable = True
+                      continue
+                  mode = p.lstat().st_mode
+              except (OSError, RuntimeError):
+                  rejected["unreadable_executable"] += 1
+                  bad_executable = True
+                  continue
+              if not stat.S_ISREG(mode) or not (mode & 0o111) or mode & (stat.S_ISUID | stat.S_ISGID):
+                  rejected["not_regular_ordinary_executable"] += 1
+                  bad_executable = True
+                  continue
+              selected.add(p)
+          if bad_executable or len(selected) != 1:
+              raise SystemExit(f"exact integration executable selector: distinct={len(selected)}, rejected={dict(rejected)}")
+          exe = next(iter(selected))
+          print(f"matched exact integration test artifact: {exe.relative_to(release)}", file=sys.stderr)
+          print(exe)
           PY
           )"
           install -m 0755 "$executable" "$EVIDENCE/external_completed_sleep_recommit"
