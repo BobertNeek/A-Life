@@ -1,0 +1,269 @@
+--- a/crates/alife_runtime/src/checkpoint_assets/durable_manifest.rs
++++ b/crates/alife_runtime/src/checkpoint_assets/durable_manifest.rs
+@@ -1012,12 +1012,14 @@
+             measure,
+             &mut timing,
+         )?;
+-        let reopened = self.commit_reused_save_authority_pointer_profiled(
+-            base,
+-            &pointer,
+-            measure,
+-            &mut timing,
+-        )?;
++        let reopened = match &base.authority {
++            GpuCheckpointAuthoritySource::GenerationV1(_) => self
++                .commit_reused_save_authority_pointer_profiled(base, &pointer, measure, &mut timing)?,
++            // The first legacy journal has just prepared both immutable
++            // artifacts. No previous authority exists to validate or reuse.
++            GpuCheckpointAuthoritySource::LegacyDirectV1 => self
++                .commit_authority_pointer_profiled(&base.save, &pointer, measure, &mut timing)?,
++        };
+         if reopened.authority.generation() != Some(&pointer) {
+             return Err(GameAppShellError::InvalidProductionFrontend {
+                 message: "GPU checkpoint journal authority generation failed reopen validation"
+--- a/crates/alife_runtime/tests/gpu_checkpoint_manifest_cas.rs
++++ b/crates/alife_runtime/tests/gpu_checkpoint_manifest_cas.rs
+@@ -468,3 +468,243 @@
+ 
+     fs::remove_dir_all(root).unwrap();
+ }
++
++#[test]
++fn first_legacy_sleep_journal_commits_exact_payload_and_later_reuses_save() {
++    use alife_core::{
++        sleep::{ConsolidationDriverEvent, SleepConsolidationConfig, SleepController},
++        BrainActivityPolicyV1, Confidence, ConsolidationIntent, MemoryBankConfig, MemorySidecarState,
++        PhenotypeHash, ScaffoldContractError, SensorProfile, SensorProfileIdentity, SensoryAbiVersion,
++        SleepState, SleepTrigger, TopologicalMapConfig, TopologySidecar,
++    };
++    use alife_runtime::GpuSleepTransactionJournalEntryV2;
++    use alife_world::{
++        persistence::{
++            AssetKind, AssetManifestEntry, AssetPresence, CreatureMindSaveSummary, CreatureSaveState,
++            GpuBackendProvenanceSave, GpuBrainAssetRef, GpuBrainSaveState, GpuSleepAssetState,
++            LearningTraceSaveSummary, MemorySidecarSaveState, NeuralGpuBackendApi,
++            ThrottleReplaySaveState, TopologySidecarSaveSummary, WeightLayerSaveSummary,
++            GPU_BACKEND_PROVENANCE_SAVE_SCHEMA_VERSION, GPU_BRAIN_SAVE_STATE_SCHEMA_VERSION,
++        },
++        TrackedObjectRegistry,
++    };
++
++    let root = std::env::temp_dir().join(format!(
++        "alife-legacy-first-sleep-publication-{}",
++        std::process::id()
++    ));
++    if root.exists() {
++        fs::remove_dir_all(&root).unwrap();
++    }
++    fs::create_dir(&root).unwrap();
++    let save_path = root.join("current.json");
++    let mut save = current_organism_save("legacy-first-sleep");
++    let record = &save.world.organism_records.as_ref().unwrap()[0];
++    let (organism, genome, biology) = (record.organism_id(), record.genome().id, record.biochemistry());
++    let awake = SleepState::awake_at(save.world.tick);
++    let profile = SensorProfileIdentity {
++        profile_id: SensorProfile::GroundedObjectSlotsV1.into(),
++        profile_schema_version: 1,
++        sensory_abi_version: SensoryAbiVersion::CURRENT.raw(),
++    };
++    let memory = MemorySidecarState::new_profiled(
++        organism,
++        profile,
++        MemoryBankConfig::new(64, 64, 4, 0.72, Confidence::new(0.0).unwrap()).unwrap(),
++    ).unwrap();
++    let topology = TopologySidecar::new_profiled(organism, profile, TopologicalMapConfig::default())
++        .unwrap();
++    let policy = BrainActivityPolicyV1::production_v1();
++    let mut provenance = GpuBackendProvenanceSave {
++        schema_version: GPU_BACKEND_PROVENANCE_SAVE_SCHEMA_VERSION,
++        backend_api_raw: NeuralGpuBackendApi::Vulkan.raw(),
++        vendor_id: 0x1002,
++        device_id: 0x744c,
++        backend_version_major: 0,
++        backend_version_minor: 1,
++        backend_version_patch: 0,
++        adapter_name_len: 0,
++        adapter_name_utf8: [0; 128],
++        driver_digest: [1, 2, 3, 4],
++        required_features_digest: [5, 6, 7, 8],
++        required_limits_digest: [9, 10, 11, 12],
++        available_features_digest: [13, 14, 15, 16],
++        adapter_limits_digest: [17, 18, 19, 20],
++    };
++    provenance.set_adapter_name("test-only-data-without-gpu").unwrap();
++    // The publisher verifies the asset manifest, but never opens a brain.
++    // Deterministic role-named bytes isolate storage and the real journal shape.
++    let mut asset = |label: &str| {
++        let digest = PortableAssetDigest::for_bytes(label.as_bytes());
++        fs::write(root.join(label), label).unwrap();
++        save.assets.entries.push(AssetManifestEntry {
++            asset_id: label.to_string(),
++            kind: AssetKind::Other,
++            relative_path: label.to_string(),
++            digest: digest.clone(),
++            presence: AssetPresence::Required,
++            schema_version: 1,
++            size_bytes: Some(label.len() as u64),
++            provenance: None,
++        });
++        GpuBrainAssetRef { asset_id: label.to_string(), digest }
++    };
++    let brain = GpuBrainSaveState {
++        schema_version: GPU_BRAIN_SAVE_STATE_SCHEMA_VERSION,
++        organism_id: organism,
++        phenotype_hash: PhenotypeHash([1, 2, 3, 4]),
++        capacity_class_id: BrainCapacityClass::N512_ID,
++        sensor_profile: profile,
++        immutable_phenotype: asset("phenotype"),
++        phenotype_compiler_inputs: asset("compiler-inputs"),
++        live_structural_topology: Some(asset("live-topology")),
++        legacy_nano512_compatibility_receipt: None,
++        active_weight_generation: 1,
++        active_weight_bank: 0,
++        active_eligibility_bank: 0,
++        learning_transaction_generation: 1,
++        lifetime_weights: asset("lifetime"),
++        fast_weights: asset("fast"),
++        eligibility: asset("eligibility"),
++        replay_journal: asset("replay-ring"),
++        replay_journal_generation: 1,
++        replay_journal_cursor: 0,
++        replay_journal_event_count: 0,
++        activation_state: asset("activation"),
++        neuron_homeostasis: asset("neuron-homeostasis"),
++        checkpoint_tick: save.world.tick,
++        exact_cognitive_state: None,
++        last_learning_replay_key: None,
++        pending_eligibility: None,
++        pending_experience_transaction: None,
++        memory: MemorySidecarSaveState::from_sidecar(&memory, asset("memory"), None, None).unwrap(),
++        topology: TopologySidecarSaveSummary::from_sidecar(&topology, asset("topology")).unwrap(),
++        tracked_objects: TrackedObjectRegistry::new(save.world.seed, 1_024)
++            .unwrap().save_state(organism).unwrap(),
++        language_grounding: Default::default(),
++        life_statistics: None,
++        sleep: awake,
++        sleep_assets: GpuSleepAssetState::default(),
++        backend_provenance: provenance,
++        runtime_profile_id: 1,
++        runtime_profile_digest: [31, 32, 33, 34],
++        activity_policy_version: policy.policy_version,
++        activity_policy_digest: policy.policy_digest,
++        throttle_replay: ThrottleReplaySaveState::bootstrap(asset("throttle")).unwrap(),
++    };
++    save.creatures.push(CreatureSaveState {
++        organism_id: organism,
++        genome_id: genome,
++        brain_class: BrainScaleTier::Nano512,
++        development_tick: biology.development.last_update_tick,
++        appearance: Default::default(),
++        mind: CreatureMindSaveSummary {
++            tick: biology.tick,
++            homeostasis: biology.homeostasis,
++            memory_record_count: 0,
++            memory_source_ids: Vec::new(),
++            concept_count: 0,
++            edge_count: 0,
++            simplex_count: 0,
++            unresolved_gap_count: 0,
++            sleep_state_label: "awake".to_string(),
++            diagnostics: Vec::new(),
++        },
++        weights: WeightLayerSaveSummary {
++            generated_weight_asset_id: None,
++            genetic_fixed_digest: "fnv1a64:0000000000000001".to_string(),
++            genetic_layer_mutable: false,
++            lifetime_consolidated_entries: 0,
++            h_operational_entries: 0,
++            h_shadow_entries: 0,
++        },
++        learning: LearningTraceSaveSummary {
++            lifetime_learning_enabled: true,
++            lamarckian_mode_enabled: false,
++            last_consolidated_tick: None,
++        },
++        composite_genetics: None,
++        lifetime_state_asset: None,
++        gpu_brain: Some(brain),
++    });
++
++    let legacy_bytes = serde_json::to_vec_pretty(&save).unwrap();
++    fs::write(&save_path, &legacy_bytes).unwrap();
++    let (durable, legacy) = GpuDurableSaveManifest::open_loaded(&save_path, &root).unwrap();
++    assert_eq!(legacy.authority_generation(), None);
++    let anchor = legacy.exact_save_anchor_digest().unwrap().0;
++    let empty = GpuSleepTransactionJournalV2::empty(&legacy).unwrap();
++    let sidecar = root.join(".current.json.sleep-journal-v2.json");
++    let sidecar_bytes = serde_json::to_vec(&empty).unwrap();
++    fs::write(&sidecar, &sidecar_bytes).unwrap();
++
++    let mut controller = SleepController::restore(SleepConsolidationConfig::reference(), awake).unwrap();
++    controller.force_sleep(Tick::new(2), SleepTrigger::SeizureHyperactivity).unwrap();
++    let forced = controller.state();
++    let edge = |owner| GpuSleepTransactionJournalEntryV2::try_new(
++        owner, Tick::new(3), awake, forced,
++    ).unwrap();
++    let journal = |entries| GpuSleepTransactionJournalV2::try_new(
++        anchor.clone(), legacy.save.world.tick, entries,
++    ).unwrap();
++    let foreign = journal(vec![edge(OrganismId(99))]);
++    assert!(matches!(
++        durable.publish_sleep_transaction_journal(&legacy, &foreign),
++        Err(GpuRuntimeError::Core(ScaffoldContractError::ConsolidationGenerationMismatch))
++    ));
++    assert_eq!(fs::read(&save_path).unwrap(), legacy_bytes);
++
++    let first_journal = journal(vec![edge(organism)]);
++    durable.publish_sleep_transaction_journal(&legacy, &first_journal).unwrap();
++    let first = durable.load().unwrap();
++    assert_eq!(first.authority_generation(), Some(1));
++    assert_eq!(first.save, save);
++    assert_eq!(first.exact_save_anchor_digest().unwrap().0, anchor);
++    let (save1, journal1, generation1) = authority_artifact_names(&save_path);
++    assert_eq!(generation1, 1);
++    assert_eq!(fs::read(root.join(&save1)).unwrap(), legacy_bytes);
++    assert_eq!(fs::read(root.join(&journal1)).unwrap(), serde_json::to_vec_pretty(&first_journal).unwrap());
++    assert_eq!(durable.load_sleep_transaction_journal(&first).unwrap(), first_journal);
++    assert_eq!(fs::read(&sidecar).unwrap(), sidecar_bytes);
++
++    controller.advance(Tick::new(10)).unwrap().unwrap();
++    let consolidating = controller.state();
++    controller.apply_consolidation_driver_event(ConsolidationDriverEvent::ReplayAssetPersisted {
++        intent: ConsolidationIntent { cycle_id: forced.active_cycle_id },
++        replay_digest: [1, 2, 3, 4],
++        replay_event_count: 3,
++        replay_eligibility_sample_count: 12,
++    }).unwrap();
++    let compound_edge = |ordinal, source, target| {
++        GpuSleepTransactionJournalEntryV2::try_new_with_ordinal(
++            organism, Tick::new(11), ordinal, source, target,
++        ).unwrap()
++    };
++    let next = journal(vec![
++        edge(organism),
++        compound_edge(0, forced, consolidating),
++        compound_edge(1, consolidating, controller.state()),
++    ]);
++    durable.publish_sleep_transaction_journal(&first, &next).unwrap();
++    let second = durable.load().unwrap();
++    let (save2, journal2, generation2) = authority_artifact_names(&save_path);
++    assert_eq!(generation2, 2);
++    assert_eq!(second.authority_generation(), Some(2));
++    assert_eq!(save1, save2, "journal append must use the first immutable save");
++    assert_ne!(journal1, journal2);
++    assert_eq!(second.save, first.save);
++    assert_eq!(second.exact_save_anchor_digest().unwrap().0, anchor);
++    assert_eq!(durable.load_sleep_transaction_journal(&second).unwrap(), next);
++    assert_eq!(fs::read(root.join(journal2)).unwrap(), serde_json::to_vec_pretty(&next).unwrap());
++
++    let pointer = fs::read(&save_path).unwrap();
++    for stale in [&legacy, &first] {
++        assert!(matches!(
++            durable.publish_sleep_transaction_journal(stale, &next),
++            Err(GpuRuntimeError::GpuCheckpointManifestConflict { .. })
++        ));
++        assert_eq!(fs::read(&save_path).unwrap(), pointer);
++    }
++    assert_eq!(fs::read(&sidecar).unwrap(), sidecar_bytes);
++    fs::remove_dir_all(root).unwrap();
++}
