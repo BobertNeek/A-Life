@@ -1,0 +1,507 @@
+diff --git a/crates/alife_game_app/Cargo.toml b/crates/alife_game_app/Cargo.toml
+--- a/crates/alife_game_app/Cargo.toml
++++ b/crates/alife_game_app/Cargo.toml
+@@ -125,6 +125,7 @@
+ ]
+ retained-language-pilot = ["foundation-training", "gpu-tests", "alife_world/retained-language-pilot"]
+ retained-language-composition-v3 = ["retained-language-pilot", "alife_world/retained-language-composition-v3"]
++retained-wsp-approach-witness = ["retained-language-composition-v3"]
+ vfx-hanabi = ["bevy-app", "dep:bevy_hanabi", "bevy_hanabi/3d"]
+ production-voxel-frontend = [
+     "bevy-app",
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs
+--- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs
+@@ -974,6 +974,14 @@
+         #[cfg(feature = "retained-language-composition-v3")]
+         let composition_before = composition_setup.as_ref()
+             .map(|p| p.capture(runtime.world(), id)).transpose()?;
++        #[cfg(feature = "retained-wsp-approach-witness")]
++        let wsp_approach_before = composition_setup.as_ref().filter(|p| p.is_wsp_approach_witness)
++            .map(|opened| {
++                if calls != 0 || controlled_pressure != Some(0) {
++                    return Err("WSP Approach must be one genuine stock decision without retry or nonzero pressure".into());
++                }
++                opened.capture_wsp_approach_witness(runtime.world(),id)
++            }).transpose()?;
+         let before_pose = runtime
+             .world()
+             .organism_registry()
+@@ -1247,6 +1255,13 @@
+                         composition_before.ok_or("v3 lost the actual predecision World snapshot")?,
+                         runtime.world(), after_tick,
+                     )?;
++                    #[cfg(feature = "retained-wsp-approach-witness")]
++                    if opened.is_wsp_approach_witness {
++                        row["wsp_approach_stock_witness"] = opened.observe_wsp_approach_witness(
++                            wsp_approach_before.ok_or("WSP Approach lost original typed World/atom authority")?,
++                            &step.frame, &step.behavior, &step.patch, runtime.world(), after_tick,
++                        )?;
++                    }
+                 }
+                 if controlled_pressure.is_some() {
+                     row["observer_host_pressure_control"] =
+@@ -1436,6 +1451,13 @@
+             && runtime.world().tick().raw().saturating_sub(source_world_tick) == expected as u64;
+         let integrity = complete && software_simulation && error.is_none()
+             && base_unchanged && prior_clear && unchanged && cue_free && endpoint_preserved;
++        #[cfg(feature = "retained-wsp-approach-witness")]
++        if v.phase == language_composition_v3::Phase::WspApproachWitness {
++            if !integrity || calls != 1 || rows != 1 || controlled_pressure != Some(0) {
++                return Err("WSP Approach lacks one closed authentic stock World cut".into());
++            }
++            receipt["wsp_approach_stock_witness_integrity"] = serde_json::json!(true);
++        }
+         receipt["language_composition_v3_witness"] = serde_json::json!({
+             "phase":v.phase,"integrity":integrity,"accepted_decisions":rows,
+             "separate_three_cut_ttl_observed": integrity && v.phase == language_composition_v3::Phase::Ttl,
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
+--- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
+@@ -343,6 +343,12 @@
+     use super::language_composition_v3 as p;
+     let (config, cell) = p::resolve(root, bytes)?;
+     let decisions = cell.phase.decisions();
++    let intervention = "language_composition_v3_observer_witness_only";
++    #[cfg(feature = "retained-wsp-approach-witness")]
++    let intervention = match cell.phase {
++        p::Phase::WspApproachWitness => "wsp_approach_one_cut_stock_witness_only",
++        _ => intervention,
++    };
+     let request = SavedLifeRetentionRequest {
+         schema: 3,
+         evaluation_nonce: cell.nonce(),
+@@ -365,7 +371,7 @@
+         semantic_settings_sha256, owner: cell.owner(),
+         source_current_sha256: config.source_current_sha256,
+         scenario: ScenarioV1::LanguageCompositionV3, card_case: None,
+-        intervention: "language_composition_v3_observer_witness_only",
++        intervention,
+         visible_self_grip_v1: None, research: None, language_pilot: None,
+         language_composition_v3: Some(cell),
+     }, request, scent: None })
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/language_composition_v3.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/language_composition_v3.rs
+--- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/language_composition_v3.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/language_composition_v3.rs
+@@ -11,6 +11,12 @@
+ use serde_json::{json, Value};
+ use std::{fs, io::Read, path::Path};
+ 
++#[cfg(feature = "retained-wsp-approach-witness")]
++#[path = "wsp_approach_witness.rs"]
++mod wsp_approach_witness;
++#[cfg(feature = "retained-wsp-approach-witness")]
++pub(super) use wsp_approach_witness::OpeningBefore as WspApproachOpeningBefore;
++
+ pub(super) const SCHEMA: u16 = 6;
+ pub(super) const OUTPUT_BYTES: u64 = 256 * 1024 * 1024;
+ pub(super) const GEOMETRY_LEAF: &str = "language-composition-geometry-proof.v3.json";
+@@ -22,6 +28,8 @@
+     Geometry,
+     Opening,
+     Ttl,
++    #[cfg(feature = "retained-wsp-approach-witness")]
++    WspApproachWitness,
+ }
+ 
+ impl Phase {
+@@ -30,6 +38,17 @@
+             Self::Geometry => 0,
+             Self::Opening => 1,
+             Self::Ttl => 3,
++            #[cfg(feature = "retained-wsp-approach-witness")]
++            Self::WspApproachWitness => 1,
++        }
++    }
++
++    fn requires_geometry(self) -> bool {
++        match self {
++            Self::Geometry => false,
++            Self::Opening | Self::Ttl => true,
++            #[cfg(feature = "retained-wsp-approach-witness")]
++            Self::WspApproachWitness => true,
+         }
+     }
+ 
+@@ -37,6 +56,11 @@
+         match self {
+             Self::Geometry => tokens.is_empty(),
+             Self::Opening | Self::Ttl => tokens.iter().map(|x| x.raw()).eq([9]),
++            #[cfg(feature = "retained-wsp-approach-witness")]
++            Self::WspApproachWitness => {
++                let mut words = tokens.iter().map(|x| x.raw());
++                words.next() == Some(9) && matches!(words.next(), Some(1 | 14)) && words.next().is_none()
++            },
+         }
+     }
+ }
+@@ -407,9 +431,13 @@
+     let f: Fixture = serde_json::from_slice(&fixture)?;
+     if !exact_fixture(&f, &m) { return Err("v3 fixture outside scoped geometry".into()); }
+ 
++    #[cfg(feature = "retained-wsp-approach-witness")]
++    if m.phase == Phase::WspApproachWitness {
++        wsp_approach_witness::check_grant(&m, &a, &grant)?;
++    }
+     let setup_pin = match (m.phase, a.geometry_proof_sha256.as_deref()) {
+         (Phase::Geometry, None) => None,
+-        (Phase::Opening | Phase::Ttl, Some(pin)) if is_digest(pin) => {
++        (phase, Some(pin)) if phase.requires_geometry() && is_digest(pin) => {
+             let b = read_leaf(root, GEOMETRY_LEAF, 65_536)?;
+             if digest(&b) != pin { return Err("v3 geometry predecessor hash mismatch".into()); }
+             let v: GeometryProof = serde_json::from_slice(&b)?;
+@@ -437,6 +465,8 @@
+             )?)
+         }
+         (Phase::Geometry | Phase::Opening, None) => None,
++        #[cfg(feature = "retained-wsp-approach-witness")]
++        (Phase::WspApproachWitness, None) => None,
+         _ => return Err("only TTL requires its own independently approved 1/1 opening pair".into()),
+     };
+     let identity = Identity {
+@@ -486,6 +516,8 @@
+     props: [WorldEntityId; 2],
+     atom: AudibleUtterance,
+     pub(super) setup: Value,
++    #[cfg(feature = "retained-wsp-approach-witness")]
++    pub(super) is_wsp_approach_witness: bool,
+ }
+ 
+ fn snapshot(world: &HeadlessWorld, owner: OrganismId, props: [WorldEntityId; 2]) -> Result<Snapshot> {
+@@ -614,7 +646,9 @@
+             "native_player_utterance":atom,"inherited_word_gain":gains,"phase":self.phase,
+             "observer_only":true,"preview_is_not_outcome":true});
+         *world = staged;
+-        Ok(Opened { layout: self.cell.layout, props: self.fixture.props_food_ball, atom, setup })
++        Ok(Opened { layout: self.cell.layout, props: self.fixture.props_food_ball, atom, setup,
++            #[cfg(feature = "retained-wsp-approach-witness")]
++            is_wsp_approach_witness: self.phase == Phase::WspApproachWitness })
+     }
+ }
+ 
+@@ -648,6 +682,24 @@
+ }
+ 
+ impl Opened {
++    #[cfg(feature = "retained-wsp-approach-witness")]
++    pub(super) fn capture_wsp_approach_witness(&self, world: &HeadlessWorld, id: OrganismId)
++        -> Result<WspApproachOpeningBefore>
++    {
++        if !self.is_wsp_approach_witness { return Err("wrong WSP Approach scope".into()); }
++        wsp_approach_witness::capture(self, world, id)
++    }
++
++    #[cfg(feature = "retained-wsp-approach-witness")]
++    pub(super) fn observe_wsp_approach_witness(
++        &self, before: WspApproachOpeningBefore, frame: &PerceptionFrame,
++        behavior: &GpuTrainingRolloutReceipt, patch: &alife_core::ExperiencePatch,
++        world: &HeadlessWorld, outcome: Tick,
++    ) -> Result<Value> {
++        if !self.is_wsp_approach_witness { return Err("wrong WSP Approach scope".into()); }
++        wsp_approach_witness::observe(self, before, frame, behavior, patch, world, outcome)
++    }
++
+     pub(super) fn capture(&self, world: &HeadlessWorld, owner: OrganismId) -> Result<Snapshot> {
+         snapshot(world, owner, self.props)
+     }
+@@ -776,6 +828,21 @@
+ #[cfg(test)]
+ mod tests {
+     use super::*;
++
++    #[cfg(feature = "retained-wsp-approach-witness")]
++    #[test]
++    fn wsp_approach_private_phase_does_not_expand_legacy_opening_or_ttl() {
++        for (p, t, good) in [
++            ("opening",json!([9]),true), ("opening",json!([9,1]),false),
++            ("ttl",json!([9]),true), ("ttl",json!([9,14]),false),
++            ("wsp_approach_witness",json!([9,1]),true),
++            ("wsp_approach_witness",json!([9,14]),true),
++            ("wsp_approach_witness",json!([9]),false),
++            ("wsp_approach_witness",json!([]),false),
++            ("wsp_approach_witness",json!([6,1]),false),
++        ] { assert_eq!(parse_manifest(&serde_json::to_vec(&m(p,t)).unwrap()).is_ok(), good); }
++        assert_eq!(Phase::WspApproachWitness.decisions(), 1);
++    }
+ 
+     fn m(phase: &str, tokens: Value) -> Value {
+         json!({"schema":6,"fixture_id":"synthetic-v3","run_id":"check","source_current_sha256":"a".repeat(64),
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/wsp_approach_witness.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/wsp_approach_witness.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/wsp_approach_witness.rs
+@@ -0,0 +1,274 @@
++//! Stock pose/custody evidence only; there is no hook into the sampler.
++use super::*;
++use alife_core::{
++    ExperiencePatch, MotorChannel, PerceptionFrameDigest, PhysicalContactKind, TrackedObjectId,
++};
++use alife_world::{HeadlessWorldSignatureDigest, PhysicalTrackingKey, PhysicalTrackingProvenance};
++
++const GRANT_SCHEMA: &str = "qualia.saved_life.wsp_approach_opening_operator_grant.v1";
++const RECEIPT_SCHEMA: &str = "qualia.saved_life.wsp_approach_opening_witness.v1";
++const SOURCE_CURRENT: &str = "55672f322eadc64e223289d9df9883f62d0cc01aa97c0478119ad6c51d2852ee";
++const DISPLACEMENT_AGREEMENT_M: f64 = 0.0001;
++const MIN_PROGRESS_M: f64 = 0.001;
++
++#[derive(Deserialize)]
++#[serde(deny_unknown_fields)]
++struct OperatorGrant {
++    schema: String,
++    phase: Phase,
++    run_id: String,
++    fixture_id: String,
++    cell: Cell,
++    source_current_sha256: String,
++    evaluator_sha256: String,
++    fixture_sha256: String,
++    rubric_sha256: String,
++    geometry_proof_sha256: String,
++    decisions: u64,
++    world_ticks: u64,
++    writes_policy: bool,
++    scorecard_eligible: bool,
++}
++
++pub(super) fn check_grant(m: &Manifest, a: &Admission, raw: &[u8]) -> Result<()> {
++    let g: OperatorGrant = serde_json::from_slice(raw)?;
++    if g.schema != GRANT_SCHEMA
++        || g.phase != Phase::WspApproachWitness || m.phase != g.phase || a.phase != g.phase
++        || g.run_id != m.run_id || g.fixture_id != m.fixture_id || g.cell != m.cell
++        || g.source_current_sha256 != SOURCE_CURRENT || g.source_current_sha256 != m.source_current_sha256
++        || g.evaluator_sha256 != a.evaluator_sha256 || g.fixture_sha256 != a.fixture_sha256
++        || g.rubric_sha256 != a.rubric_sha256
++        || a.geometry_proof_sha256.as_deref() != Some(g.geometry_proof_sha256.as_str())
++        || !is_digest(&g.geometry_proof_sha256) || g.decisions != 1 || g.world_ticks != 1
++        || g.writes_policy || g.scorecard_eligible
++    {
++        return Err("wrong stock-only WSP Approach operator grant".into());
++    }
++    Ok(())
++}
++
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++struct Spawn {
++    key: PhysicalTrackingKey,
++    provenance: PhysicalTrackingProvenance,
++}
++
++fn spawn(world: &HeadlessWorld, id: WorldEntityId) -> Result<Spawn> {
++    let object = world.entity(id).ok_or("WSP Approach lost authenticated native object")?;
++    let proof = Spawn { key: object.tracking_key, provenance: object.tracking_provenance };
++    if proof.provenance.canonical_key() != proof.key {
++        return Err("WSP Approach duplicate or invalid physical spawn identity".into());
++    }
++    Ok(proof)
++}
++
++#[derive(Serialize)]
++struct BoundOffer {
++    native_candidate_index: usize,
++    observed_slot: u16,
++    native_track: TrackedObjectId,
++    physical_spawn: PhysicalTrackingKey,
++    audit_target: WorldEntityId,
++    native_bearing_cosine_bits: u32,
++    native_appearance_bits: [u32; 6],
++    native_grounded_range_bits: u32,
++    native_world_grab_legal_pre_motion: bool,
++    stock_locomotion_independent_support: bool,
++    stock_representative_can_fill_locomotion: bool,
++}
++
++pub(crate) struct OpeningBefore {
++    state: Snapshot,
++    actor: WorldEntityId,
++    actor_spawn: Spawn,
++    props: [Spawn; 2],
++    world: HeadlessWorldSignatureDigest,
++    emitted: AudibleUtterance,
++}
++
++fn hand_empty(world: &HeadlessWorld, owner: OrganismId) -> bool {
++    !world.object_snapshots().iter().any(|x| x.carried_by == Some(owner))
++}
++
++pub(super) fn capture(opened: &Opened, world: &HeadlessWorld, owner: OrganismId) -> Result<OpeningBefore> {
++    let state = opened.capture(world, owner)?;
++    let actor = world.organism_registry().get(owner)
++        .filter(|r| r.lifecycle().is_alive()).ok_or("WSP Approach lost its living resident")?.world_entity_id();
++    let actor_spawn = spawn(world, actor)?;
++    let props = [spawn(world, opened.props[0])?, spawn(world, opened.props[1])?];
++    if !world.entity(actor).is_some_and(|o| o.organism_id==Some(owner) && !o.consumed)
++        || props[0].key == props[1].key || props.iter().any(|p| p.key == actor_spawn.key)
++        || state.tick != opened.atom.emitted_tick.raw() || opened.atom.addressee != Some(owner)
++        || opened.atom.source_kind != UtteranceSourceKind::Player || opened.atom.speaker_id.is_some()
++        || opened.atom.teacher_channel.is_some() || opened.atom.tokens.len() != 2
++        || opened.atom.emitted_tick.raw().checked_add(1) != Some(opened.atom.expires_after_tick.raw())
++        || world.audible_utterances().as_slice() != std::slice::from_ref(&opened.atom)
++        || !hand_empty(world, owner) || world.player_held_object().is_some()
++        || !state.props.iter().all(|p| p.free() && !p.native_grab_legal && p.velocity == Vec3f::ZERO)
++    {
++        return Err("WSP Approach did not observe one actual stock cue and an untouched free out-of-reach opening".into());
++    }
++    Ok(OpeningBefore { state, actor, actor_spawn, props,
++        world: world.canonical_signature_digest()?, emitted: opened.atom.clone() })
++}
++
++#[derive(Debug, Clone, Copy, Serialize)]
++struct GeometryDelta {
++    range_before_m: f64,
++    range_after_m: f64,
++    range_reduced_m: f64,
++    body_translation_m: f64,
++    paid_locomotion_displacement_m: f64,
++    remaining_delta_error_m: f64,
++    certified_progress: bool,
++}
++
++fn xyz(v: Vec3f) -> [f64; 3] { [f64::from(v.x), f64::from(v.y), f64::from(v.z)] }
++fn difference(a: Vec3f, b: Vec3f) -> [f64; 3] {
++    let [x,y,z] = xyz(a);
++    let [u,v,w] = xyz(b);
++    [x-u,y-v,z-w]
++}
++fn norm([x,y,z]: [f64;3]) -> f64 { x.hypot(y).hypot(z) }
++fn geometry(before: Vec3f, after: Vec3f, target: Vec3f, moved: Vec3f) -> Result<GeometryDelta> {
++    let rb=norm(difference(before,target));
++    let ra=norm(difference(after,target));
++    let world_delta=difference(after,before);
++    let move_delta=xyz(moved);
++    let body_translation_m=norm(world_delta);
++    let paid_locomotion_displacement_m=norm(move_delta);
++    let remaining_delta_error_m=norm(std::array::from_fn(|j| world_delta[j]-move_delta[j]));
++    let range_reduced_m=rb-ra;
++    if ![rb,ra,body_translation_m,paid_locomotion_displacement_m,remaining_delta_error_m,range_reduced_m]
++        .iter().all(|x| x.is_finite())
++    {
++        return Err("WSP Approach lost finite world motion evidence".into());
++    }
++    Ok(GeometryDelta { range_before_m: rb, range_after_m: ra, range_reduced_m,
++        body_translation_m, paid_locomotion_displacement_m, remaining_delta_error_m,
++        certified_progress: range_reduced_m >= MIN_PROGRESS_M && body_translation_m >= MIN_PROGRESS_M
++            && paid_locomotion_displacement_m >= MIN_PROGRESS_M
++            && remaining_delta_error_m <= DISPLACEMENT_AGREEMENT_M })
++}
++
++#[allow(clippy::too_many_arguments)]
++pub(super) fn observe(
++    opened: &Opened, before: OpeningBefore, frame: &PerceptionFrame, behavior: &GpuTrainingRolloutReceipt,
++    patch: &ExperiencePatch, world: &HeadlessWorld, outcome: Tick,
++) -> Result<Value> {
++    let owner=frame.organism_id();
++    let tick=frame.tick();
++    let outcome_record=patch.outcome();
++    if before.emitted!=opened.atom || before.state.owner!=owner || before.state.tick!=tick.raw()
++        || before.emitted.emitted_tick!=tick || tick.raw().checked_add(1)!=Some(outcome.raw())
++        || outcome!=world.tick() || outcome_record.outcome_tick!=outcome || outcome_record.organism_id!=owner
++        || behavior.tick!=tick.raw() || behavior.organism_id!=owner.raw()
++        || behavior.frame_digest!=frame.frame_digest()
++        || patch.pre_action().perception().frame_digest()!=frame.frame_digest()
++        || !exact_position(frame.body().pose.translation,before.state.body_position)
++        || !world.organism_registry().get(owner).is_some_and(|r| r.lifecycle().is_alive()
++            && r.world_entity_id()==before.actor)
++        || !world.entity(before.actor).is_some_and(|o| o.organism_id==Some(owner) && !o.consumed)
++        || before.world.words==[0;4] || spawn(world,before.actor)?!=before.actor_spawn
++    { return Err("WSP Approach cannot bind real opening, sealed frame, and native outcome".into()); }
++    // V3 Opened::observe independently verifies actual ordered Player heard rails.
++    // Here bind all 101 rows (not just the post-hoc winner) to exact occupied slots.
++    let after=opened.capture(world,owner)?;
++    let slots=frame.grounded_object_slots();
++    if slots.len()!=2 || frame.candidates().len()>32 { return Err("WSP Approach full target roster is out of scope".into()); }
++    let required_slot_count=frame.candidates().len();
++    if behavior.logits.len()!=required_slot_count || behavior.forced_motor_slots.len()!=required_slot_count {
++        return Err("WSP Approach malformed signed record".into());
++    }
++    let mut offers:[Option<BoundOffer>;2]=[None,None];
++    for (i,c) in frame.candidates().iter().enumerate().filter(|(_,c)| c.action_id==HeadlessActionIds::APPROACH) {
++        let j=before.state.props.iter().position(|p|Some(p.entity)==c.target.entity)
++            .ok_or("WSP Approach unexpected third native 101 route")?;
++        let p=before.state.props[j];
++        let CandidateObservationRef::ObjectSlot(slot_index)=c.observation else {
++            return Err("WSP Approach ungrounded actual 101".into());
++        };
++        let slot=slots.iter().find(|s|s.slot_index==slot_index).ok_or("WSP Approach absent actual slot")?;
++        let record=world.tracked_objects().record(owner,slot.tracked_object_id)
++            .ok_or("WSP Approach absent same-owner physical tracked record")?;
++        let f=slot.candidate_features()?.0;
++        let bit=1_u32.checked_shl(u32::try_from(i)?).ok_or("WSP Approach too many candidates")?;
++        let support=offer_support(behavior.logits[i],bit,0,behavior.motor_masks[0],
++                                  behavior.representative_mask,behavior.forced_motor_slots[i])?;
++        if offers[j].is_some() || !support.supported || c.kind!=ActionKind::Move || c.family!=CandidateActionFamily::Approach
++            || usize::from(c.candidate_index)!=i || !c.target.position.is_some_and(|p0|exact_position(p0,p.position))
++            || record.tracking_key!=before.props[j].key || record.tracking_provenance!=before.props[j].provenance
++            || record.last_seen_tick!=tick || spawn(world,p.entity)?!=before.props[j]
++            || !c.features.0.iter().zip(f.iter()).all(|(x,y)| x.to_bits()==y.to_bits())
++            || c.sensor_confidence.raw().to_bits()!=slot.confidence.raw().to_bits() || slot.confidence.raw()<=0.0
++        { return Err("WSP Approach age, track, candidate or physical spawn authority not exact".into()); }
++        offers[j]=Some(BoundOffer { native_candidate_index:i, observed_slot:slot_index,
++            native_track:slot.tracked_object_id, physical_spawn:before.props[j].key, audit_target:p.entity,
++            native_bearing_cosine_bits:f[1].to_bits(), native_appearance_bits:std::array::from_fn(|j|f[9+j].to_bits()),
++            native_grounded_range_bits:slot.distance.to_bits(), native_world_grab_legal_pre_motion:p.native_grab_legal,
++            stock_locomotion_independent_support:support.channel_mask,
++            stock_representative_can_fill_locomotion:support.representative_can_fill_channel });
++    }
++    let [Some(first),Some(second)]=offers else { return Err("WSP Approach lacks two physical stock offers".into()); };
++    if first.observed_slot==second.observed_slot || first.native_track==second.native_track {
++        return Err("WSP Approach duplicate current observed slot or track".into());
++    }
++    let word=opened.atom.tokens[1].raw();
++    let wanted=match word {
++        1 => 0, 14 => 1, _ => return Err("WSP Approach unexpected literal native noun".into()),
++    };
++    let target=before.state.props[wanted];
++    let remain=after.props[wanted];
++    let selected_expected_index=if wanted==0 { first.native_candidate_index } else { second.native_candidate_index };
++    let joint=outcome_record.joint.as_ref().ok_or("WSP Approach no actual native joint outcomes")?;
++    let command=patch.selected_bundle().and_then(|b|b.channels.iter().find(|c|c.channel==MotorChannel::Locomotion));
++    let loc=joint.channel_outcomes.iter().find(|x|x.channel==MotorChannel::Locomotion);
++    let paid=loc.and_then(|x|x.execution_evidence.as_ref()).zip(loc);
++    let requested_101=usize::from(behavior.motor_indices[0])==selected_expected_index
++        && command.is_some_and(|c|c.primitive==HeadlessActionIds::APPROACH
++        && c.target.is_some_and(|t| t.entity==Some(target.entity) && t.position.is_some_and(|p| exact_position(p,target.position))));
++    let paid_101=paid.is_some_and(|(e,x)| e.succeeded && e.primitive==HeadlessActionIds::APPROACH
++        && e.command_target==Some(target.entity) && x.physical.target_entity==Some(target.entity)
++        && x.physical.contact==PhysicalContactKind::Moved
++        && x.physical.energy_cost.raw().is_finite() && x.physical.energy_cost.raw()>0.0);
++    let motion=geometry(before.state.body_position,after.body_position,target.position,
++        loc.map_or(Vec3f::ZERO,|x|x.physical.displacement))?;
++    let target_stationary_and_free=remain.free() && remain.velocity==Vec3f::ZERO
++        && exact_position(remain.position,target.position);
++    let no_other_translation=joint.channel_outcomes.iter().filter(|o|o.channel!=MotorChannel::Locomotion)
++        .all(|o|norm(xyz(o.physical.displacement))<=DISPLACEMENT_AGREEMENT_M);
++    let no_grab_or_meal=hand_empty(world,owner) && world.player_held_object().is_none() && after.props.iter().all(|p|p.free())
++        && !joint.channel_outcomes.iter().any(|x|x.physical.contact==PhysicalContactKind::Consumed
++            || x.execution_evidence.as_ref().is_some_and(|e| e.succeeded
++               && (e.primitive==HeadlessActionIds::GRAB || e.primitive==HeadlessActionIds::EAT)));
++    let frame_identity: PerceptionFrameDigest=frame.frame_digest();
++    Ok(json!({"schema":RECEIPT_SCHEMA,"no_policy_edit":true,"scorecard_eligible":false,
++        "before_world_signature":before.world,"frame":frame_identity,"decision_tick":tick.raw(),"outcome_tick":outcome.raw(),
++        "full_native_tracked_101_offers":[first,second],"active_native_player_atom":before.emitted,
++        "audit_target_after_selection":target.entity,"actual_locomotion_outcome":loc,
++        "native_locomotion_selected_index":behavior.motor_indices[0],
++        "selected_101_toward_audit_target":requested_101,"paid_101_toward_audit_target":paid_101,
++        "actual_stationary_still_free_target":target_stationary_and_free,
++        "actual_no_competing_body_translation":no_other_translation,"actual_no_grab_or_meal":no_grab_or_meal,
++        "independent_geometry":motion,
++        "stock_paid_approach_distance_witness":requested_101 && paid_101 && motion.certified_progress
++            && target_stationary_and_free && no_other_translation && no_grab_or_meal}))
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    #[test]
++    fn wsp_geometry_rejects_turn_only_or_displacement_from_another_source() {
++        let a=Vec3f::new(1.0,0.0,1.0);
++        let b=Vec3f::new(1.04,0.0,1.03);
++        let t=Vec3f::new(2.5,0.0,2.1);
++        assert!(!geometry(a,a,t,Vec3f::ZERO).unwrap().certified_progress);
++        assert!(!geometry(a,a,t,Vec3f::new(0.04,0.0,0.03)).unwrap().certified_progress);
++        assert!(!geometry(a,b,t,Vec3f::ZERO).unwrap().certified_progress);
++        assert!(!geometry(a,b,t,Vec3f::new(0.0,0.0,0.05)).unwrap().certified_progress);
++        assert!(geometry(a,b,t,Vec3f::new(0.04,0.0,0.03)).unwrap().certified_progress);
++        assert!(!geometry(a,Vec3f::new(1.0001,0.0,1.0),t,Vec3f::new(0.0001,0.0,0.0))
++            .unwrap().certified_progress);
++    }
++}

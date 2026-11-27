@@ -1,0 +1,1414 @@
+diff --git a/crates/alife_game_app/Cargo.toml b/crates/alife_game_app/Cargo.toml
+--- a/crates/alife_game_app/Cargo.toml
++++ b/crates/alife_game_app/Cargo.toml
+@@ -126,6 +126,7 @@
+ retained-language-pilot = ["foundation-training", "gpu-tests", "alife_world/retained-language-pilot"]
+ retained-language-composition-v3 = ["retained-language-pilot", "alife_world/retained-language-composition-v3"]
+ retained-wsp-approach-witness = ["retained-language-composition-v3"]
++retained-wsp-approach-v2 = ["retained-wsp-approach-witness", "alife_gpu_backend/wsp-approach-v2"]
+ vfx-hanabi = ["bevy-app", "dep:bevy_hanabi", "bevy_hanabi/3d"]
+ production-voxel-frontend = [
+     "bevy-app",
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs
+--- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs
+@@ -407,6 +407,8 @@
+     let language = experiment.as_ref().and_then(experiments::ExperimentIdentity::language_pilot);
+     #[cfg(feature = "retained-language-composition-v3")]
+     let composition = experiment.as_ref().and_then(experiments::ExperimentIdentity::language_composition_v3);
++    #[cfg(feature = "retained-wsp-approach-v2")]
++    let wsp_delta=experiment.as_ref().and_then(|e|e.wsp_approach_v2.as_ref());
+     if let Some(scope) = scent_scope {
+         scope.validate(&request)?;
+     }
+@@ -700,7 +702,13 @@
+         Some(0)
+     } else { controlled_pressure };
+     #[cfg(feature = "retained-language-composition-v3")]
+-    let controlled_pressure = if composition.is_some() { Some(0) } else { controlled_pressure };
++    let controlled_pressure = if composition.is_some() {
++        #[cfg(feature = "retained-wsp-approach-v2")]
++        if wsp_delta.is_some() && controlled_pressure.is_some_and(|n|n!=0) {
++            return Err("WSP Approach V2 requires controlled zero pressure".into());
++        }
++        Some(0)
++    } else { controlled_pressure };
+     let isolated_archive =
+         std::env::var("ALIFE_EXPLICIT_RETENTION_ARCHIVE_TEST").is_ok_and(|v| v == "1");
+     #[cfg(feature = "gpu-tests")]
+@@ -927,6 +935,8 @@
+     let mut cue_free = true;
+     let mut error = None;
+     let mut outcomes = BTreeMap::<u64, crate::FoundationFoodOutcome>::new();
++    #[cfg(feature = "retained-wsp-approach-v2")]
++    let mut wsp_v2_receipt=None;
+     let stop = loop {
+         let alive = runtime
+             .world()
+@@ -982,6 +992,17 @@
+                 }
+                 opened.capture_wsp_approach_witness(runtime.world(),id)
+             }).transpose()?;
++        #[cfg(feature = "retained-wsp-approach-v2")]
++        if let Some(wsp)=wsp_delta {
++            wsp.still_live()?;
++            if calls!=0 || !software_simulation || isolated_archive || scent_scope.is_some()
++                || controlled_pressure!=Some(0) || request.direct_weights.is_some() || request.navigation_task.is_some() {
++                return Err("WSP Approach V2 must be the exclusive exact software opening".into());
++            }
++            let actual=composition_setup.as_ref().ok_or("WSP Approach V2 missing opened real geometry")?;
++            if wsp_approach_before.is_none() {return Err("WSP Approach V2 missing prior World identity".into());}
++            runtime.arm_wsp_approach_v2(id,wsp.prototype,actual.native_atom(),wsp.stock.clone())?;
++        }
+         let before_pose = runtime
+             .world()
+             .organism_registry()
+@@ -1021,6 +1042,10 @@
+         };
+         #[cfg(not(feature = "gpu-tests"))]
+         let tick = runtime.tick_outcome();
++        #[cfg(feature = "retained-wsp-approach-v2")]
++        if wsp_delta.is_some() && !matches!(&tick,Ok(crate::gpu_live_runtime::GpuLiveTickOutcome::Progressed(_))) {
++            return Err("WSP Approach V2 strict native dispatch had no actual completed cut; no retry".into());
++        }
+         let tick_error = tick.err().map(|e| e.to_string());
+         let after_tick = runtime.world().tick();
+         let after_pose = runtime
+@@ -1030,6 +1055,10 @@
+             .and_then(|record| runtime.world().entity(record.world_entity_id()))
+             .map(|object| (object.position, object.body_yaw));
+         let mut steps = runtime.take_foundation_training_steps();
++        #[cfg(feature = "retained-wsp-approach-v2")]
++        if wsp_delta.is_some() && (steps.len()!=1 || before_tick.raw().checked_add(1)!=Some(after_tick.raw())) {
++            return Err("WSP Approach V2 must have one paid-authoritative World cut".into());
++        }
+         if steps.len() > 1
+             || (after_tick != before_tick
+                 && after_tick.raw()
+@@ -1263,6 +1292,27 @@
+                         )?;
+                     }
+                 }
++                #[cfg(feature = "retained-wsp-approach-v2")]
++                if let Some(scope)=wsp_delta {
++                    scope.still_live()?;
++                    let (cap,raw)=runtime.take_wsp_approach_v2().ok_or("WSP V2 lacks authentic pre-sampler capture")?;
++                    let physical=&mut row["wsp_approach_stock_witness"];
++                    if !physical.is_object() || serde_json::to_value(cap.frame)?!=physical["frame"]
++                        || serde_json::to_value(cap.world_before)?!=physical["before_world_signature"]
++                        || cap.frame!=step.frame.frame_digest() || cap.sampling!=step.behavior.sampling
++                        || raw.treatment_requested!=scope.is_treatment()
++                        || raw.verified_same_stock_reference!=scope.is_treatment()
++                        || raw.just_before_stock_sampler_u32.len()!=step.behavior.logits.len()
++                        || raw.just_before_stock_sampler_u32.iter().zip(&step.behavior.logits)
++                            .any(|(bits,value)|f32::from_bits(*bits).is_finite() && *bits!=value.to_bits()) {
++                        return Err("WSP Approach V2 GPU captures are not this actual World/selection cut".into());
++                    }
++                    physical["no_policy_edit"]=serde_json::json!(!raw.changed_101.into_iter().any(|x|x));
++                    let actual=serde_json::json!({"reference":cap,"presample":raw,"physical":physical,
++                        "evaluation_only":true,"scorecard_eligible":false});
++                    row["wsp_approach_v2_opening_receipt"]=actual.clone();
++                    wsp_v2_receipt=Some(actual);
++                }
+                 if controlled_pressure.is_some() {
+                     row["observer_host_pressure_control"] =
+                         runtime.controlled_pressure_evidence_for_test();
+@@ -1457,6 +1507,16 @@
+                 return Err("WSP Approach lacks one closed authentic stock World cut".into());
+             }
+             receipt["wsp_approach_stock_witness_integrity"] = serde_json::json!(true);
++        }
++        #[cfg(feature = "retained-wsp-approach-v2")]
++        if let Some(scope)=wsp_delta {
++            scope.still_live()?;
++            if !integrity || calls!=1 || rows!=1 || controlled_pressure!=Some(0)
++                || v.phase!=language_composition_v3::Phase::WspApproachV2 {
++                return Err("WSP Approach V2 did not close its one exact World cut".into());
++            }
++            receipt["wsp_approach_v2_opening_receipt"]=wsp_v2_receipt.ok_or("WSP opening evidence absent")?;
++            receipt["wsp_approach_v2_integrity"]=serde_json::json!(true);
+         }
+         receipt["language_composition_v3_witness"] = serde_json::json!({
+             "phase":v.phase,"integrity":integrity,"accepted_decisions":rows,
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
+--- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
+@@ -85,6 +85,9 @@
+     #[cfg(feature = "retained-language-composition-v3")]
+     #[serde(skip_serializing_if = "Option::is_none")]
+     language_composition_v3: Option<super::language_composition_v3::Identity>,
++    #[cfg(feature = "retained-wsp-approach-v2")]
++    #[serde(skip_serializing_if="Option::is_none")]
++    pub(super) wsp_approach_v2:Option<super::language_composition_v3::wsp_approach_v2_admission::Scope>,
+ }
+ 
+ impl ExperimentIdentity {
+@@ -263,6 +266,8 @@
+             language_pilot: None,
+             #[cfg(feature = "retained-language-composition-v3")]
+             language_composition_v3: None,
++        #[cfg(feature = "retained-wsp-approach-v2")]
++        wsp_approach_v2:None,
+         },
+         request,
+         scent,
+@@ -302,6 +307,8 @@
+         language_pilot: None,
+         #[cfg(feature = "retained-language-composition-v3")]
+         language_composition_v3: None,
++        #[cfg(feature = "retained-wsp-approach-v2")]
++        wsp_approach_v2:None,
+     }, request, scent: None })
+ }
+ 
+@@ -335,6 +342,8 @@
+         visible_self_grip_v1: None, research: None, language_pilot: Some(cell),
+         #[cfg(feature = "retained-language-composition-v3")]
+         language_composition_v3: None,
++        #[cfg(feature = "retained-wsp-approach-v2")]
++        wsp_approach_v2:None,
+     }, request, scent: None })
+ }
+ 
+@@ -374,6 +383,8 @@
+         intervention,
+         visible_self_grip_v1: None, research: None, language_pilot: None,
+         language_composition_v3: Some(cell),
++        #[cfg(feature = "retained-wsp-approach-v2")]
++        wsp_approach_v2:None,
+     }, request, scent: None })
+ }
+ 
+@@ -436,6 +447,22 @@
+     #[derive(Deserialize)]
+     struct Version { schema: u16 }
+     let version: Version = serde_json::from_slice(&bytes)?;
++    #[cfg(not(feature = "retained-wsp-approach-v2"))]
++    if version.schema==11 { return Err("WSP Approach V2 feature is disabled".into()); }
++    #[cfg(feature = "retained-wsp-approach-v2")]
++    if version.schema==super::language_composition_v3::wsp_approach_v2_admission::SCHEMA {
++        use super::language_composition_v3::wsp_approach_v2_admission as w;
++        let (scope,inner)=w::resolve(admission_root,&bytes)?;
++        let mut p=resolve_language_composition_v3(admission_root,&inner)?;
++        let i=p.identity.language_composition_v3.as_ref().ok_or("missing WSP Approach inner geometry")?;
++        scope.bind_inner(i,&p.identity.run_id,p.request.finalization_deadline_unix_seconds)?;
++        p.identity.schema=w::SCHEMA;
++        p.identity.manifest_sha256=digest(&bytes);
++        p.identity.intervention=scope.label();
++        p.identity.wsp_approach_v2=Some(scope);
++        admitted_paths(admission_root,source,output,manifest_path)?;
++        return evaluate_saved_life_retention_inner(source,output,p.request,p.scent,Some(p.identity));
++    }
+     #[cfg(not(feature = "retained-language-composition-v3"))]
+     if version.schema == 6 {
+         return Err("v3 language composition feature is disabled".into());
+@@ -445,6 +472,11 @@
+         // Refuse admission/phase/prerequisite before inspecting the Current or
+         // writing a work root. This is deliberately not the old schema-5 path.
+         let p = resolve_language_composition_v3(admission_root, &bytes)?;
++        #[cfg(feature = "retained-wsp-approach-v2")]
++        if p.identity.language_composition_v3.as_ref().is_some_and(|x|
++            x.phase==super::language_composition_v3::Phase::WspApproachV2) {
++            return Err("WSP Approach V2 requires its distinct outer authority".into());
++        }
+         admitted_paths(admission_root, source, output, manifest_path)?;
+         return evaluate_saved_life_retention_inner(
+             source, output, p.request, p.scent, Some(p.identity),
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/language_composition_v3.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/language_composition_v3.rs
+--- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/language_composition_v3.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/language_composition_v3.rs
+@@ -16,6 +16,9 @@
+ mod wsp_approach_witness;
+ #[cfg(feature = "retained-wsp-approach-witness")]
+ pub(super) use wsp_approach_witness::OpeningBefore as WspApproachOpeningBefore;
++#[cfg(feature = "retained-wsp-approach-v2")]
++#[path = "wsp_approach_v2_admission.rs"]
++pub(super) mod wsp_approach_v2_admission;
+ 
+ pub(super) const SCHEMA: u16 = 6;
+ pub(super) const OUTPUT_BYTES: u64 = 256 * 1024 * 1024;
+@@ -30,6 +33,8 @@
+     Ttl,
+     #[cfg(feature = "retained-wsp-approach-witness")]
+     WspApproachWitness,
++    #[cfg(feature = "retained-wsp-approach-v2")]
++    WspApproachV2,
+ }
+ 
+ impl Phase {
+@@ -40,6 +45,8 @@
+             Self::Ttl => 3,
+             #[cfg(feature = "retained-wsp-approach-witness")]
+             Self::WspApproachWitness => 1,
++            #[cfg(feature = "retained-wsp-approach-v2")]
++            Self::WspApproachV2 => 1,
+         }
+     }
+ 
+@@ -49,11 +56,25 @@
+             Self::Opening | Self::Ttl => true,
+             #[cfg(feature = "retained-wsp-approach-witness")]
+             Self::WspApproachWitness => true,
+-        }
+-    }
+-
++            #[cfg(feature = "retained-wsp-approach-v2")]
++            Self::WspApproachV2 => true,
++        }
++    }
++
++    #[cfg(feature = "retained-wsp-approach-witness")]
++    fn requires_wsp_witness(self)->bool {
++        match self {
++            Self::WspApproachWitness=>true,
++            #[cfg(feature = "retained-wsp-approach-v2")]
++            Self::WspApproachV2=>true,
++            _=>false,
++        }
++    }
+     fn accepts(self, tokens: &[LanguageTokenId]) -> bool {
+         match self {
++            #[cfg(feature = "retained-wsp-approach-v2")]
++            Self::WspApproachV2 => matches!(tokens.iter().map(|t|t.raw()).collect::<Vec<_>>().as_slice(),
++                                               [] | [9] | [9,1] | [9,14]),
+             Self::Geometry => tokens.is_empty(),
+             Self::Opening | Self::Ttl => tokens.iter().map(|x| x.raw()).eq([9]),
+             #[cfg(feature = "retained-wsp-approach-witness")]
+@@ -467,6 +488,8 @@
+         (Phase::Geometry | Phase::Opening, None) => None,
+         #[cfg(feature = "retained-wsp-approach-witness")]
+         (Phase::WspApproachWitness, None) => None,
++        #[cfg(feature = "retained-wsp-approach-v2")]
++        (Phase::WspApproachV2, None) => None,
+         _ => return Err("only TTL requires its own independently approved 1/1 opening pair".into()),
+     };
+     let identity = Identity {
+@@ -514,7 +537,8 @@
+ pub(super) struct Opened {
+     layout: Layout,
+     props: [WorldEntityId; 2],
+-    atom: AudibleUtterance,
++    atom: Option<AudibleUtterance>,
++    opening_tick: Tick,
+     pub(super) setup: Value,
+     #[cfg(feature = "retained-wsp-approach-witness")]
+     pub(super) is_wsp_approach_witness: bool,
+@@ -630,14 +654,25 @@
+         let pos = opening.body_position;
+         let (sn,cs) = opening.body_yaw.sin_cos();
+         let source = Vec3f::new(pos.x + 0.25 * cs, pos.y, pos.z + 0.25 * sn);
+-        let atom = staged.emit_player_tokens(Some(owner), source, self.cell.player_tokens.clone())?;
+-        if staged.audible_utterances().as_slice() != std::slice::from_ref(&atom)
++        let atom = if self.cell.player_tokens.is_empty() {
++            #[cfg(feature = "retained-wsp-approach-v2")]
++            let allowed=self.phase==Phase::WspApproachV2;
++            #[cfg(not(feature = "retained-wsp-approach-v2"))]
++            let allowed=false;
++            if !allowed || !staged.audible_utterances().is_empty() {
++                return Err("no-cue can only be truly absent in the authorized WSP V2 scope".into());
++            }
++            None
++        } else { Some(staged.emit_player_tokens(Some(owner), source, self.cell.player_tokens.clone())?) };
++        if let Some(atom)=atom.as_ref() {
++        if staged.audible_utterances().as_slice() != std::slice::from_ref(atom)
+             || atom.source_kind!=UtteranceSourceKind::Player || atom.addressee!=Some(owner)
+             || atom.emitted_tick!=now || now.raw().checked_add(1)!=Some(atom.expires_after_tick.raw())
+             || atom.speaker_id.is_some() || atom.teacher_channel.is_some()
+             || atom.confidence.raw().to_bits()!=1.0_f32.to_bits()
+         {
+             return Err("v3 witness did not emit exactly one ordinary addressed Player atom".into());
++        }
+         }
+         let gains = self.cell.player_tokens.iter().map(|t| {
+             staged.retained_language_pilot_word_gain(owner, u32::from(t.raw()))
+@@ -646,9 +681,9 @@
+             "native_player_utterance":atom,"inherited_word_gain":gains,"phase":self.phase,
+             "observer_only":true,"preview_is_not_outcome":true});
+         *world = staged;
+-        Ok(Opened { layout: self.cell.layout, props: self.fixture.props_food_ball, atom, setup,
++        Ok(Opened { layout: self.cell.layout, props: self.fixture.props_food_ball, atom, opening_tick: now, setup,
+             #[cfg(feature = "retained-wsp-approach-witness")]
+-            is_wsp_approach_witness: self.phase == Phase::WspApproachWitness })
++            is_wsp_approach_witness: self.phase.requires_wsp_witness() })
+     }
+ }
+ 
+@@ -682,6 +717,9 @@
+ }
+ 
+ impl Opened {
++    #[cfg(feature = "retained-wsp-approach-v2")]
++    pub(super) fn native_atom(&self)->Option<AudibleUtterance> {self.atom.clone()}
++
+     #[cfg(feature = "retained-wsp-approach-witness")]
+     pub(super) fn capture_wsp_approach_witness(&self, world: &HeadlessWorld, id: OrganismId)
+         -> Result<WspApproachOpeningBefore>
+@@ -714,7 +752,7 @@
+     ) -> Result<Value> {
+         let id = frame.organism_id();
+         let tick = frame.tick();
+-        if self.atom.addressee!=Some(id) || before.owner!=id || before.tick!=tick.raw()
++        if self.atom.as_ref().is_some_and(|a|a.addressee!=Some(id)) || before.owner!=id || before.tick!=tick.raw()
+             || tick.raw().checked_add(1)!=Some(outcome.raw()) || outcome!=world.tick()
+             || frame.sensor_profile()!=SensorProfile::GroundedTerrainVisionV1
+             || !exact_position(frame.body().pose.translation, before.body_position)
+@@ -731,19 +769,22 @@
+             return Err("v3 Teacher input observed".into());
+         }
+         let players = heard.iter().flatten().filter(|x| x.source_kind==UtteranceSourceKind::Player).collect::<Vec<_>>();
+-        let current = tick.raw()<=self.atom.expires_after_tick.raw();
+-        if tick.raw()<self.atom.emitted_tick.raw()
+-            || (current && (players.len()!=self.atom.tokens.len()
+-                || heard.iter().flatten().count()!=players.len()
+-                || !players.iter().zip(&self.atom.tokens).enumerate().all(|(i,(h,t))| {
+-                    h.utterance_id==self.atom.utterance_id && usize::from(h.sequence_position)==i
+-                     && h.addressee==self.atom.addressee && h.source_position==self.atom.source_position
+-                     && h.source_entity.is_none() && h.speaker_id.is_none() && h.teacher_channel.is_none()
+-                     && h.token_id==u32::from(t.raw()) && h.confidence.raw().is_finite() && h.confidence.raw()>0.0
+-                })))
+-            || (!current && !players.is_empty())
+-        {
+-            return Err("unexpected v3 sealed Player source, vector or expiry".into());
++        let current = self.atom.as_ref().is_some_and(|a|tick.raw()<=a.expires_after_tick.raw());
++        if let Some(atom)=self.atom.as_ref() {
++            if tick.raw()<atom.emitted_tick.raw()
++                || (current && (players.len()!=atom.tokens.len()
++                    || heard.iter().flatten().count()!=players.len()
++                    || !players.iter().zip(&atom.tokens).enumerate().all(|(i,(h,t))| {
++                        h.utterance_id==atom.utterance_id && usize::from(h.sequence_position)==i
++                         && h.addressee==atom.addressee && h.source_position==atom.source_position
++                         && h.source_entity.is_none() && h.speaker_id.is_none() && h.teacher_channel.is_none()
++                         && h.token_id==u32::from(t.raw()) && h.confidence.raw().is_finite() && h.confidence.raw()>0.0
++                    })))
++                || (!current && !players.is_empty()) {
++                return Err("unexpected v3 sealed Player source, vector or expiry".into());
++            }
++        } else if heard.iter().any(Option::is_some) {
++            return Err("WSP true silence must emit and hear no atom".into());
+         }
+         let mut rows = Vec::new();
+         let mut approach = [None,None];
+@@ -780,7 +821,7 @@
+                 behavior.representative_mask, behavior.forced_motor_slots[i],
+             )?;
+             if kind==0 {
+-                if tick == self.atom.emitted_tick {
++                if tick == self.opening_tick {
+                     let pos = before.props[which].position;
+                     let own = before.body_position;
+                     let physical_range = (pos.x-own.x).hypot(pos.y-own.y).hypot(pos.z-own.z);
+@@ -795,7 +836,7 @@
+                 "candidate_index":i,"world_transport_bits_match":true,"stock_policy_support":support,
+                 "native_predecision_grab_legal":prop.native_grab_legal}));
+         }
+-        if tick==self.atom.emitted_tick {
++        if tick==self.opening_tick {
+             let Some((a,b))=approach[0].zip(approach[1]) else {
+                 return Err("v3 opening lacks two independently bound actual Approach101 candidates".into());
+             };
+@@ -812,9 +853,9 @@
+                 return Err("v3 opening slot/track/legality proof failed".into());
+             }
+         }
+-        let sound_distance=(before.body_position.x-self.atom.source_position.x)
+-            .hypot(before.body_position.y-self.atom.source_position.y)
+-            .hypot(before.body_position.z-self.atom.source_position.z);
++        let sound_distance=self.atom.as_ref().map(|a|(before.body_position.x-a.source_position.x)
++            .hypot(before.body_position.y-a.source_position.y)
++            .hypot(before.body_position.z-a.source_position.z));
+         let after = self.capture(world, id)?;
+         Ok(json!({"schema_version":3,"observer_only":true,"sealed_frame_digest":frame.frame_digest(),
+             "decision_tick":tick.raw(),"outcome_tick":outcome.raw(),"organism":id.raw(),
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/wsp_approach_v2_admission.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/wsp_approach_v2_admission.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/wsp_approach_v2_admission.rs
+@@ -0,0 +1,148 @@
++//! Separate authority and non-actuation audit identities for default-off V2.
++use super::*;
++use crate::gpu_live_runtime::WspApproachV2Reference;
++
++pub const SCHEMA:u16=11;
++const SCOPE:&str="qualia.saved_life.wsp_approach_v2.v1";
++const EXACT_PARENT:&str="55672f322eadc64e223289d9df9883f62d0cc01aa97c0478119ad6c51d2852ee";
++const EXACT_CANDIDATE:&str="27cf133126051c9ff83c0a3d4270d195b133e55ccba23672866e20b33b2dfb65";
++const EXACT_CUE_PROTOTYPES:&str="488d8e0e3d551aae6d71657277d6698ee5fefbe64ea11bcae7f51cc92aa34d9c";
++
++#[derive(Clone,Copy,Debug,Serialize,Deserialize,PartialEq,Eq)]
++#[serde(rename_all="snake_case")]
++enum Arm { PresampleReference, ConditionalDelta }
++
++#[derive(Deserialize)]
++#[serde(deny_unknown_fields)]
++struct Envelope { schema:u16, scope:String, inner_sha256:String, admission_sha256:String }
++
++#[derive(Deserialize,Serialize,PartialEq,Eq)]
++#[serde(deny_unknown_fields)]
++struct Bind {
++    scope:String,
++    run_id:String,
++    arm:Arm,
++    source_current_sha256:String,
++    evaluator_sha256:String,
++    inner_sha256:String,
++    fixture_sha256:String,
++    rubric_sha256:String,
++    geometry_sha256:String,
++    candidate_sha256:String,
++    cue_prototype_sha256:String,
++    pressure_ns:u64,
++    expires_unix_seconds:u64,
++    max_decisions:u8,
++    max_world_ticks:u8,
++    scorecard_eligible:bool,
++    stock_retention_sha256:Option<String>,
++    stock_rows_sha256:Option<String>,
++}
++#[derive(Deserialize)]
++#[serde(deny_unknown_fields)]
++struct Permit { schema:String, binding:Bind, independent_operator_grant_sha256:String }
++#[derive(Deserialize)]
++#[serde(deny_unknown_fields)]
++struct Grant { schema:String, binding:Bind }
++
++#[derive(Serialize)]
++pub struct Scope {
++    binding:Bind,
++    approval_sha256:String,
++    #[serde(skip)] pub prototype:[u32;24],
++    #[serde(skip)] pub stock:Option<WspApproachV2Reference>,
++}
++
++impl Scope {
++    pub fn is_treatment(&self)->bool {self.binding.arm==Arm::ConditionalDelta}
++    pub fn label(&self)->&'static str {
++        if self.is_treatment() {"wsp_approach_v2_conditional_delta"} else {"wsp_approach_v2_presample_reference"}
++    }
++    pub fn still_live(&self)->Result<()> {
++        if super::super::now()? >= self.binding.expires_unix_seconds {
++            return Err("WSP Approach V2 operator envelope expired".into());
++        }
++        Ok(())
++    }
++    pub fn bind_inner(&self,identity:&Identity, run_id:&str, finalization:Option<u64>)->Result<()> {
++        let m=&self.binding;
++        if identity.phase!=Phase::WspApproachV2 || m.run_id!=run_id
++            || m.evaluator_sha256!=identity.evaluator_sha256 || m.fixture_sha256!=identity.fixture_sha256
++            || m.rubric_sha256!=identity.rubric_sha256 || Some(m.geometry_sha256.as_str())!=identity.geometry_proof_sha256.as_deref()
++            || identity.source_current_sha256!=EXACT_PARENT
++            || finalization.is_none_or(|t|t>m.expires_unix_seconds) {
++            return Err("WSP Approach V2 different nested geometry/clock authority".into());
++        }
++        Ok(())
++    }
++}
++
++fn hash_leaf(root:&Path,name:&str,pin:&str,limit:usize)->Result<Vec<u8>> {
++    let x=read_leaf(root,name,limit)?;
++    if !is_digest(pin) || digest(&x)!=pin {return Err("WSP Approach V2 exact local leaf mismatch".into());}
++    Ok(x)
++}
++
++pub fn resolve(root:&Path, bytes:&[u8])->Result<(Scope,Vec<u8>)> {
++    if bytes.len()>8192 { return Err("WSP Approach V2 envelope too large".into()); }
++    let m:Envelope=serde_json::from_slice(bytes)?;
++    if m.schema!=SCHEMA || m.scope!=SCOPE { return Err("unexpected WSP Approach V2 envelope".into()); }
++    let raw=hash_leaf(root,"wsp-approach-v2-admission.json",&m.admission_sha256,8192)?;
++    let v:Permit=serde_json::from_slice(&raw)?;
++    let g_raw=hash_leaf(root,"wsp-approach-v2-operator-grant.json",&v.independent_operator_grant_sha256,8192)?;
++    let g:Grant=serde_json::from_slice(&g_raw)?;
++    let b=&v.binding;
++    let now=super::super::now()?;
++    if v.schema!="qualia.saved_life.wsp_approach_v2_admission.v1"
++        || g.schema!="qualia.saved_life.wsp_approach_v2_operator_grant.v1" || g.binding!=v.binding
++        || b.scope!=SCOPE || b.source_current_sha256!=EXACT_PARENT || b.inner_sha256!=m.inner_sha256
++        || b.candidate_sha256!=EXACT_CANDIDATE || b.cue_prototype_sha256!=EXACT_CUE_PROTOTYPES
++        || b.scorecard_eligible || b.pressure_ns!=0 || b.max_decisions!=1 || b.max_world_ticks!=1
++        || b.expires_unix_seconds<=now || b.expires_unix_seconds>now.saturating_add(600)
++        || ![&b.evaluator_sha256,&b.fixture_sha256,&b.rubric_sha256,&b.geometry_sha256].iter().all(|x|is_digest(x))
++        || b.run_id.is_empty() || b.run_id.len()>64 {
++        return Err("WSP Approach V2 scope/identity/expiry mismatch".into());
++    }
++    let inner=hash_leaf(root,"wsp-approach-v2-inner.schema6.json",&b.inner_sha256,8192)?;
++    let _candidate=hash_leaf(root,"wsp-approach-v2-weight-delta.json",EXACT_CANDIDATE,32768)?;
++    let p=hash_leaf(root,"wsp-approach-v2-existing-lexical-prototypes.json",EXACT_CUE_PROTOTYPES,8192)?;
++    let p:Value=serde_json::from_slice(&p)?;
++    let words:[[u32;8];3]=serde_json::from_value(p["prototype_f32_bits_3x8"].clone())?;
++    let prototype=std::array::from_fn(|i| words[i/8][i%8]);
++    let stock=match (b.arm,b.stock_retention_sha256.as_deref(),b.stock_rows_sha256.as_deref()) {
++        (Arm::PresampleReference,None,None)=>None,
++        (Arm::ConditionalDelta,Some(ret),Some(rows))=>{
++            let r:Value=serde_json::from_slice(&hash_leaf(root,"wsp-approach-v2-native-stock-retention.json",ret,4*1024*1024)?)?;
++            let raw=hash_leaf(root,"wsp-approach-v2-native-stock-rows.jsonl",rows,512*1024)?;
++            let mut lines=raw.split(|x|*x==b'\n');
++            let line=lines.next().filter(|s|!s.is_empty()).ok_or("no stock reference row")?;
++            if lines.any(|s|!s.is_empty()) {return Err("WSP stock reference was not one decision".into());}
++            let row:Value=serde_json::from_slice(line)?;
++            if r["status"]!="finished" || !r["error"].is_null()
++                || r["rows_sha256"]!=rows || r["source_sha256"]!=EXACT_PARENT || r["captured_decisions"]!=1
++                || r["control_calls"]!=1 || r["world_ticks"]!=1 || r["source_unchanged"]!=true
++                || r["saved_policy_base_unchanged"]!=true || r["software_simulation"]!=true
++                || r["wsp_approach_v2_integrity"]!=true || r["scorecard_eligible"]==true
++                || r["retained_experiment"]["scorecard_eligible"]!=false
++                || r["retained_experiment"]["identity"]["schema"]!=SCHEMA
++                || r["retained_experiment"]["identity"]["intervention"]!="wsp_approach_v2_presample_reference"
++                || r["retained_experiment"]["identity"]["wsp_approach_v2"]["binding"]["arm"]!="presample_reference"
++                || r["retained_experiment"]["identity"]["wsp_approach_v2"]["binding"]["inner_sha256"]!=b.inner_sha256
++                || r["retained_experiment"]["identity"]["wsp_approach_v2"]["binding"]["evaluator_sha256"]!=b.evaluator_sha256
++                || r["wsp_approach_v2_opening_receipt"]!=row["wsp_approach_v2_opening_receipt"]
++                || row["wsp_approach_v2_opening_receipt"]["presample"]["treatment_requested"]!=false
++                || row["wsp_approach_v2_opening_receipt"]["presample"]["changed_101"]!=json!([false,false])
++                || row["wsp_approach_v2_opening_receipt"]["presample"]["before_optional_u32"]!=
++                   row["wsp_approach_v2_opening_receipt"]["presample"]["just_before_stock_sampler_u32"] {
++                return Err("WSP Approach V2 exact true stock mate is absent or effectful".into());
++            }
++            let reference:WspApproachV2Reference=serde_json::from_value(row["wsp_approach_v2_opening_receipt"]["reference"].clone())?;
++            if row["frame_digest"]!=serde_json::to_value(reference.frame)?
++                || row["wsp_approach_v2_opening_receipt"]["presample"]["before_optional_u32"]!=
++                   serde_json::to_value(&reference.stock_post_context_u32)? { return Err("WSP captured stock words not bound to same frame".into()); }
++            Some(reference)
++        }
++        _=>return Err("WSP Approach V2 arm cannot borrow a different authority".into()),
++    };
++    Ok((Scope{binding:v.binding,approval_sha256:m.admission_sha256,prototype,stock},inner))
++}
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/wsp_approach_witness.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/wsp_approach_witness.rs
+--- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/wsp_approach_witness.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/wsp_approach_witness.rs
+@@ -83,7 +83,7 @@
+     actor_spawn: Spawn,
+     props: [Spawn; 2],
+     world: HeadlessWorldSignatureDigest,
+-    emitted: AudibleUtterance,
++    emitted: Option<AudibleUtterance>,
+ }
+ 
+ fn hand_empty(world: &HeadlessWorld, owner: OrganismId) -> bool {
+@@ -98,11 +98,12 @@
+     let props = [spawn(world, opened.props[0])?, spawn(world, opened.props[1])?];
+     if !world.entity(actor).is_some_and(|o| o.organism_id==Some(owner) && !o.consumed)
+         || props[0].key == props[1].key || props.iter().any(|p| p.key == actor_spawn.key)
+-        || state.tick != opened.atom.emitted_tick.raw() || opened.atom.addressee != Some(owner)
+-        || opened.atom.source_kind != UtteranceSourceKind::Player || opened.atom.speaker_id.is_some()
+-        || opened.atom.teacher_channel.is_some() || opened.atom.tokens.len() != 2
+-        || opened.atom.emitted_tick.raw().checked_add(1) != Some(opened.atom.expires_after_tick.raw())
+-        || world.audible_utterances().as_slice() != std::slice::from_ref(&opened.atom)
++        || state.tick != opened.opening_tick.raw()
++        || opened.atom.as_ref().is_some_and(|a| a.emitted_tick.raw()!=state.tick || a.addressee!=Some(owner)
++            || a.source_kind!=UtteranceSourceKind::Player || a.speaker_id.is_some()
++            || a.teacher_channel.is_some() || !(1..=2).contains(&a.tokens.len())
++            || a.emitted_tick.raw().checked_add(1)!=Some(a.expires_after_tick.raw()))
++        || world.audible_utterances().as_slice()!=opened.atom.as_slice()
+         || !hand_empty(world, owner) || world.player_held_object().is_some()
+         || !state.props.iter().all(|p| p.free() && !p.native_grab_legal && p.velocity == Vec3f::ZERO)
+     {
+@@ -160,7 +161,8 @@
+     let tick=frame.tick();
+     let outcome_record=patch.outcome();
+     if before.emitted!=opened.atom || before.state.owner!=owner || before.state.tick!=tick.raw()
+-        || before.emitted.emitted_tick!=tick || tick.raw().checked_add(1)!=Some(outcome.raw())
++        || before.emitted.as_ref().is_some_and(|a|a.emitted_tick!=tick)
++        || tick.raw().checked_add(1)!=Some(outcome.raw())
+         || outcome!=world.tick() || outcome_record.outcome_tick!=outcome || outcome_record.organism_id!=owner
+         || behavior.tick!=tick.raw() || behavior.organism_id!=owner.raw()
+         || behavior.frame_digest!=frame.frame_digest()
+@@ -213,8 +215,15 @@
+     if first.observed_slot==second.observed_slot || first.native_track==second.native_track {
+         return Err("WSP Approach duplicate current observed slot or track".into());
+     }
+-    let word=opened.atom.tokens[1].raw();
+-    let wanted=match word {
++    let Some(noun)=opened.atom.as_ref().and_then(|a|a.tokens.get(1)) else {
++        return Ok(json!({"schema":RECEIPT_SCHEMA,"scorecard_eligible":false,
++           "before_world_signature":before.world,"frame":frame.frame_digest(),"decision_tick":tick.raw(),
++           "outcome_tick":outcome.raw(),"full_native_tracked_101_offers":[first,second],
++           "active_native_player_atom":before.emitted,"audit_target_after_selection":null,
++           "native_locomotion_selected_index":behavior.motor_indices[0],"no_composite_target_credit":true,
++           "stock_paid_approach_distance_witness":false}));
++    };
++    let wanted=match noun.raw() {
+         1 => 0, 14 => 1, _ => return Err("WSP Approach unexpected literal native noun".into()),
+     };
+     let target=before.state.props[wanted];
+diff --git a/crates/alife_game_app/src/gpu_live_runtime.rs b/crates/alife_game_app/src/gpu_live_runtime.rs
+--- a/crates/alife_game_app/src/gpu_live_runtime.rs
++++ b/crates/alife_game_app/src/gpu_live_runtime.rs
+@@ -51,6 +51,10 @@
+ #[cfg(test)]
+ mod sleeping_body_contact_tests;
+ mod staged_tick;
++#[cfg(feature = "retained-wsp-approach-v2")]
++mod wsp_approach_runtime;
++#[cfg(feature = "retained-wsp-approach-v2")]
++pub(crate) use wsp_approach_runtime::WspApproachV2Reference;
+ use cpu_preparation::{
+     CapturedCpuPreparation, CapturedLivePreparation, CpuPreparationJob, CpuPreparationOutcome,
+     preparation_worker_count, prepare_cpu_rows,
+@@ -3774,6 +3778,10 @@
+     semantic_prior: Option<semantic_prior::RuntimeSemanticPrior>,
+     #[cfg(feature = "foundation-training")]
+     training_sampling: Option<alife_gpu_backend::GpuTrainingSamplingConfig>,
++    #[cfg(feature = "retained-wsp-approach-v2")]
++    wsp_approach_request:Option<wsp_approach_runtime::Request>,
++    #[cfg(feature = "retained-wsp-approach-v2")]
++    wsp_approach_receipt:Option<(WspApproachV2Reference,alife_gpu_backend::training_rollout::WspApproachV2Receipt)>,
+     // Retained in ordinary gameplay saves without enabling the training sampler.
+     training_sampling_resume: BTreeMap<u64, Vec<u8>>,
+     #[cfg(feature = "foundation-training")]
+@@ -6085,6 +6093,10 @@
+             #[cfg(feature = "foundation-training")]
+             training_sampling: options.training_sampling,
+             training_sampling_resume: BTreeMap::new(),
++            #[cfg(feature = "retained-wsp-approach-v2")]
++            wsp_approach_request:None,
++            #[cfg(feature = "retained-wsp-approach-v2")]
++            wsp_approach_receipt:None,
+             #[cfg(feature = "foundation-training")]
+             training_demonstrator: None,
+             #[cfg(feature = "foundation-training")]
+diff --git a/crates/alife_game_app/src/gpu_live_runtime/staged_tick.rs b/crates/alife_game_app/src/gpu_live_runtime/staged_tick.rs
+--- a/crates/alife_game_app/src/gpu_live_runtime/staged_tick.rs
++++ b/crates/alife_game_app/src/gpu_live_runtime/staged_tick.rs
+@@ -808,6 +808,13 @@
+             journaled_recovery_edges.clear();
+         }
+ 
++        #[cfg(feature = "retained-wsp-approach-v2")]
++        let wsp=self.prepare_wsp_approach_v2(&batch)?;
++        #[cfg(feature = "retained-wsp-approach-v2")]
++        if wsp.is_some() && (!completed_promotions.is_empty() || self.training_sampling.is_none()) {
++            return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
++        }
++
+         // The GPU selector has already committed, while the world is still at
+         // the exact tick named by the durable Completed checkpoint. Publish
+         // the manifest-side selector/ref promotion before any world action or
+@@ -937,12 +944,49 @@
+                         ..sampling
+                     });
+                 }
+-                self.training_sampling
+-                    .as_mut()
+-                    .expect("training enabled")
+-                    .counter = next_counter;
+-                self.backend
+-                    .tick_memory_batch_training(&memory_batch, &configs)?
++                #[cfg(feature = "retained-wsp-approach-v2")]
++                let signed_ticks=if let Some((scope,opened))=wsp {
++                    let [config]=configs.as_slice() else {
++                        return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
++                    };
++                    self.backend.ensure_neural_actions_available()?;
++                    let [pre]=before_training.as_slice() else {
++                        return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
++                    };
++                    if self.backend.authority().consumer()!=GpuSessionConsumerKind::Training
++                        || opened.reference.as_ref().is_some_and(|r|
++                            r.sampling!=*config || r.active_weight_generation!=pre.active_weight_generation) {
++                        return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
++                    }
++                    let result=self.backend.tick_memory_batch_training_wsp_approach_v2(&memory_batch,&configs,&scope);
++                    if let Err(e)=&result {self.backend.record_contract_failure(e);}
++                    let mut ticks=result?;
++                    let [t]=ticks.as_mut_slice() else {
++                        return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
++                    };
++                    let raw=t.wsp_approach_v2.take().ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
++                    let actual=t.training_rollout.as_ref().ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
++                    if actual.sampling!=*config || opened.reference.as_ref().is_some_and(|r|
++                        r.active_weight_generation!=actual.active_weight_generation) {
++                        return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
++                    }
++                    self.wsp_approach_receipt=Some((WspApproachV2Reference{
++                        frame:actual.frame_digest,world_before:opened.world,
++                        active_weight_generation:actual.active_weight_generation,
++                        sampling:actual.sampling,stock_post_context_u32:raw.before_optional_u32.clone(),
++                    },raw));
++                    self.training_sampling.as_mut().expect("strict signed lane").counter=next_counter;
++                    ticks
++                } else {
++                    self.training_sampling.as_mut().expect("training enabled").counter=next_counter;
++                    self.backend.tick_memory_batch_training(&memory_batch,&configs)?
++                };
++                #[cfg(not(feature = "retained-wsp-approach-v2"))]
++                let signed_ticks={
++                    self.training_sampling.as_mut().expect("training enabled").counter=next_counter;
++                    self.backend.tick_memory_batch_training(&memory_batch,&configs)?
++                };
++                signed_ticks
+             } else {
+                 self.backend.tick_memory_batch(&memory_batch)?
+             };
+diff --git a/crates/alife_game_app/src/gpu_live_runtime/wsp_approach_runtime.rs b/crates/alife_game_app/src/gpu_live_runtime/wsp_approach_runtime.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/alife_game_app/src/gpu_live_runtime/wsp_approach_runtime.rs
+@@ -0,0 +1,124 @@
++//! Narrow private authority between prepared World and the normal signed GPU sampler.
++use super::*;
++use alife_core::{ActionKind,CandidateActionFamily,CandidateObservationRef,PerceptionFrameDigest,UtteranceSourceKind};
++use alife_gpu_backend::training_rollout::{WspApproachV2Input,WspApproachV2Receipt};
++use alife_world::{AudibleUtterance,HeadlessActionIds};
++
++#[derive(Clone,Debug,serde::Deserialize,serde::Serialize)]
++#[serde(deny_unknown_fields)]
++pub(crate) struct WspApproachV2Reference {
++    pub frame:PerceptionFrameDigest,
++    pub world_before:HeadlessWorldSignatureDigest,
++    pub active_weight_generation:u64,
++    pub sampling:alife_gpu_backend::GpuTrainingSamplingConfig,
++    pub stock_post_context_u32:Vec<u32>,
++}
++
++#[derive(Debug)]
++pub(super) struct Request {
++    pub owner:OrganismId,
++    pub tick:Tick,
++    pub world:HeadlessWorldSignatureDigest,
++    pub atom:Option<AudibleUtterance>,
++    pub prototype:[u32;24],
++    pub reference:Option<WspApproachV2Reference>,
++}
++
++impl GpuLiveBrainRuntime {
++    pub(crate) fn arm_wsp_approach_v2(
++        &mut self,owner:OrganismId, prot:[u32;24], atom:Option<AudibleUtterance>,
++        reference:Option<WspApproachV2Reference>,
++    ) -> Result<(),ScaffoldContractError> {
++        let bad=||ScaffoldContractError::InvalidDecisionEvidence;
++        if self.wsp_approach_request.is_some() || self.wsp_approach_receipt.is_some()
++            || self.handles.len()!=1 || self.residents.len()!=1 || !self.handles.contains_key(&owner.raw())
++            || self.training_demonstrator.is_some() || self.training_sampling.is_none_or(|s|s.demonstrator.is_some())
++            || self.sensor_profile!=SensorProfile::GroundedTerrainVisionV1
++            || self.residents.get(&owner.raw()).is_none_or(|r|r.sleep_scheduler.state().phase!=SleepPhase::Awake) {
++            return Err(bad());
++        }
++        if self.world.audible_utterances().as_slice()!=atom.as_slice()
++            || atom.as_ref().is_some_and(|a|a.addressee!=Some(owner) || a.source_kind!=UtteranceSourceKind::Player
++                || a.speaker_id.is_some() || a.teacher_channel.is_some() || a.emitted_tick!=self.world.tick()
++                || a.emitted_tick.raw().checked_add(1)!=Some(a.expires_after_tick.raw())
++                || !(1..=2).contains(&a.tokens.len())) {
++            return Err(bad());
++        }
++        let world=self.world.canonical_signature_digest()?;
++        if reference.as_ref().is_some_and(|r|r.world_before!=world) || world.words==[0;4] { return Err(bad()); }
++        self.wsp_approach_request=Some(Request {owner,tick:self.world.tick(),world,atom,prototype:prot,reference});
++        Ok(())
++    }
++
++    pub(crate) fn take_wsp_approach_v2(
++        &mut self,
++    ) -> Option<(WspApproachV2Reference,WspApproachV2Receipt)> {
++        self.wsp_approach_receipt.take()
++    }
++
++    pub(super) fn prepare_wsp_approach_v2(
++        &mut self, batch:&[PreparedGpuBrainFrame],
++    ) -> Result<Option<(WspApproachV2Input,Request)>,ScaffoldContractError> {
++        let Some(r)=self.wsp_approach_request.take() else { return Ok(None); };
++        let bad=||ScaffoldContractError::InvalidDecisionEvidence;
++        let [item]=batch else { return Err(bad()); };
++        let f=&item.frame;
++        let tick=self.world.tick();
++        if f.organism_id()!=r.owner || f.tick()!=r.tick || tick!=r.tick || self.handles.get(&r.owner.raw())!=Some(&item.handle)
++            || r.reference.as_ref().is_some_and(|v|v.frame!=f.frame_digest())
++            || self.world.audible_utterances().as_slice()!=r.atom.as_slice() || self.world.player_held_object().is_some()
++            || self.world.object_snapshots().iter().any(|o|!o.consumed && o.carried_by==Some(r.owner)) {
++            return Err(bad());
++        }
++        let body=self.world.entity(item.world_entity_id).ok_or_else(bad)?;
++        let pbits=|p:alife_core::Vec3f|[p.x,p.y,p.z].map(f32::to_bits);
++        if body.organism_id!=Some(r.owner) || body.consumed || pbits(body.position)!=pbits(f.body().pose.translation)
++            || f.sensory().language_context.teacher_channel_marker.is_some() {
++            return Err(bad());
++        }
++        let heard=&f.sensory().language_context.heard_tokens;
++        let num=r.atom.as_ref().map_or(0,|a|a.tokens.len());
++        if heard[num..].iter().any(Option::is_some) { return Err(bad()); }
++        if let Some(atom)=&r.atom {
++            for (i,w) in atom.tokens.iter().enumerate() {
++                if !heard[i].as_ref().is_some_and(|h|h.utterance_id==atom.utterance_id
++                    && h.source_kind==UtteranceSourceKind::Player && h.addressee==Some(r.owner)
++                    && h.teacher_channel.is_none() && h.source_entity.is_none() && h.speaker_id.is_none()
++                    && usize::from(h.sequence_position)==i && h.token_id==u32::from(w.raw())
++                    && pbits(h.source_position)==pbits(atom.source_position)
++                    && h.confidence.raw().is_finite() && 0.0<h.confidence.raw() && h.confidence.raw()<=1.0) {
++                    return Err(bad());
++                }
++            }
++        }
++        let slots=f.grounded_object_slots(); let [_,_]=slots else {return Err(bad());};
++        let mut indexes=Vec::with_capacity(2);
++        let mut targets=Vec::with_capacity(2);
++        let mut tracks=Vec::with_capacity(2);
++        for (i,c) in f.candidates().iter().enumerate().filter(|(_,c)|c.action_id==HeadlessActionIds::APPROACH) {
++            if indexes.len()==2 || c.kind!=ActionKind::Move || c.family!=CandidateActionFamily::Approach {
++                return Err(bad());
++            }
++            let CandidateObservationRef::ObjectSlot(slot)=c.observation else {return Err(bad());};
++            let s=slots.iter().find(|w|w.slot_index==slot).ok_or_else(bad)?;
++            let target=c.target.entity.ok_or_else(bad)?;
++            let object=self.world.entity(target).ok_or_else(bad)?;
++            let track=self.world.tracked_objects().record(r.owner,s.tracked_object_id).ok_or_else(bad)?;
++            if targets.contains(&target) || tracks.contains(&s.tracked_object_id)
++                || object.consumed || object.carried_by.is_some() || object.organism_id.is_some() || object.activity_hold
++                || object.grounded_physical.velocity!=alife_core::Vec3f::ZERO || !c.target.position.is_some_and(|p|pbits(p)==pbits(object.position))
++                || track.tracking_key!=object.tracking_key || track.tracking_provenance!=object.tracking_provenance
++                || track.last_seen_tick!=tick || track.tracking_provenance.canonical_key()!=track.tracking_key
++                || self.world.retained_language_pilot_grab_probe(r.owner,target)!=(false,false)
++                || !(c.sensor_confidence.raw()>0.0 && c.sensor_confidence.raw().to_bits()==s.confidence.raw().to_bits())
++                || !c.features.0.iter().zip(s.candidate_features()?.0).all(|(a,b)|a.to_bits()==b.to_bits()) {
++                return Err(bad());
++            }
++            targets.push(target);tracks.push(s.tracked_object_id);indexes.push(i);
++        }
++        let indexes=<[usize;2]>::try_from(indexes).map_err(|_|bad())?;
++        let scope=WspApproachV2Input::seal(f,indexes,r.prototype,
++            r.reference.as_ref().map(|x|x.stock_post_context_u32.clone()))?;
++        Ok(Some((scope,r)))
++    }
++}
+diff --git a/crates/alife_gpu_backend/Cargo.toml b/crates/alife_gpu_backend/Cargo.toml
+--- a/crates/alife_gpu_backend/Cargo.toml
++++ b/crates/alife_gpu_backend/Cargo.toml
+@@ -22,3 +22,4 @@
+ test-support = []
+ gpu-tests = ["test-support"]
+ training-rollout = []
++wsp-approach-v2 = ["training-rollout"]
+diff --git a/crates/alife_gpu_backend/shaders/wsp_approach_v2.wgsl b/crates/alife_gpu_backend/shaders/wsp_approach_v2.wgsl
+new file mode 100644
+--- /dev/null
++++ b/crates/alife_gpu_backend/shaders/wsp_approach_v2.wgsl
+@@ -0,0 +1,116 @@
++// Detached, explicitly signed single-row optional contribution pass.
++// No action APIs or sampler alteration. All addresses are typed native frame words.
++// At entrance each precontext capture already holds actual stock context logits.
++const WSP_APPROACH_MAGIC:u32 = 0x32505357u;
++const WSP_APPROACH_WORDS:u32 = 72u;
++const WSP_MIN_AXIS:f32 = 0.03125;
++
++fn wsp_approach_agreement(port:u32, rail:u32, proto:u32) -> f32 {
++    var v=1.0;
++    for (var i=0u;i<8u;i++) {
++        let w=bitcast<f32>(frame_payload_words[port+proto+i]);
++        let x=bitcast<f32>(frame_payload_words[port+rail+i]);
++        if (abs(w)!=1.0 || !finite_decode(x) || x==0.0 || abs(x)>1.0) { return 0.0; }
++        v=min(v,max(0.0,x*w));
++    }
++    return v;
++}
++
++fn wsp_approach_map_is_live(brain:GpuBrainSlotRecord, family:GpuDecoderFamilyRecord,
++                            global_id:u32, lane:u32, motor:u32) -> bool {
++    if (family.family_raw!=3u || family.decoder_synapse_count!=384u
++        || family.weight_index_count!=family.decoder_synapse_count
++        || !span_within(family.decoder_synapse_start,family.decoder_synapse_count,brain.synapse_count)
++        || global_id<family.decoder_synapse_start
++        || global_id-family.decoder_synapse_start>=family.decoder_synapse_count) { return false; }
++    let map=load_decoder_weight_index(family.weight_index_start+4u*(global_id-family.decoder_synapse_start));
++    return map.global_synapse_id==global_id && map.motor_index==motor && map.input_lane==lane
++        && map.reserved0==0u;
++}
++
++@compute @workgroup_size(1)
++fn apply_wsp_approach_v2(@builtin(global_invocation_id) gid:vec3<u32>) {
++    if (any(gid!=vec3<u32>(0u))) { return; }
++    let header=load_perception_header(0u);
++    if (!activity_contract_prevalidated(header) || (header.reserved & 0x80000000u)==0u
++        || header.candidate_count<2u || header.candidate_count>32u) { return; }
++    let sampling=header.reserved & 0x7fffffffu;
++    let port=sampling+11u;
++    if (!span_within(port,WSP_APPROACH_WORDS,arrayLength(&frame_payload_words))
++        || frame_payload_words[sampling+3u]!=0u
++        || frame_payload_words[port]!=WSP_APPROACH_MAGIC || frame_payload_words[port+1u]!=1u
++        || frame_payload_words[port+2u]!=1u || frame_payload_words[port+10u]!=1u
++        || frame_payload_words[port+3u]!=header.candidate_count
++        || frame_payload_words[port+4u]!=header.tick_lo || frame_payload_words[port+5u]!=header.tick_hi
++        || frame_payload_words[port+6u]!=header.slot || frame_payload_words[port+7u]!=header.slot_generation
++        || frame_payload_words[port+8u]!=header.dispatch_generation_lo
++        || frame_payload_words[port+9u]!=header.dispatch_generation_hi
++        || frame_payload_words[port+51u]!=0x41000000u
++        || frame_payload_words[port+52u]!=0x41800000u
++        || frame_payload_words[port+53u]!=0xc1800000u) { return; }
++    let verb=wsp_approach_agreement(port,11u,27u);
++    let noun_food=wsp_approach_agreement(port,19u,35u);
++    let noun_object=wsp_approach_agreement(port,19u,43u);
++    let pulse=min(verb,noun_object)-min(verb,noun_food);
++    if (pulse==0.0) { return; }
++    let brain=brain_slots[header.brain_slot_index];
++    let decoder=load_decoder_plan(brain.decoder_plan_offset);
++    if (decoder.schema_version!=1u || decoder.family_offset!=brain.decoder_family_offset
++        || decoder.family_count!=8u || decoder.feature_count!=24u
++        || decoder.motor_start!=1728u || decoder.motor_width<=55u
++        || !span_within(decoder.motor_start,decoder.motor_width,brain.neuron_count)) { return; }
++    let family=find_decoder_family(decoder,3u);
++    if (!wsp_approach_map_is_live(brain,family,25752u,1u,55u)
++        || !wsp_approach_map_is_live(brain,family,25896u,10u,55u)
++        || !wsp_approach_map_is_live(brain,family,25912u,11u,55u)) { return; }
++    let side=atomicLoad(&mutable_state_words[brain.diagnostic_offset+3u]);
++    if (side>1u) { return; }
++    let activation=select(brain.activation_a_offset,brain.activation_b_offset,side==1u);
++    let a=load_state_f32(activation+decoder.motor_start+55u);
++    if (!finite_decode(a) || a<=0.0 || a>1.0) { return; }
++    let i0=frame_payload_words[port+54u]; let i1=frame_payload_words[port+63u];
++    let slot0=frame_payload_words[port+55u]; let slot1=frame_payload_words[port+64u];
++    if (i0>=header.candidate_count || i1>=header.candidate_count || i0==i1
++        || slot0>=16u || slot1>=16u || slot0==slot1) { return; }
++    var axes:array<f32,2>;
++    var alignments:array<f32,2>;
++    var stock:array<f32,2>;
++    var seen=0u;
++    for (var i=0u;i<header.candidate_count;i++) {
++        let offer=load_candidate(header.candidate_offset+i*8u);
++        let named=i==i0 || i==i1;
++        if (!named) { if (offer.action_id==101u) { return; } continue; }
++        let j=select(0u,1u,i==i1);
++        let at=port+54u+9u*j;
++        if (offer.action_id!=101u || offer.kind!=ACTION_KIND_MOVE || offer.family!=3u
++            || offer.candidate_index!=i || offer.observation_slot_or_max!=frame_payload_words[at+1u]
++            || !span_within(offer.feature_offset,24u,arrayLength(&frame_payload_words))
++            || (!training_candidate_allowed(header,brain,i,1u)
++                && !training_candidate_allowed(header,brain,i,0u))) { return; }
++        let bearing_word=frame_payload_words[offer.feature_offset+1u];
++        let f1=bitcast<f32>(bearing_word);
++        if (bearing_word!=frame_payload_words[at+2u] || !finite_decode(f1) || abs(f1)>1.0) { return; }
++        for (var k=0u;k<6u;k++) {
++            let word=frame_payload_words[offer.feature_offset+9u+k];
++            let x=bitcast<f32>(word);
++            if (word!=frame_payload_words[at+3u+k] || !finite_decode(x) || x<0.0 || x>1.0) { return; }
++        }
++        axes[j]=bitcast<f32>(frame_payload_words[offer.feature_offset+10u])
++            - bitcast<f32>(frame_payload_words[offer.feature_offset+11u]);
++        alignments[j]=max(0.0,f1);
++        stock[j]=load_state_f32(brain.candidate_logit_offset+i);
++        seen|=1u<<j;
++    }
++    if (seen!=3u || max(axes[0],axes[1])<WSP_MIN_AXIS || min(axes[0],axes[1]) > -WSP_MIN_AXIS) { return; }
++    let d1=((pulse*a)*bitcast<f32>(frame_payload_words[port+52u]));
++    let d2=((abs(pulse)*a)*bitcast<f32>(frame_payload_words[port+51u]));
++    var next:array<f32,2>;
++    for (var j=0u;j<2u;j++) {
++        let q=axes[j];
++        let d=d1*q+select(0.0,d2*alignments[j],pulse*q>=WSP_MIN_AXIS*abs(pulse));
++        next[j]=stock[j]+d;
++        if (!finite_decode(d) || abs(d)>24.0 || !finite_decode(next[j])) { return; }
++    }
++    store_state_f32(brain.candidate_logit_offset+i0,next[0]);
++    store_state_f32(brain.candidate_logit_offset+i1,next[1]);
++}
+diff --git a/crates/alife_gpu_backend/src/closed_loop_pipeline.rs b/crates/alife_gpu_backend/src/closed_loop_pipeline.rs
+--- a/crates/alife_gpu_backend/src/closed_loop_pipeline.rs
++++ b/crates/alife_gpu_backend/src/closed_loop_pipeline.rs
+@@ -652,9 +652,33 @@
+     memory_context_bindings: Vec<Option<GpuMemoryContextDispatchReceipt>>,
+     object_input_counts: Vec<u32>,
+     visible_self_grip_v1: bool,
++    #[cfg(feature = "wsp-approach-v2")]
++    wsp_approach_v2: bool,
+ }
+ 
+ impl GpuActiveBatchUpload {
++    #[cfg(feature = "wsp-approach-v2")]
++    pub(crate) fn enable_wsp_approach_v2(
++        &mut self, scope:&crate::training_rollout::WspApproachV2Input, capacity:usize,
++    ) -> Result<(),GpuClosedLoopError> {
++        use crate::training_rollout::{TRAINING_PAYLOAD_TAG,WSP_APPROACH_WORDS};
++        let [h]=self.headers.as_slice() else { return Err(GpuClosedLoopError::MalformedUpload); };
++        let offset = usize::try_from(h.reserved & !TRAINING_PAYLOAD_TAG)
++            .map_err(|_|GpuClosedLoopError::MalformedUpload)?;
++        if self.wsp_approach_v2 || self.visible_self_grip_v1 || h.reserved & TRAINING_PAYLOAD_TAG == 0
++            || offset.checked_add(11)!=Some(self.frame_payload_words.len())
++            || self.frame_payload_words.len().checked_add(WSP_APPROACH_WORDS).is_none_or(|n|n>capacity) {
++            return Err(GpuClosedLoopError::MalformedUpload);
++        }
++        let tick=u64::from(h.tick_lo)|(u64::from(h.tick_hi)<<32);
++        let dispatch=u64::from(h.dispatch_generation_lo)|(u64::from(h.dispatch_generation_hi)<<32);
++        let input=scope.payload(h.candidate_count,tick,h.slot,h.slot_generation,dispatch)
++            .ok_or(GpuClosedLoopError::MalformedUpload)?;
++        self.frame_payload_words.extend(input);
++        self.wsp_approach_v2=true;
++        Ok(())
++    }
++
+     #[cfg(feature = "training-rollout")]
+     pub(crate) fn enable_training_sampling(
+         &mut self,
+@@ -1154,6 +1178,8 @@
+             selector_diagnostic_family_synapse_counts,
+             memory_context_bindings,
+             visible_self_grip_v1,
++            #[cfg(feature = "wsp-approach-v2")]
++            wsp_approach_v2: false,
+             object_input_counts: entries
+                 .iter()
+                 .map(|entry| {
+@@ -1533,6 +1559,8 @@
+     decode_pipeline: wgpu::ComputePipeline,
+     memory_context_pipeline: wgpu::ComputePipeline,
+     visible_self_grip_pipeline: std::sync::OnceLock<wgpu::ComputePipeline>,
++    #[cfg(feature = "wsp-approach-v2")]
++    wsp_approach_v2_pipeline: std::sync::OnceLock<wgpu::ComputePipeline>,
+     visible_self_grip_device: wgpu::Device,
+     visible_self_grip_layout: wgpu::PipelineLayout,
+     select_pipeline: wgpu::ComputePipeline,
+@@ -1878,6 +1906,8 @@
+             decode_pipeline,
+             memory_context_pipeline,
+             visible_self_grip_pipeline: std::sync::OnceLock::new(),
++            #[cfg(feature = "wsp-approach-v2")]
++            wsp_approach_v2_pipeline: std::sync::OnceLock::new(),
+             visible_self_grip_device: device.clone(),
+             visible_self_grip_layout: pipeline_layout,
+             select_pipeline,
+@@ -3252,6 +3282,31 @@
+         self.authority.record_encode(batch.authority_nonce)?;
+         let result = (|| {
+             match selector_readback {
++                #[cfg(feature = "wsp-approach-v2")]
++                Some(readback) if batch.wsp_approach_v2 => {
++                    self.record_pre_context_compute_pass(encoder,batch)?;
++                    {
++                        let mut pass=encoder.begin_compute_pass(&wgpu::ComputePassDescriptor{
++                            label:Some("stock-memory-before-wsp-approach-v2"), timestamp_writes:None,
++                        });
++                        self.record_stock_memory_context(&mut pass,batch)?;
++                    }
++                    self.record_selector_logit_copy(encoder,buffers,batch,readback,false)?;
++                    {
++                        let mut pass=encoder.begin_compute_pass(&wgpu::ComputePassDescriptor{
++                            label:Some("detached-wsp-approach-v2"),timestamp_writes:None,
++                        });
++                        self.record_wsp_approach_v2(&mut pass)?;
++                    }
++                    self.record_selector_logit_copy(encoder,buffers,batch,readback,true)?;
++                    {
++                        let mut pass=encoder.begin_compute_pass(&wgpu::ComputePassDescriptor{
++                            label:Some("unchanged-stock-selector-after-wsp-approach-v2"),timestamp_writes:None,
++                        });
++                        self.record_stock_sampler_speech(&mut pass,batch)?;
++                        self.record_eligibility(&mut pass,batch)?;
++                    }
++                },
+                 Some(readback) => {
+                     self.record_pre_context_compute_pass(encoder, batch)?;
+                     self.record_selector_logit_copy(encoder, buffers, batch, readback, false)?;
+@@ -4008,6 +4063,51 @@
+         pass.set_pipeline(&self.kernels.speech_decode_pipeline);
+         pass.set_bind_group(0, &self.bind_group, &[]);
+         pass.dispatch_workgroups(1, rows, 1);
++        Ok(())
++    }
++
++    #[cfg(feature = "wsp-approach-v2")]
++    fn record_stock_memory_context<'pass>(&'pass self,pass:&mut wgpu::ComputePass<'pass>,
++        batch:&GpuActiveBatchUpload) -> Result<(),GpuClosedLoopError> {
++        if batch.row_count()!=1 || batch.visible_self_grip_v1 {
++            return Err(GpuClosedLoopError::MalformedUpload);
++        }
++        pass.set_pipeline(&self.kernels.memory_context_pipeline);
++        pass.set_bind_group(0,&self.bind_group,&[]);
++        pass.dispatch_workgroups(1,1,1);
++        Ok(())
++    }
++
++    #[cfg(feature = "wsp-approach-v2")]
++    fn record_stock_sampler_speech<'pass>(&'pass self,pass:&mut wgpu::ComputePass<'pass>,
++        batch:&GpuActiveBatchUpload) -> Result<(),GpuClosedLoopError> {
++        if batch.row_count()!=1 { return Err(GpuClosedLoopError::MalformedUpload); }
++        pass.set_pipeline(&self.kernels.select_pipeline);
++        pass.set_bind_group(0,&self.bind_group,&[]);
++        pass.dispatch_workgroups(1,1,1);
++        pass.set_pipeline(&self.kernels.speech_decode_pipeline);
++        pass.set_bind_group(0,&self.bind_group,&[]);
++        pass.dispatch_workgroups(1,1,1);
++        Ok(())
++    }
++
++    #[cfg(feature = "wsp-approach-v2")]
++    fn record_wsp_approach_v2<'pass>(&'pass self,pass:&mut wgpu::ComputePass<'pass>)
++        -> Result<(),GpuClosedLoopError> {
++        if self.kernels.wsp_approach_v2_pipeline.get().is_none() {
++            let src=wsp_approach_v2_shader_source();
++            validate_production_shader_contract(&src,&["apply_wsp_approach_v2"])?;
++            let d=&self.kernels.visible_self_grip_device;
++            let sh=d.create_shader_module(wgpu::ShaderModuleDescriptor{
++                label:Some("wsp-approach-v2"),source:wgpu::ShaderSource::Wgsl(src.into()),
++            });
++            let p=create_compute_pipeline(d,&self.kernels.visible_self_grip_layout,&sh,
++                                            "apply_wsp_approach_v2",&[]);
++            let _=self.kernels.wsp_approach_v2_pipeline.set(p);
++        }
++        let p=self.kernels.wsp_approach_v2_pipeline.get().ok_or(GpuClosedLoopError::LayoutMismatch)?;
++        pass.set_pipeline(p);pass.set_bind_group(0,&self.bind_group,&[]);
++        pass.dispatch_workgroups(1,1,1);
+         Ok(())
+     }
+ 
+@@ -5088,6 +5188,8 @@
+             memory_context_bindings: vec![None],
+             object_input_counts: vec![0],
+             visible_self_grip_v1: false,
++            #[cfg(feature = "wsp-approach-v2")]
++            wsp_approach_v2: false,
+             joint_motor_modes: vec![0],
+         };
+ 
+@@ -5232,3 +5334,18 @@
+         assert_eq!(authority.active_sides.get(&(8, 11)), Some(&1));
+     }
+ }
++
++#[cfg(feature = "wsp-approach-v2")]
++fn wsp_approach_v2_shader_source() -> String {
++    let mut src=runtime_shader_source(CLOSED_LOOP_DECODE_WGSL).into_owned();
++    src.push('
++');
++    src.push_str(include_str!("../shaders/wsp_approach_v2.wgsl"));
++    src
++}
++
++#[cfg(all(test,feature = "wsp-approach-v2"))]
++#[test]
++fn wsp_approach_v2_shader_validates_device_free() {
++    validate_production_shader_contract(&wsp_approach_v2_shader_source(),&["apply_wsp_approach_v2"]).unwrap();
++}
+diff --git a/crates/alife_gpu_backend/src/closed_loop_runtime.rs b/crates/alife_gpu_backend/src/closed_loop_runtime.rs
+--- a/crates/alife_gpu_backend/src/closed_loop_runtime.rs
++++ b/crates/alife_gpu_backend/src/closed_loop_runtime.rs
+@@ -573,6 +573,8 @@
+     pub selector_diagnostic: Option<GpuSelectorDiagnosticReceipt>,
+     #[cfg(feature = "training-rollout")]
+     pub training_rollout: Option<crate::GpuTrainingRolloutReceipt>,
++    #[cfg(feature = "wsp-approach-v2")]
++    pub wsp_approach_v2: Option<crate::training_rollout::WspApproachV2Receipt>,
+ }
+ 
+ pub const GPU_SELECTOR_DIAGNOSTIC_SCHEMA_VERSION: u16 = 4;
+@@ -4902,7 +4904,22 @@
+                 memory_upload: Some(member.memory_upload),
+             })
+             .collect::<Vec<_>>();
+-        self.tick_inputs_with_selector_diagnostic_capture(&inputs, None, None, Some(sampling))
++        self.tick_inputs_with_selector_diagnostic_capture(&inputs,None,None,Some(sampling),
++            #[cfg(feature = "wsp-approach-v2")] None)
++    }
++
++    #[cfg(feature = "wsp-approach-v2")]
++    pub fn tick_memory_batch_training_wsp_approach_v2(
++        &mut self,batch:&GpuClosedLoopMemoryBatchInput<'_>,sampling:&[crate::GpuTrainingSamplingConfig],
++        input:&crate::training_rollout::WspApproachV2Input,
++    ) -> Result<Vec<GpuClosedLoopTick>,ScaffoldContractError> {
++        let [m]=batch.members.as_slice() else { return Err(ScaffoldContractError::InvalidDecisionEvidence); };
++        if m.frame.frame_digest()!=input.frame || sampling.len()!=1 || sampling[0].demonstrator.is_some()
++            || self.adapter.get_info().device_type!=wgpu::DeviceType::Cpu
++            || self.adapter.get_info().backend!=wgpu::Backend::Vulkan { return Err(ScaffoldContractError::InvalidDecisionEvidence); }
++        let rows=[GpuRuntimeTickInput{handle:m.handle,frame:m.frame,memory_upload:Some(m.memory_upload)}];
++        self.tick_inputs_with_selector_diagnostic_capture(&rows,None,None,Some(sampling),Some(input))
++
+     }
+ 
+     pub fn tick_memory_batch_with_selector_diagnostics(
+@@ -4925,6 +4942,8 @@
+             Some(requested_candidate_indices),
+             Some(&mut capture),
+             #[cfg(feature = "training-rollout")]
++            None,
++            #[cfg(feature = "wsp-approach-v2")]
+             None,
+         ) {
+             Ok(ticks) => Ok(ticks),
+@@ -4964,6 +4983,8 @@
+             selector_diagnostic_candidate_indices,
+             None,
+             #[cfg(feature = "training-rollout")]
++            None,
++            #[cfg(feature = "wsp-approach-v2")]
+             None,
+         )
+     }
+diff --git a/crates/alife_gpu_backend/src/closed_loop_runtime/tick.rs b/crates/alife_gpu_backend/src/closed_loop_runtime/tick.rs
+--- a/crates/alife_gpu_backend/src/closed_loop_runtime/tick.rs
++++ b/crates/alife_gpu_backend/src/closed_loop_runtime/tick.rs
+@@ -9,6 +9,7 @@
+         selector_diagnostic_candidate_indices: Option<&[u16]>,
+         mut selector_diagnostic_error_capture: Option<&mut SelectorDiagnosticErrorCapture>,
+         #[cfg(feature = "training-rollout")] sampling: Option<&[crate::GpuTrainingSamplingConfig]>,
++        #[cfg(feature = "wsp-approach-v2")] wsp_approach_v2: Option<&crate::training_rollout::WspApproachV2Input>,
+     ) -> Result<Vec<GpuClosedLoopTick>, ScaffoldContractError> {
+         let capture_selector_diagnostics = selector_diagnostic_candidate_indices.is_some();
+         #[cfg(feature = "training-rollout")]
+@@ -332,7 +333,12 @@
+                             .iter()
+                             .map(|i| configs[*i])
+                             .collect::<Vec<_>>();
+-                        if let Err(error) = active.enable_training_sampling(&ordered, capacity) {
++                        let enabled=active.enable_training_sampling(&ordered,capacity);
++                        #[cfg(feature = "wsp-approach-v2")]
++                        let enabled=enabled.and_then(|()|match wsp_approach_v2 {
++                            Some(scope) => active.enable_wsp_approach_v2(scope,capacity), None=>Ok(()),
++                        });
++                        if let Err(error) = enabled {
+                             let _ = self
+                                 .class_buckets
+                                 .get_mut(&class_id)
+@@ -788,6 +794,8 @@
+         let mut ordered_selector_diagnostics = vec![None; batch.len()];
+         #[cfg(feature = "training-rollout")]
+         let mut ordered_training_receipts = vec![None; batch.len()];
++        #[cfg(feature = "wsp-approach-v2")]
++        let mut ordered_wsp_approach_v2 = vec![None;batch.len()];
+         if let Some(capture) = selector_diagnostic_error_capture.as_deref_mut() {
+             capture.later_stage = Some(GpuRuntimeSelectorDiagnosticStage::ValidateReceiptIdentity);
+         }
+@@ -1034,6 +1042,11 @@
+                             .get(&input.handle.class_id.raw())
+                             .and_then(|pool| pool.resident(input.handle).ok())
+                             .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
++                        #[cfg(feature = "wsp-approach-v2")]
++                        if let Some(scope)=wsp_approach_v2 {
++                            ordered_wsp_approach_v2[*original_index]=Some(scope.captures(
++                                &capture.pre_context_logit_bits,&capture.final_logit_bits)?);
++                        }
+                         ordered_training_receipts[*original_index] =
+                             Some(crate::training_rollout::build_receipt(
+                                 input.frame,
+@@ -1162,6 +1175,8 @@
+                     selector_diagnostic: ordered_selector_diagnostics[index].clone(),
+                     #[cfg(feature = "training-rollout")]
+                     training_rollout: ordered_training_receipts[index].clone(),
++                    #[cfg(feature = "wsp-approach-v2")]
++                    wsp_approach_v2: ordered_wsp_approach_v2[index].take(),
+                 });
+             }
+             Ok(ticks)
+diff --git a/crates/alife_gpu_backend/src/training_rollout.rs b/crates/alife_gpu_backend/src/training_rollout.rs
+--- a/crates/alife_gpu_backend/src/training_rollout.rs
++++ b/crates/alife_gpu_backend/src/training_rollout.rs
+@@ -4,6 +4,126 @@
+ use std::sync::Arc;
+ 
+ pub(crate) const TRAINING_PAYLOAD_TAG: u32 = 0x8000_0000;
++
++#[cfg(feature = "wsp-approach-v2")]
++pub(crate) const WSP_APPROACH_WORDS: usize = 72;
++
++#[cfg(feature = "wsp-approach-v2")]
++#[derive(Debug, Clone)]
++pub struct WspApproachV2Input {
++    pub(crate) frame: PerceptionFrameDigest,
++    tick: u64,
++    role_edit: bool,
++    two_words: bool,
++    rails: [u32;16],
++    prototype: [u32;24],
++    offers: [[u32;9];2],
++    pub(crate) expected_stock: Option<Vec<u32>>,
++}
++
++#[cfg(feature = "wsp-approach-v2")]
++impl WspApproachV2Input {
++    /// Admission caller still must independently certify physical World/track/free-hand
++    /// authority; this validates the immutable native frame, not any motion outcome.
++    pub fn seal(frame: &PerceptionFrame, ascending_actual_offers: [usize;2], prototype: [u32;24],
++                expected_stock: Option<Vec<u32>>) -> Result<Self, ScaffoldContractError> {
++        use alife_core::{CandidateActionFamily, CandidateObservationRef, Validate};
++        let bad=||ScaffoldContractError::InvalidDecisionEvidence;
++        frame.validate()?;
++        let count=frame.candidates().len();
++        if count<2 || count>32 || ascending_actual_offers[0]>=ascending_actual_offers[1]
++            || prototype.iter().any(|x| f32::from_bits(*x).abs()!=1.0)
++            || expected_stock.as_ref().is_some_and(|x| x.len()!=count) {
++            return Err(bad());
++        }
++        let h=&frame.sensory().language_context.heard_tokens;
++        let two_words=matches!((h[0],h[1]),(Some(_),Some(_)));
++        if h[2..].iter().any(Option::is_some) || (h[0].is_none() && h[1].is_some()) {
++            return Err(bad());
++        }
++        let all_lanes=frame.sensory().language_prior_neural_lanes();
++        let rails=std::array::from_fn(|i|all_lanes[i].to_bits());
++        let mut offers=[[0u32;9];2];
++        let mut j=0;
++        for (i,c) in frame.candidates().iter().enumerate().filter(|(_,c)|c.action_id.raw()==101) {
++            if j>=2 || ascending_actual_offers[j]!=i || c.family!=CandidateActionFamily::Approach
++                || c.kind!=ActionKind::Move || i!=usize::from(c.candidate_index) {
++                return Err(bad());
++            }
++            let CandidateObservationRef::ObjectSlot(s)=c.observation else { return Err(bad()); };
++            if s>=16 { return Err(bad()); }
++            let f=c.features.0;
++            if !f[1].is_finite() || f[1].abs()>1.0 || f[9..15].iter().any(|v|!(0.0..=1.0).contains(v)) {
++                return Err(bad());
++            }
++            offers[j]=[i as u32,u32::from(s),f[1].to_bits(),f[9].to_bits(),f[10].to_bits(),f[11].to_bits(),
++                       f[12].to_bits(),f[13].to_bits(),f[14].to_bits()];
++            j+=1;
++        }
++        if j!=2 || offers[0][1]==offers[1][1] { return Err(bad()); }
++        let role_edit=expected_stock.is_some();
++        Ok(Self{frame:frame.frame_digest(),tick:frame.tick().raw(),role_edit,two_words,rails,prototype,offers,expected_stock})
++    }
++
++    pub(crate) fn payload(&self,count:u32,tick:u64,slot:u32,generation:u32,dispatch:u64)
++        -> Option<[u32;WSP_APPROACH_WORDS]> {
++        if tick!=self.tick || count<2 || count>32 || self.offers[1][0]>=count { return None; }
++        let mut p=[0u32;WSP_APPROACH_WORDS];
++        p[..11].copy_from_slice(&[0x32505357,1,u32::from(self.role_edit),count,tick as u32,(tick>>32) as u32,
++                                slot,generation,dispatch as u32,(dispatch>>32) as u32,u32::from(self.two_words)]);
++        p[11..27].copy_from_slice(&self.rails);
++        p[27..51].copy_from_slice(&self.prototype);
++        p[51..54].copy_from_slice(&[0x41000000,0x41800000,0xc1800000]);
++        p[54..63].copy_from_slice(&self.offers[0]); p[63..72].copy_from_slice(&self.offers[1]);
++        Some(p)
++    }
++
++    pub(crate) fn captures(&self,before:&[u32],after:&[u32]) -> Result<WspApproachV2Receipt,ScaffoldContractError> {
++        let bad=||ScaffoldContractError::InvalidDecisionEvidence;
++        if before.len()!=after.len() || before.len()<2 || before.len()>32
++            || self.expected_stock.as_deref().is_some_and(|x|x!=before) {
++            return Err(bad());
++        }
++        let mut changed=[false;2];
++        for (i,(a,b)) in before.iter().zip(after).enumerate() {
++            if a==b { continue; }
++            if !self.role_edit || !self.two_words || !f32::from_bits(*a).is_finite() || !f32::from_bits(*b).is_finite() {
++                return Err(bad());
++            }
++            let j=self.offers.iter().position(|x|x[0] as usize==i).ok_or_else(bad)?;
++            changed[j]=true;
++        }
++        // One effectful logit and one f32-rounded-to-stock is permissible, but
++        // the readback preserves both bits rather than inferring application.
++        Ok(WspApproachV2Receipt{treatment_requested:self.role_edit,two_native_words:self.two_words,
++            before_optional_u32:before.to_vec(),just_before_stock_sampler_u32:after.to_vec(),
++            verified_same_stock_reference:self.role_edit,changed_101:changed})
++    }
++}
++
++#[cfg(feature = "wsp-approach-v2")]
++#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
++pub struct WspApproachV2Receipt {
++    pub treatment_requested: bool,
++    pub two_native_words: bool,
++    pub before_optional_u32: Vec<u32>,
++    pub just_before_stock_sampler_u32: Vec<u32>,
++    pub verified_same_stock_reference: bool,
++    pub changed_101: [bool;2],
++}
++
++#[cfg(all(test,feature = "wsp-approach-v2"))]
++#[test]
++fn wsp_approach_capture_rejects_wrong_stock_and_nonlocal_change() {
++    let x=WspApproachV2Input{frame:PerceptionFrameDigest([0;4]),tick:1,role_edit:true,two_words:true,
++        rails:[0;16],prototype:[0;24],offers:[[1;9],[3;9]],expected_stock:Some(vec![0;4])};
++    assert!(x.captures(&[0;4], &[0,1,0,1]).is_ok());
++    assert!(x.captures(&[0;4], &[1,0,0,0]).is_err());
++    assert!(x.captures(&[1,0,0,0], &[1,0,0,0]).is_err());
++    assert!(WspApproachV2Input{two_words:false,..x.clone()}.captures(&[0;4], &[0,1,0,0]).is_err());
++    assert!(WspApproachV2Input{role_edit:false,expected_stock:None,..x}.captures(&[0;4], &[0,1,0,0]).is_err());
++}
++
+ 
+ /// Exact GPU state at an explicitly requested training boundary. Offsets in
+ /// brain_slot.word_ranges() are absolute; subtract mutable_word_base to index words.

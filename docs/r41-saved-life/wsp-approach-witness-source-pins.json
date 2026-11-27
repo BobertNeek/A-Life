@@ -1,0 +1,24 @@
+{
+  "after": {
+    "crates/alife_game_app/Cargo.toml": "a804bc8f063aec9e797e76e10b4fcfd516ded764254fa2278c91fa5272423248",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs": "0053e32f13789b22019bcb5b8fc15c64f3bd558ff2ab21f0c614ada6cc4ab27b",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs": "21d115c5063696650dc9000045cbca2aa8673d0d4e37b927a43b669ee5446051",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/language_composition_v3.rs": "87017beeba0d0ebc6e331121817fb68ba93e1eb6972a242c26155b9113a58cf0",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/wsp_approach_witness.rs": "698c4f925be2ec5b44c49a317bfe081905077f7dc801421756a74c9138da465f"
+  },
+  "basis_hosted_v3": "8d90e0853cfbf991ac75e02c9ee55ee4cedc3c99",
+  "basis_phase": "exact shared V3 runner; no app/latch/Rank32 dependency",
+  "basis_qualified_f96_elf_sha256": "f96b1a4cb6874620ebe98237bb288fb67397fed4fd5decca382ab82d1eb2a67e",
+  "before": {
+    "crates/alife_game_app/Cargo.toml": "e07e4f4df130879a693c03c93222d6b8072ee02a10d5ff208e5f6404ab51372f",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs": "32689634ab0c19985bf18a0e528431d78d0a67552e4ad42bdb2ca32fce939080",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs": "70385a6292f077c044510282a072b68083f6c8a34138eead5bb91342ef07e26a",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/language_composition_v3.rs": "ee8603c9d56f539db284283ea41e99632cef953a7a2a17d65645dcef38fc9f4d"
+  },
+  "checked_forward_inverse_exact": true,
+  "forward_sha256": "7be53715718e68c10e9d04dc373882bfb1caaff3eaa170cbe62366d66a0e61c1",
+  "inverse_sha256": "12f4eeefe28769af12adcc9db7c0408e4fcd6a122d8f3181f05bb8f6a439cc93",
+  "registers_or_authorizes_anything": false,
+  "rust_compiled_or_native_executed": false,
+  "schema": "qualia.private.wsp_approach_opening_native-witness_source.v1"
+}
