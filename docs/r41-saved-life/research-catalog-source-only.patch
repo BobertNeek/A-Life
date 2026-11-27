@@ -1,0 +1,1639 @@
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
+--- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
+@@ -16,6 +16,7 @@
+     CueFreeFoodPlacement,
+     LCorner,
+     PublishedCardCase,
++    ResearchCatalog,
+ }
+ 
+ #[derive(Debug, Clone, Serialize, Deserialize)]
+@@ -72,6 +73,8 @@
+     intervention: &'static str,
+     #[serde(skip_serializing_if = "Option::is_none")]
+     visible_self_grip_v1: Option<[u32; 16]>,
++    #[serde(skip_serializing_if = "Option::is_none")]
++    research: Option<super::research_catalog::Identity>,
+ }
+ 
+ impl ExperimentIdentity {
+@@ -81,6 +84,10 @@
+ 
+     pub(super) fn visible_self_grip_v1(&self) -> Option<[u32; 16]> {
+         self.visible_self_grip_v1
++    }
++
++    pub(super) fn research(&self) -> Option<&super::research_catalog::Identity> {
++        self.research.as_ref()
+     }
+ 
+     pub(super) fn validate_source(&self, actual_digest: &str) -> Result<()> {
+@@ -110,7 +117,7 @@
+     let config: ManifestV1 = serde_json::from_slice(bytes)
+         .map_err(|e| format!("experiment compatibility: invalid or unsupported typed settings: {e}"))?;
+     let is_card = config.scenario == ScenarioV1::PublishedCardCase;
+-    if config.schema != 1 || is_card != config.card_case.is_some() {
++    if config.schema != 1 || config.scenario == ScenarioV1::ResearchCatalog || is_card != config.card_case.is_some() {
+         return Err("experiment compatibility: unsupported manifest schema".into());
+     }
+     let card = config.card_case.as_deref().map(|name| {
+@@ -200,6 +207,7 @@
+         }),
+         ScenarioV1::RetainedOpening | ScenarioV1::CueFreeFoodPlacement => None,
+         ScenarioV1::PublishedCardCase => card.and_then(|c| c.navigation),
++        ScenarioV1::ResearchCatalog => return Err("research requires a separate admitted manifest profile".into()),
+     };
+     let request = SavedLifeRetentionRequest {
+         schema: 3,
+@@ -226,10 +234,43 @@
+             card_case: config.card_case,
+             intervention,
+             visible_self_grip_v1,
++            research: None,
+         },
+         request,
+         scent,
+     })
++}
++
++fn resolve_research(root: &Path, bytes: &[u8]) -> Result<ResolvedExperiment> {
++    if bytes.len() > MAX_SMALL_CONFIG_BYTES {
++        return Err("research manifest exceeds 262144 bytes".into());
++    }
++    let config: super::research_catalog::Manifest = serde_json::from_slice(bytes)?;
++    if config.run_id.is_empty() || config.run_id.len() > 64
++        || !config.run_id.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-'))
++        || config.owner == 0 || !exact_sha256(&config.source_current_sha256)
++        || config.max_output_bytes > MAX_SCOPED_OUTPUT_BYTES
++    { return Err("invalid research manifest identity or output bound".into()); }
++    let research = super::research_catalog::resolve(root, &config, exact_sha256)?;
++    let request = SavedLifeRetentionRequest {
++        schema: 3, evaluation_nonce: config.evaluation_nonce,
++        cue_free_food_placement: false, direct_weights: None, navigation_task: None,
++        max_decisions: research.case.max_decisions, max_world_ticks: research.case.max_world_ticks,
++        deadline_unix_seconds: config.deadline_unix_seconds,
++        finalization_deadline_unix_seconds: config.finalization_deadline_unix_seconds,
++        max_output_bytes: config.max_output_bytes,
++    };
++    request.validate(now()?)?;
++    let semantic_settings_sha256 = digest(&serde_json::to_vec(&(
++        "retained-research-settings-v1", &research, &config.source_current_sha256, config.owner,
++        request.max_decisions, request.max_world_ticks, request.max_output_bytes,
++    ))?);
++    Ok(ResolvedExperiment { identity: ExperimentIdentity {
++        schema: config.schema, run_id: config.run_id, manifest_sha256: digest(bytes), semantic_settings_sha256,
++        owner: config.owner, source_current_sha256: config.source_current_sha256,
++        scenario: ScenarioV1::ResearchCatalog, card_case: None, intervention: "research_input",
++        visible_self_grip_v1: None, research: Some(research),
++    }, request, scent: None })
+ }
+ 
+ fn canonical_inside(root: &Path, path: &Path) -> Result<std::path::PathBuf> {
+@@ -278,12 +319,29 @@
+     manifest_path: &Path,
+ ) -> Result<serde_json::Value> {
+     use std::io::Read;
+-    admitted_paths(admission_root, source, output, manifest_path)?;
++    if !admission_root.is_absolute() || admission_root.parent().is_none()
++        || admission_root.canonicalize()? != admission_root || !fs::metadata(admission_root)?.is_dir()
++    { return Err("experiment requires a canonical operator admission directory".into()); }
++    let manifest = canonical_inside(admission_root, manifest_path)?;
++    if !fs::metadata(&manifest)?.is_file() { return Err("experiment requires a regular local manifest".into()); }
+     let mut bytes = Vec::new();
+-    fs::File::open(manifest_path)?
++    fs::File::open(manifest)?
+         .take((MAX_CONFIG_BYTES + 1) as u64)
+         .read_to_end(&mut bytes)?;
+-    let resolved = resolve(&bytes)?;
++    if bytes.len() > MAX_CONFIG_BYTES { return Err("experiment manifest exceeds 1048576 bytes".into()); }
++    #[derive(Deserialize)]
++    struct Version { schema: u16 }
++    let version: Version = serde_json::from_slice(&bytes)?;
++    let resolved = if version.schema == 2 {
++        // Static grammar, digest/admission and fixture geometry all precede
++        // even canonical/stat of the caller-supplied Current pathname.
++        let selected = resolve_research(admission_root, &bytes)?;
++        admitted_paths(admission_root, source, output, manifest_path)?;
++        selected
++    } else {
++        admitted_paths(admission_root, source, output, manifest_path)?;
++        resolve(&bytes)?
++    };
+     evaluate_saved_life_retention_inner(
+         source,
+         output,
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/research_catalog.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/research_catalog.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/research_catalog.rs
+@@ -0,0 +1,362 @@
++//! Bounded physical research setup and native observation; no behavior/scoring hooks.
++use super::*;
++use alife_core::{OrganismId, Vec3f, WorldEntityId};
++use alife_world::{HeadlessWorld, WorldEditorSpawnSpec, WorldObjectKind as Kind};
++use serde::{Deserialize, Serialize};
++use std::collections::BTreeSet;
++use std::io::Read;
++
++pub(super) const CATALOG_FILE: &str = "research-catalog.v1.json";
++pub(super) const ADMISSION_FILE: &str = "operator-research-admission.v1.json";
++pub(super) const FOUNDATION_FILE: &str = "input.alife-foundation";
++const RUBRIC_FILE: &str = "research-rubric.v1.json";
++const MAX_CATALOG_BYTES: usize = 256 * 1024;
++const MAX_FOUNDATION_BYTES: usize = 1024 * 1024;
++
++#[derive(Clone, Serialize, Deserialize)]
++#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
++pub(super) enum Input {
++    CompleteSavedLife {},
++    FoundationOnExplicitHost { foundation_sha256: String },
++}
++
++#[derive(Deserialize)]
++#[serde(deny_unknown_fields)]
++pub(super) struct Manifest {
++    pub(super) schema: u16,
++    pub(super) run_id: String,
++    pub(super) owner: u64,
++    pub(super) source_current_sha256: String,
++    pub(super) profile: String,
++    catalog_sha256: String,
++    rubric_sha256: String,
++    case_id: String,
++    evaluator_sha256: String,
++    expected_world_seed: u64,
++    pub(super) evaluation_nonce: u64,
++    pub(super) deadline_unix_seconds: u64,
++    pub(super) finalization_deadline_unix_seconds: Option<u64>,
++    pub(super) max_output_bytes: u64,
++    input: Input,
++}
++
++#[derive(Deserialize)]
++#[serde(deny_unknown_fields)]
++struct Admission {
++    schema: String,
++    catalog_sha256: String,
++    rubric_sha256: String,
++    evaluator_sha256: String,
++    admitted_case_ids: Vec<String>,
++}
++
++#[derive(Deserialize)]
++#[serde(deny_unknown_fields)]
++struct Catalog {
++    schema: String,
++    catalog_id: String,
++    cases: Vec<Case>,
++}
++
++#[derive(Clone, Deserialize)]
++#[serde(deny_unknown_fields)]
++pub(super) struct Case {
++    id: String,
++    pub(super) max_decisions: usize,
++    pub(super) max_world_ticks: u64,
++    objects: Vec<Object>,
++    opening_contacts: Vec<String>,
++}
++
++#[derive(Clone, Deserialize)]
++#[serde(deny_unknown_fields)]
++struct Object {
++    slot: String,
++    kind: Material,
++    forward_mm: i16,
++    left_mm: i16,
++    radius_mm: u16,
++    temperature_milli: i16,
++    pain_milli: u16,
++    nutrition_milli: u16,
++}
++
++#[derive(Clone, Copy, Deserialize)]
++#[serde(rename_all = "snake_case")]
++enum Material { Hazard, Obstacle, Food }
++
++impl Material {
++    fn native(self) -> Kind {
++        match self { Self::Hazard => Kind::Hazard, Self::Obstacle => Kind::Obstacle, Self::Food => Kind::Food }
++    }
++}
++
++/// Only observer/receipt code can serialize this. Nothing from it is a policy input.
++#[derive(Serialize)]
++pub(super) struct Identity {
++    profile: &'static str,
++    catalog_id: String,
++    catalog_sha256: String,
++    rubric_sha256: String,
++    admission_sha256: String,
++    case_id: String,
++    fixture_sha256: String,
++    evaluator_sha256: String,
++    expected_world_seed: u64,
++    evaluation_nonce: u64,
++    input: Input,
++    #[serde(skip)]
++    pub(super) case: Case,
++    #[serde(skip)]
++    pub(super) foundation: Option<FoundationWeightAsset>,
++}
++
++fn slug(s: &str) -> bool {
++    !s.is_empty() && s.len() <= 64
++        && s.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || matches!(b, b'-' | b'_'))
++}
++
++fn read_inside(root: &Path, name: &str, max: usize) -> Result<Vec<u8>> {
++    let path = root.join(name);
++    if path.canonicalize()? != path || !fs::symlink_metadata(&path)?.is_file() {
++        return Err("research catalog input must be a distinct canonical local file".into());
++    }
++    let mut bytes = Vec::new();
++    fs::File::open(path)?.take((max + 1) as u64).read_to_end(&mut bytes)?;
++    if bytes.len() > max { return Err("research catalog closure exceeds its byte bound".into()); }
++    Ok(bytes)
++}
++
++fn validate_case(case: &Case) -> Result<()> {
++    if !slug(&case.id) || !(1..=256).contains(&case.max_decisions)
++        || !(1..=2048).contains(&case.max_world_ticks) || case.max_world_ticks < case.max_decisions as u64
++        || !(1..=4).contains(&case.objects.len())
++    { return Err("invalid research case identity, horizon, or object count".into()); }
++    let mut slots = BTreeSet::new();
++    let mut implied_contacts = BTreeSet::new();
++    for (i, item) in case.objects.iter().enumerate() {
++        let f = i64::from(item.forward_mm);
++        let l = i64::from(item.left_mm);
++        let r = i64::from(item.radius_mm);
++        let d = f * f + l * l;
++        if !slug(&item.slot) || !slots.insert(item.slot.as_str()) || !(100..=750).contains(&r)
++            || !(100..=2600).contains(&f) || l.abs() > 1600 || d > 3000 * 3000
++            || !(-900..=900).contains(&item.temperature_milli)
++            || match item.kind {
++                Material::Hazard => item.pain_milli > 250 || item.nutrition_milli != 0,
++                Material::Obstacle => item.pain_milli != 0 || item.nutrition_milli != 0,
++                Material::Food => item.pain_milli != 0 || !(50..=1000).contains(&item.nutrition_milli),
++            }
++        { return Err("invalid bounded physical research object".into()); }
++        if d <= (r - 2).pow(2) {
++            if d < (r - 25).pow(2) { return Err("opening contact exceeds shallow placement bound".into()); }
++            implied_contacts.insert(item.slot.as_str());
++        } else if d <= (r + 2).pow(2) {
++            return Err("opening fixture is numerically ambiguous at its surface".into());
++        }
++        for prior in &case.objects[..i] {
++            let dx = f - i64::from(prior.forward_mm);
++            let dz = l - i64::from(prior.left_mm);
++            if dx * dx + dz * dz <= (r + i64::from(prior.radius_mm) + 20).pow(2) {
++                return Err("research fixture physical bodies overlap".into());
++            }
++        }
++    }
++    let contacts = case.opening_contacts.iter().map(String::as_str).collect::<BTreeSet<_>>();
++    if contacts.len() != case.opening_contacts.len() || contacts != implied_contacts {
++        return Err("research opening contact does not match physical layout".into());
++    }
++    Ok(())
++}
++
++pub(super) fn resolve(root: &Path, config: &Manifest, exact_sha: fn(&str) -> bool) -> Result<Identity> {
++    if config.schema != 2 || config.profile != "research_catalog_v1" || !slug(&config.case_id)
++        || ![&config.catalog_sha256, &config.rubric_sha256, &config.evaluator_sha256].iter().all(|v| exact_sha(v))
++    { return Err("invalid research manifest identity".into()); }
++    let admission_bytes = read_inside(root, ADMISSION_FILE, MAX_CATALOG_BYTES)?;
++    let admission: Admission = serde_json::from_slice(&admission_bytes)?;
++    let admitted_ids = admission.admitted_case_ids.iter().map(String::as_str).collect::<BTreeSet<_>>();
++    if admission.schema != "qualia.saved_life.operator_research_admission.v1"
++        || admission.catalog_sha256 != config.catalog_sha256 || admission.rubric_sha256 != config.rubric_sha256
++        || admission.evaluator_sha256 != config.evaluator_sha256 || !admitted_ids.contains(config.case_id.as_str())
++        || admitted_ids.len() != admission.admitted_case_ids.len() || admitted_ids.len() > 64
++        || !admitted_ids.iter().all(|id| slug(id))
++    { return Err("research case, evaluator or rubric was not explicitly admitted".into()); }
++    let running = std::env::current_exe()?;
++    if digest(&fs::read(running)?) != config.evaluator_sha256 {
++        return Err("research manifest evaluator digest does not name the running binary".into());
++    }
++    let catalog_bytes = read_inside(root, CATALOG_FILE, MAX_CATALOG_BYTES)?;
++    let rubric_bytes = read_inside(root, RUBRIC_FILE, MAX_CATALOG_BYTES)?;
++    if digest(&catalog_bytes) != config.catalog_sha256 || digest(&rubric_bytes) != config.rubric_sha256 {
++        return Err("research catalog or external rubric bytes changed".into());
++    }
++    let catalog: Catalog = serde_json::from_slice(&catalog_bytes)?;
++    if catalog.schema != "qualia.saved_life.research_catalog.v1" || !slug(&catalog.catalog_id)
++        || !(1..=64).contains(&catalog.cases.len())
++    { return Err("unsupported research catalog or case count".into()); }
++    let mut all = BTreeSet::new();
++    for case in &catalog.cases {
++        validate_case(case)?;
++        if !all.insert(case.id.as_str()) { return Err("duplicate research catalog case".into()); }
++    }
++    if !admitted_ids.is_subset(&all) { return Err("operator admission names an unknown catalog case".into()); }
++    let case = catalog.cases.iter().find(|case| case.id == config.case_id).ok_or("unknown admitted research case")?.clone();
++    let foundation = match &config.input {
++        Input::CompleteSavedLife {} => None,
++        Input::FoundationOnExplicitHost { foundation_sha256 } => {
++            let bytes = read_inside(root, FOUNDATION_FILE, MAX_FOUNDATION_BYTES)?;
++            if !exact_sha(foundation_sha256) || digest(&bytes) != *foundation_sha256 {
++                return Err("standalone Foundation digest mismatch".into());
++            }
++            let asset = FoundationWeightAsset::decode_canonical(&bytes)
++                .map_err(|_| "unsupported standalone Foundation format (exact canonical asset required)")?;
++            if asset.encode_canonical()? != bytes { return Err("Foundation asset is not byte-canonical".into()); }
++            Some(asset)
++        }
++    };
++    let fixture = format!("qualia-research-fixture/v1\0{}\0{}", config.catalog_sha256, case.id);
++    Ok(Identity {
++        profile: "research_catalog_v1", catalog_id: catalog.catalog_id, catalog_sha256: config.catalog_sha256.clone(),
++        rubric_sha256: config.rubric_sha256.clone(), admission_sha256: digest(&admission_bytes), case_id: case.id.clone(),
++        fixture_sha256: digest(fixture.as_bytes()), evaluator_sha256: config.evaluator_sha256.clone(),
++        expected_world_seed: config.expected_world_seed, evaluation_nonce: config.evaluation_nonce,
++        input: config.input.clone(), case, foundation,
++    })
++}
++
++impl Identity {
++    pub(super) fn validate_world_seed(&self, world_seed: u64) -> Result<()> {
++        if world_seed != self.expected_world_seed { return Err("research source world seed differs from the matched contract".into()); }
++        Ok(())
++    }
++}
++
++/// Reuse the native legal-weight transition. Refuse any asset whose exact
++/// bytes cannot be reconstructed on this host's legal protected stage.
++pub(super) fn foundation_edit(
++    target: &FoundationWeightAsset,
++    host: &alife_training::CurrentTrainingCheckpointV1,
++    source_sha: &str,
++) -> Result<Option<DirectWeightEditRequest>> {
++    let host_asset = host.handoff.compiler_inputs.n2048_candidate_asset().ok_or("host lacks a native N2048 Foundation")?;
++    if target == host_asset { return Ok(None); }
++    let phenotype = alife_training::compile_validated_n2048_cached(&host.handoff.compiler_inputs, &alife_core::BrainCapacityClass::n2048())?;
++    target.validate_against(&phenotype).map_err(|_| "standalone Foundation is incompatible with explicit host ABI")?;
++    let rebuilt = FoundationWeightAsset::from_trained_weights(&phenotype, target.weights().to_vec(), host_asset.manifest().training_stage())?;
++    if &rebuilt != target { return Err("unsupported exact Foundation pathway/provenance on this host".into()); }
++    let edits = host.handoff.actor.weights.iter().zip(target.weights()).enumerate()
++        .filter_map(|(i, (a, b))| (a.to_bits() != b.to_bits()).then(|| (i, b.to_bits()))).collect::<Vec<_>>();
++    let edit = DirectWeightEditRequest {schema: 3, source_current_sha256: source_sha.into(),
++        generator_id: "canonical-foundation-on-explicit-host-v1".into(), edits};
++    retained_direct_weights::validate_experiment_edit_shape(&edit)?;
++    Ok(Some(edit))
++}
++
++pub(super) struct Opened {
++    slots: Vec<(String, WorldEntityId)>,
++    pub(super) setup: serde_json::Value,
++}
++
++fn meters(v: impl Into<i32>) -> f32 { v.into() as f32 / 1000.0 }
++
++fn dist(a: Vec3f, b: Vec3f) -> f32 { (a.x-b.x).hypot(a.z-b.z).hypot(a.y-b.y) }
++
++pub(super) fn configure(world: &mut HeadlessWorld, owner: OrganismId, fixture: &Case) -> Result<Opened> {
++    let tick = world.tick();
++    let old = world.object_snapshots();
++    let body = old.iter().find(|o| o.organism_id == Some(owner)).ok_or("research fixture needs the actual saved body")?;
++    if world.terrain().is_some() || world.player_held_object().is_some() || !world.audible_utterances().is_empty()
++        || !world.sensory_report(owner, tick)?.contact_entities.is_empty()
++    { return Err("research fixture requires a clear, flat, unheld, quiet opening; no source normalization".into()); }
++    let mut staged = world.clone();
++    let (sin, cos) = body.body_yaw.sin_cos();
++    let mut slots = Vec::new();
++    let mut placed = Vec::new();
++    for obj in &fixture.objects {
++        let (f, l, r) = (meters(obj.forward_mm), meters(obj.left_mm), meters(obj.radius_mm));
++        let pos = Vec3f::new(body.position.x + f*cos - l*sin, body.position.y, body.position.z + f*sin + l*cos);
++        if old.iter().any(|o| o.id != body.id && !o.consumed && dist(pos, o.position) <= o.radius+r+0.02) {
++            return Err("research layout collides with pre-existing saved-world geometry".into());
++        }
++        let id = staged.editor_spawn_object(WorldEditorSpawnSpec { label: "research sample".into(), kind: obj.kind.native(),
++            organism_id: None, position: pos, nutrition: meters(obj.nutrition_milli), hazard_pain: meters(obj.pain_milli),
++            radius: r, token_id: None })?;
++        let mut physical = staged.entity(id).ok_or("missing real placed object")?.grounded_physical;
++        physical.surface_temperature = meters(obj.temperature_milli);
++        staged.set_grounded_physical_properties(id, physical)?;
++        let actual = staged.entity(id).ok_or("missing native fixture physical readback")?;
++        if actual.kind != obj.kind.native() || actual.position != pos || actual.radius != r
++            || actual.nutrition != meters(obj.nutrition_milli) || actual.hazard_pain != meters(obj.pain_milli)
++            || actual.grounded_physical != physical || actual.carried_by.is_some() || actual.consumed
++            || actual.teacher_channel.is_some() || actual.token_id.is_some()
++        { return Err("native object differs from admitted physical setup".into()); }
++        placed.push(serde_json::json!({"slot":obj.slot,"id": id,"kind":actual.kind,"position":actual.position,
++            "radius":actual.radius,"nutrition":actual.nutrition,"surface_temperature":physical.surface_temperature,
++            "hazard_pain":actual.hazard_pain,"opening_radial_clearance_m":dist(body.position, pos)-r}));
++        slots.push((obj.slot.clone(),id));
++    }
++    let opening = staged.sensory_report(owner, tick)?;
++    let contact = opening.contact_entities.iter().map(|id| id.raw()).collect::<BTreeSet<_>>();
++    let expected = slots.iter().filter_map(|(slot,id)| fixture.opening_contacts.contains(slot).then_some(id.raw())).collect::<BTreeSet<_>>();
++    if contact != expected || slots.iter().any(|(_,id)| !contact.contains(&id.raw()) && !opening.visible_entities.iter().any(|v| v.id == *id))
++        || opening.core_snapshot.language_context.heard_tokens.iter().any(Option::is_some)
++        || staged.tick() != tick || staged.organism_registry().get(owner) != world.organism_registry().get(owner)
++        || old.iter().any(|o| staged.entity(o.id) != Some(o))
++    { return Err("opening actual contact/visibility differs, or an original saved object, body, or time changed".into()); }
++    let setup = serde_json::json!({"kind":"bounded_body_relative_physical_fixture_v1", "tick":tick,
++        "body_position":body.position,"body_yaw":body.body_yaw,"objects":placed,"contacts":contact,
++        "opening_body_observation":observe(&staged, owner, false, &slots)?});
++    *world = staged;
++    Ok(Opened {slots, setup})
++}
++
++pub(super) fn observe(world: &HeadlessWorld, owner: OrganismId, decision: bool, slots: &[(String, WorldEntityId)]) -> Result<serde_json::Value> {
++    let tick = world.tick();
++    let rec = world.organism_registry().get(owner);
++    let alive = rec.is_some_and(|r| r.lifecycle().is_alive());
++    let body = rec.and_then(|r| world.entity(r.world_entity_id()));
++    let bio = rec.map(|r| r.biochemistry());
++    let contacts = if alive { Some(world.sensory_report(owner, tick)?.contact_entities) } else { None };
++    let obs = slots.iter().map(|(slot, id)| (slot, id, world.entity(*id))).map(|(slot,id,obj)| serde_json::json!({
++        "slot":slot,"id":id,"present":obj.is_some(),"consumed":obj.map(|o|o.consumed),
++        "carrier":obj.and_then(|o|o.carried_by),"position":obj.map(|o|o.position),
++        "radial_clearance_m":body.zip(obj).map(|(b,o)|dist(b.position,o.position)-o.radius)
++    })).collect::<Vec<_>>();
++    Ok(serde_json::json!({"tick":tick,"alive":alive,"pose":body.map(|o|(o.position,o.body_yaw)),
++        "health":bio.map(|b|b.body.health),"injury":bio.map(|b|b.body.injury),"pain":bio.map(|b|b.homeostasis.drives.pain),
++        "actual_contacts":contacts,"decision_paid_or_observed_in_rows":decision,"objects":obs}))
++}
++
++impl Opened {
++    pub(super) fn observe(&self, world: &HeadlessWorld, owner: OrganismId, decision: bool) -> Result<serde_json::Value> {
++        observe(world, owner, decision, &self.slots)
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn both_supplied_families_are_data_for_one_resolver() {
++        let raw = include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../docs/research-saved-life/research-catalog.v1.json"));
++        let catalog: Catalog = serde_json::from_slice(raw).expect("checked-in catalog schema");
++        assert_eq!(catalog.cases.len(), 8);
++        for case in &catalog.cases { validate_case(case).expect("admitted geometry"); }
++        assert!(catalog.cases.iter().any(|case| case.id == "contact-hot-left" && case.objects[0].pain_milli == 160));
++        assert!(catalog.cases.iter().any(|case| case.id == "reach-food" && case.opening_contacts.is_empty()));
++    }
++
++    #[test]
++    fn malformed_physical_layout_and_behavior_fields_are_refused() {
++        let raw = include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../docs/research-saved-life/research-catalog.v1.json"));
++        let mut base: serde_json::Value = serde_json::from_slice(raw).unwrap();
++        let mut obj = base["cases"][0]["objects"][0].clone();
++        obj["policy_answer"] = serde_json::json!(102);
++        assert!(serde_json::from_value::<Object>(obj).is_err());
++        base["cases"][0]["objects"][0]["radius_mm"] = serde_json::json!(700);
++        let catalog: Catalog = serde_json::from_value(base).unwrap();
++        assert!(validate_case(&catalog.cases[0]).is_err());
++    }
++}
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs
+--- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs
+@@ -18,6 +18,9 @@
+ #[cfg(feature = "gpu-tests")]
+ #[path = "saved_life_retention/case_room.rs"]
+ mod case_room;
++#[cfg(feature = "gpu-tests")]
++#[path = "saved_life_retention/research_catalog.rs"]
++mod research_catalog;
+ #[cfg(feature = "gpu-tests")]
+ pub use experiments::evaluate_saved_life_retention_experiment;
+ 
+@@ -392,6 +395,8 @@
+     #[cfg(feature = "gpu-tests")] experiment: Option<experiments::ExperimentIdentity>,
+ ) -> Result<serde_json::Value> {
+     request.validate(now()?)?;
++    #[cfg(feature = "gpu-tests")]
++    let research = experiment.as_ref().and_then(experiments::ExperimentIdentity::research);
+     if let Some(scope) = scent_scope {
+         scope.validate(&request)?;
+     }
+@@ -471,9 +476,11 @@
+     let mut baseline = if experiment.is_some() {
+         // Decode exactly the bytes already bounded and hash-checked above; do
+         // not reopen a pathname and validate different bytes for this mode.
+-        current::admit_current_training_checkpoint(
+-            alife_training::CurrentTrainingCheckpointV1::decode(&original)?,
+-        )?
++        let decoded = alife_training::CurrentTrainingCheckpointV1::decode(&original);
++        let decoded = if research.is_some() {
++            decoded.map_err(|e| format!("unsupported exact native full-life Current format: {e}; a standalone Foundation requires an explicit compatible host"))?
++        } else { decoded? };
++        current::admit_current_training_checkpoint(decoded)?
+     } else {
+         read_current_training_checkpoint(&source)?
+     };
+@@ -481,6 +488,13 @@
+     let mut baseline = read_current_training_checkpoint(&source)?;
+     let mut baseline_bytes = original.clone();
+     baseline.require_living_continuation()?;
++    #[cfg(feature = "gpu-tests")]
++    let request = if let Some(target) = research.and_then(|profile| profile.foundation.as_ref()) {
++        let mut effective = request;
++        effective.direct_weights = research_catalog::foundation_edit(target, &baseline, &source_sha)?;
++        alife_storage::write(output.join("research-foundation-resolved-request.json"), serde_json::to_vec_pretty(&effective)?)?;
++        effective
++    } else { request };
+     let mut actor_sha = digest(&serde_json::to_vec(&baseline.handoff.actor)?);
+     let value_sha = digest(&serde_json::to_vec(&baseline.handoff.value)?);
+     let life = output.join("life");
+@@ -507,6 +521,8 @@
+     if world.seed() != baseline.seed {
+         return Err("retention source world seed mismatch".into());
+     }
++    #[cfg(feature = "gpu-tests")]
++    if let Some(profile) = research { profile.validate_world_seed(world.seed())?; }
+     let cues = TeacherCues::observe(&world);
+     let mut receipt = serde_json::json!({
+         "schema":2,"kind":"saved-life-retention-v2","request":request,
+@@ -539,6 +555,11 @@
+             "scorecard_eligible": false,
+         });
+     }
++    #[cfg(feature = "gpu-tests")]
++    if let Some(profile) = research {
++        receipt["research_catalog"] = serde_json::to_value(profile)?;
++        receipt["source_world_seed"] = serde_json::json!(world.seed());
++    }
+     if !cues.clear() {
+         receipt["status"] = serde_json::json!("rejected_existing_teacher_cues_before_gpu");
+         receipt["neural_execution"] = serde_json::json!(false);
+@@ -606,8 +627,17 @@
+     } else {
+         controlled_pressure
+     };
++    #[cfg(feature = "gpu-tests")]
++    let controlled_pressure = if research.is_some() {
++        if controlled_pressure.is_some_and(|value| value != 0) {
++            return Err("research catalog requires the common 0ns pressure condition".into());
++        }
++        Some(0)
++    } else { controlled_pressure };
+     let isolated_archive =
+         std::env::var("ALIFE_EXPLICIT_RETENTION_ARCHIVE_TEST").is_ok_and(|v| v == "1");
++    #[cfg(feature = "gpu-tests")]
++    if research.is_some() && isolated_archive { return Err("research catalog does not admit isolated archives".into()); }
+     if (controlled_pressure.is_some() || isolated_archive)
+         && (!software_simulation || !cfg!(feature = "gpu-tests"))
+     {
+@@ -701,6 +731,15 @@
+         receipt["direct_weight_calibration"] = calibration;
+         receipt["calibrated_actor_sha256"] = serde_json::json!(actor_sha);
+     }
++    #[cfg(feature = "gpu-tests")]
++    if let Some(target) = research.and_then(|profile| profile.foundation.as_ref()) {
++        if baseline.handoff.compiler_inputs.n2048_candidate_asset() != Some(target) {
++            return Err("installed standalone Foundation differs from the exact admitted asset".into());
++        }
++        receipt["research_foundation_host"] = serde_json::json!({"separate_typed_foundation_on_explicit_host":true,
++            "exact_asset_installed":true,"effective_current_sha256":digest(&baseline_bytes),
++            "same_individual_and_acquired_state_retained":true});
++    }
+     if isolated_archive && request.max_decisions != 0 {
+         let archive_root = output.join("lineage");
+         if archive_root.exists() {
+@@ -755,6 +794,19 @@
+     } else { None };
+     #[cfg(feature = "gpu-tests")]
+     let mut published_body = Vec::new();
++    #[cfg(feature = "gpu-tests")]
++    let research_setup = if let Some(profile) = research {
++        let sampler = runtime.foundation_training_sampling_state();
++        let tick = runtime.world().tick();
++        let setup = research_catalog::configure(runtime.world_mut(), id, &profile.case)?;
++        if sampler != runtime.foundation_training_sampling_state() || tick != runtime.world().tick()
++            || !TeacherCues::observe(runtime.world()).clear()
++        { return Err("physical research setup advanced the sampler/time or introduced cues".into()); }
++        receipt["research_physical_setup"] = setup.setup.clone();
++        Some(setup)
++    } else { None };
++    #[cfg(feature = "gpu-tests")]
++    let mut research_observations = Vec::new();
+     let mut task = request
+         .navigation_task
+         .map(|spec| retained_navigation_tasks::configure(runtime.world_mut(), id, spec))
+@@ -898,6 +950,13 @@
+                 "registered_food_carried_by": food.and_then(|o| o.carried_by),
+                 "neural_action": !steps.is_empty()
+             }));
++        }
++        #[cfg(feature = "gpu-tests")]
++        if let Some(setup) = &research_setup {
++            if after_tick != before_tick {
++                if research_observations.len() >= 2048 { return Err("research observation budget exceeded".into()); }
++                research_observations.push(setup.observe(runtime.world(), id, !steps.is_empty())?);
++            }
+         }
+         if after_tick != before_tick {
+             if let Some(state) = &mut task {
+@@ -1089,6 +1148,10 @@
+     if published_case.is_some_and(|name| name.starts_with("r2-grade-")) {
+         receipt["private_post_tick_body_observations"] = serde_json::to_value(published_body)?;
+     }
++    #[cfg(feature = "gpu-tests")]
++    if research_setup.is_some() {
++        receipt["research_native_body_observations"] = serde_json::to_value(research_observations)?;
++    }
+     rows_writer.flush()?;
+     sync_rows.sync_all()?;
+     drop(rows_writer);
+diff --git a/docs/research-saved-life/README.md b/docs/research-saved-life/README.md
+new file mode 100644
+--- /dev/null
++++ b/docs/research-saved-life/README.md
+@@ -0,0 +1,51 @@
++# Configurable native saved-life research profile
++
++This is the separate `research_catalog_v1` profile for the **same** `evaluate_saved_life_retention --experiment-manifest ROOT CURRENT OUTPUT MANIFEST` entrypoint. It is not the frozen R41 promotion card and cannot emit promotion authority. Keep the deployed v1 binary (588b6094…), frozen control proof, rubric, base and state unchanged.
++
++## Source and study contract
++
++Apply the source-only overlay on the exact source reconstructed by `docs/r41-saved-life/restore_source.py` at `f466b83791cccb97568e6f718b92b052999cfb2b` (anchor `c5d250178cb70a10f99f78ebcc974e0ad5533b41`). It does not apply directly to the historical unoverlaid `crates/` snapshot. The OS/toolchain/driver must be qualified independently; an unqualified binary must never be given a research admission file. Do not replace the active v1 binary or copy any private checkpoint into Git.
++
++The operator supplies three bounded, exact local documents in each admitted arm: `operator-research-admission.v1.json`, `research-catalog.v1.json`, `research-rubric.v1.json`. Admission is a separate operator-provided digest pin, not embedded in a contender or allowed inline in the manifest. Example shape, with **non-operational placeholders**:
++
++```json
++{
++  "schema": "qualia.saved_life.operator_research_admission.v1",
++  "catalog_sha256": "<exact catalog bytes>",
++  "rubric_sha256": "<exact external rubric bytes>",
++  "evaluator_sha256": "<qualified research ELF bytes>",
++  "admitted_case_ids": ["contact-hot-left", "contact-same-hot-harmless-left", "contact-warm-edible-left", "reach-food", "reach-inert"]
++}
++```
++
++The manifest names one admitted case, a pinned caller Current, the sole living owner, common expected world seed and evaluation nonce. The catalog describes only integer-unit body-relative native `Hazard`, `Obstacle`, and `Food` placements and required physical opening contacts. Coordinates, radii, dose, heat, nutritional content, counts, geometry and horizons are bounded. Unknown fields and overlapping or ambiguous geometry fail ahead of even the Current path check. No arbitrary commands, rewards, target IDs, brain data, policy inputs, terrain mutation, placeholder sensors, or inline runner settings are accepted. The rubric bytes are hashed but not parsed by the simulator; labels/slots are kept in observers, not creature inputs.
++
++Native materialization is transactional on a disposable saved world. It does not reposition the body, normalize the saved scene, clear prior experiences, or change the retained sampler, time, optimizer or learned state. It succeeds only if the actual quiet, flat, local opening permits the declared data. The runner measures actual contacts, paid decisions, health/pain/injury, target clearance and real ownership/nourishment. A host that cannot realize the declared physical opening is **incompatible**, not a losing creature. Terrain edits are deliberately not part of this first operation set.
++
++`contact-*` includes mirror hot harmful/same-hot same-kind harmless/warm edible conditions. Score escape only after paid, genuinely outward Flee on the same target followed by sustained clearance under the frozen injury cap. Warm Food needs real same-target custody and ingestion. `reach-food`/`reach-inert` is a second data-only fixture with an entirely different opening geometry and contact schedule, using the same binary/ABI and ordinary control flow. No pass, gain or generalization is claimed until an independently accepted native run.
++
++## Inputs and exact command
++
++The normal `complete_saved_life` input is an **exact native Current** and preserves actual history. Its independent file hash is required for each arm. Equal source seed and trial settings are checked; genuinely different hashes are called an *independent saved-life comparison*, not a brain-only causal experiment, even when seeds match. Saved sampling streams are not replaced to create cosmetic matching. For a standalone canonical `FoundationWeightAsset`, provide the asset SHA **and an explicit compatible full native host Current**. The native canonical decoder and existing safe N2048 calibration transaction admit only exact, reconstructible assets on legal inherited coordinates. An incompatible topology, protected stage/speech difference, unsupported provenance, or unrecognized file format is refused, not silently converted to a founder or mislabeled as acquired history. Native installation cannot write the host’s mutable acquired rails. A same-host asset comparison should use the same source Current and owner in both arms. It is still not v1 promotion evidence.
++
++From the candidate checkout, device-free plan:
++
++```sh
++python3 scripts/research_saved_life_catalog.py \
++  --catalog docs/research-saved-life/research-catalog.v1.json \
++  --rubric docs/research-saved-life/research-rubric.v1.json \
++  --admission "$ADMISSION" --admission-sha256 "$ADMISSION_SHA" --evaluator "$RESEARCH_ELF" \
++  --world-seed "$COMMON_WORLD_SEED" --nonce "$COMMON_NONCE" --case contact-hot-left \
++  --a-current "$CURRENT_A" --a-sha256 "$CURRENT_A_SHA" --a-owner "$OWNER_A" \
++  --b-current "$CURRENT_B" --b-sha256 "$CURRENT_B_SHA" --b-owner "$OWNER_B"
++```
++
++For A5 after the active lease clears, add `--execute --output "$NEW_PRIVATE_RUN" --lease "$EXISTING_SHARED_NATIVE_LEASE" --lavapipe-so "$PINNED_LAVAPIPE_SO" --lavapipe-icd "$PINNED_LAVAPIPE_ICD"`. For each `a` and `b` also add `--a-reopen "$ACCEPTED_A" --a-reopen-sha256 "$ACCEPTED_A_SHA" --a-reopen-process "$PROCESS_A" --a-reopen-process-sha256 "$PROCESS_A_SHA" --a-reopen-raw "$RAW_NATIVE_A"` and the corresponding B flags. Those are **real independent separate-process zero-cut approvals** on the exact new binary using the existing restore-only protocol, never derived from the plan or generated by this wrapper. For an explicit Foundation arm, add its `--a-foundation "$FOUNDATION_A" --a-foundation-sha256 "$FOUNDATION_A_SHA"` optionally. Set case to the corresponding admitted foils and `reach-food`/`reach-inert` with the same executable. Use a new output directory for each paired case. Only plans run without the signed-off native admission, lease and resource floor.
++
++## Qualification order (not yet executed)
++
++1. Near-term, run `PYTHONDONTWRITEBYTECODE=1 python3 scripts/test_research_saved_life_catalog.py -v` (device-free). When Rust/toolchain/disk are available and A5 is clear, compile/test only the new module first (`cargo test --frozen --offline -p alife_game_app --features foundation-training,gpu-tests --lib research_catalog::tests`). On that compiled executable verify a malformed admitted placement fails before touching a deliberately nonexistent Current, and genuine v1 control/receipt behavior matches the old proof before any native claim. Keep the old v1 production promotion evaluator pinned regardless.
++2. Under the existing shared lease, produce independent same-binary zero-cut proofs for two actual complete Currents with the same world seed. A may be R41 or another known complete host. B must come from a separately documented non-R41 branch/organism, not a weight edit or clone of R41; select an already held compatible independent Current, or arrange one to be retained through the ordinary same-individual production checkpoint pathway first. Verify both hosts meet the same local world constraints. Stage no nonexistent checkpoint as a pass.
++3. Run one case per family and their foils on both Currents through exactly this binary and argument path. Report input, catalog, admission, case/fixture, rubric, evaluator, process, native receipt, native rows, and effective Current hashes. Valid control and no measured gain is still a real result; absent layout/device/source or corrupt evidence is not biological failure. If the study is selected to grow, repeat the existing left/right conditions from the frozen catalog and separately authorize any additional ecology or terrain operation. Keep research and promotion artifacts separate.
++
++No Rust build, real native execution or acceptance has occurred in this isolated source branch workspace.
+diff --git a/docs/research-saved-life/research-catalog.v1.json b/docs/research-saved-life/research-catalog.v1.json
+new file mode 100644
+--- /dev/null
++++ b/docs/research-saved-life/research-catalog.v1.json
+@@ -0,0 +1,222 @@
++{
++  "schema": "qualia.saved_life.research_catalog.v1",
++  "catalog_id": "contact-and-food-v1",
++  "cases": [
++    {
++      "id": "contact-hot-left",
++      "max_decisions": 64,
++      "max_world_ticks": 512,
++      "objects": [
++        {
++          "slot": "sample-a",
++          "kind": "hazard",
++          "forward_mm": 120,
++          "left_mm": 590,
++          "radius_mm": 610,
++          "temperature_milli": 840,
++          "pain_milli": 160,
++          "nutrition_milli": 0
++        },
++        {
++          "slot": "sample-b",
++          "kind": "food",
++          "forward_mm": 1650,
++          "left_mm": -840,
++          "radius_mm": 320,
++          "temperature_milli": 0,
++          "pain_milli": 0,
++          "nutrition_milli": 650
++        }
++      ],
++      "opening_contacts": [
++        "sample-a"
++      ]
++    },
++    {
++      "id": "contact-same-hot-harmless-left",
++      "max_decisions": 64,
++      "max_world_ticks": 512,
++      "objects": [
++        {
++          "slot": "sample-a",
++          "kind": "hazard",
++          "forward_mm": 120,
++          "left_mm": 590,
++          "radius_mm": 610,
++          "temperature_milli": 840,
++          "pain_milli": 0,
++          "nutrition_milli": 0
++        },
++        {
++          "slot": "sample-b",
++          "kind": "food",
++          "forward_mm": 1650,
++          "left_mm": -840,
++          "radius_mm": 320,
++          "temperature_milli": 0,
++          "pain_milli": 0,
++          "nutrition_milli": 650
++        }
++      ],
++      "opening_contacts": [
++        "sample-a"
++      ]
++    },
++    {
++      "id": "contact-warm-edible-left",
++      "max_decisions": 64,
++      "max_world_ticks": 512,
++      "objects": [
++        {
++          "slot": "sample-a",
++          "kind": "food",
++          "forward_mm": 120,
++          "left_mm": 590,
++          "radius_mm": 610,
++          "temperature_milli": 210,
++          "pain_milli": 0,
++          "nutrition_milli": 450
++        },
++        {
++          "slot": "sample-b",
++          "kind": "food",
++          "forward_mm": 1650,
++          "left_mm": -840,
++          "radius_mm": 320,
++          "temperature_milli": 0,
++          "pain_milli": 0,
++          "nutrition_milli": 650
++        }
++      ],
++      "opening_contacts": [
++        "sample-a"
++      ]
++    },
++    {
++      "id": "contact-hot-right",
++      "max_decisions": 64,
++      "max_world_ticks": 512,
++      "objects": [
++        {
++          "slot": "sample-a",
++          "kind": "hazard",
++          "forward_mm": 120,
++          "left_mm": -590,
++          "radius_mm": 610,
++          "temperature_milli": 840,
++          "pain_milli": 160,
++          "nutrition_milli": 0
++        },
++        {
++          "slot": "sample-b",
++          "kind": "food",
++          "forward_mm": 1650,
++          "left_mm": 840,
++          "radius_mm": 320,
++          "temperature_milli": 0,
++          "pain_milli": 0,
++          "nutrition_milli": 650
++        }
++      ],
++      "opening_contacts": [
++        "sample-a"
++      ]
++    },
++    {
++      "id": "contact-same-hot-harmless-right",
++      "max_decisions": 64,
++      "max_world_ticks": 512,
++      "objects": [
++        {
++          "slot": "sample-a",
++          "kind": "hazard",
++          "forward_mm": 120,
++          "left_mm": -590,
++          "radius_mm": 610,
++          "temperature_milli": 840,
++          "pain_milli": 0,
++          "nutrition_milli": 0
++        },
++        {
++          "slot": "sample-b",
++          "kind": "food",
++          "forward_mm": 1650,
++          "left_mm": 840,
++          "radius_mm": 320,
++          "temperature_milli": 0,
++          "pain_milli": 0,
++          "nutrition_milli": 650
++        }
++      ],
++      "opening_contacts": [
++        "sample-a"
++      ]
++    },
++    {
++      "id": "contact-warm-edible-right",
++      "max_decisions": 64,
++      "max_world_ticks": 512,
++      "objects": [
++        {
++          "slot": "sample-a",
++          "kind": "food",
++          "forward_mm": 120,
++          "left_mm": -590,
++          "radius_mm": 610,
++          "temperature_milli": 210,
++          "pain_milli": 0,
++          "nutrition_milli": 450
++        },
++        {
++          "slot": "sample-b",
++          "kind": "food",
++          "forward_mm": 1650,
++          "left_mm": 840,
++          "radius_mm": 320,
++          "temperature_milli": 0,
++          "pain_milli": 0,
++          "nutrition_milli": 650
++        }
++      ],
++      "opening_contacts": [
++        "sample-a"
++      ]
++    },
++    {
++      "id": "reach-food",
++      "max_decisions": 64,
++      "max_world_ticks": 256,
++      "objects": [
++        {
++          "slot": "sample-a",
++          "kind": "food",
++          "forward_mm": 1900,
++          "left_mm": 250,
++          "radius_mm": 320,
++          "temperature_milli": 0,
++          "pain_milli": 0,
++          "nutrition_milli": 450
++        }
++      ],
++      "opening_contacts": []
++    },
++    {
++      "id": "reach-inert",
++      "max_decisions": 64,
++      "max_world_ticks": 256,
++      "objects": [
++        {
++          "slot": "sample-a",
++          "kind": "obstacle",
++          "forward_mm": 1900,
++          "left_mm": 250,
++          "radius_mm": 320,
++          "temperature_milli": 0,
++          "pain_milli": 0,
++          "nutrition_milli": 0
++        }
++      ],
++      "opening_contacts": []
++    }
++  ]
++}
+diff --git a/docs/research-saved-life/research-rubric.v1.json b/docs/research-saved-life/research-rubric.v1.json
+new file mode 100644
+--- /dev/null
++++ b/docs/research-saved-life/research-rubric.v1.json
+@@ -0,0 +1,45 @@
++{
++  "schema": "qualia.saved_life.research_rubric.v1",
++  "rubric_id": "protective-exit-and-native-meal-v1",
++  "policy": "report study outcomes, never promotion points; failures attributable to inadmissible host or invalid native evidence are not behavioral losses",
++  "thresholds": {
++    "escape_decisions": 8,
++    "outside_world_intervals": 3,
++    "min_radial_gain_mm": 80,
++    "maximum_injury_increment_milli": 87
++  },
++  "cases": {
++    "contact-hot-left": {
++      "metric": "protective_exit",
++      "subject": "sample-a"
++    },
++    "contact-same-hot-harmless-left": {
++      "metric": "harmless_contact",
++      "subject": "sample-a"
++    },
++    "contact-warm-edible-left": {
++      "metric": "native_meal",
++      "subject": "sample-a"
++    },
++    "contact-hot-right": {
++      "metric": "protective_exit",
++      "subject": "sample-a"
++    },
++    "contact-same-hot-harmless-right": {
++      "metric": "harmless_contact",
++      "subject": "sample-a"
++    },
++    "contact-warm-edible-right": {
++      "metric": "native_meal",
++      "subject": "sample-a"
++    },
++    "reach-food": {
++      "metric": "native_meal",
++      "subject": "sample-a"
++    },
++    "reach-inert": {
++      "metric": "no_fake_meal",
++      "subject": "sample-a"
++    }
++  }
++}
+diff --git a/scripts/research_saved_life_catalog.py b/scripts/research_saved_life_catalog.py
+new file mode 100644
+--- /dev/null
++++ b/scripts/research_saved_life_catalog.py
+@@ -0,0 +1,527 @@
++#!/usr/bin/env python3
++"""Prepare or run paired, independently admitted native saved-life research.
++
++Research only: this never reads or writes SURGERY_STATE or emits promotion evidence.
++"""
++import argparse
++from dataclasses import dataclass
++import fcntl
++import hashlib
++import json
++import math
++import os
++from pathlib import Path
++import shutil
++import signal
++import stat
++import subprocess
++import time
++import re
++
++CATALOG = "research-catalog.v1.json"
++RUBRIC = "research-rubric.v1.json"
++ADMISSION = "operator-research-admission.v1.json"
++PROC = "process.json"
++CAP = 256 * 1024
++ARM_LIMIT = 512 * 1024 * 1024
++DISK_FLOOR = 9_900_000_000
++RUN_MIN_AVAILABLE_KB = 5_242_880
++V1_ELF = "588b60942ded9959eef5860e96bf546b2acd05a71fe6a6d77d9296304ff22bf6"
++DRIVER_SHA = "0004262f4dc95585492d55925face67a79a7c869ad8760b42ae01bd0bdb807a2"
++ICD_SHA = "9a6a0d616f3f2efc2d227f89653047e5330ff634b0519ffbf1b2c60dc1c0e0e7"
++
++
++def require(ok, message):
++    if not ok:
++        raise ValueError(message)
++
++
++def bytes_sha(raw):
++    return hashlib.sha256(raw).hexdigest()
++
++
++def pin_syntax(value):
++    return isinstance(value, str) and re.fullmatch(r"[a-f0-9]{64}", value) is not None
++
++
++def sha(path):
++    require(path.is_file() and not path.is_symlink(), f"expected regular private input: {path}")
++    with path.open("rb") as handle:
++        return hashlib.file_digest(handle, "sha256").hexdigest()
++
++
++def assert_pin(path, expected):
++    require(pin_syntax(expected) and sha(path) == expected, f"SHA-256 mismatch: {path}")
++
++
++def unique_fields(items):
++    fields = dict(items)
++    require(len(fields) == len(items), "duplicate JSON field")
++    return fields
++
++
++def parse(raw):
++    def invalid(s):
++        raise ValueError(f"invalid JSON number: {s}")
++    return json.loads(raw, object_pairs_hook=unique_fields, parse_constant=invalid)
++
++
++def read_small(path):
++    require(path.is_file() and not path.is_symlink(), f"expected regular local JSON: {path}")
++    with path.open("rb") as handle:
++        raw = handle.read(CAP + 1)
++    require(len(raw) <= CAP, "bounded research JSON too large")
++    return raw
++
++
++def write_json(path, obj):
++    with path.open("x", encoding="utf-8") as handle:
++        json.dump(obj, handle, ensure_ascii=True, allow_nan=False, sort_keys=True, indent=2)
++        handle.write("\n")
++
++
++def exact_keys(item, expected, name):
++    require(isinstance(item, dict) and item.keys() == set(expected.split()), f"invalid {name} fields")
++
++
++def slug(value):
++    return isinstance(value, str) and re.fullmatch(r"[a-z0-9_-]{1,64}", value) is not None
++
++
++def bounded(value, bottom, top):
++    return type(value) is int and bottom <= value <= top
++
++
++def validate_case(case):
++    exact_keys(case, "id max_decisions max_world_ticks objects opening_contacts", "research case")
++    require(slug(case["id"]) and bounded(case["max_decisions"], 1, 256)
++            and bounded(case["max_world_ticks"], case["max_decisions"], 2048)
++            and isinstance(case["objects"], list) and 1 <= len(case["objects"]) <= 4,
++            "invalid research bounds or id")
++    points, slots, contacts = [], set(), set()
++    for obj in case["objects"]:
++        exact_keys(obj, "slot kind forward_mm left_mm radius_mm temperature_milli pain_milli nutrition_milli", "physical object")
++        slot, kind, f, l, r, temp, pain, meal = (obj[k] for k in (
++            "slot", "kind", "forward_mm", "left_mm", "radius_mm", "temperature_milli", "pain_milli", "nutrition_milli"))
++        require(slug(slot) and slot not in slots and bounded(f, 100, 2600) and bounded(l, -1600, 1600)
++                and f*f+l*l <= 3000**2 and bounded(r, 100, 750) and bounded(temp, -900, 900)
++                and bounded(pain, 0, 250) and bounded(meal, 0, 1000)
++                and ((kind == "hazard" and meal == 0) or (kind == "obstacle" and pain == meal == 0)
++                     or (kind == "food" and pain == 0 and 50 <= meal <= 1000)), "invalid bounded physical object")
++        slots.add(slot)
++        for a, b, c in points:
++            require((a-f)**2+(b-l)**2 > (c+r+20)**2, "physical fixture objects overlap")
++        points.append((f,l,r))
++        d = f*f+l*l
++        require(d >= (r-25)**2, "opening contact too deep")
++        if d <= (r-2)**2:
++            contacts.add(slot)
++        else:
++            require(d > (r+2)**2, "ambiguous physical opening contact")
++    expected = case["opening_contacts"]
++    require(isinstance(expected, list) and all(slug(e) for e in expected) and contacts == set(expected)
++            and len(contacts) == len(expected), "opening contacts do not match physical layout")
++
++
++@dataclass(frozen=True)
++class Research:
++    raw: dict
++    admission: dict
++    catalog: dict
++    rubric: dict
++    case: dict
++
++    @property
++    def fixture(self):
++        return bytes_sha(f"qualia-research-fixture/v1\0{self.admission['catalog_sha256']}\0{self.case['id']}".encode())
++
++
++def research(args):
++    inputs = {ADMISSION: read_small(args.admission), CATALOG: read_small(args.catalog), RUBRIC: read_small(args.rubric)}
++    require(pin_syntax(args.admission_sha256) and bytes_sha(inputs[ADMISSION]) == args.admission_sha256,
++            "operator admission SHA-256 mismatch")
++    a, c, r = (parse(inputs[f]) for f in inputs)
++    exact_keys(a, "schema catalog_sha256 rubric_sha256 evaluator_sha256 admitted_case_ids", "operator admission")
++    require(a["schema"] == "qualia.saved_life.operator_research_admission.v1" and pin_syntax(a["evaluator_sha256"])
++            and a["evaluator_sha256"] != V1_ELF and a["catalog_sha256"] == bytes_sha(inputs[CATALOG])
++            and a["rubric_sha256"] == bytes_sha(inputs[RUBRIC]), "unadmitted research catalog, external rubric, or evaluator")
++    exact_keys(c, "schema catalog_id cases", "catalog")
++    require(c["schema"] == "qualia.saved_life.research_catalog.v1" and slug(c["catalog_id"])
++            and isinstance(c["cases"], list) and 1 <= len(c["cases"]) <= 64, "unsupported research catalog")
++    cases = {}
++    for row in c["cases"]:
++        validate_case(row)
++        require(row["id"] not in cases,"duplicate research catalog case")
++        cases[row["id"]] = row
++    ids = a["admitted_case_ids"]
++    require(isinstance(ids,list) and all(slug(k) for k in ids) and len(ids) == len(set(ids))
++            and set(ids) <= cases.keys() and args.case in ids, "case not explicitly admitted")
++    exact_keys(r, "schema rubric_id policy thresholds cases", "study rubric")
++    require(r["schema"] == "qualia.saved_life.research_rubric.v1" and slug(r["rubric_id"])
++            and isinstance(r["policy"], str) and r["cases"].keys() == cases.keys(), "unmatched research rubric inventory")
++    threshold_bounds = dict(escape_decisions=(1,32), outside_world_intervals=(1,16), min_radial_gain_mm=(1,1000),
++                            maximum_injury_increment_milli=(0,1000))
++    exact_keys(r["thresholds"]," ".join(threshold_bounds),"observer thresholds")
++    require(all(bounded(r["thresholds"][k], *v) for k,v in threshold_bounds.items()), "unbounded observer rubric")
++    for name, spec in r["cases"].items():
++        exact_keys(spec,"metric subject","observer case")
++        require(spec["metric"] in ("protective_exit","harmless_contact","native_meal","no_fake_meal")
++                and spec["subject"] in {x["slot"] for x in cases[name]["objects"]}, "unbound observer rubric subject")
++    assert_pin(args.evaluator, a["evaluator_sha256"])
++    return Research(inputs, a, c, r, cases[args.case])
++
++
++@dataclass(frozen=True)
++class Input:
++    label: str
++    current: Path
++    current_sha: str
++    owner: int
++    foundation: Path | None
++    foundation_sha: str | None
++
++    def mode(self):
++        return ({"kind":"foundation_on_explicit_host","foundation_sha256":self.foundation_sha}
++                if self.foundation else {"kind":"complete_saved_life"})
++
++
++def input_arm(args, label):
++    key = label.lower()
++    current, current_sha, owner, foundation, foundation_sha = (getattr(args, f"{key}_{k}") for k in (
++        "current", "sha256", "owner", "foundation", "foundation_sha256"))
++    require((foundation is None) == (foundation_sha is None) and bounded(owner, 1, 2**64-1), "incomplete explicit host/asset or invalid owner")
++    assert_pin(current, current_sha)
++    if foundation:
++        require(0 < foundation.stat().st_size <= 1024*1024, "unsupported standalone Foundation size")
++        assert_pin(foundation, foundation_sha)
++    return Input(label, current, current_sha, owner, foundation, foundation_sha)
++
++
++def command_manifest(args, study, arm, *, now):
++    return {"schema":2,"profile":"research_catalog_v1","run_id":f"research-{study.case['id'][:45]}-{arm.label}",
++            "owner":arm.owner,"source_current_sha256":arm.current_sha,"input":arm.mode(),"case_id":study.case["id"],
++            "catalog_sha256":study.admission["catalog_sha256"],"rubric_sha256":study.admission["rubric_sha256"],
++            "evaluator_sha256":study.admission["evaluator_sha256"],"expected_world_seed":args.world_seed,
++            "evaluation_nonce":args.nonce,"deadline_unix_seconds":now+420,"finalization_deadline_unix_seconds":now+510,
++            "max_output_bytes":ARM_LIMIT}
++
++
++def reopen_anchor(args, study, arm):
++    prefix = arm.label.lower()
++    accepted_path, accepted_pin, process_path, process_pin, raw_path = (getattr(args,f"{prefix}_{k}") for k in (
++        "reopen", "reopen_sha256", "reopen_process", "reopen_process_sha256", "reopen_raw"))
++    require(all(x is not None for x in (accepted_path,accepted_pin,process_path,process_pin,raw_path)),
++            "execute requires independently pinned zero-cut accepted/native/process evidence for both host Currents")
++    assert_pin(accepted_path,accepted_pin)
++    assert_pin(process_path,process_pin)
++    accepted, process = parse(read_small(accepted_path)), parse(read_small(process_path))
++    assert_pin(raw_path,accepted["receipt_sha256"])
++    raw = parse(read_small(raw_path))
++    expected = study.admission["evaluator_sha256"]
++    require(accepted["schema"] == "qualia.accepted_saved_life_reopen.v1" and accepted["source_current_sha256"] == arm.current_sha
++            and accepted["executable_sha256"] == expected and accepted["semantic_prior_mode"] == "off"
++            and all(accepted[k] is True for k in ("independently_accepted","zero_cut","same_individual","source_unchanged",
++                 "gpu_restored","private_world_memory_neural_and_sampling_preserved")), "wrong independently accepted reopen")
++    require(bounded(accepted["tick_start"],1,2**64-1) and accepted["tick_end"] == accepted["tick_start"]
++            and bounded(accepted["parent_pid"],1,2**31-1) and bounded(accepted["child_pid"],1,2**31-1)
++            and accepted["parent_pid"] != accepted["child_pid"] and accepted["child_exit"] == 0,
++            "reopen must be a successful stationary separate process")
++    require(all(process[k]==v for k,v in dict(evaluator_sha256=expected,current_sha256=arm.current_sha,
++        native_receipt_sha256=accepted["receipt_sha256"],parent_pid=accepted["parent_pid"],child_pid=accepted["child_pid"],
++        finished_at=accepted["finished_at"],exit_code=0).items()), "zero-cut process/acceptance pins disagree")
++    ep = raw["final_endpoint"]
++    require(raw["stop_reason"] == "restore_only" and raw["source_sha256"] == ep["source_current_sha256"] == arm.current_sha
++            and raw["source_world_tick"] == ep["world_tick"] == accepted["tick_start"] and raw["organism_id"] == arm.owner
++            and all(raw[k] is True for k in ("source_unchanged","gpu_restored","software_simulation_integrity_valid"))
++            and all(type(raw[k]) is int and raw[k] == 0 for k in ("captured_decisions","world_ticks","offline_actor_updates","offline_value_updates"))
++            and all(ep[k] is True for k in ("same_individual","private_world_memory_neural_and_sampling_preserved","actor_value_Adam_unchanged"))
++            and all(ep["zero_step_equality"][k] is True for k in ("world_json_byteequal", "sleep_journal_byteequal",
++                 "private_asset_closure_byteequal","saved_sampling_equal")), "native zero-cut receipt does not prove retained life")
++    return {"accepted_sha256":accepted_pin,"process_sha256":process_pin,"native_sha256":accepted["receipt_sha256"],"tick":accepted["tick_start"]}
++
++
++def guard_lease(fd, path):
++    a, b = os.fstat(fd), path.lstat()
++    require((a.st_dev,a.st_ino) == (b.st_dev,b.st_ino) and stat.S_ISREG(a.st_mode)
++            and stat.S_IMODE(a.st_mode) == 0o600 and a.st_size == 0 and a.st_nlink == 1 and a.st_uid == os.getuid(),
++            "shared native lease identity changed")
++
++
++def resource_floor(path):
++    available = int(next(line.split()[1] for line in Path("/proc/meminfo").read_text().splitlines() if line.startswith("MemAvailable:")))
++    require(shutil.disk_usage(path).free >= DISK_FLOOR and available >= RUN_MIN_AVAILABLE_KB, "shared native resource floor")
++
++
++def proc_group_alive(pid):
++    for p in Path("/proc").glob("[0-9]*/stat"):
++        try:
++            tail = p.read_text().rsplit(")",1)[1].split()
++            if tail[0] not in ("X","Z") and int(tail[2]) == pid:
++                return True
++        except (OSError,IndexError,ValueError):
++            continue
++    return False
++
++
++def score_native(result, rows, study):
++    """External read-only scoring. The simulator receives no metric or answer."""
++    opening = result["research_physical_setup"]
++    spec = study.rubric["cases"][study.case["id"]]
++    thresholds = study.rubric["thresholds"]
++    subject = next(o for o in opening["objects"] if o["slot"] == spec["subject"])
++    target, t0 = subject["id"], opening["tick"]
++    post = result["research_native_body_observations"]
++    require([x["tick"] for x in post] == list(range(t0+1,t0+1+result["world_ticks"]))
++            and len(rows) == result["captured_decisions"]
++            and all(x["row"] == i and x["organism"] == result["organism_id"] for i,x in enumerate(rows)),
++            "native row/continuous observation count or identity mismatch")
++    require(bool(rows), "no native biological decision evidence")
++    by_tick = {x["tick"]:x for x in [opening["opening_body_observation"],*post]}
++    require(all(x["outcome_tick"] in by_tick and x["decision_tick"] == x["outcome_tick"]-1 for x in rows),
++            "native decisions do not bind to enclosing world intervals")
++
++    def clearance(frame):
++        return next(x["radial_clearance_m"] for x in frame["objects"] if x["id"] == target)
++
++    def paid(row, channel, primitive):
++        return any(c["channel"] == channel and e["primitive"] == primitive and e["command_target"] == target and e["succeeded"] is True
++                   for c in row["joint_physical"]["channel_outcomes"] if (e:=c.get("execution_evidence")) is not None)
++
++    early = rows[:thresholds["escape_decisions"]]
++    paid_flees = [r for r in early if paid(r,"Locomotion",102)]
++    flees = [r for r in paid_flees if clearance(by_tick[r["outcome_tick"]]) is not None
++             and clearance(by_tick[r["decision_tick"]]) is not None
++             and clearance(by_tick[r["outcome_tick"]]) > clearance(by_tick[r["decision_tick"]])]
++    first_flee = flees[0]["row"] + 1 if flees else None
++    first_flee_tick = flees[0]["outcome_tick"] if flees else None
++    opened_contact = target in opening["contacts"]
++    width = thresholds["outside_world_intervals"]
++    gain = thresholds["min_radial_gain_mm"] / 1000
++    injury0 = by_tick[t0]["injury"]
++    start_clearance = clearance(by_tick[t0])
++    exit_tick = None
++    peak_injury = None
++    if first_flee_tick is not None:
++        for i,x in enumerate(post):
++            hold = post[i:i+width]
++            if not first_flee_tick <= x["tick"] <= early[-1]["outcome_tick"] or len(hold) != width:
++                continue
++            if all(y["alive"] and target not in y["actual_contacts"] and clearance(y) is not None
++                   and clearance(y) >= 0 and clearance(y)-start_clearance >= gain for y in hold):
++                exit_tick = x["tick"]
++                peak_injury = max(z["injury"] - injury0 for z in post[:i+width])
++                break
++    acquired = None
++    meal_tick = None
++    nutrition = None
++    for r in rows:
++        for food in r["food_events"]:
++            if food["target"] != target:
++                continue
++            if (food["acquired"] is True and food["after"]["owner"] == result["organism_id"]
++                    and (paid(r,"Manipulation",210) or paid(r,"Manipulation",211))):
++                acquired = r["outcome_tick"]
++            if (acquired is not None and paid(r,"Manipulation",210) and r["outcome_tick"] > acquired
++                    and food["consumed"] is True and food["nourished"] is True
++                    and food["before"]["owner"] == result["organism_id"] and food["hazard_pain_before"] == 0
++                    and math.isfinite(food["nutrition_before"]) and food["nutrition_before"] > 0):
++                meal_tick, nutrition = r["outcome_tick"], food["nutrition_before"]
++                break
++        if meal_tick is not None:
++            break
++    metric = spec["metric"]
++    if metric == "protective_exit":
++        require(opened_contact, "required genuine protective contact did not materialize")
++        passed = exit_tick is not None and peak_injury <= thresholds["maximum_injury_increment_milli"] / 1000
++    elif metric == "harmless_contact":
++        require(opened_contact, "required harmless contact did not materialize")
++        passed = len(early) == thresholds["escape_decisions"] and not paid_flees
++    elif metric == "native_meal":
++        passed = meal_tick is not None
++    else:
++        passed = (len(early) == thresholds["escape_decisions"] and not any(f["target"] == target and f["nourished"]
++                  for r in rows for f in r["food_events"]))
++    return {"metric":metric,"subject":spec["subject"],"passed":passed,"actual_opening_contact":opened_contact,
++            "early_paid_targeted_flees":len(paid_flees),
++            "first_paid_outward_flee_decision":first_flee,"first_sustained_egress_tick":exit_tick,
++            "peak_injury_increment_to_egress":peak_injury,"actual_acquisition_tick":acquired,
++            "actual_nourished_meal_tick":meal_tick,"actual_food_nutrition":nutrition}
++
++
++def measured_receipt(work, arm, study, manifest, pin):
++    root = work/"native"
++    rr = root/"retention.json"
++    result = parse(rr.read_bytes())
++    body = result["retained_experiment"]
++    profile = result["research_catalog"]
++    require(result["source_sha256"] == arm.current_sha and result["source_world_seed"] == manifest["expected_world_seed"]
++            and result["organism_id"] == arm.owner and body["identity"]["manifest_sha256"] == pin
++            and body["scorecard_eligible"] is False and result["source_unchanged"] is True and result["prior_remained_off"] is True
++            and result["measurement_valid"] is True and result["coverage_complete"] is True and result["gpu_restored"] is True
++            and result["software_simulation_integrity_valid"] is True and result["final_endpoint"]["same_individual"] is True,
++            "invalid native research evidence or identity")
++    for k, v in {k:manifest[k] for k in ("case_id","catalog_sha256","rubric_sha256","evaluator_sha256",
++             "evaluation_nonce","expected_world_seed","input")}.items():
++        require(profile[k] == v, f"native research receipt drift: {k}")
++    require(profile["admission_sha256"] == bytes_sha(study.raw[ADMISSION]) and profile["fixture_sha256"] == study.fixture
++            and result["request"]["evaluation_nonce"] == manifest["evaluation_nonce"]
++            and all(result["request"][k] == study.case[k] for k in ("max_decisions","max_world_ticks")),
++            "native fixture or budget differs from admitted identity")
++    assert_pin(root/"rows.jsonl",result["rows_sha256"])
++    with (root/"rows.jsonl").open("rb") as handle:
++        observer_keys = ("row","organism","decision_tick","outcome_tick","joint_physical","food_events")
++        rows = [{k: value[k] for k in observer_keys} for line in handle if (value:=parse(line)) is not None]
++    measured = score_native(result,rows,study)
++    if arm.foundation:
++        aux = result["research_foundation_host"]
++        require(aux["exact_asset_installed"] is True and aux["same_individual_and_acquired_state_retained"] is True,
++                "unsupported Foundation host installation")
++        expected_current = aux["effective_current_sha256"]
++        if expected_current != arm.current_sha:
++            assert_pin(root/"CALIBRATED-PARENT.alife-checkpoint",expected_current)
++    else:
++        require(result["request"]["direct_weights"] is None and "direct_weight_calibration" not in result,
++                "complete saved life unexpectedly recompiled direct weights")
++        expected_current = arm.current_sha
++    return {"native_receipt_sha256":sha(rr),"rows_sha256":result["rows_sha256"],"effective_current_sha256":expected_current,
++            "captured_decisions":result["captured_decisions"],"world_ticks":result["world_ticks"],"sampling_before":result["sampling_before"],
++            "physical_setup":result["research_physical_setup"],"measured_outcome":measured}
++
++
++def run_arm(args, study, arm, work, leased, reopen):
++    resource_floor(work.parent)
++    require(shutil.disk_usage(work.parent).free >= DISK_FLOOR + ARM_LIMIT + arm.current.stat().st_size,
++            "insufficient resource headroom to keep the shared 9.9 GB floor throughout an arm")
++    work.mkdir(mode=0o700)
++    current = work/"input.alife-checkpoint"
++    shutil.copyfile(arm.current,current)
++    current.chmod(0o400)
++    assert_pin(current,arm.current_sha)
++    for name, raw in study.raw.items():
++        (work/name).write_bytes(raw)
++        (work/name).chmod(0o400)
++    if arm.foundation:
++        shutil.copyfile(arm.foundation,work/"input.alife-foundation")
++        assert_pin(work/"input.alife-foundation",arm.foundation_sha)
++        (work/"input.alife-foundation").chmod(0o400)
++    for f in ("home","tmp","cache","runtime"):
++        (work/f).mkdir(mode=0o700)
++    now = int(time.time())
++    manifest = command_manifest(args,study,arm,now=now)
++    manifest_path = work/"manifest.json"
++    write_json(manifest_path,manifest)
++    manifest_pin = sha(manifest_path)
++    child_env = {"PATH":"/usr/bin:/bin","LANG":"C.UTF-8","HOME":str(work/"home"),"TMPDIR":str(work/"tmp"),
++        "XDG_CACHE_HOME":str(work/"cache"),"XDG_RUNTIME_DIR":str(work/"runtime"),
++        "ALIFE_EXPLICIT_FIXED_HOST_PRESSURE_NS":"0","ALIFE_EXPLICIT_SOFTWARE_RETENTION_TEST":"1",
++        "ALIFE_SLM_PRIOR":"off","ALIFE_SLM_PRIOR_BACKEND":"off","LD_LIBRARY_PATH":str(args.lavapipe_so.resolve().parent),
++        "VK_DRIVER_FILES":str(args.lavapipe_icd.resolve())}
++    cmd = [str(args.evaluator.resolve()),"--experiment-manifest",str(work),str(current),str(work/"native"),str(manifest_path)]
++    stopped = None
++    with (work/"stdout").open("xb") as stdout,(work/"stderr").open("xb") as stderr:
++        child = subprocess.Popen(cmd,cwd=work,env=child_env,stdin=subprocess.DEVNULL,stdout=stdout,stderr=stderr,start_new_session=True)
++        try:
++            while child.poll() is None:
++                guard_lease(leased,args.lease)
++                resource_floor(work)
++                require(time.time() < now + 540, "native research arm deadline reached")
++                require(sum(p.stat().st_blocks*512 for p in work.rglob("*") if p.is_file()) <= 1_000_000_000,
++                        "native research arm artifact cap reached")
++                time.sleep(0.2)
++        except (OSError, ValueError) as exc:
++            stopped = str(exc)
++        finally:
++            for sig in (signal.SIGTERM,signal.SIGKILL):
++                if child.poll() is not None and not proc_group_alive(child.pid):
++                    break
++                try:
++                    os.killpg(child.pid,sig)
++                except ProcessLookupError:
++                    pass
++                try:
++                    child.wait(5)
++                except subprocess.TimeoutExpired:
++                    continue
++    rr = work/"native/retention.json"
++    process = {"parent_pid":os.getpid(),"child_pid":child.pid,"exit_code":child.returncode,"stop":stopped,
++               "native_receipt_sha256":sha(rr) if rr.is_file() else None,"manifest_sha256":manifest_pin,"reopen":reopen,
++               "current_sha256":arm.current_sha,"evaluator_sha256":manifest["evaluator_sha256"],"group_reaped":not proc_group_alive(child.pid)}
++    write_json(work/PROC,process)
++    require(not stopped and child.returncode == 0 and process["group_reaped"], f"native research arm did not complete: {stopped or child.returncode}")
++    assert_pin(arm.current,arm.current_sha)
++    assert_pin(current,arm.current_sha)
++    if arm.foundation:
++        assert_pin(arm.foundation,arm.foundation_sha)
++        assert_pin(work/"input.alife-foundation",arm.foundation_sha)
++    assert_pin(args.evaluator,manifest["evaluator_sha256"])
++    return measured_receipt(work,arm,study,manifest,manifest_pin)
++
++
++def start_live(args, study, arms, names):
++    require(all(x is not None for x in (args.lease,args.lavapipe_so,args.lavapipe_icd,args.output)),
++            "execute requires existing shared lease, exact Vulkan driver and private output")
++    require(args.lease.is_absolute() and args.lease.name == ".qualia-stock-U-A-exclusive.lock" and not args.lease.is_symlink(),
++            "execute requires the operator-configured existing shared native lease")
++    require(args.lavapipe_so.name == "libvulkan_lvp.so", "wrong software Vulkan driver name")
++    assert_pin(args.lavapipe_so,DRIVER_SHA)
++    assert_pin(args.lavapipe_icd,ICD_SHA)
++    reopens = [reopen_anchor(args,study,arm) for arm in arms]
++    output = args.output.parent.resolve(strict=True)/args.output.name
++    require(output.name not in {"", ".", ".."} and not output.exists() and not output.is_symlink(), "output must be a new isolated run")
++    with args.lease.open("rb") as lease:
++        guard_lease(lease.fileno(),args.lease)
++        fcntl.flock(lease,fcntl.LOCK_EX | fcntl.LOCK_NB)
++        resource_floor(output.parent)
++        output.mkdir(mode=0o700)
++        evidence = [run_arm(args,study,a,output/a.label,lease.fileno(),r) for a,r in zip(arms,reopens,strict=True)]
++        names["verified_native_arms"] = {a.label:e for a,e in zip(arms,evidence,strict=True)}
++        if arms[0].current_sha == arms[1].current_sha:
++            require(evidence[0]["sampling_before"] == evidence[1]["sampling_before"]
++                    and evidence[0]["physical_setup"] == evidence[1]["physical_setup"], "matched-host opening or sampler drift")
++        write_json(output/"comparison.json",names)
++    return names
++
++
++def main():
++    p = argparse.ArgumentParser(description=__doc__)
++    for key in ("catalog","rubric","admission","evaluator"):
++        p.add_argument(f"--{key}",required=True,type=Path)
++    for key in ("admission-sha256","case"):
++        p.add_argument(f"--{key}",required=True)
++    for key in ("world-seed","nonce"):
++        p.add_argument(f"--{key}",required=True,type=int)
++    for key in ("output","lease","lavapipe-so","lavapipe-icd"):
++        p.add_argument(f"--{key}",type=Path)
++    for key in ("a","b"):
++        p.add_argument(f"--{key}-current",required=True,type=Path)
++        p.add_argument(f"--{key}-sha256",required=True)
++        p.add_argument(f"--{key}-owner",required=True,type=int)
++        for item in ("foundation","reopen","reopen-process","reopen-raw"):
++            p.add_argument(f"--{key}-{item}",type=Path)
++        for item in ("foundation-sha256","reopen-sha256","reopen-process-sha256"):
++            p.add_argument(f"--{key}-{item}")
++    p.add_argument("--execute",action="store_true",help="operator/verifier only; default is device-free plan")
++    args = p.parse_args()
++    try:
++        require(bounded(args.world_seed,0,2**64-1) and bounded(args.nonce,1,2**64-1), "invalid matched seed/nonce")
++        study = research(args)  # validate admitted layout before hashing either Current
++        arms = [input_arm(args,k) for k in ("A","B")]
++        kind = ("independent_saved_life_comparison" if arms[0].current_sha != arms[1].current_sha else
++                "same_host_foundation_comparison" if arms[0].foundation_sha != arms[1].foundation_sha else "same_input_repeat")
++        require(arms[0].current_sha != arms[1].current_sha or arms[0].owner == arms[1].owner, "same Current must specify the same live owner")
++        result = {"schema":"qualia.saved_life.research_comparison.v1","comparison_kind":kind,
++                  "promotion_eligible":False,"catalog_sha256":study.admission["catalog_sha256"],
++                  "rubric_sha256":study.admission["rubric_sha256"],"evaluator_sha256":study.admission["evaluator_sha256"],
++                  "fixture_sha256":study.fixture,"case_id":study.case["id"],"source_world_seed":args.world_seed,
++                  "evaluation_nonce":args.nonce,"same_fixture_not_same_acquired_history":kind=="independent_saved_life_comparison",
++                  "arm_manifests":{arm.label:command_manifest(args,study,arm,now=int(time.time())) for arm in arms}}
++        if args.execute:
++            os.umask(0o077)
++            result = start_live(args,study,arms,result)
++        print(json.dumps(result,indent=2,allow_nan=False))
++    except (OSError,ValueError,TypeError,KeyError,AttributeError,OverflowError) as exc:
++        p.exit(2,f"research comparison refused: {exc}\n")
++
++
++if __name__ == "__main__":
++    main()
+diff --git a/scripts/test_research_saved_life_catalog.py b/scripts/test_research_saved_life_catalog.py
+new file mode 100644
+--- /dev/null
++++ b/scripts/test_research_saved_life_catalog.py
+@@ -0,0 +1,126 @@
++#!/usr/bin/env python3
++"""Device-free CLI tests. Synthetic test artifacts are never evaluation evidence."""
++import copy
++import json
++from pathlib import Path
++import subprocess
++import sys
++import tempfile
++from types import SimpleNamespace
++import unittest
++
++import research_saved_life_catalog as runner
++
++ROOT = Path(__file__).resolve().parents[1]
++DATA = ROOT / "docs/research-saved-life"
++
++
++class CatalogCLI(unittest.TestCase):
++    def setUp(self):
++        self._tmp = tempfile.TemporaryDirectory(prefix="qualia-catalog-test.")
++        self.addCleanup(self._tmp.cleanup)
++        self.tmp = Path(self._tmp.name)
++        self.catalog = runner.parse((DATA / runner.CATALOG).read_bytes())
++        self.rubric = runner.parse((DATA / runner.RUBRIC).read_bytes())
++        self.a_current = self.tmp / "fake-current-a"
++        self.b_current = self.tmp / "fake-current-b"
++        self.a_current.write_text("TEST ONLY; not a Current")
++        self.b_current.write_text("TEST ONLY; different history identity")
++        self.evaluator = self.tmp / "no-execute"
++        self.evaluator.write_text("TEST ONLY; not an executable")
++
++    def go(self, case="contact-hot-left", *, missing_current=False, extras=(), a_overrides=None, raw_catalog=None,
++           no_b_current=False, same_host=False):
++        a, b = ((self.tmp / "missing-first-current") if missing_current else self.a_current), self.b_current
++        if same_host:
++            b = a
++        cat, rub, admit = (self.tmp / s for s in (runner.CATALOG,runner.RUBRIC,runner.ADMISSION))
++        cat.write_bytes(raw_catalog if raw_catalog is not None else json.dumps(self.catalog).encode())
++        rub.write_text(json.dumps(self.rubric))
++        admission = dict(schema="qualia.saved_life.operator_research_admission.v1",catalog_sha256=runner.sha(cat),
++                         rubric_sha256=runner.sha(rub),evaluator_sha256=runner.sha(self.evaluator),
++                         admitted_case_ids=list(self.rubric["cases"]))
++        admission.update(a_overrides or {})
++        admit.write_text(json.dumps(admission))
++        argv = [sys.executable,str(ROOT/"scripts/research_saved_life_catalog.py"),"--case",case,
++                "--world-seed","77","--nonce","87","--admission",str(admit),"--admission-sha256",runner.sha(admit),
++                "--rubric",str(rub),"--catalog",str(cat),"--evaluator",str(self.evaluator),"--a-current",str(a),
++                "--a-sha256",runner.sha(self.a_current),"--a-owner","3"]
++        if not no_b_current:
++            argv.extend(["--b-current",str(b),"--b-sha256",runner.sha(self.a_current if same_host else b),"--b-owner","3"])
++        return subprocess.run(argv+list(extras),capture_output=True,text=True)
++
++    def refused(self, result, reason):
++        self.assertEqual(result.returncode,2,result)
++        self.assertEqual(result.stdout,"")
++        self.assertIn(reason,result.stderr)
++
++    def test_same_entrypoint_two_catalog_families_and_foils(self):
++        cases = ["contact-hot-left","contact-same-hot-harmless-left","contact-warm-edible-left","reach-food","reach-inert"]
++        seen = set()
++        for case in cases:
++            result = self.go(case)
++            self.assertEqual(result.returncode,0,result)
++            report = runner.parse(result.stdout)
++            self.assertEqual(report["comparison_kind"],"independent_saved_life_comparison")
++            self.assertFalse(report["promotion_eligible"])
++            a, b = report["arm_manifests"].values()
++            self.assertNotEqual(a["source_current_sha256"],b["source_current_sha256"])
++            self.assertEqual(a["expected_world_seed"],b["expected_world_seed"])
++            self.assertEqual(a["evaluation_nonce"],b["evaluation_nonce"])
++            self.assertEqual(a["case_id"],b["case_id"])
++            self.assertNotIn("objects",a)
++            seen.add(report["fixture_sha256"])
++        self.assertEqual(len(seen),len(cases))
++
++    def test_explicit_same_host_typed_foundation_separate(self):
++        foundation = self.tmp / "not-a-real-foundation-device-free"
++        foundation.write_text("TEST ONLY")
++        result = self.go(same_host=True,extras=("--b-foundation",str(foundation),"--b-foundation-sha256",runner.sha(foundation)))
++        self.assertEqual(result.returncode,0,result)
++        report = runner.parse(result.stdout)
++        self.assertEqual(report["comparison_kind"],"same_host_foundation_comparison")
++        self.assertEqual(report["arm_manifests"]["B"]["input"],{"kind":"foundation_on_explicit_host","foundation_sha256":runner.sha(foundation)})
++        self.refused(self.go(same_host=True,extras=("--b-foundation",str(foundation))),"incomplete explicit host")
++        self.refused(self.go(no_b_current=True),"--b-current")
++
++    def test_rejects_unadmitted_and_malformed_before_checkpoint_access(self):
++        self.refused(self.go("not-admitted",missing_current=True),"case not explicitly admitted")
++        self.refused(self.go(missing_current=True,a_overrides={"catalog_sha256":"0"*64}),"unadmitted research catalog")
++        self.refused(self.go(missing_current=True,a_overrides={"evaluator_sha256":runner.V1_ELF}),"unadmitted research catalog")
++        self.refused(self.go(missing_current=True,raw_catalog=b'{"schema":1,"schema":2}'),"duplicate JSON field")
++        self.catalog["cases"][0]["objects"][0]["policy_answer"] = 102
++        self.refused(self.go(missing_current=True),"invalid physical object fields")
++        del self.catalog["cases"][0]["objects"][0]["policy_answer"]
++        self.catalog["cases"][0]["objects"][0]["radius_mm"] = 700
++        self.refused(self.go(missing_current=True),"opening contact too deep")
++        self.catalog["cases"][0]["objects"][0]["radius_mm"] = 610
++        self.catalog["cases"][0]["opening_contacts"] = []
++        self.refused(self.go(missing_current=True),"opening contacts do not match")
++
++    def test_checks_source_hashes_and_refuses_execution_without_receipts(self):
++        self.refused(self.go(missing_current=True),"expected regular private input")
++        self.refused(self.go(extras=("--b-sha256","7"*64)),"SHA-256 mismatch")
++        self.refused(self.go(extras=("--execute",)),"execute requires existing shared lease")
++
++    def test_observer_requires_paid_same_target_and_sustained_physical_exit(self):
++        t0, subject = 123, 19
++        def frame(tick, clearance, injured):
++            return dict(tick=tick,actual_contacts=[subject] if clearance<0 else [],alive=True,
++                        injury=injured,objects=[dict(id=subject,radial_clearance_m=clearance)])
++        native = dict(world_ticks=4,captured_decisions=1,organism_id=3,research_physical_setup=dict(
++            tick=t0,objects=[dict(slot="sample-a",id=subject)],contacts=[subject],opening_body_observation=frame(t0,-0.008,0)),
++            research_native_body_observations=[frame(t0+i,value,.04) for i,value in enumerate((.080,.086,.093,.10),1)])
++        row = dict(row=0,organism=3,decision_tick=t0,outcome_tick=t0+1,food_events=[],joint_physical=dict(channel_outcomes=[{
++            "channel":"Locomotion","execution_evidence":dict(primitive=102,command_target=subject,succeeded=True)}]))
++        study = SimpleNamespace(rubric=self.rubric,case={"id":"contact-hot-left"})
++        self.assertTrue(runner.score_native(native,[row],study)["passed"])
++        wrong = copy.deepcopy(row)
++        wrong["joint_physical"]["channel_outcomes"][0]["execution_evidence"]["command_target"] = 17
++        self.assertFalse(runner.score_native(native,[wrong],study)["passed"])
++        native["research_native_body_observations"][1] = frame(t0+2,-0.001,.04)
++        self.assertFalse(runner.score_native(native,[row],study)["passed"])
++
++
++if __name__ == "__main__":
++    unittest.main()
