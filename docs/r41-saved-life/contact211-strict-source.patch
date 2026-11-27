@@ -1,0 +1,913 @@
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs
+--- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs
+@@ -24,6 +24,9 @@
+ #[cfg(feature = "retained-language-pilot")]
+ #[path = "saved_life_retention/language_pilot.rs"]
+ mod language_pilot;
++#[cfg(all(feature = "retained-language-pilot", feature = "contact211-witness"))]
++#[path = "saved_life_retention/contact211_parity.rs"]
++mod contact211_parity;
+ #[cfg(feature = "gpu-tests")]
+ pub use experiments::evaluate_saved_life_retention_experiment;
+ 
+@@ -402,6 +405,8 @@
+     let research = experiment.as_ref().and_then(experiments::ExperimentIdentity::research);
+     #[cfg(feature = "retained-language-pilot")]
+     let language = experiment.as_ref().and_then(experiments::ExperimentIdentity::language_pilot);
++    #[cfg(all(feature = "retained-language-pilot", feature = "contact211-witness"))]
++    let contact211 = experiment.as_ref().and_then(experiments::ExperimentIdentity::contact211_parity);
+     if let Some(scope) = scent_scope {
+         scope.validate(&request)?;
+     }
+@@ -934,6 +939,11 @@
+         if foods.len() > 1024 {
+             return Err("retention food observation bound exceeded".into());
+         }
++        #[cfg(all(feature = "retained-language-pilot", feature = "contact211-witness"))]
++        if let Some(arm) = contact211 {
++            if calls != 0 { return Err("Contact211 refuses to retry the first real signed cut".into()); }
++            arm.arm(&mut runtime, id, before_tick)?;
++        }
+         calls += 1;
+         #[cfg(feature = "gpu-tests")]
+         let tick = match (
+@@ -947,6 +957,16 @@
+         };
+         #[cfg(not(feature = "gpu-tests"))]
+         let tick = runtime.tick_outcome();
++        #[cfg(all(feature = "retained-language-pilot", feature = "contact211-witness"))]
++        if contact211.is_some() {
++            match &tick {
++                Ok(crate::gpu_live_runtime::GpuLiveTickOutcome::Progressed(_)) => {},
++                Ok(crate::gpu_live_runtime::GpuLiveTickOutcome::NoProgress(reason)) =>
++                    return Err(format!("Contact211 one-cut observation refused without a retry: {reason:?}").into()),
++                Err(error) =>
++                    return Err(format!("Contact211 one-cut observation failed without a retry: {error}").into()),
++            }
++        }
+         let tick_error = tick.err().map(|e| e.to_string());
+         let after_tick = runtime.world().tick();
+         let after_pose = runtime
+@@ -1012,6 +1032,13 @@
+                 return Err("retention row identity mismatch".into());
+             }
+             step.patch.validate_contract()?;
++            #[cfg(all(feature = "retained-language-pilot", feature = "contact211-witness"))]
++            if let Some(arm) = contact211 {
++                if tick_error.is_some() || rows != 0 || calls != 1 || after_tick.raw() != before_tick.raw().saturating_add(1) {
++                    return Err("Contact211 requires exactly one completed native stock cut".into());
++                }
++                receipt["contact211_f0_observation"] = arm.collect(&mut runtime, &step)?;
++            }
+             let measured = step
+                 .patch
+                 .outcome()
+@@ -1350,6 +1377,25 @@
+         receipt["qualified"] = serde_json::json!(false);
+         receipt["retention_demonstrated"] = serde_json::json!(false);
+     }
++    #[cfg(all(feature = "retained-language-pilot", feature = "contact211-witness"))]
++    if let Some(arm) = contact211 {
++        let exactly_one = calls == 1 && rows == 1 && stop == "decision_limit"
++            && runtime.world().tick().raw().saturating_sub(source_world_tick) == 1;
++        let integrity = exactly_one && alive && base_unchanged && prior_clear && unchanged && cue_free
++            && endpoint_preserved && error.is_none() && software_simulation && controlled_pressure == Some(0)
++            && !receipt["contact211_f0_observation"].is_null();
++        if !integrity { return Err("Contact211 observer-only native cut failed integrity".into()); }
++        receipt["contact211_f0_integrity"] = serde_json::json!(true);
++        receipt["coverage_complete"] = serde_json::json!(false);
++        receipt["measurement_valid"] = serde_json::json!(false);
++        receipt["qualified"] = serde_json::json!(false);
++        receipt["retention_demonstrated"] = serde_json::json!(false);
++        arm.publish_stock_reference(
++            &output, &receipt["contact211_f0_observation"],
++            receipt["rows_sha256"].as_str().ok_or("Contact211 missing row digest")?,
++            experiment.as_ref().ok_or("Contact211 missing scope")?.manifest_sha256(),
++        )?;
++    }
+     alife_storage::write(
+         output.join("retention.json"),
+         serde_json::to_vec_pretty(&receipt)?,
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/contact211_parity.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/contact211_parity.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/contact211_parity.rs
+@@ -0,0 +1,288 @@
++//! Separate schema-7 observer-only admission layered over an exact, admitted native cue cell.
++use super::{digest, now, Result};
++use crate::gpu_live_runtime::{Contact211WitnessRequest, GpuLiveBrainRuntime};
++use alife_core::{OrganismId, PerceptionFrameDigest, Tick};
++use alife_world::{Contact211WorldWitness, HeadlessWorldSignatureDigest};
++use serde::{Deserialize, Serialize};
++use serde_json::{json, Value};
++use std::{fs, io::Read, path::Path};
++
++pub(super) const SCHEMA: u16 = 7;
++const SCOPE: &str = "qualia.saved_life.contact211_f0_parity.v1";
++const ADMIT: &str = "qualia.saved_life.contact211_f0_admission.v1";
++const TRANSCRIPT: &str = "qualia.saved_life.contact211_f0_stock_reference.v1";
++const ARM_MODE: &str = "observer_only_one_signed_cut_fixed_0ns";
++const CELL: &str = "contact211-language-cell.schema5.json";
++const PERMIT: &str = "contact211-f0-admission.v1.json";
++const GRANT: &str = "contact211-operator-grant.v1.json";
++const REFERENCE: &str = "contact211-stock-reference.v1.json";
++const MAX: usize = 8192;
++
++#[derive(Debug, Copy, Clone, PartialEq, Eq, Deserialize, Serialize)]
++#[serde(rename_all = "snake_case")]
++enum Arm { StockReference, PresampleWitness }
++
++#[derive(Deserialize)]
++#[serde(deny_unknown_fields)]
++struct Envelope {
++    schema: u16,
++    scope: String,
++    language_manifest_sha256: String,
++    admission_sha256: String,
++}
++
++#[derive(Deserialize)]
++#[serde(deny_unknown_fields)]
++struct Admission {
++    schema: String,
++    scope: String,
++    behavior_scope: String,
++    arm: Arm,
++    current_sha256: String,
++    language_manifest_sha256: String,
++    evaluator_sha256: String,
++    independent_operator_grant_sha256: String,
++    expires_unix_seconds: u64,
++    max_decisions: u64,
++    max_world_ticks: u64,
++    prior_stock_reference_sha256: Option<String>,
++}
++
++#[derive(Deserialize)]
++#[serde(deny_unknown_fields)]
++struct OperatorGrant {
++    schema: String,
++    scope: String,
++    arm: Arm,
++    current_sha256: String,
++    evaluator_sha256: String,
++    language_manifest_sha256: String,
++    prior_stock_reference_sha256: Option<String>,
++    max_decisions: u64,
++    max_world_ticks: u64,
++    live_selection_edit: bool,
++}
++
++#[derive(Debug, Clone, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++struct StockReference {
++    schema: String,
++    source_current_sha256: String,
++    evaluator_sha256: String,
++    language_manifest_sha256: String,
++    stock_arm_admission_sha256: String,
++    stock_arm_outer_manifest_sha256: String,
++    original_physical_rows_sha256: String,
++    owner: u64,
++    tick: u64,
++    frame: PerceptionFrameDigest,
++    world: HeadlessWorldSignatureDigest,
++}
++
++#[derive(Serialize)]
++pub(super) struct Scope {
++    schema: &'static str,
++    arm: Arm,
++    language_manifest_sha256: String,
++    admission_sha256: String,
++    current_sha256: String,
++    evaluator_sha256: String,
++    frozen_stock_reference_sha256: Option<String>,
++    #[serde(skip)]
++    reference: Option<StockReference>,
++    expires_unix_seconds: u64,
++}
++
++fn exact(s: &str) -> bool {
++    s.len() == 64 && s.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
++}
++fn read_local(root: &Path, name: &str) -> Result<Vec<u8>> {
++    let path = root.join(name);
++    if path.canonicalize()? != path || !fs::symlink_metadata(&path)?.is_file() {
++        return Err("Contact211 requires a distinct canonical regular admission leaf".into());
++    }
++    let mut b = Vec::new();
++    fs::File::open(path)?.take(MAX as u64 + 1).read_to_end(&mut b)?;
++    if b.is_empty() || b.len() > MAX {
++        return Err("Contact211 admission exceeds bounded leaf".into());
++    }
++    Ok(b)
++}
++
++// Digest checks bind approved bytes but do not confer external launch authority.
++pub(super) fn resolve(root: &Path, bytes: &[u8]) -> Result<(Scope, Vec<u8>)> {
++    if bytes.is_empty() || bytes.len() > MAX {
++        return Err("Contact211 invalid outer manifest length".into());
++    }
++    let x: Envelope = serde_json::from_slice(bytes)?;
++    if x.schema != SCHEMA || x.scope != SCOPE
++        || !exact(&x.language_manifest_sha256) || !exact(&x.admission_sha256) {
++        return Err("Contact211 unsupported observer-only envelope".into());
++    }
++    let raw = read_local(root, PERMIT)?;
++    if digest(&raw) != x.admission_sha256 {
++        return Err("Contact211 separately approved permit hash mismatch".into());
++    }
++    let a: Admission = serde_json::from_slice(&raw)?;
++    let current_time = now()?;
++    if a.schema != ADMIT || a.scope != SCOPE || a.behavior_scope != ARM_MODE
++        || !exact(&a.current_sha256) || !exact(&a.evaluator_sha256)
++        || !exact(&a.independent_operator_grant_sha256)
++        || a.language_manifest_sha256 != x.language_manifest_sha256
++        || a.max_decisions != 1 || a.max_world_ticks != 1
++        || a.expires_unix_seconds <= current_time || a.expires_unix_seconds > current_time.saturating_add(600)
++        || digest(&fs::read(std::env::current_exe()?)?) != a.evaluator_sha256
++    {
++        return Err("Contact211 mismatched or expired signed-scope inputs".into());
++    }
++    let raw_grant = read_local(root, GRANT)?;
++    if digest(&raw_grant) != a.independent_operator_grant_sha256 {
++        return Err("Contact211 external operator grant digest differs".into());
++    }
++    let grant: OperatorGrant = serde_json::from_slice(&raw_grant)?;
++    if grant.schema != "qualia.saved_life.contact211_f0_operator_grant.v1" || grant.scope != SCOPE
++        || grant.arm != a.arm || grant.current_sha256 != a.current_sha256
++        || grant.evaluator_sha256 != a.evaluator_sha256
++        || grant.language_manifest_sha256 != a.language_manifest_sha256
++        || grant.prior_stock_reference_sha256 != a.prior_stock_reference_sha256
++        || grant.max_decisions != 1 || grant.max_world_ticks != 1 || grant.live_selection_edit
++    {
++        return Err("Contact211 operator grant does not bind this observer-only arm".into());
++    }
++    let nested = read_local(root, CELL)?;
++    if digest(&nested) != x.language_manifest_sha256 {
++        return Err("Contact211 nested native cue cell changed".into());
++    }
++    let reference = match (a.arm, &a.prior_stock_reference_sha256) {
++        (Arm::StockReference, None) => None,
++        (Arm::PresampleWitness, Some(xref)) if exact(xref) => {
++            let rb = read_local(root, REFERENCE)?;
++            if digest(&rb) != *xref { return Err("Contact211 prior reference hash mismatch".into()); }
++            let r: StockReference = serde_json::from_slice(&rb)?;
++            if r.schema != TRANSCRIPT || r.source_current_sha256 != a.current_sha256
++                || r.evaluator_sha256 != a.evaluator_sha256
++                || r.language_manifest_sha256 != x.language_manifest_sha256
++                || !exact(&r.stock_arm_admission_sha256)
++                || r.stock_arm_admission_sha256 == x.admission_sha256
++                || !exact(&r.stock_arm_outer_manifest_sha256)
++                || r.stock_arm_outer_manifest_sha256 == digest(bytes)
++                || !exact(&r.original_physical_rows_sha256) || r.owner == 0
++                || r.frame.0 == [0; 4] || r.world.words == [0; 4]
++            {
++                return Err("Contact211 witness needs independent prior stock pre-dispatch evidence".into());
++            }
++            Some(r)
++        }
++        _ => return Err("Contact211 arm/reference scope differs".into()),
++    };
++    Ok((Scope {
++        schema: SCOPE, arm: a.arm, language_manifest_sha256: a.language_manifest_sha256,
++        admission_sha256: x.admission_sha256, current_sha256: a.current_sha256,
++        evaluator_sha256: a.evaluator_sha256, frozen_stock_reference_sha256: a.prior_stock_reference_sha256,
++        reference, expires_unix_seconds: a.expires_unix_seconds,
++    }, nested))
++}
++
++impl Scope {
++    pub(super) fn binds_source_and_deadline(&self, current: &str, deadline: u64) -> bool {
++        current == self.current_sha256 && deadline <= self.expires_unix_seconds
++    }
++    pub(super) fn arm(&self, runtime: &mut GpuLiveBrainRuntime, owner: OrganismId, tick: Tick) -> Result<()> {
++        if now()? >= self.expires_unix_seconds {
++            return Err("Contact211 admission expired before dispatch".into());
++        }
++        if let Some(prior) = &self.reference {
++            if prior.owner != owner.raw() || prior.tick != tick.raw() {
++                return Err("Contact211 prior frozen owner/tick differs".into());
++            }
++            runtime.request_contact211_witness_strict(Contact211WitnessRequest {
++                organism: owner, decision_tick: tick, expected_frame: prior.frame, expected_world: prior.world,
++            })?;
++        } else {
++            runtime.request_contact211_stock_reference(owner, tick)?;
++        }
++        Ok(())
++    }
++
++    pub(super) fn collect(&self, runtime: &mut GpuLiveBrainRuntime, step: &crate::gpu_live_runtime::FoundationTrainingStep) -> Result<Value> {
++        let (world, proof) = match self.arm {
++            Arm::StockReference => (runtime.take_contact211_stock_reference().ok_or("Contact211 missing actual stock predispatch World/frame")?, None),
++            Arm::PresampleWitness => {
++                let capture = runtime.take_contact211_witness().ok_or("Contact211 witness not independently admitted at current cut")?;
++                (capture.world, Some(capture.presample))
++            }
++        };
++        let count = step.frame.candidates().len();
++        if world.organism != step.frame.organism_id() || world.frame_digest != step.frame.frame_digest()
++            || world.decision_tick != step.frame.tick() || usize::from(world.sealed_candidate_count) != count
++            || count == 0 || count > 32
++            || step.behavior.logits.len() != count || step.behavior.forced_motor_slots.len() != count
++        {
++            return Err("Contact211 moved or mismatched actual stage".into());
++        }
++        if let Some(p) = &proof {
++            if p.dispatch_generation != step.behavior.dispatch_generation || p.weight_generation != step.behavior.active_weight_generation
++                || p.handle != step.after_inference.handle || p.rows.len() != world.rows.len()
++                || p.rows.iter().any(|r| {
++                    let i = usize::from(r.candidate_index);
++                    if i >= count { return true; }
++                    let bit = 1_u32 << i;
++                    r.stock_f32_bits != step.behavior.logits[i].to_bits()
++                        || r.projected_representative != (step.behavior.representative_mask & bit != 0)
++                        || r.independently_projected_hand != (step.behavior.motor_masks[2] & bit != 0)
++                        || r.representative_can_force_hand != (step.behavior.representative_mask & bit != 0
++                                                              && step.behavior.forced_motor_slots[i] == 2)
++                })
++            {
++                return Err("Contact211 post-proof candidate observation differs from stock receipt".into());
++            }
++        }
++        let observed_world = world_json(&world);
++        let gpu = proof.map(|p| json!({
++            "dispatch_generation":p.dispatch_generation, "weight_generation":p.weight_generation,
++            "slot":p.handle.slot(), "slot_generation":p.handle.generation(),
++            "rows":p.rows.into_iter().map(|r| json!({
++                "index":r.candidate_index, "stock_f32_bits":r.stock_f32_bits,
++                "rep":r.projected_representative, "hand":r.independently_projected_hand,
++                "forces_hand":r.representative_can_force_hand, "f9_14_bits":r.observed_f9_14_bits
++            })).collect::<Vec<_>>(),
++        }));
++        Ok(json!({"scope":SCOPE, "arm":self.arm, "observer_only":true, "world":observed_world,
++                  "actual_pre_sampler_gpu":gpu, "unchanged_signed_decision": {
++                    "all_stock_logit_u32_bits":step.behavior.logits.iter().map(|f|f.to_bits()).collect::<Vec<_>>(),
++                    "all_stock_decoder_input_u32_bits":step.behavior.decoder_inputs.iter().map(|f|f.to_bits()).collect::<Vec<_>>(),
++                    "representative_mask":step.behavior.representative_mask,"motor_masks":step.behavior.motor_masks,
++                    "motor_indices":step.behavior.motor_indices,"forced_motor_slots":step.behavior.forced_motor_slots,
++                    "representative_index":step.behavior.representative_index, "dispatch_generation":step.behavior.dispatch_generation,
++                    "weight_generation":step.behavior.active_weight_generation, "slot":step.after_inference.handle.slot(),
++                    "slot_generation":step.after_inference.handle.generation(), "sampling":step.behavior.sampling,
++                  }, "bonus_enabled":false, "official_score_eligible":false}))
++    }
++
++    /// Emit a small seed only after complete native stock run integrity. It is
++    /// not an admission and cannot validate any future run without new approval.
++    pub(super) fn publish_stock_reference(
++        &self, directory: &Path, observer: &Value, rows_sha256: &str, outer_sha256: &str
++    ) -> Result<()> {
++        if self.arm != Arm::StockReference { return Ok(()); }
++        #[derive(Deserialize)]
++        struct Observed { owner: u64, tick: u64, frame: PerceptionFrameDigest, world_signature: HeadlessWorldSignatureDigest }
++        let w: Observed = serde_json::from_value(observer["world"].clone())?;
++        if !exact(rows_sha256) || !exact(outer_sha256) { return Err("Contact211 lacks sealed stock receipt digests".into()); }
++        let result = StockReference { schema: TRANSCRIPT.into(), source_current_sha256: self.current_sha256.clone(),
++            evaluator_sha256:self.evaluator_sha256.clone(),language_manifest_sha256:self.language_manifest_sha256.clone(),
++            stock_arm_admission_sha256:self.admission_sha256.clone(), stock_arm_outer_manifest_sha256:outer_sha256.into(),
++            original_physical_rows_sha256:rows_sha256.into(), owner:w.owner,tick:w.tick,frame:w.frame,world:w.world_signature };
++        alife_storage::write(directory.join(REFERENCE), serde_json::to_vec_pretty(&result)?)?;
++        Ok(())
++    }
++}
++
++fn world_json(w: &Contact211WorldWitness) -> Value {
++    json!({"owner":w.organism.raw(),"tick":w.decision_tick.raw(),"frame":w.frame_digest,
++        "world_signature":w.current_world_signature,"hand_empty":w.hand_actually_empty,
++        "full_candidate_count":w.sealed_candidate_count,
++        "rows":w.rows.iter().map(|r| json!({"index":r.candidate_index,"observed_slot":r.observed_slot,
++            "track":r.track.raw(),"physical_body":r.physical_target.raw(),"f9_14_bits":r.appearance_f9_14_bits,
++            "current_free_legal":r.free_legal_before_motion})).collect::<Vec<_>>()})
++}
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
+--- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
+@@ -80,6 +80,9 @@
+     #[cfg(feature = "retained-language-pilot")]
+     #[serde(skip_serializing_if = "Option::is_none")]
+     language_pilot: Option<super::language_pilot::Identity>,
++    #[cfg(all(feature = "retained-language-pilot", feature = "contact211-witness"))]
++    #[serde(skip_serializing_if = "Option::is_none")]
++    contact211_parity: Option<super::contact211_parity::Scope>,
+ }
+ 
+ impl ExperimentIdentity {
+@@ -99,6 +102,14 @@
+     pub(super) fn language_pilot(&self) -> Option<&super::language_pilot::Identity> {
+         self.language_pilot.as_ref()
+     }
++
++    #[cfg(all(feature = "retained-language-pilot", feature = "contact211-witness"))]
++    pub(super) fn contact211_parity(&self) -> Option<&super::contact211_parity::Scope> {
++        self.contact211_parity.as_ref()
++    }
++
++    #[cfg(all(feature = "retained-language-pilot", feature = "contact211-witness"))]
++    pub(super) fn manifest_sha256(&self) -> &str { &self.manifest_sha256 }
+ 
+     pub(super) fn validate_source(&self, actual_digest: &str) -> Result<()> {
+         if self.source_current_sha256 != actual_digest {
+@@ -249,6 +260,8 @@
+             research: None,
+             #[cfg(feature = "retained-language-pilot")]
+             language_pilot: None,
++            #[cfg(all(feature = "retained-language-pilot", feature = "contact211-witness"))]
++            contact211_parity: None,
+         },
+         request,
+         scent,
+@@ -286,6 +299,8 @@
+         visible_self_grip_v1: None, research: Some(research),
+         #[cfg(feature = "retained-language-pilot")]
+         language_pilot: None,
++        #[cfg(all(feature = "retained-language-pilot", feature = "contact211-witness"))]
++        contact211_parity: None,
+     }, request, scent: None })
+ }
+ 
+@@ -317,6 +332,8 @@
+         scenario: ScenarioV1::LanguagePilotV2, card_case: None,
+         intervention: "language_pilot_external_player_only",
+         visible_self_grip_v1: None, research: None, language_pilot: Some(cell),
++        #[cfg(all(feature = "retained-language-pilot", feature = "contact211-witness"))]
++        contact211_parity: None,
+     }, request, scent: None })
+ }
+ 
+@@ -379,6 +396,35 @@
+     #[derive(Deserialize)]
+     struct Version { schema: u16 }
+     let version: Version = serde_json::from_slice(&bytes)?;
++    #[cfg(all(feature = "retained-language-pilot", feature = "contact211-witness"))]
++    if version.schema == super::contact211_parity::SCHEMA {
++        let (observer, original_cue_manifest) = super::contact211_parity::resolve(admission_root, &bytes)?;
++        let mut p = resolve_language_pilot(admission_root, &original_cue_manifest)?;
++        let disclosed = serde_json::to_value(
++            p.identity.language_pilot().ok_or("Contact211 lost its native cue identity")?,
++        )?;
++        if disclosed["layout"].as_str() != Some("a") || disclosed["player_tokens"] != serde_json::json!([9, 14]) {
++            return Err("Contact211 observer-only v1 admits only the disclosed layout-A GET BALL physical parity cut".into());
++        }
++        if !observer.binds_source_and_deadline(&p.identity.source_current_sha256,
++            p.request.finalization_deadline_unix_seconds.unwrap_or(p.request.deadline_unix_seconds)) {
++            return Err("Contact211 retained cell source/deadline differs from observer permit".into());
++        }
++        p.request.max_decisions = 1;
++        p.request.max_world_ticks = 1;
++        p.request.validate(now()?)?;
++        p.identity.schema = super::contact211_parity::SCHEMA;
++        p.identity.manifest_sha256 = digest(&bytes);
++        p.identity.semantic_settings_sha256 = digest(&serde_json::to_vec(&(
++            "contact211-f0-one-stock-signed-cut", &p.identity.semantic_settings_sha256,
++        ))?);
++        p.identity.intervention = "contact211_f0_observer_only";
++        p.identity.contact211_parity = Some(observer);
++        admitted_paths(admission_root, source, output, manifest_path)?;
++        return evaluate_saved_life_retention_inner(source, output, p.request, p.scent, Some(p.identity));
++    }
++    #[cfg(not(all(feature = "retained-language-pilot", feature = "contact211-witness")))]
++    if version.schema == 7 { return Err("Contact211 F0 observer feature is disabled".into()); }
+     #[cfg(feature = "retained-language-pilot")]
+     if version.schema == super::language_pilot::SCHEMA {
+         let p = resolve_language_pilot(admission_root, &bytes)?;
+diff --git a/crates/alife_game_app/src/gpu_live_runtime.rs b/crates/alife_game_app/src/gpu_live_runtime.rs
+--- a/crates/alife_game_app/src/gpu_live_runtime.rs
++++ b/crates/alife_game_app/src/gpu_live_runtime.rs
+@@ -3783,9 +3783,13 @@
+     #[cfg(feature = "contact211-witness")]
+     contact211_captured: Option<alife_world::Contact211WorldWitness>,
+     #[cfg(feature = "contact211-witness")]
+-    contact211_pending: Option<Contact211F0Witness>,
++    contact211_pending: Option<contact211_f0_witness::Contact211Observation>,
+     #[cfg(feature = "contact211-witness")]
+-    contact211_completed: Option<Contact211F0Witness>,
++    contact211_strict_observer: bool,
++    #[cfg(feature = "contact211-witness")]
++    contact211_reference_only: bool,
++    #[cfg(feature = "contact211-witness")]
++    contact211_completed: Option<contact211_f0_witness::Contact211Observation>,
+     // Retained in ordinary gameplay saves without enabling the training sampler.
+     training_sampling_resume: BTreeMap<u64, Vec<u8>>,
+     #[cfg(feature = "foundation-training")]
+@@ -6102,6 +6106,10 @@
+             contact211_captured: None,
+             #[cfg(feature = "contact211-witness")]
+             contact211_pending: None,
++            #[cfg(feature = "contact211-witness")]
++            contact211_strict_observer: false,
++            #[cfg(feature = "contact211-witness")]
++            contact211_reference_only: false,
+             #[cfg(feature = "contact211-witness")]
+             contact211_completed: None,
+             training_sampling_resume: BTreeMap::new(),
+diff --git a/crates/alife_game_app/src/gpu_live_runtime/contact211_f0_witness.rs b/crates/alife_game_app/src/gpu_live_runtime/contact211_f0_witness.rs
+--- a/crates/alife_game_app/src/gpu_live_runtime/contact211_f0_witness.rs
++++ b/crates/alife_game_app/src/gpu_live_runtime/contact211_f0_witness.rs
+@@ -16,6 +16,18 @@
+ pub struct Contact211F0Witness {
+     pub world: Contact211WorldWitness,
+     pub presample: Contact211PresampleReport,
++}
++
++pub(super) enum Contact211Observation {
++    Reference(Contact211WorldWitness),
++    Witness(Contact211F0Witness),
++}
++
++enum Contact211SignedSubmission {
++    Stock,
++    Reference(Contact211WorldWitness),
++    Permissive(Contact211WorldWitness, Contact211PresampleAdmission),
++    Strict(Contact211WorldWitness, Contact211PresampleAdmission),
+ }
+ 
+ impl GpuLiveBrainRuntime {
+@@ -36,6 +48,8 @@
+             return Err(ScaffoldContractError::InvalidDecisionEvidence);
+         }
+         self.contact211_request = Some(request);
++        self.contact211_strict_observer = false;
++        self.contact211_reference_only = false;
+         self.contact211_captured = None;
+         self.contact211_pending = None;
+         self.contact211_completed = None;
+@@ -43,7 +57,92 @@
+     }
+ 
+     pub fn take_contact211_witness(&mut self) -> Option<Contact211F0Witness> {
+-        self.contact211_completed.take()
++        match self.contact211_completed.take()? {
++            Contact211Observation::Witness(x) => Some(x),
++            Contact211Observation::Reference(_) => None,
++        }
++    }
++
++    pub(crate) fn take_contact211_stock_reference(&mut self) -> Option<Contact211WorldWitness> {
++        match self.contact211_completed.take()? {
++            Contact211Observation::Reference(x) => Some(x),
++            Contact211Observation::Witness(_) => None,
++        }
++    }
++
++    fn require_contact211_awake(&self, id: OrganismId) -> Result<(), ScaffoldContractError> {
++        if self.residents.get(&id.raw()).is_none_or(|r| r.sleep_scheduler.state().phase != SleepPhase::Awake) {
++            return Err(ScaffoldContractError::InvalidDecisionEvidence);
++        }
++        Ok(())
++    }
++
++    pub(crate) fn request_contact211_witness_strict(
++        &mut self, request: Contact211WitnessRequest,
++    ) -> Result<(), ScaffoldContractError> {
++        self.require_contact211_awake(request.organism)?;
++        self.request_contact211_witness(request)?;
++        self.contact211_strict_observer = true;
++        Ok(())
++    }
++
++    pub(crate) fn request_contact211_stock_reference(
++        &mut self, owner: OrganismId, tick: Tick,
++    ) -> Result<(), ScaffoldContractError> {
++        self.require_contact211_awake(owner)?;
++        // Separate explicit stock mode. The two digests are established by genuine
++        // sealed perception and World, not by caller constants or native candidate B.
++        if self.contact211_request.is_some() || tick != self.world.tick()
++            || self.residents.len() != 1 || !self.residents.contains_key(&owner.raw())
++            || self.training_sampling.is_none_or(|sampling| sampling.demonstrator.is_some())
++            || self.training_demonstrator.is_some()
++        {
++            return Err(ScaffoldContractError::InvalidDecisionEvidence);
++        }
++        let world_now = self.world.canonical_signature_digest()?;
++        self.contact211_request = Some(Contact211WitnessRequest {
++            organism: owner, decision_tick: tick, expected_frame: PerceptionFrameDigest([0; 4]),
++            expected_world: world_now,
++        });
++        self.contact211_strict_observer = true;
++        self.contact211_reference_only = true;
++        self.contact211_captured = None;
++        self.contact211_pending = None;
++        self.contact211_completed = None;
++        Ok(())
++    }
++
++    pub(super) fn require_contact211_signed_scope(&self) -> Result<(), ScaffoldContractError> {
++        if self.contact211_strict_observer {
++            let request = self.contact211_request.as_ref().ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
++            if self.handles.len() != 1 || !self.handles.contains_key(&request.organism.raw())
++                || request.decision_tick != self.world.tick()
++                || self.training_sampling.is_none_or(|sampling| sampling.demonstrator.is_some())
++                || self.training_demonstrator.is_some()
++            {
++                return Err(ScaffoldContractError::InvalidDecisionEvidence);
++            }
++            self.require_contact211_awake(request.organism)?;
++        }
++        Ok(())
++    }
++
++    // Before a signed sampler counter increment, a working World/candidate cut
++    // must already be attested. Scope absence leaves ordinary execution unchanged.
++    pub(super) fn require_contact211_admitted_before_dispatch(
++        &self, prepared: &[PreparedGpuBrainFrame],
++    ) -> Result<(), ScaffoldContractError> {
++        if !self.contact211_strict_observer { return Ok(()); }
++        let (Some(request), Some(world), [prepared]) =
++            (&self.contact211_request, &self.contact211_captured, prepared)
++        else { return Err(ScaffoldContractError::InvalidDecisionEvidence); };
++        if request.organism != world.organism || self.world.tick() != world.decision_tick
++            || world.frame_digest != prepared.frame.frame_digest()
++            || self.world.canonical_signature_digest()? != world.current_world_signature
++        {
++            return Err(ScaffoldContractError::InvalidDecisionEvidence);
++        }
++        Ok(())
+     }
+ 
+     pub(super) fn capture_contact211_world_if_admitted(
+@@ -51,32 +150,44 @@
+     ) {
+         let Some(request) = self.contact211_request.as_ref() else { return; };
+         if request.organism != frame.organism_id() || request.decision_tick != frame.tick()
+-            || request.expected_frame != frame.frame_digest()
++            || (!self.contact211_reference_only && request.expected_frame != frame.frame_digest())
+         {
+             return;
+         }
+         self.contact211_captured = binding
+             .and_then(|binding| self.world.contact211_world_witness(frame, binding).ok())
+-            .filter(|w| w.current_world_signature == request.expected_world);
+-    }
+-
+-    pub(super) fn submit_contact211_witness_or_stock(
+-        &mut self, batch: &GpuClosedLoopMemoryBatchInput<'_>, prepared: &[PreparedGpuBrainFrame],
++            .filter(|w| self.contact211_reference_only || w.current_world_signature == request.expected_world);
++    }
++
++    fn prepare_contact211_signed_submission(
++        &mut self, prepared: &[PreparedGpuBrainFrame],
+         before: &[alife_gpu_backend::training_rollout::GpuTrainingStateSnapshot],
+         configs: &[alife_gpu_backend::GpuTrainingSamplingConfig],
+-    ) -> Result<Vec<alife_gpu_backend::GpuClosedLoopTick>, ScaffoldContractError> {
+-        // Missing/stale/unmatched: same stock method with the original sampler/RNG and budget.
+-        let (Some(request), Some(world), [prepared], [before]) =
+-            (self.contact211_request.take(), self.contact211_captured.take(), prepared, before)
+-        else {
+-            return self.backend.tick_memory_batch_training(batch, configs);
+-        };
+-        if request.organism != world.organism || self.world.tick() != world.decision_tick
+-            || world.frame_digest != prepared.frame.frame_digest() || prepared.handle != before.handle
+-            || before.tick != world.decision_tick.raw()
+-            || self.world.canonical_signature_digest().ok() != Some(world.current_world_signature)
+-        {
+-            return self.backend.tick_memory_batch_training(batch, configs);
++    ) -> Result<Contact211SignedSubmission, ScaffoldContractError> {
++        let strict = self.contact211_strict_observer;
++        let reference = self.contact211_reference_only;
++        let cut = match (self.contact211_request.take(), self.contact211_captured.take(), prepared, before, configs) {
++            (Some(request), Some(world), [prepared], [before], [config])
++                if request.organism == world.organism && request.decision_tick == world.decision_tick
++                    && self.world.tick() == world.decision_tick
++                    && (reference || request.expected_frame == world.frame_digest)
++                    && (reference || request.expected_world == world.current_world_signature)
++                    && world.frame_digest == prepared.frame.frame_digest()
++                    && prepared.handle == before.handle && before.tick == world.decision_tick.raw()
++                    && (!strict || config.demonstrator.is_none())
++                    && self.world.canonical_signature_digest().ok() == Some(world.current_world_signature)
++                => Some((world, prepared, before)),
++            _ => None,
++        };
++        let Some((world, prepared, before)) = cut else {
++            return if strict || reference {
++                Err(ScaffoldContractError::InvalidDecisionEvidence)
++            } else {
++                Ok(Contact211SignedSubmission::Stock)
++            };
++        };
++        if reference {
++            return Ok(Contact211SignedSubmission::Reference(world));
+         }
+         let gate = Contact211PresampleAdmission {
+             handle: prepared.handle, tick: world.decision_tick, frame_digest: world.frame_digest,
+@@ -84,9 +195,45 @@
+             next_dispatch_generation: self.backend.contact211_presample_expected_dispatch(),
+             expected_weight_generation: before.active_weight_generation,
+         };
+-        let (ticks, proof) = self.backend.tick_memory_batch_training_contact211_witness(
+-            batch, configs, Some(gate),
+-        )?;
++        Ok(if strict {
++            Contact211SignedSubmission::Strict(world, gate)
++        } else {
++            Contact211SignedSubmission::Permissive(world, gate)
++        })
++    }
++
++    pub(super) fn submit_contact211_signed(
++        &mut self, batch: &GpuClosedLoopMemoryBatchInput<'_>, prepared: &[PreparedGpuBrainFrame],
++        before: &[alife_gpu_backend::training_rollout::GpuTrainingStateSnapshot],
++        configs: &[alife_gpu_backend::GpuTrainingSamplingConfig], next_counter: u32,
++    ) -> Result<Vec<alife_gpu_backend::GpuClosedLoopTick>, ScaffoldContractError> {
++        // No strict/ref mismatch can use either stock branch. All host-side checks
++        // are finished before sampler accounting. B's backend independently checks
++        // backend ownership/generations and must succeed before host accounting.
++        let dispatch = self.prepare_contact211_signed_submission(prepared, before, configs)?;
++        let strict = matches!(&dispatch, Contact211SignedSubmission::Strict(_, _));
++        if !strict {
++            // Ordinary OFF/no-scope, A, and the pre-existing permissive observer
++            // keep the original counter-before-submit stock ordering.
++            self.training_sampling.as_mut().expect("training enabled").counter = next_counter;
++        }
++        let (world, ticks, proof) = match dispatch {
++            Contact211SignedSubmission::Stock => return self.backend.tick_memory_batch_training(batch, configs),
++            Contact211SignedSubmission::Reference(world) => {
++                let ticks = self.backend.tick_memory_batch_training(batch, configs)?;
++                self.contact211_pending = Some(Contact211Observation::Reference(world));
++                return Ok(ticks);
++            }
++            Contact211SignedSubmission::Permissive(world, gate) => {
++                let (ticks, proof) = self.backend.tick_memory_batch_training_contact211_witness(batch, configs, Some(gate))?;
++                (world, ticks, proof)
++            }
++            Contact211SignedSubmission::Strict(world, gate) => {
++                let (ticks, proof) = self.backend.tick_memory_batch_training_contact211_witness_strict(batch, configs, gate)?;
++                self.training_sampling.as_mut().expect("training enabled").counter = next_counter;
++                (world, ticks, proof)
++            }
++        };
+         // Join only as evidence. An observation miss does not roll back, retry or edit stock.
+         if let Some(presample) = proof.filter(|p| {
+             p.frame_digest == world.frame_digest && p.tick == world.decision_tick
+@@ -97,22 +244,34 @@
+                         && g.observed_f9_14_bits == w.appearance_f9_14_bits
+                 })
+         }) {
+-            self.contact211_pending = Some(Contact211F0Witness { world, presample });
++            self.contact211_pending = Some(Contact211Observation::Witness(Contact211F0Witness { world, presample }));
+         }
+         Ok(ticks)
+     }
+ 
+     pub(super) fn finish_contact211_after_successful_staged_tick(&mut self) {
+-        self.contact211_completed = self.contact211_pending.take().filter(|proof|
+-            proof.world.decision_tick.raw().checked_add(1) == Some(self.world.tick().raw()));
+-    }
+-
+-    pub(super) fn reset_contact211_before_staged_tick(&mut self) {
++        self.contact211_completed = self.contact211_pending.take().filter(|proof| {
++            let world = match proof {
++                Contact211Observation::Reference(w) => w,
++                Contact211Observation::Witness(x) => &x.world,
++            };
++            world.decision_tick.raw().checked_add(1) == Some(self.world.tick().raw())
++        });
++        self.contact211_strict_observer = false;
++        self.contact211_reference_only = false;
++    }
++
++    pub(super) fn reset_contact211_before_staged_tick(&mut self) -> Result<(), ScaffoldContractError> {
++        // Do not silently clear a missed/reused strict request into ordinary stock.
++        self.require_contact211_signed_scope()?;
+         self.contact211_captured = None;
+         self.contact211_pending = None;
+         self.contact211_completed = None;
+         if self.contact211_request.as_ref().is_some_and(|r| r.decision_tick != self.world.tick()) {
+             self.contact211_request = None;
+-        }
+-    }
+-}
++            self.contact211_strict_observer = false;
++            self.contact211_reference_only = false;
++        }
++        Ok(())
++    }
++}
+diff --git a/crates/alife_game_app/src/gpu_live_runtime/staged_tick.rs b/crates/alife_game_app/src/gpu_live_runtime/staged_tick.rs
+--- a/crates/alife_game_app/src/gpu_live_runtime/staged_tick.rs
++++ b/crates/alife_game_app/src/gpu_live_runtime/staged_tick.rs
+@@ -21,7 +21,7 @@
+         #[cfg(feature = "foundation-training")]
+         self.last_foundation_training_steps.clear();
+         #[cfg(feature = "contact211-witness")]
+-        self.reset_contact211_before_staged_tick();
++        self.reset_contact211_before_staged_tick()?;
+         #[cfg(feature = "foundation-training")]
+         self.last_foundation_terminal_biology.clear();
+         let preamble_started = Instant::now();
+@@ -75,6 +75,8 @@
+         {
+             self.last_sleep_memory_compaction_preparation_count = 0;
+         }
++        #[cfg(feature = "contact211-witness")]
++        self.require_contact211_signed_scope()?;
+         if self.handles.is_empty() {
+             if matches!(
+                 self.exact_checkpoint_work,
+@@ -797,6 +799,8 @@
+             ).map_err(cpu_preparation::upload_error)?;
+         }
+ 
++        #[cfg(feature = "contact211-witness")]
++        self.require_contact211_admitted_before_dispatch(&batch)?;
+         // The exact worker must receive every journal consequence from this
+         // canonical tick before Completed promotion grants it permission to
+         // finalize. Entries newer than the captured tick are consumed by the
+@@ -939,21 +943,23 @@
+                         ..sampling
+                     });
+                 }
+-                self.training_sampling
+-                    .as_mut()
+-                    .expect("training enabled")
+-                    .counter = next_counter;
+                 #[cfg(feature = "contact211-witness")]
+                 {
+-                    self.submit_contact211_witness_or_stock(
+-                        &memory_batch, &batch, &before_training, &configs,
++                    self.submit_contact211_signed(
++                        &memory_batch, &batch, &before_training, &configs, next_counter,
+                     )?
+                 }
+                 #[cfg(not(feature = "contact211-witness"))]
+                 {
++                    self.training_sampling
++                        .as_mut()
++                        .expect("training enabled")
++                        .counter = next_counter;
+                     self.backend.tick_memory_batch_training(&memory_batch, &configs)?
+                 }
+             } else {
++                #[cfg(feature = "contact211-witness")]
++                self.require_contact211_signed_scope()?;
+                 self.backend.tick_memory_batch(&memory_batch)?
+             };
+             #[cfg(feature = "foundation-training")]
+diff --git a/crates/alife_gpu_backend/src/closed_loop_runtime.rs b/crates/alife_gpu_backend/src/closed_loop_runtime.rs
+--- a/crates/alife_gpu_backend/src/closed_loop_runtime.rs
++++ b/crates/alife_gpu_backend/src/closed_loop_runtime.rs
+@@ -4918,8 +4918,37 @@
+         sampling: &[crate::GpuTrainingSamplingConfig],
+         admission: Option<crate::training_rollout::Contact211PresampleAdmission>,
+     ) -> Result<(Vec<GpuClosedLoopTick>, Option<crate::training_rollout::Contact211PresampleReport>), ScaffoldContractError> {
+-        let (Some(gate), [member]) = (admission, batch.members.as_slice()) else {
++        let Some(gate) = admission else {
+             return self.tick_memory_batch_training(batch, sampling).map(|ticks| (ticks, None));
++        };
++        if self.require_contact211_presample(batch, sampling, &gate).is_err() {
++            return self.tick_memory_batch_training(batch, sampling).map(|ticks| (ticks, None));
++        }
++        self.dispatch_contact211_presample(batch, sampling, gate)
++    }
++
++    /// The isolated schema-7 observer is never allowed to fall back to a stock
++    /// decision. All gate refusals occur before recording/submitting GPU work.
++    #[cfg(feature = "contact211-witness")]
++    pub fn tick_memory_batch_training_contact211_witness_strict(
++        &mut self,
++        batch: &GpuClosedLoopMemoryBatchInput<'_>,
++        sampling: &[crate::GpuTrainingSamplingConfig],
++        gate: crate::training_rollout::Contact211PresampleAdmission,
++    ) -> Result<(Vec<GpuClosedLoopTick>, Option<crate::training_rollout::Contact211PresampleReport>), ScaffoldContractError> {
++        self.require_contact211_presample(batch, sampling, &gate)?;
++        self.dispatch_contact211_presample(batch, sampling, gate)
++    }
++
++    #[cfg(feature = "contact211-witness")]
++    fn require_contact211_presample(
++        &self,
++        batch: &GpuClosedLoopMemoryBatchInput<'_>,
++        sampling: &[crate::GpuTrainingSamplingConfig],
++        gate: &crate::training_rollout::Contact211PresampleAdmission,
++    ) -> Result<(), ScaffoldContractError> {
++        let [member] = batch.members.as_slice() else {
++            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+         };
+         if gate.handle != member.handle || gate.tick != member.frame.tick()
+             || gate.frame_digest != member.frame.frame_digest()
+@@ -4931,8 +4960,21 @@
+                 .and_then(|pool| pool.resident(member.handle).ok())
+                 .map(|resident| resident.active_weight_generation) != Some(gate.expected_weight_generation)
+         {
+-            return self.tick_memory_batch_training(batch, sampling).map(|ticks| (ticks, None));
+-        }
++            return Err(ScaffoldContractError::InvalidDecisionEvidence);
++        }
++        Ok(())
++    }
++
++    #[cfg(feature = "contact211-witness")]
++    fn dispatch_contact211_presample(
++        &mut self,
++        batch: &GpuClosedLoopMemoryBatchInput<'_>,
++        sampling: &[crate::GpuTrainingSamplingConfig],
++        gate: crate::training_rollout::Contact211PresampleAdmission,
++    ) -> Result<(Vec<GpuClosedLoopTick>, Option<crate::training_rollout::Contact211PresampleReport>), ScaffoldContractError> {
++        let [member] = batch.members.as_slice() else {
++            return Err(ScaffoldContractError::InvalidDecisionEvidence);
++        };
+         // Admission is diagnostic only. The underlying production validation owns
+         // native dispatch, identity, old RNG, and all failures and action outputs.
+         let inputs = [GpuRuntimeTickInput {

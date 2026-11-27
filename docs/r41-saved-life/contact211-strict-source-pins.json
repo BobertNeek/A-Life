@@ -1,0 +1,22 @@
+{
+  "after_sha256": {
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs": "76a9999d4b7381cf04b88574ee4f31f5f2ebaadc193c99d6e3a04af8eac07819",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/contact211_parity.rs": "fb9c70ca73bd259ef344b724497eecee9ef939ebc31c3c13e4905c103fc5ca0a",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs": "67166eeb51d657b40a93287c0f95c5b276756468c7bc61b5a75ddcfc3ef5bb07",
+    "crates/alife_game_app/src/gpu_live_runtime.rs": "87742f5e03bdcb5fc1b0419cd8d43404eb9bccf913e64e05a0c78d077d8ce9bc",
+    "crates/alife_game_app/src/gpu_live_runtime/contact211_f0_witness.rs": "7213850e6eecd3a7ee8e8888b199bdf2911d76e3d80e4a961111e7be9e7075d3",
+    "crates/alife_game_app/src/gpu_live_runtime/staged_tick.rs": "665ea13f4ef5fa3f0e1c1f3a4d0c0f84fbbc8f80587a62bd7eab1722ed6020c6",
+    "crates/alife_gpu_backend/src/closed_loop_runtime.rs": "7f5f6fc35ca167aaac24b70df6eb87a8e3d2352e44e18c4fff7c3b4ff8daedff"
+  },
+  "baseline": "B00 exact with F0 hosted Cargo check dab4a38f + existing exact B00 v2 unchanged",
+  "before_sha256": {
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs": "75a5906dcbd2a946c83a9bf254bfe2be982a7393456ebba43dc19fa043747f88",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs": "2af91d86c48bf9e95ccb41b6176db080c94d0e58d7b4afb98cb2020d5816b159",
+    "crates/alife_game_app/src/gpu_live_runtime.rs": "6c9c403ebf90a076394072a06c88fd7d8cd6cabc1814c43634f0f16009a47001",
+    "crates/alife_game_app/src/gpu_live_runtime/contact211_f0_witness.rs": "f891ef0e5eee4befb5d0da1c02aa6a48ecfe51e5f0dc2e31eaad704cc5301b71",
+    "crates/alife_game_app/src/gpu_live_runtime/staged_tick.rs": "a114bbde487e9812989ba113919239bb783a9d01196f912719d4f9e54936edd3",
+    "crates/alife_gpu_backend/src/closed_loop_runtime.rs": "69bac11ff904dba9090006d9356668579e5cf5c24d434cdd958994105e6b9a45"
+  },
+  "considered_and_rejected_fc0c_draft": "fc0c76b6675f5fc1b36b526d3bfb0fde813c19ca844f249521492b4052b100ec",
+  "official_or_native_ready": false
+}
