@@ -1,0 +1,152 @@
+name: Qualia research catalog build
+
+on:
+  push:
+    branches: ["bob/qualia-configurable-saved-life-catalog-20261127"]
+    paths:
+      - ".github/workflows/qualia-research-catalog-build.yml"
+      - "docs/r41-saved-life/research-catalog-source-only.patch"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qualia-research-catalog-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  research-elf:
+    if: github.ref == 'refs/heads/bob/qualia-configurable-saved-life-catalog-20261127'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 48
+    env:
+      PIN_SOURCE: f466b83791cccb97568e6f718b92b052999cfb2b
+      PIN_PATCH: 873cfddd3e6bebd65073da7bb163679ce04b6148dfde4e7e197b0d6c32ee8393
+      PIN_LOCK: 155699e9274f8890bc8c335669a62de48203ba315a33388a8f0caca71f0f7f37
+      RUST_TOOLCHAIN: "1.100.0"
+      TARGET: x86_64-unknown-linux-gnu
+      CARGO_BUILD_JOBS: "1"
+      CARGO_INCREMENTAL: "0"
+      CARGO_PROFILE_RELEASE_DEBUG: "0"
+      CARGO_PROFILE_RELEASE_INCREMENTAL: "false"
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check out the exact source-only research commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Reconstruct pinned source and apply only the reviewed research overlay
+        run: |
+          set -euo pipefail
+          export CARGO_TARGET_DIR="$RUNNER_TEMP/qualia-catalog-target"
+          export EXACT_SRC="$RUNNER_TEMP/qualia-catalog-source"
+          export EVIDENCE="$RUNNER_TEMP/qualia-research-build-evidence"
+          printf 'CARGO_TARGET_DIR=%s\nEXACT_SRC=%s\nEVIDENCE=%s\n' "$CARGO_TARGET_DIR" "$EXACT_SRC" "$EVIDENCE" >> "$GITHUB_ENV"
+          git merge-base --is-ancestor "$PIN_SOURCE" HEAD
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git diff --exit-code "$PIN_SOURCE" HEAD -- docs/r41-saved-life/restore_source.py docs/r41-saved-life/SOURCE.json docs/r41-saved-life/patches
+          patch="$GITHUB_WORKSPACE/docs/r41-saved-life/research-catalog-source-only.patch"
+          echo "$PIN_PATCH  $patch" | sha256sum -c -
+          python3 docs/r41-saved-life/restore_source.py "$GITHUB_WORKSPACE" "$EXACT_SRC"
+          cd "$EXACT_SRC"
+          git apply --check "$patch"
+          git apply "$patch"
+          echo "$PIN_LOCK  Cargo.lock" | sha256sum -c -
+          mkdir "$EVIDENCE"
+          printf 'repo_commit=%s\nexact_source=%s\nresearch_patch_sha256=%s\nlock_sha256=%s\n' "$GITHUB_SHA" "$PIN_SOURCE" "$PIN_PATCH" "$PIN_LOCK" > "$EVIDENCE/build.log"
+
+      - name: Install the exact official Rust toolchain
+        run: |
+          set -euo pipefail
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --target "$TARGET"
+          version="$(rustc +"$RUST_TOOLCHAIN" -vV)"
+          grep -Fqx 'release: 1.100.0' <<< "$version"
+          grep -Fqx 'commit-hash: 0ef1bc386059596dada8fb65b50425aab2ea637a' <<< "$version"
+          grep -Fqx "host: $TARGET" <<< "$version"
+          printf '%s\n' "$version" | tee -a "$EVIDENCE/build.log"
+          cargo +"$RUST_TOOLCHAIN" -V | tee -a "$EVIDENCE/build.log"
+
+      - name: Fetch locked dependencies then run bounded offline Rust tests and build
+        run: |
+          set -euo pipefail
+          cd "$EXACT_SRC"
+          timeout 8m cargo +"$RUST_TOOLCHAIN" fetch --locked --target "$TARGET" 2>&1 | tee -a "$EVIDENCE/build.log"
+          timeout 22m cargo +"$RUST_TOOLCHAIN" test --frozen --offline --release --target "$TARGET" -j 1 \
+            -p alife_game_app --features foundation-training,gpu-tests --lib research_catalog::tests -- --test-threads=1 2>&1 | tee -a "$EVIDENCE/build.log"
+          timeout 12m cargo +"$RUST_TOOLCHAIN" build --frozen --offline --release --target "$TARGET" -j 1 \
+            -p alife_game_app --features foundation-training,gpu-tests --bin evaluate_saved_life_retention 2>&1 | tee -a "$EVIDENCE/build.log"
+          PYTHONDONTWRITEBYTECODE=1 python3 scripts/test_research_saved_life_catalog.py -v 2>&1 | tee -a "$EVIDENCE/build.log"
+          install -m 0755 "$CARGO_TARGET_DIR/$TARGET/release/evaluate_saved_life_retention" "$EVIDENCE/evaluate_saved_life_retention"
+          readelf -h -d "$EVIDENCE/evaluate_saved_life_retention" | tee -a "$EVIDENCE/build.log"
+
+      - name: Device-free real binary entrypoint probes with no checkpoints
+        run: |
+          set -euo pipefail
+          cd "$EXACT_SRC"
+          python3 - <<'PY' | tee -a "$EVIDENCE/build.log"
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          import subprocess
+          import tempfile
+          import time
+
+          cli = Path(os.environ["EVIDENCE"]) / "evaluate_saved_life_retention"
+          sha = lambda b: hashlib.sha256(b).hexdigest()
+          elf_sha = hashlib.file_digest(cli.open("rb"), "sha256").hexdigest()
+          base = Path("docs/research-saved-life")
+          rubric = (base / "research-rubric.v1.json").read_bytes()
+          catalog = (base / "research-catalog.v1.json").read_bytes()
+          def probe(case, mode, expected):
+              with tempfile.TemporaryDirectory(prefix="qualia-no-checkpoint-") as name:
+                  stage = Path(name).resolve()
+                  raw = catalog
+                  if mode == "malformed":
+                      edit = json.loads(catalog)
+                      edit["cases"][0]["objects"][0]["radius_mm"] = 700
+                      raw = json.dumps(edit).encode()
+                  (stage / "research-catalog.v1.json").write_bytes(raw)
+                  (stage / "research-rubric.v1.json").write_bytes(rubric)
+                  (stage / "operator-research-admission.v1.json").write_text(json.dumps(dict(
+                      schema="qualia.saved_life.operator_research_admission.v1", catalog_sha256=sha(raw),
+                      rubric_sha256=sha(rubric), evaluator_sha256=elf_sha,
+                      admitted_case_ids=[case] if mode != "unadmitted" else ["reach-inert"])))
+                  manifest = stage / "manifest.json"
+                  manifest.write_text(json.dumps(dict(schema=2, profile="research_catalog_v1", run_id="ci-refusal",
+                      owner=3, source_current_sha256="a"*64, input={"kind":"complete_saved_life"}, case_id=case,
+                      catalog_sha256=sha(raw), rubric_sha256=sha(rubric), evaluator_sha256=elf_sha,
+                      expected_world_seed=17, evaluation_nonce=42, deadline_unix_seconds=int(time.time())+60,
+                      max_output_bytes=268435456)))
+                  absent = stage / "INTENTIONALLY-NO-CURRENT"
+                  out = stage / "NO-NATIVE-OUTPUT"
+                  q = subprocess.run([str(cli), "--experiment-manifest", str(stage), str(absent), str(out), str(manifest)],
+                      capture_output=True, text=True, timeout=30, env={"PATH":"/usr/bin:/bin","LC_ALL":"C"})
+                  if q.returncode == 0 or expected not in q.stderr or out.exists() or absent.exists():
+                      raise SystemExit(f"wrong compiled refusal for {case} / {mode}: {q.returncode}: {q.stderr!r}")
+                  print(f"{case} / {mode}: compiled expected refusal without checkpoint or GPU: {q.stderr.strip()}")
+          probe("contact-hot-left", "malformed", "opening contact exceeds shallow placement bound")
+          probe("contact-hot-left", "unadmitted", "not explicitly admitted")
+          probe("contact-hot-left", "admitted", "No such file or directory")
+          probe("reach-food", "admitted", "No such file or directory")
+          PY
+          cd "$EVIDENCE"
+          sha256sum evaluate_saved_life_retention build.log > SHA256SUMS
+          sha256sum -c SHA256SUMS
+
+      - name: Retain only the source-built research ELF and hashed build evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: qualia-research-evaluator-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/qualia-research-build-evidence/evaluate_saved_life_retention
+            ${{ runner.temp }}/qualia-research-build-evidence/build.log
+            ${{ runner.temp }}/qualia-research-build-evidence/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 5
+          compression-level: 3
