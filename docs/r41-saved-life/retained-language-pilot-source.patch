@@ -31,7 +31,19 @@ diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_rete
      if let Some(scope) = scent_scope {
          scope.validate(&request)?;
      }
-@@ -634,10 +639,19 @@
+@@ -488,6 +493,11 @@
+     let mut baseline = read_current_training_checkpoint(&source)?;
+     let mut baseline_bytes = original.clone();
+     baseline.require_living_continuation()?;
++    #[cfg(feature = "retained-language-pilot")]
++    if language.is_some() {
++        let life = baseline.life.as_ref().ok_or("language pilot requires exact living state")?;
++        language_pilot::reject_archived_toy_rolls(&life.world_json)?;
++    }
+     #[cfg(feature = "gpu-tests")]
+     let request = if let Some(target) = research.and_then(|profile| profile.foundation.as_ref()) {
+         let mut effective = request;
+@@ -634,10 +644,19 @@
          }
          Some(0)
      } else { controlled_pressure };
@@ -51,7 +63,7 @@ diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_rete
      if (controlled_pressure.is_some() || isolated_archive)
          && (!software_simulation || !cfg!(feature = "gpu-tests"))
      {
-@@ -807,6 +821,22 @@
+@@ -807,6 +826,22 @@
      } else { None };
      #[cfg(feature = "gpu-tests")]
      let mut research_observations = Vec::new();
@@ -74,7 +86,7 @@ diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_rete
      let mut task = request
          .navigation_task
          .map(|spec| retained_navigation_tasks::configure(runtime.world_mut(), id, spec))
-@@ -870,6 +900,9 @@
+@@ -870,6 +905,9 @@
              break "teacher_cue_observed";
          }
          let before_tick = runtime.world().tick();
@@ -84,7 +96,7 @@ diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_rete
          let before_pose = runtime
              .world()
              .organism_registry()
-@@ -1103,6 +1136,19 @@
+@@ -1103,6 +1141,19 @@
                      row["observed_world_utterances_after"] =
                          serde_json::to_value(runtime.world().audible_utterances())?;
                  }
@@ -104,11 +116,10 @@ diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_rete
                  if controlled_pressure.is_some() {
                      row["observer_host_pressure_control"] =
                          runtime.controlled_pressure_evidence_for_test();
-@@ -1268,6 +1314,21 @@
-         receipt["retention_demonstrated"] = serde_json::json!(false);
+@@ -1269,6 +1320,21 @@
          receipt["published_case_software_integrity"] = receipt["software_simulation_integrity_valid"].clone();
          receipt["software_simulation_integrity_valid"] = serde_json::json!(false);
-+    }
+     }
 +    #[cfg(feature = "retained-language-pilot")]
 +    if language_setup.is_some() {
 +        let complete = stop == "decision_limit" && alive && rows == language_pilot::DECISIONS
@@ -123,9 +134,10 @@ diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_rete
 +        receipt["software_simulation_integrity_valid"] = serde_json::json!(false);
 +        receipt["qualified"] = serde_json::json!(false);
 +        receipt["retention_demonstrated"] = serde_json::json!(false);
-     }
++    }
      alife_storage::write(
          output.join("retention.json"),
+         serde_json::to_vec_pretty(&receipt)?,
 diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
 --- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
 +++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
@@ -148,18 +160,18 @@ diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_rete
  }
  
  impl ExperimentIdentity {
-@@ -88,6 +93,11 @@
- 
-     pub(super) fn research(&self) -> Option<&super::research_catalog::Identity> {
+@@ -90,6 +95,11 @@
          self.research.as_ref()
-+    }
-+
+     }
+ 
 +    #[cfg(feature = "retained-language-pilot")]
 +    pub(super) fn language_pilot(&self) -> Option<&super::language_pilot::Identity> {
 +        self.language_pilot.as_ref()
-     }
- 
++    }
++
      pub(super) fn validate_source(&self, actual_digest: &str) -> Result<()> {
+         if self.source_current_sha256 != actual_digest {
+             return Err("experiment compatibility: source Current hash mismatch".into());
 @@ -208,6 +218,8 @@
          ScenarioV1::RetainedOpening | ScenarioV1::CueFreeFoodPlacement => None,
          ScenarioV1::PublishedCardCase => card.and_then(|c| c.navigation),
@@ -233,12 +245,10 @@ diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_rete
      let resolved = if version.schema == 2 {
          // Static grammar, digest/admission and fixture geometry all precede
          // even canonical/stat of the caller-supplied Current pathname.
-@@ -380,6 +435,18 @@
-             "schema": 2, "source_current_sha256": "a".repeat(64),
-             "generator_id": "candidate-01", "edits": [[7, bits]]
+@@ -382,6 +437,18 @@
          }})
-+    }
-+
+     }
+ 
 +    #[cfg(feature = "retained-language-pilot")]
 +    #[test]
 +    fn language_pilot_legacy_tag_is_refused_and_disabled_identity_is_absent() {
@@ -249,14 +259,16 @@ diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_rete
 +        assert!(!identity.as_object().unwrap().contains_key("language_pilot"));
 +        m["scenario"] = serde_json::json!("language_pilot_v2");
 +        assert!(resolved(&m).is_err(), "schema 1 must never opt into placement or speech");
-     }
- 
++    }
++
      #[test]
+     fn published_case_carries_exact_frozen_bounds_and_rejects_unknown_modes() {
+         let mut x = base(serde_json::json!({"kind":"control"}));
 diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/language_pilot.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/language_pilot.rs
 new file mode 100644
 --- /dev/null
 +++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/language_pilot.rs
-@@ -0,0 +1,380 @@
+@@ -0,0 +1,400 @@
 +//! Retained language pilot: versioned, manifest-only world setup and observation.
 +//! No selector, teaching path, training, model mutation, or scoring authority.
 +use super::{digest, Result};
@@ -351,6 +363,26 @@ new file mode 100644
 +        return Err("language pilot admission leaf exceeds its bound".into());
 +    }
 +    Ok(buf)
++}
++
++/// The signed evaluator's World decoder omits the newer toy-roll subsystem.
++/// Reject an active archived roll on the exact input wire before that decoder
++/// could discard it. Only schema 5 uses this additional read-only guard.
++pub(super) fn reject_archived_toy_rolls(world_json: &str) -> Result<()> {
++    #[derive(Deserialize)]
++    struct Save {
++        world: World,
++    }
++    #[derive(Deserialize)]
++    struct World {
++        #[serde(default)]
++        toy_rolls: std::collections::BTreeMap<String, serde::de::IgnoredAny>,
++    }
++    let save: Save = serde_json::from_str(world_json)?;
++    if !save.world.toy_rolls.is_empty() {
++        return Err("language pilot cannot restore an archived rolling object".into());
++    }
++    Ok(())
 +}
 +
 +fn parse_manifest(bytes: &[u8]) -> Result<Manifest> {
@@ -640,20 +672,20 @@ new file mode 100644
 diff --git a/crates/alife_world/Cargo.toml b/crates/alife_world/Cargo.toml
 --- a/crates/alife_world/Cargo.toml
 +++ b/crates/alife_world/Cargo.toml
-@@ -4,6 +4,9 @@
- edition.workspace = true
+@@ -5,6 +5,9 @@
  publish.workspace = true
  repository.workspace = true
-+
+ 
 +[features]
 +retained-language-pilot = []
- 
++
  [dependencies]
  alife_storage.workspace = true
+ alife_core.workspace = true
 diff --git a/crates/alife_world/src/headless.rs b/crates/alife_world/src/headless.rs
 --- a/crates/alife_world/src/headless.rs
 +++ b/crates/alife_world/src/headless.rs
-@@ -7059,6 +7059,28 @@
+@@ -7233,6 +7233,29 @@
                  || self.activity_grip_available(organism_id, target))
      }
  
@@ -665,8 +697,9 @@ diff --git a/crates/alife_world/src/headless.rs b/crates/alife_world/src/headles
 +        organism_id: OrganismId,
 +        target: WorldEntityId,
 +    ) -> (bool, bool) {
-+        let pending = self.toy_rolls.contains_key(&target.raw())
-+            || self.player_held_object().is_some()
++        // This exact retained World build has no rolling-toy subsystem.
++        // Schema 5 separately rejects archived rolls before restoring World.
++        let pending = self.player_held_object().is_some()
 +            || self.thermal_contact_candidate.is_some()
 +            || self.pending_player_care.contains_key(&organism_id.raw());
 +        let available = self.agent_entity_id(organism_id)

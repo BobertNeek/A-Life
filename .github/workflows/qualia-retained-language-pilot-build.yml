@@ -28,8 +28,8 @@ jobs:
       PIN_RESEARCH_PATCH: 3dcf657b2b1149a7da52e7867c3bdbc4c4dfe8d4785b53c95f429c78aa1cd490
       PIN_REPAIR_PATCH: c2815992c4e3e70a7b7bc42b307dc1d96e8c34483ea36cf2c98e06b9920282e6
       PIN_LEGACY_PATCH: 692ec25acc620f502581e7299d952471c039812646e41f85cdd1d6f87ed5c66d
-      PIN_ADAPTER_PATCH: 325d3e15f857d202b10d930c49c408e220af61a0c0ad56ef634873369ed89a76
-      PIN_ADAPTER_LEAVES: 31d9daf260499d4026066ca43beba10e9e16fab0a2bcce2a4d8bd7843bdca631
+      PIN_ADAPTER_PATCH: 14a45cd8038bb7bcd00128ea53cf3bc716af1998426c62e3e26ae34bdab1142f
+      PIN_ADAPTER_LEAVES: 0f03ccd2376de9d3f7633ef242e90befd34afeae2b6c6bf9d0ceec66697a9322
       PIN_LOCK: 155699e9274f8890bc8c335669a62de48203ba315a33388a8f0caca71f0f7f37
       PIN_RUSTC_COMMIT: 0ef1bc386059596dada8fb65b50425aab2ea637a
       RUST_TOOLCHAIN: "1.100.0"
@@ -95,16 +95,21 @@ jobs:
           leaves = pins["changed_source_leaves"]
           assert len(leaves) == 6 and sum(s["parent_sha256"] is None for s in leaves.values()) == 1
           def check(kind):
-              for name, expected in leaves.items():
-                  p = pathlib.Path(name)
-                  value = expected[kind + "_sha256"]
-                  if value is None:
-                      assert not p.exists() and not p.is_symlink(), name
-                  else:
-                      assert p.is_file() and not p.is_symlink(), name
-                      assert hashlib.sha256(p.read_bytes()).hexdigest() == value, name
-              catalog = pathlib.Path("crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/research_catalog.rs")
-              assert hashlib.sha256(catalog.read_bytes()).hexdigest() == pins["research_catalog_unchanged_sha256"]
+              def digest_file(p):
+                  if p.is_symlink() or (p.exists() and not p.is_file()):
+                      return "not-regular"
+                  return hashlib.sha256(p.read_bytes()).hexdigest() if p.is_file() else None
+              catalog = "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/research_catalog.rs"
+              expected = {n: v[kind + "_sha256"] for n, v in leaves.items()}
+              expected[catalog] = pins["research_catalog_unchanged_sha256"]
+              rejected = []
+              for name, value in expected.items():
+                  actual = digest_file(pathlib.Path(name))
+                  if actual != value:
+                      rejected.append(name)
+                      print(f"Exact {kind} mismatch: {name} expected={value} actual={actual}", flush=True)
+              if rejected:
+                  raise SystemExit("Detached source byte verification rejected the above leaves")
               print("Exact adapter leaves and unchanged research catalog:", kind)
           check("parent")
           subprocess.run(["git", "apply", "--check", sys.argv[2]], check=True)

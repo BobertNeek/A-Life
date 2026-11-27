@@ -6,7 +6,7 @@
     },
     "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs": {
       "parent_sha256": "330e52d1e2bccca8f703e884599c274c4b505d1c352d6af0222e22b84f999956",
-      "result_sha256": "d1c892e246be1b9d85479cfed0c0d608cb8816d267e2aaf9ece351373d8c69d5"
+      "result_sha256": "c41a0006f0031483d9c0942cee246c72038859156f31aea49d396f5115d158d5"
     },
     "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs": {
       "parent_sha256": "8c004b22c13891a6c044b8975ab235787a14e4406f9eb7239dc29ba41436bdc6",
@@ -14,21 +14,28 @@
     },
     "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/language_pilot.rs": {
       "parent_sha256": null,
-      "result_sha256": "25e242aaf80cc522cc4b2c43567d1fe8538394e186154ab9c26cc10afd6a2221"
+      "result_sha256": "d969338bb3684f4d844a107511125b373003cddb604a114fe2be3c232f63ca19"
     },
     "crates/alife_world/Cargo.toml": {
       "parent_sha256": "3946a9571697e86c53ad729a4f4b810e10bac6f02b62321bd84766db7406e51c",
       "result_sha256": "48f623d724595500ae36cd1e50a92cc78ef6e0b44a3a449b2a3a55ad0befd37e"
     },
     "crates/alife_world/src/headless.rs": {
-      "parent_sha256": "9ef742b2105c858389fbe50f89175396058c72476b2b47b644570ca46b9e0bc7",
-      "result_sha256": "b473c568d8a7dc96daa1622207238f0dbb7fe44073cb003c1ecdc0c86873a9b1"
+      "parent_sha256": "876c0361a97165de48e00c68f44959970c5d9ec1043a489ae590fcd100c6574e",
+      "result_sha256": "4705e10a8395cf8a9f4d2adcd97e78705464043e91cc975e12c39372e7e787ae"
     }
   },
-  "forward_sha256": "325d3e15f857d202b10d930c49c408e220af61a0c0ad56ef634873369ed89a76",
-  "inverse_sha256": "99524001d76933f97693e8463758b88f93d983e8ff83e759264716eb9efb38c4",
+  "forward_sha256": "14a45cd8038bb7bcd00128ea53cf3bc716af1998426c62e3e26ae34bdab1142f",
+  "inverse_sha256": "ef223d51724ee922e618ba7e0658eda765d78eee122a7268b70c8b497df99ec9",
   "old_cli_untouched": true,
+  "rebased_from_forward_sha256": "325d3e15f857d202b10d930c49c408e220af61a0c0ad56ef634873369ed89a76",
   "research_catalog_unchanged_sha256": "cf13ba6cb42209092a03d9f9bda559fd5638f498e9597a3cab49a863a89b5e53",
-  "scope": "detached source-only; no compile/test/device/lease or change to v1/research catalog",
-  "upstream_anchor": "f466b83791cccb97568e6f718b92b052999cfb2b signed restore plus existing exact detached research catalog patch; check all named bytes before staging"
+  "scope": "Detached schema5 only; preserve host rolling-free closure and reject active archived roll before restore; no change to v1 or research catalog",
+  "upstream_anchor": "7a5061285be79275d914f3f8852eaace75c9af1b: verified f466b837 signed restore + exact pinned research, sleep repair and legacy publication",
+  "verified_host_headless_restore": {
+    "anchor_git_blob_sha1": "8531bba2e4531086471667fab72c58dcbe8aeeb9",
+    "closure_patch_git_blob_sha1": "873ab82eb5385f6eb1b2fed223c38a55d44cf8de",
+    "closure_patch_sha256": "2d610a81237e236798a0aceaf77465cf4ef5b7c1b515232fa04ba4bcd971aef2",
+    "closure_post_sha256": "876c0361a97165de48e00c68f44959970c5d9ec1043a489ae590fcd100c6574e"
+  }
 }
