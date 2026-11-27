@@ -1,0 +1,825 @@
+diff --git a/crates/alife_game_app/Cargo.toml b/crates/alife_game_app/Cargo.toml
+--- a/crates/alife_game_app/Cargo.toml
++++ b/crates/alife_game_app/Cargo.toml
+@@ -89,6 +89,7 @@
+ [features]
+ default = []
+ contact211-witness = ["foundation-training", "alife_world/contact211-witness", "alife_gpu_backend/contact211-witness"]
++contact211-rank32 = ["contact211-witness", "retained-language-pilot", "alife_gpu_backend/contact211-rank32"]
+ bevy-app = [
+     "dep:accesskit",
+     "dep:bevy",
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/contact211_parity.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/contact211_parity.rs
+--- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/contact211_parity.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/contact211_parity.rs
+@@ -20,7 +20,23 @@
+ 
+ #[derive(Debug, Copy, Clone, PartialEq, Eq, Deserialize, Serialize)]
+ #[serde(rename_all = "snake_case")]
+-enum Arm { StockReference, PresampleWitness }
++enum Arm {
++    StockReference, PresampleWitness,
++    #[cfg(feature = "contact211-rank32")]
++    Rank32Edit,
++}
++
++impl Arm {
++    fn reads_frozen_stock_reference(self) -> bool { self != Self::StockReference }
++
++    #[cfg(feature = "contact211-rank32")]
++    fn is_rank32_edit(self) -> bool { self == Self::Rank32Edit }
++}
++
++#[cfg(feature = "contact211-rank32")]
++const RANK32_PACKET: &str = "contact211-rank32.weights.v1.json";
++#[cfg(feature = "contact211-rank32")]
++const RANK32_PIN: &str = "488d8e0e3d551aae6d71657277d6698ee5fefbe64ea11bcae7f51cc92aa34d9c";
+ 
+ #[derive(Deserialize)]
+ #[serde(deny_unknown_fields)]
+@@ -46,6 +62,9 @@
+     max_decisions: u64,
+     max_world_ticks: u64,
+     prior_stock_reference_sha256: Option<String>,
++    #[cfg(feature = "contact211-rank32")]
++    #[serde(default)]
++    rank32_weights_sha256: Option<String>,
+ }
+ 
+ #[derive(Deserialize)]
+@@ -61,6 +80,9 @@
+     max_decisions: u64,
+     max_world_ticks: u64,
+     live_selection_edit: bool,
++    #[cfg(feature = "contact211-rank32")]
++    #[serde(default)]
++    rank32_weights_sha256: Option<String>,
+ }
+ 
+ #[derive(Debug, Clone, Serialize, Deserialize)]
+@@ -90,6 +112,9 @@
+     frozen_stock_reference_sha256: Option<String>,
+     #[serde(skip)]
+     reference: Option<StockReference>,
++    #[cfg(feature = "contact211-rank32")]
++    #[serde(skip)]
++    rank32: Option<[u32; 32]>,
+     expires_unix_seconds: u64,
+ }
+ 
+@@ -140,22 +165,62 @@
+         return Err("Contact211 external operator grant digest differs".into());
+     }
+     let grant: OperatorGrant = serde_json::from_slice(&raw_grant)?;
++    #[cfg(feature = "contact211-rank32")]
++    let authorized_edit = a.arm.is_rank32_edit();
++    #[cfg(not(feature = "contact211-rank32"))]
++    let authorized_edit = false;
+     if grant.schema != "qualia.saved_life.contact211_f0_operator_grant.v1" || grant.scope != SCOPE
+         || grant.arm != a.arm || grant.current_sha256 != a.current_sha256
+         || grant.evaluator_sha256 != a.evaluator_sha256
+         || grant.language_manifest_sha256 != a.language_manifest_sha256
+         || grant.prior_stock_reference_sha256 != a.prior_stock_reference_sha256
+-        || grant.max_decisions != 1 || grant.max_world_ticks != 1 || grant.live_selection_edit
++        || grant.max_decisions != 1 || grant.max_world_ticks != 1 || grant.live_selection_edit != authorized_edit
+     {
+         return Err("Contact211 operator grant does not bind this observer-only arm".into());
+     }
++    #[cfg(feature = "contact211-rank32")]
++    let rank32 = if a.arm.is_rank32_edit() {
++        if a.rank32_weights_sha256.as_deref() != Some(RANK32_PIN)
++            || grant.rank32_weights_sha256 != a.rank32_weights_sha256
++        {
++            return Err("Contact211 rank32 requires separately admitted exact weights".into());
++        }
++        let raw = read_local(root, RANK32_PACKET)?;
++        if digest(&raw) != RANK32_PIN {
++            return Err("Contact211 rank32 immutable packet mismatch".into());
++        }
++        #[derive(Deserialize)]
++        struct Frozen {
++            schema: String, source_current_sha256: String, train_free: bool,
++            prototype_f32_bits_3x8: [[u32; 8]; 3],
++            candidate_actual_f9_14_f32_bits: [u32; 6],
++            bounded_gain_and_ambiguity_f32_bits: [u32; 2],
++        }
++        let p: Frozen = serde_json::from_slice(&raw)?;
++        if p.schema != "qualia.experimental.contact_lexical_rank1.weights.v1"
++            || p.source_current_sha256 != a.current_sha256 || !p.train_free {
++            return Err("Contact211 rank32 wrong exact experimental lineage".into());
++        }
++        let mut words = [0_u32; 32];
++        for (j, k) in p.prototype_f32_bits_3x8.iter().enumerate() {
++            words[j * 8..(j + 1) * 8].copy_from_slice(k);
++        }
++        words[24..30].copy_from_slice(&p.candidate_actual_f9_14_f32_bits);
++        words[30..32].copy_from_slice(&p.bounded_gain_and_ambiguity_f32_bits);
++        Some(words)
++    } else {
++        if a.rank32_weights_sha256.is_some() || grant.rank32_weights_sha256.is_some() || root.join(RANK32_PACKET).exists() {
++            return Err("Contact211 stock/observer arms forbid rank32 activation".into());
++        }
++        None
++    };
+     let nested = read_local(root, CELL)?;
+     if digest(&nested) != x.language_manifest_sha256 {
+         return Err("Contact211 nested native cue cell changed".into());
+     }
+     let reference = match (a.arm, &a.prior_stock_reference_sha256) {
+         (Arm::StockReference, None) => None,
+-        (Arm::PresampleWitness, Some(xref)) if exact(xref) => {
++        (arm, Some(xref)) if arm.reads_frozen_stock_reference() && exact(xref) => {
+             let rb = read_local(root, REFERENCE)?;
+             if digest(&rb) != *xref { return Err("Contact211 prior reference hash mismatch".into()); }
+             let r: StockReference = serde_json::from_slice(&rb)?;
+@@ -180,10 +245,20 @@
+         admission_sha256: x.admission_sha256, current_sha256: a.current_sha256,
+         evaluator_sha256: a.evaluator_sha256, frozen_stock_reference_sha256: a.prior_stock_reference_sha256,
+         reference, expires_unix_seconds: a.expires_unix_seconds,
++        #[cfg(feature = "contact211-rank32")]
++        rank32,
+     }, nested))
+ }
+ 
+ impl Scope {
++    pub(super) fn rank32_enabled(&self) -> bool {
++        #[cfg(feature = "contact211-rank32")]
++        { self.rank32.is_some() }
++        #[cfg(not(feature = "contact211-rank32"))]
++        { false }
++    }
++
++
+     pub(super) fn binds_source_and_deadline(&self, current: &str, deadline: u64) -> bool {
+         current == self.current_sha256 && deadline <= self.expires_unix_seconds
+     }
+@@ -195,9 +270,15 @@
+             if prior.owner != owner.raw() || prior.tick != tick.raw() {
+                 return Err("Contact211 prior frozen owner/tick differs".into());
+             }
+-            runtime.request_contact211_witness_strict(Contact211WitnessRequest {
++            let request = Contact211WitnessRequest {
+                 organism: owner, decision_tick: tick, expected_frame: prior.frame, expected_world: prior.world,
+-            })?;
++            };
++            #[cfg(feature = "contact211-rank32")]
++            if let Some(weights) = self.rank32 {
++                runtime.request_contact211_rank32_strict(request, weights)?;
++                return Ok(());
++            }
++            runtime.request_contact211_witness_strict(request)?;
+         } else {
+             runtime.request_contact211_stock_reference(owner, tick)?;
+         }
+@@ -207,7 +288,7 @@
+     pub(super) fn collect(&self, runtime: &mut GpuLiveBrainRuntime, step: &crate::gpu_live_runtime::FoundationTrainingStep) -> Result<Value> {
+         let (world, proof) = match self.arm {
+             Arm::StockReference => (runtime.take_contact211_stock_reference().ok_or("Contact211 missing actual stock predispatch World/frame")?, None),
+-            Arm::PresampleWitness => {
++            _ => {
+                 let capture = runtime.take_contact211_witness().ok_or("Contact211 witness not independently admitted at current cut")?;
+                 (capture.world, Some(capture.presample))
+             }
+@@ -247,7 +328,11 @@
+                 "forces_hand":r.representative_can_force_hand, "f9_14_bits":r.observed_f9_14_bits
+             })).collect::<Vec<_>>(),
+         }));
+-        Ok(json!({"scope":SCOPE, "arm":self.arm, "observer_only":true, "world":observed_world,
++        #[cfg(feature = "contact211-rank32")]
++        let requested_edit = self.rank32.is_some();
++        #[cfg(not(feature = "contact211-rank32"))]
++        let requested_edit = false;
++        let receipt = json!({"scope":SCOPE, "arm":self.arm, "observer_only":!requested_edit, "world":observed_world,
+                   "actual_pre_sampler_gpu":gpu, "unchanged_signed_decision": {
+                     "all_stock_logit_u32_bits":step.behavior.logits.iter().map(|f|f.to_bits()).collect::<Vec<_>>(),
+                     "all_stock_decoder_input_u32_bits":step.behavior.decoder_inputs.iter().map(|f|f.to_bits()).collect::<Vec<_>>(),
+@@ -256,7 +341,17 @@
+                     "representative_index":step.behavior.representative_index, "dispatch_generation":step.behavior.dispatch_generation,
+                     "weight_generation":step.behavior.active_weight_generation, "slot":step.after_inference.handle.slot(),
+                     "slot_generation":step.after_inference.handle.generation(), "sampling":step.behavior.sampling,
+-                  }, "bonus_enabled":false, "official_score_eligible":false}))
++                  }, "bonus_enabled":requested_edit, "official_score_eligible":false});
++        #[cfg(feature = "contact211-rank32")]
++        if requested_edit {
++            let mut receipt = receipt;
++            receipt["rank32_weights_sha256"] = json!(RANK32_PIN);
++            receipt["readback_phase"] = json!("after_optional_rank32_before_existing_sampler");
++            // Whether a delta was actually applied must be corroborated against
++            // authenticated equal-start stock words, not inferred from admission.
++            return Ok(receipt);
++        }
++        Ok(receipt)
+     }
+ 
+     /// Emit a small seed only after complete native stock run integrity. It is
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
+--- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
+@@ -418,7 +418,11 @@
+         p.identity.semantic_settings_sha256 = digest(&serde_json::to_vec(&(
+             "contact211-f0-one-stock-signed-cut", &p.identity.semantic_settings_sha256,
+         ))?);
+-        p.identity.intervention = "contact211_f0_observer_only";
++        p.identity.intervention = if observer.rank32_enabled() {
++            "contact211_rank32_research_edit"
++        } else {
++            "contact211_f0_observer_only"
++        };
+         p.identity.contact211_parity = Some(observer);
+         admitted_paths(admission_root, source, output, manifest_path)?;
+         return evaluate_saved_life_retention_inner(source, output, p.request, p.scent, Some(p.identity));
+diff --git a/crates/alife_game_app/src/gpu_live_runtime.rs b/crates/alife_game_app/src/gpu_live_runtime.rs
+--- a/crates/alife_game_app/src/gpu_live_runtime.rs
++++ b/crates/alife_game_app/src/gpu_live_runtime.rs
+@@ -3788,6 +3788,8 @@
+     contact211_strict_observer: bool,
+     #[cfg(feature = "contact211-witness")]
+     contact211_reference_only: bool,
++    #[cfg(feature = "contact211-rank32")]
++    contact211_rank32_weights: Option<[u32; 32]>,
+     #[cfg(feature = "contact211-witness")]
+     contact211_completed: Option<contact211_f0_witness::Contact211Observation>,
+     // Retained in ordinary gameplay saves without enabling the training sampler.
+@@ -6110,6 +6112,8 @@
+             contact211_strict_observer: false,
+             #[cfg(feature = "contact211-witness")]
+             contact211_reference_only: false,
++            #[cfg(feature = "contact211-rank32")]
++            contact211_rank32_weights: None,
+             #[cfg(feature = "contact211-witness")]
+             contact211_completed: None,
+             training_sampling_resume: BTreeMap::new(),
+diff --git a/crates/alife_game_app/src/gpu_live_runtime/contact211_f0_witness.rs b/crates/alife_game_app/src/gpu_live_runtime/contact211_f0_witness.rs
+--- a/crates/alife_game_app/src/gpu_live_runtime/contact211_f0_witness.rs
++++ b/crates/alife_game_app/src/gpu_live_runtime/contact211_f0_witness.rs
+@@ -48,6 +48,8 @@
+             return Err(ScaffoldContractError::InvalidDecisionEvidence);
+         }
+         self.contact211_request = Some(request);
++        #[cfg(feature = "contact211-rank32")]
++        { self.contact211_rank32_weights = None; }
+         self.contact211_strict_observer = false;
+         self.contact211_reference_only = false;
+         self.contact211_captured = None;
+@@ -84,6 +86,60 @@
+         self.request_contact211_witness(request)?;
+         self.contact211_strict_observer = true;
+         Ok(())
++    }
++
++    #[cfg(feature = "contact211-rank32")]
++    pub(crate) fn request_contact211_rank32_strict(
++        &mut self, request: Contact211WitnessRequest, weights: [u32; 32],
++    ) -> Result<(), ScaffoldContractError> {
++        self.request_contact211_witness_strict(request)?;
++        self.contact211_rank32_weights = Some(weights);
++        Ok(())
++    }
++
++    #[cfg(feature = "contact211-rank32")]
++    fn contact211_rank32_input(
++        &self, frame: &PerceptionFrame, world: &Contact211WorldWitness, weights: [u32; 32],
++    ) -> Option<alife_gpu_backend::training_rollout::Contact211Rank32Input> {
++        use alife_core::UtteranceSourceKind;
++        use alife_gpu_backend::training_rollout::Contact211Rank32Input;
++        let context = &frame.sensory().language_context;
++        let (Some(a),Some(b))=(context.heard_tokens[0],context.heard_tokens[1]) else { return None; };
++        if context.heard_tokens[2..].iter().any(Option::is_some) { return None; }
++        let audible = self.world.audible_utterances();
++        let [utterance] = audible.as_slice() else { return None; };
++        // Complete current World utterance, not a guessed or post-selection answer.
++        // Code words become the existing eight signed rails; no policy branch sees an ID.
++        if !world.hand_actually_empty || frame.frame_digest() != world.frame_digest
++            || context.teacher_channel_marker.is_some()
++            || a.sequence_position != 0 || b.sequence_position != 1
++            || utterance.tokens.len() != 2
++            || utterance.source_kind != UtteranceSourceKind::Player
++            || utterance.addressee != Some(frame.organism_id())
++            || utterance.teacher_channel.is_some() || utterance.speaker_id.is_some()
++            || frame.tick() < utterance.emitted_tick || frame.tick() > utterance.expires_after_tick
++        {
++            return None;
++        }
++        for (j, word) in [a,b].iter().enumerate() {
++            if word.utterance_id != utterance.utterance_id || word.source_kind != utterance.source_kind
++                || word.speaker_id != utterance.speaker_id || word.addressee != utterance.addressee
++                || word.teacher_channel.is_some() || word.source_position != utterance.source_position
++                || word.token_id != u32::from(utterance.tokens[j].raw())
++                || !(1..=255).contains(&word.token_id)
++                || !word.confidence.raw().is_finite() || !(0.0 < word.confidence.raw() && word.confidence.raw() <= 1.0)
++            {
++                return None;
++            }
++        }
++        let grip = frame.sensory().channels.tactile_contact[2];
++        if !(0.0..1.0).contains(&grip) { return None; }
++        let actual_rails = frame.sensory().language_prior_neural_lanes();
++        let rails = std::array::from_fn(|i| actual_rails[i].to_bits());
++        let roster = world.rows.iter().map(|r| (
++            r.candidate_index, r.observed_slot, r.appearance_f9_14_bits, r.free_legal_before_motion,
++        )).collect::<Vec<_>>();
++        Contact211Rank32Input::try_bind(frame, rails, grip, weights, &roster).ok()
+     }
+ 
+     pub(crate) fn request_contact211_stock_reference(
+@@ -106,6 +162,8 @@
+         });
+         self.contact211_strict_observer = true;
+         self.contact211_reference_only = true;
++        #[cfg(feature = "contact211-rank32")]
++        { self.contact211_rank32_weights = None; }
+         self.contact211_captured = None;
+         self.contact211_pending = None;
+         self.contact211_completed = None;
+@@ -229,6 +287,17 @@
+                 (world, ticks, proof)
+             }
+             Contact211SignedSubmission::Strict(world, gate) => {
++                #[cfg(feature = "contact211-rank32")]
++                let (ticks, proof) = {
++                    let weights = self.contact211_rank32_weights.take();
++                    let input = weights.and_then(|weights| self.contact211_rank32_input(&prepared[0].frame, &world, weights));
++                    if let Some(input) = input.as_ref() {
++                        self.backend.tick_memory_batch_training_contact211_rank32(batch, configs, gate, input)?
++                    } else {
++                        self.backend.tick_memory_batch_training_contact211_witness_strict(batch, configs, gate)?
++                    }
++                };
++                #[cfg(not(feature = "contact211-rank32"))]
+                 let (ticks, proof) = self.backend.tick_memory_batch_training_contact211_witness_strict(batch, configs, gate)?;
+                 self.training_sampling.as_mut().expect("training enabled").counter = next_counter;
+                 (world, ticks, proof)
+@@ -259,6 +328,8 @@
+         });
+         self.contact211_strict_observer = false;
+         self.contact211_reference_only = false;
++        #[cfg(feature = "contact211-rank32")]
++        { self.contact211_rank32_weights = None; }
+     }
+ 
+     pub(super) fn reset_contact211_before_staged_tick(&mut self) -> Result<(), ScaffoldContractError> {
+diff --git a/crates/alife_gpu_backend/Cargo.toml b/crates/alife_gpu_backend/Cargo.toml
+--- a/crates/alife_gpu_backend/Cargo.toml
++++ b/crates/alife_gpu_backend/Cargo.toml
+@@ -23,3 +23,4 @@
+ gpu-tests = ["test-support"]
+ training-rollout = []
+ contact211-witness = ["training-rollout"]
++contact211-rank32 = ["contact211-witness"]
+diff --git a/crates/alife_gpu_backend/shaders/contact211_rank32.wgsl b/crates/alife_gpu_backend/shaders/contact211_rank32.wgsl
+new file mode 100644
+--- /dev/null
++++ b/crates/alife_gpu_backend/shaders/contact211_rank32.wgsl
+@@ -0,0 +1,105 @@
++// Appended only to the detached, signed decode module. Production shaders/sampler untouched.
++const CONTACT211_RANK32_MAGIC:u32 = 0x51333243u;
++const CONTACT211_RANK32_PAYLOAD_WORDS:u32 = 252u;
++
++fn contact211_rank32_unit(x:f32) -> bool {
++  return finite_decode(x) && x >= 0.0 && x <= 1.0;
++}
++
++fn contact211_rank32_pattern(port:u32, rails:u32, weights:u32) -> f32 {
++  var result=1.0;
++  for (var j=0u; j<8u; j++) {
++    let x=bitcast<f32>(frame_payload_words[port + rails + j]);
++    let w=bitcast<f32>(frame_payload_words[port + weights + j]);
++    if (!finite_decode(x) || x == 0.0 || abs(x)>1.0 || abs(w)!=1.0) { return 0.0; }
++    result=min(result,max(0.0,x*w));
++  }
++  return result;
++}
++
++@compute @workgroup_size(1)
++fn apply_contact211_rank32(@builtin(global_invocation_id) gid:vec3<u32>) {
++  if (any(gid != vec3<u32>(0u))) { return; }
++  let header=load_perception_header(0u);
++  if (!activity_contract_prevalidated(header) || (header.reserved & 0x80000000u)==0u
++      || header.candidate_count==0u || header.candidate_count>32u) { return; }
++  let sampling=header.reserved & 0x7fffffffu;
++  let port=sampling+11u;
++  if (!span_within(port, CONTACT211_RANK32_PAYLOAD_WORDS, arrayLength(&frame_payload_words))
++      || frame_payload_words[sampling+3u]!=0u
++      || frame_payload_words[port]!=CONTACT211_RANK32_MAGIC || frame_payload_words[port+1u]!=1u
++      || frame_payload_words[port+2u]!=header.candidate_count
++      || frame_payload_words[port+5u]!=header.tick_lo || frame_payload_words[port+6u]!=header.tick_hi
++      || frame_payload_words[port+7u]!=header.slot || frame_payload_words[port+8u]!=header.slot_generation
++      || frame_payload_words[port+9u]!=header.dispatch_generation_lo
++      || frame_payload_words[port+10u]!=header.dispatch_generation_hi) { return; }
++  let roster=frame_payload_words[port+3u];
++  let legal=frame_payload_words[port+4u];
++  let grip=bitcast<f32>(frame_payload_words[port+11u]);
++  let gain=bitcast<f32>(frame_payload_words[port+58u]);
++  let band=bitcast<f32>(frame_payload_words[port+59u]);
++  if (roster==0u || (legal & ~roster)!=0u || !contact211_rank32_unit(grip) || grip==1.0
++      || !finite_decode(gain) || gain<=0.0 || gain>32.0
++      || !finite_decode(band) || band<=0.0 || band>=1.0) { return; }
++
++  let verb=contact211_rank32_pattern(port,12u,28u);
++  let noun_minus=contact211_rank32_pattern(port,20u,36u);
++  let noun_plus=contact211_rank32_pattern(port,20u,44u);
++  let purpose=min(verb,noun_plus)-min(verb,noun_minus);
++  if (purpose==0.0) { return; }
++
++  let brain=brain_slots[header.brain_slot_index];
++  var seen=0u;
++  var count=0u;
++  var indexes:array<u32,2>;
++  var axes:array<f32,2>;
++  var stock:array<f32,2>;
++  for (var i=0u; i<header.candidate_count; i++) {
++    let offer=load_candidate(header.candidate_offset+i*8u);
++    let bit=1u<<i;
++    // Action kind identifies a stock logistical port, never a noun or target.
++    if (offer.action_id!=211u) {
++      if ((roster & bit)!=0u) { return; }
++      continue;
++    }
++    if ((roster & bit)==0u || offer.candidate_index!=i || offer.family!=5u
++        || offer.observation_slot_or_max>=16u || factorized_motor_slot(offer.kind)!=2u
++        || !span_within(offer.feature_offset, 15u, arrayLength(&frame_payload_words))) { return; }
++    seen=seen|bit;
++    var axis=0.0;
++    for (var j=0u; j<6u; j++) {
++      let feature=frame_payload_words[offer.feature_offset+9u+j];
++      if (feature!=frame_payload_words[port+60u+i*6u+j]) { return; }
++      let x=bitcast<f32>(feature);
++      let k=bitcast<f32>(frame_payload_words[port+52u+j]);
++      if (!contact211_rank32_unit(x) || !finite_decode(k) || abs(k)>1.0) { return; }
++      axis=axis+x*k;
++    }
++    // Same stock projection predicates used by the existing native signed
++    // sampler, before changing any logit. A representative can force Hand when
++    // the independent Hand channel is disabled.
++    let projected=(training_candidate_allowed(header,brain,i,0u)
++            && factorized_motor_slot(offer.kind)==2u)
++        || training_candidate_allowed(header,brain,i,3u);
++    if ((legal & bit)!=0u && projected) {
++      // Only this initial paired scope. A third legal projected prop, including
++      // an appearance alias, forces full abstention rather than rank tie break.
++      if (count>=2u) { return; }
++      indexes[count]=i;
++      axes[count]=axis;
++      stock[count]=load_state_f32(brain.candidate_logit_offset+i);
++      count++;
++    }
++  }
++  if (seen!=roster || count!=2u) { return; }
++  let direction=sign(purpose);
++  let a=direction*axes[0];
++  let b=direction*axes[1];
++  if (max(a,b)<band || abs(a-b)<band) { return; }
++  let strength=gain*purpose*(1.0-grip);
++  let new_a=stock[0]+strength*axes[0];
++  let new_b=stock[1]+strength*axes[1];
++  if (!finite_decode(new_a) || !finite_decode(new_b)) { return; }
++  store_state_f32(brain.candidate_logit_offset+indexes[0],new_a);
++  store_state_f32(brain.candidate_logit_offset+indexes[1],new_b);
++}
+diff --git a/crates/alife_gpu_backend/src/closed_loop_pipeline.rs b/crates/alife_gpu_backend/src/closed_loop_pipeline.rs
+--- a/crates/alife_gpu_backend/src/closed_loop_pipeline.rs
++++ b/crates/alife_gpu_backend/src/closed_loop_pipeline.rs
+@@ -652,9 +652,35 @@
+     memory_context_bindings: Vec<Option<GpuMemoryContextDispatchReceipt>>,
+     object_input_counts: Vec<u32>,
+     visible_self_grip_v1: bool,
++    #[cfg(feature = "contact211-rank32")]
++    contact211_rank32: bool,
+ }
+ 
+ impl GpuActiveBatchUpload {
++    #[cfg(feature = "contact211-rank32")]
++    pub(crate) fn enable_contact211_rank32(
++        &mut self, input: &crate::training_rollout::Contact211Rank32Input, capacity: usize,
++    ) -> Result<(), GpuClosedLoopError> {
++        let [h] = self.headers.as_slice() else { return Err(GpuClosedLoopError::MalformedUpload); };
++        let training = (h.reserved & 0x7fff_ffff) as usize;
++        let start = self.frame_payload_words.len();
++        let end = start.checked_add(input.words.len()).ok_or(GpuClosedLoopError::CapacityExceeded)?;
++        if self.contact211_rank32 || h.reserved & 0x8000_0000 == 0
++            || start != training + 11 || self.frame_payload_words[training+3] != 0
++            || h.candidate_count != input.words[2]
++            || (u64::from(h.tick_lo) | (u64::from(h.tick_hi)<<32)) != input.decision_tick.raw()
++            || end > capacity || end >= 0x8000_0000
++        {
++            return Err(GpuClosedLoopError::MalformedUpload);
++        }
++        let mut words = input.words;
++        words[5..11].copy_from_slice(&[h.tick_lo,h.tick_hi,h.slot,h.slot_generation,
++            h.dispatch_generation_lo,h.dispatch_generation_hi]);
++        self.frame_payload_words.extend(words);
++        self.contact211_rank32 = true;
++        Ok(())
++    }
++
+     #[cfg(feature = "training-rollout")]
+     pub(crate) fn enable_training_sampling(
+         &mut self,
+@@ -1154,6 +1180,8 @@
+             selector_diagnostic_family_synapse_counts,
+             memory_context_bindings,
+             visible_self_grip_v1,
++            #[cfg(feature = "contact211-rank32")]
++            contact211_rank32: false,
+             object_input_counts: entries
+                 .iter()
+                 .map(|entry| {
+@@ -1535,6 +1563,8 @@
+     visible_self_grip_pipeline: std::sync::OnceLock<wgpu::ComputePipeline>,
+     visible_self_grip_device: wgpu::Device,
+     visible_self_grip_layout: wgpu::PipelineLayout,
++    #[cfg(feature = "contact211-rank32")]
++    contact211_rank32_pipeline: std::sync::OnceLock<wgpu::ComputePipeline>,
+     select_pipeline: wgpu::ComputePipeline,
+     speech_decode_pipeline: wgpu::ComputePipeline,
+     prevalidate_eligibility_pipeline: wgpu::ComputePipeline,
+@@ -1880,6 +1910,8 @@
+             visible_self_grip_pipeline: std::sync::OnceLock::new(),
+             visible_self_grip_device: device.clone(),
+             visible_self_grip_layout: pipeline_layout,
++            #[cfg(feature = "contact211-rank32")]
++            contact211_rank32_pipeline: std::sync::OnceLock::new(),
+             select_pipeline,
+             speech_decode_pipeline,
+             prevalidate_eligibility_pipeline,
+@@ -3282,8 +3314,16 @@
+                         });
+                         self.record_memory_context_only(&mut pass, batch)?;
+                     }
+-                    // Actual commands order this immutable copy before the existing
+-                    // signed draw. No new GPU kernel, submission, sampling or mask.
++                    #[cfg(feature = "contact211-rank32")]
++                    if batch.contact211_rank32 {
++                        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
++                            label: Some("closed-loop-detached-contact211-rank32"),
++                            timestamp_writes: None,
++                        });
++                        self.record_contact211_rank32(&mut pass)?;
++                    }
++                    // Preserve the true logits immediately before the existing draw:
++                    // on the edit scope these include the optional rank32 update.
+                     self.record_selector_logit_copy(encoder, buffers, batch, readback, true)?;
+                     {
+                         let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+@@ -4084,6 +4124,31 @@
+         pass.set_pipeline(pipeline);
+         pass.set_bind_group(0, &self.bind_group, &[]);
+         pass.dispatch_workgroups(1, rows, 1);
++        Ok(())
++    }
++
++    #[cfg(feature = "contact211-rank32")]
++    fn record_contact211_rank32<'pass>(
++        &'pass self, pass: &mut wgpu::ComputePass<'pass>,
++    ) -> Result<(), GpuClosedLoopError> {
++        if self.kernels.contact211_rank32_pipeline.get().is_none() {
++            let mut src = runtime_shader_source(CLOSED_LOOP_DECODE_WGSL).into_owned();
++            src.push_str("\n");
++            src.push_str(include_str!("../shaders/contact211_rank32.wgsl"));
++            validate_production_shader_contract(&src, &["apply_contact211_rank32"])?;
++            let device = &self.kernels.visible_self_grip_device;
++            let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
++                label: Some("closed-loop-detached-contact211-rank32"),
++                source: wgpu::ShaderSource::Wgsl(src.into()),
++            });
++            let pipeline = create_compute_pipeline(device, &self.kernels.visible_self_grip_layout,
++                &shader, "apply_contact211_rank32", &[]);
++            let _ = self.kernels.contact211_rank32_pipeline.set(pipeline);
++        }
++        let pipeline = self.kernels.contact211_rank32_pipeline.get().ok_or(GpuClosedLoopError::LayoutMismatch)?;
++        pass.set_pipeline(pipeline);
++        pass.set_bind_group(0, &self.bind_group, &[]);
++        pass.dispatch_workgroups(1,1,1);
+         Ok(())
+     }
+ 
+@@ -5181,6 +5246,8 @@
+             memory_context_bindings: vec![None],
+             object_input_counts: vec![0],
+             visible_self_grip_v1: false,
++            #[cfg(feature = "contact211-rank32")]
++            contact211_rank32: false,
+             joint_motor_modes: vec![0],
+         };
+ 
+@@ -5325,3 +5392,12 @@
+         assert_eq!(authority.active_sides.get(&(8, 11)), Some(&1));
+     }
+ }
++
++#[cfg(all(test, feature = "contact211-rank32"))]
++#[test]
++fn contact211_rank32_signed_shader_validates_without_device() {
++    let mut full = runtime_shader_source(CLOSED_LOOP_DECODE_WGSL).into_owned();
++    full.push_str("\n");
++    full.push_str(include_str!("../shaders/contact211_rank32.wgsl"));
++    validate_production_shader_contract(&full, &["apply_contact211_rank32"]).unwrap();
++}
+diff --git a/crates/alife_gpu_backend/src/closed_loop_runtime.rs b/crates/alife_gpu_backend/src/closed_loop_runtime.rs
+--- a/crates/alife_gpu_backend/src/closed_loop_runtime.rs
++++ b/crates/alife_gpu_backend/src/closed_loop_runtime.rs
+@@ -4906,6 +4906,8 @@
+             &inputs, None, None, Some(sampling),
+             #[cfg(feature = "contact211-witness")]
+             false,
++            #[cfg(feature = "contact211-rank32")]
++            None,
+         )
+     }
+ 
+@@ -4924,7 +4926,11 @@
+         if self.require_contact211_presample(batch, sampling, &gate).is_err() {
+             return self.tick_memory_batch_training(batch, sampling).map(|ticks| (ticks, None));
+         }
+-        self.dispatch_contact211_presample(batch, sampling, gate)
++        self.dispatch_contact211_presample(
++            batch, sampling, gate,
++            #[cfg(feature = "contact211-rank32")]
++            None,
++        )
+     }
+ 
+     /// The isolated schema-7 observer is never allowed to fall back to a stock
+@@ -4937,7 +4943,27 @@
+         gate: crate::training_rollout::Contact211PresampleAdmission,
+     ) -> Result<(Vec<GpuClosedLoopTick>, Option<crate::training_rollout::Contact211PresampleReport>), ScaffoldContractError> {
+         self.require_contact211_presample(batch, sampling, &gate)?;
+-        self.dispatch_contact211_presample(batch, sampling, gate)
++        self.dispatch_contact211_presample(
++            batch, sampling, gate,
++            #[cfg(feature = "contact211-rank32")]
++            None,
++        )
++    }
++
++    #[cfg(feature = "contact211-rank32")]
++    pub fn tick_memory_batch_training_contact211_rank32(
++        &mut self, batch: &GpuClosedLoopMemoryBatchInput<'_>,
++        sampling: &[crate::GpuTrainingSamplingConfig],
++        gate: crate::training_rollout::Contact211PresampleAdmission,
++        rank32: &crate::training_rollout::Contact211Rank32Input,
++    ) -> Result<(Vec<GpuClosedLoopTick>, Option<crate::training_rollout::Contact211PresampleReport>), ScaffoldContractError> {
++        self.require_contact211_presample(batch, sampling, &gate)?;
++        if rank32.frame_digest != gate.frame_digest || rank32.decision_tick != gate.tick
++            || rank32.organism != gate.handle.organism_id
++        {
++            return Err(ScaffoldContractError::InvalidDecisionEvidence);
++        }
++        self.dispatch_contact211_presample(batch, sampling, gate, Some(rank32))
+     }
+ 
+     #[cfg(feature = "contact211-witness")]
+@@ -4971,6 +4997,8 @@
+         batch: &GpuClosedLoopMemoryBatchInput<'_>,
+         sampling: &[crate::GpuTrainingSamplingConfig],
+         gate: crate::training_rollout::Contact211PresampleAdmission,
++        #[cfg(feature = "contact211-rank32")]
++        rank32: Option<&crate::training_rollout::Contact211Rank32Input>,
+     ) -> Result<(Vec<GpuClosedLoopTick>, Option<crate::training_rollout::Contact211PresampleReport>), ScaffoldContractError> {
+         let [member] = batch.members.as_slice() else {
+             return Err(ScaffoldContractError::InvalidDecisionEvidence);
+@@ -4982,7 +5010,11 @@
+             frame: member.frame,
+             memory_upload: Some(member.memory_upload),
+         }];
+-        let ticks = self.tick_inputs_with_selector_diagnostic_capture(&inputs, None, None, Some(sampling), true)?;
++        let ticks = self.tick_inputs_with_selector_diagnostic_capture(
++            &inputs, None, None, Some(sampling), true,
++            #[cfg(feature = "contact211-rank32")]
++            rank32,
++        )?;
+         // An observer validation miss cannot undo or retry an already completed native tick.
+         let proof = ticks.first().and_then(|tick|
+             crate::training_rollout::contact211_presample_support(member.frame, tick, gate).ok());
+@@ -5017,6 +5049,8 @@
+             None,
+             #[cfg(feature = "contact211-witness")]
+             false,
++            #[cfg(feature = "contact211-rank32")]
++            None,
+         ) {
+             Ok(ticks) => Ok(ticks),
+             Err(error) => match capture.enable_error {
+@@ -5058,6 +5092,8 @@
+             None,
+             #[cfg(feature = "contact211-witness")]
+             false,
++            #[cfg(feature = "contact211-rank32")]
++            None,
+         )
+     }
+ 
+diff --git a/crates/alife_gpu_backend/src/closed_loop_runtime/tick.rs b/crates/alife_gpu_backend/src/closed_loop_runtime/tick.rs
+--- a/crates/alife_gpu_backend/src/closed_loop_runtime/tick.rs
++++ b/crates/alife_gpu_backend/src/closed_loop_runtime/tick.rs
+@@ -10,8 +10,13 @@
+         mut selector_diagnostic_error_capture: Option<&mut SelectorDiagnosticErrorCapture>,
+         #[cfg(feature = "training-rollout")] sampling: Option<&[crate::GpuTrainingSamplingConfig]>,
+         #[cfg(feature = "contact211-witness")] capture_contact211_presample: bool,
++        #[cfg(feature = "contact211-rank32")] contact211_rank32: Option<&crate::training_rollout::Contact211Rank32Input>,
+     ) -> Result<Vec<GpuClosedLoopTick>, ScaffoldContractError> {
+         let capture_selector_diagnostics = selector_diagnostic_candidate_indices.is_some();
++        #[cfg(feature = "contact211-rank32")]
++        if contact211_rank32.is_some() && (!capture_contact211_presample || sampling.is_none() || batch.len() != 1) {
++            return Err(ScaffoldContractError::InvalidDecisionEvidence);
++        }
+         #[cfg(feature = "training-rollout")]
+         if let Some(configs) = sampling {
+             if selector_diagnostic_candidate_indices.is_some()
+@@ -333,7 +338,13 @@
+                             .iter()
+                             .map(|i| configs[*i])
+                             .collect::<Vec<_>>();
+-                        if let Err(error) = active.enable_training_sampling(&ordered, capacity) {
++                        let enabled = active.enable_training_sampling(&ordered, capacity);
++                        #[cfg(feature = "contact211-rank32")]
++                        let enabled = enabled.and_then(|()| match contact211_rank32 {
++                            Some(input) => active.enable_contact211_rank32(input, capacity),
++                            None => Ok(()),
++                        });
++                        if let Err(error) = enabled {
+                             let _ = self
+                                 .class_buckets
+                                 .get_mut(&class_id)
+diff --git a/crates/alife_gpu_backend/src/training_rollout.rs b/crates/alife_gpu_backend/src/training_rollout.rs
+--- a/crates/alife_gpu_backend/src/training_rollout.rs
++++ b/crates/alife_gpu_backend/src/training_rollout.rs
+@@ -423,6 +423,78 @@
+         weight_generation: receipt.active_weight_generation,
+         rows: out,
+     })
++}
++
++// A detached signed one-cut payload; never serialized into the incumbent
++// checkpoint or constructed by a normal game dispatch.
++#[cfg(feature = "contact211-rank32")]
++pub(crate) const CONTACT211_RANK32_PAYLOAD_WORDS: usize = 252;
++
++#[cfg(feature = "contact211-rank32")]
++pub struct Contact211Rank32Input {
++    pub(crate) words: [u32; CONTACT211_RANK32_PAYLOAD_WORDS],
++    pub(crate) frame_digest: PerceptionFrameDigest,
++    pub(crate) organism: alife_core::OrganismId,
++    pub(crate) decision_tick: alife_core::Tick,
++}
++
++#[cfg(feature = "contact211-rank32")]
++impl Contact211Rank32Input {
++    pub fn try_bind(
++        frame: &PerceptionFrame, rails: [u32; 16], grip: f32, weights: [u32; 32],
++        roster: &[(u16, u16, [u32; 6], bool)],
++    ) -> Result<Self, ScaffoldContractError> {
++        use alife_core::{CandidateActionFamily, CandidateObservationRef};
++        let invalid = ScaffoldContractError::InvalidDecisionEvidence;
++        let count = frame.candidates().len();
++        if count == 0 || count > 32 || roster.is_empty() || roster.len() > 32
++            || !(0.0..1.0).contains(&grip)
++            || rails.iter().any(|b| {
++                let f = f32::from_bits(*b); !f.is_finite() || f == 0.0 || f.abs() > 1.0
++            })
++            || !rails[..8].iter().all(|b| f32::from_bits(*b).abs() == f32::from_bits(rails[0]).abs())
++            || !rails[8..].iter().all(|b| f32::from_bits(*b).abs() == f32::from_bits(rails[8]).abs())
++            || weights[..24].iter().any(|b| f32::from_bits(*b).abs() != 1.0)
++            || weights[24..30].iter().any(|b| {
++                let f=f32::from_bits(*b); !f.is_finite() || f.abs()>1.0
++            })
++            || !(0.0..=32.0).contains(&f32::from_bits(weights[30]))
++            || !(0.0 < f32::from_bits(weights[31]) && f32::from_bits(weights[31]) < 1.0)
++        {
++            return Err(invalid);
++        }
++        let mut words = [0; CONTACT211_RANK32_PAYLOAD_WORDS];
++        words[0] = 0x51333243;
++        words[1] = 1;
++        words[2] = count as u32;
++        words[11] = grip.to_bits();
++        words[12..28].copy_from_slice(&rails);
++        words[28..60].copy_from_slice(&weights);
++        let mut slots = 0_u32;
++        for &(i, slot, features, legal) in roster {
++            let Some(c) = frame.candidates().get(usize::from(i)) else { return Err(invalid); };
++            let i = usize::from(i);
++            let mark = 1_u32 << i;
++            if slot >= 16 || slots & (1_u32 << slot) != 0 || words[3] & mark != 0
++                || c.action_id.raw() != 211 || c.family != CandidateActionFamily::Contact
++                || c.observation != CandidateObservationRef::ObjectSlot(slot)
++                || (0..6).any(|j| c.features.0[9+j].to_bits() != features[j]
++                    || !(0.0..=1.0).contains(&f32::from_bits(features[j])))
++            {
++                return Err(invalid);
++            }
++            slots |= 1_u32 << slot;
++            words[3] |= mark;
++            if legal { words[4] |= mark; }
++            words[60+i*6..66+i*6].copy_from_slice(&features);
++        }
++        if frame.candidates().iter().enumerate().any(|(i,c)| {
++            (c.action_id.raw()==211) != (words[3] & (1_u32<<i) != 0)
++        }) {
++            return Err(invalid);
++        }
++        Ok(Self{ words, frame_digest: frame.frame_digest(), organism: frame.organism_id(), decision_tick: frame.tick() })
++    }
+ }
+ 
+ const GAME_EXPLORATION_HOOK: &str = "fn game_exploration_enabled(header:GpuPerceptionHeader) -> bool {\n  // The feature-composed training shader replaces this single checked hook.\n  return true;\n}";
