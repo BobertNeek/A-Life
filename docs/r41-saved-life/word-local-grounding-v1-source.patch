@@ -1,0 +1,1097 @@
+diff --git a/crates/alife_game_app/Cargo.toml b/crates/alife_game_app/Cargo.toml
+--- a/crates/alife_game_app/Cargo.toml
++++ b/crates/alife_game_app/Cargo.toml
+@@ -87,6 +87,7 @@
+ ] }
+ 
+ [features]
++retained-word-local-grounding-v1 = ["foundation-training", "gpu-tests", "alife_world/word-local-grounding-v1"]
+ default = []
+ contact211-witness = ["foundation-training", "alife_world/contact211-witness", "alife_gpu_backend/contact211-witness"]
+ contact211-rank32 = ["contact211-witness", "retained-language-pilot", "alife_gpu_backend/contact211-rank32"]
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs
+--- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs
+@@ -706,6 +706,8 @@
+         });
+     }
+     receipt["hardware"] = serde_json::to_value(backend.hardware_receipt())?;
++    #[cfg(feature = "retained-word-local-grounding-v1")]
++    let mut word_local_words = Vec::new();
+     let mut runtime = GpuLiveBrainRuntime::restore_foundation_observation(
+         backend,
+         world,
+@@ -717,6 +719,20 @@
+         cycle_sampling_config(world_seed, baseline.handoff.policy_version, 1.0)?,
+     )?;
+     runtime.rebind_durable_checkpoint_boundary(&save_path, &assets, &loaded.save)?;
++    #[cfg(feature = "retained-word-local-grounding-v1")]
++    let word_local_scope = experiment.as_ref().and_then(|e| e.word_local_grounding());
++    #[cfg(feature = "retained-word-local-grounding-v1")]
++    if let Some(mode) = word_local_scope {
++        if !software_simulation || controlled_pressure != Some(0) || request.direct_weights.is_some()
++            || request.cue_free_food_placement || scent_scope.is_some()
++        { return Err("Word-local study requires isolated ordinary software cut and unchanged parent".into()); }
++        let weights = match mode {
++            experiments::WordLocalMode::ObserverOnly => None,
++            experiments::WordLocalMode::SignedEdit { weights } => Some(weights),
++        };
++        runtime.arm_word_local_grounding_v1(id, weights)?;
++    }
++
+     if request.cue_free_food_placement {
+         let (_, setup) = super::continuous_world::prepare_cue_free_food_placement_with_receipt(
+             runtime.world_mut(),
+@@ -969,6 +985,17 @@
+         }
+         let tick_error = tick.err().map(|e| e.to_string());
+         let after_tick = runtime.world().tick();
++        #[cfg(feature = "retained-word-local-grounding-v1")]
++        if word_local_scope.is_some() && tick_error.is_none() && after_tick != before_tick {
++            if let Some((appearance, confidence, closure, proposed_score_delta)) = runtime.word_local_grounding_v1_observation() {
++                word_local_words.push(serde_json::json!({
++                    "decision_tick": before_tick.raw(), "native_appearance": appearance,
++                    "confidence": confidence, "prior_paid_same_track_closure_m": closure,
++                    "before_sampler_proposed_word_delta": proposed_score_delta,
++                }));
++            }
++        }
++
+         let after_pose = runtime
+             .world()
+             .organism_registry()
+@@ -1202,6 +1229,15 @@
+                 }
+                 row
+             };
++            #[cfg(feature = "retained-word-local-grounding-v1")]
++            let row = if word_local_scope.is_some() {
++                let mut row = row;
++                row["word_local_actual_native_score_witness_v1"] =
++                    serde_json::to_value(runtime.word_local_native_score_witness_v1(&step)?)?;
++                row
++            } else {
++                row
++            };
+             let mut bytes = serde_json::to_vec(&row)?;
+             bytes.push(b'\n');
+             rows_bytes = rows_bytes
+@@ -1395,6 +1431,22 @@
+             receipt["rows_sha256"].as_str().ok_or("Contact211 missing row digest")?,
+             experiment.as_ref().ok_or("Contact211 missing scope")?.manifest_sha256(),
+         )?;
++    }
++    #[cfg(feature = "retained-word-local-grounding-v1")]
++    if word_local_scope.is_some() {
++        receipt["word_local_grounding_v1_observations"] = serde_json::json!(word_local_words);
++        receipt["word_local_diagnostic_integrity"] = serde_json::json!(
++            stop == "decision_limit" && rows == request.max_decisions
++                && runtime.world().tick().raw().saturating_sub(source_world_tick) == request.max_world_ticks
++                && software_simulation && error.is_none() && base_unchanged && prior_clear
++                && unchanged && cue_free && endpoint_preserved
++        );
++        receipt["scorecard_eligible"] = serde_json::json!(false);
++        receipt["measurement_valid"] = serde_json::json!(false);
++        receipt["software_simulation_integrity_valid"] = serde_json::json!(false);
++        receipt["coverage_complete"] = serde_json::json!(false);
++        receipt["qualified"] = serde_json::json!(false);
++        receipt["retention_demonstrated"] = serde_json::json!(false);
+     }
+     alife_storage::write(
+         output.join("retention.json"),
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
+--- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
+@@ -30,7 +30,7 @@
+     VisibleSelfGripV1 { edit: DirectWeightEditRequest, words: [u32; 16] },
+ }
+ 
+-#[derive(Debug, Clone, Deserialize)]
++#[derive(Debug, Clone, Deserialize, Serialize)]
+ #[serde(deny_unknown_fields)]
+ struct ManifestV1 {
+     schema: u16,
+@@ -77,6 +77,9 @@
+     visible_self_grip_v1: Option<[u32; 16]>,
+     #[serde(skip_serializing_if = "Option::is_none")]
+     research: Option<super::research_catalog::Identity>,
++    #[cfg(feature = "retained-word-local-grounding-v1")]
++    #[serde(skip_serializing_if = "Option::is_none")]
++    word_local_grounding: Option<WordLocalScope>,
+     #[cfg(feature = "retained-language-pilot")]
+     #[serde(skip_serializing_if = "Option::is_none")]
+     language_pilot: Option<super::language_pilot::Identity>,
+@@ -85,7 +88,29 @@
+     contact211_parity: Option<super::contact211_parity::Scope>,
+ }
+ 
++#[cfg(feature = "retained-word-local-grounding-v1")]
++#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
++#[serde(tag = "mode", rename_all = "snake_case", deny_unknown_fields)]
++pub(super) enum WordLocalMode {
++    ObserverOnly,
++    SignedEdit { weights: crate::gpu_live_runtime::WordLocalWeightsV1 },
++}
++
++#[cfg(feature = "retained-word-local-grounding-v1")]
++#[derive(Serialize)]
++struct WordLocalScope {
++    mode: WordLocalMode,
++    evaluator_sha256: String,
++    grant_sha256: String,
++    unchanged_settings_sha256: String,
++    scorecard_eligible: bool,
++}
++
+ impl ExperimentIdentity {
++    #[cfg(feature = "retained-word-local-grounding-v1")]
++    pub(super) fn word_local_grounding(&self) -> Option<WordLocalMode> {
++        self.word_local_grounding.as_ref().map(|scope| scope.mode)
++    }
+     pub(super) fn card_case(&self) -> Option<&str> {
+         self.card_case.as_deref()
+     }
+@@ -258,6 +283,8 @@
+             intervention,
+             visible_self_grip_v1,
+             research: None,
++            #[cfg(feature = "retained-word-local-grounding-v1")]
++            word_local_grounding: None,
+             #[cfg(feature = "retained-language-pilot")]
+             language_pilot: None,
+             #[cfg(all(feature = "retained-language-pilot", feature = "contact211-witness"))]
+@@ -297,6 +324,8 @@
+         owner: config.owner, source_current_sha256: config.source_current_sha256,
+         scenario: ScenarioV1::ResearchCatalog, card_case: None, intervention: "research_input",
+         visible_self_grip_v1: None, research: Some(research),
++        #[cfg(feature = "retained-word-local-grounding-v1")]
++        word_local_grounding: None,
+         #[cfg(feature = "retained-language-pilot")]
+         language_pilot: None,
+         #[cfg(all(feature = "retained-language-pilot", feature = "contact211-witness"))]
+@@ -338,9 +367,86 @@
+         scenario: ScenarioV1::LanguagePilotV2, card_case: None,
+         intervention: "language_pilot_external_player_only",
+         visible_self_grip_v1: None, research: None, language_pilot: Some(cell),
++        #[cfg(feature = "retained-word-local-grounding-v1")]
++        word_local_grounding: None,
+         #[cfg(all(feature = "retained-language-pilot", feature = "contact211-witness"))]
+         contact211_parity: None,
+     }, request, scent: None })
++}
++
++#[cfg(feature = "retained-word-local-grounding-v1")]
++fn resolve_word_local(root: &Path, bytes: &[u8]) -> Result<ResolvedExperiment> {
++    use std::io::Read;
++    #[derive(Deserialize)]
++    #[serde(deny_unknown_fields)]
++    struct Envelope {
++        schema: u16,
++        settings: ManifestV1,
++        mode: WordLocalMode,
++        operator_grant_sha256: String,
++    }
++    #[derive(Deserialize)]
++    #[serde(deny_unknown_fields)]
++    struct Grant {
++        schema: String,
++        evaluator_sha256: String,
++        source_current_sha256: String,
++        run_id: String,
++        unchanged_settings_sha256: String,
++        mode_sha256: String,
++        scorecard_eligible: bool,
++    }
++    let e: Envelope = serde_json::from_slice(bytes)?;
++    if bytes.len() > MAX_SMALL_CONFIG_BYTES || e.schema != 10
++        || !exact_sha256(&e.operator_grant_sha256)
++        || !matches!(&e.settings.intervention, InterventionV1::Control {})
++        || e.settings.scenario != ScenarioV1::PublishedCardCase
++        || e.settings.max_decisions != 256 || e.settings.max_world_ticks != 256
++    {
++        return Err("unsupported Word-local scope/settings".into());
++    }
++    if let WordLocalMode::SignedEdit { weights } = e.mode {
++        weights.validate()?;
++    }
++    let mode_sha256 = digest(&serde_json::to_vec(&e.mode)?);
++    // Nested byte identity uses canonical serde struct serialization over
++    // the strict stock typed fields; no hidden setup or coordinate vector.
++    let settings = serde_json::to_vec(&e.settings)?;
++    let unchanged_settings_sha256 = digest(&settings);
++    let p = canonical_inside(root, &root.join("word-local-operator-grant.v1.json"))?;
++    let length = fs::metadata(&p)?;
++    if !length.is_file() || length.len() > 16_384 {
++        return Err("invalid bounded Word-local grant".into());
++    }
++    let mut raw = Vec::new();
++    fs::File::open(p)?.take(16_385).read_to_end(&mut raw)?;
++    if raw.len() > 16_384 || digest(&raw) != e.operator_grant_sha256 {
++        return Err("Word-local grant hash mismatch".into());
++    }
++    let g: Grant = serde_json::from_slice(&raw)?;
++    if g.schema != "qualia.saved_life.word_local_operator_grant.v1"
++        || g.scorecard_eligible || !exact_sha256(&g.evaluator_sha256)
++        || digest(&fs::read(std::env::current_exe()?)?) != g.evaluator_sha256
++        || g.run_id != e.settings.run_id || g.source_current_sha256 != e.settings.source_current_sha256
++        || g.unchanged_settings_sha256 != unchanged_settings_sha256 || g.mode_sha256 != mode_sha256
++    {
++        return Err("Word-local grant scope or evaluator differs".into());
++    }
++    let mut resolved = resolve(&settings)?;
++    resolved.identity.schema = 10;
++    resolved.identity.manifest_sha256 = digest(bytes);
++    resolved.identity.semantic_settings_sha256 = digest(&serde_json::to_vec(&(
++        "word-local-grounding-v1", &resolved.identity.semantic_settings_sha256, &mode_sha256,
++    ))?);
++    resolved.identity.intervention = match e.mode {
++        WordLocalMode::ObserverOnly => "word_local_observer_only",
++        WordLocalMode::SignedEdit { .. } => "word_local_signed_edit",
++    };
++    resolved.identity.word_local_grounding = Some(WordLocalScope {
++        mode: e.mode, evaluator_sha256: g.evaluator_sha256,
++        grant_sha256: e.operator_grant_sha256, unchanged_settings_sha256, scorecard_eligible: false,
++    });
++    Ok(resolved)
+ }
+ 
+ fn canonical_inside(root: &Path, path: &Path) -> Result<std::path::PathBuf> {
+@@ -402,6 +508,15 @@
+     #[derive(Deserialize)]
+     struct Version { schema: u16 }
+     let version: Version = serde_json::from_slice(&bytes)?;
++    #[cfg(not(feature = "retained-word-local-grounding-v1"))]
++    if version.schema == 10 { return Err("Word-local grounding feature is disabled".into()); }
++    #[cfg(feature = "retained-word-local-grounding-v1")]
++    if version.schema == 10 {
++        let p = resolve_word_local(admission_root, &bytes)?;
++        admitted_paths(admission_root, source, output, manifest_path)?;
++        return evaluate_saved_life_retention_inner(source, output, p.request, p.scent, Some(p.identity));
++    }
++
+     #[cfg(not(feature = "contact211-rank32-crossed"))]
+     if version.schema == 8 { return Err("Crossed Rank32 feature is disabled".into()); }
+     #[cfg(all(feature = "retained-language-pilot", feature = "contact211-witness"))]
+diff --git a/crates/alife_game_app/src/gpu_live_runtime.rs b/crates/alife_game_app/src/gpu_live_runtime.rs
+--- a/crates/alife_game_app/src/gpu_live_runtime.rs
++++ b/crates/alife_game_app/src/gpu_live_runtime.rs
+@@ -20,6 +20,10 @@
+ #[cfg(test)]
+ mod contact_chemistry_tests;
+ mod cpu_preparation;
++#[cfg(feature = "retained-word-local-grounding-v1")]
++mod word_local_grounding;
++#[cfg(feature = "retained-word-local-grounding-v1")]
++pub(crate) use word_local_grounding::WordLocalWeightsV1;
+ mod durability_hold;
+ mod exact_population_checkpoint;
+ #[cfg(feature = "foundation-training")]
+@@ -3775,6 +3779,8 @@
+ 
+ pub struct GpuLiveBrainRuntime {
+     audited_cognition: bool,
++    #[cfg(feature = "retained-word-local-grounding-v1")]
++    word_local_grounding: Option<word_local_grounding::Session>,
+     semantic_prior: Option<semantic_prior::RuntimeSemanticPrior>,
+     #[cfg(feature = "foundation-training")]
+     training_sampling: Option<alife_gpu_backend::GpuTrainingSamplingConfig>,
+@@ -6116,6 +6122,8 @@
+             contact211_rank32_weights: None,
+             #[cfg(feature = "contact211-witness")]
+             contact211_completed: None,
++            #[cfg(feature = "retained-word-local-grounding-v1")]
++            word_local_grounding: None,
+             training_sampling_resume: BTreeMap::new(),
+             #[cfg(feature = "foundation-training")]
+             training_demonstrator: None,
+@@ -7856,6 +7864,36 @@
+         self.tick_with_sleep_progress_outcome_scent(progress, None, None)
+     }
+ 
++    #[cfg(feature = "retained-word-local-grounding-v1")]
++    pub(crate) fn arm_word_local_grounding_v1(
++        &mut self, owner: OrganismId, weights: Option<WordLocalWeightsV1>,
++    ) -> Result<(), GameAppShellError> {
++        if self.word_local_grounding.is_some() || self.handles.len() != 1
++            || !self.handles.contains_key(&owner.raw())
++            || self.sensor_profile != SensorProfile::GroundedTerrainVisionV1
++            || self.training_sampling.is_none() || self.training_demonstrator.is_some()
++        {
++            return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
++        }
++        self.word_local_grounding = Some(word_local_grounding::Session::new(owner, weights)?);
++        Ok(())
++    }
++
++    #[cfg(feature = "retained-word-local-grounding-v1")]
++    pub(crate) fn word_local_grounding_v1_observation(&self) -> Option<([f32; 6], f32, f64, f32)> {
++        let evidence = self.word_local_grounding.as_ref()?.observed?;
++        Some((evidence.appearance, evidence.confidence, evidence.recent_closure_m, evidence.amount))
++    }
++
++    #[cfg(feature = "retained-word-local-grounding-v1")]
++    pub(crate) fn word_local_native_score_witness_v1(
++        &self, step: &FoundationTrainingStep,
++    ) -> Result<word_local_grounding::WordScoreWitnessV1, ScaffoldContractError> {
++        let session = self.word_local_grounding.as_ref()
++            .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
++        word_local_grounding::score_witness(step, session.observed)
++    }
++
+     fn tick_with_sleep_progress_outcome_scent<F>(
+         &mut self,
+         mut progress: F,
+@@ -7917,6 +7955,14 @@
+             tick_with_sleep_progress_inner(self, measure_clone_wall_time, |runtime| {
+                 runtime.tick_with_sleep_progress_staged(&mut progress, near_field_owner, visible_self_grip_v1)
+             });
++        #[cfg(feature = "retained-word-local-grounding-v1")]
++        if let Some(session) = self.word_local_grounding.as_mut() {
++            if result.is_ok() {
++                session.settled(&self.world, &self.last_foundation_training_steps);
++            } else {
++                session.abort();
++            }
++        }
+         if result.is_err() {
+             #[cfg(feature = "foundation-training")]
+             self.last_foundation_training_steps.clear();
+diff --git a/crates/alife_game_app/src/gpu_live_runtime/staged_tick.rs b/crates/alife_game_app/src/gpu_live_runtime/staged_tick.rs
+--- a/crates/alife_game_app/src/gpu_live_runtime/staged_tick.rs
++++ b/crates/alife_game_app/src/gpu_live_runtime/staged_tick.rs
+@@ -43,6 +43,13 @@
+             self.handles.len() != 1 || !self.handles.contains_key(&owner.raw())
+         }) {
+             return Err(ScaffoldContractError::BrainOwnershipMismatch.into());
++        }
++        #[cfg(feature = "retained-word-local-grounding-v1")]
++        if self.word_local_grounding.as_ref().is_some_and(|session| {
++            self.training_demonstrator.is_some() || near_field_owner.is_some() || visible_self_grip_v1.is_some()
++                || self.handles.len() != 1 || !self.handles.contains_key(&session.owner.raw())
++        }) {
++            return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
+         }
+         if visible_self_grip_v1.is_some_and(|(owner, _)| {
+             near_field_owner.is_some() || self.sensor_profile != SensorProfile::GroundedTerrainVisionV1
+@@ -1373,6 +1380,19 @@
+             runtime.capture_contact211_world_if_admitted(
+                 &prepared.frame, captured.input.candidate_binding.as_ref(),
+             );
++            #[cfg(feature = "retained-word-local-grounding-v1")]
++            let prepared = {
++                let mut prepared = prepared;
++                if let Some(session) = runtime.word_local_grounding.as_mut() {
++                    if let Some(evidence) = session.preselection(&runtime.world, &prepared.frame, captured.input.candidate_binding.as_ref()) {
++                        if evidence.amount > 0.0 {
++                            prepared.memory_upload.bind_word_local_grounding_v1(&prepared.frame, evidence.amount)
++                                .map_err(cpu_preparation::upload_error)?;
++                        }
++                    }
++                }
++                prepared
++            };
+             collection.batch.push(PreparedGpuBrainFrame {
+             handle: captured.handle,
+             world_entity_id: captured.world_entity_id,
+diff --git a/crates/alife_game_app/src/gpu_live_runtime/word_local_grounding.rs b/crates/alife_game_app/src/gpu_live_runtime/word_local_grounding.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/alife_game_app/src/gpu_live_runtime/word_local_grounding.rs
+@@ -0,0 +1,371 @@
++//! Optional, process-local Word context at the actual finalized live cut.
++//! No scene, target ID, token, outcome or teacher bit is a decoder input.
++use super::*;
++use alife_core::{
++    ActionKind, CandidateActionFamily, CandidateObservationRef, MotorChannel, PerceptionFrameDigest,
++    PhysicalContactKind, TrackedObjectId, Vec3f,
++};
++use alife_world::{GroundedCandidateBinding, HeadlessActionIds, PhysicalTrackingKey, PhysicalTrackingProvenance};
++
++const MIN_CLOSURE_M: f64 = 0.001;
++const MOTION_AGREEMENT_M: f64 = 0.0001;
++const FULL_CLOSURE_M: f64 = 0.04;
++const MAX_WORD_DELTA: f32 = 96.0;
++const MAX_WORD_WEIGHT_L1: f32 = 256.0;
++
++#[derive(Clone, Copy, Debug, serde::Deserialize, serde::Serialize)]
++#[serde(deny_unknown_fields)]
++pub(crate) struct WordLocalWeightsV1 {
++    // In order: centered native material f9–11 and shape f12–14.
++    coefficients: [f32; 6],
++}
++
++impl WordLocalWeightsV1 {
++    pub(crate) fn validate(self) -> Result<Self, ScaffoldContractError> {
++        if self.coefficients.iter().all(|w| w.is_finite() && w.abs() <= 128.0)
++            && self.coefficients.iter().map(|w| w.abs()).sum::<f32>() <= MAX_WORD_WEIGHT_L1
++        {
++            return Ok(self);
++        }
++        Err(ScaffoldContractError::InvalidPerceptionFrame)
++    }
++
++    fn delta(self, features: [f32; 6], confidence: f32, closure_m: f64) -> Option<f32> {
++        self.validate().ok()?;
++        if !features.iter().all(|x| (0.0..=1.0).contains(x))
++            || !(0.0..=1.0).contains(&confidence)
++            || !closure_m.is_finite() || closure_m < MIN_CLOSURE_M
++        {
++            return None;
++        }
++        let signed_affinity = self.coefficients.iter().zip(features)
++            .fold(0.0f32, |sum, (w, x)| sum + w * (x * 2.0 - 1.0));
++        let gate = (closure_m / FULL_CLOSURE_M).min(1.0) as f32 * confidence;
++        // Negative affinity abstains from adding new contextual evidence. It
++        // must not suppress the mature actor's existing autonomous word.
++        Some((signed_affinity * gate).clamp(0.0, MAX_WORD_DELTA))
++    }
++}
++
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++struct TrackIdentity {
++    target: WorldEntityId,
++    track: TrackedObjectId,
++    spawn: PhysicalTrackingKey,
++    provenance: PhysicalTrackingProvenance,
++}
++
++#[derive(Clone, Copy, Debug)]
++struct CurrentTrack {
++    identity: TrackIdentity,
++    native_approach_index: u16,
++    position: Vec3f,
++    confidence: f32,
++    features: [f32; 6],
++}
++
++#[derive(Clone, Debug)]
++pub(super) struct BeforeCut {
++    actor: OrganismId,
++    tick: Tick,
++    digest: PerceptionFrameDigest,
++    body: Vec3f,
++    tracks: Vec<CurrentTrack>,
++}
++
++#[derive(Clone, Copy, Debug)]
++struct PriorPaidApproach {
++    actor: OrganismId,
++    outcome_tick: Tick,
++    track: TrackIdentity,
++    confidence: f32,
++    closure_m: f64,
++}
++
++#[derive(Clone, Copy, Debug)]
++pub(super) struct ContextWord {
++    pub(super) amount: f32,
++    pub(super) appearance: [f32; 6],
++    pub(super) confidence: f32,
++    pub(super) recent_closure_m: f64,
++}
++
++#[derive(Debug)]
++pub(super) struct Session {
++    pub(super) owner: OrganismId,
++    weights: Option<WordLocalWeightsV1>,
++    prior: Option<PriorPaidApproach>,
++    // Pending capture is not committed prior. It is absent after failed or
++    // skipped staging; only the outer successful actual tick can finish it.
++    pub(super) pending: Option<BeforeCut>,
++    pub(super) observed: Option<ContextWord>,
++}
++
++impl Session {
++    pub(super) fn new(owner: OrganismId, weights: Option<WordLocalWeightsV1>) -> Result<Self, ScaffoldContractError> {
++        Ok(Self { owner, weights: weights.map(WordLocalWeightsV1::validate).transpose()?,
++            prior: None, pending: None, observed: None })
++    }
++
++    pub(super) fn preselection(&mut self, world: &HeadlessWorld, frame: &PerceptionFrame,
++        binding: Option<&GroundedCandidateBinding>,
++    ) -> Option<ContextWord> {
++        let old = self.prior.take();
++        self.pending = binding.and_then(|b| BeforeCut::capture(world, frame, b, self.owner));
++        self.observed = self.pending.as_ref().zip(old).and_then(|(now, prior)| {
++            if now.actor != prior.actor || now.tick != prior.outcome_tick {
++                return None;
++            }
++            let target = now.tracks.iter().find(|x| x.identity == prior.track)?;
++            let confidence = target.confidence.min(prior.confidence);
++            Some(ContextWord {
++                amount: self.weights.and_then(|w| w.delta(target.features, confidence, prior.closure_m)).unwrap_or(0.0),
++                appearance: target.features, confidence, recent_closure_m: prior.closure_m,
++            })
++        });
++        self.observed
++    }
++
++    pub(super) fn settled(&mut self, world: &HeadlessWorld, steps: &[FoundationTrainingStep]) {
++        if !self.pending.as_ref().is_some_and(|pending| steps.len() == 1
++            && steps[0].frame.frame_digest() == pending.digest
++            && steps[0].frame.tick() == pending.tick)
++        {
++            self.observed = None;
++        }
++        self.prior = self.pending.take().and_then(|before| {
++            let [step] = steps else { return None; };
++            before.settled(world, step)
++        });
++    }
++
++    pub(super) fn abort(&mut self) {
++        self.prior = None;
++        self.pending = None;
++        self.observed = None;
++    }
++}
++
++fn position_bits(v: Vec3f) -> [u32; 3] { [v.x.to_bits(), v.y.to_bits(), v.z.to_bits()] }
++
++fn difference(a: Vec3f, b: Vec3f) -> [f64; 3] {
++    [f64::from(a.x) - f64::from(b.x), f64::from(a.y) - f64::from(b.y), f64::from(a.z) - f64::from(b.z)]
++}
++
++fn norm([x, y, z]: [f64; 3]) -> f64 { x.hypot(y).hypot(z) }
++
++fn radial_m(before: Vec3f, after: Vec3f, target: Vec3f, real_delta: Vec3f) -> Option<f64> {
++    let [dx, dy, dz] = difference(after, before);
++    let error = norm([dx - f64::from(real_delta.x), dy - f64::from(real_delta.y), dz - f64::from(real_delta.z)]);
++    let closure = norm(difference(before, target)) - norm(difference(after, target));
++    (error.is_finite() && error <= MOTION_AGREEMENT_M && closure.is_finite() && closure >= MIN_CLOSURE_M)
++        .then_some(closure)
++}
++
++impl BeforeCut {
++    fn capture(world: &HeadlessWorld, frame: &PerceptionFrame,
++        binding: &GroundedCandidateBinding, owner: OrganismId,
++    ) -> Option<Self> {
++        let tick = frame.tick();
++        if frame.organism_id() != owner || tick != world.tick()
++            || frame.sensor_profile() != SensorProfile::GroundedTerrainVisionV1
++            || frame.grounded_object_slots().len() > 32 || frame.candidates().len() > 32
++        {
++            return None;
++        }
++        let resident = world.organism_registry().get(owner)?;
++        let actor = world.entity(resident.world_entity_id())?;
++        if !resident.lifecycle().is_alive() || actor.organism_id != Some(owner) || actor.consumed
++            || position_bits(actor.position) != position_bits(frame.body().pose.translation)
++        {
++            return None;
++        }
++        let mut tracks: Vec<CurrentTrack> = Vec::new();
++        for (idx, c) in frame.candidates().iter().enumerate().filter(|(_, c)| c.action_id == HeadlessActionIds::APPROACH) {
++            let (CandidateObservationRef::ObjectSlot(slot), Some(id), Some(position)) =
++                (c.observation, c.target.entity, c.target.position) else { continue; };
++            if c.kind != ActionKind::Move || c.family != CandidateActionFamily::Approach
++                || usize::from(c.candidate_index) != idx
++                || !binding.matches_word_local_transport_v1(frame, c)
++            { return None; }
++            let seen = frame.grounded_object_slots().iter().find(|s| s.slot_index == slot)?;
++            let obj = world.entity(id)?;
++            if obj.consumed || obj.carried_by.is_some() || obj.activity_hold || world.player_held_object() == Some(id) {
++                continue;
++            }
++            let hit = world.tracked_objects().record(owner, seen.tracked_object_id)?;
++            let f = seen.candidate_features().ok()?.0;
++            let features = [f[9], f[10], f[11], f[12], f[13], f[14]];
++            let confidence = seen.confidence.raw();
++            if position_bits(obj.position) != position_bits(position)
++                || hit.tracking_key != obj.tracking_key || hit.tracking_provenance != obj.tracking_provenance
++                || obj.tracking_provenance.canonical_key() != obj.tracking_key || hit.last_seen_tick != tick
++                || !(0.0..=1.0).contains(&confidence) || confidence == 0.0
++                || confidence.to_bits() != c.sensor_confidence.raw().to_bits()
++                || f.iter().zip(&c.features.0).any(|(x, y)| x.to_bits() != y.to_bits())
++                || !features.iter().all(|x| (0.0..=1.0).contains(x))
++                || tracks.iter().any(|x| x.identity.spawn == obj.tracking_key
++                    || x.identity.track == seen.tracked_object_id || x.identity.target == id)
++            {
++                return None;
++            }
++            tracks.push(CurrentTrack {
++                identity: TrackIdentity { target: id, track: seen.tracked_object_id,
++                    spawn: obj.tracking_key, provenance: obj.tracking_provenance },
++                native_approach_index: c.candidate_index, position, confidence, features,
++            });
++        }
++        Some(Self { actor: owner, tick, digest: frame.frame_digest(), body: actor.position, tracks })
++    }
++
++    fn settled(self, world: &HeadlessWorld, step: &FoundationTrainingStep) -> Option<PriorPaidApproach> {
++        let out = step.patch.outcome();
++        if self.tick.raw().checked_add(1) != Some(out.outcome_tick.raw()) || world.tick() != out.outcome_tick
++            || out.organism_id != self.actor || step.frame.organism_id() != self.actor
++            || step.frame.tick() != self.tick || step.frame.frame_digest() != self.digest
++            || step.patch.pre_action().perception().frame_digest() != self.digest
++            || step.behavior.frame_digest != self.digest || step.behavior.organism_id != self.actor.raw()
++            || step.behavior.tick != self.tick.raw() || step.behavior.sampling.demonstrator.is_some()
++            || step.behavior.behavior != alife_gpu_backend::GpuTrainingBehaviorKind::OnPolicy
++        { return None; }
++        let mut commands = step.patch.selected_bundle()?.channels.iter().filter(|x| x.channel == MotorChannel::Locomotion);
++        let cmd = commands.next()?;
++        let mut outcomes = out.joint.as_ref()?.channel_outcomes.iter().filter(|x| x.channel == MotorChannel::Locomotion);
++        let loc = outcomes.next()?;
++        let evidence = loc.execution_evidence.as_ref()?;
++        let chosen = self.tracks.iter().find(|r| r.native_approach_index == step.behavior.motor_indices[0])?;
++        let target = cmd.target?;
++        let cost = loc.physical.energy_cost.raw();
++        if commands.next().is_some() || outcomes.next().is_some()
++            || cmd.primitive != HeadlessActionIds::APPROACH || evidence.primitive != cmd.primitive
++            || !evidence.succeeded || !(cost.is_finite() && cost > 0.0)
++            || loc.physical.contact != PhysicalContactKind::Moved
++            || target.entity != Some(chosen.identity.target) || evidence.command_target != target.entity
++            || loc.physical.target_entity != target.entity || target.position.map(position_bits) != Some(position_bits(chosen.position))
++            || out.joint.as_ref()?.channel_outcomes.iter().filter(|x| x.channel != MotorChannel::Locomotion)
++                .any(|x| norm(difference(x.physical.displacement, Vec3f::ZERO)) > MOTION_AGREEMENT_M)
++        { return None; }
++        let obj = world.entity(chosen.identity.target)?;
++        let resident = world.organism_registry().get(self.actor)?;
++        let actor = world.entity(resident.world_entity_id())?;
++        if !resident.lifecycle().is_alive() || actor.organism_id != Some(self.actor) || actor.consumed
++            || obj.consumed || obj.carried_by.is_some() || obj.activity_hold || world.player_held_object() == Some(obj.id)
++            || position_bits(obj.position) != position_bits(chosen.position)
++            || obj.tracking_key != chosen.identity.spawn || obj.tracking_provenance != chosen.identity.provenance
++        { return None; }
++        Some(PriorPaidApproach { actor: self.actor, outcome_tick: out.outcome_tick,
++            track: chosen.identity, confidence: chosen.confidence,
++            closure_m: radial_m(self.body, actor.position, chosen.position, loc.physical.displacement)? })
++    }
++}
++
++/// One arm's actual stock sampler input. "Before" is supplied only by
++/// independently matching an observer-only arm; it is never inferred by
++/// subtracting the proposed correction from the signed arm's GPU result.
++#[derive(Clone, Debug, serde::Serialize)]
++pub(crate) struct WordScoreWitnessV1 {
++    frame_digest: PerceptionFrameDigest,
++    organism: OrganismId,
++    decision_tick: Tick,
++    actual_weight_generation: u64,
++    actual_dispatch_generation: u64,
++    native_word_candidate_index: Option<u16>,
++    native_word_finite_presampler_score_bits: Option<u32>,
++    native_representative_mask: u32,
++    native_motor_masks: [u32; 6],
++    native_vocal_channel_choice: u16,
++    admitted_port_word_index: Option<u32>,
++    admitted_port_amount_bits: Option<u32>,
++    proposed_context_delta_bits: Option<u32>,
++    score_source: &'static str,
++}
++
++pub(super) fn score_witness(
++    step: &FoundationTrainingStep, context: Option<ContextWord>,
++) -> Result<WordScoreWitnessV1, ScaffoldContractError> {
++    let frame = &step.frame;
++    let b = &step.behavior;
++    let rows = frame.candidates();
++    if frame.frame_digest() != b.frame_digest || frame.tick().raw() != b.tick
++        || frame.organism_id().raw() != b.organism_id
++        || step.patch.pre_action().perception().frame_digest() != frame.frame_digest()
++        || step.after_inference.logical_dispatch_generation != b.dispatch_generation
++        || step.after_inference.active_weight_generation != b.active_weight_generation
++        || b.logits.len() != rows.len() || b.forced_motor_slots.len() != rows.len()
++        || b.sampling.demonstrator.is_some()
++        || b.behavior != alife_gpu_backend::GpuTrainingBehaviorKind::OnPolicy
++    { return Err(ScaffoldContractError::InvalidDecisionEvidence); }
++    let word = unique_native_word(rows)?;
++    let admitted = step.memory_upload.admitted_word_local_grounding_v1();
++    let proposed = context.map(|c| c.amount);
++    let expected = Option::zip(word, proposed.filter(|v| *v > 0.0))
++        .map(|(i,v)| (u32::from(i),v.to_bits()));
++    if admitted.map(|(i,v)| (i,v.to_bits())) != expected {
++        return Err(ScaffoldContractError::InvalidDecisionEvidence);
++    }
++    let raw = if let Some(i) = word {
++        let j = usize::from(i);
++        let score = b.logits[j];
++        let mask = 1u32 << j;
++        if b.forced_motor_slots[j] != 3 || (b.representative_mask & mask != 0) != score.is_finite()
++            || (b.motor_masks[3] & mask != 0 && !score.is_finite())
++        { return Err(ScaffoldContractError::InvalidDecisionEvidence); }
++        score.is_finite().then(|| score.to_bits())
++    } else { None };
++    Ok(WordScoreWitnessV1 {
++        frame_digest: frame.frame_digest(),
++        organism: frame.organism_id(),
++        decision_tick: frame.tick(),
++        actual_weight_generation: b.active_weight_generation,
++        actual_dispatch_generation: b.dispatch_generation,
++        native_word_candidate_index: word,
++        native_word_finite_presampler_score_bits: raw,
++        native_representative_mask: b.representative_mask,
++        native_motor_masks: b.motor_masks,
++        native_vocal_channel_choice: b.motor_indices[3],
++        admitted_port_word_index: admitted.map(|(i,_)| i),
++        admitted_port_amount_bits: admitted.map(|(_,v)| v.to_bits()),
++        proposed_context_delta_bits: proposed.map(f32::to_bits),
++        score_source: "actual_native_selector_final_logit_bits",
++    })
++}
++
++fn unique_native_word(rows: &[alife_core::ActionCandidate])
++    -> Result<Option<u16>, ScaffoldContractError>
++{
++    if rows.len() > 32 { return Err(ScaffoldContractError::InvalidDecisionEvidence); }
++    let mut words = rows.iter().enumerate().filter(|(_,c)| c.action_id == ActionKind::Vocalize.canonical_id());
++    let Some((i,c)) = words.next() else { return Ok(None); };
++    if words.next().is_some() || usize::from(c.candidate_index) != i
++        || c.kind != ActionKind::Vocalize || c.family != CandidateActionFamily::Other
++        || c.observation != CandidateObservationRef::None
++        || c.target.entity.is_some() || c.target.position.is_some()
++        || c.features.0[22].to_bits() != 1.0f32.to_bits()
++        || c.features.0[23].to_bits() != 1.0f32.to_bits()
++    { return Err(ScaffoldContractError::InvalidDecisionEvidence); }
++    Ok(Some(c.candidate_index))
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    #[test]
++    fn paid_motion_agrees_with_body_and_closes_same_fixed_target() {
++        let a = Vec3f::new(0.0, 0.0, 0.0);
++        let b = Vec3f::new(0.041, 0.0, 0.0);
++        let t = Vec3f::new(1.0, 0.0, 0.0);
++        assert!(radial_m(a, b, t, b).unwrap() > 0.04);
++        assert!(radial_m(a, b, t, a).is_none());
++        assert!(radial_m(a, a, t, a).is_none());
++        assert!(radial_m(b, a, t, Vec3f::new(-0.041, 0.0, 0.0)).is_none());
++    }
++    #[test]
++    fn signed_material_abstains_without_suppressing_stock_word() {
++        let w = WordLocalWeightsV1 { coefficients: [-64.0, 64.0, 0.0, 0.0, 0.0, 0.0] };
++        assert_eq!(w.delta([0.0, 1.0, 0.5, 0.5, 0.5, 0.5], 1.0, 0.04), Some(96.0));
++        assert_eq!(w.delta([1.0, 0.0, 0.5, 0.5, 0.5, 0.5], 1.0, 0.04), Some(0.0));
++        assert_eq!(w.delta([0.0, 1.0, 0.5, 0.5, 0.5, 0.5], 1.0, 0.0), None);
++        assert_eq!(w.delta([0.0, 1.0, 0.5, 0.5, 0.5, 0.5], f32::NAN, 0.04), None);
++        assert!(WordLocalWeightsV1 { coefficients: [100.0; 6] }.validate().is_err());
++    }
++}
+diff --git a/crates/alife_gpu_backend/shaders/word_local_grounding_v1.wgsl b/crates/alife_gpu_backend/shaders/word_local_grounding_v1.wgsl
+new file mode 100644
+--- /dev/null
++++ b/crates/alife_gpu_backend/shaders/word_local_grounding_v1.wgsl
+@@ -0,0 +1,40 @@
++
++// Versioned optional Word-local candidate bid. Legacy stock module untouched.
++fn word_local_grounding_v1(
++    row_base: u32, header: GpuMemoryContextHeader, brain: GpuBrainSlotRecord,
++    candidate: GpuCandidateRecord, stock: f32
++) -> f32 {
++  let packet = header.neural_receptor_effects_offset + 16u;
++  let length = arrayLength(&frame_payload_words);
++  let p = load_perception_header(row_base);
++  if (packet > length || 10u > length - packet
++      || frame_payload_words[packet] != 0x574c4731u
++      || frame_payload_words[packet + 1u] != 1u
++      || frame_payload_words[packet + 2u] != p.slot
++      || frame_payload_words[packet + 3u] != p.slot_generation
++      || frame_payload_words[packet + 4u] != p.tick_lo
++      || frame_payload_words[packet + 5u] != p.tick_hi
++      || frame_payload_words[packet + 6u] != p.dispatch_generation_lo
++      || frame_payload_words[packet + 7u] != p.dispatch_generation_hi
++      || frame_payload_words[packet + 8u] >= header.candidate_count) {
++    atomicOr(&mutable_state_words[brain.diagnostic_offset + MEMORY_CONTEXT_DIAGNOSTIC_LANE],
++      CONTRACT_INVALID_DIAGNOSTIC_BIT);
++    return stock;
++  }
++  if (candidate.candidate_index != frame_payload_words[packet + 8u]) { return stock; }
++  let d = bitcast<f32>(frame_payload_words[packet + 9u]);
++  if (candidate.action_id != 400u || candidate.kind != 6u || candidate.family != 7u
++      || candidate.observation_slot_or_max != 0xffffffffu
++      || !(d > 0.0 && d <= 96.0)) {
++    atomicOr(&mutable_state_words[brain.diagnostic_offset + MEMORY_CONTEXT_DIAGNOSTIC_LANE],
++      CONTRACT_INVALID_DIAGNOSTIC_BIT);
++    return stock;
++  }
++  if (!finite_memory_value(stock)) { return stock; }
++  if (!finite_memory_value(stock + d)) {
++    atomicOr(&mutable_state_words[brain.diagnostic_offset + MEMORY_CONTEXT_DIAGNOSTIC_LANE],
++      CONTRACT_INVALID_DIAGNOSTIC_BIT);
++    return stock;
++  }
++  return stock + d;
++}
+diff --git a/crates/alife_gpu_backend/src/closed_loop_memory.rs b/crates/alife_gpu_backend/src/closed_loop_memory.rs
+--- a/crates/alife_gpu_backend/src/closed_loop_memory.rs
++++ b/crates/alife_gpu_backend/src/closed_loop_memory.rs
+@@ -64,6 +64,8 @@
+     pub(crate) perception_binding: GpuPerceptionFrameBinding,
+     pub(crate) neural_receptor_effects: Option<NeuralReceptorEffects>,
+     pub(crate) visible_self_grip_v1: Option<VisibleSelfGripFrameV1>,
++    // Not serialized in saved brains. (Unique canonical Word slot, positive delta).
++    pub(crate) word_local_grounding_v1: Option<(u32, f32)>,
+     offset_domain: GpuMemoryOffsetDomain,
+ }
+ 
+@@ -180,6 +182,43 @@
+         }
+         self.visible_self_grip_v1 = Some(VisibleSelfGripFrameV1 { words: words.to_vec(), weights });
+         Ok(())
++    }
++
++    /// Attach a trusted retained-App direct projection for the uniquely
++    /// targetless stock Vocalize primitive. No weights/masks/actions change.
++    pub fn bind_word_local_grounding_v1(
++        &mut self, frame: &PerceptionFrame, amount: f32,
++    ) -> Result<(), GpuClosedLoopError> {
++        use alife_core::{ActionKind, CandidateActionFamily, CandidateObservationRef, SensorProfile};
++        if self.offset_domain != GpuMemoryOffsetDomain::Local
++            || self.final_frame_digest != frame.frame_digest()
++            || self.perception_binding.tick != frame.tick()
++            || self.word_local_grounding_v1.is_some() || self.visible_self_grip_v1.is_some()
++            || frame.sensor_profile() != SensorProfile::GroundedTerrainVisionV1
++            || !(amount > 0.0 && amount <= 96.0)
++        { return Err(GpuClosedLoopError::MalformedUpload); }
++        let mut slots = frame.candidates().iter().enumerate().filter(|(_, c)| {
++            c.action_id == ActionKind::Vocalize.canonical_id()
++        });
++        let Some((i, c)) = slots.next() else {
++            // Some healthy stock menus legitimately have no Word offer.
++            return Ok(());
++        };
++        if slots.next().is_some() || i != usize::from(c.candidate_index) || i >= 32
++            || c.kind != ActionKind::Vocalize || c.family != CandidateActionFamily::Other
++            || c.observation != CandidateObservationRef::None
++            || c.target.entity.is_some() || c.target.position.is_some()
++            || c.features.0[22].to_bits() != 1.0f32.to_bits()
++            || c.features.0[23].to_bits() != 1.0f32.to_bits()
++        { return Err(GpuClosedLoopError::MalformedUpload); }
++        self.word_local_grounding_v1 = Some((i as u32, amount));
++        Ok(())
++    }
++
++    /// Truthful CPU admission ledger for this specific consumed frame upload.
++    /// A returned amount is not evidence that the GPU logit was changed.
++    pub fn admitted_word_local_grounding_v1(&self) -> Option<(u32, f32)> {
++        self.word_local_grounding_v1
+     }
+ 
+     pub fn bind_neural_receptor_effects(
+@@ -481,6 +520,7 @@
+             perception_binding,
+             neural_receptor_effects: None,
+             visible_self_grip_v1: None,
++            word_local_grounding_v1: None,
+             offset_domain: GpuMemoryOffsetDomain::Local,
+         })
+     }
+diff --git a/crates/alife_gpu_backend/src/closed_loop_pipeline.rs b/crates/alife_gpu_backend/src/closed_loop_pipeline.rs
+--- a/crates/alife_gpu_backend/src/closed_loop_pipeline.rs
++++ b/crates/alife_gpu_backend/src/closed_loop_pipeline.rs
+@@ -652,6 +652,7 @@
+     memory_context_bindings: Vec<Option<GpuMemoryContextDispatchReceipt>>,
+     object_input_counts: Vec<u32>,
+     visible_self_grip_v1: bool,
++    word_local_grounding_v1: bool,
+     #[cfg(feature = "contact211-rank32")]
+     contact211_rank32: bool,
+ }
+@@ -778,7 +779,11 @@
+ 
+         let visible_self_grip_v1 = entries.iter().any(|entry| entry.memory_upload
+             .is_some_and(|upload| upload.visible_self_grip_v1.is_some()));
+-        if visible_self_grip_v1 && entries.len() != 1 {
++        let word_local_grounding_v1 = entries.iter().any(|entry| entry.memory_upload
++            .is_some_and(|upload| upload.word_local_grounding_v1.is_some()));
++        if (visible_self_grip_v1 || word_local_grounding_v1) && entries.len() != 1
++            || (visible_self_grip_v1 && word_local_grounding_v1)
++        {
+             return Err(GpuClosedLoopError::MalformedUpload);
+         }
+         for (row, entry) in entries.iter().enumerate() {
+@@ -900,6 +905,7 @@
+                 .and_then(|value| value.checked_add(cognitive_record_words))
+                 .and_then(|value| value.checked_add(neural_receptor_effects_words))
+                 .and_then(|value| value.checked_add(visible_self_grip_words))
++                .and_then(|value| value.checked_add(if word_local_grounding_v1 { 10 } else { 0 }))
+                 .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+             if payload_end > GPU_REQUIRED_MAX_BUFFER_WORDS
+                 || payload_end > frame_payload_capacity_words
+@@ -1029,6 +1035,15 @@
+                     ]);
+                     frame_payload_words.extend(port.weights);
+                     frame_payload_words.extend(&port.words);
++                }
++                if let Some((index, amount)) = memory.word_local_grounding_v1 {
++                    frame_payload_words.extend([
++                        WORD_LOCAL_GROUNDING_V1_MAGIC, 1,
++                        upload.header.slot, upload.header.slot_generation,
++                        upload.header.tick_lo, upload.header.tick_hi,
++                        dispatch_generation.get() as u32, (dispatch_generation.get() >> 32) as u32,
++                        index, amount.to_bits(),
++                    ]);
+                 }
+                 (Some(memory), Some(receipt))
+             } else {
+@@ -1180,6 +1195,7 @@
+             selector_diagnostic_family_synapse_counts,
+             memory_context_bindings,
+             visible_self_grip_v1,
++            word_local_grounding_v1,
+             #[cfg(feature = "contact211-rank32")]
+             contact211_rank32: false,
+             object_input_counts: entries
+@@ -1561,6 +1577,7 @@
+     decode_pipeline: wgpu::ComputePipeline,
+     memory_context_pipeline: wgpu::ComputePipeline,
+     visible_self_grip_pipeline: std::sync::OnceLock<wgpu::ComputePipeline>,
++    word_local_grounding_pipeline: std::sync::OnceLock<wgpu::ComputePipeline>,
+     visible_self_grip_device: wgpu::Device,
+     visible_self_grip_layout: wgpu::PipelineLayout,
+     #[cfg(feature = "contact211-rank32")]
+@@ -1584,6 +1601,37 @@
+     finalize_sleep_staging_pipeline: wgpu::ComputePipeline,
+     reset_sleep_mutable_state_pipeline: wgpu::ComputePipeline,
+     finalize_sleep_commit_pipeline: wgpu::ComputePipeline,
++}
++
++const WORD_LOCAL_GROUNDING_V1_MAGIC: u32 = 0x574c4731;
++
++fn superimpose_word_local_grounding_v1(stock: &str) -> Result<String, GpuClosedLoopError> {
++    let simple = "store_state_f32(logit_index, composed);";
++    let multi = "store_state_f32(logit_index,\n      base_logit\n        + clamp(delta, -plan.max_candidate_gain, plan.max_candidate_gain)\n        + clamp(cognitive_delta, -0.5, 0.5));";
++    if stock.matches(simple).count() != 1 || stock.matches(multi).count() != 1 {
++        return Err(GpuClosedLoopError::LayoutMismatch);
++    }
++    let bound = stock.replace(simple,
++        "store_state_f32(logit_index, word_local_grounding_v1(row_base, header, brain, candidate, composed));")
++        .replace(multi,
++        "let composed = base_logit + clamp(delta, -plan.max_candidate_gain, plan.max_candidate_gain) + clamp(cognitive_delta, -0.5, 0.5);\n    store_state_f32(logit_index, word_local_grounding_v1(row_base, header, brain, candidate, composed));");
++    Ok(bound + include_str!("../shaders/word_local_grounding_v1.wgsl"))
++}
++
++#[cfg(all(test, feature = "training-rollout"))]
++#[test]
++fn word_local_grounding_v1_shader_validates_without_device() {
++    let stock = CLOSED_LOOP_MEMORY_CONTEXT_WGSL;
++    let signed = superimpose_word_local_grounding_v1(stock).unwrap();
++    assert_eq!(signed.matches("word_local_grounding_v1(row_base").count(), 2);
++    assert!(!stock.contains("word_local_grounding_v1"));
++    assert!(signed.contains("candidate.observation_slot_or_max != 0xffffffffu"));
++    validate_production_shader_contract(&runtime_shader_source(stock), &["add_candidate_memory_context"]).unwrap();
++    validate_production_shader_contract(&runtime_shader_source(&signed), &["add_candidate_memory_context"]).unwrap();
++    let wrong = stock.replace("store_state_f32(logit_index, composed);", "");
++    assert!(superimpose_word_local_grounding_v1(&wrong).is_err());
++    let wrong = format!("{stock}\nstore_state_f32(logit_index, composed);");
++    assert!(superimpose_word_local_grounding_v1(&wrong).is_err());
+ }
+ 
+ fn superimpose_visible_self_grip_v1(stock: &str) -> String {
+@@ -1908,6 +1956,7 @@
+             decode_pipeline,
+             memory_context_pipeline,
+             visible_self_grip_pipeline: std::sync::OnceLock::new(),
++            word_local_grounding_pipeline: std::sync::OnceLock::new(),
+             visible_self_grip_device: device.clone(),
+             visible_self_grip_layout: pipeline_layout,
+             #[cfg(feature = "contact211-rank32")]
+@@ -4061,7 +4110,22 @@
+     ) -> Result<(), GpuClosedLoopError> {
+         let rows =
+             u32::try_from(batch.row_count()).map_err(|_| GpuClosedLoopError::CapacityExceeded)?;
+-        let pipeline = if batch.visible_self_grip_v1 {
++        let pipeline = if batch.word_local_grounding_v1 {
++            if self.kernels.word_local_grounding_pipeline.get().is_none() {
++                let src = superimpose_word_local_grounding_v1(CLOSED_LOOP_MEMORY_CONTEXT_WGSL)?;
++                let source = runtime_shader_source(&src);
++                validate_production_shader_contract(&source, &["add_candidate_memory_context"])?;
++                let device = &self.kernels.visible_self_grip_device;
++                let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
++                    label: Some("closed-loop-word-local-grounding-v1"),
++                    source: wgpu::ShaderSource::Wgsl(source),
++                });
++                let kernel = create_compute_pipeline(device, &self.kernels.visible_self_grip_layout,
++                    &shader, "add_candidate_memory_context", &[]);
++                let _ = self.kernels.word_local_grounding_pipeline.set(kernel);
++            }
++            self.kernels.word_local_grounding_pipeline.get().ok_or(GpuClosedLoopError::LayoutMismatch)?
++        } else if batch.visible_self_grip_v1 {
+             if self.kernels.visible_self_grip_pipeline.get().is_none() {
+                 let source = superimpose_visible_self_grip_v1(CLOSED_LOOP_MEMORY_CONTEXT_WGSL);
+                 // Run the same stock parser, entry-point and ABI validation.
+@@ -4099,6 +4163,9 @@
+         pass: &mut wgpu::ComputePass<'pass>,
+         batch: &GpuActiveBatchUpload,
+     ) -> Result<(), GpuClosedLoopError> {
++        if batch.word_local_grounding_v1 {
++            return Err(GpuClosedLoopError::MalformedUpload);
++        }
+         let rows =
+             u32::try_from(batch.row_count()).map_err(|_| GpuClosedLoopError::CapacityExceeded)?;
+         let pipeline = if batch.visible_self_grip_v1 {
+@@ -4912,6 +4979,19 @@
+                         return Err(GpuClosedLoopError::MalformedUpload);
+                     }
+                 }
++                if batch.word_local_grounding_v1 {
++                    let end = receptor_end.checked_add(10).ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
++                    let w = batch.frame_payload_words.get(receptor_end..end)
++                        .ok_or(GpuClosedLoopError::MalformedUpload)?;
++                    let amount = f32::from_bits(w[9]);
++                    if w[..8] != [
++                        WORD_LOCAL_GROUNDING_V1_MAGIC, 1,
++                        header.slot, header.slot_generation, header.tick_lo, header.tick_hi,
++                        header.dispatch_generation_lo, header.dispatch_generation_hi,
++                    ] || w[8] as usize >= candidate_count || !(amount > 0.0 && amount <= 96.0) {
++                        return Err(GpuClosedLoopError::MalformedUpload);
++                    }
++                }
+                 let receptor = GpuNeuralReceptorEffectsRecord::from_words(
+                     &batch.frame_payload_words[receptor_start..receptor_end],
+                 )?;
+@@ -5246,6 +5326,7 @@
+             memory_context_bindings: vec![None],
+             object_input_counts: vec![0],
+             visible_self_grip_v1: false,
++            word_local_grounding_v1: false,
+             #[cfg(feature = "contact211-rank32")]
+             contact211_rank32: false,
+             joint_motor_modes: vec![0],
+diff --git a/crates/alife_world/Cargo.toml b/crates/alife_world/Cargo.toml
+--- a/crates/alife_world/Cargo.toml
++++ b/crates/alife_world/Cargo.toml
+@@ -6,6 +6,7 @@
+ repository.workspace = true
+ 
+ [features]
++word-local-grounding-v1 = []
+ retained-language-pilot = []
+ contact211-witness = []
+ 
+diff --git a/crates/alife_world/src/candidate_enumerator.rs b/crates/alife_world/src/candidate_enumerator.rs
+--- a/crates/alife_world/src/candidate_enumerator.rs
++++ b/crates/alife_world/src/candidate_enumerator.rs
+@@ -127,6 +127,30 @@
+ }
+ 
+ impl GroundedCandidateBinding {
++    /// Confirms a particular sealed candidate still uses the exact observed
++    /// same-cut ephemeral object transport. This does not expose identities or
++    /// grant any extra proximity/force privilege.
++    #[cfg(feature = "word-local-grounding-v1")]
++    pub fn matches_word_local_transport_v1(
++        &self, frame: &alife_core::PerceptionFrame, candidate: &alife_core::ActionCandidate,
++    ) -> bool {
++        let alife_core::CandidateObservationRef::ObjectSlot(index) = candidate.observation else {
++            return false;
++        };
++        if self.grounded.sensory().organism_id != frame.organism_id()
++            || self.grounded.sensory().tick != frame.tick()
++        { return false; }
++        let a=self.grounded.slots().iter().find(|s| s.slot_index==index);
++        let b=frame.grounded_object_slots().iter().find(|s| s.slot_index==index);
++        let transport=self.grounded.transports().iter().find(|s| s.slot_index==index);
++        if let (Some(a), Some(b), Some(transport), Some(target)) = (a,b,transport,candidate.target.position) {
++            let actual=transport.target_position;
++            a==b && candidate.target.entity==Some(transport.transport_entity)
++                && [actual.x.to_bits(),actual.y.to_bits(),actual.z.to_bits()]
++                    ==[target.x.to_bits(),target.y.to_bits(),target.z.to_bits()]
++        } else { false }
++    }
++
+     /// Only the exact frame's already-accounted ephemeral tracked transport.
+     #[cfg(feature = "contact211-witness")]
+     pub(crate) fn contact211_transport(
