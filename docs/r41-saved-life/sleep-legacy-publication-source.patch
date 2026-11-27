@@ -23,7 +23,7 @@
                  message: "GPU checkpoint journal authority generation failed reopen validation"
 --- a/crates/alife_runtime/tests/gpu_checkpoint_manifest_cas.rs
 +++ b/crates/alife_runtime/tests/gpu_checkpoint_manifest_cas.rs
-@@ -468,3 +468,243 @@
+@@ -468,3 +468,250 @@
  
      fs::remove_dir_all(root).unwrap();
  }
@@ -187,6 +187,13 @@
 +        gpu_brain: Some(brain),
 +    });
 +
++    // current_organism_save builds the world before the GPU summary is added;
++    // mirror PortableSaveFile::from_headless_world's initial Wild registration.
++    save.world
++        .habitats
++        .register_creature(organism, alife_world::HabitatId::DEFAULT_WILD, Tick::ZERO)
++        .unwrap();
++    save.validate_with_asset_root(&root).expect("complete legacy fixture");
 +    let legacy_bytes = serde_json::to_vec_pretty(&save).unwrap();
 +    fs::write(&save_path, &legacy_bytes).unwrap();
 +    let (durable, legacy) = GpuDurableSaveManifest::open_loaded(&save_path, &root).unwrap();
