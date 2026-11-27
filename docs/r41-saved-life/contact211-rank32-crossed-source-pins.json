@@ -1,0 +1,28 @@
+{
+  "five_source_only_after_sha256": {
+    "crates/alife_game_app/Cargo.toml": "b8ef3fb37b90a93adbb72a3aeaa846f57e968b5cca892d88978c25f5d17dfa18",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/contact211_parity.rs": "dcafd31c1879a35beaad46b6c3e89465b3713d44b32500fae7d85c260eef2961",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs": "a5253b9b158e82ff8f21094b8eff3d1546951df1a4aab2f1450a7f604bcd5827",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/language_pilot.rs": "c76576cc8d5eff262ff3ccde3e5dbe223fffb06666336d61174f8c369966feca",
+    "crates/alife_game_app/src/gpu_live_runtime/contact211_f0_witness.rs": "99c9b5e13d0a563fca07cbefacf9c9a759ac0b1349b1956aa6a63a29bb3b0f82"
+  },
+  "five_source_only_before_sha256": {
+    "crates/alife_game_app/Cargo.toml": "c06791b7d9b3db6e0a7c0664ca7cc9f6ce00ea9b8ae1717aa71039af5716beae",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/contact211_parity.rs": "f358d3d82a0154dae295ed3afb7cacc9305eebd7a18f8534e80653f627e76ecb",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs": "6c3369d844a41f97a0a4965534fb7a1cb03a3cfbbd9f3d47f528200cbc74b2d3",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/language_pilot.rs": "e9f796904ffa49433de00c2acb920ad2e492d6b6cb9536719525278690116309",
+    "crates/alife_game_app/src/gpu_live_runtime/contact211_f0_witness.rs": "5e832d5d49aadc1a77e3e5fb4a90ea60260816deef94485c66e575d5f897cbce"
+  },
+  "forward_sha256": "d6ed64c12f5e9a58b80f2a1737f7c29b7d4029842916e87747df92f5e8c6a9da",
+  "full_hosted_parent_commit": "3c9c6e50391834023490b8edecff45ee4e133e0c",
+  "inverse_sha256": "d3629ed4ea48ca5ba02d87eeb25d663b748f038b4747cddce787ff8630164122",
+  "isolated_partial_tree_base": "21668d06cb1e12cfe3dacbcf86d8de961fb78fee",
+  "isolated_source_commit": "7db932201b0e824b8f68f34122d2d5bfa3c15cc2",
+  "native_run": false,
+  "published": false,
+  "rust_compiled": false,
+  "same_world_geometry_and_legal_probe_bytes": true,
+  "schema": "qualia.private.contact211_rank32_crossed_source_pins.v1",
+  "static_feature_scope_receipt_and_control_guards": true,
+  "verified_exact_reversible_apply": true
+}
