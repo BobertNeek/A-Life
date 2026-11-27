@@ -1,0 +1,187 @@
+diff --git a/crates/alife_world/src/bin/compare_saved_world_tracked_signature.rs b/crates/alife_world/src/bin/compare_saved_world_tracked_signature.rs
+index abb9a22..06ebd98 100644
+--- a/crates/alife_world/src/bin/compare_saved_world_tracked_signature.rs
++++ b/crates/alife_world/src/bin/compare_saved_world_tracked_signature.rs
+@@ -2,11 +2,12 @@
+ //! Projects the authentic portable save twice; it never opens a runtime or an asset.
+ use alife_world::{
+     persistence::{P34_SAVE_FILE_SCHEMA, P34_SAVE_FILE_SCHEMA_VERSION, PortableSaveFile},
+-    HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION,
++    HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION, WorldObjectKind,
+ };
+ use serde::Deserialize;
+ use serde_json::{Value, json};
+ use std::{
++    collections::{BTreeMap, BTreeSet},
+     env, fs,
+     io::{Read, Write},
+     os::unix::fs::MetadataExt,
+@@ -99,6 +100,56 @@ fn read_bound_save(path: &Path, digest: &str) -> Result<Vec<u8>, &'static str> {
+     Ok(bytes)
+ }
+ 
++type ActorBinding = (u64, u64, WorldObjectKind);
++
++fn exact_actor_map(
++    rows: &[ActorBinding],
++) -> Option<BTreeMap<u64, (u64, WorldObjectKind)>> {
++    let mut owners = BTreeMap::new();
++    let mut entities = BTreeSet::new();
++    for &(owner, entity, kind) in rows {
++        if owner == 0 || entity == 0 || !entities.insert(entity)
++            || owners.insert(owner, (entity, kind)).is_some()
++        {
++            return None;
++        }
++    }
++    Some(owners)
++}
++
++// An external actor is a sealed world object, not a biological registry row.
++// Verify the two authorities separately, and never remove actors for hashing.
++fn exact_same_life_bindings(
++    saved_resident: (u64, u64),
++    restored_registry: &[(u64, u64)],
++    declared_externals: &[u64],
++    saved_actors: &[ActorBinding],
++    restored_actors: &[ActorBinding],
++) -> bool {
++    if restored_registry != [saved_resident] {
++        return false;
++    }
++    let Some(saved) = exact_actor_map(saved_actors) else {
++        return false;
++    };
++    let Some(restored) = exact_actor_map(restored_actors) else {
++        return false;
++    };
++    if saved != restored
++        || saved.get(&saved_resident.0) != Some(&(saved_resident.1, WorldObjectKind::Agent))
++    {
++        return false;
++    }
++    let mut sealed_agents = BTreeSet::from([saved_resident.0]);
++    if declared_externals.iter().any(|&id| id == 0 || !sealed_agents.insert(id)) {
++        return false;
++    }
++    let saved_agents = saved.iter().filter_map(|(&id, &(_, kind))| {
++        (kind == WorldObjectKind::Agent).then_some(id)
++    }).collect::<BTreeSet<_>>();
++    saved_agents == sealed_agents
++}
++
+ fn run() -> Result<(Value, u8), &'static str> {
+     let a = env::args_os().skip(1).take(9).collect::<Vec<_>>();
+     if a.len() != 8 {
+@@ -145,9 +196,34 @@ fn run() -> Result<(Value, u8), &'static str> {
+     tracked.validate_contract().map_err(|_| "saved tracked sidecar failed production validation")?;
+ 
+     let bare = save.restore_headless_world().map_err(|_| "production bare world restore refused authentic bytes")?;
+-    let residents = bare.organism_entity_ids();
+-    if residents.len() != 1 || residents[0].0 != creature.organism_id || bare.tick().raw() != tick {
+-        return Err("restored world changed the single resident or tick");
++    if bare.tick().raw() != tick {
++        return Err("restored world changed the admitted absolute tick");
++    }
++    let Some([saved_record]) = save.world.organism_records.as_deref() else {
++        return Err("save lacks the single authoritative resident registry record");
++    };
++    let registry = bare.organism_registry();
++    if saved_record.organism_id() != creature.organism_id
++        || registry.get(creature.organism_id) != Some(saved_record)
++    {
++        return Err("restored world registry changed the authoritative resident record");
++    }
++    let saved_resident = (owner, saved_record.world_entity_id().raw());
++    let restored_registry = registry.iter().map(|r| {
++        (r.organism_id().raw(), r.world_entity_id().raw())
++    }).collect::<Vec<_>>();
++    let declared_externals = save.world.external_actor_ids.iter().flatten().map(|id| id.raw())
++        .collect::<Vec<_>>();
++    let saved_actors = save.world.objects.iter().filter_map(|o| {
++        o.organism_id.map(|id| (id.raw(), o.id.raw(), o.kind))
++    }).collect::<Vec<_>>();
++    let restored_actors = bare.organism_entity_ids().into_iter().map(|(id, entity)| {
++        let o = bare.entity(entity).ok_or("restored organism object binding is missing")?;
++        Ok((id.raw(), entity.raw(), o.kind))
++    }).collect::<Result<Vec<_>, &'static str>>()?;
++    if !exact_same_life_bindings(saved_resident, &restored_registry, &declared_externals,
++                                 &saved_actors, &restored_actors) {
++        return Err("restored registry or all-organism object bindings do not match the sealed save");
+     }
+     let bare_count = bare.tracked_objects().save_state(creature.organism_id)
+         .map_err(|_| "bare tracked count unavailable")?.records.len();
+@@ -218,3 +294,73 @@ fn main() -> ExitCode {
+         }
+     }
+ }
++
++#[cfg(test)]
++mod guard_tests {
++    use super::*;
++
++    const SUBJECT: (u64, u64) = (91, 700);
++    const EXTERNAL: u64 = 84;
++    const ACTOR: ActorBinding = (EXTERNAL, 595, WorldObjectKind::Agent);
++    const RESIDENT: ActorBinding = (SUBJECT.0, SUBJECT.1, WorldObjectKind::Agent);
++
++    fn admit(roles: &[(u64, u64)], externals: &[u64], saved: &[ActorBinding], restored: &[ActorBinding]) -> bool {
++        exact_same_life_bindings(SUBJECT, roles, externals, saved, restored)
++    }
++
++    #[test]
++    fn exact_owner_and_authenticated_external_are_admitted_regardless_of_order() {
++        assert!(admit(&[SUBJECT], &[], &[RESIDENT], &[RESIDENT]));
++        assert!(admit(&[SUBJECT], &[EXTERNAL], &[RESIDENT, ACTOR], &[ACTOR, RESIDENT]));
++    }
++
++    #[test]
++    fn missing_extra_reassigned_and_swapped_actor_pairs_are_refused() {
++        let saved = [RESIDENT, ACTOR];
++        let extra = (17, 285, WorldObjectKind::Agent);
++        let moved = (EXTERNAL, 199, WorldObjectKind::Agent);
++        for roster in [
++            vec![RESIDENT], vec![ACTOR], vec![RESIDENT, ACTOR, extra], vec![RESIDENT, moved],
++            vec![(SUBJECT.0, ACTOR.1, WorldObjectKind::Agent),
++                 (EXTERNAL, SUBJECT.1, WorldObjectKind::Agent)],
++        ] {
++            assert!(!admit(&[SUBJECT], &[EXTERNAL], &saved, &roster));
++        }
++    }
++
++    #[test]
++    fn aliased_bindings_and_missing_or_extra_external_authority_are_refused() {
++        let saved = [RESIDENT, ACTOR];
++        let alias_owner = (EXTERNAL, 596, WorldObjectKind::Agent);
++        let alias_entity = (EXTERNAL, SUBJECT.1, WorldObjectKind::Agent);
++        for alias in [
++            vec![RESIDENT, ACTOR, ACTOR],
++            vec![RESIDENT, ACTOR, alias_owner],
++            vec![RESIDENT, alias_entity],
++        ] {
++            assert!(!admit(&[SUBJECT], &[EXTERNAL], &saved, &alias));
++            assert!(!admit(&[SUBJECT], &[EXTERNAL], &alias, &alias));
++        }
++        for declared in [vec![], vec![EXTERNAL, EXTERNAL], vec![EXTERNAL, 17],
++                         vec![EXTERNAL, SUBJECT.0], vec![0, EXTERNAL]] {
++            assert!(!admit(&[SUBJECT], &declared, &saved, &saved));
++        }
++    }
++
++    #[test]
++    fn resident_external_role_changes_remaps_and_object_kind_changes_are_refused() {
++        let rows = [RESIDENT, ACTOR];
++        for roles in [
++            vec![],
++            vec![(EXTERNAL, ACTOR.1)],
++            vec![SUBJECT, (EXTERNAL, ACTOR.1)],
++            vec![(SUBJECT.0, ACTOR.1)],
++        ] {
++            assert!(!admit(&roles, &[EXTERNAL], &rows, &rows));
++        }
++        let changed_kind = (EXTERNAL, ACTOR.1, WorldObjectKind::Ball);
++        assert!(!admit(&[SUBJECT], &[EXTERNAL], &rows, &[RESIDENT, changed_kind]));
++        let malformed_role = [RESIDENT, changed_kind];
++        assert!(!admit(&[SUBJECT], &[EXTERNAL], &malformed_role, &malformed_role));
++    }
++}
