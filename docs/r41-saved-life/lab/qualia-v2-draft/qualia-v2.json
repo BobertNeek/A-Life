@@ -1,0 +1,112 @@
+{
+  "aggregate": "exactly sum weighted matched cases from complete cohort. Balance by condition before aggregation, positive/foil pairs always compose. Neither missing arms, unqualified fixtures, an absent route, or runner error gets 0, a full score, or denominator normalization. Incomplete v2 reports only observed cases unranked with explicit unresolved fields; never changes v1 base.",
+  "authority": "Independent verifier qualifies symmetric real observer-visible producers, then reviewer approves new frozen v2 ID/share. Set split and predeclare unseen procedural seeds off shared author storage before any results; fixed rehearsal recipes are never relabeled blind.",
+  "cases": [
+    {
+      "case_id": "v2-l1-noun-verb-composition",
+      "domain": "language",
+      "status": "unqualified-do-not-score",
+      "weight": 6
+    },
+    {
+      "case_id": "v2-l2-affordances",
+      "domain": "language",
+      "status": "unqualified-do-not-score",
+      "weight": 6
+    },
+    {
+      "case_id": "v2-d1-drive-names",
+      "domain": "drives",
+      "status": "unqualified-do-not-score",
+      "weight": 4
+    },
+    {
+      "case_id": "v2-d2-drive-action-release",
+      "domain": "drives",
+      "status": "unqualified-do-not-score",
+      "weight": 4
+    },
+    {
+      "case_id": "v2-s1-protective-egress",
+      "domain": "safety",
+      "status": "unqualified-do-not-score",
+      "weight": 5
+    },
+    {
+      "case_id": "v2-s2-peer-response",
+      "domain": "safety",
+      "status": "unqualified-do-not-score",
+      "weight": 3
+    },
+    {
+      "case_id": "v2-n-slalom",
+      "domain": "woodland",
+      "status": "unqualified-do-not-score",
+      "weight": 7
+    },
+    {
+      "case_id": "v2-n-ridge",
+      "domain": "woodland",
+      "status": "unqualified-do-not-score",
+      "weight": 5
+    }
+  ],
+  "domain_weights_pct": {
+    "drives": 8,
+    "frozen_v1": 60,
+    "language": 12,
+    "safety": 8,
+    "woodland": 12
+  },
+  "fixture_recipes_sha256": "d373fd7a58d47b093279ffe3fef624adee517304ed27c4ab610d48967a440ccf",
+  "frozen_v1": {
+    "current_reference_for_v1_only": 92.5,
+    "frozen_case_ids": [
+      "canonical-L-full",
+      "dogleg_corridor",
+      "doorway_chambers",
+      "original-autonomous-axis",
+      "original-autonomous-plus4",
+      "r12-word-ball-silence",
+      "r12-word-empty-silence",
+      "r12-word-food-obstacle-silence",
+      "r12-word-food-silence",
+      "r12-word-mirror-food-silence",
+      "r12-word-obstacle-silence",
+      "r14-word-mirror-root-silence",
+      "r14-word-mirror-scent-decoy-silence",
+      "r14-word-root-scent-decoy-silence",
+      "r14-word-root-silence",
+      "r14-word-scent-decoy-silence",
+      "r2-grade-left",
+      "r2-grade-right",
+      "r2-word-approach-food",
+      "r2-word-approach-toy",
+      "r2-word-mirror-approach-food",
+      "r2-word-mirror-approach-toy",
+      "r2-word-mirror-retreat-food",
+      "r2-word-mirror-retreat-toy",
+      "r2-word-mirror-silence",
+      "r2-word-retreat-food",
+      "r2-word-retreat-toy",
+      "r2-word-silence",
+      "u_detour"
+    ],
+    "rule": "publish v1 independently under exact frozen definition; contributes 60% of a future complete v2 score, not cross-version comparable. Reproduce v1 for every v2-ranked contender on the same conditions; do not use historic sealed as a control.",
+    "sha256": "8544f30571929b83198c206dd6a94ac97feac7db055784647f1014fae59e3129"
+  },
+  "required_receipts": [
+    "exact same-origin and opening private digest",
+    "separate actual public fixture digest",
+    "legitimate paid executor event and selected grounded target",
+    "observed controls/foils",
+    "same pinned valid evaluator and sampler",
+    "raw journals and per-case receipts",
+    "authenticated graph/reopen and digest-bound backups on promotion"
+  ],
+  "safety_policy": "Terminate immediately on actor death or runaway injury gate; native documented in-game ability, never terrain injury as opponent strike. Preserve exact failure evidence. Negative controls not post-hoc exclusions.",
+  "schema": "qualia.foundation.report-card.v2.draft.1",
+  "scorecard_id": "qualia-v2",
+  "status": "draft-not-approved-not-active",
+  "woodland_recipes_sha256": "72ecb256975010c060ec93ce0ba7493eef2aabe41deb10c499ed4e4032e37300"
+}
