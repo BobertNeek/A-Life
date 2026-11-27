@@ -1,0 +1,161 @@
+name: Qualia detached device-free world signature comparator
+on:
+  push:
+    branches: ["bob/qualia-g3-world-signature-compare-20261127"]
+    paths:
+      - ".github/workflows/qualia-g3-world-signature-compare-build.yml"
+      - "docs/r41-saved-life/g3-tracked-world-digest-compare-source.patch"
+permissions:
+  contents: read
+concurrency:
+  group: qualia-g3-world-signature-compare-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  source-build:
+    if: github.ref == 'refs/heads/bob/qualia-g3-world-signature-compare-20261127'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 22
+    env:
+      BASE: f466b83791cccb97568e6f718b92b052999cfb2b
+      RESEARCH: 0cd14f12a8012a9b00119a7b33939ca5e3dbeb53
+      SLEEP: cbe4e85cbfe5e5194de1fd3bf30bd17a7121fa3d
+      WRAPPER: 5cb8ebea10aed1fa6428c5166f27bf8b8eac5dd3
+      HISTORICAL_TEST: 3f5e70cbf65f631a3ee51f5856140abb9b8b1954
+      HISTORICAL_WORKFLOW_BLOB: 167884bae2b50706a9e0a7795c1dd4dc4cb9b77e
+      PIN_LOCK: 155699e9274f8890bc8c335669a62de48203ba315a33388a8f0caca71f0f7f37
+      RUST: "1.100.0"
+      PIN_RUST_COMMIT: 0ef1bc386059596dada8fb65b50425aab2ea637a
+      TARGET: x86_64-unknown-linux-gnu
+      CARGO_INCREMENTAL: "0"
+      CARGO_PROFILE_RELEASE_DEBUG: "0"
+      CARGO_PROFILE_RELEASE_INCREMENTAL: "false"
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Rebuild the recorded test source and apply only the comparator auto-bin
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git merge-base --is-ancestor "$HISTORICAL_TEST" HEAD
+          git merge-base --is-ancestor "$WRAPPER" "$HISTORICAL_TEST"
+          git merge-base --is-ancestor "$SLEEP" "$WRAPPER"
+          git merge-base --is-ancestor "$BASE" "$SLEEP"
+          git merge-base --is-ancestor "$RESEARCH" "$SLEEP"
+          test "$(git rev-parse "$HISTORICAL_TEST:.github/workflows/qualia-g3-recommit-probe-build.yml")" = "$HISTORICAL_WORKFLOW_BLOB"
+          workflow=.github/workflows/qualia-g3-world-signature-compare-build.yml
+          patch=docs/r41-saved-life/g3-tracked-world-digest-compare-source.patch
+          git diff --exit-code "$HISTORICAL_TEST" HEAD -- . ":(exclude)$workflow" ":(exclude)$patch"
+          git diff --exit-code "$BASE" HEAD --             docs/r41-saved-life/restore_source.py docs/r41-saved-life/SOURCE.json docs/r41-saved-life/patches
+          src="$RUNNER_TEMP/qualia-g3-world-signature-source"
+          out="$RUNNER_TEMP/qualia-g3-world-signature-evidence"
+          target="$RUNNER_TEMP/qualia-g3-world-signature-target"
+          mkdir "$out"
+          printf 'EXACT_SRC=%s\nEVIDENCE=%s\nCARGO_TARGET_DIR=%s\n' "$src" "$out" "$target" >> "$GITHUB_ENV"
+          python3 docs/r41-saved-life/restore_source.py "$GITHUB_WORKSPACE" "$src"
+          printf 'head=%s\nbase=%s\nhistorical_test=%s\nhistorical_workflow_blob=%s\n'             "$GITHUB_SHA" "$BASE" "$HISTORICAL_TEST" "$HISTORICAL_WORKFLOW_BLOB" > "$out/SOURCE-PINS.txt"
+          overlays="$(mktemp -d "$RUNNER_TEMP/qualia-g3-signature-overlays.XXXXXXXX")"
+          apply() {
+            local commit="$1" leaf="$2" sha="$3"
+            git show "$commit:docs/r41-saved-life/$leaf" > "$overlays/$leaf"
+            printf '%s  %s\n' "$sha" "$overlays/$leaf" | sha256sum -c -
+            (cd "$src"; git apply --check --whitespace=error "$overlays/$leaf"; git apply --whitespace=error "$overlays/$leaf")
+            printf 'overlay=%s:%s:%s\n' "$commit" "$leaf" "$sha" >> "$out/SOURCE-PINS.txt"
+          }
+          apply "$RESEARCH" research-catalog-source-only.patch 3dcf657b2b1149a7da52e7867c3bdbc4c4dfe8d4785b53c95f429c78aa1cd490
+          apply "$SLEEP" sleep-boundary-repair-source.patch c2815992c4e3e70a7b7bc42b307dc1d96e8c34483ea36cf2c98e06b9920282e6
+          apply "$SLEEP" sleep-legacy-publication-source.patch 692ec25acc620f502581e7299d952471c039812646e41f85cdd1d6f87ed5c66d
+          apply "$SLEEP" sleep-late-archive-retirement-source.patch ed46a3cedb6f0bfdcba54660be6e1645ea6ea9cc71c6b7015b255b790b66a17d
+          apply "$WRAPPER" publish-derived-completed-save-source.patch ab8b07f7ac688ff56e8ca4dfb59f2e44c492be8b3b3710601d77dea035675af6
+          apply "$HISTORICAL_TEST" g3-recommit-probe-source.patch 45d98eb14b7eca2cbf7973fc6962cb141768f34be23e4b25f3bd112cef0c5b6a
+          apply "$HISTORICAL_TEST" g3-recommit-explicit-software-vulkan.patch 0d4a7d4499803c3f4c769d89bfdbb12406d9cf69dd87bc65a6a89d8b0f20ea64
+          apply "$GITHUB_SHA" g3-tracked-world-digest-compare-source.patch 2518b5b72a7972791cddd1f973fca681decfc6267644a5d6ef67cabfd7b37a50
+          cd "$src"
+          printf '%s  %s\n'             "$PIN_LOCK" Cargo.lock             7b794ed46dae5a4d1309a47704d9853d929d239bfe4918eb74280d2b261b86d5 crates/alife_game_app/tests/external_completed_sleep_recommit.rs             68ab02e6842968259dbdea6fe8d42b3c6957ccbc3945acc74e311fb1e77252b5 crates/alife_world/src/bin/compare_saved_world_tracked_signature.rs | sha256sum -c -
+          printf 'lock=%s\nrust=%s\nrust_commit=%s\ntarget=%s\n'             "$PIN_LOCK" "$RUST" "$PIN_RUST_COMMIT" "$TARGET" >> "$out/SOURCE-PINS.txt"
+
+      - name: Compile the lightweight alife_world bin and verify the no-device dependency path
+        run: |
+          set -euo pipefail
+          rustup toolchain install "$RUST" --profile minimal --target "$TARGET"
+          version="$(rustc +"$RUST" -vV)"
+          grep -Fqx "release: $RUST" <<< "$version"
+          grep -Fqx "commit-hash: $PIN_RUST_COMMIT" <<< "$version"
+          grep -Fqx "host: $TARGET" <<< "$version"
+          cd "$EXACT_SRC"
+          timeout 6m cargo +"$RUST" fetch --locked --target "$TARGET"
+          cargo +"$RUST" tree --frozen --offline --target "$TARGET" --edges normal,build             -p alife_world --no-default-features > "$RUNNER_TEMP/qualia-g3-comparator-cargo-tree"
+          if grep -Eq '(^|[[:space:]├└─│])(alife_runtime|alife_game_app|alife_gpu|wgpu[^[:space:]]*|bevy[^[:space:]]*) v'             "$RUNNER_TEMP/qualia-g3-comparator-cargo-tree"; then
+            echo 'unexpected GPU-facing dependency in the device-free binary' >&2
+            exit 1
+          fi
+          timeout 12m cargo +"$RUST" build --frozen --offline --release --target "$TARGET" -j 1             -p alife_world --no-default-features --bin compare_saved_world_tracked_signature
+          binary=compare_saved_world_tracked_signature
+          install -m 0755 "$CARGO_TARGET_DIR/$TARGET/release/$binary" "$EVIDENCE/$binary"
+          LC_ALL=C readelf -h "$EVIDENCE/$binary" > "$RUNNER_TEMP/qualia-g3-signature-elf"
+          grep -Eq 'Class:[[:space:]]+ELF64' "$RUNNER_TEMP/qualia-g3-signature-elf"
+          grep -Eq 'Machine:[[:space:]]+Advanced Micro Devices X86-64' "$RUNNER_TEMP/qualia-g3-signature-elf"
+          printf '%s\n' locked_compile_link=passed gpu_facing_dependency=false > "$EVIDENCE/BUILD-CHECKS.txt"
+
+      - name: Verify synthetic pre-input refusals only
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' | tee -a "$EVIDENCE/BUILD-CHECKS.txt"
+          import hashlib, os, subprocess, tempfile
+          from pathlib import Path
+
+          elf = Path(os.environ["EVIDENCE"]) / "compare_saved_world_tracked_signature"
+          with tempfile.TemporaryDirectory(prefix="synthetic-world-signature-") as name:
+              directory = Path(name).resolve()
+              fake = directory / "invalid.txt"
+              fake.write_bytes(b"not a save\n")
+              fake.chmod(0o400)
+              alias = directory / "alias.txt"
+              alias.symlink_to(fake.name)
+              args = [str(fake), "0" * 64, "8", "1", "1", "1", "1,2,3,4", "5,6,7,8"]
+              valid = hashlib.sha256(fake.read_bytes()).hexdigest()
+
+              def tree():
+                  return sorted((p.name, p.lstat().st_mode, p.lstat().st_ino, p.lstat().st_size,
+                                 os.readlink(p) if p.is_symlink() else hashlib.sha256(p.read_bytes()).hexdigest())
+                                for p in directory.iterdir())
+
+              before = tree()
+              tests = [
+                  ("no_args", [], "usage: compare_saved_world_tracked_signature"),
+                  ("duplicate_recorded_digest", args[:-1] + [args[-2]], "a real, distinct recorded mismatch"),
+                  ("not_four_words", args[:-1] + ["5,6,7"], "exactly four canonical digest words"),
+                  ("alias", [str(alias)] + args[1:], "canonical path without aliases"),
+                  ("wrong_save_hash", args, "save SHA-256 mismatch"),
+                  ("hash_bound_invalid_save", [args[0], valid] + args[2:], "invalid save header"),
+              ]
+              for label, tail, expected in tests:
+                  p = subprocess.run([str(elf), *tail], cwd=directory, stdin=subprocess.DEVNULL,
+                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                                     env={"PATH": "/usr/bin:/bin", "LC_ALL": "C"}, timeout=10)
+                  if p.returncode != 1 or p.stdout or expected not in p.stderr or tree() != before:
+                      raise SystemExit(f"unexpected refusal boundary: {label}, exit={p.returncode}")
+                  print(f"{label}=passed")
+              print("private_execution=false")
+          PY
+          cd "$EVIDENCE"
+          sha256sum compare_saved_world_tracked_signature SOURCE-PINS.txt BUILD-CHECKS.txt > SHA256SUMS
+          sha256sum -c SHA256SUMS
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: qualia-g3-world-signature-compare-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/qualia-g3-world-signature-evidence/compare_saved_world_tracked_signature
+            ${{ runner.temp }}/qualia-g3-world-signature-evidence/SOURCE-PINS.txt
+            ${{ runner.temp }}/qualia-g3-world-signature-evidence/BUILD-CHECKS.txt
+            ${{ runner.temp }}/qualia-g3-world-signature-evidence/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 5
+          compression-level: 3

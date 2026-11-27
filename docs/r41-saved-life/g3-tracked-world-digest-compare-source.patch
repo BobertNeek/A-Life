@@ -1,0 +1,226 @@
+diff --git a/crates/alife_world/src/bin/compare_saved_world_tracked_signature.rs b/crates/alife_world/src/bin/compare_saved_world_tracked_signature.rs
+new file mode 100644
+index 0000000..abb9a22
+--- /dev/null
++++ b/crates/alife_world/src/bin/compare_saved_world_tracked_signature.rs
+@@ -0,0 +1,220 @@
++//! Read-only diagnostic for a recorded, single-resident canonical world mismatch.
++//! Projects the authentic portable save twice; it never opens a runtime or an asset.
++use alife_world::{
++    persistence::{P34_SAVE_FILE_SCHEMA, P34_SAVE_FILE_SCHEMA_VERSION, PortableSaveFile},
++    HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION,
++};
++use serde::Deserialize;
++use serde_json::{Value, json};
++use std::{
++    env, fs,
++    io::{Read, Write},
++    os::unix::fs::MetadataExt,
++    path::Path,
++    process::{Command, ExitCode, Stdio},
++};
++
++const MAX_SAVE_BYTES: u64 = 8 * 1024 * 1024;
++const USAGE: &str = "usage: compare_saved_world_tracked_signature ABSOLUTE_SAVE SAVE_SHA256 SIGNATURE_SCHEMA TICK OWNER TRACKED_COUNT RECORDED_BARE_WORDS_CSV RECORDED_LIVE_WORDS_CSV";
++
++#[derive(Deserialize)]
++struct SaveFormat {
++    schema: String,
++    schema_version: u16,
++}
++
++fn decimal(s: &str) -> Result<u64, &'static str> {
++    if s.is_empty() || (s.len() > 1 && s.starts_with('0')) || !s.bytes().all(|b| b.is_ascii_digit())
++    {
++        return Err("expected an exact unsigned decimal");
++    }
++    s.parse().map_err(|_| "unsigned decimal overflows")
++}
++
++fn words(s: &str) -> Result<[u64; 4], &'static str> {
++    let values = s.split(',').take(5).map(decimal).collect::<Result<Vec<_>, _>>()?;
++    values.try_into().map_err(|_| "expected exactly four canonical digest words")
++}
++
++fn identity(m: &fs::Metadata) -> (u64, u64, u32, u32, u64, u64, i64, i64, i64, i64) {
++    (
++        m.dev(), m.ino(), m.uid(), m.mode(), m.nlink(), m.len(),
++        m.mtime(), m.mtime_nsec(), m.ctime(), m.ctime_nsec(),
++    )
++}
++
++fn read_bound_save(path: &Path, digest: &str) -> Result<Vec<u8>, &'static str> {
++    if !path.is_absolute() || fs::canonicalize(path).ok().as_deref() != Some(path) {
++        return Err("save must be an absolute canonical path without aliases");
++    }
++    let uid = fs::metadata("/proc/self").map_err(|_| "process owner unavailable")?.uid();
++    let parent = path.parent().ok_or("save parent unavailable")?;
++    let parent_metadata = fs::symlink_metadata(parent).map_err(|_| "save parent unreadable")?;
++    if !parent_metadata.is_dir() || parent_metadata.uid() != uid || parent_metadata.mode() & 0o777 != 0o700 {
++        return Err("save parent must be an owner-only mode-0700 directory");
++    }
++    let before = fs::symlink_metadata(path).map_err(|_| "save metadata unavailable")?;
++    if !before.is_file()
++        || before.uid() != uid
++        || before.mode() & 0o777 != 0o400
++        || before.nlink() != 1
++        || !(1..=MAX_SAVE_BYTES).contains(&before.len())
++    {
++        return Err("save must be a nonempty bounded owner mode-0400 regular single-link file");
++    }
++
++    let file = fs::File::open(path).map_err(|_| "save open failed")?;
++    let opened = file.metadata().map_err(|_| "opened save metadata unavailable")?;
++    if identity(&before) != identity(&opened) {
++        return Err("save identity changed during open");
++    }
++    let mut bytes = Vec::with_capacity(before.len() as usize);
++    let mut bounded = file.take(MAX_SAVE_BYTES + 1);
++    bounded.read_to_end(&mut bytes).map_err(|_| "save read failed")?;
++    let finished = bounded.into_inner().metadata().map_err(|_| "finished save metadata unavailable")?;
++    let after = fs::symlink_metadata(path).map_err(|_| "save metadata lost after read")?;
++    if bytes.len() as u64 != before.len()
++        || identity(&before) != identity(&finished)
++        || identity(&before) != identity(&after)
++    {
++        return Err("save identity or size changed during read");
++    }
++
++    // Hash exactly the byte buffer that will be parsed, not a second open of
++    // the pathname. Use the fixed host utility with no shell or inherited env.
++    let mut sha = Command::new("/usr/bin/sha256sum")
++        .env_clear()
++        .stdin(Stdio::piped())
++        .stdout(Stdio::piped())
++        .stderr(Stdio::null())
++        .spawn()
++        .map_err(|_| "system SHA-256 utility unavailable")?;
++    let wrote = sha.stdin.take().ok_or("system SHA-256 stdin unavailable")
++        .and_then(|mut input| input.write_all(&bytes).map_err(|_| "system SHA-256 input failed"));
++    let hashes = sha.wait_with_output().map_err(|_| "system SHA-256 utility wait failed")?;
++    wrote?;
++    if !hashes.status.success() || hashes.stdout != format!("{digest}  -\n").as_bytes() {
++        return Err("save SHA-256 mismatch");
++    }
++    Ok(bytes)
++}
++
++fn run() -> Result<(Value, u8), &'static str> {
++    let a = env::args_os().skip(1).take(9).collect::<Vec<_>>();
++    if a.len() != 8 {
++        return Err(USAGE);
++    }
++    let digest = a[1].to_str().ok_or("invalid save SHA-256 encoding")?;
++    if digest.len() != 64 || !digest.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
++    {
++        return Err("expected a lowercase SHA-256");
++    }
++    let number = |i: usize| decimal(a[i].to_str().ok_or("expected unsigned decimal encoding")?);
++    let schema = number(2)?;
++    let tick = number(3)?;
++    let owner = number(4)?;
++    let count = number(5)?;
++    let word_arg = |i: usize| words(a[i].to_str().ok_or("invalid canonical digest encoding")?);
++    let recorded_bare = word_arg(6)?;
++    let recorded_live = word_arg(7)?;
++    if schema != u64::from(HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION)
++        || tick == 0 || owner == 0 || count == 0 || recorded_bare == recorded_live
++    {
++        return Err("expected current schema and a real, distinct recorded mismatch");
++    }
++
++    let bytes = read_bound_save(Path::new(&a[0]), digest)?;
++    let format: SaveFormat = serde_json::from_slice(&bytes).map_err(|_| "authenticated input has an invalid save header")?;
++    if format.schema != P34_SAVE_FILE_SCHEMA || format.schema_version != P34_SAVE_FILE_SCHEMA_VERSION {
++        return Err("authenticated input must already use the current portable schema");
++    }
++    let save = PortableSaveFile::from_json_str(
++        std::str::from_utf8(&bytes).map_err(|_| "authenticated input is not UTF-8")?,
++    )
++    .map_err(|_| "production portable save decode refused authentic bytes")?;
++    let [creature] = save.creatures.as_slice() else {
++        return Err("save does not have exactly one resident");
++    };
++    if save.world.tick.raw() != tick || creature.organism_id.raw() != owner {
++        return Err("saved tick or resident does not match the authenticated contract");
++    }
++    let tracked = &creature.gpu_brain.as_ref().ok_or("resident lacks a saved GPU sidecar")?.tracked_objects;
++    if tracked.organism_id != creature.organism_id || tracked.records.len() as u64 != count {
++        return Err("tracked state owner or record count does not match the authenticated contract");
++    }
++    tracked.validate_contract().map_err(|_| "saved tracked sidecar failed production validation")?;
++
++    let bare = save.restore_headless_world().map_err(|_| "production bare world restore refused authentic bytes")?;
++    let residents = bare.organism_entity_ids();
++    if residents.len() != 1 || residents[0].0 != creature.organism_id || bare.tick().raw() != tick {
++        return Err("restored world changed the single resident or tick");
++    }
++    let bare_count = bare.tracked_objects().save_state(creature.organism_id)
++        .map_err(|_| "bare tracked count unavailable")?.records.len();
++    if bare_count != 0 {
++        return Err("bare restore unexpectedly contains tracked records");
++    }
++    let baseline = bare.canonical_signature_digest().map_err(|_| "bare canonical world signature failed")?;
++    let mut completed = bare.clone();
++    completed.restore_tracked_object_states([(*tracked).clone()])
++        .map_err(|_| "production tracked-state install refused authentic sidecar")?;
++    let restored = completed.tracked_objects().save_state(creature.organism_id)
++        .map_err(|_| "installed tracked state unavailable")?;
++    if &restored != tracked || completed.tick() != bare.tick() {
++        return Err("tracked carry was not exact or moved the world tick");
++    }
++    let completed_digest = completed.canonical_signature_digest()
++        .map_err(|_| "tracked canonical world signature failed")?;
++    if bare.canonical_signature_digest().ok() != Some(baseline)
++        || baseline.schema_version != completed_digest.schema_version
++        || u64::from(baseline.schema_version) != schema
++    {
++        return Err("bare projection drifted or signature schemas differed");
++    }
++
++    let bare_matches = baseline.words == recorded_bare;
++    let completed_matches = completed_digest.words == recorded_live;
++    let first_remaining_group = if !bare_matches {
++        "bare_projection_vs_recorded_expected"
++    } else if !completed_matches {
++        "tracked_projection_vs_recorded_live_unlocalized"
++    } else {
++        "none"
++    };
++    let code = if bare_matches && completed_matches { 0 } else { 2 };
++    Ok((json!({
++        "schema": "alife.evidence.tracked_world_signature_comparison.v1",
++        "save_sha256": digest,
++        "canonical_signature_schema": schema,
++        "tick": tick,
++        "owner": owner,
++        "record_counts": {"bare": bare_count, "saved": count, "tracked_projection": restored.records.len()},
++        "recorded_bare": recorded_bare,
++        "computed_bare": baseline.words,
++        "recorded_live": recorded_live,
++        "computed_tracked_projection": completed_digest.words,
++        "bare_matches_recorded": bare_matches,
++        "tracked_projection_matches_recorded_live": completed_matches,
++        "first_remaining_group": first_remaining_group,
++        "world_ticks_advanced": 0,
++        "device_initialized": false,
++        "durable_state_written": false,
++    }), code))
++}
++
++fn main() -> ExitCode {
++    match run() {
++        Ok((report, code)) => {
++            let mut out = std::io::stdout().lock();
++            if serde_json::to_writer(&mut out, &report).is_ok() && out.write_all(b"\n").is_ok() {
++                ExitCode::from(code)
++            } else {
++                ExitCode::FAILURE
++            }
++        }
++        Err(error) => {
++            eprintln!("{error}");
++            ExitCode::FAILURE
++        }
++    }
++}
