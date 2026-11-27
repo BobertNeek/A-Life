@@ -1,0 +1,517 @@
+diff --git a/crates/alife_game_app/Cargo.toml b/crates/alife_game_app/Cargo.toml
+index 0fc9fac8c96d09df1d85ebe40705cdbe567f5f7b..5bc3f82e76d0fb4194852148c0afe411338cba67 100644
+--- a/crates/alife_game_app/Cargo.toml
++++ b/crates/alife_game_app/Cargo.toml
+@@ -90,6 +90,7 @@ windows-sys = { version = "0.61.2", features = [
+ default = []
+ contact211-witness = ["foundation-training", "alife_world/contact211-witness", "alife_gpu_backend/contact211-witness"]
+ contact211-rank32 = ["contact211-witness", "retained-language-pilot", "alife_gpu_backend/contact211-rank32"]
++contact211-rank32-crossed = ["contact211-rank32"]
+ bevy-app = [
+     "dep:accesskit",
+     "dep:bevy",
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/contact211_parity.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/contact211_parity.rs
+index daa07ffffcad4f00d869d56489bc23356db8937e..c08c3d1df2eb6ad9da874b245340b9db23aefa79 100644
+--- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/contact211_parity.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/contact211_parity.rs
+@@ -8,9 +8,12 @@ use serde_json::{json, Value};
+ use std::{fs, io::Read, path::Path};
+ 
+ pub(super) const SCHEMA: u16 = 7;
++pub(super) const CROSSED_SCHEMA: u16 = 8;
++const CROSSED_SCOPE: &str = "qualia.saved_life.contact211_rank32_crossed.v1";
+ const SCOPE: &str = "qualia.saved_life.contact211_f0_parity.v1";
+ const ADMIT: &str = "qualia.saved_life.contact211_f0_admission.v1";
+ const TRANSCRIPT: &str = "qualia.saved_life.contact211_f0_stock_reference.v1";
++const CROSSED_TRANSCRIPT: &str = "qualia.saved_life.contact211_rank32_crossed_stock_reference.v1";
+ const ARM_MODE: &str = "observer_only_one_signed_cut_fixed_0ns";
+ const CELL: &str = "contact211-language-cell.schema5.json";
+ const PERMIT: &str = "contact211-f0-admission.v1.json";
+@@ -135,12 +138,18 @@ fn read_local(root: &Path, name: &str) -> Result<Vec<u8>> {
+ }
+ 
+ // Digest checks bind approved bytes but do not confer external launch authority.
+-pub(super) fn resolve(root: &Path, bytes: &[u8]) -> Result<(Scope, Vec<u8>)> {
++pub(super) fn resolve(root: &Path, bytes: &[u8], crossed: bool) -> Result<(Scope, Vec<u8>)> {
++    if crossed && !cfg!(feature = "contact211-rank32-crossed") {
++        return Err("Crossed Rank32 feature is disabled".into());
++    }
++    let (schema, scope, transcript) = if crossed {
++        (CROSSED_SCHEMA, CROSSED_SCOPE, CROSSED_TRANSCRIPT)
++    } else { (SCHEMA, SCOPE, TRANSCRIPT) };
+     if bytes.is_empty() || bytes.len() > MAX {
+         return Err("Contact211 invalid outer manifest length".into());
+     }
+     let x: Envelope = serde_json::from_slice(bytes)?;
+-    if x.schema != SCHEMA || x.scope != SCOPE
++    if x.schema != schema || x.scope != scope
+         || !exact(&x.language_manifest_sha256) || !exact(&x.admission_sha256) {
+         return Err("Contact211 unsupported observer-only envelope".into());
+     }
+@@ -150,7 +159,8 @@ pub(super) fn resolve(root: &Path, bytes: &[u8]) -> Result<(Scope, Vec<u8>)> {
+     }
+     let a: Admission = serde_json::from_slice(&raw)?;
+     let current_time = now()?;
+-    if a.schema != ADMIT || a.scope != SCOPE || a.behavior_scope != ARM_MODE
++    if a.schema != ADMIT || a.scope != scope || a.behavior_scope != ARM_MODE
++        || (crossed && a.arm == Arm::PresampleWitness)
+         || !exact(&a.current_sha256) || !exact(&a.evaluator_sha256)
+         || !exact(&a.independent_operator_grant_sha256)
+         || a.language_manifest_sha256 != x.language_manifest_sha256
+@@ -169,7 +179,7 @@ pub(super) fn resolve(root: &Path, bytes: &[u8]) -> Result<(Scope, Vec<u8>)> {
+     let authorized_edit = a.arm.is_rank32_edit();
+     #[cfg(not(feature = "contact211-rank32"))]
+     let authorized_edit = false;
+-    if grant.schema != "qualia.saved_life.contact211_f0_operator_grant.v1" || grant.scope != SCOPE
++    if grant.schema != "qualia.saved_life.contact211_f0_operator_grant.v1" || grant.scope != scope
+         || grant.arm != a.arm || grant.current_sha256 != a.current_sha256
+         || grant.evaluator_sha256 != a.evaluator_sha256
+         || grant.language_manifest_sha256 != a.language_manifest_sha256
+@@ -224,7 +234,7 @@ pub(super) fn resolve(root: &Path, bytes: &[u8]) -> Result<(Scope, Vec<u8>)> {
+             let rb = read_local(root, REFERENCE)?;
+             if digest(&rb) != *xref { return Err("Contact211 prior reference hash mismatch".into()); }
+             let r: StockReference = serde_json::from_slice(&rb)?;
+-            if r.schema != TRANSCRIPT || r.source_current_sha256 != a.current_sha256
++            if r.schema != transcript || r.source_current_sha256 != a.current_sha256
+                 || r.evaluator_sha256 != a.evaluator_sha256
+                 || r.language_manifest_sha256 != x.language_manifest_sha256
+                 || !exact(&r.stock_arm_admission_sha256)
+@@ -241,7 +251,7 @@ pub(super) fn resolve(root: &Path, bytes: &[u8]) -> Result<(Scope, Vec<u8>)> {
+         _ => return Err("Contact211 arm/reference scope differs".into()),
+     };
+     Ok((Scope {
+-        schema: SCOPE, arm: a.arm, language_manifest_sha256: a.language_manifest_sha256,
++        schema: scope, arm: a.arm, language_manifest_sha256: a.language_manifest_sha256,
+         admission_sha256: x.admission_sha256, current_sha256: a.current_sha256,
+         evaluator_sha256: a.evaluator_sha256, frozen_stock_reference_sha256: a.prior_stock_reference_sha256,
+         reference, expires_unix_seconds: a.expires_unix_seconds,
+@@ -286,10 +296,14 @@ impl Scope {
+     }
+ 
+     pub(super) fn collect(&self, runtime: &mut GpuLiveBrainRuntime, step: &crate::gpu_live_runtime::FoundationTrainingStep) -> Result<Value> {
++        #[cfg(feature = "contact211-rank32-crossed")]
++        let mut payload_submitted = false;
+         let (world, proof) = match self.arm {
+             Arm::StockReference => (runtime.take_contact211_stock_reference().ok_or("Contact211 missing actual stock predispatch World/frame")?, None),
+             _ => {
+                 let capture = runtime.take_contact211_witness().ok_or("Contact211 witness not independently admitted at current cut")?;
++                #[cfg(feature = "contact211-rank32-crossed")]
++                { payload_submitted = capture.rank32_payload_submitted; }
+                 (capture.world, Some(capture.presample))
+             }
+         };
+@@ -332,7 +346,7 @@ impl Scope {
+         let requested_edit = self.rank32.is_some();
+         #[cfg(not(feature = "contact211-rank32"))]
+         let requested_edit = false;
+-        let receipt = json!({"scope":SCOPE, "arm":self.arm, "observer_only":!requested_edit, "world":observed_world,
++        let receipt = json!({"scope":self.schema, "arm":self.arm, "observer_only":!requested_edit, "world":observed_world,
+                   "actual_pre_sampler_gpu":gpu, "unchanged_signed_decision": {
+                     "all_stock_logit_u32_bits":step.behavior.logits.iter().map(|f|f.to_bits()).collect::<Vec<_>>(),
+                     "all_stock_decoder_input_u32_bits":step.behavior.decoder_inputs.iter().map(|f|f.to_bits()).collect::<Vec<_>>(),
+@@ -342,6 +356,13 @@ impl Scope {
+                     "weight_generation":step.behavior.active_weight_generation, "slot":step.after_inference.handle.slot(),
+                     "slot_generation":step.after_inference.handle.generation(), "sampling":step.behavior.sampling,
+                   }, "bonus_enabled":requested_edit, "official_score_eligible":false});
++        #[cfg(feature = "contact211-rank32-crossed")]
++        let receipt = if self.schema == CROSSED_SCOPE {
++            let mut x = receipt;
++            x["rank32_requested"] = json!(requested_edit);
++            x["rank32_payload_submitted"] = json!(payload_submitted);
++            x
++        } else { receipt };
+         #[cfg(feature = "contact211-rank32")]
+         if requested_edit {
+             let mut receipt = receipt;
+@@ -364,7 +385,8 @@ impl Scope {
+         struct Observed { owner: u64, tick: u64, frame: PerceptionFrameDigest, world_signature: HeadlessWorldSignatureDigest }
+         let w: Observed = serde_json::from_value(observer["world"].clone())?;
+         if !exact(rows_sha256) || !exact(outer_sha256) { return Err("Contact211 lacks sealed stock receipt digests".into()); }
+-        let result = StockReference { schema: TRANSCRIPT.into(), source_current_sha256: self.current_sha256.clone(),
++        let transcript = if self.schema == CROSSED_SCOPE { CROSSED_TRANSCRIPT } else { TRANSCRIPT };
++        let result = StockReference { schema: transcript.into(), source_current_sha256: self.current_sha256.clone(),
+             evaluator_sha256:self.evaluator_sha256.clone(),language_manifest_sha256:self.language_manifest_sha256.clone(),
+             stock_arm_admission_sha256:self.admission_sha256.clone(), stock_arm_outer_manifest_sha256:outer_sha256.into(),
+             original_physical_rows_sha256:rows_sha256.into(), owner:w.owner,tick:w.tick,frame:w.frame,world:w.world_signature };
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
+index 93cc39e45feed78c50ed0d7c8a839adf3e3a812a..d4c2c0a8b20cc5281e06f7ee764439fcb13bebec 100644
+--- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
+@@ -305,9 +305,15 @@ fn resolve_research(root: &Path, bytes: &[u8]) -> Result<ResolvedExperiment> {
+ }
+ 
+ #[cfg(feature = "retained-language-pilot")]
+-fn resolve_language_pilot(root: &Path, bytes: &[u8]) -> Result<ResolvedExperiment> {
++fn resolve_language_pilot(root: &Path, bytes: &[u8], crossed: bool) -> Result<ResolvedExperiment> {
+     use super::language_pilot as p;
+-    let (config, cell) = p::resolve(root, bytes)?;
++    #[cfg(feature = "contact211-rank32-crossed")]
++    let (config, cell) = if crossed { p::resolve_crossed(root, bytes)? } else { p::resolve(root, bytes)? };
++    #[cfg(not(feature = "contact211-rank32-crossed"))]
++    let (config, cell) = {
++        if crossed { return Err("Crossed Rank32 feature is disabled".into()); }
++        p::resolve(root, bytes)?
++    };
+     let request = SavedLifeRetentionRequest {
+         schema: 3,
+         evaluation_nonce: p::NONCE,
+@@ -396,14 +402,17 @@ pub fn evaluate_saved_life_retention_experiment(
+     #[derive(Deserialize)]
+     struct Version { schema: u16 }
+     let version: Version = serde_json::from_slice(&bytes)?;
++    #[cfg(not(feature = "contact211-rank32-crossed"))]
++    if version.schema == 8 { return Err("Crossed Rank32 feature is disabled".into()); }
+     #[cfg(all(feature = "retained-language-pilot", feature = "contact211-witness"))]
+-    if version.schema == super::contact211_parity::SCHEMA {
+-        let (observer, original_cue_manifest) = super::contact211_parity::resolve(admission_root, &bytes)?;
+-        let mut p = resolve_language_pilot(admission_root, &original_cue_manifest)?;
++    if version.schema == super::contact211_parity::SCHEMA || version.schema == super::contact211_parity::CROSSED_SCHEMA {
++        let crossed = version.schema == super::contact211_parity::CROSSED_SCHEMA;
++        let (observer, original_cue_manifest) = super::contact211_parity::resolve(admission_root, &bytes, crossed)?;
++        let mut p = resolve_language_pilot(admission_root, &original_cue_manifest, crossed)?;
+         let disclosed = serde_json::to_value(
+             p.identity.language_pilot().ok_or("Contact211 lost its native cue identity")?,
+         )?;
+-        if disclosed["layout"].as_str() != Some("a") || disclosed["player_tokens"] != serde_json::json!([9, 14]) {
++        if !crossed && (disclosed["layout"].as_str() != Some("a") || disclosed["player_tokens"] != serde_json::json!([9, 14])) {
+             return Err("Contact211 observer-only v1 admits only the disclosed layout-A GET BALL physical parity cut".into());
+         }
+         if !observer.binds_source_and_deadline(&p.identity.source_current_sha256,
+@@ -413,15 +422,17 @@ pub fn evaluate_saved_life_retention_experiment(
+         p.request.max_decisions = 1;
+         p.request.max_world_ticks = 1;
+         p.request.validate(now()?)?;
+-        p.identity.schema = super::contact211_parity::SCHEMA;
++        p.identity.schema = version.schema;
+         p.identity.manifest_sha256 = digest(&bytes);
+         p.identity.semantic_settings_sha256 = digest(&serde_json::to_vec(&(
+-            "contact211-f0-one-stock-signed-cut", &p.identity.semantic_settings_sha256,
++            if crossed { "contact211-rank32-crossed-one-stock-signed-cut" }
++                else { "contact211-f0-one-stock-signed-cut" }, &p.identity.semantic_settings_sha256,
+         ))?);
+-        p.identity.intervention = if observer.rank32_enabled() {
+-            "contact211_rank32_research_edit"
+-        } else {
+-            "contact211_f0_observer_only"
++        p.identity.intervention = match (crossed, observer.rank32_enabled()) {
++            (true, true) => "contact211_rank32_crossed_edit",
++            (true, false) => "contact211_rank32_crossed_stock",
++            (false, true) => "contact211_rank32_research_edit",
++            (false, false) => "contact211_f0_observer_only",
+         };
+         p.identity.contact211_parity = Some(observer);
+         admitted_paths(admission_root, source, output, manifest_path)?;
+@@ -431,7 +442,7 @@ pub fn evaluate_saved_life_retention_experiment(
+     if version.schema == 7 { return Err("Contact211 F0 observer feature is disabled".into()); }
+     #[cfg(feature = "retained-language-pilot")]
+     if version.schema == super::language_pilot::SCHEMA {
+-        let p = resolve_language_pilot(admission_root, &bytes)?;
++        let p = resolve_language_pilot(admission_root, &bytes, false)?;
+         admitted_paths(admission_root, source, output, manifest_path)?;
+         return evaluate_saved_life_retention_inner(
+             source, output, p.request, p.scent, Some(p.identity),
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/language_pilot.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/language_pilot.rs
+index 51e91c1880a6bc1e3910d307773307b48fd4a211..48c53b8fc5f3a9c0807da3fb9b3973680d0ddf5b 100644
+--- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/language_pilot.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/language_pilot.rs
+@@ -32,11 +32,11 @@ enum Layout {
+     B,
+ }
+ 
+-#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
++#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+ #[serde(deny_unknown_fields)]
+ struct Cell {
+     layout: Layout,
+-    tokens: [LanguageTokenId; 2],
++    tokens: Vec<LanguageTokenId>,
+ }
+ 
+ #[derive(Deserialize)]
+@@ -72,7 +72,7 @@ pub(super) struct Identity {
+     evaluator_sha256: String,
+     rubric_sha256: String,
+     layout: Layout,
+-    player_tokens: [u16; 2],
++    player_tokens: Vec<u16>,
+     #[serde(skip)]
+     cell: Cell,
+ }
+@@ -115,15 +115,25 @@ pub(super) fn reject_archived_toy_rolls(world_json: &str) -> Result<()> {
+ }
+ 
+ fn parse_manifest(bytes: &[u8]) -> Result<Manifest> {
++    parse_manifest_mode(bytes, false)
++}
++
++fn parse_manifest_mode(bytes: &[u8], crossed_rank32: bool) -> Result<Manifest> {
+     if bytes.len() > 8192 {
+         return Err("language pilot manifest exceeds 8192 bytes".into());
+     }
+     let m: Manifest = serde_json::from_slice(bytes)?;
++    let tokens = m.cell.tokens.iter().map(|t| t.raw()).collect::<Vec<_>>();
++    let sequence_is_admitted = if crossed_rank32 && cfg!(feature = "contact211-rank32-crossed") {
++        matches!(tokens.as_slice(), [] | [9] | [9, 1] | [9, 14])
++    } else {
++        !crossed_rank32 && matches!(tokens.as_slice(), [9, 1] | [9, 14] | [14, 1] | [6, 1])
++    };
+     if m.schema != SCHEMA || m.fixture_id != ID || m.source_current_sha256 != SOURCE
+         || !hex(&m.admission_sha256)
+         || m.run_id.is_empty() || m.run_id.len() > 64
+         || !m.run_id.bytes().all(|c| c.is_ascii_alphanumeric() || matches!(c, b'_' | b'-'))
+-        || !matches!(m.cell.tokens.map(LanguageTokenId::raw), [9, 1] | [9, 14] | [14, 1] | [6, 1])
++        || !sequence_is_admitted
+     {
+         return Err("unadmitted language pilot identity or Player pair".into());
+     }
+@@ -131,7 +141,15 @@ fn parse_manifest(bytes: &[u8]) -> Result<Manifest> {
+ }
+ 
+ pub(super) fn resolve(root: &Path, bytes: &[u8]) -> Result<(Manifest, Identity)> {
+-    let m = parse_manifest(bytes)?;
++    resolve_mode(root, parse_manifest(bytes)?)
++}
++
++#[cfg(feature = "contact211-rank32-crossed")]
++pub(super) fn resolve_crossed(root: &Path, bytes: &[u8]) -> Result<(Manifest, Identity)> {
++    resolve_mode(root, parse_manifest_mode(bytes, true)?)
++}
++
++fn resolve_mode(root: &Path, m: Manifest) -> Result<(Manifest, Identity)> {
+     let raw = read_local(root, "language-pilot-admission.v2.json", 8192)?;
+     if digest(&raw) != m.admission_sha256 {
+         return Err("language pilot operator admission hash mismatch".into());
+@@ -149,7 +167,7 @@ pub(super) fn resolve(root: &Path, bytes: &[u8]) -> Result<(Manifest, Identity)>
+     let identity = Identity {
+         fixture_id: ID, fixture_plan_sha256: PLAN, admission_sha256: m.admission_sha256.clone(),
+         evaluator_sha256: a.evaluator_sha256, rubric_sha256: a.rubric_sha256,
+-        layout: m.cell.layout, player_tokens: m.cell.tokens.map(LanguageTokenId::raw), cell: m.cell,
++        layout: m.cell.layout, player_tokens: m.cell.tokens.iter().map(|t| t.raw()).collect(), cell: m.cell.clone(),
+     };
+     Ok((m, identity))
+ }
+@@ -166,9 +184,9 @@ pub(super) struct Custody {
+ 
+ pub(super) struct Opened {
+     layout: Layout,
+-    atom: AudibleUtterance,
+-    starter_membership: [bool; 2],
+-    inherited_word_gain: [f32; 2],
++    atom: Option<AudibleUtterance>,
++    starter_membership: Vec<bool>,
++    inherited_word_gain: Vec<f32>,
+     pub(super) setup: Value,
+ }
+ 
+@@ -282,7 +300,13 @@ fn free(world: &HeadlessWorld, id: WorldEntityId, kind: WorldObjectKind, owner:
+         && !world.retained_language_pilot_grab_probe(owner, id).0)
+ }
+ 
+-fn hear(heard: &[Option<HeardToken>], atom: &AudibleUtterance, at: Tick) -> Result<()> {
++fn hear(heard: &[Option<HeardToken>], atom: Option<&AudibleUtterance>, at: Tick) -> Result<()> {
++    let Some(atom) = atom else {
++        if heard.iter().any(Option::is_some) {
++            return Err("crossed Rank32 quiet control did not have an empty sealed heard lane".into());
++        }
++        return Ok(());
++    };
+     let players = heard.iter().flatten()
+         .filter(|h| h.source_kind == UtteranceSourceKind::Player).collect::<Vec<_>>();
+     if heard.iter().flatten().any(|h| h.source_kind == UtteranceSourceKind::Teacher) {
+@@ -295,7 +319,7 @@ fn hear(heard: &[Option<HeardToken>], atom: &AudibleUtterance, at: Tick) -> Resu
+         if !players.is_empty() { return Err("language pilot retained or introduced fresh Player input after TTL".into()); }
+         return Ok(());
+     }
+-    if players.len() != 2 || !players.iter().enumerate().all(|(i, h)| {
++    if players.len() != atom.tokens.len() || !players.iter().enumerate().all(|(i, h)| {
+         let c = h.confidence.raw();
+         h.utterance_id == atom.utterance_id && usize::from(h.sequence_position) == i
+             && h.addressee == atom.addressee && h.speaker_id.is_none() && h.source_entity.is_none()
+@@ -330,10 +354,10 @@ impl Identity {
+         if !starter.iter().map(|token| token.raw()).eq([1, 2, 3, 4, 5, 6]) {
+             return Err("language pilot starter vocabulary differs from exact R44".into());
+         }
+-        let starter_membership = self.cell.tokens.map(|token| starter.contains(&token));
+-        let inherited_word_gain = self.cell.tokens.map(|token| {
++        let starter_membership: Vec<bool> = self.cell.tokens.iter().map(|token| starter.contains(token)).collect();
++        let inherited_word_gain: Vec<f32> = self.cell.tokens.iter().map(|token| {
+             world.retained_language_pilot_word_gain(owner, u32::from(token.raw()))
+-        });
++        }).collect();
+         let (sn, cs) = body.body_yaw.sin_cos();
+         let at = |f: f32, l: f32| Vec3f::new(
+             body.position.x + f*cs - l*sn, body.position.y, body.position.z + f*sn + l*cs);
+@@ -366,15 +390,25 @@ impl Identity {
+             || old.iter().any(|o| !PROPS.contains(&o.id) && staged.entity(o.id) != Some(o))
+         { return Err("language pilot setup changed the common start or lacks both visible free props".into()); }
+ 
+-        let atom = staged.emit_player_tokens(Some(owner), at(0.25, 0.0), self.cell.tokens.to_vec())?;
+-        if staged.audible_utterances().as_slice() != std::slice::from_ref(&atom)
+-            || atom.source_kind != UtteranceSourceKind::Player || atom.addressee != Some(owner)
+-            || atom.emitted_tick != tick || atom.expires_after_tick.raw() != OPENING + 1
+-            || atom.speaker_id.is_some() || atom.teacher_channel.is_some()
+-            || atom.confidence.raw().to_bits() != 1.0_f32.to_bits()
+-        { return Err("language pilot lost the unique real Player stimulus".into()); }
++        let atom = if self.cell.tokens.is_empty() {
++            // A quiet trial must not allocate an utterance ID, emit a hidden word,
++            // change acoustic inputs, or skip the same physical fixture checks.
++            None
++        } else {
++            let atom = staged.emit_player_tokens(Some(owner), at(0.25, 0.0), self.cell.tokens.clone())?;
++            if staged.audible_utterances().as_slice() != std::slice::from_ref(&atom)
++                || atom.source_kind != UtteranceSourceKind::Player || atom.addressee != Some(owner)
++                || atom.emitted_tick != tick || atom.expires_after_tick.raw() != OPENING + 1
++                || atom.speaker_id.is_some() || atom.teacher_channel.is_some()
++                || atom.confidence.raw().to_bits() != 1.0_f32.to_bits()
++            { return Err("language pilot lost the unique real Player stimulus".into()); }
++            Some(atom)
++        };
+         let post = staged.sensory_report(owner, tick)?;
+-        hear(&post.core_snapshot.language_context.heard_tokens, &atom, tick)?;
++        hear(&post.core_snapshot.language_context.heard_tokens, atom.as_ref(), tick)?;
++        if atom.is_none() && (!staged.audible_utterances().is_empty() || post.core_snapshot != pre.core_snapshot) {
++            return Err("crossed Rank32 quiet control changed the silent physical opening".into());
++        }
+         if visible(&post) != vis || post.contact_entities != pre.contact_entities
+             || staged.tick() != tick || staged.entity(body.id) != Some(body)
+         { return Err("language pilot sound changed common opening".into()); }
+@@ -404,11 +438,12 @@ impl Opened {
+         world: &HeadlessWorld, before: [Custody; 2], listener: (Vec3f, f32), outcome: Tick) -> Result<Value>
+     {
+         let tick = frame.tick();
+-        if self.atom.addressee != Some(frame.organism_id()) || tick.raw().checked_add(1) != Some(outcome.raw())
++        if self.atom.as_ref().is_some_and(|atom| atom.addressee != Some(frame.organism_id()))
++            || tick.raw().checked_add(1) != Some(outcome.raw())
+             || outcome != world.tick() || !(OPENING..OPENING + TICKS).contains(&tick.raw())
+         { return Err("language pilot custody and sealed decision have different owners or ticks".into()); }
+         let heard = &frame.sensory().language_context.heard_tokens;
+-        hear(heard, &self.atom, tick)?;
++        hear(heard, self.atom.as_ref(), tick)?;
+         let mut offers = [None, None];
+         let mut full = Vec::new();
+         for (j, id) in PROPS.into_iter().enumerate() {
+@@ -459,17 +494,19 @@ impl Opened {
+             }
+         }
+         let (listener_position, listener_body_yaw) = listener;
+-        let src = self.atom.source_position;
+-        let audio_distance_m = (listener_position.x-src.x).hypot(listener_position.y-src.y)
+-            .hypot(listener_position.z-src.z);
++        let acoustics = self.atom.as_ref().map_or(Value::Null, |atom| {
++            let src = atom.source_position;
++            let distance = (listener_position.x-src.x).hypot(listener_position.y-src.y)
++                .hypot(listener_position.z-src.z);
++            json!({"listener_position":listener_position,"listener_body_yaw":listener_body_yaw,
++                "sealed_listener_rotation":frame.body().pose.rotation,
++                "source_position":src,"source_strength":atom.confidence.raw(),"distance_m":distance,
++                "starter_membership":self.starter_membership,"native_inherited_word_gain":self.inherited_word_gain})
++        });
+         Ok(json!({"schema_version":1,"observer_only":true,"organism":frame.organism_id(),
+             "decision_tick":tick,"outcome_tick":outcome,"frame_digest":frame.frame_digest(),
+             "sealed_heard_tokens":heard,"same_target_grab_offers":full,
+-            "acoustics":{"listener_position":listener_position,"listener_body_yaw":listener_body_yaw,
+-                "sealed_listener_rotation":frame.body().pose.rotation,
+-                "source_position":src,"source_strength":self.atom.confidence.raw(),"distance_m":audio_distance_m,
+-                "starter_membership":self.starter_membership,"native_inherited_word_gain":self.inherited_word_gain},
+-            "custody_before":before,"custody_after":self.custody(world)?}))
++            "acoustics":acoustics,"custody_before":before,"custody_after":self.custody(world)?}))
+     }
+ }
+ 
+@@ -493,14 +530,45 @@ mod tests {
+             w.sensory_report(who, w.tick()).unwrap().core_snapshot.language_context.heard_tokens
+         };
+         assert_eq!(atom.confidence.raw().to_bits(), 1.0_f32.to_bits());
+-        assert!(hear(&heard(&world, owner), &atom, t).is_ok());
+-        assert!(hear(&heard(&world, other), &atom, t).is_err());
++        assert!(hear(&heard(&world, owner), Some(&atom), t).is_ok());
++        assert!(hear(&heard(&world, other), Some(&atom), t).is_err());
+         assert_eq!(world.advance_tick().raw(), t.raw() + 1);
+-        assert!(hear(&heard(&world, owner), &atom, world.tick()).is_ok());
++        assert!(hear(&heard(&world, owner), Some(&atom), world.tick()).is_ok());
+         assert_eq!(world.advance_tick().raw(), t.raw() + 2);
+         let h0 = heard(&world, owner);
+         assert!(h0.iter().flatten().all(|h| h.source_kind != UtteranceSourceKind::Player));
+-        assert!(hear(&h0, &atom, world.tick()).is_ok());
++        assert!(hear(&h0, Some(&atom), world.tick()).is_ok());
++    }
++
++    #[cfg(feature = "contact211-rank32-crossed")]
++    #[test]
++    fn crossed_sequences_do_not_expand_standalone_schema5_or_emit_a_quiet_atom() {
++        let mut m = json!({"schema":SCHEMA,"fixture_id":ID,"run_id":"crossed-cpu",
++            "source_current_sha256":SOURCE,"admission_sha256":"a".repeat(64),
++            "cell":{"layout":"b","tokens":[]},"deadline_unix_seconds":1});
++        for (tokens, crossed, legacy) in [
++            (json!([]), true, false), (json!([9]), true, false),
++            (json!([9,1]), true, true), (json!([9,14]), true, true),
++            (json!([14,1]), false, true), (json!([6,1]), false, true),
++            (json!([9,1,14]), false, false), (json!([0]), false, false),
++        ] {
++            m["cell"]["tokens"] = tokens;
++            let b = serde_json::to_vec(&m).unwrap();
++            assert_eq!(parse_manifest_mode(&b, true).is_ok(), crossed);
++            assert_eq!(parse_manifest(&b).is_ok(), legacy);
++        }
++        let owner = OrganismId(3);
++        let mut world = alife_world::HeadlessScenarioBuilder::new(77)
++            .agent("crossed-listener", owner, Vec3f::ZERO).build().unwrap();
++        let t = world.tick();
++        let heard = |w: &HeadlessWorld| w.sensory_report(owner, t).unwrap().core_snapshot.language_context.heard_tokens;
++        assert!(hear(&heard(&world), None, t).is_ok());
++        assert!(world.audible_utterances().is_empty());
++        let at = Vec3f::new(0.25, 0.0, 0.0);
++        let atom = world.emit_player_tokens(Some(owner), at, vec![LanguageTokenId::new(9).unwrap()]).unwrap();
++        assert!(hear(&heard(&world), None, t).is_err());
++        assert!(hear(&heard(&world), Some(&atom), t).is_ok());
++        assert_eq!(atom.tokens.len(), 1);
+     }
+ 
+     #[test]
+diff --git a/crates/alife_game_app/src/gpu_live_runtime/contact211_f0_witness.rs b/crates/alife_game_app/src/gpu_live_runtime/contact211_f0_witness.rs
+index 7b5ac5a9b18b79756d054b18243af2259dbcbb0c..92925c0c2ce5aa2ff8e17b72b530c38367d74e1e 100644
+--- a/crates/alife_game_app/src/gpu_live_runtime/contact211_f0_witness.rs
++++ b/crates/alife_game_app/src/gpu_live_runtime/contact211_f0_witness.rs
+@@ -16,6 +16,8 @@ pub struct Contact211WitnessRequest {
+ pub struct Contact211F0Witness {
+     pub world: Contact211WorldWitness,
+     pub presample: Contact211PresampleReport,
++    #[cfg(feature = "contact211-rank32-crossed")]
++    pub rank32_payload_submitted: bool,
+ }
+ 
+ pub(super) enum Contact211Observation {
+@@ -275,6 +277,8 @@ impl GpuLiveBrainRuntime {
+             // keep the original counter-before-submit stock ordering.
+             self.training_sampling.as_mut().expect("training enabled").counter = next_counter;
+         }
++        #[cfg(feature = "contact211-rank32-crossed")]
++        let mut rank32_payload_submitted = false;
+         let (world, ticks, proof) = match dispatch {
+             Contact211SignedSubmission::Stock => return self.backend.tick_memory_batch_training(batch, configs),
+             Contact211SignedSubmission::Reference(world) => {
+@@ -292,7 +296,10 @@ impl GpuLiveBrainRuntime {
+                     let weights = self.contact211_rank32_weights.take();
+                     let input = weights.and_then(|weights| self.contact211_rank32_input(&prepared[0].frame, &world, weights));
+                     if let Some(input) = input.as_ref() {
+-                        self.backend.tick_memory_batch_training_contact211_rank32(batch, configs, gate, input)?
++                        let exact = self.backend.tick_memory_batch_training_contact211_rank32(batch, configs, gate, input)?;
++                        #[cfg(feature = "contact211-rank32-crossed")]
++                        { rank32_payload_submitted = true; }
++                        exact
+                     } else {
+                         self.backend.tick_memory_batch_training_contact211_witness_strict(batch, configs, gate)?
+                     }
+@@ -313,7 +320,11 @@ impl GpuLiveBrainRuntime {
+                         && g.observed_f9_14_bits == w.appearance_f9_14_bits
+                 })
+         }) {
+-            self.contact211_pending = Some(Contact211Observation::Witness(Contact211F0Witness { world, presample }));
++            self.contact211_pending = Some(Contact211Observation::Witness(Contact211F0Witness {
++                world, presample,
++                #[cfg(feature = "contact211-rank32-crossed")]
++                rank32_payload_submitted,
++            }));
+         }
+         Ok(ticks)
+     }
