@@ -232,7 +232,7 @@
 +            store_pod_slice_at(&mut live, base, ranges.replay_span_words.start, &spans)?;
 +            if validate_learning_slot_layout(
 +                previous.record(),
-+                previous.counts(),
++                previous.brain_slot().typed_counts(),
 +                ranges,
 +                &previous.immutable_plan_words,
 +                previous.ranges.immutable_plan_words.start,

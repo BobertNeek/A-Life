@@ -110,7 +110,7 @@
 +            store_pod_slice_at(&mut live, base, ranges.replay_span_words.start, &spans)?;
 +            if validate_learning_slot_layout(
 +                previous.record(),
-+                previous.counts(),
++                previous.brain_slot().typed_counts(),
 +                ranges,
 +                &previous.immutable_plan_words,
 +                previous.ranges.immutable_plan_words.start,
@@ -231,7 +231,7 @@
 +            let mut learned_live = grown.mutable_state_words.clone();
 +            store_pod_slice_at(&mut learned_live, base, ranges.replay_span_words.start, &captured)?;
 +            validate_learning_slot_layout(
-+                grown.record(), grown.counts(), ranges, &grown.immutable_plan_words, plan_base,
++                grown.record(), grown.brain_slot().typed_counts(), ranges, &grown.immutable_plan_words, plan_base,
 +                &grown.immutable_weight_words, grown.ranges.immutable_weight_words.start,
 +                &learned_live, base,
 +            )?;
