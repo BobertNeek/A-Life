@@ -1,0 +1,160 @@
+name: Qualia detached retained language pilot
+
+on:
+  push:
+    branches: ["bob/qualia-retained-language-pilot-20261127"]
+    paths:
+      - ".github/workflows/qualia-retained-language-pilot-build.yml"
+      - "docs/r41-saved-life/retained-language-pilot-source.patch"
+      - "docs/r41-saved-life/retained-language-pilot-source-pins.json"
+      - "scripts/check_retained_language_pilot_cli.py"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qualia-language-pilot-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  detached-source-qualification:
+    if: github.ref == 'refs/heads/bob/qualia-retained-language-pilot-20261127'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 48
+    env:
+      PIN_PARENT: 7a5061285be79275d914f3f8852eaace75c9af1b
+      PIN_SOURCE: f466b83791cccb97568e6f718b92b052999cfb2b
+      PIN_RESEARCH_COMMIT: 0cd14f12a8012a9b00119a7b33939ca5e3dbeb53
+      PIN_RESEARCH_PATCH: 3dcf657b2b1149a7da52e7867c3bdbc4c4dfe8d4785b53c95f429c78aa1cd490
+      PIN_REPAIR_PATCH: c2815992c4e3e70a7b7bc42b307dc1d96e8c34483ea36cf2c98e06b9920282e6
+      PIN_LEGACY_PATCH: 692ec25acc620f502581e7299d952471c039812646e41f85cdd1d6f87ed5c66d
+      PIN_ADAPTER_PATCH: 325d3e15f857d202b10d930c49c408e220af61a0c0ad56ef634873369ed89a76
+      PIN_ADAPTER_LEAVES: 31d9daf260499d4026066ca43beba10e9e16fab0a2bcce2a4d8bd7843bdca631
+      PIN_LOCK: 155699e9274f8890bc8c335669a62de48203ba315a33388a8f0caca71f0f7f37
+      PIN_RUSTC_COMMIT: 0ef1bc386059596dada8fb65b50425aab2ea637a
+      RUST_TOOLCHAIN: "1.100.0"
+      TARGET: x86_64-unknown-linux-gnu
+      CARGO_BUILD_JOBS: "1"
+      CARGO_INCREMENTAL: "0"
+      CARGO_PROFILE_RELEASE_DEBUG: "0"
+      CARGO_PROFILE_RELEASE_INCREMENTAL: "false"
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check out the exact detached source-only commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify exact parent, reviewed overlay, per-leaf preimages and lock
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git merge-base --is-ancestor "$PIN_PARENT" HEAD
+          git merge-base --is-ancestor "$PIN_SOURCE" "$PIN_PARENT"
+          git merge-base --is-ancestor "$PIN_RESEARCH_COMMIT" "$PIN_PARENT"
+          git diff --exit-code "$PIN_SOURCE" HEAD -- docs/r41-saved-life/{restore_source.py,SOURCE.json,patches}
+          diff -u <(printf '%s\n' \
+            $'A\t.github/workflows/qualia-retained-language-pilot-build.yml' \
+            $'A\tdocs/r41-saved-life/retained-language-pilot-source-pins.json' \
+            $'A\tdocs/r41-saved-life/retained-language-pilot-source.patch' \
+            $'A\tscripts/check_retained_language_pilot_cli.py') \
+            <(git diff --name-status --no-renames "$PIN_PARENT" HEAD | LC_ALL=C sort)
+          export EXACT_SRC="$RUNNER_TEMP/qualia-language-pilot-source"
+          export CARGO_TARGET_DIR="$RUNNER_TEMP/qualia-language-pilot-target"
+          export EVIDENCE="$RUNNER_TEMP/qualia-language-pilot-evidence"
+          printf 'EXACT_SRC=%s\nCARGO_TARGET_DIR=%s\nEVIDENCE=%s\n' \
+            "$EXACT_SRC" "$CARGO_TARGET_DIR" "$EVIDENCE" >> "$GITHUB_ENV"
+          mkdir "$EVIDENCE"
+          research="$RUNNER_TEMP/pinned-research.patch"
+          repair="$RUNNER_TEMP/pinned-sleep-boundary-repair.patch"
+          legacy="$RUNNER_TEMP/pinned-sleep-legacy-publication.patch"
+          git show "$PIN_RESEARCH_COMMIT:docs/r41-saved-life/research-catalog-source-only.patch" > "$research"
+          git show "$PIN_PARENT:docs/r41-saved-life/sleep-boundary-repair-source.patch" > "$repair"
+          git show "$PIN_PARENT:docs/r41-saved-life/sleep-legacy-publication-source.patch" > "$legacy"
+          adapter="$GITHUB_WORKSPACE/docs/r41-saved-life/retained-language-pilot-source.patch"
+          pins="$GITHUB_WORKSPACE/docs/r41-saved-life/retained-language-pilot-source-pins.json"
+          printf '%s  %s\n' "$PIN_RESEARCH_PATCH" "$research" "$PIN_REPAIR_PATCH" "$repair" \
+            "$PIN_LEGACY_PATCH" "$legacy" "$PIN_ADAPTER_PATCH" "$adapter" \
+            "$PIN_ADAPTER_LEAVES" "$pins" | sha256sum -c - | tee "$EVIDENCE/build.log"
+          printf 'event_commit=%s\nparent=%s\nclosure_source=%s\nresearch_commit=%s\nreviewed_adapter=%s\n' \
+            "$GITHUB_SHA" "$PIN_PARENT" "$PIN_SOURCE" "$PIN_RESEARCH_COMMIT" "$PIN_ADAPTER_PATCH" | tee -a "$EVIDENCE/build.log"
+          python3 docs/r41-saved-life/restore_source.py "$GITHUB_WORKSPACE" "$EXACT_SRC" | tee -a "$EVIDENCE/build.log"
+          cd "$EXACT_SRC"
+          for p in "$research" "$repair" "$legacy"; do
+            git apply --check "$p"
+            git apply "$p"
+          done
+          python3 - "$pins" "$adapter" <<'PY' | tee -a "$EVIDENCE/build.log"
+          import hashlib, json, pathlib, subprocess, sys
+
+          pins = json.loads(pathlib.Path(sys.argv[1]).read_bytes())
+          leaves = pins["changed_source_leaves"]
+          assert len(leaves) == 6 and sum(s["parent_sha256"] is None for s in leaves.values()) == 1
+          def check(kind):
+              for name, expected in leaves.items():
+                  p = pathlib.Path(name)
+                  value = expected[kind + "_sha256"]
+                  if value is None:
+                      assert not p.exists() and not p.is_symlink(), name
+                  else:
+                      assert p.is_file() and not p.is_symlink(), name
+                      assert hashlib.sha256(p.read_bytes()).hexdigest() == value, name
+              catalog = pathlib.Path("crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/research_catalog.rs")
+              assert hashlib.sha256(catalog.read_bytes()).hexdigest() == pins["research_catalog_unchanged_sha256"]
+              print("Exact adapter leaves and unchanged research catalog:", kind)
+          check("parent")
+          subprocess.run(["git", "apply", "--check", sys.argv[2]], check=True)
+          subprocess.run(["git", "apply", sys.argv[2]], check=True)
+          check("result")
+          PY
+          printf '%s  Cargo.lock\n' "$PIN_LOCK" | sha256sum -c - | tee -a "$EVIDENCE/build.log"
+
+      - name: Compile the real shared CLI with the pilot off and on
+        run: |
+          set -euo pipefail
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --target "$TARGET"
+          version="$(rustc +"$RUST_TOOLCHAIN" -vV)"
+          grep -Fqx "release: $RUST_TOOLCHAIN" <<< "$version"
+          grep -Fqx "commit-hash: $PIN_RUSTC_COMMIT" <<< "$version"
+          grep -Fqx "host: $TARGET" <<< "$version"
+          printf '%s\n' "$version" | tee -a "$EVIDENCE/build.log"
+          cd "$EXACT_SRC"
+          timeout 8m cargo +"$RUST_TOOLCHAIN" fetch --locked --target "$TARGET" 2>&1 | tee -a "$EVIDENCE/build.log"
+          for mode in off on; do
+            features=foundation-training,gpu-tests
+            if [[ "$mode" == on ]]; then features=retained-language-pilot; fi
+            printf 'shared CLI build mode=%s features=%s\n' "$mode" "$features" | tee -a "$EVIDENCE/build.log"
+            timeout 27m cargo +"$RUST_TOOLCHAIN" build --frozen --offline --release --target "$TARGET" -j 1 \
+              -p alife_game_app --features "$features" --bin evaluate_saved_life_retention 2>&1 | tee -a "$EVIDENCE/build.log"
+            install -m 0755 "$CARGO_TARGET_DIR/$TARGET/release/evaluate_saved_life_retention" \
+              "$EVIDENCE/evaluate_saved_life_retention-$mode"
+          done
+          printf '%s  Cargo.lock\n' "$PIN_LOCK" | sha256sum -c - | tee -a "$EVIDENCE/build.log"
+
+      - name: Actual compiled CLI guards, with no checkpoint or device access
+        run: |
+          set -euo pipefail
+          python3 "$GITHUB_WORKSPACE/scripts/check_retained_language_pilot_cli.py" \
+            "$EVIDENCE/evaluate_saved_life_retention-off" "$EVIDENCE/evaluate_saved_life_retention-on" \
+            "$EXACT_SRC/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/language_pilot.rs" \
+            | tee -a "$EVIDENCE/build.log"
+          cd "$EVIDENCE"
+          sha256sum evaluate_saved_life_retention-off evaluate_saved_life_retention-on build.log > SHA256SUMS
+          sha256sum -c SHA256SUMS
+
+      - name: Retain only detached source-built ELFs and device-free build evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: qualia-detached-language-pilot-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/qualia-language-pilot-evidence/evaluate_saved_life_retention-off
+            ${{ runner.temp }}/qualia-language-pilot-evidence/evaluate_saved_life_retention-on
+            ${{ runner.temp }}/qualia-language-pilot-evidence/build.log
+            ${{ runner.temp }}/qualia-language-pilot-evidence/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 5
+          compression-level: 3
