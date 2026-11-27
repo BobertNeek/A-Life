@@ -63,6 +63,8 @@ def reopen(e, i):
     return dict(schema="alife.brain_surgery.reopen_receipt.v1", schema_version=1,
                 base_id=i["base_id"], foundation_digest=i["foundation_digest"],
                 dendritic_branches_sha256=i["dendritic_branches_sha256"],
+                source_current_sha256=e["source_current_sha256"],
+                evaluator_sha256=e["executable_sha256"],
                 dendritic_branch_count=i["dendritic_branch_count"], tick=start,
                 parent_pid=parent, child_pid=child, verified=True, semantic_prior_mode=mode,
                 verified_at_unix=timestamp)
