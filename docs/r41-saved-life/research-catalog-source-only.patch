@@ -1,3 +1,17 @@
+diff --git a/crates/alife_game_app/src/bin/evaluate_saved_life_retention.rs b/crates/alife_game_app/src/bin/evaluate_saved_life_retention.rs
+--- a/crates/alife_game_app/src/bin/evaluate_saved_life_retention.rs
++++ b/crates/alife_game_app/src/bin/evaluate_saved_life_retention.rs
+@@ -6,6 +6,10 @@
+ // 31,744 [index,u32] pairs at their longest compact encoding need <600 KiB.
+ const FULL_REQUEST_LIMIT: usize = 1024 * 1024;
+ const USAGE: &str = "usage: evaluate_saved_life_retention CURRENT OUTPUT REQUEST.json";
++
++#[cfg(all(test, feature = "gpu-tests"))]
++#[path = "../foundation_training_cycle/saved_life_retention/research_fixture_label.rs"]
++mod research_fixture_label;
+ 
+ fn arguments(args: Vec<OsString>) -> Result<(PathBuf, PathBuf, PathBuf), Error> {
+     if args.len() != 3 || args.iter().any(|s| s.is_empty()) {
 diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
 --- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
 +++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
@@ -127,7 +141,7 @@ diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_rete
 new file mode 100644
 --- /dev/null
 +++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/research_catalog.rs
-@@ -0,0 +1,362 @@
+@@ -0,0 +1,367 @@
 +//! Bounded physical research setup and native observation; no behavior/scoring hooks.
 +use super::*;
 +use alife_core::{OrganismId, Vec3f, WorldEntityId};
@@ -135,6 +149,9 @@ new file mode 100644
 +use serde::{Deserialize, Serialize};
 +use std::collections::BTreeSet;
 +use std::io::Read;
++
++#[path = "research_fixture_label.rs"]
++mod fixture_label;
 +
 +pub(super) const CATALOG_FILE: &str = "research-catalog.v1.json";
 +pub(super) const ADMISSION_FILE: &str = "operator-research-admission.v1.json";
@@ -403,13 +420,15 @@ new file mode 100644
 +    let (sin, cos) = body.body_yaw.sin_cos();
 +    let mut slots = Vec::new();
 +    let mut placed = Vec::new();
-+    for obj in &fixture.objects {
++    for (ordinal, obj) in fixture.objects.iter().enumerate() {
 +        let (f, l, r) = (meters(obj.forward_mm), meters(obj.left_mm), meters(obj.radius_mm));
 +        let pos = Vec3f::new(body.position.x + f*cos - l*sin, body.position.y, body.position.z + f*sin + l*cos);
 +        if old.iter().any(|o| o.id != body.id && !o.consumed && dist(pos, o.position) <= o.radius+r+0.02) {
 +            return Err("research layout collides with pre-existing saved-world geometry".into());
 +        }
-+        let id = staged.editor_spawn_object(WorldEditorSpawnSpec { label: "research sample".into(), kind: obj.kind.native(),
++        let label = fixture_label::neutral_label(ordinal, |candidate| staged.entity_id(candidate).is_some())
++            .ok_or("research fixture local allocator label namespace exhausted")?;
++        let id = staged.editor_spawn_object(WorldEditorSpawnSpec { label, kind: obj.kind.native(),
 +            organism_id: None, position: pos, nutrition: meters(obj.nutrition_milli), hazard_pain: meters(obj.pain_milli),
 +            radius: r, token_id: None })?;
 +        let mut physical = staged.entity(id).ok_or("missing real placed object")?.grounded_physical;
@@ -488,6 +507,50 @@ new file mode 100644
 +        base["cases"][0]["objects"][0]["radius_mm"] = serde_json::json!(700);
 +        let catalog: Catalog = serde_json::from_value(base).unwrap();
 +        assert!(validate_case(&catalog.cases[0]).is_err());
++    }
++}
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/research_fixture_label.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/research_fixture_label.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/research_fixture_label.rs
+@@ -0,0 +1,39 @@
++//! Local allocator names are bookkeeping only, never catalog or behavior data.
++
++pub(super) fn neutral_label(ordinal: usize, mut occupied: impl FnMut(&str) -> bool) -> Option<String> {
++    (0..=16).map(|attempt| format!("research sample {ordinal}-{attempt}"))
++        .find(|label| !occupied(label))
++}
++
++#[cfg(test)]
++mod tests {
++    use super::neutral_label;
++    use alife_core::Vec3f;
++    use alife_world::{HeadlessWorld, WorldEditorSpawnSpec, WorldObjectKind};
++
++    #[test]
++    fn actual_world_allocator_admits_two_distinct_research_props() {
++        let mut world = HeadlessWorld::new(17);
++        let mut ids = Vec::new();
++        // First occupied local name simulates an original host prop, not a research result.
++        for (label, kind, x, nutrition, pain) in [
++            (Some("research sample 0-0"), WorldObjectKind::Obstacle, 4.0, 0.0, 0.0),
++            (None, WorldObjectKind::Hazard, 0.6, 0.0, 0.16),
++            (None, WorldObjectKind::Food, 1.7, 0.65, 0.0),
++        ] {
++            let ordinal = ids.len().saturating_sub(1);
++            let label = label.map(str::to_owned).unwrap_or_else(|| {
++                neutral_label(ordinal, |candidate| world.entity_id(candidate).is_some()).unwrap()
++            });
++            let id = world.editor_spawn_object(WorldEditorSpawnSpec {
++                label: label.clone(), kind, organism_id: None, position: Vec3f::new(x, 0.0, 0.0),
++                nutrition, hazard_pain: pain, radius: 0.32, token_id: None,
++            }).expect("ordinary native editor accepts each neutral, unique local label");
++            assert_eq!(world.entity_id(&label), Some(id));
++            assert!(!ids.contains(&id));
++            ids.push(id);
++        }
++        assert_eq!(world.entity(ids[1]).unwrap().hazard_pain, 0.16);
++        assert_eq!(world.entity(ids[2]).unwrap().nutrition, 0.65);
 +    }
 +}
 diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs
@@ -692,7 +755,7 @@ new file mode 100644
 +
 +## Qualification order (not yet executed)
 +
-+1. Near-term, run `PYTHONDONTWRITEBYTECODE=1 python3 scripts/test_research_saved_life_catalog.py -v` (device-free). When Rust/toolchain/disk are available and A5 is clear, compile/test only the new module first (`cargo test --frozen --offline -p alife_game_app --features foundation-training,gpu-tests --lib research_catalog::tests`). On that compiled executable verify a malformed admitted placement fails before touching a deliberately nonexistent Current, and genuine v1 control/receipt behavior matches the old proof before any native claim. Keep the old v1 production promotion evaluator pinned regardless.
++1. Run `PYTHONDONTWRITEBYTECODE=1 python3 scripts/test_research_saved_life_catalog.py -v` (device-free). Build the normal production closure and run the bounded CLI harness with `cargo test --frozen --offline --release -p alife_game_app --features foundation-training,gpu-tests --bin evaluate_saved_life_retention`. Its actual world allocator regression adds two real props with neutral local names, with the first default name already occupied by a host prop. The pinned production-only source closure deliberately omits unrelated experimental assets required by `cargo test --lib`. On the compiled executable verify a malformed admitted placement fails before touching a deliberately nonexistent Current, and genuine v1 control/receipt behavior matches the old proof before any native claim. Keep the old v1 production promotion evaluator pinned regardless.
 +2. Under the existing shared lease, produce independent same-binary zero-cut proofs for two actual complete Currents with the same world seed. A may be R41 or another known complete host. B must come from a separately documented non-R41 branch/organism, not a weight edit or clone of R41; select an already held compatible independent Current, or arrange one to be retained through the ordinary same-individual production checkpoint pathway first. Verify both hosts meet the same local world constraints. Stage no nonexistent checkpoint as a pass.
 +3. Run one case per family and their foils on both Currents through exactly this binary and argument path. Report input, catalog, admission, case/fixture, rubric, evaluator, process, native receipt, native rows, and effective Current hashes. Valid control and no measured gain is still a real result; absent layout/device/source or corrupt evidence is not biological failure. If the study is selected to grow, repeat the existing left/right conditions from the frozen catalog and separately authorize any additional ecology or terrain operation. Keep research and promotion artifacts separate.
 +

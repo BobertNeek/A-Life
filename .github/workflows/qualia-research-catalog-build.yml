@@ -21,7 +21,7 @@ jobs:
     timeout-minutes: 48
     env:
       PIN_SOURCE: f466b83791cccb97568e6f718b92b052999cfb2b
-      PIN_PATCH: 873cfddd3e6bebd65073da7bb163679ce04b6148dfde4e7e197b0d6c32ee8393
+      PIN_PATCH: 3dcf657b2b1149a7da52e7867c3bdbc4c4dfe8d4785b53c95f429c78aa1cd490
       PIN_LOCK: 155699e9274f8890bc8c335669a62de48203ba315a33388a8f0caca71f0f7f37
       RUST_TOOLCHAIN: "1.100.0"
       TARGET: x86_64-unknown-linux-gnu
