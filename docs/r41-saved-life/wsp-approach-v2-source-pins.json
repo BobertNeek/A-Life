@@ -1,0 +1,43 @@
+{
+  "exact_f96_host_head": "8d90e0853cfbf991ac75e02c9ee55ee4cedc3c99",
+  "exact_witness_predecessor_sha256": "7be53715718e68c10e9d04dc373882bfb1caaff3eaa170cbe62366d66a0e61c1",
+  "forward_sha256": "e8839af1e71bfce2f0bfba29a46b5910f8e2a33e81d678795e4414f26df9316e",
+  "inverse_sha256": "1804af01a0cecab12684810221e49bfe4b10d920477778b8a0fae056490c2776",
+  "native_executed": false,
+  "publish_or_use_authority": false,
+  "r44_actor_candidate_package_sha256": "27cf133126051c9ff83c0a3d4270d195b133e55ccba23672866e20b33b2dfb65",
+  "rust_compiled": false,
+  "schema": "qualia.private.wsp_approach_v2_source.v1",
+  "source_after": {
+    "crates/alife_game_app/Cargo.toml": "b15f7df0602390b203178d7594ef37b124138ce06a033ceee497a9fc72ebec0a",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs": "64cbcf23c991c2cf818faa1f99d029871e3d57540290dd3aeb38f52fd1621b38",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs": "f1fe43fb3268c6194effc8b8b392997378ce3edb1f4b48abf78b674cdabaaa26",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/language_composition_v3.rs": "988d32056684f747e3c3a57b8f877d54e908b76d5506bb2f77cc84f4216165d1",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/wsp_approach_v2_admission.rs": "063620b870d28c57a8ad361187b3c2602d5440bac98cd2e9ef1a5cfd4e79e155",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/wsp_approach_witness.rs": "f8e8a2487bc79f9b55d2e76f4c958b06ce49b03b58d2a25f5c96389ff2b8fd17",
+    "crates/alife_game_app/src/gpu_live_runtime.rs": "1098c15fb5627e6b1eae2070359b36abd8a1ebc41084367ebbe7f068a8ec7e4d",
+    "crates/alife_game_app/src/gpu_live_runtime/staged_tick.rs": "c1adfcc30ee49911fcd7d87b9d3c0bf37eeb1534e10327ab8b144ab61c15b563",
+    "crates/alife_game_app/src/gpu_live_runtime/wsp_approach_runtime.rs": "1194bb1317e2d2e495b1e28d569f79616eae156f5cdca6fbfd80f3d0f4c4f21e",
+    "crates/alife_gpu_backend/Cargo.toml": "3da446fc7ea925616b2c54c21cf440d5e20334f2a04a178e47f9dc004cd773fa",
+    "crates/alife_gpu_backend/shaders/wsp_approach_v2.wgsl": "164c2add474d176fe9e8a65bc1c3b573f43b20abf7a518cadd778446284db473",
+    "crates/alife_gpu_backend/src/closed_loop_pipeline.rs": "fa22f3f3b7e9260734e9da9a2f4e627bd253b1d6aedfe845f346fb6e42cd63d4",
+    "crates/alife_gpu_backend/src/closed_loop_runtime.rs": "837a694e288ee338d9289894cd88f6b6d1a9fc3a343081943c6c551c8578893a",
+    "crates/alife_gpu_backend/src/closed_loop_runtime/tick.rs": "121aebff5c1971482ed2618a0af0fc1e9c0bf6eca8bf36e4087f271d8547c76b",
+    "crates/alife_gpu_backend/src/training_rollout.rs": "8d11d202c4c046edc309095b58d24b6b5b4ecefc4dba0c1f40c0d52956cb54ea"
+  },
+  "source_before": {
+    "crates/alife_game_app/Cargo.toml": "a804bc8f063aec9e797e76e10b4fcfd516ded764254fa2278c91fa5272423248",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs": "0053e32f13789b22019bcb5b8fc15c64f3bd558ff2ab21f0c614ada6cc4ab27b",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs": "21d115c5063696650dc9000045cbca2aa8673d0d4e37b927a43b669ee5446051",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/language_composition_v3.rs": "87017beeba0d0ebc6e331121817fb68ba93e1eb6972a242c26155b9113a58cf0",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/wsp_approach_witness.rs": "698c4f925be2ec5b44c49a317bfe081905077f7dc801421756a74c9138da465f",
+    "crates/alife_game_app/src/gpu_live_runtime.rs": "b4b3f2da8995a55e12179ff3efef2de01698f6d10252582045f4e2ef7469f503",
+    "crates/alife_game_app/src/gpu_live_runtime/staged_tick.rs": "c16b350a3d21c782b7bc6915ca6e9b6af94554dced49e2054e6e2890ec72be7f",
+    "crates/alife_gpu_backend/Cargo.toml": "70abd451cbc5d57cabef8b55a4426c809f49e6b2565f2db0b703080ca7967c73",
+    "crates/alife_gpu_backend/src/closed_loop_pipeline.rs": "fb6ff4560ab704c5c28fdeb94c310b0dd73ce5bad6518ee2b5deec823cc14f65",
+    "crates/alife_gpu_backend/src/closed_loop_runtime.rs": "6ab9151fda73dd30e3064143277f5d54f683ae87cebe0dc0a9f305d57f6d1605",
+    "crates/alife_gpu_backend/src/closed_loop_runtime/tick.rs": "25df6d7c687a81caf7d4592ee28f31f715645fe8aef7acb7023ee83f1a2bc6d7",
+    "crates/alife_gpu_backend/src/training_rollout.rs": "9c2596ea662fa096ede135478d1db53ff9b6cafdee8f0a3e04dd98c8ba2d3ef2"
+  },
+  "source_only_and_reverse_exact": true
+}
