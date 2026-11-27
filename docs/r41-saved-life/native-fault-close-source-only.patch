@@ -1,0 +1,363 @@
+--- a/scripts/surgery_loop.py
++++ b/scripts/surgery_loop.py
+@@ -22,11 +22,14 @@
+ import os
+ import pathlib
+ import shutil
++import stat
++import struct
+ import subprocess
+ import sys
+ import tempfile
+ import time
+-from typing import Any, Iterator
++import zipfile
++from typing import Any, Callable, Iterator
+ 
+ STATE_SCHEMA = "alife.brain_surgery.state.v1"
+ BUNDLE_MANIFEST_SCHEMA = "alife.brain_surgery.base_bundle.v1"
+@@ -663,7 +666,323 @@
+         return item
+ 
+ 
++@contextmanager
++def native_fault_lease(state_path: pathlib.Path) -> Iterator[Callable[[], None]]:
++    """Take the runner's existing single lane, before taking the state lock."""
++    if sys.platform != "linux":
++        raise SurgeryLoopError("native fault closure requires the hosted Linux lease")
++    import fcntl
++
++    guard = state_path.parent.parent / ".qualia-stock-U-A-exclusive.lock"
++    fd = os.open(guard, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
++    try:
++        def check_identity() -> None:
++            a, b = os.fstat(fd), guard.lstat()
++            if ((a.st_dev, a.st_ino) != (b.st_dev, b.st_ino)
++                    or not stat.S_ISREG(a.st_mode) or stat.S_IMODE(a.st_mode) != 0o600
++                    or a.st_uid != os.getuid() or a.st_size != 0 or a.st_nlink != 1):
++                raise SurgeryLoopError("native runner lease identity is invalid")
++        check_identity()
++        try:
++            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
++        except BlockingIOError as exc:
++            raise SurgeryLoopError("native runner is still busy; no candidate closure") from exc
++        check_identity()
++        yield check_identity
++    finally:
++        os.close(fd)
++
++
++def native_fault_assert(condition: Any, detail: str) -> None:
++    if not condition:
++        raise SurgeryLoopError(f"native fault closure: {detail}")
++
++
++def private_fault_file(path: pathlib.Path) -> pathlib.Path:
++    info = path.lstat()
++    native_fault_assert(stat.S_ISREG(info.st_mode) and info.st_uid == os.getuid()
++                        and not info.st_mode & 0o077 and path.resolve() == path,
++                        f"not an owner-only regular file: {path.name}")
++    return path
++
++
++def fault_canonical(value: Any) -> bytes:
++    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False,
++                      allow_nan=False).encode("utf-8")
++
++
++def attest_native_fault(state_path: pathlib.Path, state: dict[str, Any], target: dict[str, Any],
++                        args: argparse.Namespace) -> dict[str, Any]:
++    """Validate an independently archived, first and only, invalid native challenger arm."""
++    require = native_fault_assert
++    failure = verified_state_failure(state)
++    require(failure is None, f"active state could not be verified: {failure}")
++    gate = state["saved_life_controls"]
++    pin = gate["active_card"]
++    require(pin.get("baseline"), "an already frozen mature stock control is required")
++    card = validate_card_cases(load_active_card(state))
++    require(target["status"] == "unscored" and not target.get("completed_comparisons")
++            and all(target.get(k) is None for k in ("report_path", "candidate_id", "base_score",
++                "candidate_score", "delta", "promoted_decision", "scored_at_utc")),
++            "only the first failed test of an unscored candidate can close by this route")
++    ps, source, binary = (target["patch_sha256"], gate["full_saved_life_current_sha256"],
++                          state["known_good_eval_bin_sha256"])
++    require(all(valid_digest(x) for x in (ps, source, binary, args.fault_evidence_sha256,
++                                         args.fault_readback_sha256)), "missing independent digest pins")
++    patch_path = pathlib.Path(target["patch_path"])
++    patch = read_json(patch_path, "registered patch")
++    require(sha256_file(patch_path) == ps and patch.get("patch_id") == target["patch_id"]
++            and patch.get("schema") == PATCH_SCHEMA and patch.get("schema_version") == SCHEMA_VERSION
++            and patch.get("target_base_id") == state["active_base_id"]
++            and patch.get("target_foundation_digest") == state["active_base_foundation_digest"]
++            and patch.get("target_dendritic_branches_sha256") == state["active_base_dendritic_sha256"]
++            and patch.get("dendritic_edits") == {"op": "keep"}, "registered patch or parent drifted")
++    edits = []
++    for w in patch["weight_edits"]:
++        require(type(w["index"]) is int and 0 <= w["index"] < 32768 and w["mode"] == "set"
++                and type(w["value"]) in (int, float) and math.isfinite(w["value"])
++                and abs(w["value"]) <= 3.4028234663852886e38, "invalid registered binary32 edit")
++        edits.append([w["index"], struct.unpack("<I", struct.pack("<f", w["value"]))[0]])
++    require(edits and len({i for i, _ in edits}) == len(edits), "empty or duplicate registered edits")
++    schema = patch.get("native_request_schema", 1)
++    require(type(schema) is int and schema in (1, 2, 3), "unsupported direct-weight request schema")
++    direct = dict(schema=schema, generator_id=target["patch_id"], source_current_sha256=source,
++                  edits=sorted(edits))
++
++    evidence_path = private_fault_file(pathlib.Path(os.path.abspath(args.native_fault)))
++    require(sha256_file(evidence_path) == args.fault_evidence_sha256, "independent evidence digest drifted")
++    e = read_json(evidence_path, "independent partial native fault")
++    case = e["published_case"]
++    require(isinstance(case, str) and case in card and re.fullmatch(r"[A-Za-z0-9_.-]+", case),
++            "not a published frozen-card case")
++    spec, budget = card[case]["scenario"], card[case]["decisions"]
++    require(hashlib.sha256(fault_canonical(spec)).hexdigest() == card[case]["scenario_sha256"],
++            "frozen scenario hash mismatch")
++    opening = spec.get("exact_released_visible_opening")
++    source_tick = opening.get("at_tick") if isinstance(opening, dict) else None
++    require(type(source_tick) is int and source_tick > 0,
++            "no source world tick authenticated by the frozen opening")
++    batch = state_path.parent / "private" / f"active29-matched-{ps[:16]}"
++    run = batch / case
++    require(evidence_path == run / "independent-partial-native-fault.json"
++            and set(batch.iterdir()) == {run}
++            and {x.name for x in run.iterdir()} == {"B", "verified-baseline-control.json",
++                "independent-partial-native-fault.json", "fault-owner-only-readback.json"},
++            "not a closed single-arm batch, or other evaluation/evidence remains")
++    readback = private_fault_file(pathlib.Path(os.path.abspath(args.fault_readback)))
++    require(readback == run / "fault-owner-only-readback.json"
++            and sha256_file(readback) == args.fault_readback_sha256, "independent archive readback digest drifted")
++    rb = read_json(readback, "independent owner-only archive readback")
++    archive = private_fault_file(pathlib.Path(os.path.abspath(args.fault_archive)))
++    require(archive.parent == state_path.parent / "private" and rb.get("verified") is True
++            and rb.get("owner_only_original_byte_readback") is True
++            and isinstance(rb.get("id"), str) and re.fullmatch(r"[A-Za-z0-9_-]{20,}", rb["id"])
++            and archive.stem.removeprefix("Qualia-").lower() == rb.get("case")
++            and valid_digest(rb.get("sha256")) and type(rb.get("bytes")) is int
++            and 0 < rb["bytes"] <= 1_000_000_000 and archive.stat().st_size == rb["bytes"]
++            and sha256_file(archive) == rb["sha256"], "archive missing, unverified or bytes do not match readback")
++
++    def file(name: str) -> pathlib.Path:
++        return private_fault_file(run / name)
++
++    local = ("verified-baseline-control.json", "independent-partial-native-fault.json",
++             "B/authority.json", "B/manifest.json", "B/started.json", "B/process.json",
++             "B/native/request.json", "B/native/retention.json", "B/native/rows.jsonl",
++             "B/native/DIRECT-WEIGHT-CALIBRATION.json")
++    digests = {name: sha256_file(file(name)) for name in local}
++    with zipfile.ZipFile(archive) as z:
++        names = [n.filename for n in z.infolist()]
++        require(len(names) == len(set(names)) and len(names) <= 512
++                and sum(n.file_size for n in z.infolist()) <= 1_000_000_000
++                and all(not n.is_dir() and not (stat.S_ISLNK(n.external_attr >> 16))
++                        for n in z.infolist()), "invalid archive size, entries, or member type")
++        index = json.loads(z.read("INDEX.json"))
++        leaves = index["leaves"]
++        require(index.get("schema") == "qualia.exact_native_failure_archive.v1"
++                and index.get("measurement_valid") is False and index.get("patch_sha256") == ps
++                and index.get("source_current_sha256") == source
++                and index.get("evidence_sha256") == args.fault_evidence_sha256
++                and set(names) == set(leaves) | {"INDEX.json"}
++                and all(leaves.get(k) == v for k, v in digests.items())
++                and leaves.get("B/Current.alife-checkpoint") == source
++                and valid_digest(leaves.get("B/native/CALIBRATED-PARENT.alife-checkpoint")),
++                "original failure archive index or leaves drifted")
++        for name, digest in leaves.items():
++            p = pathlib.PurePosixPath(name)
++            require(str(p) == name and not p.is_absolute() and ".." not in p.parts and "\\" not in name
++                    and p.name not in {"final.alife-checkpoint", "completed-comparison.json",
++                                       "case-measurement.json", "comparison-report.v1.json"}
++                    and valid_digest(digest), "unexpected archive member or completed result")
++            with z.open(name) as member:
++                require(hashlib.file_digest(member, "sha256").hexdigest() == digest,
++                        f"archived leaf does not match its index: {name}")
++
++    def doc(name: str) -> dict[str, Any]:
++        return read_json(file(name), name)
++
++    control = doc("verified-baseline-control.json")
++    baseline = read_json(pathlib.Path(pin["baseline"]["path"]), "frozen baseline")
++    c = baseline["cases"][case]
++    require(control.get("schema") == "qualia.retained_native_control.v1"
++            and control.get("case_id") == case and control.get("active_baseline_sha256") == pin["baseline"]["sha256"]
++            and baseline.get("source_current_sha256") == c.get("source_current_sha256") == c.get("effective_current_sha256") == source
++            and c.get("intervention") == "control" and c.get("decisions") == budget
++            and c.get("scenario_sha256") == card[case]["scenario_sha256"]
++            and baseline.get("independently_accepted") is True
++            and baseline.get("evaluator_sha256") == binary and baseline.get("rubric_sha256") == pin["sha256"]
++            and all(valid_digest(control.get(k)) and control[k] == c.get(k) for k in
++                    ("rows_sha256", "native_process_sha256", "native_receipt_sha256", "case_evidence_sha256")),
++            "retained stock control is not the exact frozen mature comparison reference")
++
++    a, m, start, p = (doc(f"B/{name}.json") for name in ("authority", "manifest", "started", "process"))
++    req, r, cal = (doc(f"B/native/{name}.json") for name in ("request", "retention", "DIRECT-WEIGHT-CALIBRATION"))
++    authority = dict(case=case, patch_id=target["patch_id"], patch_sha256=ps,
++        source_current_sha256=source, rubric_sha256=pin["sha256"], scorecard_id=pin["id"],
++        evaluator_sha256=binary, scenario_sha256=card[case]["scenario_sha256"], prior="off",
++        pressure_ns=spec["host_pressure"]["applied_gpu_time_ns"],
++        native_request_canonical_sha256=hashlib.sha256(fault_canonical(direct)).hexdigest(),
++        native_manifest_sha256=digests["B/manifest.json"])
++    require(all(d.get(k) == v for d in (a, p) for k, v in authority.items()),
++            "native process/authority did not run the registered frozen request")
++    require(type(p["exit_code"]) is int and p["exit_code"] == 0 and p["group_reaped"] is True
++            and p["stop"] is None and p["parent_pid"] != p["child_pid"]
++            and all(type(p[k]) is int and p[k] > 0 for k in ("parent_pid", "child_pid"))
++            and all(p[k] == start.get(k) for k in ("parent_pid", "child_pid", "started_at_utc")),
++            "native group not cleanly terminal and reaped")
++    chronology = [target["proposed_at_utc"], p["started_at_utc"], p["finished_at_utc"], e["utc"], utc_now_iso()]
++    dates = [dt.datetime.fromisoformat(s.replace("Z", "+00:00")) for s in chronology]
++    require(all(d.utcoffset() is not None for d in dates) and dates == sorted(dates),
++            "native fault is outside the registered experiment or review time")
++    wanted_manifest = dict(schema=1, source_current_sha256=source,
++        intervention=dict(kind="direct_weights", edit=direct), scenario="published_card_case", card_case=case,
++        owner=spec["starting_organism_id"], max_decisions=budget, max_world_ticks=spec["world_tick_limit"],
++        evaluation_nonce=spec["evaluation_nonce"],
++        max_output_bytes=(384 if budget == 1024 else 256) * 1024**2)
++    identity = r["retained_experiment"]["identity"]
++    require(all(m.get(k) == v for k, v in wanted_manifest.items())
++            and m["max_decisions"] == spec["decision_limit"]
++            and r["retained_experiment"]["evaluation_only"] is True
++            and r["retained_experiment"]["scorecard_eligible"] is False
++            and all(identity.get(k) == m[k] for k in
++                    ("schema", "source_current_sha256", "scenario", "card_case", "owner", "run_id"))
++            and identity.get("manifest_sha256") == digests["B/manifest.json"]
++            and identity.get("intervention") == "direct_weights"
++            and req == r["request"] and req["schema"] == 3 and req["direct_weights"] == direct
++            and all(req[k] == m[k] for k in ("evaluation_nonce", "max_decisions", "max_world_ticks",
++                    "max_output_bytes", "deadline_unix_seconds", "finalization_deadline_unix_seconds"))
++            and req["navigation_task"] == spec["navigation_task"]
++            and r["test_host_pressure_control"] == spec["host_pressure"]
++            and r["published_case_registry"] == spec["registry"] and r["published_case"] == case,
++            "mature native request did not use the frozen scenario")
++    args_cue = spec["authentic_player_tokens_per_cut"]
++    cue = r.get("published_case_player_utterance")
++    if args_cue:
++        expected_cue = dict(source_kind="Player", speaker_id=None, teacher_channel=None,
++                            addressee=m["owner"], emitted_tick=r["source_world_tick"],
++                            expires_after_tick=r["source_world_tick"] + 1, tokens=args_cue[0])
++        require(isinstance(cue, dict) and all(cue.get(k) == v for k, v in expected_cue.items())
++                and r.get("published_case_external_suggestion") is True and r.get("cue_free") is False,
++                "no authentic frozen Player cue")
++    else:
++        require(cue is None and r.get("published_case_external_suggestion") is False
++                and r.get("cue_free") is True, "unexpected Player cue in frozen silence")
++    nav = spec["navigation_task"]
++    require((r.get("navigation_task_setup") is None
++             and r.get("published_case_setup") == spec["exact_released_visible_opening"]) if nav is None
++            else (r.get("published_case_setup") is None and r["navigation_task_setup"]["spec"] == nav),
++            "native opening differs from the frozen scenario")
++    require(r.get("direct_weight_calibration") == cal and cal["source_current_sha256"] == source
++            and cal["generator_id"] == target["patch_id"] and cal["same_individual"] is True
++            and cal["sampler_retained"] is True and cal["optimizer_updates"] == cal["mutable_words_written"] == 0
++            and cal["changed_weights"] == cal["requested_coordinates"] == len(edits)
++            and cal["calibrated_current_sha256"] == leaves["B/native/CALIBRATED-PARENT.alife-checkpoint"] != source,
++            "exact independent candidate calibration unavailable")
++    n = r["captured_decisions"]
++    error = r["error"]
++    endpoint_error = r.get("final_endpoint_error")
++    require(r.get("schema") == 2 and r.get("kind") == "saved-life-retention-v2"
++            and r.get("status") == "finished" and r.get("stop_reason") == "runtime_error"
++            and r.get("measurement_valid") is False and r.get("coverage_complete") is False
++            and r.get("final_endpoint") is None and not os.path.lexists(run / "B/native/final.alife-checkpoint")
++            and not os.path.lexists(run / "B/case-measurement.json")
++            and r.get("prior_enabled") is False and r.get("prior_remained_off") is True
++            and r.get("gpu_restored") is True and r.get("neural_execution") is True
++            and r.get("software_simulation") is True and r.get("hardware_gpu_qualification") is False
++            and r.get("saved_policy_base_unchanged") is True and r.get("offline_optimizer_constructed") is False
++            and r.get("offline_actor_updates") == r.get("offline_value_updates") == 0
++            and r.get("new_teacher_cues_emitted_by_evaluator") == 0
++            and r.get("source_unchanged") is True and r.get("source_sha256") == source
++            and r.get("organism_id") == spec["starting_organism_id"]
++            and type(r.get("source_world_tick")) is int
++            and r["source_world_tick"] == cal["world_tick"] == source_tick
++            and type(n) is int and 0 < n < budget and type(r["world_ticks"]) is int
++            and n <= r["world_ticks"] <= spec["world_tick_limit"]
++            and isinstance(error, str) and bool(error.strip())
++            and isinstance(endpoint_error, str) and bool(endpoint_error.strip())
++            and p["native_receipt_sha256"] == digests["B/native/retention.json"]
++            and r.get("rows_file") == "rows.jsonl" and r["rows_sha256"] == digests["B/native/rows.jsonl"],
++            "not a real failed partial native evaluation with no valid endpoint")
++    with file("B/native/rows.jsonl").open("rb") as rows:
++        last_tick, count = r["source_world_tick"] - 1, 0
++        for row in rows:
++            item = json.loads(row)
++            tick = item["decision_tick"]
++            require(count < n and item["row"] == count and item["organism"] == r["organism_id"]
++                    and type(tick) is int and last_tick < tick < r["source_world_tick"] + r["world_ticks"]
++                    and item["outcome_tick"] == tick + 1, "invalid sequence of native decision rows")
++            last_tick, count = tick, count + 1
++    require(count == n, "native rows do not match the positive incomplete capture")
++    expected_review = dict(schema="qualia.native_grade_fault_actual_partial_evidence.v1",
++        patch_id=target["patch_id"], patch_sha256=ps, active_current_sha256=source,
++        evaluator_sha256=binary, rubric_sha256=pin["sha256"], published_case=case,
++        stock_A_rows_sha256=c["rows_sha256"], candidate_B_rows_sha256=r["rows_sha256"],
++        native_process_sha256=digests["B/process.json"], native_receipt_sha256=digests["B/native/retention.json"],
++        captured_decisions=n, world_ticks=r["world_ticks"], native_budget=budget,
++        native_error=error, final_endpoint_error=endpoint_error)
++    require(all(e.get(k) == v for k, v in expected_review.items())
++            and e.get("no_final_endpoint") is True and e.get("real_game_inputs") is True
++            and e.get("measurement_valid") is False and e.get("completed_comparison") is False
++            and "full_score" in e and e["full_score"] is None,
++            "independent review did not corroborate the exact unscored fault")
++    return dict(kind="invalid-native-first-case", case_id=case, decisions=n, budget=budget,
++        native_error=error, final_endpoint_error=endpoint_error, scorecard_id=pin["id"],
++        rubric_sha256=pin["sha256"], evaluator_sha256=binary, parent_current_sha256=source,
++        patch_sha256=ps, process_sha256=digests["B/process.json"],
++        native_receipt_sha256=digests["B/native/retention.json"], native_rows_sha256=r["rows_sha256"],
++        independent_evidence_sha256=args.fault_evidence_sha256,
++        owner_only_readback_sha256=args.fault_readback_sha256, archive_sha256=rb["sha256"],
++        archive_drive_id=rb["id"])
++
++
++def cmd_close_native_fault(args: argparse.Namespace) -> dict[str, Any]:
++    if not all((args.native_fault, args.fault_archive, args.fault_readback,
++                args.fault_evidence_sha256, args.fault_readback_sha256)):
++        raise SurgeryLoopError("native fault closure requires all independent evidence/readback and archive arguments")
++    if not args.reason.strip():
++        raise SurgeryLoopError("closure must state why the failed run is being retired")
++    path = pathlib.Path(args.state).resolve()
++    with native_fault_lease(path) as check_lease, state_lock(path):
++        state = load_state(path)
++        target = [p for p in state["in_flight_patches"] if p["patch_id"] == args.patch_id
++                  and p["target_base_id"] == state["active_base_id"] and p["status"] == "unscored"]
++        if len(target) != 1:
++            raise SurgeryLoopError("native fault must target one exact active unscored patch")
++        fault = attest_native_fault(path, state, target[0], args)
++        check_lease()
++        # Authenticated closure is operational progress, not a comparison or recovery.
++        now = utc_now_iso()
++        target[0].update(status="closed", closed_at_utc=now,
++                         closure_reason=args.reason, native_fault_closure=fault)
++        state["last_candidate_closed_utc"] = now
++        write_json_atomic(path, state)
++        return target[0]
++
++
+ def cmd_close_candidate(args: argparse.Namespace) -> dict[str, Any]:
++    fault_args = ("native_fault", "fault_archive", "fault_readback",
++                  "fault_evidence_sha256", "fault_readback_sha256")
++    if any(getattr(args, name, None) is not None for name in fault_args):
++        return cmd_close_native_fault(args)
+     path = pathlib.Path(args.state).resolve()
+     with state_lock(path):
+         state = load_state(path)
+@@ -967,6 +1286,11 @@
+     p_close.add_argument("--state", required=True)
+     p_close.add_argument("--patch-id", required=True)
+     p_close.add_argument("--reason", required=True)
++    p_close.add_argument("--native-fault", help="independent partial native evidence file; never a score")
++    p_close.add_argument("--fault-archive", help="owner-only original failure ZIP")
++    p_close.add_argument("--fault-readback", help="independent owner-only original readback receipt")
++    p_close.add_argument("--fault-evidence-sha256", help="independently supplied evidence file SHA-256")
++    p_close.add_argument("--fault-readback-sha256", help="independently supplied readback receipt SHA-256")
+ 
+     p_rec = sub.add_parser("record-recovery")
+     p_rec.add_argument("--state", required=True)
+@@ -1024,7 +1348,7 @@
+             raise SurgeryLoopError(f"unknown subcommand: {args.cmd}")
+         print(json.dumps(result, indent=2))
+         return 0
+-    except (SurgeryLoopError, OSError, KeyError, ValueError, TypeError) as exc:
++    except (SurgeryLoopError, OSError, KeyError, ValueError, TypeError, zipfile.BadZipFile) as exc:
+         print(f"ERROR: {exc}", file=sys.stderr)
+         return 2
+ 
