@@ -6,7 +6,7 @@
     },
     "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs": {
       "parent_sha256": "330e52d1e2bccca8f703e884599c274c4b505d1c352d6af0222e22b84f999956",
-      "result_sha256": "c41a0006f0031483d9c0942cee246c72038859156f31aea49d396f5115d158d5"
+      "result_sha256": "75a5906dcbd2a946c83a9bf254bfe2be982a7393456ebba43dc19fa043747f88"
     },
     "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs": {
       "parent_sha256": "8c004b22c13891a6c044b8975ab235787a14e4406f9eb7239dc29ba41436bdc6",
@@ -14,7 +14,7 @@
     },
     "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/language_pilot.rs": {
       "parent_sha256": null,
-      "result_sha256": "d969338bb3684f4d844a107511125b373003cddb604a114fe2be3c232f63ca19"
+      "result_sha256": "e9f796904ffa49433de00c2acb920ad2e492d6b6cb9536719525278690116309"
     },
     "crates/alife_world/Cargo.toml": {
       "parent_sha256": "3946a9571697e86c53ad729a4f4b810e10bac6f02b62321bd84766db7406e51c",
@@ -25,12 +25,12 @@
       "result_sha256": "4705e10a8395cf8a9f4d2adcd97e78705464043e91cc975e12c39372e7e787ae"
     }
   },
-  "forward_sha256": "14a45cd8038bb7bcd00128ea53cf3bc716af1998426c62e3e26ae34bdab1142f",
-  "inverse_sha256": "ef223d51724ee922e618ba7e0658eda765d78eee122a7268b70c8b497df99ec9",
+  "forward_sha256": "f0a836086d20e47e434eb947ebc9083f52dc50c344403d24e8ede08ae23ad657",
+  "inverse_sha256": "4d089a2b64d9b19728af0fd4bdc7d0899b794716d1a49eaff1a5db363806d4f1",
   "old_cli_untouched": true,
-  "rebased_from_forward_sha256": "325d3e15f857d202b10d930c49c408e220af61a0c0ad56ef634873369ed89a76",
+  "rebased_from_forward_sha256": "14a45cd8038bb7bcd00128ea53cf3bc716af1998426c62e3e26ae34bdab1142f",
   "research_catalog_unchanged_sha256": "cf13ba6cb42209092a03d9f9bda559fd5638f498e9597a3cab49a863a89b5e53",
-  "scope": "Detached schema5 only; preserve host rolling-free closure and reject active archived roll before restore; no change to v1 or research catalog",
+  "scope": "Detached schema5 observed-slot crossover v2; additionally records real endogenous routed candidate order; older qualification immutable; no runtime or official v1 change",
   "upstream_anchor": "7a5061285be79275d914f3f8852eaace75c9af1b: verified f466b837 signed restore + exact pinned research, sleep repair and legacy publication",
   "verified_host_headless_restore": {
     "anchor_git_blob_sha1": "8531bba2e4531086471667fab72c58dcbe8aeeb9",

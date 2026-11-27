@@ -67,11 +67,11 @@ def main(off, on, reviewed_source):
             root = Path(tmp).resolve(strict=True)
             source, output = root / "current-boundary-marker", root / "unused-output"
             manifest_path = root / "synthetic.json"
-            admission_path = root / "language-pilot-admission.v1.json"
-            rubric_path = root / "language-pilot-rubric.v1.json"
+            admission_path = root / "language-pilot-admission.v2.json"
+            rubric_path = root / "language-pilot-rubric.v2.json"
             rubric_path.write_bytes(rubric)
             arm = {"layout": layout, "tokens": list(pair)}
-            admission = dict(schema="qualia.saved_life.language_pilot_admission.v1",
+            admission = dict(schema="qualia.saved_life.language_pilot_admission.v2",
                              fixture_id=fixture_id, source_current_sha256=current_pin,
                              fixture_plan_sha256=plan_pin, evaluator_sha256=elf_pin,
                              rubric_sha256=sha(rubric), cell=dict(arm))
@@ -114,6 +114,11 @@ def main(off, on, reviewed_source):
             probe(f"schema5 {layout} {pair} admitted, absent Current", missing_file, layout=layout, pair=pair)
             probe(f"schema5 {layout} {pair} admitted, inert marker", valid_schema_error,
                   layout=layout, pair=pair, inert=True)
+    probe("reject superseded v1 pilot fixture", "unadmitted language pilot identity or Player pair",
+          change=lambda m, _: m.update(fixture_id="v2-language-get-food-crossed-ball-v1"))
+    probe("reject old admission schema even in the new filename",
+          "language pilot source, cell, rubric, or executable does not match admission",
+          change=lambda _, a: a.update(schema="qualia.saved_life.language_pilot_admission.v1"))
     probe("reject extra answer field", "unknown field `expected_entity`",
           change=lambda m, _: m["cell"].update(expected_entity=2))
     probe("reject unregistered pair", "unadmitted language pilot identity or Player pair",

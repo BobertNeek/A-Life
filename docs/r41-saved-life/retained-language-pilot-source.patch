@@ -96,7 +96,7 @@ diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_rete
          let before_pose = runtime
              .world()
              .organism_registry()
-@@ -1103,6 +1141,19 @@
+@@ -1103,6 +1141,34 @@
                      row["observed_world_utterances_after"] =
                          serde_json::to_value(runtime.world().audible_utterances())?;
                  }
@@ -107,19 +107,35 @@ diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_rete
 +                    {
 +                        return Err("language pilot sealed frame or actual outcome tick mismatch".into());
 +                    }
-+                    row["language_pilot_native_observation"] = opened.observe(
++                    let observation = opened.observe(
 +                        &step.frame, &step.behavior, runtime.world(),
 +                        language_before.ok_or("language pilot lost the predecision native custody")?,
 +                        before_pose.ok_or("language pilot lost the native listener pose")?, after_tick,
-+                    )?;
++                    );
++                    row["language_pilot_native_observation"] = match observation {
++                        Ok(observation) => observation,
++                        Err(error) => {
++                            if rows == 0 {
++                                if let Some(rejected) =
++                                    error.downcast_ref::<language_pilot::OpeningGuardRejected>()
++                                {
++                                    language_pilot::write_opening_rejection(
++                                        &output, &request_identity, rejected,
++                                    )?;
++                                }
++                            }
++                            return Err(error);
++                        }
++                    };
 +                }
                  if controlled_pressure.is_some() {
                      row["observer_host_pressure_control"] =
                          runtime.controlled_pressure_evidence_for_test();
-@@ -1269,6 +1320,21 @@
+@@ -1268,6 +1334,21 @@
+         receipt["retention_demonstrated"] = serde_json::json!(false);
          receipt["published_case_software_integrity"] = receipt["software_simulation_integrity_valid"].clone();
          receipt["software_simulation_integrity_valid"] = serde_json::json!(false);
-     }
++    }
 +    #[cfg(feature = "retained-language-pilot")]
 +    if language_setup.is_some() {
 +        let complete = stop == "decision_limit" && alive && rows == language_pilot::DECISIONS
@@ -134,10 +150,9 @@ diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_rete
 +        receipt["software_simulation_integrity_valid"] = serde_json::json!(false);
 +        receipt["qualified"] = serde_json::json!(false);
 +        receipt["retention_demonstrated"] = serde_json::json!(false);
-+    }
+     }
      alife_storage::write(
          output.join("retention.json"),
-         serde_json::to_vec_pretty(&receipt)?,
 diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
 --- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
 +++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
@@ -160,18 +175,18 @@ diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_rete
  }
  
  impl ExperimentIdentity {
-@@ -90,6 +95,11 @@
-         self.research.as_ref()
-     }
+@@ -88,6 +93,11 @@
  
+     pub(super) fn research(&self) -> Option<&super::research_catalog::Identity> {
+         self.research.as_ref()
++    }
++
 +    #[cfg(feature = "retained-language-pilot")]
 +    pub(super) fn language_pilot(&self) -> Option<&super::language_pilot::Identity> {
 +        self.language_pilot.as_ref()
-+    }
-+
+     }
+ 
      pub(super) fn validate_source(&self, actual_digest: &str) -> Result<()> {
-         if self.source_current_sha256 != actual_digest {
-             return Err("experiment compatibility: source Current hash mismatch".into());
 @@ -208,6 +218,8 @@
          ScenarioV1::RetainedOpening | ScenarioV1::CueFreeFoodPlacement => None,
          ScenarioV1::PublishedCardCase => card.and_then(|c| c.navigation),
@@ -245,10 +260,12 @@ diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_rete
      let resolved = if version.schema == 2 {
          // Static grammar, digest/admission and fixture geometry all precede
          // even canonical/stat of the caller-supplied Current pathname.
-@@ -382,6 +437,18 @@
+@@ -380,6 +435,18 @@
+             "schema": 2, "source_current_sha256": "a".repeat(64),
+             "generator_id": "candidate-01", "edits": [[7, bits]]
          }})
-     }
- 
++    }
++
 +    #[cfg(feature = "retained-language-pilot")]
 +    #[test]
 +    fn language_pilot_legacy_tag_is_refused_and_disabled_identity_is_absent() {
@@ -259,16 +276,14 @@ diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_rete
 +        assert!(!identity.as_object().unwrap().contains_key("language_pilot"));
 +        m["scenario"] = serde_json::json!("language_pilot_v2");
 +        assert!(resolved(&m).is_err(), "schema 1 must never opt into placement or speech");
-+    }
-+
+     }
+ 
      #[test]
-     fn published_case_carries_exact_frozen_bounds_and_rejects_unknown_modes() {
-         let mut x = base(serde_json::json!({"kind":"control"}));
 diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/language_pilot.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/language_pilot.rs
 new file mode 100644
 --- /dev/null
 +++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/language_pilot.rs
-@@ -0,0 +1,400 @@
+@@ -0,0 +1,545 @@
 +//! Retained language pilot: versioned, manifest-only world setup and observation.
 +//! No selector, teaching path, training, model mutation, or scoring authority.
 +use super::{digest, Result};
@@ -289,9 +304,9 @@ new file mode 100644
 +pub(super) const OWNER: u64 = 3;
 +const SEED: u64 = 202612240055;
 +const OPENING: u64 = 3074;
-+const ID: &str = "v2-language-get-food-crossed-ball-v1";
++const ID: &str = "v2-language-get-food-crossed-ball-v2";
 +const SOURCE: &str = "55672f322eadc64e223289d9df9883f62d0cc01aa97c0478119ad6c51d2852ee";
-+const PLAN: &str = "16a270c350f9e2f2a434eea8b40195f99071c5f8628966de5b3d01f307d978ad";
++const PLAN: &str = "bbd4fbf0faa4d9b074c5b91f5e1e4f75c4c4d6ecf72c50d8e1396405a1443a3a";
 +const FOOD: WorldEntityId = WorldEntityId(2);
 +const BALL: WorldEntityId = WorldEntityId(3);
 +const PROPS: [WorldEntityId; 2] = [FOOD, BALL];
@@ -403,17 +418,17 @@ new file mode 100644
 +
 +pub(super) fn resolve(root: &Path, bytes: &[u8]) -> Result<(Manifest, Identity)> {
 +    let m = parse_manifest(bytes)?;
-+    let raw = read_local(root, "language-pilot-admission.v1.json", 8192)?;
++    let raw = read_local(root, "language-pilot-admission.v2.json", 8192)?;
 +    if digest(&raw) != m.admission_sha256 {
 +        return Err("language pilot operator admission hash mismatch".into());
 +    }
 +    let a: Admission = serde_json::from_slice(&raw)?;
-+    if a.schema != "qualia.saved_life.language_pilot_admission.v1"
++    if a.schema != "qualia.saved_life.language_pilot_admission.v2"
 +        || a.fixture_id != ID || a.source_current_sha256 != SOURCE
 +        || a.fixture_plan_sha256 != PLAN || a.cell != m.cell
 +        || !hex(&a.rubric_sha256) || !hex(&a.evaluator_sha256)
 +        || digest(&fs::read(std::env::current_exe()?)?) != a.evaluator_sha256
-+        || digest(&read_local(root, "language-pilot-rubric.v1.json", 65_536)?) != a.rubric_sha256
++        || digest(&read_local(root, "language-pilot-rubric.v2.json", 65_536)?) != a.rubric_sha256
 +    {
 +        return Err("language pilot source, cell, rubric, or executable does not match admission".into());
 +    }
@@ -441,6 +456,108 @@ new file mode 100644
 +    starter_membership: [bool; 2],
 +    inherited_word_gain: [f32; 2],
 +    pub(super) setup: Value,
++}
++
++#[derive(Clone, Copy, Debug, Serialize)]
++struct OpeningOfferWitness {
++    candidate_index: usize,
++    observed_slot: u16,
++    independent_manipulation_mask: bool,
++    representative_can_force_manipulation: bool,
++}
++
++#[derive(Clone, Copy, Debug, Serialize)]
++struct OpeningCustodyWitness {
++    no_resident_owner: bool,
++    no_player_hold: bool,
++    no_activity_hold: bool,
++    not_consumed: bool,
++}
++
++impl OpeningCustodyWitness {
++    fn from_custody(p: Custody) -> Self {
++        Self {
++            no_resident_owner: p.owner.is_none(), no_player_hold: !p.player_held,
++            no_activity_hold: !p.activity_hold, not_consumed: !p.consumed,
++        }
++    }
++
++    fn is_free(self) -> bool {
++        self.no_resident_owner && self.no_player_hold && self.no_activity_hold && self.not_consumed
++    }
++}
++
++/// Audit of the accepted opening transaction, never an accepted study row.
++#[derive(Debug, Serialize)]
++pub(super) struct OpeningGuardRejected {
++    layout: Layout,
++    decision_tick: u64,
++    outcome_tick: u64,
++    /// Both arrays are indexed by the fixture's fixed prop ordinal, not by
++    /// perceptual slot, routed rank, heard term or expected answer.
++    offers: [Option<OpeningOfferWitness>; 2],
++    custody_before: [OpeningCustodyWitness; 2],
++    distinct_tracks: Option<bool>,
++    observed_slot_order_matches_layout: Option<bool>,
++    routed_candidate_order_matches_layout: Option<bool>,
++}
++
++impl OpeningGuardRejected {
++    fn crossed_observed_guards_pass(&self) -> bool {
++        self.distinct_tracks == Some(true)
++            && self.observed_slot_order_matches_layout == Some(true)
++            // Perception slots rank physical distance. Canonical focal routing
++            // may reorder candidate ordinals afterward; preserve the actual ranks
++            // as diagnostics without requiring them to copy the observed slots.
++            && self.offers[0].zip(self.offers[1]).is_some_and(|(a, b)| {
++                a.candidate_index != b.candidate_index
++            })
++            && self.offers.iter().all(|offer| offer.is_some_and(|offer| {
++                offer.independent_manipulation_mask || offer.representative_can_force_manipulation
++            }))
++            && self.custody_before.iter().all(|p| p.is_free())
++    }
++}
++
++impl std::fmt::Display for OpeningGuardRejected {
++    fn fmt(&self, out: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
++        if self.offers.iter().any(Option::is_none) {
++            out.write_str("language pilot both opening native Grab offers were not present")
++        } else {
++            out.write_str("language pilot opening masks, distinct slot order, or free-custody control failed")
++        }
++    }
++}
++
++impl std::error::Error for OpeningGuardRejected {}
++
++pub(super) fn write_opening_rejection(
++    output: &Path, request_identity: &str, rejected: &OpeningGuardRejected,
++) -> Result<()> {
++    use std::io::Write;
++    let data = serde_json::to_vec(&json!({
++        "schema": "qualia.retained_language_opening_rejection.v1",
++        "observer_only": true, "scorecard_eligible": false,
++        "language_pilot_integrity": false, "accepted_decisions": 0,
++        "phase": "first_native_outcome_before_row_acceptance",
++        "experiment_request_identity_sha256": request_identity,
++        "opening_guard_evidence": rejected,
++    }))?;
++    if data.len() > 2048 {
++        return Err("language pilot opening rejection exceeds fixed evidence bound".into());
++    }
++    let path = output.join("language-opening-rejection.v1.json");
++    let mut opts = fs::OpenOptions::new();
++    opts.create_new(true).write(true);
++    #[cfg(unix)]
++    {
++        use std::os::unix::fs::OpenOptionsExt;
++        opts.mode(0o600);
++    }
++    let mut file = alife_storage::writer(&path, opts.open(&path)?)?;
++    file.write_all(&data)?;
++    file.flush()?;
++    Ok(())
 +}
 +
 +fn free(world: &HeadlessWorld, id: WorldEntityId, kind: WorldObjectKind, owner: OrganismId) -> bool {
@@ -590,9 +707,15 @@ new file mode 100644
 +                let s = frame.grounded_object_slots().iter().find(|s| s.slot_index == slot)
 +                    .ok_or("language pilot missing native Grab observation")?;
 +                let bit = 1_u32.checked_shl(u32::try_from(i)?).ok_or("language pilot invalid offer index")?;
-+                let eligible = behavior.motor_masks[2] & bit != 0 || (behavior.representative_mask & bit != 0
-+                    && behavior.forced_motor_slots.get(i).copied() == Some(2));
-+                if offers[j].replace((i, slot, s.tracked_object_id, eligible)).is_some()
++                let witness = OpeningOfferWitness {
++                    candidate_index: i, observed_slot: slot,
++                    independent_manipulation_mask: behavior.motor_masks[2] & bit != 0,
++                    representative_can_force_manipulation: behavior.representative_mask & bit != 0
++                        && behavior.forced_motor_slots.get(i).copied() == Some(2),
++                };
++                let eligible = witness.independent_manipulation_mask
++                    || witness.representative_can_force_manipulation;
++                if offers[j].replace((witness, s.tracked_object_id)).is_some()
 +                    || usize::from(c.candidate_index) != i || c.family != CandidateActionFamily::Contact
 +                    || s.candidate_features()? != c.features
 +                { return Err("language pilot malformed or duplicated native Grab offer".into()); }
@@ -601,13 +724,25 @@ new file mode 100644
 +            }
 +        }
 +        if tick.raw() == OPENING {
-+            let [Some(a), Some(b)] = offers else {
-+                return Err("language pilot both opening native Grab offers were not present".into());
++            let pair = offers[0].zip(offers[1]);
++            let matching_rank = |a, b| match self.layout {
++                Layout::A => a < b, Layout::B => b < a,
 +            };
-+            let order = match self.layout { Layout::A => a.0 < b.0 && a.1 < b.1, Layout::B => b.0 < a.0 && b.1 < a.1 };
-+            if !a.3 || !b.3 || a.2 == b.2 || !order || before.iter().any(|p| {
-+                p.owner.is_some() || p.player_held || p.activity_hold || p.consumed
-+            }) { return Err("language pilot opening masks, distinct slot order, or free-custody control failed".into()); }
++            let opening = OpeningGuardRejected {
++                layout: self.layout, decision_tick: tick.raw(), outcome_tick: outcome.raw(),
++                offers: offers.map(|offer| offer.map(|(witness, _)| witness)),
++                custody_before: before.map(OpeningCustodyWitness::from_custody),
++                distinct_tracks: pair.map(|(a, b)| a.1 != b.1),
++                observed_slot_order_matches_layout: pair.map(|(a, b)| {
++                    matching_rank(usize::from(a.0.observed_slot), usize::from(b.0.observed_slot))
++                }),
++                routed_candidate_order_matches_layout: pair.map(|(a, b)| {
++                    matching_rank(a.0.candidate_index, b.0.candidate_index)
++                }),
++            };
++            if !opening.crossed_observed_guards_pass() {
++                return Err(opening.into());
++            }
 +        }
 +        let (listener_position, listener_body_yaw) = listener;
 +        let src = self.atom.source_position;
@@ -655,12 +790,37 @@ new file mode 100644
 +    }
 +
 +    #[test]
++    fn crossed_physical_order_is_independent_of_focal_routing() {
++        let offer = |candidate_index, observed_slot| OpeningOfferWitness {
++            candidate_index, observed_slot, independent_manipulation_mask: false,
++            representative_can_force_manipulation: true,
++        };
++        let free = OpeningCustodyWitness {
++            no_resident_owner: true, no_player_hold: true, no_activity_hold: true, not_consumed: true,
++        };
++        let mut opening = OpeningGuardRejected {
++            layout: Layout::A, decision_tick: OPENING, outcome_tick: OPENING + 1,
++            offers: [Some(offer(20, 0)), Some(offer(4, 1))], custody_before: [free; 2],
++            distinct_tracks: Some(true), observed_slot_order_matches_layout: Some(true),
++            routed_candidate_order_matches_layout: Some(false),
++        };
++        assert!(opening.crossed_observed_guards_pass());
++        opening.offers[1] = Some(offer(20, 1));
++        assert!(!opening.crossed_observed_guards_pass());
++        opening.offers[1] = None;
++        assert!(!opening.crossed_observed_guards_pass());
++    }
++
++    #[test]
 +    fn language_pilot_rejects_unbounded_or_answer_bearing_manifest() {
 +        let mut m = json!({"schema":SCHEMA,"fixture_id":ID,"run_id":"opaque-0",
 +            "source_current_sha256":SOURCE,"admission_sha256":"a".repeat(64),
 +            "cell":{"layout":"a","tokens":[9,1]},"deadline_unix_seconds":1});
 +        let parse = |v: &Value| parse_manifest(&serde_json::to_vec(v).unwrap()).is_ok();
 +        assert!(parse(&m));
++        m["fixture_id"] = json!("v2-language-get-food-crossed-ball-v1");
++        assert!(!parse(&m));
++        m["fixture_id"] = json!(ID);
 +        m["cell"]["tokens"] = json!([9,1,14]); assert!(!parse(&m));
 +        m["cell"]["tokens"] = json!([9,2]); assert!(!parse(&m));
 +        m["cell"]["tokens"] = json!([9,14]); assert!(parse(&m));
@@ -672,16 +832,16 @@ new file mode 100644
 diff --git a/crates/alife_world/Cargo.toml b/crates/alife_world/Cargo.toml
 --- a/crates/alife_world/Cargo.toml
 +++ b/crates/alife_world/Cargo.toml
-@@ -5,6 +5,9 @@
+@@ -4,6 +4,9 @@
+ edition.workspace = true
  publish.workspace = true
  repository.workspace = true
- 
++
 +[features]
 +retained-language-pilot = []
-+
+ 
  [dependencies]
  alife_storage.workspace = true
- alife_core.workspace = true
 diff --git a/crates/alife_world/src/headless.rs b/crates/alife_world/src/headless.rs
 --- a/crates/alife_world/src/headless.rs
 +++ b/crates/alife_world/src/headless.rs
