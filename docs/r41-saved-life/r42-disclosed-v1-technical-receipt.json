@@ -1,0 +1,46 @@
+{
+  "schema": "qualia.public_technical_saved_life_receipt.v1",
+  "qualification": "Redacted technical summary; contains no trained artifacts, private archive locations, or per-case traces.",
+  "card": {
+    "id": "qualia-disclosed-29-v1",
+    "gameplay_cases": 29,
+    "zero_point_controls": 2,
+    "unchanged_from_parent": true
+  },
+  "comparison": {
+    "parent": "R41",
+    "candidate": "R42",
+    "score_parent": 92.5,
+    "score_candidate": 94.16666666666667,
+    "delta": 1.6666666666666667,
+    "improved": 1,
+    "unchanged": 28,
+    "regressed": 0,
+    "failed": 0,
+    "completed_utc": "2026-11-27T06:47:12.441324Z",
+    "matching": "Exact mature saved-life state; same scene, input, budgets, frozen rubric, and software Vulkan evaluator. Independent replay of all actual native A/B results.",
+    "improvement": "Grounded FOOD expression with an obstacle while retaining correct food approach, custody and meal.",
+    "private_comparison_receipt_sha256": "b67e132c3785ee2e86ca3dc0b0ef74d363f6fdc29f400c670d004641b7c5be5a"
+  },
+  "reopen": {
+    "completed_utc": "2026-11-27T06:48:17.917341Z",
+    "exact_scored_current": true,
+    "separate_process": true,
+    "exit_code": 0,
+    "decisions": 0,
+    "world_ticks": 0,
+    "same_individual": true,
+    "source_unchanged": true,
+    "independently_accepted": true,
+    "saved_world_neural_memory_and_sampling_state_preserved": true,
+    "private_acceptance_receipt_sha256": "a8ba3911db0e56af7237432e80cf917ab868d62efd42c031efa444078704e60f"
+  },
+  "promotion": {
+    "completed_utc": "2026-11-27T06:50:28.103117Z",
+    "base": "R42",
+    "parent_preserved_for_rollback": true,
+    "private_off_host_backup_byte_readback_verified": true,
+    "next_gate": "Fresh unedited R42 control on all 29 cases, separately accepted before scoring any next challenger."
+  },
+  "historical": "The old 30-case R41 record also reads 92.5; it is not the source of this matched 29-case comparison."
+}
