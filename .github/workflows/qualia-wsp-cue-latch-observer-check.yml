@@ -1,0 +1,516 @@
+name: Qualia WSP cue latch observer qualification
+
+"on":
+  push:
+    branches: ["bob/qualia-wsp-cue-latch-observer-resident-retry-20261127"]
+    paths:
+      - ".github/workflows/qualia-wsp-cue-latch-observer-check.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qualia-wsp-cue-latch-observer-check-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  qualify-source-executable:
+    if: github.repository == 'BobertNeek/A-Life' && github.ref == 'refs/heads/bob/qualia-wsp-cue-latch-observer-resident-retry-20261127'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 78
+    defaults:
+      run:
+        shell: bash
+    env:
+      PIN_SCHEMA8_FINAL: de8b39fb47d768513eed4cd2e8f8647d5f22e88f
+      PIN_SCHEMA8_TREE: d45c0bb7d00e3cc7490dbcfd1e8fbbc3a7336002
+      PIN_LATCH_PATCH: de1d62c7e6bfc85da2bd865ca3a9ce8de99a5f4a72fbfd9a7435230c4548628f
+      PIN_LATCH_PINS: 2303cb67eae40095bcd2e1f0157917c2c47a90dcd7dc66007bc6da734d371b5b
+      PIN_LATCH_HARNESS: 09003f3a823068fff86b50f4ee889aaa78ddc28332128db0d7553e9cbcce1169
+      PIN_FIRST_CROSSED: 2ccb3364ffea6fbb6a8d517174aad6984a807112
+      PIN_CPU_HARNESS: d31e44da4df32dd83bd9848ed663cbc4cfc262bcf9d6e2784cce5e43f01fe319
+      PIN_RANK_COMMIT: 3c9c6e50391834023490b8edecff45ee4e133e0c
+      PIN_CROSSED_PATCH: d6ed64c12f5e9a58b80f2a1737f7c29b7d4029842916e87747df92f5e8c6a9da
+      PIN_CROSSED_LEAVES: 7fe116bae6f1b493d31d2c742d2cea684804bc8b6a22aa0599378828a24ceaf2
+      PIN_CROSSED_CHECK: c66f1e1a13b7a7b4f3e70366277ab3802929236c08269d38dce03f90982c2a2f
+      PIN_PARENT: aaa0c3b0cfd7b588fb2d202178c3a7016aa68ab3
+      PIN_PARENT_TREE: 2fe4b0ace78b6ce657a9a057d297e3afb82672e1
+      PIN_STRICT_PREDECESSOR: 8aef03ea2608b82ce24261400961b3b16b04789c
+      PIN_B00: b00de30b27b8d501c5e01f8df527ffa3471a2d10
+      PIN_TREE: a1f474ce9feb2dd70356d93004698525fe7d2bad
+      PIN_LEGACY_PARENT: 7a5061285be79275d914f3f8852eaace75c9af1b
+      PIN_SOURCE: f466b83791cccb97568e6f718b92b052999cfb2b
+      PIN_ANCHOR: c5d250178cb70a10f99f78ebcc974e0ad5533b41
+      PIN_RESEARCH: 0cd14f12a8012a9b00119a7b33939ca5e3dbeb53
+      PIN_SOURCE_MANIFEST: 16a63a8f3fb12262f7da2830e3721fc727e20073a8795e91ccfb0765913288ad
+      PIN_RESTORE: bd554f6fa39054ddc08d17487e18ee4edc314c249eabfad2261bf8c1a53c3cef
+      PIN_RESEARCH_PATCH: 3dcf657b2b1149a7da52e7867c3bdbc4c4dfe8d4785b53c95f429c78aa1cd490
+      PIN_REPAIR_PATCH: c2815992c4e3e70a7b7bc42b307dc1d96e8c34483ea36cf2c98e06b9920282e6
+      PIN_LEGACY_PATCH: 692ec25acc620f502581e7299d952471c039812646e41f85cdd1d6f87ed5c66d
+      PIN_V2_PATCH: f0a836086d20e47e434eb947ebc9083f52dc50c344403d24e8ede08ae23ad657
+      PIN_V2_LEAVES: 0ca357bc54e8d997c1f3d12a3cbe697959d87c910f8ac257b9019febeb157349
+      PIN_LOCK: 155699e9274f8890bc8c335669a62de48203ba315a33388a8f0caca71f0f7f37
+      PIN_F0_PATCH: dab4a38f54fba616f9d789cd9e1b4853b09eee5229da91362b29be6aab686cde
+      PIN_F0_LEAVES: a1fc172b35206dffedd1c593cc1f890dab6fda0b287420d8cf5bc1c531b64ac7
+      PIN_STRICT_PATCH: 18ac5322a3e41e2c6ff1e67cf4c9b7eb0d3d3a4cbfbb9f002add7b60e3b43c77
+      PIN_STRICT_LEAVES: 87dac60cf9f540a60a400aa235d798716645cc778648d8ef85fb0b7cf8718791
+      PIN_STRICT_CHECK: 907535345f3ab9c85ab7c7f78ee66cc3d680cecf974ce6c337f59a96d82dde84
+      PIN_RANK_PATCH: 0069bf5a621d6092868540d76ffe3e3a7d06329ac00fdd4a5ad02afcc9edbb38
+      PIN_RANK_LEAVES: 8339b8c2bd4a94a00895920733aab315f9cfa913a8c68974a2483fcdb976610e
+      PIN_RANK_CHECK: a2fa8bff69e4f81729de3475d4353af76b4d1d0931e6e5999414bb85c404e5c7
+      PIN_RUSTC: 0ef1bc386059596dada8fb65b50425aab2ea637a
+      RUST_TOOLCHAIN: "1.100.0"
+      TARGET: x86_64-unknown-linux-gnu
+      CARGO_BUILD_JOBS: "2"
+      CARGO_INCREMENTAL: "0"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_DEV_OPT_LEVEL: "1"
+      CARGO_PROFILE_DEV_INCREMENTAL: "false"
+    steps:
+      - name: Check out candidate commit with no persisted credentials
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify exact Rank32 ancestry, unchanged behavioral overlay, and isolated CPU harness retry
+        run: |
+          set -euo pipefail
+          export LC_ALL=C
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-list --parents -n 1 HEAD)" = "$GITHUB_SHA $PIN_SCHEMA8_FINAL"
+          test "$(git rev-parse "$PIN_SCHEMA8_FINAL^{tree}")" = "$PIN_SCHEMA8_TREE"
+          sw='.github/workflows/qualia-wsp-cue-latch-observer-check.yml'
+          sp='docs/r41-saved-life/wsp-cue-latch-observer-source.patch'
+          sl='docs/r41-saved-life/wsp-cue-latch-observer-source-pins.json'
+          sh='docs/r41-saved-life/wsp-cue-latch-observer-cpu-harness.rs'
+          diff -u <(printf 'A\t%s\n' "$sw" "$sp" "$sl" "$sh" | sort) <(git diff --name-status --no-renames "$PIN_SCHEMA8_FINAL" HEAD | sort)
+          for leaf in "$sw" "$sp" "$sl" "$sh"; do
+            test -f "$leaf" && test ! -L "$leaf"
+            test "$(git ls-tree HEAD -- "$leaf" | cut -d' ' -f1)" = 100644
+          done
+          printf '%s  %s\n' "$PIN_LATCH_PATCH" "$sp" "$PIN_LATCH_PINS" "$sl" "$PIN_LATCH_HARNESS" "$sh" | sha256sum -c -
+          test "$(git rev-list --parents -n 1 "$PIN_RANK_COMMIT")" = "$PIN_RANK_COMMIT $PIN_PARENT"
+          git merge-base --is-ancestor "$PIN_RANK_COMMIT" "$PIN_SCHEMA8_FINAL"
+          test "$(git rev-list --count "$PIN_RANK_COMMIT..$PIN_SCHEMA8_FINAL")" = 6
+          test "$(git rev-list --count "$PIN_FIRST_CROSSED..$PIN_SCHEMA8_FINAL")" = 2
+          git merge-base --is-ancestor "$PIN_FIRST_CROSSED" "$PIN_SCHEMA8_FINAL"
+          test -z "$(git rev-list --merges "$PIN_RANK_COMMIT..$PIN_SCHEMA8_FINAL")"
+          test "$(git rev-parse "$PIN_PARENT^{tree}")" = "$PIN_PARENT_TREE"
+          test "$(git rev-list --parents -n 1 "$PIN_PARENT")" = "$PIN_PARENT $PIN_STRICT_PREDECESSOR"
+          test "$(git rev-list --parents -n 1 "$PIN_STRICT_PREDECESSOR")" = "$PIN_STRICT_PREDECESSOR $PIN_B00"
+          test "$(git rev-parse "$PIN_B00^{tree}")" = "$PIN_TREE"
+          git merge-base --is-ancestor "$PIN_SOURCE" "$PIN_LEGACY_PARENT"
+          git merge-base --is-ancestor "$PIN_RESEARCH" "$PIN_LEGACY_PARENT"
+          git merge-base --is-ancestor "$PIN_LEGACY_PARENT" "$PIN_B00"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+          workflow='.github/workflows/qualia-contact211-rank32-check.yml'
+          docs='docs/r41-saved-life'
+          overlay="$docs/contact211-f0-source.patch"
+          leaves="$docs/contact211-f0-source-pins.json"
+          strict_overlay="$docs/contact211-strict-source.patch"
+          strict_leaves="$docs/contact211-strict-source-pins.json"
+          strict_check="$docs/contact211-strict-source-check.py"
+          rank_overlay="$docs/contact211-rank32-source.patch"
+          rank_leaves="$docs/contact211-rank32-source-pins.json"
+          rank_check="$docs/contact211-rank32-source-check.py"
+          diff -u <(printf 'A\t%s\n' "$workflow" "$rank_overlay" "$rank_leaves" "$rank_check" | sort) \
+            <(git diff --name-status --no-renames "$PIN_PARENT" "$PIN_RANK_COMMIT" | sort)
+          cw='.github/workflows/qualia-contact211-rank32-crossed-check.yml'
+          cp='docs/r41-saved-life/contact211-rank32-crossed-source.patch'
+          cl='docs/r41-saved-life/contact211-rank32-crossed-source-pins.json'
+          cc='docs/r41-saved-life/contact211-rank32-crossed-source-check.py'
+          ch='docs/r41-saved-life/contact211-rank32-crossed-cpu-harness.rs'
+          diff -u <(printf 'A\t%s\n' "$cw" "$cp" "$cl" "$cc" "$ch" | sort) <(git diff --name-status --no-renames "$PIN_RANK_COMMIT" "$PIN_SCHEMA8_FINAL" | sort)
+          diff -u <(printf 'M\t%s\nA\t%s\n' "$cw" "$ch" | sort) <(git diff --name-status --no-renames "$PIN_FIRST_CROSSED" "$PIN_SCHEMA8_FINAL" | sort)
+          for path in "$workflow" "$rank_overlay" "$rank_leaves" "$rank_check" "$strict_overlay" "$strict_leaves" "$strict_check" "$overlay" "$leaves" "$cw" "$cp" "$cl" "$cc" "$ch"; do
+            test -f "$path" && test ! -L "$path"
+            test "$(git ls-tree "$PIN_SCHEMA8_FINAL" -- "$path" | cut -d' ' -f1)" = 100644
+          done
+          printf '%s  %s\n' \
+            "$PIN_F0_PATCH" "$overlay" "$PIN_F0_LEAVES" "$leaves" \
+            "$PIN_STRICT_PATCH" "$strict_overlay" "$PIN_STRICT_LEAVES" "$strict_leaves" "$PIN_STRICT_CHECK" "$strict_check" \
+            "$PIN_RANK_PATCH" "$rank_overlay" "$PIN_RANK_LEAVES" "$rank_leaves" "$PIN_RANK_CHECK" "$rank_check" \
+            "$PIN_CROSSED_PATCH" "$cp" "$PIN_CROSSED_LEAVES" "$cl" "$PIN_CROSSED_CHECK" "$cc" "$PIN_CPU_HARNESS" "$ch" | sha256sum -c -
+
+          exact="$RUNNER_TEMP/qualia-contact211-rank32-exact"
+          layer="$RUNNER_TEMP/qualia-contact211-rank32-layers"
+          evidence="$RUNNER_TEMP/qualia-contact211-rank32-evidence"
+          build="$RUNNER_TEMP/qualia-contact211-rank32-target"
+          mkdir "$layer" "$evidence"
+          git show "$PIN_SOURCE:$docs/restore_source.py" > "$layer/restore_source.py"
+          git show "$PIN_SOURCE:$docs/SOURCE.json" > "$layer/SOURCE.json"
+          mapfile -t diffs < <(git ls-tree -r --name-only "$PIN_SOURCE" -- "$docs/patches" | sort)
+          test "${#diffs[@]}" -eq 69
+          for path in "${diffs[@]}"; do
+            case "$path" in "$docs/patches/"*.patch) ;; *) exit 1;; esac
+            rel="${path#"$docs"/}"
+            mkdir -p "$layer/$(dirname "$rel")"
+            git show "$PIN_SOURCE:$path" > "$layer/$rel"
+          done
+          git show "$PIN_RESEARCH:$docs/research-catalog-source-only.patch" > "$layer/research.patch"
+          git show "$PIN_LEGACY_PARENT:$docs/sleep-boundary-repair-source.patch" > "$layer/repair.patch"
+          git show "$PIN_LEGACY_PARENT:$docs/sleep-legacy-publication-source.patch" > "$layer/legacy.patch"
+          git show "$PIN_B00:$docs/retained-language-pilot-source.patch" > "$layer/v2.patch"
+          git show "$PIN_B00:$docs/retained-language-pilot-source-pins.json" > "$layer/v2-pins.json"
+          printf '%s  %s\n' \
+            "$PIN_RESTORE" "$layer/restore_source.py" "$PIN_SOURCE_MANIFEST" "$layer/SOURCE.json" \
+            "$PIN_RESEARCH_PATCH" "$layer/research.patch" "$PIN_REPAIR_PATCH" "$layer/repair.patch" \
+            "$PIN_LEGACY_PATCH" "$layer/legacy.patch" "$PIN_V2_PATCH" "$layer/v2.patch" \
+            "$PIN_V2_LEAVES" "$layer/v2-pins.json" | sha256sum -c - | tee "$evidence/qualification.txt"
+          printf 'rank32_source_patch_sha256=%s\nrank32_source_pins_sha256=%s\n' \
+            "$PIN_RANK_PATCH" "$PIN_RANK_LEAVES" | tee -a "$evidence/qualification.txt"
+          printf 'head=%s\nactual_parent=%s\nactual_parent_tree=%s\nstrict_patch_sha256=%s\nstrict_pins_sha256=%s\n' \
+            "$GITHUB_SHA" "$PIN_PARENT" "$PIN_PARENT_TREE" "$PIN_STRICT_PATCH" "$PIN_STRICT_LEAVES" | tee -a "$evidence/qualification.txt"
+          printf 'head=%s\nprior=%s\nprior_tree=%s\nF0_patch_sha256=%s\n' \
+            "$GITHUB_SHA" "$PIN_B00" "$PIN_TREE" "$PIN_F0_PATCH" | tee -a "$evidence/qualification.txt"
+          python3 -I "$layer/restore_source.py" "$GITHUB_WORKSPACE" "$exact" | tee -a "$evidence/qualification.txt"
+          test "$(git -C "$GITHUB_WORKSPACE" rev-parse "$PIN_ANCHOR")" = "$PIN_ANCHOR"
+          cd "$exact"
+          for patch in "$layer/research.patch" "$layer/repair.patch" "$layer/legacy.patch"; do
+            git apply --check "$patch"
+            git apply "$patch"
+          done
+
+          python3 -I - "$layer/v2-pins.json" "$layer/v2.patch" \
+            "$GITHUB_WORKSPACE/$leaves" "$GITHUB_WORKSPACE/$overlay" \
+            "$GITHUB_WORKSPACE/$strict_leaves" "$GITHUB_WORKSPACE/$strict_overlay" "$GITHUB_WORKSPACE/$strict_check" \
+            "$GITHUB_WORKSPACE/$rank_leaves" "$GITHUB_WORKSPACE/$rank_overlay" "$layer/checked-tree.json" <<'PY' | tee -a "$evidence/qualification.txt"
+          from hashlib import sha256
+          import json, os, pathlib, re, subprocess, sys
+
+          def require(condition, label):
+              if not condition:
+                  raise SystemExit(f'Contact211 F0 source check refused: {label}')
+
+          root = pathlib.Path.cwd()
+          v2_json, v2_patch, f0_json, f0_patch, strict_json, strict_patch, strict_check, rank_json, rank_patch, checked_tree = map(pathlib.Path, sys.argv[1:])
+          v2 = json.loads(v2_json.read_bytes())
+          f0 = json.loads(f0_json.read_bytes())
+
+          modified = {
+              'crates/alife_game_app/Cargo.toml',
+              'crates/alife_game_app/src/gpu_live_runtime.rs',
+              'crates/alife_game_app/src/gpu_live_runtime/staged_tick.rs',
+              'crates/alife_gpu_backend/Cargo.toml',
+              'crates/alife_gpu_backend/src/closed_loop_pipeline.rs',
+              'crates/alife_gpu_backend/src/closed_loop_runtime.rs',
+              'crates/alife_gpu_backend/src/closed_loop_runtime/tick.rs',
+              'crates/alife_gpu_backend/src/training_rollout.rs',
+              'crates/alife_world/Cargo.toml',
+              'crates/alife_world/src/candidate_enumerator.rs',
+              'crates/alife_world/src/headless.rs',
+          }
+          added = {
+              'crates/alife_game_app/src/gpu_live_runtime/contact211_f0_witness.rs',
+              'crates/alife_world/src/headless/contact211_witness.rs',
+          }
+          shaders = {
+              'crates/alife_gpu_backend/shaders/closed_loop_decode.wgsl',
+              'crates/alife_gpu_backend/shaders/closed_loop_memory_context.wgsl',
+              'crates/alife_gpu_backend/shaders/training_rollout.wgsl',
+          }
+          before = f0['overlaid_source_before_sha256']
+          after = f0['overlaid_source_after_sha256']
+          shader_pins = f0['unchanged_shaders_sha256']
+          require(f0['schema'] == 'qualia.contact211_f0_compile_source.v1'
+                  and f0['prior_commit'] == os.environ['PIN_B00']
+                  and f0['prior_tree'] == os.environ['PIN_TREE']
+                  and f0['forward_sha256'] == os.environ['PIN_F0_PATCH']
+                  and f0['lock_sha256'] == os.environ['PIN_LOCK']
+                  and f0['policy_or_native_result'] is False
+                  and set(before) == modified and set(after) == modified | added
+                  and set(shader_pins) == shaders, 'independent exact F0 leaf allowlist')
+          require(sha256(f0_patch.read_bytes()).hexdigest() == os.environ['PIN_F0_PATCH'], 'overlay bytes')
+          headers = [l for l in f0_patch.read_text().splitlines() if l.startswith('diff --git ')]
+          path_pattern = re.compile(r'diff --git a/([a-zA-Z0-9_./-]+) b/([a-zA-Z0-9_./-]+)')
+          names = []
+          for line in headers:
+              m = path_pattern.fullmatch(line)
+              require(m is not None and m[1] == m[2], 'patch header shape')
+              names.append(m[1])
+          require(len(names) == 13 and set(names) == modified | added, 'patch target allowlist')
+
+          def digest(rel):
+              path = root / rel
+              require(not path.is_symlink(), f'symlink {rel}')
+              return sha256(path.read_bytes()).hexdigest() if path.is_file() else None
+
+          def verify(pins, label):
+              for path, want in sorted(pins.items()):
+                  require(digest(path) == want, f'{label}: {path}')
+
+          def apply(patch):
+              subprocess.run(['git', 'apply', '--check', str(patch)], cwd=root, check=True)
+              subprocess.run(['git', 'apply', str(patch)], cwd=root, check=True)
+
+          v2_leaves = v2['changed_source_leaves']
+          catalog = 'crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/research_catalog.rs'
+          require(len(v2_leaves) == 6 and sum(x['parent_sha256'] is None for x in v2_leaves.values()) == 1,
+                  'v2 historical leaf shape')
+          for phase in ('parent', 'result'):
+              if phase == 'result':
+                  apply(v2_patch)
+              verify({path: pins[phase + '_sha256'] for path, pins in v2_leaves.items()}
+                     | {catalog: v2['research_catalog_unchanged_sha256']}, f'v2 {phase}')
+          verify(before | shader_pins | {'Cargo.lock': os.environ['PIN_LOCK']}, 'authentic B00 emitted preimage')
+          require(all(digest(p) is None and not (root / p).exists() for p in added), 'F0 new files already present')
+
+          def tree():
+              nodes = list(root.rglob('*'))
+              require(not any(p.is_symlink() for p in nodes), 'symlink in restored closure')
+              return {p.relative_to(root).as_posix(): sha256(p.read_bytes()).hexdigest()
+                      for p in nodes if p.is_file()}
+
+          source_before = tree()
+          apply(f0_patch)
+          verify(after | shader_pins | {'Cargo.lock': os.environ['PIN_LOCK']}, 'exact F0 postimage')
+          source_after = tree()
+          changed = {p for p in source_before.keys() | source_after.keys() if source_before.get(p) != source_after.get(p)}
+          require(changed == modified | added and set(source_after) - set(source_before) == added,
+                  'whole reconstructed tree diff outside exact 13-leaf allowlist')
+          subprocess.run(['git', 'apply', '--reverse', '--check', str(f0_patch)], cwd=root, check=True)
+          print('status=source+locks+three_shaders_authenticated; restored_827+historical_layers+exact_13_leaf_f0')
+
+          strict = json.loads(strict_json.read_bytes())
+          app = 'crates/alife_game_app/src/'
+          strict_modified = {
+              app + 'gpu_live_runtime.rs',
+              app + 'gpu_live_runtime/contact211_f0_witness.rs',
+              app + 'gpu_live_runtime/staged_tick.rs',
+              app + 'foundation_training_cycle/saved_life_retention.rs',
+              app + 'foundation_training_cycle/saved_life_retention/experiments.rs',
+              'crates/alife_gpu_backend/src/closed_loop_runtime.rs',
+          }
+          strict_added = {app + 'foundation_training_cycle/saved_life_retention/contact211_parity.rs'}
+          pre, post = strict['before_sha256'], strict['after_sha256']
+          require(strict['official_or_native_ready'] is False and set(pre) == strict_modified
+                  and set(post) == strict_modified | strict_added, 'independent exact strict source allowlist')
+          require(sha256(strict_patch.read_bytes()).hexdigest() == os.environ['PIN_STRICT_PATCH']
+                  and sha256(strict_json.read_bytes()).hexdigest() == os.environ['PIN_STRICT_LEAVES'],
+                  'exact strict overlay and leaf bytes')
+          headers = [path_pattern.fullmatch(l) for l in strict_patch.read_text().splitlines()
+                     if l.startswith('diff --git ')]
+          require(len(headers) == 7 and all(m is not None and m[1] == m[2] for m in headers)
+                  and {m[1] for m in headers} == strict_modified | strict_added, 'strict patch target allowlist')
+          verify(pre | shader_pins | {'Cargo.lock': os.environ['PIN_LOCK']}, 'exact strict preimage')
+          require(all(digest(p) is None and not (root / p).exists() for p in strict_added), 'strict new file already present')
+          apply(strict_patch)
+          verify(post | shader_pins | {'Cargo.lock': os.environ['PIN_LOCK']}, 'exact strict postimage')
+          strict_after = tree()
+          changed = {p for p in source_after.keys() | strict_after.keys() if source_after.get(p) != strict_after.get(p)}
+          require(changed == strict_modified | strict_added and set(strict_after) - set(source_after) == strict_added,
+                  'whole reconstructed tree diff outside strict seven-leaf allowlist')
+          subprocess.run(['git', 'apply', '--reverse', '--check', str(strict_patch)], cwd=root, check=True)
+          print('status=strict_seven_leaf_source_and_exact_inverse_checked; frozen_lock+three_shaders_unchanged')
+          inherited = subprocess.check_output([sys.executable, '-I', str(strict_check), str(root)], text=True)
+          require(inherited.count('DENIED ') == 7, 'inherited strict negative controls')
+          print(inherited, end='')
+          print('strict_source_negative_controls=7_PASS')
+          rank = json.loads(rank_json.read_bytes())
+          gpu = 'crates/alife_gpu_backend/'
+          app = 'crates/alife_game_app/'
+          rank_modified = {
+              app + 'Cargo.toml', gpu + 'Cargo.toml',
+              app + 'src/gpu_live_runtime.rs',
+              app + 'src/gpu_live_runtime/contact211_f0_witness.rs',
+              app + 'src/foundation_training_cycle/saved_life_retention/contact211_parity.rs',
+              app + 'src/foundation_training_cycle/saved_life_retention/experiments.rs',
+              gpu + 'src/training_rollout.rs',
+              gpu + 'src/closed_loop_runtime.rs',
+              gpu + 'src/closed_loop_runtime/tick.rs',
+              gpu + 'src/closed_loop_pipeline.rs',
+          }
+          rank_added = {gpu + 'shaders/contact211_rank32.wgsl'}
+          pre, post = rank['before_sha256'], rank['after_sha256']
+          require(set(pre) == rank_modified and set(post) == rank_modified | rank_added
+                  and sha256(rank_patch.read_bytes()).hexdigest() == os.environ['PIN_RANK_PATCH']
+                  and sha256(rank_json.read_bytes()).hexdigest() == os.environ['PIN_RANK_LEAVES'],
+                  'independent exact Rank32 source allowlist/pins')
+          headers = [path_pattern.fullmatch(line) for line in rank_patch.read_text().splitlines()
+                     if line.startswith('diff --git ')]
+          require(len(headers) == 11 and all(m is not None and m[1] == m[2] for m in headers)
+                  and {m[1] for m in headers} == rank_modified | rank_added, 'exact Rank32 patch paths')
+          verify(pre | shader_pins | {'Cargo.lock': os.environ['PIN_LOCK']}, 'rank32 preimage from strict AAA0')
+          require(all(not (root / p).exists() for p in rank_added), 'rank32 new shader exists before patch')
+          require(not any(p.name in ('contact211-rank32.weights.v1.json', 'CONTACT-LEXICAL-WEIGHTS.v1.json',
+                                    'rows.jsonl', 'Current.alife-checkpoint') for p in root.rglob('*')),
+                  'private weights, traces, or saved-life file in restored CI closure')
+          apply(rank_patch)
+          verify(post | shader_pins | {'Cargo.lock': os.environ['PIN_LOCK']}, 'exact Rank32 postimage')
+          rank_after = tree()
+          changed = {p for p in strict_after.keys() | rank_after.keys() if strict_after.get(p) != rank_after.get(p)}
+          require(changed == rank_modified | rank_added and set(rank_after) - set(strict_after) == rank_added,
+                  'whole reconstructed tree diff outside exact rank32 eleven-leaf allowlist')
+          subprocess.run(['git', 'apply', '--reverse', '--check', str(rank_patch)], cwd=root, check=True)
+          checked_tree.write_text(json.dumps(rank_after, sort_keys=True) + '\n')
+          print('status=rank32_exact_eleven_leaf_source_and_inverse_checked; frozen_lock+three_stock_shaders_unchanged')
+          PY
+          python3 -I "$GITHUB_WORKSPACE/$rank_check" "$exact" | tee -a "$evidence/qualification.txt"
+          test "$(grep -c '^REJECTED ' "$evidence/qualification.txt")" = 5
+          python3 -I "$GITHUB_WORKSPACE/$cc" "$GITHUB_WORKSPACE/$cl" "$GITHUB_WORKSPACE/$cp" "$layer/checked-tree.json" | tee -a "$evidence/qualification.txt"
+          printf 'crossed_source_patch_sha256=%s\ncrossed_source_pins_sha256=%s\nqualified_rank32_parent=%s\n' \
+            "$PIN_CROSSED_PATCH" "$PIN_CROSSED_LEAVES" "$PIN_RANK_COMMIT" | tee -a "$evidence/qualification.txt"
+          printf 'EXACT_SRC=%s\nCARGO_TARGET_DIR=%s\nF0_LAYER=%s\nF0_EVIDENCE=%s\n' \
+            "$exact" "$build" "$layer" "$evidence" >> "$GITHUB_ENV"
+
+      - name: Apply exactly ten observer-only source leaves to the frozen schema8 closure
+        run: |
+          set -euo pipefail
+          cd "$EXACT_SRC"
+          python3 -I - "$F0_LAYER/checked-tree.json" "$GITHUB_WORKSPACE/docs/r41-saved-life/wsp-cue-latch-observer-source-pins.json" "$GITHUB_WORKSPACE/docs/r41-saved-life/wsp-cue-latch-observer-source.patch" <<'PY' | tee -a "$F0_EVIDENCE/qualification.txt"
+          from hashlib import sha256
+          import json, os, pathlib, subprocess, sys
+          def require(c, why):
+              if not c:
+                  raise SystemExit(why)
+          def h(p):
+              return sha256(p.read_bytes()).hexdigest()
+          def exact_tree():
+              all=list(pathlib.Path.cwd().rglob('*'))
+              require(not any(p.is_symlink() for p in all), "source has a symlink")
+              denied={'Current.alife-checkpoint','rows.jsonl','retention.json','cue-latch-lexical-source.v1.json','contact211-rank32.weights.v1.json'}
+              require(not any(p.name in denied for p in all), "private experiment leaf in source")
+              return {p.relative_to(pathlib.Path.cwd()).as_posix():h(p) for p in all if p.is_file()}
+          checked,pins,patch=map(pathlib.Path,sys.argv[1:])
+          q=json.loads(pins.read_bytes())
+          old=json.loads(checked.read_bytes())
+          before,after=q['combined_source_before_sha256'],q['combined_source_after_sha256']
+          app='crates/alife_game_app/'
+          world='crates/alife_world/'
+          r=app+'src/foundation_training_cycle/saved_life_retention'
+          g=app+'src/gpu_live_runtime'
+          changed={app+'Cargo.toml',world+'Cargo.toml',world+'src/headless.rs',
+              g+'.rs',g+'/staged_tick.rs',r+'.rs',r+'/experiments.rs'}
+          new={g+'/cue_latch_observer.rs',r+'/wsp_cue_latch.rs',world+'src/headless/cue_latch_observer.rs'}
+          require(set(before)==changed and set(after)==changed|new and q['actual_source_parent_hosted_commit']==os.environ['PIN_SCHEMA8_FINAL']
+              and h(pins)==os.environ['PIN_LATCH_PINS'] and h(patch)==os.environ['PIN_LATCH_PATCH']==q['combined_forward_sha256'],
+              "observer path or exact hashes not approved")
+          require(exact_tree()==old and all(old[k]==v for k,v in before.items()) and not set(old)&new,
+              "actual restored parent source tree differs")
+          check=['git','apply']
+          subprocess.run(check+['--check',str(patch)],check=True)
+          subprocess.run(check+[str(patch)],check=True)
+          fresh=exact_tree()
+          require(fresh==old|after and set(fresh)-set(old)==new,"observer changed any uncovered source path")
+          subprocess.run(check+['--reverse','--check',str(patch)],check=True)
+          # Check actual inverse and preserve exact ON postimage for compiler.
+          subprocess.run(check+['--reverse',str(patch)],check=True)
+          require(exact_tree()==old,"observer inverse did not recover frozen source")
+          subprocess.run(check+[str(patch)],check=True)
+          require(exact_tree()==fresh,"observer reapply differs")
+          checked.write_text(json.dumps(fresh,sort_keys=True)+'\n')
+          print('wsp_cue_latch_combined_source_qualification=PASS ten_leaves_true_inverse_old_lock_and_shaders_unchanged')
+          PY
+
+      - name: Check observer OFF, run actual World CPU harness and exact Naga, then build one shared evaluator ON
+        run: |
+          set -euo pipefail
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --target "$TARGET"
+          version="$(rustc +"$RUST_TOOLCHAIN" -vV)"
+          grep -Fqx "release: $RUST_TOOLCHAIN" <<< "$version"
+          grep -Fqx "commit-hash: $PIN_RUSTC" <<< "$version"
+          grep -Fqx "host: $TARGET" <<< "$version"
+          printf '%s\n' "$version" | tee -a "$F0_EVIDENCE/qualification.txt"
+          cd "$EXACT_SRC"
+          timeout 8m cargo +"$RUST_TOOLCHAIN" fetch --locked --target "$TARGET"
+          timeout 16m cargo +"$RUST_TOOLCHAIN" check --frozen --offline --no-default-features \
+            --target "$TARGET" -j 2 -p alife_game_app --features contact211-rank32-crossed --bin evaluate_saved_life_retention
+          printf 'cargo_check_wsp_off=PASS no_binary\n' | tee -a "$F0_EVIDENCE/qualification.txt"
+          test "$(df -PB1 "$CARGO_TARGET_DIR" | awk 'NR==2 {print $4}')" -ge 10737418240
+          auth_harness="$GITHUB_WORKSPACE/docs/r41-saved-life/wsp-cue-latch-observer-cpu-harness.rs"
+          exact_harness="crates/alife_game_app/tests/wsp_cue_latch_cpu.rs"
+          printf '%s  %s\n' "$PIN_LATCH_HARNESS" "$auth_harness" | sha256sum -c -
+          test ! -e "$exact_harness" && test ! -L "$exact_harness"
+          mkdir -p "$(dirname "$exact_harness")"
+          install -m 0644 "$auth_harness" "$exact_harness"
+          cmp -s "$auth_harness" "$exact_harness"
+          trap 'rm -f -- "$exact_harness"' EXIT
+          timeout 25m cargo +"$RUST_TOOLCHAIN" test --frozen --offline --no-default-features \
+            --target "$TARGET" -j 2 -p alife_game_app --test wsp_cue_latch_cpu --features contact211-rank32-crossed \
+            actual_shared_admission_refuses_latch_off_before_any_saved_life_access -- --nocapture | tee "$F0_LAYER/wsp-off.log"
+          grep -Fq 'actual_shared_admission_refuses_latch_off_before_any_saved_life_access ... ok' "$F0_LAYER/wsp-off.log"
+          grep -Eq '^test result: ok. 1 passed; 0 failed; 0 ignored;' "$F0_LAYER/wsp-off.log"
+          timeout 25m cargo +"$RUST_TOOLCHAIN" test --frozen --offline --no-default-features \
+            --target "$TARGET" -j 2 -p alife_game_app --test wsp_cue_latch_cpu --features wsp-cue-latch-observer \
+            -- --nocapture | tee "$F0_LAYER/wsp-on.log"
+          grep -Fq 'actual_shared_admission_does_not_accept_a_selector_address_in_the_new_observer_mode ... ok' "$F0_LAYER/wsp-on.log"
+          grep -Fq 'actual_world_track_binding_and_acoustic_expiry_are_not_fixture_results ... ok' "$F0_LAYER/wsp-on.log"
+          grep -Eq '^test result: ok. 2 passed; 0 failed; 0 ignored;' "$F0_LAYER/wsp-on.log"
+          printf 'wsp_native_api_off_refusal_and_cpu_world_qualification=PASS three_tests_no_private_checkpoint_or_native_gpu\n' | tee -a "$F0_EVIDENCE/qualification.txt"
+          printf '%s  %s\n' "$PIN_LATCH_HARNESS" "$exact_harness" | sha256sum -c -
+          rm -f -- "$exact_harness"
+          trap - EXIT
+          timeout 20m cargo +"$RUST_TOOLCHAIN" test --frozen --offline --no-default-features \
+            --target "$TARGET" -j 2 -p alife_gpu_backend --lib --features contact211-rank32,gpu-tests \
+            contact211_rank32_signed_shader_validates_without_device -- --nocapture | tee "$F0_LAYER/naga-validation.log"
+          grep -Fq 'closed_loop_pipeline::contact211_rank32_signed_shader_validates_without_device ... ok' "$F0_LAYER/naga-validation.log"
+          grep -Eq '^test result: ok. 1 passed; 0 failed; 0 ignored;' "$F0_LAYER/naga-validation.log"
+          printf 'exact_signed_WGSL_cpu_naga=PASS one_test_no_device_or_native_eval\n' | tee -a "$F0_EVIDENCE/qualification.txt"
+          test "$(df -PB1 "$CARGO_TARGET_DIR" | awk 'NR==2 {print $4}')" -ge 10737418240
+          # Final and only artifact build; no further Cargo command may replace the enabled binary.
+          timeout 35m cargo +"$RUST_TOOLCHAIN" build --frozen --offline --no-default-features \
+            --target "$TARGET" -j 2 -p alife_game_app --features wsp-cue-latch-observer \
+            --bin evaluate_saved_life_retention --message-format=json-render-diagnostics > "$F0_LAYER/cargo-observer-on.jsonl"
+          python3 -I - "$F0_LAYER/cargo-observer-on.jsonl" "$CARGO_TARGET_DIR/$TARGET/debug/evaluate_saved_life_retention" <<'PY' | tee -a "$F0_EVIDENCE/qualification.txt"
+          import json, sys
+          rows=[json.loads(l) for l in open(sys.argv[1])]
+          exact=[x for x in rows if x.get('reason')=='compiler-artifact'
+                 and x['target']['name']=='evaluate_saved_life_retention' and 'bin' in x['target']['kind']]
+          if len(exact)!=1 or exact[0]['executable']!=sys.argv[2] or 'wsp-cue-latch-observer' not in exact[0]['features']:
+              raise SystemExit('exact enabled compiler artifact is missing')
+          print('cargo_build_wsp_observer_on=PASS exact_produced_bin_features=' + ','.join(exact[0]['features']))
+          PY
+          python3 -I - "$F0_LAYER/checked-tree.json" <<'PY'
+          from hashlib import sha256
+          import json, pathlib, sys
+          root = pathlib.Path.cwd()
+          expected = json.loads(pathlib.Path(sys.argv[1]).read_bytes())
+          nodes = list(root.rglob('*'))
+          if any(p.is_symlink() for p in nodes):
+              raise SystemExit('compile/check modified source symlinks')
+          actual = {p.relative_to(root).as_posix(): sha256(p.read_bytes()).hexdigest()
+                    for p in nodes if p.is_file()}
+          if actual != expected:
+              raise SystemExit('compile/check modified restored source; refusing qualification')
+          PY
+          raw="$CARGO_TARGET_DIR/$TARGET/debug/evaluate_saved_life_retention"
+          dst="$F0_EVIDENCE/evaluate_saved_life_retention"
+          test -x "$raw" && test -f "$raw" && test ! -L "$raw" && test ! -e "$dst"
+          LC_ALL=C grep -aFq -- 'WSP CUE LATCH observer-only native transcript failed integrity' "$raw"
+          printf 'wsp_elf_schema9_observer_only_marker=PASS\n' | tee -a "$F0_EVIDENCE/qualification.txt"
+          bytes="$(stat -c %s "$raw")"
+          test "$bytes" -ge 1048576 && test "$bytes" -le 268435456
+          readelf -W -h "$raw" > "$F0_LAYER/elf-header.txt"
+          grep -Eq 'Class:[[:space:]]+ELF64' "$F0_LAYER/elf-header.txt"
+          grep -Eq 'Machine:[[:space:]]+Advanced Micro Devices X86-64' "$F0_LAYER/elf-header.txt"
+          grep -Eq 'Type:[[:space:]]+(DYN|EXEC)' "$F0_LAYER/elf-header.txt"
+          install -m 0755 "$raw" "$dst"
+          cmp -s "$raw" "$dst"
+          test -x "$dst" && test -f "$dst" && test ! -L "$dst"
+          sha="$(sha256sum "$dst" | cut -d' ' -f1)"
+          printf 'authority=source_build_only\ngame_binary_executed=false\nprivate_data_read_or_uploaded=false\n' \
+            | tee -a "$F0_EVIDENCE/qualification.txt"
+          printf 'executable_basename=evaluate_saved_life_retention\nexecutable_sha256=%s\nexecutable_bytes=%s\n' \
+            "$sha" "$bytes" | tee -a "$F0_EVIDENCE/qualification.txt"
+          printf 'source_tree_manifest_sha256=%s\nhost_%s\n' \
+            "$(sha256sum "$F0_LAYER/checked-tree.json" | cut -d' ' -f1)" "$(getconf GNU_LIBC_VERSION)" \
+            | tee -a "$F0_EVIDENCE/qualification.txt"
+          readelf -W -n "$dst" | awk '/Build ID:/ {print "elf_build_id=" $NF}' | tee -a "$F0_EVIDENCE/qualification.txt"
+          readelf -W -d "$dst" | awk '/NEEDED/ {print "elf_needed=" $NF}' | tee -a "$F0_EVIDENCE/qualification.txt"
+          diff -u <(printf '%s\n' evaluate_saved_life_retention qualification.txt | sort) \
+            <(find "$F0_EVIDENCE" -mindepth 1 -maxdepth 1 -printf '%f\n' | sort)
+          printf 'wsp_cue_latch_native_shadow_or_gameplay=not_run; separate_private_same_elf_A_B_required\n' \
+            | tee -a "$F0_EVIDENCE/qualification.txt"
+
+      - name: Retain exactly the qualified source-build executable and receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: qualia-wsp-cue-latch-observer-source-executable-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/qualia-contact211-rank32-evidence/qualification.txt
+            ${{ runner.temp }}/qualia-contact211-rank32-evidence/evaluate_saved_life_retention
+          if-no-files-found: error
+          compression-level: 3
+          retention-days: 5
