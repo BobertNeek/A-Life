@@ -1,0 +1,1186 @@
+diff --git a/crates/alife_game_app/Cargo.toml b/crates/alife_game_app/Cargo.toml
+--- a/crates/alife_game_app/Cargo.toml
++++ b/crates/alife_game_app/Cargo.toml
+@@ -124,6 +124,7 @@
+     "alife_runtime/gpu-tests",
+ ]
+ retained-language-pilot = ["foundation-training", "gpu-tests", "alife_world/retained-language-pilot"]
++retained-language-composition-v3 = ["retained-language-pilot", "alife_world/retained-language-composition-v3"]
+ vfx-hanabi = ["bevy-app", "dep:bevy_hanabi", "bevy_hanabi/3d"]
+ production-voxel-frontend = [
+     "bevy-app",
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs
+--- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs
+@@ -24,6 +24,9 @@
+ #[cfg(feature = "retained-language-pilot")]
+ #[path = "saved_life_retention/language_pilot.rs"]
+ mod language_pilot;
++#[cfg(feature = "retained-language-composition-v3")]
++#[path = "saved_life_retention/language_composition_v3.rs"]
++mod language_composition_v3;
+ #[cfg(feature = "gpu-tests")]
+ pub use experiments::evaluate_saved_life_retention_experiment;
+ 
+@@ -402,6 +405,8 @@
+     let research = experiment.as_ref().and_then(experiments::ExperimentIdentity::research);
+     #[cfg(feature = "retained-language-pilot")]
+     let language = experiment.as_ref().and_then(experiments::ExperimentIdentity::language_pilot);
++    #[cfg(feature = "retained-language-composition-v3")]
++    let composition = experiment.as_ref().and_then(experiments::ExperimentIdentity::language_composition_v3);
+     if let Some(scope) = scent_scope {
+         scope.validate(&request)?;
+     }
+@@ -497,6 +502,18 @@
+     if language.is_some() {
+         let life = baseline.life.as_ref().ok_or("language pilot requires exact living state")?;
+         language_pilot::reject_archived_toy_rolls(&life.world_json)?;
++    }
++    #[cfg(feature = "retained-language-composition-v3")]
++    if composition.is_some() {
++        let life = baseline.life.as_ref().ok_or("v3 requires exact living state before restore")?;
++        language_pilot::reject_archived_toy_rolls(&life.world_json)?;
++        if std::env::var("ALIFE_EXPLICIT_RETENTION_ARCHIVE_TEST")
++            .ok().as_deref() == Some("1")
++            || std::env::var("ALIFE_EXPLICIT_FIXED_HOST_PRESSURE_NS")
++                .ok().is_some_and(|s| s.parse::<u64>().ok() != Some(0))
++        {
++            return Err("v3 admits neither isolated archive nor nonzero/invalid fixed pressure".into());
++        }
+     }
+     #[cfg(feature = "gpu-tests")]
+     let request = if let Some(target) = research.and_then(|profile| profile.foundation.as_ref()) {
+@@ -581,6 +598,37 @@
+         )?;
+         return Ok(receipt);
+     }
++    #[cfg(feature = "retained-language-composition-v3")]
++    if let Some(spec) = composition.filter(|s| s.phase == language_composition_v3::Phase::Geometry) {
++        // A separate opening *geometry* 0/0; never construct backend, resident
++        // runtime, operation queue, outcome tick or Player atom on this branch.
++        // Current is checked/decoded by the same stock bounded host loader above.
++        let geometry = spec.geometry(&world, id)?;
++        if now()? >= request.deadline_unix_seconds || fs::read(&source)? != original {
++            return Err("v3 zero-dispatch geometry exceeded time/source scope".into());
++        }
++        receipt["status"] = serde_json::json!("geometry_witness_only");
++        receipt["captured_decisions"] = serde_json::json!(0);
++        receipt["world_ticks"] = serde_json::json!(0);
++        receipt["control_calls"] = serde_json::json!(0);
++        receipt["neural_execution"] = serde_json::json!(false);
++        receipt["gpu_restored"] = serde_json::json!(false);
++        receipt["measurement_valid"] = serde_json::json!(false);
++        receipt["software_simulation_integrity_valid"] = serde_json::json!(false);
++        receipt["retention_demonstrated"] = serde_json::json!(false);
++        receipt["source_unchanged"] = serde_json::json!(true);
++        receipt["language_composition_v3_geometry"] = geometry;
++        drop(final_headroom);
++        alife_storage::write(output.join(language_composition_v3::GEOMETRY_LEAF),
++            serde_json::to_vec_pretty(&receipt["language_composition_v3_geometry"])?)?;
++        alife_storage::write(output.join("retention.json"), serde_json::to_vec_pretty(&receipt)?)?;
++        return Ok(receipt);
++    }
++    #[cfg(feature = "retained-language-composition-v3")]
++    if let Some(spec) = composition {
++        // Affirm the dry scene and bound parent again before constructing a backend.
++        spec.check_parent_geometry(&world, id)?;
++    }
+     let endpoint_seeds = observation_seeds(&baseline, request.evaluation_nonce)?;
+     let sampling_temperature = baseline
+         .saved_training_sampling()?
+@@ -651,6 +699,8 @@
+         }
+         Some(0)
+     } else { controlled_pressure };
++    #[cfg(feature = "retained-language-composition-v3")]
++    let controlled_pressure = if composition.is_some() { Some(0) } else { controlled_pressure };
+     let isolated_archive =
+         std::env::var("ALIFE_EXPLICIT_RETENTION_ARCHIVE_TEST").is_ok_and(|v| v == "1");
+     #[cfg(feature = "gpu-tests")]
+@@ -840,6 +890,19 @@
+         receipt["teacher_emission_scope"] = serde_json::json!(
+             "Exactly one addressed native Player utterance; no Teacher emitter, hints or reward"
+         );
++        Some(opened)
++    } else { None };
++    #[cfg(feature = "retained-language-composition-v3")]
++    let composition_setup = if let Some(spec) = composition {
++        let sampler = runtime.foundation_training_sampling_state();
++        let tick = runtime.world().tick();
++        let opened = spec.configure(runtime.world_mut(), id)?;
++        if sampler != runtime.foundation_training_sampling_state() || tick != runtime.world().tick()
++            || !TeacherCues::observe(runtime.world()).clear()
++        {
++            return Err("v3 observer setup changed sampler/tick or introduced a Teacher cue".into());
++        }
++        receipt["language_composition_v3_setup"] = opened.setup.clone();
+         Some(opened)
+     } else { None };
+     let mut task = request
+@@ -908,6 +971,9 @@
+         #[cfg(feature = "retained-language-pilot")]
+         let language_before = language_setup.as_ref()
+             .map(|p| p.custody(runtime.world())).transpose()?;
++        #[cfg(feature = "retained-language-composition-v3")]
++        let composition_before = composition_setup.as_ref()
++            .map(|p| p.capture(runtime.world(), id)).transpose()?;
+         let before_pose = runtime
+             .world()
+             .organism_registry()
+@@ -1169,6 +1235,19 @@
+                         }
+                     };
+                 }
++                #[cfg(feature = "retained-language-composition-v3")]
++                if let Some(opened) = &composition_setup {
++                    if step.frame.frame_digest() != step.patch.pre_action().perception().frame_digest()
++                        || step.patch.outcome().outcome_tick != after_tick
++                    {
++                        return Err("v3 cannot join raw World truth to the sealed native outcome".into());
++                    }
++                    row["language_composition_v3_observation"] = opened.observe(
++                        &step.frame, &step.behavior,
++                        composition_before.ok_or("v3 lost the actual predecision World snapshot")?,
++                        runtime.world(), after_tick,
++                    )?;
++                }
+                 if controlled_pressure.is_some() {
+                     row["observer_host_pressure_control"] =
+                         runtime.controlled_pressure_evidence_for_test();
+@@ -1343,6 +1422,25 @@
+             complete && software_simulation && error.is_none() && base_unchanged
+             && prior_clear && unchanged && cue_free && endpoint_preserved
+         );
++        receipt["coverage_complete"] = serde_json::json!(complete);
++        receipt["cue_free"] = serde_json::json!(false);
++        receipt["measurement_valid"] = serde_json::json!(false);
++        receipt["software_simulation_integrity_valid"] = serde_json::json!(false);
++        receipt["qualified"] = serde_json::json!(false);
++        receipt["retention_demonstrated"] = serde_json::json!(false);
++    }
++    #[cfg(feature = "retained-language-composition-v3")]
++    if let Some(v) = composition {
++        let expected = v.phase.decisions();
++        let complete = stop == "decision_limit" && alive && rows == expected
++            && runtime.world().tick().raw().saturating_sub(source_world_tick) == expected as u64;
++        let integrity = complete && software_simulation && error.is_none()
++            && base_unchanged && prior_clear && unchanged && cue_free && endpoint_preserved;
++        receipt["language_composition_v3_witness"] = serde_json::json!({
++            "phase":v.phase,"integrity":integrity,"accepted_decisions":rows,
++            "separate_three_cut_ttl_observed": integrity && v.phase == language_composition_v3::Phase::Ttl,
++            "behavior_score":false,"scorecard_eligible":false,"not_a_composition_trial":true,
++        });
+         receipt["coverage_complete"] = serde_json::json!(complete);
+         receipt["cue_free"] = serde_json::json!(false);
+         receipt["measurement_valid"] = serde_json::json!(false);
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
+--- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
+@@ -19,6 +19,8 @@
+     ResearchCatalog,
+     #[cfg(feature = "retained-language-pilot")]
+     LanguagePilotV2,
++    #[cfg(feature = "retained-language-composition-v3")]
++    LanguageCompositionV3,
+ }
+ 
+ #[derive(Debug, Clone, Serialize, Deserialize)]
+@@ -80,6 +82,9 @@
+     #[cfg(feature = "retained-language-pilot")]
+     #[serde(skip_serializing_if = "Option::is_none")]
+     language_pilot: Option<super::language_pilot::Identity>,
++    #[cfg(feature = "retained-language-composition-v3")]
++    #[serde(skip_serializing_if = "Option::is_none")]
++    language_composition_v3: Option<super::language_composition_v3::Identity>,
+ }
+ 
+ impl ExperimentIdentity {
+@@ -98,6 +103,11 @@
+     #[cfg(feature = "retained-language-pilot")]
+     pub(super) fn language_pilot(&self) -> Option<&super::language_pilot::Identity> {
+         self.language_pilot.as_ref()
++    }
++
++    #[cfg(feature = "retained-language-composition-v3")]
++    pub(super) fn language_composition_v3(&self) -> Option<&super::language_composition_v3::Identity> {
++        self.language_composition_v3.as_ref()
+     }
+ 
+     pub(super) fn validate_source(&self, actual_digest: &str) -> Result<()> {
+@@ -220,6 +230,8 @@
+         ScenarioV1::ResearchCatalog => return Err("research requires a separate admitted manifest profile".into()),
+         #[cfg(feature = "retained-language-pilot")]
+         ScenarioV1::LanguagePilotV2 => return Err("language pilot requires a separate admitted manifest profile".into()),
++        #[cfg(feature = "retained-language-composition-v3")]
++        ScenarioV1::LanguageCompositionV3 => return Err("v3 language composition requires its separate schema-6 admission".into()),
+     };
+     let request = SavedLifeRetentionRequest {
+         schema: 3,
+@@ -249,6 +261,8 @@
+             research: None,
+             #[cfg(feature = "retained-language-pilot")]
+             language_pilot: None,
++            #[cfg(feature = "retained-language-composition-v3")]
++            language_composition_v3: None,
+         },
+         request,
+         scent,
+@@ -286,6 +300,8 @@
+         visible_self_grip_v1: None, research: Some(research),
+         #[cfg(feature = "retained-language-pilot")]
+         language_pilot: None,
++        #[cfg(feature = "retained-language-composition-v3")]
++        language_composition_v3: None,
+     }, request, scent: None })
+ }
+ 
+@@ -317,6 +333,41 @@
+         scenario: ScenarioV1::LanguagePilotV2, card_case: None,
+         intervention: "language_pilot_external_player_only",
+         visible_self_grip_v1: None, research: None, language_pilot: Some(cell),
++        #[cfg(feature = "retained-language-composition-v3")]
++        language_composition_v3: None,
++    }, request, scent: None })
++}
++
++#[cfg(feature = "retained-language-composition-v3")]
++fn resolve_language_composition_v3(root: &Path, bytes: &[u8]) -> Result<ResolvedExperiment> {
++    use super::language_composition_v3 as p;
++    let (config, cell) = p::resolve(root, bytes)?;
++    let decisions = cell.phase.decisions();
++    let request = SavedLifeRetentionRequest {
++        schema: 3,
++        evaluation_nonce: cell.nonce(),
++        cue_free_food_placement: false,
++        direct_weights: None,
++        navigation_task: None,
++        max_decisions: decisions,
++        max_world_ticks: decisions as u64,
++        deadline_unix_seconds: config.deadline_unix_seconds,
++        finalization_deadline_unix_seconds: config.finalization_deadline_unix_seconds,
++        max_output_bytes: p::OUTPUT_BYTES,
++    };
++    request.validate(now()?)?;
++    let semantic_settings_sha256 = digest(&serde_json::to_vec(&(
++        "retained-language-composition-opening-settings-v3", &cell,
++        &config.source_current_sha256, cell.owner(), cell.nonce(), decisions, p::OUTPUT_BYTES,
++    ))?);
++    Ok(ResolvedExperiment { identity: ExperimentIdentity {
++        schema: p::SCHEMA, run_id: config.run_id, manifest_sha256: digest(bytes),
++        semantic_settings_sha256, owner: cell.owner(),
++        source_current_sha256: config.source_current_sha256,
++        scenario: ScenarioV1::LanguageCompositionV3, card_case: None,
++        intervention: "language_composition_v3_observer_witness_only",
++        visible_self_grip_v1: None, research: None, language_pilot: None,
++        language_composition_v3: Some(cell),
+     }, request, scent: None })
+ }
+ 
+@@ -379,6 +430,20 @@
+     #[derive(Deserialize)]
+     struct Version { schema: u16 }
+     let version: Version = serde_json::from_slice(&bytes)?;
++    #[cfg(not(feature = "retained-language-composition-v3"))]
++    if version.schema == 6 {
++        return Err("v3 language composition feature is disabled".into());
++    }
++    #[cfg(feature = "retained-language-composition-v3")]
++    if version.schema == super::language_composition_v3::SCHEMA {
++        // Refuse admission/phase/prerequisite before inspecting the Current or
++        // writing a work root. This is deliberately not the old schema-5 path.
++        let p = resolve_language_composition_v3(admission_root, &bytes)?;
++        admitted_paths(admission_root, source, output, manifest_path)?;
++        return evaluate_saved_life_retention_inner(
++            source, output, p.request, p.scent, Some(p.identity),
++        );
++    }
+     #[cfg(feature = "retained-language-pilot")]
+     if version.schema == super::language_pilot::SCHEMA {
+         let p = resolve_language_pilot(admission_root, &bytes)?;
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/language_composition_v3.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/language_composition_v3.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/language_composition_v3.rs
+@@ -0,0 +1,785 @@
++//! Detached schema-6 opening witnesses. No full composition trial or policy port.
++use super::{digest, Result};
++use alife_core::{
++    ActionKind, CandidateActionFamily, CandidateObservationRef, LanguageTokenId, OrganismId,
++    PerceptionFrame,
++    SensorProfile, Tick, UtteranceSourceKind, Vec3f, WorldEntityId,
++};
++use alife_gpu_backend::{GpuTrainingBehaviorKind, GpuTrainingRolloutReceipt};
++use alife_world::{AudibleUtterance, HeadlessActionIds, HeadlessWorld, WorldObjectKind};
++use serde::{Deserialize, Serialize};
++use serde_json::{json, Value};
++use std::{fs, io::Read, path::Path};
++
++pub(super) const SCHEMA: u16 = 6;
++pub(super) const OUTPUT_BYTES: u64 = 256 * 1024 * 1024;
++pub(super) const GEOMETRY_LEAF: &str = "language-composition-geometry-proof.v3.json";
++const OPENING_PAIR_LEAF: &str = "language-composition-opening-pair-proof.v1.json";
++
++#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
++#[serde(rename_all = "snake_case")]
++pub(super) enum Phase {
++    Geometry,
++    Opening,
++    Ttl,
++}
++
++impl Phase {
++    pub(super) fn decisions(self) -> usize {
++        match self {
++            Self::Geometry => 0,
++            Self::Opening => 1,
++            Self::Ttl => 3,
++        }
++    }
++
++    fn accepts(self, tokens: &[LanguageTokenId]) -> bool {
++        match self {
++            Self::Geometry => tokens.is_empty(),
++            Self::Opening | Self::Ttl => tokens.iter().map(|x| x.raw()).eq([9]),
++        }
++    }
++}
++
++#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
++#[serde(rename_all = "snake_case")]
++enum Layout { A, B }
++
++#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
++#[serde(deny_unknown_fields)]
++struct Cell {
++    layout: Layout,
++    player_tokens: Vec<LanguageTokenId>,
++}
++
++#[derive(Deserialize)]
++#[serde(deny_unknown_fields)]
++pub(super) struct Manifest {
++    schema: u16,
++    fixture_id: String,
++    pub(super) run_id: String,
++    pub(super) source_current_sha256: String,
++    admission_sha256: String,
++    phase: Phase,
++    cell: Cell,
++    pub(super) deadline_unix_seconds: u64,
++    pub(super) finalization_deadline_unix_seconds: Option<u64>,
++}
++
++#[derive(Deserialize)]
++#[serde(deny_unknown_fields)]
++struct Admission {
++    schema: String,
++    fixture_id: String,
++    phase: Phase,
++    run_id: String,
++    cell: Cell,
++    source_current_sha256: String,
++    evaluator_sha256: String,
++    fixture_sha256: String,
++    rubric_sha256: String,
++    operator_grant_sha256: String,
++    geometry_proof_sha256: Option<String>,
++    opening_pair_proof_sha256: Option<String>,
++}
++
++/// Deployment-specific owner, geometry and data digests stay in the separately
++/// admitted private leaf, not in distributed source or arbitrary manifest fields.
++#[derive(Deserialize)]
++#[serde(deny_unknown_fields)]
++struct Fixture {
++    schema: String,
++    fixture_id: String,
++    source_current_sha256: String,
++    pub owner: u64,
++    tick: u64,
++    world_seed: u64,
++    object_count: usize,
++    pub nonce: u64,
++    props_food_ball: [WorldEntityId; 2],
++    berths_forward_left_mm: [[i32; 2]; 2],
++}
++
++#[derive(Serialize)]
++pub(super) struct Identity {
++    pub(super) phase: Phase,
++    cell: Cell,
++    fixture_id: String,
++    evaluator_sha256: String,
++    fixture_sha256: String,
++    admission_sha256: String,
++    rubric_sha256: String,
++    operator_grant_sha256: String,
++    source_current_sha256: String,
++    #[serde(skip_serializing_if = "Option::is_none")]
++    geometry_proof_sha256: Option<String>,
++    #[serde(skip_serializing_if = "Option::is_none")]
++    opening_pair_proof_sha256: Option<String>,
++    #[serde(skip)]
++    parent_geometry_setup_sha256: Option<String>,
++    #[serde(skip)]
++    fixture: Fixture,
++}
++
++#[derive(Deserialize)]
++#[serde(deny_unknown_fields)]
++struct GeometryProof {
++    schema: String,
++    fixture_sha256: String,
++    source_current_sha256: String,
++    evaluator_sha256: String,
++    layout: Layout,
++    owner: u64,
++    world_tick: u64,
++    accepted_decisions: u64,
++    world_ticks: u64,
++    backend_constructed: bool,
++    runtime_or_queue_constructed: bool,
++    player_utterances_emitted: u64,
++    setup_sha256: String,
++    setup: Value,
++}
++
++// This is an external independent qualification of closed native runs, not
++// live authorization by self-assertion. The operator supplies a separately
++// verified, exact grant covering a single TTL layout and this proof's bytes.
++#[derive(Deserialize)]
++#[serde(deny_unknown_fields)]
++struct TtlOperatorGrant {
++    schema: String,
++    phase: Phase,
++    fixture_id: String,
++    run_id: String,
++    cell: Cell,
++    source_current_sha256: String,
++    evaluator_sha256: String,
++    fixture_sha256: String,
++    rubric_sha256: String,
++    geometry_proof_sha256: String,
++    opening_pair_proof_sha256: String,
++}
++
++#[derive(Deserialize)]
++#[serde(deny_unknown_fields)]
++struct OpeningPairProof {
++    schema: String,
++    phase: Phase,
++    fixture_id: String,
++    source_current_sha256: String,
++    evaluator_sha256: String,
++    fixture_sha256: String,
++    rubric_sha256: String,
++    owner: u64,
++    opening_tick: u64,
++    opening_player_tokens: Vec<LanguageTokenId>,
++    layouts: [OpeningArm; 2],
++}
++
++#[derive(Deserialize)]
++#[serde(deny_unknown_fields)]
++struct OpeningArm {
++    layout: Layout,
++    run_id: String,
++    accepted_decisions: u64,
++    world_ticks: u64,
++    manifest_sha256: String,
++    admission_sha256: String,
++    operator_grant_sha256: String,
++    geometry_proof_sha256: String,
++    retention_sha256: String,
++    rows_sha256: String,
++    final_current_sha256: String,
++}
++
++fn check_ttl_predecessor(
++    m: &Manifest, a: &Admission, f: &Fixture, grant: &TtlOperatorGrant, p: &OpeningPairProof,
++) -> Result<()> {
++    let pin = a.opening_pair_proof_sha256.as_deref().ok_or("TTL has no opening pair pin")?;
++    if grant.schema != "qualia.saved_life.language_composition_ttl_operator_grant.v1"
++        || grant.phase != Phase::Ttl || grant.fixture_id != a.fixture_id || grant.run_id != m.run_id
++        || grant.cell != m.cell || grant.source_current_sha256 != a.source_current_sha256
++        || grant.evaluator_sha256 != a.evaluator_sha256 || grant.fixture_sha256 != a.fixture_sha256
++        || grant.rubric_sha256 != a.rubric_sha256 || grant.opening_pair_proof_sha256 != pin
++        || a.geometry_proof_sha256.as_deref() != Some(grant.geometry_proof_sha256.as_str())
++        || p.schema != "qualia.saved_life.language_composition_opening_pair_proof.v1"
++        || p.phase != Phase::Opening || p.fixture_id != a.fixture_id
++        || p.source_current_sha256 != a.source_current_sha256 || p.evaluator_sha256 != a.evaluator_sha256
++        || p.fixture_sha256 != a.fixture_sha256 || p.rubric_sha256 != a.rubric_sha256
++        || p.owner != f.owner || p.opening_tick != f.tick || !Phase::Opening.accepts(&p.opening_player_tokens)
++    {
++        return Err("TTL operator grant or independently verified opening pair has a different identity".into());
++    }
++    let [x, y] = &p.layouts;
++    if x.layout != Layout::A || y.layout != Layout::B || x.run_id == y.run_id
++        || x.geometry_proof_sha256 == y.geometry_proof_sha256
++        || x.manifest_sha256 == y.manifest_sha256 || x.admission_sha256 == y.admission_sha256
++        || x.retention_sha256 == y.retention_sha256 || x.rows_sha256 == y.rows_sha256
++        || x.final_current_sha256 == y.final_current_sha256
++    {
++        return Err("TTL predecessor must be two distinct crossed opening witnesses".into());
++    }
++    for arm in &p.layouts {
++        if arm.accepted_decisions != 1 || arm.world_ticks != 1 || !is_slug(&arm.run_id)
++            || arm.run_id == m.run_id || arm.operator_grant_sha256 == a.operator_grant_sha256
++            || ![&arm.manifest_sha256, &arm.admission_sha256, &arm.operator_grant_sha256,
++                &arm.geometry_proof_sha256, &arm.retention_sha256, &arm.rows_sha256,
++                &arm.final_current_sha256].iter().all(|s| is_digest(s))
++            || (arm.layout == m.cell.layout && arm.geometry_proof_sha256 != grant.geometry_proof_sha256)
++        {
++            return Err("TTL predecessor is not the two exact separately granted 1/1 openings".into());
++        }
++    }
++    Ok(())
++}
++
++fn is_digest(pin: &str) -> bool {
++    pin.len() == 64 && pin.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
++}
++fn is_slug(s: &str) -> bool {
++    !s.is_empty() && s.len() <= 80
++        && s.bytes().all(|c| c.is_ascii_alphanumeric() || matches!(c, b'_' | b'-'))
++}
++fn read_leaf(root: &Path, name: &str, limit: usize) -> Result<Vec<u8>> {
++    let path = root.join(name);
++    if path.canonicalize()? != path || !fs::symlink_metadata(&path)?.is_file() {
++        return Err("v3 requires a regular canonical sidecar".into());
++    }
++    let mut bytes = Vec::new();
++    fs::File::open(path)?.take((limit + 1) as u64).read_to_end(&mut bytes)?;
++    if bytes.is_empty() || bytes.len() > limit {
++        return Err("v3 sidecar outside bounded size".into());
++    }
++    Ok(bytes)
++}
++
++fn parse_manifest(bytes: &[u8]) -> Result<Manifest> {
++    if bytes.len() > 8192 { return Err("v3 manifest exceeds bound".into()); }
++    let m: Manifest = serde_json::from_slice(bytes)?;
++    if m.schema != SCHEMA || !is_slug(&m.fixture_id) || !is_slug(&m.run_id)
++        || !is_digest(&m.source_current_sha256) || !is_digest(&m.admission_sha256)
++        || !m.phase.accepts(&m.cell.player_tokens)
++    {
++        return Err("v3 manifest phase, scope or genuine Player token vector refused".into());
++    }
++    Ok(m)
++}
++
++fn exact_fixture(f: &Fixture, m: &Manifest) -> bool {
++    let [[near, left], [far, right]] = f.berths_forward_left_mm;
++    f.schema == "qualia.saved_life.language_composition_fixture.v3"
++        && f.fixture_id == m.fixture_id && f.source_current_sha256 == m.source_current_sha256
++        && f.owner != 0 && f.tick.checked_add(3).is_some() && f.nonce != 0
++        && (3..=32).contains(&f.object_count)
++        && f.props_food_ball[0] != f.props_food_ball[1]
++        && (1000..=2500).contains(&near) && (1000..=2500).contains(&far)
++        && near < far && (1300..=1800).contains(&left)
++        && (-1800..=-1300).contains(&right) && left == -right
++}
++
++pub(super) fn resolve(root: &Path, bytes: &[u8]) -> Result<(Manifest, Identity)> {
++    let m = parse_manifest(bytes)?;
++    let raw = read_leaf(root, "language-composition-admission.v3.json", 8192)?;
++    if digest(&raw) != m.admission_sha256 { return Err("v3 admission hash mismatch".into()); }
++    let a: Admission = serde_json::from_slice(&raw)?;
++    if a.schema != "qualia.saved_life.language_composition_admission.v3"
++        || a.fixture_id != m.fixture_id || a.phase != m.phase || a.run_id != m.run_id
++        || a.cell != m.cell || a.source_current_sha256 != m.source_current_sha256
++        || ![&a.fixture_sha256, &a.rubric_sha256, &a.evaluator_sha256, &a.operator_grant_sha256]
++            .iter().all(|s| is_digest(s))
++    {
++        return Err("wrong v3 admission identity or phase".into());
++    }
++    let fixture = read_leaf(root, "language-composition-fixture.v3.json", 8192)?;
++    let grant = read_leaf(root, "language-composition-operator-grant.v3.json", 65_536)?;
++    if digest(&fixture) != a.fixture_sha256
++        || digest(&read_leaf(root, "language-composition-rubric.v3.json", 65_536)?) != a.rubric_sha256
++        || digest(&grant) != a.operator_grant_sha256
++        || digest(&fs::read(std::env::current_exe()?)?) != a.evaluator_sha256
++    {
++        return Err("v3 fixture/rubric/operator grant/executable bytes differ".into());
++    }
++    let f: Fixture = serde_json::from_slice(&fixture)?;
++    if !exact_fixture(&f, &m) { return Err("v3 fixture outside scoped geometry".into()); }
++
++    let setup_pin = match (m.phase, a.geometry_proof_sha256.as_deref()) {
++        (Phase::Geometry, None) => None,
++        (Phase::Opening | Phase::Ttl, Some(pin)) if is_digest(pin) => {
++            let b = read_leaf(root, GEOMETRY_LEAF, 65_536)?;
++            if digest(&b) != pin { return Err("v3 geometry predecessor hash mismatch".into()); }
++            let v: GeometryProof = serde_json::from_slice(&b)?;
++            if v.schema != "qualia.saved_life.language_composition_geometry.v3"
++                || v.fixture_sha256 != a.fixture_sha256 || v.source_current_sha256 != a.source_current_sha256
++                || v.evaluator_sha256 != a.evaluator_sha256 || v.layout != m.cell.layout
++                || v.owner != f.owner || v.world_tick != f.tick || v.accepted_decisions != 0 || v.world_ticks != 0
++                || v.backend_constructed || v.runtime_or_queue_constructed || v.player_utterances_emitted != 0
++                || digest(&serde_json::to_vec(&v.setup)?) != v.setup_sha256
++            {
++                return Err("v3 predecessor is not exact zero-dispatch geometry".into());
++            }
++            Some(v.setup_sha256)
++        }
++        _ => return Err("v3 phase requires its own independent geometry predecessor".into()),
++    };
++    match (m.phase, a.opening_pair_proof_sha256.as_deref()) {
++        (Phase::Ttl, Some(pin)) if is_digest(pin) => {
++            let proof = read_leaf(root, OPENING_PAIR_LEAF, 16_384)?;
++            if digest(&proof) != pin {
++                return Err("TTL paired opening predecessor bytes differ".into());
++            }
++            check_ttl_predecessor(&m, &a, &f, &serde_json::from_slice(&grant)?, &serde_json::from_slice(&proof)?)?;
++        }
++        (Phase::Geometry | Phase::Opening, None) => {}
++        _ => return Err("only TTL requires its own independently approved 1/1 opening pair".into()),
++    }
++    let identity = Identity {
++        phase: m.phase, cell: m.cell.clone(), fixture_id: m.fixture_id.clone(),
++        evaluator_sha256: a.evaluator_sha256, fixture_sha256: a.fixture_sha256,
++        admission_sha256: m.admission_sha256.clone(), rubric_sha256: a.rubric_sha256,
++        operator_grant_sha256: a.operator_grant_sha256, source_current_sha256: m.source_current_sha256.clone(),
++        geometry_proof_sha256: a.geometry_proof_sha256,
++        opening_pair_proof_sha256: a.opening_pair_proof_sha256,
++        parent_geometry_setup_sha256: setup_pin, fixture: f,
++    };
++    Ok((m, identity))
++}
++
++#[derive(Clone, Copy, Serialize)]
++struct Prop {
++    entity: WorldEntityId,
++    position: Vec3f,
++    velocity: Vec3f,
++    owner: Option<OrganismId>,
++    player_held: bool,
++    activity_hold: bool,
++    consumed: bool,
++    native_grab_legal: bool,
++    pending_intervention: bool,
++}
++
++impl Prop {
++    fn free(&self) -> bool {
++        self.owner.is_none() && !self.player_held && !self.activity_hold
++            && !self.consumed && !self.pending_intervention
++    }
++}
++
++#[derive(Serialize)]
++pub(super) struct Snapshot {
++    owner: OrganismId,
++    tick: u64,
++    body_position: Vec3f,
++    body_yaw: f32,
++    props: [Prop; 2],
++}
++
++pub(super) struct Opened {
++    layout: Layout,
++    props: [WorldEntityId; 2],
++    atom: AudibleUtterance,
++    pub(super) setup: Value,
++}
++
++fn snapshot(world: &HeadlessWorld, owner: OrganismId, props: [WorldEntityId; 2]) -> Result<Snapshot> {
++    let rec = world.organism_registry().get(owner).ok_or("missing same v3 resident")?;
++    let body = world.entity(rec.world_entity_id()).ok_or("missing same v3 body")?;
++    let prop = |id| -> Result<Prop> {
++        let x = world.entity(id).ok_or("missing exact stock v3 prop")?;
++        let (pending_intervention, native_grab_legal) = world.retained_language_pilot_grab_probe(owner, id);
++        Ok(Prop { entity: id, position: x.position, velocity: x.grounded_physical.velocity, owner: x.carried_by,
++            player_held: world.player_held_object()==Some(id), activity_hold:x.activity_hold, consumed:x.consumed,
++            native_grab_legal, pending_intervention })
++    };
++    Ok(Snapshot { owner, tick: world.tick().raw(), body_position: body.position, body_yaw: body.body_yaw,
++        props: [prop(props[0])?, prop(props[1])?] })
++}
++
++impl Identity {
++    pub(super) fn owner(&self) -> u64 { self.fixture.owner }
++    pub(super) fn nonce(&self) -> u64 { self.fixture.nonce }
++
++    fn scene(&self, world: &HeadlessWorld, owner: OrganismId) -> Result<(HeadlessWorld, Value)> {
++        let p = self.fixture.props_food_ball;
++        let old = world.object_snapshots();
++        let start = snapshot(world, owner, p)?;
++        let rec = world.organism_registry().get(owner).ok_or("no same v3 resident")?;
++        if owner.raw() != self.fixture.owner || start.tick != self.fixture.tick
++            || world.seed() != self.fixture.world_seed || old.len() != self.fixture.object_count
++            || !rec.lifecycle().is_alive() || world.terrain().is_some() || world.player_held_object().is_some()
++            || !world.audible_utterances().is_empty()
++            || old.iter().any(|o| o.carried_by == Some(owner) || o.teacher_channel.is_some())
++            || !start.props.iter().all(|o| o.free() && o.velocity == Vec3f::ZERO)
++        {
++            return Err("v3 exact clean living fixture opening refused".into());
++        }
++        let (sn, cs) = start.body_yaw.sin_cos();
++        let at = |f: i32, l: i32| {
++            let f = f as f32 / 1000.0;
++            let l = l as f32 / 1000.0;
++            Vec3f::new(start.body_position.x + f * cs - l * sn, start.body_position.y,
++                start.body_position.z + f * sn + l * cs)
++        };
++        let [a,b] = self.fixture.berths_forward_left_mm.map(|[f,l]| at(f,l));
++        let berths = match self.cell.layout { Layout::A => [a,b], Layout::B => [b,a] };
++        let mut staged = world.clone();
++        for ((id, pos), kind) in p.into_iter().zip(berths).zip([WorldObjectKind::Food, WorldObjectKind::Ball]) {
++            let mut value = world.entity(id).ok_or("missing original v3 prop")?.clone();
++            if value.kind != kind || value.organism_id.is_some() || value.token_id.is_some()
++                || value.hazard_pain != 0.0 || !value.radius.is_finite() || value.radius <= 0.0
++                || value.radius > 0.5
++            {
++                return Err("v3 refuses a synthesized, nonstationary or wrong-kind prop".into());
++            }
++            value.position = pos;
++            staged.editor_move_object(id, pos)?;
++            staged.editor_move_object(id, pos)?;
++            if staged.entity(id) != Some(&value) {
++                return Err("v3 editor changed more than the existing stationary prop center".into());
++            }
++        }
++        let mut ecology = staged.ecology().clone();
++        ecology.metrics = world.ecology().metrics.clone();
++        let sensed = staged.sensory_report(owner, staged.tick())?;
++        let visible: Vec<_> = sensed.visible_entities.iter().map(|x| x.id).collect();
++        if &ecology != world.ecology() || staged.tick()!=world.tick()
++            || staged.organism_registry().get(owner)!=Some(rec)
++            || old.iter().any(|o| !p.contains(&o.id) && staged.entity(o.id)!=Some(o))
++            || visible.len()!=2 || !p.iter().all(|id| visible.contains(id)) || !sensed.contact_entities.is_empty()
++            || sensed.core_snapshot.language_context.heard_tokens.iter().any(Option::is_some)
++        {
++            return Err("v3 geometry does not have the exact quiet same-body/props opening".into());
++        }
++        let geometry = staged.retained_language_composition_geometry(owner, p)?;
++        let scene = snapshot(&staged, owner, p)?;
++        // A stock scene report is neither a sealed frame nor a candidate/menu claim.
++        Ok((staged, json!({"schema_version":3,"geometry_only":true,"body_and_props":scene,
++            "true_visible_world_props":visible,"stock_sweep_and_grip_witnesses":geometry,
++            "no_action_was_submitted":true,"not_sealed_candidate_evidence":true})))
++    }
++
++    pub(super) fn geometry(&self, world: &HeadlessWorld, owner: OrganismId) -> Result<Value> {
++        if self.phase != Phase::Geometry { return Err("wrong v3 zero-step phase".into()); }
++        let (_, setup) = self.scene(world, owner)?;
++        Ok(json!({"schema":"qualia.saved_life.language_composition_geometry.v3",
++            "fixture_sha256":self.fixture_sha256,"source_current_sha256":self.source_current_sha256,
++            "evaluator_sha256":self.evaluator_sha256,"layout":self.cell.layout,"owner":owner.raw(),
++            "world_tick":world.tick().raw(),"accepted_decisions":0,"world_ticks":0,
++            "backend_constructed":false,"runtime_or_queue_constructed":false,"player_utterances_emitted":0,
++            "setup_sha256":digest(&serde_json::to_vec(&setup)?),"setup":setup}))
++    }
++
++    pub(super) fn check_parent_geometry(&self, world: &HeadlessWorld, owner: OrganismId) -> Result<()> {
++        if self.phase == Phase::Geometry { return Err("unexpected v3 native geometry check".into()); }
++        let (_, setup) = self.scene(world, owner)?;
++        let pin = digest(&serde_json::to_vec(&setup)?);
++        if self.parent_geometry_setup_sha256.as_deref() != Some(pin.as_str()) {
++            return Err("v3 opening differs from the bound zero-dispatch witness".into());
++        }
++        Ok(())
++    }
++
++    pub(super) fn configure(&self, world: &mut HeadlessWorld, owner: OrganismId) -> Result<Opened> {
++        if self.phase == Phase::Geometry { return Err("geometry phase cannot emit".into()); }
++        let (mut staged, setup) = self.scene(world, owner)?;
++        let setup_sha = digest(&serde_json::to_vec(&setup)?);
++        if self.parent_geometry_setup_sha256.as_deref() != Some(setup_sha.as_str()) {
++            return Err("v3 initial geometry differs from separately admitted zero-step witness".into());
++        }
++        let now = staged.tick();
++        let opening = snapshot(&staged, owner, self.fixture.props_food_ball)?;
++        let pos = opening.body_position;
++        let (sn,cs) = opening.body_yaw.sin_cos();
++        let source = Vec3f::new(pos.x + 0.25 * cs, pos.y, pos.z + 0.25 * sn);
++        let atom = staged.emit_player_tokens(Some(owner), source, self.cell.player_tokens.clone())?;
++        if staged.audible_utterances().as_slice() != std::slice::from_ref(&atom)
++            || atom.source_kind!=UtteranceSourceKind::Player || atom.addressee!=Some(owner)
++            || atom.emitted_tick!=now || now.raw().checked_add(1)!=Some(atom.expires_after_tick.raw())
++            || atom.speaker_id.is_some() || atom.teacher_channel.is_some()
++            || atom.confidence.raw().to_bits()!=1.0_f32.to_bits()
++        {
++            return Err("v3 witness did not emit exactly one ordinary addressed Player atom".into());
++        }
++        let gains = self.cell.player_tokens.iter().map(|t| {
++            staged.retained_language_pilot_word_gain(owner, u32::from(t.raw()))
++        }).collect::<Vec<_>>();
++        let setup = json!({"geometry_setup_sha256":setup_sha,"geometry":setup,
++            "native_player_utterance":atom,"inherited_word_gain":gains,"phase":self.phase,
++            "observer_only":true,"preview_is_not_outcome":true});
++        *world = staged;
++        Ok(Opened { layout: self.cell.layout, props: self.fixture.props_food_ball, atom, setup })
++    }
++}
++
++fn exact_position(a: Vec3f, b: Vec3f) -> bool {
++    a.x.to_bits() == b.x.to_bits() && a.y.to_bits() == b.y.to_bits() && a.z.to_bits() == b.z.to_bits()
++}
++
++#[derive(Clone, Copy, Serialize)]
++struct OfferSupport {
++    channel_mask: bool,
++    representative_can_fill_channel: bool,
++    supported: bool,
++}
++
++fn offer_support(
++    logit: f32, candidate_bit: u32, motor_slot: u8,
++    channel_mask: u32, representative_mask: u32, force_slot: u8,
++) -> Result<OfferSupport> {
++    let channel_mask = channel_mask & candidate_bit != 0;
++    let representative = representative_mask & candidate_bit != 0;
++    // Matches stock build_receipt: finite entries enter the representative
++    // menu; independent channel support can be absent without hiding a rep.
++    if force_slot != motor_slot || representative != logit.is_finite() || (channel_mask && !representative) {
++        return Err("v3 stock candidate support disagrees with receipt slot or logit".into());
++    }
++    Ok(OfferSupport {
++        channel_mask,
++        representative_can_fill_channel: representative,
++        supported: channel_mask || representative,
++    })
++}
++
++impl Opened {
++    pub(super) fn capture(&self, world: &HeadlessWorld, owner: OrganismId) -> Result<Snapshot> {
++        snapshot(world, owner, self.props)
++    }
++
++    pub(super) fn observe(
++        &self,
++        frame: &PerceptionFrame,
++        behavior: &GpuTrainingRolloutReceipt,
++        before: Snapshot,
++        world: &HeadlessWorld,
++        outcome: Tick,
++    ) -> Result<Value> {
++        let id = frame.organism_id();
++        let tick = frame.tick();
++        if self.atom.addressee!=Some(id) || before.owner!=id || before.tick!=tick.raw()
++            || tick.raw().checked_add(1)!=Some(outcome.raw()) || outcome!=world.tick()
++            || frame.sensor_profile()!=SensorProfile::GroundedTerrainVisionV1
++            || !exact_position(frame.body().pose.translation, before.body_position)
++            || behavior.organism_id != id.raw() || behavior.tick != tick.raw()
++            || behavior.frame_digest != frame.frame_digest()
++            || behavior.behavior != GpuTrainingBehaviorKind::OnPolicy || behavior.sampling.demonstrator.is_some()
++            || behavior.logits.len() != frame.candidates().len()
++            || behavior.forced_motor_slots.len() != frame.candidates().len()
++        {
++            return Err("v3 cannot join prior World truth to actual sealed frame and outcome".into());
++        }
++        let heard = &frame.sensory().language_context.heard_tokens;
++        if heard.iter().flatten().any(|x| x.source_kind==UtteranceSourceKind::Teacher) {
++            return Err("v3 Teacher input observed".into());
++        }
++        let players = heard.iter().flatten().filter(|x| x.source_kind==UtteranceSourceKind::Player).collect::<Vec<_>>();
++        let current = tick.raw()<=self.atom.expires_after_tick.raw();
++        if tick.raw()<self.atom.emitted_tick.raw()
++            || (current && (players.len()!=self.atom.tokens.len()
++                || heard.iter().flatten().count()!=players.len()
++                || !players.iter().zip(&self.atom.tokens).enumerate().all(|(i,(h,t))| {
++                    h.utterance_id==self.atom.utterance_id && usize::from(h.sequence_position)==i
++                     && h.addressee==self.atom.addressee && h.source_position==self.atom.source_position
++                     && h.source_entity.is_none() && h.speaker_id.is_none() && h.teacher_channel.is_none()
++                     && h.token_id==u32::from(t.raw()) && h.confidence.raw().is_finite() && h.confidence.raw()>0.0
++                })))
++            || (!current && !players.is_empty())
++        {
++            return Err("unexpected v3 sealed Player source, vector or expiry".into());
++        }
++        let mut rows = Vec::new();
++        let mut approach = [None,None];
++        let mut witnessed_kind = [[false;2];2];
++        for (i,c) in frame.candidates().iter().enumerate() {
++            let Some(which) = self.props.iter().position(|t| c.target.entity==Some(*t)) else { continue };
++            let (kind, motor_slot, expected_kind, expected_family) = if c.action_id==HeadlessActionIds::APPROACH {
++                (0, 0u8, ActionKind::Move, CandidateActionFamily::Approach)
++            } else if c.action_id==HeadlessActionIds::GRAB {
++                (1, 2u8, ActionKind::Interact, CandidateActionFamily::Contact)
++            } else { continue };
++            let prop = &before.props[which];
++            if c.kind != expected_kind || c.family != expected_family || c.target.entity != Some(prop.entity)
++                || !c.target.position.is_some_and(|p| exact_position(p, prop.position))
++            {
++                return Err("v3 candidate action kind/family or exact predecision target transport differs".into());
++            }
++            let CandidateObservationRef::ObjectSlot(slot_index)=c.observation else {
++                return Err("v3 action is not a current object slot".into());
++            };
++            let slot=frame.grounded_object_slots().iter().find(|s| s.slot_index==slot_index)
++                .ok_or("v3 sealed object slot is absent")?;
++            let slot_features=slot.candidate_features()?;
++            if witnessed_kind[which][kind] || usize::from(c.candidate_index)!=i
++                || !c.features.0.iter().zip(&slot_features.0).all(|(x,y)| x.to_bits()==y.to_bits())
++                || c.sensor_confidence.raw().to_bits()!=slot.confidence.raw().to_bits()
++            {
++                return Err("v3 duplicate or mismatched sealed candidate physical descriptor".into());
++            }
++            witnessed_kind[which][kind]=true;
++            let bit=1_u32.checked_shl(u32::try_from(i)?).ok_or("v3 candidate roster too large")?;
++            let support = offer_support(
++                behavior.logits[i], bit, motor_slot, behavior.motor_masks[usize::from(motor_slot)],
++                behavior.representative_mask, behavior.forced_motor_slots[i],
++            )?;
++            if kind==0 {
++                if tick == self.atom.emitted_tick {
++                    let pos = before.props[which].position;
++                    let own = before.body_position;
++                    let physical_range = (pos.x-own.x).hypot(pos.y-own.y).hypot(pos.z-own.z);
++                    let range = physical_range / alife_world::GROUNDED_VISION_RADIUS;
++                    if (slot.distance-range).abs() > 0.0001 || slot.confidence.raw() <= 0.0 {
++                        return Err("v3 slot range/confidence contradicts actual free predecision prop".into());
++                    }
++                }
++                approach[which]=Some((slot_index,slot.tracked_object_id,i,slot.distance,support.supported));
++            }
++            rows.push(json!({"candidate":c,"slot":slot,"native_world_target":prop.entity,
++                "candidate_index":i,"world_transport_bits_match":true,"stock_policy_support":support,
++                "native_predecision_grab_legal":prop.native_grab_legal}));
++        }
++        if tick==self.atom.emitted_tick {
++            let Some((a,b))=approach[0].zip(approach[1]) else {
++                return Err("v3 opening lacks two independently bound actual Approach101 candidates".into());
++            };
++            let slot_order = match self.layout {
++                Layout::A => a.0<b.0 && a.3<b.3,
++                Layout::B => b.0<a.0 && b.3<a.3,
++            };
++            if !a.4 || !b.4 {
++                return Err("v3 opening has bound Approach101 descriptors but not two stock-policy-supported offers".into());
++            }
++            if !slot_order || a.1==b.1 || a.2==b.2
++                || !before.props.iter().all(|p| p.free() && !p.native_grab_legal && p.velocity==Vec3f::ZERO)
++            {
++                return Err("v3 opening slot/track/legality proof failed".into());
++            }
++        }
++        let sound_distance=(before.body_position.x-self.atom.source_position.x)
++            .hypot(before.body_position.y-self.atom.source_position.y)
++            .hypot(before.body_position.z-self.atom.source_position.z);
++        let after = self.capture(world, id)?;
++        Ok(json!({"schema_version":3,"observer_only":true,"sealed_frame_digest":frame.frame_digest(),
++            "decision_tick":tick.raw(),"outcome_tick":outcome.raw(),"organism":id.raw(),
++            "native_behavior_frame_digest":behavior.frame_digest,
++            "same_target_current_bindings":rows,"sealed_heard_tokens":heard,"current_player_atom":current,
++            "listener_source_distance_m":sound_distance,"before":before,"after":after,
++            "local_scope_not_composition_score":true}))
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    fn m(phase: &str, tokens: Value) -> Value {
++        json!({"schema":6,"fixture_id":"synthetic-v3","run_id":"check","source_current_sha256":"a".repeat(64),
++            "admission_sha256":"b".repeat(64),"phase":phase,"cell":{"layout":"a","player_tokens":tokens},
++            "deadline_unix_seconds":1_000_000,"finalization_deadline_unix_seconds":null})
++    }
++
++    #[test]
++    fn v3_phase_budget_and_native_singleton_are_literal() {
++        for (phase, t, expected) in [("geometry",json!([]),0),("opening",json!([9]),1),("ttl",json!([9]),3)] {
++            let v=parse_manifest(&serde_json::to_vec(&m(phase,t)).unwrap()).unwrap();
++            assert_eq!(v.phase.decisions(),expected);
++        }
++    }
++
++    #[test]
++    fn v3_exact_transport_distinguishes_signed_zero_and_retargeting() {
++        let v = Vec3f::new(1.0, 0.0, 3.0);
++        assert!(exact_position(v, Vec3f::new(1.0, 0.0, 3.0)));
++        assert!(!exact_position(v, Vec3f::new(1.0, -0.0, 3.0)));
++        assert!(!exact_position(v, Vec3f::new(1.0, 0.0, 3.000_001)));
++    }
++
++    #[test]
++    fn v3_policy_support_is_not_presence_selection_or_world_grip_legality() {
++        let bit = 1 << 4;
++        let no = offer_support(f32::NEG_INFINITY, bit, 0, 0, 0, 0).unwrap();
++        assert!(!no.supported);
++        let rep = offer_support(-200.0, bit, 0, 0, bit, 0).unwrap();
++        assert!(rep.supported && !rep.channel_mask && rep.representative_can_fill_channel);
++        let both = offer_support(-200.0, bit, 0, bit, bit, 0).unwrap();
++        assert!(both.supported && both.channel_mask);
++        assert!(offer_support(1.0, bit, 0, bit, bit, 2).is_err());
++        assert!(offer_support(1.0, bit, 0, 0, 0, 0).is_err());
++        assert!(offer_support(f32::NEG_INFINITY, bit, 0, bit, 0, 0).is_err());
++    }
++
++    #[test]
++    fn v3_ttl_requires_both_crossed_one_cut_parents_and_a_distinct_exact_grant() {
++        let tag = "a".repeat(64);
++        let pin = |c: char| c.to_string().repeat(64);
++        let m = parse_manifest(&serde_json::to_vec(&m("ttl", json!([9]))).unwrap()).unwrap();
++        let a: Admission = serde_json::from_value(json!({
++            "schema":"qualia.saved_life.language_composition_admission.v3",
++            "fixture_id":"synthetic-v3","phase":"ttl","run_id":"check",
++            "cell":{"layout":"a","player_tokens":[9]},"source_current_sha256":tag,
++            "evaluator_sha256":pin('b'),"fixture_sha256":pin('c'),"rubric_sha256":pin('d'),
++            "operator_grant_sha256":pin('e'),"geometry_proof_sha256":pin('f'),
++            "opening_pair_proof_sha256":pin('0')
++        })).unwrap();
++        let f: Fixture = serde_json::from_value(json!({
++            "schema":"qualia.saved_life.language_composition_fixture.v3","fixture_id":"synthetic-v3",
++            "source_current_sha256":tag,"owner":3,"tick":6,"world_seed":2,"object_count":3,
++            "nonce":4,"props_food_ball":[8,9],"berths_forward_left_mm":[[1200,1320],[1700,-1320]]
++        })).unwrap();
++        let wire = json!({
++            "schema":"qualia.saved_life.language_composition_ttl_operator_grant.v1",
++            "phase":"ttl","fixture_id":"synthetic-v3","run_id":"check",
++            "cell":{"layout":"a","player_tokens":[9]},"source_current_sha256":tag,
++            "evaluator_sha256":pin('b'),"fixture_sha256":pin('c'),"rubric_sha256":pin('d'),
++            "geometry_proof_sha256":pin('f'),"opening_pair_proof_sha256":pin('0')
++        });
++        let g: TtlOperatorGrant = serde_json::from_value(wire.clone()).unwrap();
++        let arm = |layout: &str, run: &str, geo: char, seed: char| json!({
++            "layout":layout,"run_id":run,"accepted_decisions":1,"world_ticks":1,
++            "manifest_sha256":pin(seed),"admission_sha256":pin(seed),
++            "operator_grant_sha256":pin('6'),"geometry_proof_sha256":pin(geo),
++            "retention_sha256":pin(seed),"rows_sha256":pin(seed),"final_current_sha256":pin(seed)
++        });
++        let base = json!({
++            "schema":"qualia.saved_life.language_composition_opening_pair_proof.v1",
++            "phase":"opening","fixture_id":"synthetic-v3","source_current_sha256":tag,
++            "evaluator_sha256":pin('b'),"fixture_sha256":pin('c'),"rubric_sha256":pin('d'),
++            "owner":3,"opening_tick":6,"opening_player_tokens":[9],
++            "layouts":[arm("a","start_a",'f','1'),arm("b","start_b",'2','3')]
++        });
++        let validate = |value| {
++            let p: OpeningPairProof = serde_json::from_value(value).unwrap();
++            check_ttl_predecessor(&m, &a, &f, &g, &p).is_ok()
++        };
++        assert!(validate(base.clone()));
++        for (k, value) in [
++            ("layout",json!("a")),("accepted_decisions",json!(3)),("world_ticks",json!(0)),
++            ("run_id",json!("check")),("rows_sha256",json!(pin('1'))),
++            ("operator_grant_sha256",json!(pin('e')))
++        ] {
++            let mut bad=base.clone();
++            bad["layouts"][1][k]=value;
++            assert!(!validate(bad));
++        }
++        let mut bad=base.clone();
++        bad["layouts"][0]["geometry_proof_sha256"]=json!(pin('4'));
++        assert!(!validate(bad));
++        let mut bad=base.clone();
++        bad["evaluator_sha256"]=json!(pin('4'));
++        assert!(!validate(bad));
++        let mut wrong_grant=wire;
++        wrong_grant["opening_pair_proof_sha256"]=json!(pin('5'));
++        assert!(check_ttl_predecessor(&m, &a, &f, &serde_json::from_value(wrong_grant).unwrap(),
++            &serde_json::from_value(base).unwrap()).is_err());
++    }
++
++    #[test]
++    fn v3_refuses_nonwitness_commands_old_schema_and_inline_answer() {
++        for (phase,t) in [("geometry",json!([9])),("opening",json!([9,1])),("opening",json!([9,0])),
++            ("ttl",json!([])),("sequence",json!([9]))] {
++            assert!(parse_manifest(&serde_json::to_vec(&m(phase,t)).unwrap()).is_err());
++        }
++        let mut v=m("opening",json!([9]));
++        v["cell"]["expected_target"]=json!(23);
++        assert!(parse_manifest(&serde_json::to_vec(&v).unwrap()).is_err());
++        let mut v=m("opening",json!([9]));
++        v["schema"]=json!(5);
++        assert!(parse_manifest(&serde_json::to_vec(&v).unwrap()).is_err());
++    }
++}
+diff --git a/crates/alife_world/Cargo.toml b/crates/alife_world/Cargo.toml
+--- a/crates/alife_world/Cargo.toml
++++ b/crates/alife_world/Cargo.toml
+@@ -7,6 +7,7 @@
+ 
+ [features]
+ retained-language-pilot = []
++retained-language-composition-v3 = ["retained-language-pilot"]
+ 
+ [dependencies]
+ alife_storage.workspace = true
+diff --git a/crates/alife_world/src/headless.rs b/crates/alife_world/src/headless.rs
+--- a/crates/alife_world/src/headless.rs
++++ b/crates/alife_world/src/headless.rs
+@@ -7251,6 +7251,82 @@
+         (pending, available)
+     }
+ 
++    /// Geometry-only witness on a disposable scene. Does not perform a move,
++    /// change the caller, reserve a candidate, or predict how a creature acts.
++    /// The hypothetical endpoints test the same stock perception/reach rules,
++    /// not force a path or provide an input to cognition.
++    #[cfg(feature = "retained-language-composition-v3")]
++    pub fn retained_language_composition_geometry(
++        &self,
++        owner: OrganismId,
++        props: [WorldEntityId; 2],
++    ) -> Result<[(Vec3f, Vec3f); 2], ScaffoldContractError> {
++        let bad = || ScaffoldContractError::InvalidDecisionEvidence;
++        let body = self.agent_for(owner)?;
++        let start = body.position;
++        let open_y = start.y;
++        if props[0] == props[1]
++            || self.terrain.is_some()
++            || start.y != 0.0
++            || self.player_held_object().is_some()
++            || self.objects.values().any(|o| o.carried_by == Some(owner))
++        {
++            return Err(bad());
++        }
++        let targets = [
++            self.entity(props[0]).ok_or_else(bad)?,
++            self.entity(props[1]).ok_or_else(bad)?,
++        ];
++        if distance(targets[0].position, targets[1].position) <= 2.0 * EAT_RADIUS {
++            return Err(bad());
++        }
++        let mut result = [(Vec3f::ZERO, Vec3f::ZERO); 2];
++        for (i, target) in targets.into_iter().enumerate() {
++            let d = distance(start, target.position);
++            if !d.is_finite()
++                || d <= EAT_RADIUS + MOVE_STEP
++                || d > 4.0
++                || target.position.y != open_y
++                || target.consumed
++                || target.activity_hold
++                || target.carried_by.is_some()
++                || target.grounded_physical.velocity != Vec3f::ZERO
++                || !self.object_in_sight(body, target)
++                || self.visible_motion_target(owner, target.id)?.is_none()
++                || self.retained_language_pilot_grab_probe(owner, target.id) != (false, false)
++            {
++                return Err(bad());
++            }
++            let inside = EAT_RADIUS - 0.1;
++            let end = add(start, scale(subtract(target.position, start), 1.0 - inside / d));
++            end.validate()?;
++            if self.first_motion_blocker(start, end).is_some()
++                || !self.solid_segment_clear(start, end)
++                || self.objects.values().any(|o| {
++                    !o.consumed && o.id != body.id
++                        && matches!(o.kind, WorldObjectKind::Hazard | WorldObjectKind::Agent)
++                        && motion_sphere_entry(start, end, o.position, o.radius
++                            + self.locomotion_body_radius()).is_some()
++                })
++            {
++                return Err(bad());
++            }
++            let mut hypothetical = self.clone();
++            // Set only the queried body point in discarded scratch. None of
++            // tick/apply/queued motor paths is called; never commit this clone.
++            hypothetical.objects.get_mut(&body.id.raw()).ok_or_else(bad)?.position = end;
++            if hypothetical.visible_motion_target(owner, target.id)?.is_none()
++                || hypothetical.retained_language_pilot_grab_probe(owner, target.id) != (false, true)
++                || hypothetical.retained_language_pilot_grab_probe(owner, props[1 - i]) != (false, false)
++                || hypothetical.body_contacts_at(body.id, end) != (None, false)
++            {
++                return Err(bad());
++            }
++            result[i] = (target.position, end);
++        }
++        Ok(result)
++    }
++
+     #[cfg(feature = "retained-language-pilot")]
+     pub fn retained_language_pilot_word_gain(&self, organism_id: OrganismId, token: u32) -> f32 {
+         self.inherited_word_gain(organism_id, token)
