@@ -1,0 +1,325 @@
+--- a/crates/alife_gpu_backend/src/closed_loop_buffers/bucket.rs
++++ b/crates/alife_gpu_backend/src/closed_loop_buffers/bucket.rs
+@@ -3642,17 +3642,28 @@
+         for local in 0..decoder_count {
+             old_global_for_new[new_recurrent + local] = Some(old_recurrent + local);
+         }
+-        let live_replay_sample_counts = live_replay_spans
+-            .into_iter()
+-            .map(|span| (span.local_synapse_id, span.sample_count))
+-            .collect::<BTreeMap<_, _>>();
+-        for span in &mut fresh_replay_spans {
+-            span.sample_count = usize::try_from(span.local_synapse_id)
+-                .ok()
+-                .and_then(|new_index| old_global_for_new.get(new_index).copied().flatten())
+-                .and_then(|old_index| u32::try_from(old_index).ok())
+-                .and_then(|old_index| live_replay_sample_counts.get(&old_index).copied())
+-                .unwrap_or(0);
++        // Replay samples belong to the *live* capture spans, not the freshly
++        // compiled canonical plan. Preserve their slot/order/count and remap
++        // only the addressed synapse identity. Re-selecting canonical spans
++        // would attach historical eligibility samples to different synapses.
++        if fresh_replay_spans.len() != live_replay_spans.len() {
++            return Err(GpuClosedLoopError::MalformedUpload);
++        }
++        let mut new_global_for_old = vec![None; old_total];
++        for (new, old) in old_global_for_new.iter().enumerate() {
++            if let Some(old) = old {
++                new_global_for_old[*old] = Some(new);
++            }
++        }
++        for (fresh, live) in fresh_replay_spans.iter_mut().zip(live_replay_spans) {
++            let new_id = new_global_for_old
++                .get(live.local_synapse_id as usize)
++                .copied()
++                .flatten()
++                .ok_or(GpuClosedLoopError::MalformedUpload)?;
++            *fresh = live;
++            fresh.local_synapse_id =
++                u32::try_from(new_id).map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
+         }
+ 
+         let live_source = live_words.clone();
+@@ -3730,6 +3741,210 @@
+     }
+ }
+ 
++/// Device-free reproduction through the exact production remapper. Never
++/// opens a mature save or creates a GPU device.
++#[doc(hidden)]
++#[cfg(feature = "gpu-tests")]
++pub fn replay_span_remap_probe_for_test() -> Result<(u32, u32), GpuClosedLoopError> {
++    use alife_core::{BrainGenome, DevelopmentState, NormalizedScalar, PhenotypeCompiler, SensorProfile, Tick};
++    let capacity = BrainCapacityClass::n512();
++    let genome = BrainGenome::scaffold(705, capacity.id());
++    let development = DevelopmentState::new(
++        genome.id,
++        Tick::ZERO,
++        NormalizedScalar::new(0.35).map_err(|_| GpuClosedLoopError::MalformedUpload)?,
++    );
++    let phenotype = PhenotypeCompiler::compile(
++        &genome,
++        &capacity,
++        &development,
++        SensorProfile::GroundedObjectSlotsV1,
++    )
++    .map_err(|_| GpuClosedLoopError::MalformedUpload)?;
++    let plan = GpuFixedClassArenaPlan::new(capacity, 1, 512 * 1024 * 1024)?;
++    let previous = plan.prepare_slot_upload(0, 1, &phenotype)?;
++    let inherited = phenotype.synapses().iter()
++        .filter(|s| s.kind() == alife_core::CompiledSynapseKind::Recurrent)
++        .nth(previous.record().recurrent_synapse_count as usize / 2)
++        .ok_or(GpuClosedLoopError::MalformedUpload)?;
++    let addition = AddLifetimeSynapse {
++        source: inherited.source(),
++        target: inherited.target(),
++        route: u32::from(inherited.route_index()),
++        initial_weight: 0.125,
++        evidence: alife_core::CoactivationEvidence {
++            region: inherited.route_index(),
++            source: inherited.source(),
++            target: inherited.target(),
++            coactivation: 1,
++            eligibility: 1,
++            concept_gap_support: 0,
++        },
++    };
++    let base = previous.ranges.mutable_state_words.start;
++    let ranges = &previous.ranges.layout;
++    let canonical = read_pod_prefix::<GpuReplaySynapseSpanRecord>(
++        &previous.mutable_state_words,
++        base,
++        &ranges.replay_span_words,
++        previous.brain_slot.counts.replay_capture_synapses,
++    )?;
++    // Restored replay may legitimately keep a different enabled synapse in a
++    // physical slot. Preserve original offsets and a consistent event count.
++    for i in 0..canonical.len().saturating_sub(1) {
++        for id in canonical[i].local_synapse_id + 1..canonical[i + 1].local_synapse_id {
++            let mut spans = canonical.clone();
++            spans[i].local_synapse_id = id;
++            for span in &mut spans {
++                span.sample_count = 3;
++            }
++            let mut live = previous.mutable_state_words.clone();
++            let mut state: GpuSlotLearningStateRecord =
++                read_pod_at(&live, base, ranges.learning_state_words.start)?;
++            state.replay_event_count = 3;
++            state.replay_cursor = 3;
++            store_pod_at(&mut live, base, ranges.learning_state_words.start, &state)?;
++            store_pod_slice_at(&mut live, base, ranges.replay_span_words.start, &spans)?;
++            if validate_learning_slot_layout(
++                previous.record(),
++                previous.counts(),
++                ranges,
++                &previous.immutable_plan_words,
++                previous.ranges.immutable_plan_words.start,
++                &previous.immutable_weight_words,
++                previous.ranges.immutable_weight_words.start,
++                &live,
++                base,
++            )
++            .is_err()
++            {
++                continue;
++            }
++            let next = plan
++                .prepare_slot_upload(0, 1, &phenotype)?
++                .with_remapped_live_mutable_state(&previous, live)?;
++            let actual = read_pod_prefix::<GpuReplaySynapseSpanRecord>(
++                &next.mutable_state_words,
++                base,
++                &ranges.replay_span_words,
++                spans.len(),
++            )?;
++            // Isolate the precise retired default-to-zero rule using the
++            // same valid input; the replaced canonical ID is absent.
++            let old_count = spans.iter()
++                .find(|span| span.local_synapse_id == canonical[i].local_synapse_id)
++                .map(|span| span.sample_count)
++                .unwrap_or(0);
++            if old_count != 0 || actual[i].sample_count != state.replay_event_count
++                || actual[i].local_synapse_id != id {
++                return Err(GpuClosedLoopError::MalformedUpload);
++            }
++            let sample_begin = (ranges.replay_sample_words.start - base) as usize;
++            let sample_end = (ranges.replay_sample_words.end - base) as usize;
++            let mut live = next.mutable_state_words.clone();
++            // Distinguish physical sample slots to detect any data movement.
++            for (j, word) in live[sample_begin..sample_end].iter_mut().enumerate() {
++                *word = 0x1234_0000_u32.wrapping_add(j as u32);
++            }
++            let mut grown = plan.prepare_slot_upload(0, 1, &phenotype)?
++                .with_added_lifetime_synapse(&addition)?
++                .with_remapped_live_mutable_state(&previous, live.clone())?;
++            let grown_spans = read_pod_prefix::<GpuReplaySynapseSpanRecord>(
++                &grown.mutable_state_words, base, &ranges.replay_span_words, spans.len(),
++            )?;
++            let old_edges = recurrent_edge_identities(&previous)?;
++            let new_edges = recurrent_edge_identities(&grown)?;
++            let old_recurrent = previous.record().recurrent_synapse_count;
++            let new_recurrent = grown.record().recurrent_synapse_count;
++            let same_pair = spans.iter().zip(&grown_spans).all(|(a, b)| {
++                let edge_matches = if a.local_synapse_id < old_recurrent {
++                    old_edges.get(a.local_synapse_id as usize)
++                        == new_edges.get(b.local_synapse_id as usize)
++                } else {
++                    a.local_synapse_id.checked_sub(old_recurrent)
++                        == b.local_synapse_id.checked_sub(new_recurrent)
++                };
++                edge_matches && a.sample_start == b.sample_start
++                    && a.sample_count == b.sample_count && a.reserved == b.reserved
++            });
++            if !same_pair || !spans.iter().zip(&grown_spans)
++                .any(|(a, b)| a.local_synapse_id != b.local_synapse_id)
++                || grown.mutable_state_words[sample_begin..sample_end]
++                    != live[sample_begin..sample_end] {
++                return Err(GpuClosedLoopError::MalformedUpload);
++            }
++            let grown_state: GpuSlotLearningStateRecord =
++                read_pod_at(&grown.mutable_state_words, base, ranges.learning_state_words.start)?;
++            if grown_state.replay_event_count != state.replay_event_count
++                || grown_state.replay_cursor != state.replay_cursor
++                || grown_state.replay_generation_lo != state.replay_generation_lo
++                || grown_state.replay_generation_hi != state.replay_generation_hi {
++                return Err(GpuClosedLoopError::MalformedUpload);
++            }
++            // A genuinely stale slot generation must still reject, even
++            // with byte-valid frozen ring contents.
++            let stale_rejected = matches!(
++                plan.prepare_slot_upload(0, 2, &phenotype)?
++                    .with_remapped_live_mutable_state(&previous, live.clone()),
++                Err(GpuClosedLoopError::StaleOrForeignHandle)
++            );
++            if !stale_rejected {
++                return Err(GpuClosedLoopError::MalformedUpload);
++            }
++            // A valid live capture of a learned edge cannot be rebound to
++            // a different ancestral synapse if that edge is gone.
++            let mut inherited_ids = BTreeMap::<_, usize>::new();
++            for edge in old_edges {
++                *inherited_ids.entry(edge).or_default() += 1;
++            }
++            let learned_id = new_edges.iter().position(|edge| {
++                let count = inherited_ids.entry(*edge).or_default();
++                if *count == 0 {
++                    true
++                } else {
++                    *count -= 1;
++                    false
++                }
++            }).ok_or(GpuClosedLoopError::MalformedUpload)?;
++            let learned_u32 = u32::try_from(learned_id)
++                .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
++            let capture_i = grown_spans.partition_point(|span| span.local_synapse_id < learned_u32)
++                .min(grown_spans.len() - 1);
++            let mut captured = grown_spans.clone();
++            let inherited_capture_index = captured[capture_i].local_synapse_id as usize;
++            captured[capture_i].local_synapse_id = learned_u32;
++            // The synthetic fixture needs an enabled receptor for this
++            // learned edge to qualify as a valid captured span.
++            let plan_base = grown.ranges.immutable_plan_words.start;
++            let mut metadata = read_pod_prefix::<GpuSynapseLearningMetadata>(
++                &grown.immutable_plan_words, plan_base, &ranges.synapse_learning_metadata_words,
++                grown.record().synapse_count as usize,
++            )?;
++            metadata[learned_id].receptor_index = metadata[inherited_capture_index].receptor_index;
++            store_pod_slice_at(
++                &mut grown.immutable_plan_words, plan_base,
++                ranges.synapse_learning_metadata_words.start, &metadata,
++            )?;
++            let mut learned_live = grown.mutable_state_words.clone();
++            store_pod_slice_at(&mut learned_live, base, ranges.replay_span_words.start, &captured)?;
++            validate_learning_slot_layout(
++                grown.record(), grown.counts(), ranges, &grown.immutable_plan_words, plan_base,
++                &grown.immutable_weight_words, grown.ranges.immutable_weight_words.start,
++                &learned_live, base,
++            )?;
++            if !matches!(
++                plan.prepare_slot_upload(0, 1, &phenotype)?
++                    .with_remapped_live_mutable_state(&grown, learned_live),
++                Err(GpuClosedLoopError::MalformedUpload)
++            ) {
++                return Err(GpuClosedLoopError::MalformedUpload);
++            }
++            return Ok((old_count, grown_spans[i].sample_count));
++        }
++    }
++    Err(GpuClosedLoopError::MalformedUpload)
++}
++
+ fn recurrent_edge_identities(
+     upload: &GpuFixedSlotUpload,
+ ) -> Result<Vec<(u32, u32, u32)>, GpuClosedLoopError> {
+--- a/crates/alife_game_app/src/bin/evaluate_saved_life_retention.rs
++++ b/crates/alife_game_app/src/bin/evaluate_saved_life_retention.rs
+@@ -239,3 +239,69 @@
+         );
+     }
+ }
++
++#[cfg(all(test, feature = "gpu-tests"))]
++mod first_sleep_generation_regression {
++    use alife_core::sleep::{
++        ConsolidationDriverEvent, ConsolidationIntent, SleepConsolidationConfig,
++        SleepController, SleepPhase, SleepState, SleepTrigger,
++    };
++    use alife_core::{OrganismId, ScaffoldContractError, Tick};
++    use alife_runtime::{GpuSleepTransactionJournalEntryV2, GpuSleepTransactionJournalV2};
++
++    #[test]
++    fn first_sleep_generation_regression_repairs_ring_through_lifetime_growth() {
++        let (retired_default_count, preserved_live_count) =
++            alife_gpu_backend::replay_span_remap_probe_for_test().unwrap();
++        assert_eq!(retired_default_count, 0);
++        assert_eq!(preserved_live_count, 3);
++    }
++
++    #[test]
++    fn first_sleep_generation_regression_validates_pending_transition_generation() {
++        // A public synthetic clock, no private archive and no GPU work.
++        let organism = OrganismId(7);
++        let awake = SleepState::awake_at(Tick::new(50));
++        let mut phase = SleepController::restore(SleepConsolidationConfig::reference(), awake)
++            .unwrap();
++        phase.force_sleep(Tick::new(50), SleepTrigger::SeizureHyperactivity).unwrap();
++        let recovery = phase.state();
++        assert_eq!(recovery.phase, SleepPhase::ForcedRecoverySleep);
++        assert!(phase.advance(Tick::new(57)).unwrap().is_none());
++        assert!(phase.advance(Tick::new(58)).unwrap().is_some());
++        let consolidating = phase.state();
++        assert_eq!(consolidating.phase, SleepPhase::Consolidating);
++        let persisted = |cycle_id| ConsolidationDriverEvent::ReplayAssetPersisted {
++            intent: ConsolidationIntent { cycle_id },
++            replay_digest: [1, 2, 3, 4],
++            replay_event_count: 3,
++            replay_eligibility_sample_count: 12,
++        };
++        assert_eq!(
++            phase.apply_consolidation_driver_event(persisted(recovery.active_cycle_id + 1)),
++            Err(ScaffoldContractError::ConsolidationGenerationMismatch)
++        );
++        assert_eq!(phase.state(), consolidating);
++        phase.apply_consolidation_driver_event(persisted(recovery.active_cycle_id)).unwrap();
++        let pending = phase.state();
++        let edge = |ordinal, source, target| {
++            GpuSleepTransactionJournalEntryV2::try_new_with_ordinal(
++                organism, Tick::new(59), ordinal, source, target,
++            )
++            .unwrap()
++        };
++        let mut entries = vec![GpuSleepTransactionJournalEntryV2::try_new(
++            organism, Tick::new(51), awake, recovery,
++        ).unwrap()];
++        entries.push(edge(0, recovery, consolidating));
++        entries.push(edge(1, consolidating, pending));
++        let anchor = "fnv1a64:0123456789abcdef".to_string();
++        GpuSleepTransactionJournalV2::try_new(anchor.clone(), Tick::new(50), entries.clone())
++            .unwrap();
++        entries.swap(1, 2);
++        assert_eq!(
++            GpuSleepTransactionJournalV2::try_new(anchor, Tick::new(50), entries),
++            Err(ScaffoldContractError::ConsolidationGenerationMismatch)
++        );
++    }
++}

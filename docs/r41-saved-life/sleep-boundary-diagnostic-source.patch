@@ -1,0 +1,265 @@
+--- a/crates/alife_game_app/src/gpu_live_runtime.rs
++++ b/crates/alife_game_app/src/gpu_live_runtime.rs
+@@ -2440,7 +2440,10 @@
+         }
+         let event = match (state.consolidation, intent) {
+             (ConsolidationState::None, Some(intent)) => {
+-                let replay = self.backend.build_sleep_replay_batch(self.handle)?;
++                let replay = self
++                    .backend
++                    .build_sleep_replay_batch(self.handle)
++                    .inspect_err(|error| note_sleep_boundary_error("open-pending-live-replay", error))?;
+                 ConsolidationDriverEvent::ReplayAssetPersisted {
+                     intent,
+                     replay_digest: replay.canonical_digest,
+@@ -2548,7 +2551,8 @@
+                 context.sealed_patches,
+                 context.last_sealed_patches,
+             ),
+-        }?;
++        }
++        .inspect_err(|error| note_sleep_boundary_error("replay-before-structural", error))?;
+         let receipt = run_authoritative_sleep_transaction_with_evidence(
+             homeostasis,
+             tick,
+@@ -2556,13 +2560,15 @@
+                 .ok_or(ScaffoldContractError::MissingPhaseData)?,
+             context,
+             &evidence,
+-        )?;
++        )
++        .inspect_err(|error| note_sleep_boundary_error("bounded-CPU-sleep-work", error))?;
+         if due_work.contains(SleepWorkDue::STRUCTURAL_GROWTH_PRUNING) {
+             if let Some(armed) = self.fail_stop_armed.as_deref_mut() {
+                 *armed = true;
+             }
+             self.backend
+-                .apply_v11_sleep_structural_phase(self.handle, &evidence)?;
++                .apply_v11_sleep_structural_phase(self.handle, &evidence)
++                .inspect_err(|error| note_sleep_boundary_error("V11-structural-replay-remap", error))?;
+         }
+         if let Some(last_sleep_work) = self.last_sleep_work.as_mut() {
+             **last_sleep_work = Some(receipt.clone());
+@@ -2582,6 +2588,16 @@
+     }
+ }
+ 
++#[cfg(feature = "foundation-training")]
++fn note_sleep_boundary_error(stage: &str, error: &ScaffoldContractError) {
++    if *error == ScaffoldContractError::ConsolidationGenerationMismatch {
++        eprintln!("qualia-sleep-boundary {stage}: {error}");
++    }
++}
++
++#[cfg(not(feature = "foundation-training"))]
++fn note_sleep_boundary_error(_stage: &str, _error: &ScaffoldContractError) {}
++
+ type SleepProgressResult = Result<Option<ConsolidationDriverEvent>, ScaffoldContractError>;
+ 
+ struct RoutedGpuSleepDriver<'a, F> {
+--- a/crates/alife_game_app/src/gpu_live_runtime/staged_tick.rs
++++ b/crates/alife_game_app/src/gpu_live_runtime/staged_tick.rs
+@@ -313,7 +313,8 @@
+                     tick_before,
+                     &mut routed_driver,
+                     false,
+-                )?;
++                )
++                .inspect_err(|error| note_sleep_boundary_error("scheduled-tick-before-journal", error))?;
+                 self.world.replace_organism_record_exact(record)?;
+                 if event.sleep_work_units > 0 {
+                     let sleep_work = resident
+@@ -414,10 +415,9 @@
+                             (ConsolidationState::None, ConsolidationState::Pending { .. })
+                         );
+                         if refresh_authority && !checkpoint_active {
+-                            sleep_journal_neural_authority_updates.insert(
+-                                raw,
+-                                capture_sleep_journal_neural_authority(&mut self.backend, handle)?,
+-                            );
++                            let authority = capture_sleep_journal_neural_authority(&mut self.backend, handle)
++                                .inspect_err(|error| note_sleep_boundary_error("refresh-compact-authority-before-pending", error))?;
++                            sleep_journal_neural_authority_updates.insert(raw, authority);
+                         } else if !checkpoint_active {
+                             if let Some(expected) = sleep_journal_neural_authority_updates
+                                 .get(&raw)
+@@ -447,7 +447,8 @@
+                                     0,
+                                     sleep_before,
+                                     intermediate,
+-                                )?,
++                                )
++                                .inspect_err(|error| note_sleep_boundary_error("durable-forced-recovery-to-consolidating", error))?,
+                             );
+                             sleep_journal_entries.push(
+                                 GpuSleepTransactionJournalEntryV2::try_new_with_ordinal(
+@@ -456,7 +457,8 @@
+                                     1,
+                                     intermediate,
+                                     sleep_after,
+-                                )?,
++                                )
++                                .inspect_err(|error| note_sleep_boundary_error("durable-consolidating-to-pending", error))?,
+                             );
+                         } else {
+                             sleep_journal_entries.push(GpuSleepTransactionJournalEntryV2::try_new(
+--- a/crates/alife_game_app/src/bin/evaluate_saved_life_retention.rs
++++ b/crates/alife_game_app/src/bin/evaluate_saved_life_retention.rs
+@@ -239,3 +239,72 @@
+         );
+     }
+ }
++
++#[cfg(all(test, feature = "gpu-tests"))]
++mod first_sleep_generation_regression {
++    use alife_core::sleep::{
++        ConsolidationDriverEvent, ConsolidationIntent, SleepConsolidationConfig,
++        SleepController, SleepPhase, SleepState, SleepTrigger,
++    };
++    use alife_core::{OrganismId, ScaffoldContractError, Tick};
++    use alife_runtime::{GpuSleepTransactionJournalEntryV2, GpuSleepTransactionJournalV2};
++
++    #[test]
++    fn first_sleep_generation_regression_pins_production_ring_mismatch() {
++        // This diagnostic build deliberately leaves the production defect in
++        // place. It contains no behavior or scoring fix. The repair inverts
++        // the final assertion: the retained count must remain three.
++        let (journal_count, rebuilt_span_count) =
++            alife_gpu_backend::replay_span_remap_probe_for_test().unwrap();
++        assert_eq!(journal_count, 3);
++        assert_eq!(rebuilt_span_count, 0);
++    }
++
++    #[test]
++    fn first_sleep_generation_regression_validates_pending_transition_generation() {
++        // A public synthetic clock, no private archive and no GPU work.
++        let organism = OrganismId(7);
++        let awake = SleepState::awake_at(Tick::new(50));
++        let mut phase = SleepController::restore(SleepConsolidationConfig::reference(), awake)
++            .unwrap();
++        phase.force_sleep(Tick::new(50), SleepTrigger::SeizureHyperactivity).unwrap();
++        let recovery = phase.state();
++        assert_eq!(recovery.phase, SleepPhase::ForcedRecoverySleep);
++        assert!(phase.advance(Tick::new(57)).unwrap().is_none());
++        assert!(phase.advance(Tick::new(58)).unwrap().is_some());
++        let consolidating = phase.state();
++        assert_eq!(consolidating.phase, SleepPhase::Consolidating);
++        let persisted = |cycle_id| ConsolidationDriverEvent::ReplayAssetPersisted {
++            intent: ConsolidationIntent { cycle_id },
++            replay_digest: [1, 2, 3, 4],
++            replay_event_count: 3,
++            replay_eligibility_sample_count: 12,
++        };
++        assert_eq!(
++            phase.apply_consolidation_driver_event(persisted(recovery.active_cycle_id + 1)),
++            Err(ScaffoldContractError::ConsolidationGenerationMismatch)
++        );
++        assert_eq!(phase.state(), consolidating);
++        phase.apply_consolidation_driver_event(persisted(recovery.active_cycle_id)).unwrap();
++        let pending = phase.state();
++        let edge = |ordinal, source, target| {
++            GpuSleepTransactionJournalEntryV2::try_new_with_ordinal(
++                organism, Tick::new(59), ordinal, source, target,
++            )
++            .unwrap()
++        };
++        let mut entries = vec![GpuSleepTransactionJournalEntryV2::try_new(
++            organism, Tick::new(51), awake, recovery,
++        ).unwrap()];
++        entries.push(edge(0, recovery, consolidating));
++        entries.push(edge(1, consolidating, pending));
++        let anchor = "fnv1a64:0123456789abcdef".to_string();
++        GpuSleepTransactionJournalV2::try_new(anchor.clone(), Tick::new(50), entries.clone())
++            .unwrap();
++        entries.swap(1, 2);
++        assert_eq!(
++            GpuSleepTransactionJournalV2::try_new(anchor, Tick::new(50), entries),
++            Err(ScaffoldContractError::ConsolidationGenerationMismatch)
++        );
++    }
++}
+--- a/crates/alife_gpu_backend/src/closed_loop_buffers/bucket.rs
++++ b/crates/alife_gpu_backend/src/closed_loop_buffers/bucket.rs
+@@ -3730,6 +3730,82 @@
+     }
+ }
+ 
++/// Device-free reproduction through the exact production remapper. Never
++/// opens a mature save or creates a GPU device.
++#[doc(hidden)]
++#[cfg(feature = "gpu-tests")]
++pub fn replay_span_remap_probe_for_test() -> Result<(u32, u32), GpuClosedLoopError> {
++    use alife_core::{BrainGenome, DevelopmentState, NormalizedScalar, PhenotypeCompiler, SensorProfile, Tick};
++    let capacity = BrainCapacityClass::n512();
++    let genome = BrainGenome::scaffold(705, capacity.id());
++    let development = DevelopmentState::new(
++        genome.id,
++        Tick::ZERO,
++        NormalizedScalar::new(0.35).map_err(|_| GpuClosedLoopError::MalformedUpload)?,
++    );
++    let phenotype = PhenotypeCompiler::compile(
++        &genome,
++        &capacity,
++        &development,
++        SensorProfile::GroundedObjectSlotsV1,
++    )
++    .map_err(|_| GpuClosedLoopError::MalformedUpload)?;
++    let plan = GpuFixedClassArenaPlan::new(capacity, 1, 512 * 1024 * 1024)?;
++    let previous = plan.prepare_slot_upload(0, 1, &phenotype)?;
++    let base = previous.ranges.mutable_state_words.start;
++    let ranges = &previous.ranges.layout;
++    let canonical = read_pod_prefix::<GpuReplaySynapseSpanRecord>(
++        &previous.mutable_state_words,
++        base,
++        &ranges.replay_span_words,
++        previous.brain_slot.counts.replay_capture_synapses,
++    )?;
++    // Restored replay may legitimately keep a different enabled synapse in a
++    // physical slot. Preserve original offsets and a consistent event count.
++    for i in 0..canonical.len().saturating_sub(1) {
++        for id in canonical[i].local_synapse_id + 1..canonical[i + 1].local_synapse_id {
++            let mut spans = canonical.clone();
++            spans[i].local_synapse_id = id;
++            for span in &mut spans {
++                span.sample_count = 3;
++            }
++            let mut live = previous.mutable_state_words.clone();
++            let mut state: GpuSlotLearningStateRecord =
++                read_pod_at(&live, base, ranges.learning_state_words.start)?;
++            state.replay_event_count = 3;
++            state.replay_cursor = 3;
++            store_pod_at(&mut live, base, ranges.learning_state_words.start, &state)?;
++            store_pod_slice_at(&mut live, base, ranges.replay_span_words.start, &spans)?;
++            if validate_learning_slot_layout(
++                previous.record(),
++                previous.counts(),
++                ranges,
++                &previous.immutable_plan_words,
++                previous.ranges.immutable_plan_words.start,
++                &previous.immutable_weight_words,
++                previous.ranges.immutable_weight_words.start,
++                &live,
++                base,
++            )
++            .is_err()
++            {
++                continue;
++            }
++            let next = plan
++                .prepare_slot_upload(0, 1, &phenotype)?
++                .with_remapped_live_mutable_state(&previous, live)?;
++            let actual = read_pod_prefix::<GpuReplaySynapseSpanRecord>(
++                &next.mutable_state_words,
++                base,
++                &ranges.replay_span_words,
++                spans.len(),
++            )?;
++            return Ok((state.replay_event_count, actual[i].sample_count));
++        }
++    }
++    Err(GpuClosedLoopError::MalformedUpload)
++}
++
+ fn recurrent_edge_identities(
+     upload: &GpuFixedSlotUpload,
+ ) -> Result<Vec<(u32, u32, u32)>, GpuClosedLoopError> {

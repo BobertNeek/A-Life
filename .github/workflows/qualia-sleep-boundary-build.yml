@@ -1,0 +1,122 @@
+name: Qualia detached sleep-boundary build
+on:
+  push:
+    branches: ["bob/qualia-sleep-boundary-20261127"]
+    paths:
+      - ".github/workflows/qualia-sleep-boundary-build.yml"
+      - "docs/r41-saved-life/sleep-boundary-diagnostic-source.patch"
+      - "docs/r41-saved-life/sleep-boundary-repair-source.patch"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qualia-sleep-boundary-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-build:
+    if: github.ref == 'refs/heads/bob/qualia-sleep-boundary-20261127'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 48
+    env:
+      # Choose one patch. 'repair' proves the retired fallback and repaired
+      # production remapper in one focused compile; no duplicate build needed.
+      VARIANT: repair
+      PIN_SOURCE: f466b83791cccb97568e6f718b92b052999cfb2b
+      PIN_RESEARCH_COMMIT: 0cd14f12a8012a9b00119a7b33939ca5e3dbeb53
+      PIN_RESEARCH_PATCH: 3dcf657b2b1149a7da52e7867c3bdbc4c4dfe8d4785b53c95f429c78aa1cd490
+      PIN_DIAGNOSTIC_PATCH: 6c67c8e2dd765cb1d8c33853dda77d3a05acd95940a3de0654678e0258cc7d83
+      PIN_REPAIR_PATCH: c6108d621963d25d582160c05eb8c7256841b317cd8a7f99ee5c5475d40b790e
+      PIN_LOCK: 155699e9274f8890bc8c335669a62de48203ba315a33388a8f0caca71f0f7f37
+      PIN_RUSTC_COMMIT: 0ef1bc386059596dada8fb65b50425aab2ea637a
+      RUST_TOOLCHAIN: "1.100.0"
+      TARGET: x86_64-unknown-linux-gnu
+      CARGO_BUILD_JOBS: "1"
+      CARGO_INCREMENTAL: "0"
+      CARGO_PROFILE_RELEASE_DEBUG: "0"
+      CARGO_PROFILE_RELEASE_INCREMENTAL: "false"
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Read the isolated source-only branch at the event commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Pin and reconstruct the exact research source before applying one overlay
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git merge-base --is-ancestor "$PIN_SOURCE" HEAD
+          git merge-base --is-ancestor "$PIN_RESEARCH_COMMIT" HEAD
+          git diff --exit-code "$PIN_SOURCE" HEAD -- docs/r41-saved-life/{restore_source.py,SOURCE.json,patches}
+          export EXACT_SRC="$RUNNER_TEMP/qualia-source"
+          export CARGO_TARGET_DIR="$RUNNER_TEMP/cargo-target"
+          export EVIDENCE="$RUNNER_TEMP/sleep-boundary-evidence"
+          printf 'EXACT_SRC=%s\nCARGO_TARGET_DIR=%s\nEVIDENCE=%s\n' \
+            "$EXACT_SRC" "$CARGO_TARGET_DIR" "$EVIDENCE" >> "$GITHUB_ENV"
+          mkdir "$EVIDENCE"
+          research="$RUNNER_TEMP/verified-research.patch"
+          git show "$PIN_RESEARCH_COMMIT:docs/r41-saved-life/research-catalog-source-only.patch" > "$research"
+          echo "$PIN_RESEARCH_PATCH  $research" | sha256sum -c -
+          diag="$GITHUB_WORKSPACE/docs/r41-saved-life/sleep-boundary-diagnostic-source.patch"
+          fix="$GITHUB_WORKSPACE/docs/r41-saved-life/sleep-boundary-repair-source.patch"
+          echo "$PIN_DIAGNOSTIC_PATCH  $diag" | sha256sum -c -
+          echo "$PIN_REPAIR_PATCH  $fix" | sha256sum -c -
+          python3 docs/r41-saved-life/restore_source.py "$GITHUB_WORKSPACE" "$EXACT_SRC" | tee "$EVIDENCE/build.log"
+          cd "$EXACT_SRC"
+          git apply --check "$research"
+          git apply "$research"
+          git apply --check "$diag"
+          git apply --check "$fix"
+          case "$VARIANT" in
+            diagnostic) git apply "$diag" ;;
+            repair) git apply "$fix" ;;
+            *) exit 2 ;;
+          esac
+          echo "$PIN_LOCK  Cargo.lock" | sha256sum -c -
+          printf 'branch_commit=%s\nsource_pin=%s\nresearch_commit=%s\nresearch_patch=%s\nvariant=%s\ndiagnostic_patch=%s\nrepair_patch=%s\n' \
+            "$GITHUB_SHA" "$PIN_SOURCE" "$PIN_RESEARCH_COMMIT" "$PIN_RESEARCH_PATCH" "$VARIANT" \
+            "$PIN_DIAGNOSTIC_PATCH" "$PIN_REPAIR_PATCH" | tee -a "$EVIDENCE/build.log"
+
+      - name: Verify official Rust and run the real device-free production-closure regression
+        run: |
+          set -euo pipefail
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --target "$TARGET"
+          version="$(rustc +"$RUST_TOOLCHAIN" -vV)"
+          grep -Fqx "release: $RUST_TOOLCHAIN" <<< "$version"
+          grep -Fqx "commit-hash: $PIN_RUSTC_COMMIT" <<< "$version"
+          grep -Fqx "host: $TARGET" <<< "$version"
+          printf '%s\n' "$version" | tee -a "$EVIDENCE/build.log"
+          cd "$EXACT_SRC"
+          timeout 8m cargo +"$RUST_TOOLCHAIN" fetch --locked --target "$TARGET" 2>&1 | tee -a "$EVIDENCE/build.log"
+          timeout 28m cargo +"$RUST_TOOLCHAIN" test --frozen --offline --release --target "$TARGET" -j 1 \
+            -p alife_game_app --features foundation-training,gpu-tests --bin evaluate_saved_life_retention \
+            -- first_sleep_generation_regression --test-threads=1 2>&1 | tee -a "$EVIDENCE/build.log"
+          # Avoid a successful no-test build or accidentally testing a crate-wide cfg(test) closure.
+          grep -F 'test result: ok. 2 passed; 0 failed;' "$EVIDENCE/build.log"
+          timeout 7m cargo +"$RUST_TOOLCHAIN" build --frozen --offline --release --target "$TARGET" -j 1 \
+            -p alife_game_app --features foundation-training,gpu-tests --bin evaluate_saved_life_retention 2>&1 | tee -a "$EVIDENCE/build.log"
+          install -m 0755 "$CARGO_TARGET_DIR/$TARGET/release/evaluate_saved_life_retention" "$EVIDENCE/evaluate_saved_life_retention"
+          readelf -h -d "$EVIDENCE/evaluate_saved_life_retention" | tee -a "$EVIDENCE/build.log"
+          cd "$EVIDENCE"
+          sha256sum evaluate_saved_life_retention build.log > SHA256SUMS
+          sha256sum -c SHA256SUMS
+
+      # The build contains public source and a generated test fixture only.
+      # No Checkpoints, authored weights, saved states, native traces, or CI keys.
+      - name: Publish detached source-built evaluator and exact test log
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: qualia-detached-sleep-boundary-${{ env.VARIANT }}-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/sleep-boundary-evidence/evaluate_saved_life_retention
+            ${{ runner.temp }}/sleep-boundary-evidence/build.log
+            ${{ runner.temp }}/sleep-boundary-evidence/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 5
+          compression-level: 3
