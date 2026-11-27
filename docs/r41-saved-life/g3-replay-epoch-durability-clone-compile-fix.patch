@@ -1,0 +1,12 @@
+diff --git a/crates/alife_game_app/src/gpu_live_runtime.rs b/crates/alife_game_app/src/gpu_live_runtime.rs
+index 123c9e9f7b6a4536c9a23fef122c2f567c69946d..63c8bba914b4c83943e77c826004ca76b009c4b6 100644
+--- a/crates/alife_game_app/src/gpu_live_runtime.rs
++++ b/crates/alife_game_app/src/gpu_live_runtime.rs
+@@ -1232,6 +1232,7 @@ struct DeferredReplayEpochV2 {
+     neural_authority: BTreeMap<u64, SleepJournalNeuralAuthority>,
+ }
+ 
++#[derive(Debug, Clone)]
+ struct GpuLiveCheckpointDurability {
+     store: GpuCheckpointAssetStore,
+     durable_manifest: GpuDurableSaveManifest,

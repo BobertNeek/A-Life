@@ -5,6 +5,7 @@ on:
     paths:
       - ".github/workflows/qualia-replay-epoch-one-resident-build.yml"
       - "docs/r41-saved-life/g3-replay-epoch-native-proof-source.patch"
+      - "docs/r41-saved-life/g3-replay-epoch-durability-clone-compile-fix.patch"
 
 permissions:
   contents: read
@@ -39,6 +40,12 @@ jobs:
       PIN_TRACKED_PARENT: 04a0d8980eb48ed362530ab663ac91b01e596185
       PIN_TRACKED_WORKFLOW: a4bb1999dbd593ba19fcd58166a77592b09181ab
       PIN_REPLAY_EPOCH_PATCH: 10ccf78bdbed943f123ee71c433b419edc1a40bfc8f084a3202b3fd0bc77632d
+      PIN_CLONE_REPAIR_PARENT: 45fb1034483499636fab7cb1f4377e3d7438b602
+      PIN_CLONE_REPAIR_PARENT_TREE: 9a90e36985f54c031577ab742791a8e6f93f1314
+      PIN_CLONE_REPAIR_WORKFLOW: 65988b6a0176e410bf3f08514fd1d1ce72fc3b36
+      PIN_CLONE_REPAIR_PATCH: 4b05fe205dcddf0dd05d90c0f2854ac1ae76673fd057f3cf2d41a7951bc0f6d7
+      PIN_CLONE_REPAIR_SOURCE_PREIMAGE: ac41618c76463974bd3b645d6625c5e295d4ea5eb3f92fb80a0c2588c7f63ea8
+      PIN_CLONE_REPAIR_SOURCE: aec2227f77548e6511ae9be98f01a23de603f97c149cd98d3ed9f6d1ecb4709a
       PIN_LOCK: 155699e9274f8890bc8c335669a62de48203ba315a33388a8f0caca71f0f7f37
       PIN_RUSTC_COMMIT: 0ef1bc386059596dada8fb65b50425aab2ea637a
       RUST_TOOLCHAIN: "1.100.0"
@@ -62,7 +69,10 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git rev-parse HEAD^)" = "$PIN_TRACKED_PARENT"
+          test "$(git rev-parse HEAD^)" = "$PIN_CLONE_REPAIR_PARENT"
+          test "$(git rev-parse "$PIN_CLONE_REPAIR_PARENT^{tree}")" = "$PIN_CLONE_REPAIR_PARENT_TREE"
+          test "$(git rev-parse "$PIN_CLONE_REPAIR_PARENT^")" = "$PIN_TRACKED_PARENT"
+          test "$(git rev-parse "$PIN_CLONE_REPAIR_PARENT:.github/workflows/qualia-replay-epoch-one-resident-build.yml")" = "$PIN_CLONE_REPAIR_WORKFLOW"
           test "$(git rev-parse "$PIN_TRACKED_PARENT^")" = "$PIN_PROBE_PARENT"
           test "$(git rev-parse "$PIN_TRACKED_PARENT:.github/workflows/qualia-g3-recommit-tracked-reference-build.yml")" = "$PIN_TRACKED_WORKFLOW"
           test "$(git rev-parse "$PIN_PROBE_PARENT:.github/workflows/qualia-g3-recommit-probe-build.yml")" = "$PIN_PROBE_PARENT_WORKFLOW"
@@ -71,9 +81,12 @@ jobs:
           git merge-base --is-ancestor "$PIN_BASE" "$PIN_SLEEP_PARENT"
           git merge-base --is-ancestor "$PIN_RESEARCH_COMMIT" "$PIN_SLEEP_PARENT"
           test "$(git rev-parse "$PIN_WRAPPER_PARENT:.github/workflows/qualia-derived-completed-authority-build.yml")" = "$PIN_WRAPPER_WORKFLOW"
-          git diff --exit-code "$PIN_TRACKED_PARENT" HEAD -- . \
+          git diff --exit-code "$PIN_TRACKED_PARENT" "$PIN_CLONE_REPAIR_PARENT" -- . \
             ':(exclude).github/workflows/qualia-replay-epoch-one-resident-build.yml' \
             ':(exclude)docs/r41-saved-life/g3-replay-epoch-native-proof-source.patch'
+          git diff --exit-code "$PIN_CLONE_REPAIR_PARENT" HEAD -- . \
+            ':(exclude).github/workflows/qualia-replay-epoch-one-resident-build.yml' \
+            ':(exclude)docs/r41-saved-life/g3-replay-epoch-durability-clone-compile-fix.patch'
           git diff --exit-code "$PIN_BASE" HEAD -- \
             docs/r41-saved-life/restore_source.py docs/r41-saved-life/SOURCE.json docs/r41-saved-life/patches
           exact="$RUNNER_TEMP/qualia-epoch-source"
@@ -95,7 +108,8 @@ jobs:
           extract "$PIN_PROBE_PARENT" g3-recommit-probe-source.patch "$PIN_PROBE_PATCH"
           extract "$PIN_PROBE_PARENT" g3-recommit-explicit-software-vulkan.patch "$PIN_ADMISSION_PATCH"
           extract "$PIN_TRACKED_PARENT" g3-recommit-tracked-reference-source.patch "$PIN_TRACKED_REFERENCE_PATCH"
-          extract "$GITHUB_SHA" g3-replay-epoch-native-proof-source.patch "$PIN_REPLAY_EPOCH_PATCH"
+          extract "$PIN_CLONE_REPAIR_PARENT" g3-replay-epoch-native-proof-source.patch "$PIN_REPLAY_EPOCH_PATCH"
+          extract "$GITHUB_SHA" g3-replay-epoch-durability-clone-compile-fix.patch "$PIN_CLONE_REPAIR_PATCH"
           cd "$exact"
           for patch in research-catalog-source-only.patch sleep-boundary-repair-source.patch \
              sleep-legacy-publication-source.patch sleep-late-archive-retirement-source.patch \
@@ -154,7 +168,11 @@ jobs:
           git apply --check --whitespace=error "$patches/g3-replay-epoch-native-proof-source.patch"
           git apply --whitespace=error "$patches/g3-replay-epoch-native-proof-source.patch"
           verify_epoch_leaves after
-          printf '%s  %s\n' "$PIN_LOCK" Cargo.lock | sha256sum -c -
+          epoch_runtime=crates/alife_game_app/src/gpu_live_runtime.rs
+          printf '%s  %s\n' "$PIN_CLONE_REPAIR_SOURCE_PREIMAGE" "$epoch_runtime" | sha256sum -c -
+          git apply --check --whitespace=error "$patches/g3-replay-epoch-durability-clone-compile-fix.patch"
+          git apply --whitespace=error "$patches/g3-replay-epoch-durability-clone-compile-fix.patch"
+          printf '%s  %s\n' "$PIN_CLONE_REPAIR_SOURCE" "$epoch_runtime" "$PIN_LOCK" Cargo.lock | sha256sum -c -
           printf '%s\n' \
             "branch_commit=$GITHUB_SHA" "base=$PIN_BASE" "sleep_parent=$PIN_SLEEP_PARENT" \
             "wrapper_parent=$PIN_WRAPPER_PARENT" "wrapper_workflow_blob=$PIN_WRAPPER_WORKFLOW" \
@@ -166,6 +184,9 @@ jobs:
             "test_preimage=$PIN_TEST_PREIMAGE" "tracked_reference_patch=$PIN_TRACKED_REFERENCE_PATCH" "test_source=$PIN_TEST_SOURCE" \
             "tracked_parent=$PIN_TRACKED_PARENT" "tracked_workflow_blob=$PIN_TRACKED_WORKFLOW" \
             "replay_epoch_patch=$PIN_REPLAY_EPOCH_PATCH" "physical_replay_epoch_scope=one_owned_resident" \
+            "clone_repair_parent=$PIN_CLONE_REPAIR_PARENT" "clone_repair_parent_tree=$PIN_CLONE_REPAIR_PARENT_TREE" \
+            "clone_repair_patch=$PIN_CLONE_REPAIR_PATCH" "clone_repair_preimage=$PIN_CLONE_REPAIR_SOURCE_PREIMAGE" \
+            "clone_repair_source=$PIN_CLONE_REPAIR_SOURCE" \
             "cargo_lock=$PIN_LOCK" "rustc_commit=$PIN_RUSTC_COMMIT" "rust_toolchain=$RUST_TOOLCHAIN" "target=$TARGET" \
             > "$evidence/SOURCE-PINS.txt"
 
