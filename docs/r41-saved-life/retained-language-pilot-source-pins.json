@@ -1,0 +1,34 @@
+{
+  "changed_source_leaves": {
+    "crates/alife_game_app/Cargo.toml": {
+      "parent_sha256": "e2bc4c9122b8bc1ffb1f9e647df34e99ea7d8905d82437329f8aac20e5089bc3",
+      "result_sha256": "afc7dce56e6c1f49881ab5e029df2f5ada93a6d5b0d3eba1f05dc54741744ac5"
+    },
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs": {
+      "parent_sha256": "330e52d1e2bccca8f703e884599c274c4b505d1c352d6af0222e22b84f999956",
+      "result_sha256": "d1c892e246be1b9d85479cfed0c0d608cb8816d267e2aaf9ece351373d8c69d5"
+    },
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs": {
+      "parent_sha256": "8c004b22c13891a6c044b8975ab235787a14e4406f9eb7239dc29ba41436bdc6",
+      "result_sha256": "2af91d86c48bf9e95ccb41b6176db080c94d0e58d7b4afb98cb2020d5816b159"
+    },
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/language_pilot.rs": {
+      "parent_sha256": null,
+      "result_sha256": "25e242aaf80cc522cc4b2c43567d1fe8538394e186154ab9c26cc10afd6a2221"
+    },
+    "crates/alife_world/Cargo.toml": {
+      "parent_sha256": "3946a9571697e86c53ad729a4f4b810e10bac6f02b62321bd84766db7406e51c",
+      "result_sha256": "48f623d724595500ae36cd1e50a92cc78ef6e0b44a3a449b2a3a55ad0befd37e"
+    },
+    "crates/alife_world/src/headless.rs": {
+      "parent_sha256": "9ef742b2105c858389fbe50f89175396058c72476b2b47b644570ca46b9e0bc7",
+      "result_sha256": "b473c568d8a7dc96daa1622207238f0dbb7fe44073cb003c1ecdc0c86873a9b1"
+    }
+  },
+  "forward_sha256": "325d3e15f857d202b10d930c49c408e220af61a0c0ad56ef634873369ed89a76",
+  "inverse_sha256": "99524001d76933f97693e8463758b88f93d983e8ff83e759264716eb9efb38c4",
+  "old_cli_untouched": true,
+  "research_catalog_unchanged_sha256": "cf13ba6cb42209092a03d9f9bda559fd5638f498e9597a3cab49a863a89b5e53",
+  "scope": "detached source-only; no compile/test/device/lease or change to v1/research catalog",
+  "upstream_anchor": "f466b83791cccb97568e6f718b92b052999cfb2b signed restore plus existing exact detached research catalog patch; check all named bytes before staging"
+}
