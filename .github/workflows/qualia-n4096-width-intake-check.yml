@@ -1,7 +1,7 @@
-name: Qualia detached N4096 physical intake source qualification
+name: Qualia detached N4096 ordinary proof and carrier source qualification
 on:
   push:
-    branches: ["bob/qualia-n4096-width-intake-source-20261127"]
+    branches: ["bob/qualia-n4096-ordinary-zero-proof-source-20261127"]
     paths: [".github/workflows/qualia-n4096-width-intake-check.yml"]
 
 permissions:
@@ -13,10 +13,13 @@ concurrency:
 
 jobs:
   source-only:
-    if: github.ref == 'refs/heads/bob/qualia-n4096-width-intake-source-20261127'
+    if: github.ref == 'refs/heads/bob/qualia-n4096-ordinary-zero-proof-source-20261127'
     runs-on: ubuntu-24.04
     timeout-minutes: 65
     env:
+      PIN_WIDTH_PARENT: 0319c7f76a4d6e60c62c93ec2558b197b94e139d
+      PIN_WIDTH_PARENT_TREE: e4abafe0669bc503add8d455204acd0d1f1edd9e
+      PIN_ORDINARY_META: c69bf0fee0d6c745d11937ca8aca06314d9db10f992211ebd7a15a41d03907ad
       PIN_V3_HOST: 8d90e0853cfbf991ac75e02c9ee55ee4cedc3c99
       PIN_V3_PARENT: befddaeaf1a96cf6fb9f3c70244b7970281222c8
       PIN_V3_FIRST: 5f0f31ad10a507a9e2c9d0352b39ef5fe3b87020
@@ -62,7 +65,15 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git show -s --format=%P HEAD)" = "$PIN_V3_HOST"
+          test "$(git show -s --format=%P HEAD)" = "$PIN_WIDTH_PARENT"
+          test "$(git rev-parse "$PIN_WIDTH_PARENT^{tree}")" = "$PIN_WIDTH_PARENT_TREE"
+          test "$(git show -s --format=%P "$PIN_WIDTH_PARENT")" = "$PIN_V3_HOST"
+          diff -u <(printf '%s\n' \
+            $'M\t.github/workflows/qualia-n4096-width-intake-check.yml' \
+            $'A\tdocs/r41-saved-life/N4096-ORDINARY-ZERO-PROOF-SOURCE.patch' \
+            $'A\tdocs/r41-saved-life/n4096-ordinary-zero-proof-pins.v1.json' \
+            $'A\tscripts/check_n4096_ordinary_proof_device_free.py' | LC_ALL=C sort) \
+            <(git diff --name-status --no-renames "$PIN_WIDTH_PARENT" HEAD | LC_ALL=C sort)
           test "$(git show -s --format=%P "$PIN_V3_HOST")" = "$PIN_V3_PARENT"
           test "$(git rev-parse "$PIN_V3_PARENT^{tree}")" = "$PIN_V3_PARENT_TREE"
           test "$(git show -s --format=%P "$PIN_V3_PARENT")" = "$PIN_V3_FIRST"
@@ -76,9 +87,12 @@ jobs:
             $'A\t.github/workflows/qualia-n4096-width-intake-check.yml' \
             $'A\tdocs/r41-saved-life/N4096-NATIVE-AUXILIARY-FIRST-SLICE.patch' \
             $'A\tdocs/r41-saved-life/N4096-NATIVE-CLASS4-SHAPE.patch' \
+            $'A\tdocs/r41-saved-life/N4096-ORDINARY-ZERO-PROOF-SOURCE.patch' \
             $'A\tdocs/r41-saved-life/N4096-SHARED-APP-ZERO-INTAKE.patch' \
+            $'A\tdocs/r41-saved-life/n4096-ordinary-zero-proof-pins.v1.json' \
             $'A\tdocs/r41-saved-life/n4096-width-hosted-pins.v1.json' \
-            $'A\tscripts/check_n4096_app_device_free.py' | LC_ALL=C sort) \
+            $'A\tscripts/check_n4096_app_device_free.py' \
+            $'A\tscripts/check_n4096_ordinary_proof_device_free.py' | LC_ALL=C sort) \
             <(git diff --name-status --no-renames "$PIN_V3_HOST" HEAD | LC_ALL=C sort)
           export EXACT_SRC="$RUNNER_TEMP/qualia-n4096-width-intake-source"
           export CARGO_TARGET_DIR="$RUNNER_TEMP/qualia-n4096-width-intake-target"
@@ -150,7 +164,7 @@ jobs:
           verify("before"); apply(); verify("after"); apply("--reverse"); verify("before"); apply(); verify("after")
           PY
 
-      - name: Compose exact independently-reviewed width source only
+      - name: Compose exact reviewed width and ordinary proof source only
         run: |
           set -euo pipefail
           cd "$EXACT_SRC"
@@ -184,8 +198,39 @@ jobs:
                   subprocess.run(['git','apply','--whitespace=error',*extra,p],check=True)
           assert seen==set(before) and {k:sh(k) for k in after}==after
           assert sh('Cargo.lock')==os.environ['PIN_LOCK']
-          pathlib.Path('n4096-final-source-pins.json').write_text(json.dumps(after,sort_keys=True))
-          print('exact signed shared source plus all ten approved composed width leaves')
+          ordinary_path=src/'n4096-ordinary-zero-proof-pins.v1.json'
+          assert sh(ordinary_path)==os.environ['PIN_ORDINARY_META']
+          op=json.loads(ordinary_path.read_bytes())
+          assert op['base_hosted_source_head']==os.environ['PIN_WIDTH_PARENT']
+          assert not op['compiled'] and not op['private_current_consumed'] and not op['game_or_device_run']
+          proof_patch=src/'N4096-ORDINARY-ZERO-PROOF-SOURCE.patch'
+          proof_harness=root/'scripts/check_n4096_ordinary_proof_device_free.py'
+          ps=op['files_for_source_review_only']
+          assert ps=={p.name:sh(p) for p in (proof_patch,proof_harness)}
+          exact=op['leaf_before_after_sha256']
+          names={l.decode().split('\t',2)[2] for l in
+            subprocess.check_output(['git','apply','--numstat','-z',proof_patch]).rstrip(b'\0').split(b'\0')}
+          approved_paths={
+              'crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs',
+              'crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs',
+              'crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/n4096_auxiliary_intake.rs',
+              'crates/alife_game_app/src/gpu_live_runtime.rs',
+              'crates/alife_gpu_backend/src/research_n4096_auxiliary.rs',
+          }
+          assert set(exact)==names==approved_paths and names.issubset(after)
+          assert all(exact[k]['before']==after[k] for k in names)
+          final={**after,**{k:ex['after'] for k,ex in exact.items()}}
+          def check_all(expected):
+              assert {k:sh(k) for k in expected}==expected
+              assert sh('Cargo.lock')==os.environ['PIN_LOCK']
+          def apply_proof(*flags):
+              for extra in (['--check'],[]):
+                  subprocess.run(['git','apply','--whitespace=error',*flags,*extra,proof_patch],check=True)
+          check_all(after); apply_proof(); check_all(final)
+          apply_proof('--reverse'); check_all(after)
+          apply_proof(); check_all(final)
+          pathlib.Path('n4096-final-source-pins.json').write_text(json.dumps(final,sort_keys=True))
+          print('full signed source reconstructed; all ten exact width leaves plus five-leaf proof overlay forward/reverse/forward')
           PY
 
       - name: Rust pin, genuine shared OFF CLI and targeted native allocator CPU tests
@@ -231,28 +276,34 @@ jobs:
           assert sha256(pathlib.Path('Cargo.lock').read_bytes()).hexdigest()==os.environ['PIN_LOCK']
           b,a=on.read_bytes(),off.read_bytes()
           assert b[:4]==a[:4]==b'\x7fELF' and max(len(a),len(b))<268435456
-          marker=b'n4096_auxiliary_zero_inspection_only'
-          assert marker in b and marker not in a and sha256(a).digest()!=sha256(b).digest()
-          dst.write_text(json.dumps({'schema':'qualia.compiled_n4096_width_intake_source_only.v1',
+          markers=(b'n4096_auxiliary_zero_inspection_only',b'n4096_ordinary_zero_proof_only')
+          assert all(marker in b and marker not in a for marker in markers)
+          assert sha256(a).digest()!=sha256(b).digest()
+          dst.write_text(json.dumps({'schema':'qualia.compiled_n4096_ordinary_proof_and_width_source_only.v1',
               'event_head':os.environ['GITHUB_SHA'],'source_leaves':pins,'binary_sha256':sha256(b).hexdigest(),
+              'qualified_predecessor_head':os.environ['PIN_WIDTH_PARENT'],'ordinary_proof_and_carrier_same_elf':True,
               'off_binary_sha256':sha256(a).hexdigest(),'native_device_or_game_run':False,
               'private_Input_in_artifact':False,'score_or_native_capacity_claim':False},sort_keys=True,indent=2)+'\n')
           PY
           python3 -IB "$GITHUB_WORKSPACE/scripts/check_n4096_app_device_free.py"             "$RUNNER_TEMP/n4096-shared-feature-off" "$EVIDENCE/evaluate_saved_life_retention"             | tee "$EVIDENCE/width-cli-cpu.log"
+          python3 -IB "$GITHUB_WORKSPACE/scripts/check_n4096_ordinary_proof_device_free.py" \
+            "$RUNNER_TEMP/n4096-shared-feature-off" "$EVIDENCE/evaluate_saved_life_retention" \
+            | tee "$EVIDENCE/ordinary-proof-cli-cpu.log"
           cd "$EVIDENCE"
-          sha256sum evaluate_saved_life_retention width-source-compiled.json build.log width-planner-carrier-cpu.log width-cli-cpu.log > SHA256SUMS
+          sha256sum evaluate_saved_life_retention width-source-compiled.json build.log width-planner-carrier-cpu.log width-cli-cpu.log ordinary-proof-cli-cpu.log > SHA256SUMS
           sha256sum -c SHA256SUMS
 
       - name: Retain source-only qualification artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: qualia-n4096-width-intake-${{ github.sha }}
+          name: qualia-n4096-ordinary-zero-proof-source-${{ github.sha }}
           path: |
             ${{ runner.temp }}/qualia-n4096-width-intake-evidence/evaluate_saved_life_retention
             ${{ runner.temp }}/qualia-n4096-width-intake-evidence/width-source-compiled.json
             ${{ runner.temp }}/qualia-n4096-width-intake-evidence/build.log
             ${{ runner.temp }}/qualia-n4096-width-intake-evidence/width-planner-carrier-cpu.log
             ${{ runner.temp }}/qualia-n4096-width-intake-evidence/width-cli-cpu.log
+            ${{ runner.temp }}/qualia-n4096-width-intake-evidence/ordinary-proof-cli-cpu.log
             ${{ runner.temp }}/qualia-n4096-width-intake-evidence/SHA256SUMS
           if-no-files-found: error
           retention-days: 5

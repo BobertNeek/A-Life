@@ -1,0 +1,34 @@
+{
+  "base_hosted_source_head": "0319c7f76a4d6e60c62c93ec2558b197b94e139d",
+  "compiled": false,
+  "exact_round_trip": true,
+  "files_for_source_review_only": {
+    "N4096-ORDINARY-ZERO-PROOF-SOURCE.patch": "b815dab4540e17a444321b6cc296e48c7797282f41b9d4e98e024be4f1a0ae10",
+    "check_n4096_ordinary_proof_device_free.py": "7472938a65b11fac2a2eeadd0a6db12441e113189486ae7bd1a9358ad633ad89"
+  },
+  "game_or_device_run": false,
+  "leaf_before_after_sha256": {
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs": {
+      "after": "8d7a67344aff5ed11d843cf8af7bd670769a05f602ee12445b0bcd38ede77af1",
+      "before": "f623f7774fbd377171b75d357c9d6f51c39e589475edd50e161779513a92020d"
+    },
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs": {
+      "after": "d2ae0e258e6151a1fea63f113e2cb646347b6baf936463dc83d03efd384d9005",
+      "before": "683f6bc1d31acea83a9017cde116dcef509b32b0448aae8d523613bdefe47303"
+    },
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/n4096_auxiliary_intake.rs": {
+      "after": "ca37441575ccbae4c8c7ea38012456ff88592d5d2d83f207e8cb12937cced1f4",
+      "before": "dfaa9663ee3c59856dda0ede7093e37f83e43858da6b82f893239b7b905673dd"
+    },
+    "crates/alife_game_app/src/gpu_live_runtime.rs": {
+      "after": "d61d5bab9d65b0c1499f6347594a2c95058d4f038fae61f6098e0557b5fa18dd",
+      "before": "11e9aa3aac6b707d5519aec5f7e1d3eaa1bbd4f307043069941e4a5812d6d41f"
+    },
+    "crates/alife_gpu_backend/src/research_n4096_auxiliary.rs": {
+      "after": "014e2860997e6396ea2ee359ea6ea7bc8326ad23537981d433fca1d3f54a2962",
+      "before": "9e4dfe71fb92b79e28e6c6c9813b5d7cfded832ca5378a90e0373e1e339562ad"
+    }
+  },
+  "private_current_consumed": false,
+  "schema": "qualia.n4096.ordinary-zero.design-stage-review.v1"
+}

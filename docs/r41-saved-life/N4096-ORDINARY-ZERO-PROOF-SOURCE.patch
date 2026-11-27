@@ -1,0 +1,499 @@
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs
+index 244cc3b..804c693 100644
+--- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs
+@@ -768,7 +768,9 @@ fn evaluate_saved_life_retention_inner(
+         });
+     }
+     receipt["hardware"] = serde_json::to_value(backend.hardware_receipt())?;
+-    let mut runtime = GpuLiveBrainRuntime::restore_foundation_observation(
++    #[cfg(feature = "retained-n4096-auxiliary")]
++    let mut ordinary_restore = None;
++    let mut runtime = GpuLiveBrainRuntime::restore_foundation_observation_inner(
+         backend,
+         world,
+         world_seed,
+@@ -777,6 +779,8 @@ fn evaluate_saved_life_retention_inner(
+         &loaded.save.assets,
+         &checkpoints,
+         cycle_sampling_config(world_seed, baseline.handoff.policy_version, 1.0)?,
++        #[cfg(feature = "retained-n4096-auxiliary")]
++        width.filter(|spec| spec.ordinary_proof()).map(|_| &mut ordinary_restore),
+     )?;
+     runtime.rebind_durable_checkpoint_boundary(&save_path, &assets, &loaded.save)?;
+     if request.cue_free_food_placement {
+@@ -802,11 +806,18 @@ fn evaluate_saved_life_retention_inner(
+     if let Some(spec) = width {
+         // New branch exits before every paid step, scene mutation, and finalizer.
+         let expected_v11 = expected_v11.as_ref().ok_or("missing exact saved V11")?;
+-        let result = spec.inspect_exact_zero(
+-            &mut runtime, &baseline, id, &source, &source_sha, expected_v11,
+-        )?;
+-        receipt["n4096_auxiliary_zero_inspection"] = result;
+-        receipt["status"] = serde_json::json!("n4096_auxiliary_zero_inspection_only");
++        if spec.ordinary_proof() {
++            let native = ordinary_restore.ok_or("no real ordinary portable GPU restore receipt")?;
++            receipt["n4096_ordinary_zero_proof"] = spec.witness_ordinary_zero(
++                &mut runtime, &baseline, id, &source, &source_sha, expected_v11, native,
++            )?;
++            receipt["status"] = serde_json::json!("n4096_ordinary_zero_proof_only");
++        } else {
++            receipt["n4096_auxiliary_zero_inspection"] = spec.inspect_exact_zero(
++                &mut runtime, &baseline, id, &source, &source_sha, expected_v11,
++            )?;
++            receipt["status"] = serde_json::json!("n4096_auxiliary_zero_inspection_only");
++        }
+         receipt["captured_decisions"] = serde_json::json!(0);
+         receipt["world_ticks"] = serde_json::json!(0);
+         receipt["control_calls"] = serde_json::json!(0);
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
+index ec5f730..c93322b 100644
+--- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
+@@ -396,9 +396,9 @@ fn resolve_language_composition_v3(root: &Path, bytes: &[u8]) -> Result<Resolved
+ }
+ 
+ #[cfg(feature = "retained-n4096-auxiliary")]
+-fn resolve_n4096_auxiliary(root: &Path, bytes: &[u8]) -> Result<ResolvedExperiment> {
++fn resolve_n4096_auxiliary(root: &Path, manifest: &Path, bytes: &[u8]) -> Result<ResolvedExperiment> {
+     use super::n4096_auxiliary_intake as n;
+-    let admission = n::resolve(root, bytes, now()?)?;
++    let admission = n::resolve(root, manifest, bytes, now()?)?;
+     let request = SavedLifeRetentionRequest {
+         schema: 3, evaluation_nonce: admission.evaluation_nonce,
+         cue_free_food_placement: false, direct_weights: None, navigation_task: None,
+@@ -407,13 +407,16 @@ fn resolve_n4096_auxiliary(root: &Path, bytes: &[u8]) -> Result<ResolvedExperime
+         finalization_deadline_unix_seconds: None, max_output_bytes: n::OUTPUT_BYTES,
+     };
+     request.validate(now()?)?;
+-    let semantic_settings_sha256 = digest(&serde_json::to_vec(&(n::SCOPE, &admission))?);
++    let semantic_settings_sha256 = digest(&serde_json::to_vec(&(admission.scope(), &admission))?);
++    let intervention = if admission.ordinary_proof() {
++        "detached_n2048_ordinary_zero_proof_only"
++    } else { "detached_n4096_zero_inspection_only" };
+     Ok(ResolvedExperiment { identity: ExperimentIdentity {
+         schema: n::SCHEMA, run_id: admission.run_id.clone(), manifest_sha256: digest(bytes),
+         semantic_settings_sha256, owner: admission.owner,
+         source_current_sha256: admission.source_current_sha256.clone(),
+         scenario: ScenarioV1::N4096AuxiliaryZero, card_case: None,
+-        intervention: "detached_n4096_zero_inspection_only",
++        intervention,
+         visible_self_grip_v1: None, research: None, n4096_auxiliary: Some(admission),
+         #[cfg(feature = "retained-language-pilot")]
+         language_pilot: None,
+@@ -487,7 +490,7 @@ pub fn evaluate_saved_life_retention_experiment(
+     }
+     #[cfg(feature = "retained-n4096-auxiliary")]
+     if version.schema == super::n4096_auxiliary_intake::SCHEMA {
+-        let p = resolve_n4096_auxiliary(admission_root, &bytes)?;
++        let p = resolve_n4096_auxiliary(admission_root, manifest_path, &bytes)?;
+         admitted_paths(admission_root, source, output, manifest_path)?;
+         super::n4096_auxiliary_intake::validate_private_source(admission_root, source)?;
+         return evaluate_saved_life_retention_inner(
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/n4096_auxiliary_intake.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/n4096_auxiliary_intake.rs
+index a327f65..19ae18f 100644
+--- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/n4096_auxiliary_intake.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/n4096_auxiliary_intake.rs
+@@ -1,4 +1,4 @@
+-//! Strict, detached 0/0 intake for one physical AUXILIARY class-4 carrier.
++//! Strict detached 0/0 scopes: ordinary N2048 receipt or a separate class-4 carrier.
+ //! No scenario, policy edit, World tick, wider resident, or scoring path.
+ 
+ use super::*;
+@@ -11,8 +11,10 @@ use std::io::Read;
+ 
+ pub(super) const SCHEMA: u16 = 12;
+ pub(super) const SCOPE: &str = "qualia.saved_life.n4096_auxiliary_zero.v1";
++pub(super) const ORDINARY_SCOPE: &str = "qualia.saved_life.n4096_ordinary_zero_proof.v1";
+ pub(super) const OUTPUT_BYTES: u64 = 256 * 1024 * 1024;
+ const LEAF: &str = "n4096-auxiliary-admission.v1.json";
++const PROOF_LEAF: &str = "n4096-ordinary-zero-admission.v1.json";
+ const MAX_CONTROL: u64 = 16 * 1024;
+ const MAX_ELF: u64 = 256 * 1024 * 1024;
+ const MAX_TOPOLOGY: usize = 16 * 1024 * 1024;
+@@ -39,8 +41,10 @@ pub(super) struct Admission {
+     source_world_json_sha256: String,
+     source_sleep_journal_sha256: String,
+     source_live_topology_sha256: String,
+-    expected_restored_world_signature: [u64; 4],
+-    expected_restored_native_snapshot: [u64; 4],
++    #[serde(default, skip_serializing_if = "Option::is_none")]
++    expected_restored_world_signature: Option<[u64; 4]>,
++    #[serde(default, skip_serializing_if = "Option::is_none")]
++    expected_restored_native_snapshot: Option<[u64; 4]>,
+ }
+ 
+ fn exact_sha(value: &str) -> bool {
+@@ -52,23 +56,33 @@ fn envelope(bytes: &[u8]) -> Result<Envelope> {
+         return Err("N4096 auxiliary manifest exceeds bounded input".into());
+     }
+     let envelope: Envelope = serde_json::from_slice(bytes)?;
+-    if envelope.schema != SCHEMA || envelope.scope != SCOPE || !exact_sha(&envelope.admission_sha256) {
++    if envelope.schema != SCHEMA || !matches!(envelope.scope.as_str(), SCOPE | ORDINARY_SCOPE) || !exact_sha(&envelope.admission_sha256) {
+         return Err("unexpected N4096 auxiliary zero envelope".into());
+     }
+     Ok(envelope)
+ }
+ 
+-fn parse_admission(bytes: &[u8], expected_sha: &str, now: u64) -> Result<Admission> {
++fn parse_admission(bytes: &[u8], expected_sha: &str, now: u64, expected_scope: &str) -> Result<Admission> {
+     if bytes.len() as u64 > MAX_CONTROL || digest(bytes) != expected_sha {
+         return Err("N4096 auxiliary exact admission digest mismatch".into());
+     }
+     let a: Admission = serde_json::from_slice(bytes)?;
+-    if a.schema != 1 || a.scope != SCOPE || a.owner == 0 || a.evaluation_nonce == 0
++    // Scope binds the wire shape as well as selecting a distinct leaf. The
++    // proof never accepts supplied result fields, including explicit null.
++    let proper_pins = match expected_scope {
++        SCOPE => [a.expected_restored_world_signature, a.expected_restored_native_snapshot]
++            .into_iter().all(|pin| pin.is_some_and(|d| d != [0; 4])),
++        ORDINARY_SCOPE => {
++            let wire: serde_json::Value = serde_json::from_slice(bytes)?;
++            wire.get("expected_restored_world_signature").is_none()
++                && wire.get("expected_restored_native_snapshot").is_none()
++        }
++        _ => false,
++    };
++    if a.schema != 1 || a.scope != expected_scope || !proper_pins || a.owner == 0 || a.evaluation_nonce == 0
+         || a.run_id.is_empty() || a.run_id.len() > 64
+         || !a.run_id.bytes().all(|c| c.is_ascii_alphanumeric() || matches!(c, b'_' | b'-'))
+         || a.deadline_unix_seconds <= now || a.deadline_unix_seconds > now.saturating_add(120)
+-        || a.expected_restored_world_signature == [0; 4]
+-        || a.expected_restored_native_snapshot == [0; 4]
+         || ![&a.source_current_sha256, &a.evaluator_sha256, &a.source_world_json_sha256,
+              &a.source_sleep_journal_sha256, &a.source_live_topology_sha256].into_iter().all(|v| exact_sha(v))
+     {
+@@ -119,14 +133,20 @@ fn hash_file(path: &Path, ceiling: u64) -> Result<String> {
+     Ok(format!("{:x}", hasher.finalize()))
+ }
+ 
+-pub(super) fn resolve(root: &Path, bytes: &[u8], now: u64) -> Result<Admission> {
++pub(super) fn resolve(root: &Path, manifest: &Path, bytes: &[u8], now: u64) -> Result<Admission> {
+     let e = envelope(bytes)?;
+     private_path(root, 0o700, true)?;
+-    let path = root.join(LEAF);
++    let path = root.join(if e.scope == ORDINARY_SCOPE {
++        private_path(manifest, 0o400, false)?;
++        PROOF_LEAF
++    } else { LEAF });
++    if manifest == path {
++        return Err("N4096 envelope and scope admission must be distinct files".into());
++    }
+     private_path(&path, 0o400, false)?;
+     let mut raw = Vec::new();
+     fs::File::open(&path)?.take(MAX_CONTROL + 1).read_to_end(&mut raw)?;
+-    let a = parse_admission(&raw, &e.admission_sha256, now)?;
++    let a = parse_admission(&raw, &e.admission_sha256, now, &e.scope)?;
+     if hash_file(&std::env::current_exe()?, MAX_ELF)? != a.evaluator_sha256 {
+         return Err("N4096 auxiliary evaluator executable mismatch".into());
+     }
+@@ -141,6 +161,12 @@ pub(super) fn validate_private_source(root: &Path, source: &Path) -> Result<()>
+ }
+ 
+ impl Admission {
++    pub(super) fn ordinary_proof(&self) -> bool { self.scope == ORDINARY_SCOPE }
++
++    pub(super) fn scope(&self) -> &'static str {
++        if self.ordinary_proof() { ORDINARY_SCOPE } else { SCOPE }
++    }
++
+     pub(super) fn require_zero_request(&self, r: &SavedLifeRetentionRequest) -> Result<()> {
+         if r.schema != 3 || r.max_decisions != 0 || r.max_world_ticks != 0
+             || r.cue_free_food_placement || r.navigation_task.is_some() || r.direct_weights.is_some()
+@@ -202,6 +228,60 @@ impl Admission {
+         Ok(topology.v11_checkpoint)
+     }
+ 
++    pub(super) fn witness_ordinary_zero(
++        &self,
++        runtime: &mut GpuLiveBrainRuntime,
++        current: &CurrentTrainingCheckpointV1,
++        owner: OrganismId,
++        source: &Path,
++        source_sha: &str,
++        expected_v11: &GpuV11Checkpoint,
++        restored: alife_gpu_backend::GpuBrainRestoreReceipt,
++    ) -> Result<serde_json::Value> {
++        let world = runtime.world();
++        let before = world.canonical_signature_digest()?;
++        let tick = world.tick();
++        let sampling = runtime.foundation_training_sampling_state();
++        if !self.ordinary_proof() || world.seed() != current.seed || owner.raw() != self.owner
++            || before.words == [0; 4] || source_sha != self.source_current_sha256.as_str()
++            || sampling.is_none() || sampling != current.saved_training_sampling()?
++            || now()? >= self.deadline_unix_seconds
++        {
++            return Err("N4096 ordinary proof restored World/Current/sampling mismatch".into());
++        }
++        let verified = runtime.witness_detached_n4096_ordinary_resident(owner, restored, expected_v11)?;
++        if runtime.world().tick() != tick || runtime.world().canonical_signature_digest()? != before
++            || runtime.foundation_training_sampling_state() != sampling
++            || runtime.live_foundation_compiler_inputs(owner)? != &current.handoff.compiler_inputs
++            || now()? >= self.deadline_unix_seconds
++            || hash_file(source, alife_training::MAX_CURRENT_CHECKPOINT_BYTES)? != source_sha
++        {
++            return Err("N4096 ordinary proof changed or outlived exact restored cut".into());
++        }
++        Ok(serde_json::json!({
++            "kind": "independent_ordinary_n2048_0_0_source_cut",
++            "scope": ORDINARY_SCOPE,
++            "owner": owner.raw(), "world_tick_before_after": tick.raw(),
++            "restored_world_signature": before.words,
++            "restored_native_snapshot": verified.native_snapshot_digest,
++            "native_restore_asset_digest": restored.checkpoint_digest,
++            "ordinary_dispatch_counters_before_after": verified.dispatch_counters,
++            "resident_transaction_generation": restored.learning_transaction_generation,
++            "ordinary_sampler_sha256": digest(&serde_json::to_vec(
++                sampling.as_ref().ok_or("missing restored sampler")?,
++            )?),
++            "separately_restored_exact_v11": true,
++            "source_current_sha256": source_sha,
++            "source_world_json_sha256": self.source_world_json_sha256,
++            "source_sleep_journal_sha256": self.source_sleep_journal_sha256,
++            "source_live_topology_sha256": self.source_live_topology_sha256,
++            "evaluator_sha256": self.evaluator_sha256,
++            "paid_world_ticks": 0, "paid_decisions": 0,
++            "authorized_width_allocation": false, "physical_class4_allocation_bytes": 0,
++            "checkpoint_published": false, "scored": false,
++        }))
++    }
++
+     pub(super) fn inspect_exact_zero(
+         &self,
+         runtime: &mut GpuLiveBrainRuntime,
+@@ -215,7 +295,7 @@ impl Admission {
+         let before = world.canonical_signature_digest()?;
+         let tick = world.tick();
+         let sampling = runtime.foundation_training_sampling_state();
+-        if before.words != self.expected_restored_world_signature || world.seed() != current.seed
++        if self.ordinary_proof() || Some(before.words) != self.expected_restored_world_signature || world.seed() != current.seed
+             || source_sha != self.source_current_sha256.as_str()
+             || sampling.is_none() || sampling != current.saved_training_sampling()?
+             || now()? >= self.deadline_unix_seconds
+@@ -223,7 +303,7 @@ impl Admission {
+             return Err("N4096 auxiliary actual restored World/Current/sampling differs before device copy".into());
+         }
+         let device = runtime.verify_detached_n4096_restored_resident(
+-            owner, self.expected_restored_native_snapshot, expected_v11,
++            owner, self.expected_restored_native_snapshot.ok_or("missing independent ordinary snapshot pin")?, expected_v11,
+         )?;
+         if runtime.world().tick() != tick || runtime.world().canonical_signature_digest()? != before
+             || runtime.foundation_training_sampling_state() != sampling
+@@ -281,14 +361,38 @@ mod tests {
+     fn n4096_aux_admission_requires_exact_private_hash_and_live_world_neural_pins() {
+         let a = exact_admission();
+         let b = serde_json::to_vec(&a).unwrap();
+-        assert!(parse_admission(&b, &digest(&b), 100).is_ok());
+-        assert!(parse_admission(&b, &"f".repeat(64), 100).is_err());
+-        assert!(parse_admission(&b, &digest(&b), 110).is_err());
++        assert!(parse_admission(&b, &digest(&b), 100, SCOPE).is_ok());
++        assert!(parse_admission(&b, &"f".repeat(64), 100, SCOPE).is_err());
++        assert!(parse_admission(&b, &digest(&b), 110, SCOPE).is_err());
+         for key in ["expected_restored_world_signature", "expected_restored_native_snapshot"] {
+             let mut rejected = a.clone();
+             rejected[key] = serde_json::json!([0,0,0,0]);
+             let bytes = serde_json::to_vec(&rejected).unwrap();
+-            assert!(parse_admission(&bytes, &digest(&bytes), 100).is_err());
++            assert!(parse_admission(&bytes, &digest(&bytes), 100, SCOPE).is_err());
++        }
++    }
++
++    #[test]
++    fn n4096_ordinary_receipt_and_carrier_grammar_cannot_cross() {
++        let mut proof = exact_admission();
++        proof["scope"] = serde_json::json!(ORDINARY_SCOPE);
++        let obj = proof.as_object_mut().unwrap();
++        obj.remove("expected_restored_world_signature");
++        obj.remove("expected_restored_native_snapshot");
++        let parse = |v: &serde_json::Value, scope| {
++            let bytes = serde_json::to_vec(v).unwrap();
++            parse_admission(&bytes, &digest(&bytes), 100, scope)
++        };
++        assert!(parse(&proof, ORDINARY_SCOPE).unwrap().ordinary_proof());
++        assert!(parse(&proof, SCOPE).is_err());
++        assert!(parse(&exact_admission(), ORDINARY_SCOPE).is_err());
++        for key in ["expected_restored_world_signature", "expected_restored_native_snapshot", "width", "fixture_id"] {
++            let mut rejected = proof.clone();
++            rejected[key] = serde_json::Value::Null;
++            assert!(parse(&rejected, ORDINARY_SCOPE).is_err());
+         }
++        let mut e = exact_envelope();
++        e["scope"] = serde_json::json!(ORDINARY_SCOPE);
++        assert!(envelope(&serde_json::to_vec(&e).unwrap()).is_ok());
+     }
+ }
+diff --git a/crates/alife_game_app/src/gpu_live_runtime.rs b/crates/alife_game_app/src/gpu_live_runtime.rs
+index 2497f6e..b1f3d23 100644
+--- a/crates/alife_game_app/src/gpu_live_runtime.rs
++++ b/crates/alife_game_app/src/gpu_live_runtime.rs
+@@ -6196,6 +6196,8 @@ impl GpuLiveBrainRuntime {
+             manifest,
+             checkpoints,
+             GpuLiveRuntimeConstructionOptions::production(),
++            #[cfg(feature = "retained-n4096-auxiliary")]
++            None,
+         )
+     }
+ 
+@@ -6233,6 +6235,8 @@ impl GpuLiveBrainRuntime {
+             manifest,
+             checkpoints,
+             options,
++            #[cfg(feature = "retained-n4096-auxiliary")]
++            None,
+         )
+     }
+ 
+@@ -6248,6 +6252,27 @@ impl GpuLiveBrainRuntime {
+         manifest: &AssetManifest,
+         checkpoints: &[GpuBrainSaveState],
+         sampling: alife_gpu_backend::GpuTrainingSamplingConfig,
++    ) -> Result<Self, GameAppShellError> {
++        Self::restore_foundation_observation_inner(
++            backend, world, deterministic_seed, brain_class, store, manifest, checkpoints, sampling,
++            #[cfg(feature = "retained-n4096-auxiliary")]
++            None,
++        )
++    }
++
++    #[cfg(feature = "foundation-training")]
++    #[allow(clippy::too_many_arguments)]
++    pub(crate) fn restore_foundation_observation_inner(
++        backend: GpuClosedLoopBackend,
++        world: HeadlessWorld,
++        deterministic_seed: u64,
++        brain_class: BrainScaleTier,
++        store: &GpuCheckpointAssetStore,
++        manifest: &AssetManifest,
++        checkpoints: &[GpuBrainSaveState],
++        sampling: alife_gpu_backend::GpuTrainingSamplingConfig,
++        #[cfg(feature = "retained-n4096-auxiliary")]
++        ordinary_restore: Option<&mut Option<alife_gpu_backend::GpuBrainRestoreReceipt>>,
+     ) -> Result<Self, GameAppShellError> {
+         sampling.validate()?;
+         if sampling.demonstrator.is_some()
+@@ -6270,6 +6295,8 @@ impl GpuLiveBrainRuntime {
+             manifest,
+             checkpoints,
+             options,
++            #[cfg(feature = "retained-n4096-auxiliary")]
++            ordinary_restore,
+         )
+     }
+ 
+@@ -6283,7 +6310,13 @@ impl GpuLiveBrainRuntime {
+         manifest: &AssetManifest,
+         checkpoints: &[GpuBrainSaveState],
+         options: GpuLiveRuntimeConstructionOptions,
++        #[cfg(feature = "retained-n4096-auxiliary")]
++        mut ordinary_restore: Option<&mut Option<alife_gpu_backend::GpuBrainRestoreReceipt>>,
+     ) -> Result<Self, GameAppShellError> {
++        #[cfg(feature = "retained-n4096-auxiliary")]
++        if ordinary_restore.is_some() && checkpoints.len() != 1 {
++            return Err(ScaffoldContractError::BrainOwnershipMismatch.into());
++        }
+         if deterministic_seed == 0 || brain_class.neuron_count().is_none() {
+             return Err(ScaffoldContractError::PhenotypeCompile.into());
+         }
+@@ -6562,6 +6595,12 @@ impl GpuLiveBrainRuntime {
+                         return Err(error);
+                     }
+                 };
++                #[cfg(feature = "retained-n4096-auxiliary")]
++                if let Some(out) = ordinary_restore.as_deref_mut() {
++                    // This is the production portable asset loader receipt, not
++                    // a caller digest or an independently reconstructed bank.
++                    *out = Some(restored.receipt);
++                }
+                 runtime.handles.insert(raw, handle);
+                 runtime.residents.insert(raw, resident);
+                 runtime.memories.insert(raw, memory);
+@@ -8186,6 +8225,24 @@ impl GpuLiveBrainRuntime {
+             .map_err(Into::into)
+     }
+ 
++    #[cfg(feature = "retained-n4096-auxiliary")]
++    pub(crate) fn witness_detached_n4096_ordinary_resident(
++        &mut self,
++        owner: OrganismId,
++        restored: alife_gpu_backend::GpuBrainRestoreReceipt,
++        expected_v11: &alife_gpu_backend::GpuV11Checkpoint,
++    ) -> Result<alife_gpu_backend::research_n4096_auxiliary::N4096OrdinaryCutV1, GameAppShellError> {
++        let tick = self.world.tick();
++        if self.handles.len() != 1 || self.residents.len() != 1
++            || self.handles.get(&owner.raw()) != Some(&restored.handle)
++            || !self.world.organism_registry().get(owner).is_some_and(|r| r.lifecycle().is_alive())
++        {
++            return Err(ScaffoldContractError::BrainOwnershipMismatch.into());
++        }
++        self.backend.witness_detached_n4096_ordinary_cut(tick, restored, expected_v11)
++            .map_err(Into::into)
++    }
++
+     pub(crate) const fn world(&self) -> &HeadlessWorld {
+         &self.world
+     }
+diff --git a/crates/alife_gpu_backend/src/research_n4096_auxiliary.rs b/crates/alife_gpu_backend/src/research_n4096_auxiliary.rs
+index 23431bb..2debddc 100644
+--- a/crates/alife_gpu_backend/src/research_n4096_auxiliary.rs
++++ b/crates/alife_gpu_backend/src/research_n4096_auxiliary.rs
+@@ -13,7 +13,7 @@ use crate::closed_loop_buffers::{
+ use crate::closed_loop_runtime::map_gpu_contract_error;
+ use crate::closed_loop_sleep::read_gpu_word_ranges;
+ use crate::research_n4096_shape::{address_bands, N4096LobeAddressBandsV1};
+-use crate::{GpuBrainHandle, GpuClosedLoopBackend, GpuV11Checkpoint};
++use crate::{GpuBrainHandle, GpuBrainRestoreReceipt, GpuClosedLoopBackend, GpuV11Checkpoint};
+ 
+ const OLD: usize = alife_core::N2048FoundationLayoutV1::NEURON_COUNT as usize;
+ const WIDE: usize = alife_core::N4096ResearchLayoutV1::NEURON_COUNT as usize;
+@@ -188,6 +188,12 @@ pub struct N4096DetachedDeviceWitnessV1 {
+     pub checkpoint_or_score_published: bool,
+ }
+ 
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub struct N4096OrdinaryCutV1 {
++    pub native_snapshot_digest: [u64; 4],
++    pub dispatch_counters: [u64; 5],
++}
++
+ impl GpuClosedLoopBackend {
+     fn detached_width_source_cut(&self, source: GpuBrainHandle) -> Result<AuthorityCut, ScaffoldContractError> {
+         self.validate_handle_backend(source)?;
+@@ -213,6 +219,37 @@ impl GpuClosedLoopBackend {
+         })
+     }
+ 
++    /// Ordinary class-3 restore witness. A standard exact bank readback is
++    /// mapped twice; no class-4 planning, allocation, initialization, or motor
++    /// step is reachable from this method.
++    pub fn witness_detached_n4096_ordinary_cut(
++        &mut self,
++        tick: Tick,
++        restored: GpuBrainRestoreReceipt,
++        expected_v11: &GpuV11Checkpoint,
++    ) -> Result<N4096OrdinaryCutV1, ScaffoldContractError> {
++        if !self.is_software_runtime_test() || restored.checkpoint_digest == [0; 4]
++            || restored.pending_eligibility.is_some()
++        {
++            return Err(ScaffoldContractError::MissingPhaseData);
++        }
++        self.ensure_ready()?;
++        let source = restored.handle;
++        let cut = self.detached_width_source_cut(source)?;
++        if cut.graph_epoch != restored.learning_transaction_generation || &cut.v11 != expected_v11 {
++            return Err(mismatch());
++        }
++        let first = self.snapshot_brain(source, tick)?.canonical_digest();
++        if first != restored.checkpoint_digest || self.detached_width_source_cut(source)? != cut {
++            return Err(mismatch());
++        }
++        let second = self.snapshot_brain(source, tick)?.canonical_digest();
++        if second != first || self.detached_width_source_cut(source)? != cut {
++            return Err(mismatch());
++        }
++        Ok(N4096OrdinaryCutV1 { native_snapshot_digest: first, dispatch_counters: cut.counters })
++    }
++
+     /// Synchronous, one-slot trace only. The app must independently authenticate
+     /// ordinary Current/zero tick/world and same life before issuing this call.
+     /// No free CPU words or externally hydrated snapshot can initialize the arena.
