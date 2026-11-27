@@ -1,0 +1,684 @@
+diff --git a/crates/alife_game_app/Cargo.toml b/crates/alife_game_app/Cargo.toml
+--- a/crates/alife_game_app/Cargo.toml
++++ b/crates/alife_game_app/Cargo.toml
+@@ -123,6 +123,7 @@
+     "alife_gpu_backend/gpu-tests",
+     "alife_runtime/gpu-tests",
+ ]
++retained-language-pilot = ["foundation-training", "gpu-tests", "alife_world/retained-language-pilot"]
+ vfx-hanabi = ["bevy-app", "dep:bevy_hanabi", "bevy_hanabi/3d"]
+ production-voxel-frontend = [
+     "bevy-app",
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs
+--- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs
+@@ -21,6 +21,9 @@
+ #[cfg(feature = "gpu-tests")]
+ #[path = "saved_life_retention/research_catalog.rs"]
+ mod research_catalog;
++#[cfg(feature = "retained-language-pilot")]
++#[path = "saved_life_retention/language_pilot.rs"]
++mod language_pilot;
+ #[cfg(feature = "gpu-tests")]
+ pub use experiments::evaluate_saved_life_retention_experiment;
+ 
+@@ -397,6 +400,8 @@
+     request.validate(now()?)?;
+     #[cfg(feature = "gpu-tests")]
+     let research = experiment.as_ref().and_then(experiments::ExperimentIdentity::research);
++    #[cfg(feature = "retained-language-pilot")]
++    let language = experiment.as_ref().and_then(experiments::ExperimentIdentity::language_pilot);
+     if let Some(scope) = scent_scope {
+         scope.validate(&request)?;
+     }
+@@ -634,10 +639,19 @@
+         }
+         Some(0)
+     } else { controlled_pressure };
++    #[cfg(feature = "retained-language-pilot")]
++    let controlled_pressure = if language.is_some() {
++        if controlled_pressure.is_some_and(|value| value != 0) {
++            return Err("language pilot requires the common 0ns condition".into());
++        }
++        Some(0)
++    } else { controlled_pressure };
+     let isolated_archive =
+         std::env::var("ALIFE_EXPLICIT_RETENTION_ARCHIVE_TEST").is_ok_and(|v| v == "1");
+     #[cfg(feature = "gpu-tests")]
+     if research.is_some() && isolated_archive { return Err("research catalog does not admit isolated archives".into()); }
++    #[cfg(feature = "retained-language-pilot")]
++    if language.is_some() && isolated_archive { return Err("language pilot does not admit isolated archives".into()); }
+     if (controlled_pressure.is_some() || isolated_archive)
+         && (!software_simulation || !cfg!(feature = "gpu-tests"))
+     {
+@@ -807,6 +821,22 @@
+     } else { None };
+     #[cfg(feature = "gpu-tests")]
+     let mut research_observations = Vec::new();
++    #[cfg(feature = "retained-language-pilot")]
++    let language_setup = if let Some(spec) = language {
++        let sampler = runtime.foundation_training_sampling_state();
++        let t = runtime.world().tick();
++        let opened = spec.configure(runtime.world_mut(), id)?;
++        if sampler != runtime.foundation_training_sampling_state() || t != runtime.world().tick()
++            || !TeacherCues::observe(runtime.world()).clear()
++        {
++            return Err("language pilot setup changed sampler/tick or introduced a Teacher cue".into());
++        }
++        receipt["language_pilot_setup"] = opened.setup.clone();
++        receipt["teacher_emission_scope"] = serde_json::json!(
++            "Exactly one addressed native Player utterance; no Teacher emitter, hints or reward"
++        );
++        Some(opened)
++    } else { None };
+     let mut task = request
+         .navigation_task
+         .map(|spec| retained_navigation_tasks::configure(runtime.world_mut(), id, spec))
+@@ -870,6 +900,9 @@
+             break "teacher_cue_observed";
+         }
+         let before_tick = runtime.world().tick();
++        #[cfg(feature = "retained-language-pilot")]
++        let language_before = language_setup.as_ref()
++            .map(|p| p.custody(runtime.world())).transpose()?;
+         let before_pose = runtime
+             .world()
+             .organism_registry()
+@@ -1103,6 +1136,19 @@
+                     row["observed_world_utterances_after"] =
+                         serde_json::to_value(runtime.world().audible_utterances())?;
+                 }
++                #[cfg(feature = "retained-language-pilot")]
++                if let Some(opened) = &language_setup {
++                    if step.frame.frame_digest() != step.patch.pre_action().perception().frame_digest()
++                        || step.patch.outcome().outcome_tick != after_tick
++                    {
++                        return Err("language pilot sealed frame or actual outcome tick mismatch".into());
++                    }
++                    row["language_pilot_native_observation"] = opened.observe(
++                        &step.frame, &step.behavior, runtime.world(),
++                        language_before.ok_or("language pilot lost the predecision native custody")?,
++                        before_pose.ok_or("language pilot lost the native listener pose")?, after_tick,
++                    )?;
++                }
+                 if controlled_pressure.is_some() {
+                     row["observer_host_pressure_control"] =
+                         runtime.controlled_pressure_evidence_for_test();
+@@ -1268,6 +1314,21 @@
+         receipt["retention_demonstrated"] = serde_json::json!(false);
+         receipt["published_case_software_integrity"] = receipt["software_simulation_integrity_valid"].clone();
+         receipt["software_simulation_integrity_valid"] = serde_json::json!(false);
++    }
++    #[cfg(feature = "retained-language-pilot")]
++    if language_setup.is_some() {
++        let complete = stop == "decision_limit" && alive && rows == language_pilot::DECISIONS
++            && runtime.world().tick().raw().saturating_sub(source_world_tick) == language_pilot::TICKS;
++        receipt["language_pilot_integrity"] = serde_json::json!(
++            complete && software_simulation && error.is_none() && base_unchanged
++            && prior_clear && unchanged && cue_free && endpoint_preserved
++        );
++        receipt["coverage_complete"] = serde_json::json!(complete);
++        receipt["cue_free"] = serde_json::json!(false);
++        receipt["measurement_valid"] = serde_json::json!(false);
++        receipt["software_simulation_integrity_valid"] = serde_json::json!(false);
++        receipt["qualified"] = serde_json::json!(false);
++        receipt["retention_demonstrated"] = serde_json::json!(false);
+     }
+     alife_storage::write(
+         output.join("retention.json"),
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
+--- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
+@@ -17,6 +17,8 @@
+     LCorner,
+     PublishedCardCase,
+     ResearchCatalog,
++    #[cfg(feature = "retained-language-pilot")]
++    LanguagePilotV2,
+ }
+ 
+ #[derive(Debug, Clone, Serialize, Deserialize)]
+@@ -75,6 +77,9 @@
+     visible_self_grip_v1: Option<[u32; 16]>,
+     #[serde(skip_serializing_if = "Option::is_none")]
+     research: Option<super::research_catalog::Identity>,
++    #[cfg(feature = "retained-language-pilot")]
++    #[serde(skip_serializing_if = "Option::is_none")]
++    language_pilot: Option<super::language_pilot::Identity>,
+ }
+ 
+ impl ExperimentIdentity {
+@@ -88,6 +93,11 @@
+ 
+     pub(super) fn research(&self) -> Option<&super::research_catalog::Identity> {
+         self.research.as_ref()
++    }
++
++    #[cfg(feature = "retained-language-pilot")]
++    pub(super) fn language_pilot(&self) -> Option<&super::language_pilot::Identity> {
++        self.language_pilot.as_ref()
+     }
+ 
+     pub(super) fn validate_source(&self, actual_digest: &str) -> Result<()> {
+@@ -208,6 +218,8 @@
+         ScenarioV1::RetainedOpening | ScenarioV1::CueFreeFoodPlacement => None,
+         ScenarioV1::PublishedCardCase => card.and_then(|c| c.navigation),
+         ScenarioV1::ResearchCatalog => return Err("research requires a separate admitted manifest profile".into()),
++        #[cfg(feature = "retained-language-pilot")]
++        ScenarioV1::LanguagePilotV2 => return Err("language pilot requires a separate admitted manifest profile".into()),
+     };
+     let request = SavedLifeRetentionRequest {
+         schema: 3,
+@@ -235,6 +247,8 @@
+             intervention,
+             visible_self_grip_v1,
+             research: None,
++            #[cfg(feature = "retained-language-pilot")]
++            language_pilot: None,
+         },
+         request,
+         scent,
+@@ -270,6 +284,39 @@
+         owner: config.owner, source_current_sha256: config.source_current_sha256,
+         scenario: ScenarioV1::ResearchCatalog, card_case: None, intervention: "research_input",
+         visible_self_grip_v1: None, research: Some(research),
++        #[cfg(feature = "retained-language-pilot")]
++        language_pilot: None,
++    }, request, scent: None })
++}
++
++#[cfg(feature = "retained-language-pilot")]
++fn resolve_language_pilot(root: &Path, bytes: &[u8]) -> Result<ResolvedExperiment> {
++    use super::language_pilot as p;
++    let (config, cell) = p::resolve(root, bytes)?;
++    let request = SavedLifeRetentionRequest {
++        schema: 3,
++        evaluation_nonce: p::NONCE,
++        cue_free_food_placement: false,
++        direct_weights: None,
++        navigation_task: None,
++        max_decisions: p::DECISIONS,
++        max_world_ticks: p::TICKS,
++        deadline_unix_seconds: config.deadline_unix_seconds,
++        finalization_deadline_unix_seconds: config.finalization_deadline_unix_seconds,
++        max_output_bytes: p::OUTPUT_BYTES,
++    };
++    request.validate(now()?)?;
++    let semantic_settings_sha256 = digest(&serde_json::to_vec(&(
++        "retained-language-pilot-settings-v1", &cell, &config.source_current_sha256,
++        p::OWNER, p::NONCE, p::DECISIONS, p::TICKS, p::OUTPUT_BYTES,
++    ))?);
++    Ok(ResolvedExperiment { identity: ExperimentIdentity {
++        schema: p::SCHEMA, run_id: config.run_id, manifest_sha256: digest(bytes),
++        semantic_settings_sha256, owner: p::OWNER,
++        source_current_sha256: config.source_current_sha256,
++        scenario: ScenarioV1::LanguagePilotV2, card_case: None,
++        intervention: "language_pilot_external_player_only",
++        visible_self_grip_v1: None, research: None, language_pilot: Some(cell),
+     }, request, scent: None })
+ }
+ 
+@@ -332,6 +379,14 @@
+     #[derive(Deserialize)]
+     struct Version { schema: u16 }
+     let version: Version = serde_json::from_slice(&bytes)?;
++    #[cfg(feature = "retained-language-pilot")]
++    if version.schema == super::language_pilot::SCHEMA {
++        let p = resolve_language_pilot(admission_root, &bytes)?;
++        admitted_paths(admission_root, source, output, manifest_path)?;
++        return evaluate_saved_life_retention_inner(
++            source, output, p.request, p.scent, Some(p.identity),
++        );
++    }
+     let resolved = if version.schema == 2 {
+         // Static grammar, digest/admission and fixture geometry all precede
+         // even canonical/stat of the caller-supplied Current pathname.
+@@ -380,6 +435,18 @@
+             "schema": 2, "source_current_sha256": "a".repeat(64),
+             "generator_id": "candidate-01", "edits": [[7, bits]]
+         }})
++    }
++
++    #[cfg(feature = "retained-language-pilot")]
++    #[test]
++    fn language_pilot_legacy_tag_is_refused_and_disabled_identity_is_absent() {
++        let mut m = base(serde_json::json!({"kind":"control"}));
++        let control = resolved(&m).unwrap();
++        let identity = serde_json::to_value(&control.identity).unwrap();
++        assert!(control.identity.language_pilot().is_none());
++        assert!(!identity.as_object().unwrap().contains_key("language_pilot"));
++        m["scenario"] = serde_json::json!("language_pilot_v2");
++        assert!(resolved(&m).is_err(), "schema 1 must never opt into placement or speech");
+     }
+ 
+     #[test]
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/language_pilot.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/language_pilot.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/language_pilot.rs
+@@ -0,0 +1,380 @@
++//! Retained language pilot: versioned, manifest-only world setup and observation.
++//! No selector, teaching path, training, model mutation, or scoring authority.
++use super::{digest, Result};
++use alife_core::{
++    CandidateActionFamily, CandidateObservationRef, HeardToken, LanguageTokenId, OrganismId,
++    PerceptionFrame, Tick, UtteranceSourceKind, Vec3f, WorldEntityId,
++};
++use alife_world::{AudibleUtterance, HeadlessActionIds, HeadlessWorld, WorldObjectKind};
++use serde::{Deserialize, Serialize};
++use serde_json::{json, Value};
++use std::{fs, io::Read, path::Path};
++
++pub(super) const SCHEMA: u16 = 5;
++pub(super) const DECISIONS: usize = 16;
++pub(super) const TICKS: u64 = 16;
++pub(super) const OUTPUT_BYTES: u64 = 256 * 1024 * 1024;
++pub(super) const NONCE: u64 = 1794935016;
++pub(super) const OWNER: u64 = 3;
++const SEED: u64 = 202612240055;
++const OPENING: u64 = 3074;
++const ID: &str = "v2-language-get-food-crossed-ball-v1";
++const SOURCE: &str = "55672f322eadc64e223289d9df9883f62d0cc01aa97c0478119ad6c51d2852ee";
++const PLAN: &str = "16a270c350f9e2f2a434eea8b40195f99071c5f8628966de5b3d01f307d978ad";
++const FOOD: WorldEntityId = WorldEntityId(2);
++const BALL: WorldEntityId = WorldEntityId(3);
++const PROPS: [WorldEntityId; 2] = [FOOD, BALL];
++
++#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
++#[serde(rename_all = "snake_case")]
++enum Layout {
++    A,
++    B,
++}
++
++#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
++#[serde(deny_unknown_fields)]
++struct Cell {
++    layout: Layout,
++    tokens: [LanguageTokenId; 2],
++}
++
++#[derive(Deserialize)]
++#[serde(deny_unknown_fields)]
++pub(super) struct Manifest {
++    schema: u16,
++    fixture_id: String,
++    pub(super) run_id: String,
++    pub(super) source_current_sha256: String,
++    admission_sha256: String,
++    cell: Cell,
++    pub(super) deadline_unix_seconds: u64,
++    pub(super) finalization_deadline_unix_seconds: Option<u64>,
++}
++
++#[derive(Deserialize)]
++#[serde(deny_unknown_fields)]
++struct Admission {
++    schema: String,
++    fixture_id: String,
++    source_current_sha256: String,
++    fixture_plan_sha256: String,
++    evaluator_sha256: String,
++    rubric_sha256: String,
++    cell: Cell,
++}
++
++#[derive(Serialize)]
++pub(super) struct Identity {
++    fixture_id: &'static str,
++    fixture_plan_sha256: &'static str,
++    admission_sha256: String,
++    evaluator_sha256: String,
++    rubric_sha256: String,
++    layout: Layout,
++    player_tokens: [u16; 2],
++    #[serde(skip)]
++    cell: Cell,
++}
++
++fn hex(pin: &str) -> bool {
++    pin.len() == 64 && pin.bytes().all(|x| matches!(x, b'0'..=b'9' | b'a'..=b'f'))
++}
++
++fn read_local(root: &Path, name: &str, cap: usize) -> Result<Vec<u8>> {
++    let path = root.join(name);
++    if path.canonicalize()? != path || !fs::symlink_metadata(&path)?.is_file() {
++        return Err("language pilot requires canonical local admission leaves".into());
++    }
++    let mut buf = Vec::new();
++    fs::File::open(path)?.take(cap as u64 + 1).read_to_end(&mut buf)?;
++    if buf.is_empty() || buf.len() > cap {
++        return Err("language pilot admission leaf exceeds its bound".into());
++    }
++    Ok(buf)
++}
++
++fn parse_manifest(bytes: &[u8]) -> Result<Manifest> {
++    if bytes.len() > 8192 {
++        return Err("language pilot manifest exceeds 8192 bytes".into());
++    }
++    let m: Manifest = serde_json::from_slice(bytes)?;
++    if m.schema != SCHEMA || m.fixture_id != ID || m.source_current_sha256 != SOURCE
++        || !hex(&m.admission_sha256)
++        || m.run_id.is_empty() || m.run_id.len() > 64
++        || !m.run_id.bytes().all(|c| c.is_ascii_alphanumeric() || matches!(c, b'_' | b'-'))
++        || !matches!(m.cell.tokens.map(LanguageTokenId::raw), [9, 1] | [9, 14] | [14, 1] | [6, 1])
++    {
++        return Err("unadmitted language pilot identity or Player pair".into());
++    }
++    Ok(m)
++}
++
++pub(super) fn resolve(root: &Path, bytes: &[u8]) -> Result<(Manifest, Identity)> {
++    let m = parse_manifest(bytes)?;
++    let raw = read_local(root, "language-pilot-admission.v1.json", 8192)?;
++    if digest(&raw) != m.admission_sha256 {
++        return Err("language pilot operator admission hash mismatch".into());
++    }
++    let a: Admission = serde_json::from_slice(&raw)?;
++    if a.schema != "qualia.saved_life.language_pilot_admission.v1"
++        || a.fixture_id != ID || a.source_current_sha256 != SOURCE
++        || a.fixture_plan_sha256 != PLAN || a.cell != m.cell
++        || !hex(&a.rubric_sha256) || !hex(&a.evaluator_sha256)
++        || digest(&fs::read(std::env::current_exe()?)?) != a.evaluator_sha256
++        || digest(&read_local(root, "language-pilot-rubric.v1.json", 65_536)?) != a.rubric_sha256
++    {
++        return Err("language pilot source, cell, rubric, or executable does not match admission".into());
++    }
++    let identity = Identity {
++        fixture_id: ID, fixture_plan_sha256: PLAN, admission_sha256: m.admission_sha256.clone(),
++        evaluator_sha256: a.evaluator_sha256, rubric_sha256: a.rubric_sha256,
++        layout: m.cell.layout, player_tokens: m.cell.tokens.map(LanguageTokenId::raw), cell: m.cell,
++    };
++    Ok((m, identity))
++}
++
++#[derive(Clone, Copy, Serialize)]
++pub(super) struct Custody {
++    entity: WorldEntityId,
++    position: Vec3f,
++    owner: Option<OrganismId>,
++    player_held: bool,
++    activity_hold: bool,
++    consumed: bool,
++}
++
++pub(super) struct Opened {
++    layout: Layout,
++    atom: AudibleUtterance,
++    starter_membership: [bool; 2],
++    inherited_word_gain: [f32; 2],
++    pub(super) setup: Value,
++}
++
++fn free(world: &HeadlessWorld, id: WorldEntityId, kind: WorldObjectKind, owner: OrganismId) -> bool {
++    world.entity(id).is_some_and(|o| o.kind == kind && o.organism_id.is_none()
++        && !o.consumed && !o.activity_hold && o.carried_by.is_none()
++        && o.token_id.is_none() && o.teacher_channel.is_none() && o.hazard_pain == 0.0
++        && o.grounded_physical.velocity == Vec3f::ZERO
++        && !world.retained_language_pilot_grab_probe(owner, id).0)
++}
++
++fn hear(heard: &[Option<HeardToken>], atom: &AudibleUtterance, at: Tick) -> Result<()> {
++    let players = heard.iter().flatten()
++        .filter(|h| h.source_kind == UtteranceSourceKind::Player).collect::<Vec<_>>();
++    if heard.iter().flatten().any(|h| h.source_kind == UtteranceSourceKind::Teacher) {
++        return Err("language pilot observed Teacher, not clean live Player stimulus".into());
++    }
++    if at.raw() < atom.emitted_tick.raw() {
++        return Err("language pilot observed a cut before emission".into());
++    }
++    if at.raw() > atom.expires_after_tick.raw() {
++        if !players.is_empty() { return Err("language pilot retained or introduced fresh Player input after TTL".into()); }
++        return Ok(());
++    }
++    if players.len() != 2 || !players.iter().enumerate().all(|(i, h)| {
++        let c = h.confidence.raw();
++        h.utterance_id == atom.utterance_id && usize::from(h.sequence_position) == i
++            && h.addressee == atom.addressee && h.speaker_id.is_none() && h.source_entity.is_none()
++            && h.teacher_channel.is_none() && h.source_position == atom.source_position
++            && h.token_id == u32::from(atom.tokens[i].raw()) && c.is_finite() && c > 0.0
++    }) {
++        return Err("language pilot did not hear the one admitted addressed Player atom".into());
++    }
++    Ok(())
++}
++
++impl Identity {
++    pub(super) fn configure(&self, world: &mut HeadlessWorld, owner: OrganismId) -> Result<Opened> {
++        let tick = world.tick();
++        let old = world.object_snapshots();
++        let body = old.iter().find(|o| o.organism_id == Some(owner)).ok_or("missing actual saved body")?;
++        if owner.raw() != OWNER || tick.raw() != OPENING || world.seed() != SEED || old.len() != 10
++            || world.terrain().is_some() || world.player_held_object().is_some()
++            || !world.audible_utterances().is_empty()
++            || old.iter().any(|o| o.carried_by == Some(owner) || o.teacher_channel.is_some())
++            || !world.organism_registry().get(owner).is_some_and(|r| r.lifecycle().is_alive())
++            || !free(world, FOOD, WorldObjectKind::Food, owner)
++            || !free(world, BALL, WorldObjectKind::Ball, owner)
++            || !world.entity(FOOD).is_some_and(|o| o.radius.to_bits() == 0.45_f32.to_bits()
++                && o.nutrition.to_bits() == 0.85_f32.to_bits())
++            || !world.entity(BALL).is_some_and(|o| o.radius.to_bits() == 0.30_f32.to_bits()
++                && o.nutrition == 0.0)
++        { return Err("language pilot requires the exact clean living R44 opening and two free native props".into()); }
++
++        let resident = world.organism_registry().get(owner).ok_or("missing starter-vocabulary owner")?;
++        let starter = &resident.phenotype().predisposition.starter_tokens;
++        if !starter.iter().map(|token| token.raw()).eq([1, 2, 3, 4, 5, 6]) {
++            return Err("language pilot starter vocabulary differs from exact R44".into());
++        }
++        let starter_membership = self.cell.tokens.map(|token| starter.contains(&token));
++        let inherited_word_gain = self.cell.tokens.map(|token| {
++            world.retained_language_pilot_word_gain(owner, u32::from(token.raw()))
++        });
++        let (sn, cs) = body.body_yaw.sin_cos();
++        let at = |f: f32, l: f32| Vec3f::new(
++            body.position.x + f*cs - l*sn, body.position.y, body.position.z + f*sn + l*cs);
++        let (near, far) = (at(1.047, 0.620), at(1.057, -0.620));
++        let berths = match self.cell.layout { Layout::A => [near, far], Layout::B => [far, near] };
++        let mut staged = world.clone();
++        for (id, p) in PROPS.into_iter().zip(berths) {
++            let mut expected = world.entity(id).ok_or("missing preplacement real prop")?.clone();
++            expected.position = p;
++            expected.grounded_physical.velocity = Vec3f::ZERO;
++            staged.editor_move_object(id, p)?;
++            staged.editor_move_object(id, p)?;
++            if staged.entity(id) != Some(&expected) || staged.retained_language_pilot_grab_probe(owner, id) != (false, true) {
++                return Err("language pilot exact prop or native Grab reach/permission mismatch".into());
++            }
++        }
++        let mut staged_ecology = staged.ecology().clone();
++        staged_ecology.metrics = world.ecology().metrics.clone();
++        if &staged_ecology != world.ecology() {
++            return Err("language pilot altered saved ecology beyond derived placement metrics".into());
++        }
++        let pre = staged.sensory_report(owner, tick)?;
++        let visible = |r: &alife_world::HeadlessSensoryReport| r.visible_entities.iter()
++            .map(|v| v.id).collect::<Vec<_>>();
++        let vis = visible(&pre);
++        let before = &pre.core_snapshot.language_context.heard_tokens;
++        if vis.len() != 2 || !PROPS.iter().all(|id| vis.contains(id)) || !pre.contact_entities.is_empty()
++            || before.iter().any(Option::is_some)
++            || staged.tick() != tick || staged.organism_registry().get(owner) != world.organism_registry().get(owner)
++            || old.iter().any(|o| !PROPS.contains(&o.id) && staged.entity(o.id) != Some(o))
++        { return Err("language pilot setup changed the common start or lacks both visible free props".into()); }
++
++        let atom = staged.emit_player_tokens(Some(owner), at(0.25, 0.0), self.cell.tokens.to_vec())?;
++        if staged.audible_utterances().as_slice() != std::slice::from_ref(&atom)
++            || atom.source_kind != UtteranceSourceKind::Player || atom.addressee != Some(owner)
++            || atom.emitted_tick != tick || atom.expires_after_tick.raw() != OPENING + 1
++            || atom.speaker_id.is_some() || atom.teacher_channel.is_some()
++            || atom.confidence.raw().to_bits() != 1.0_f32.to_bits()
++        { return Err("language pilot lost the unique real Player stimulus".into()); }
++        let post = staged.sensory_report(owner, tick)?;
++        hear(&post.core_snapshot.language_context.heard_tokens, &atom, tick)?;
++        if visible(&post) != vis || post.contact_entities != pre.contact_entities
++            || staged.tick() != tick || staged.entity(body.id) != Some(body)
++        { return Err("language pilot sound changed common opening".into()); }
++        let setup = json!({"observer_only":true,"tick":tick,"organism":owner,
++            "body_position":body.position,"body_yaw":body.body_yaw,"prop_positions":berths,
++            "prop_ids":PROPS,"visible_order":vis,"native_player_utterance":atom,
++            "starter_membership":starter_membership,"native_inherited_word_gain":inherited_word_gain,
++            "opening_world_heard_tokens":post.core_snapshot.language_context.heard_tokens,
++            "before_sound_sha256":digest(&serde_json::to_vec(&pre.core_snapshot)?),
++            "after_sound_sha256":digest(&serde_json::to_vec(&post.core_snapshot)?)});
++        *world = staged;
++        Ok(Opened { layout:self.cell.layout, atom, starter_membership, inherited_word_gain, setup })
++    }
++}
++
++impl Opened {
++    pub(super) fn custody(&self, world: &HeadlessWorld) -> Result<[Custody; 2]> {
++        let one = |id| -> Result<Custody> {
++            let o = world.entity(id).ok_or("language pilot lost real prop during custody observation")?;
++            Ok(Custody { entity:id, position:o.position, owner:o.carried_by,
++                player_held:world.player_held_object()==Some(id), activity_hold:o.activity_hold, consumed:o.consumed })
++        };
++        Ok([one(FOOD)?, one(BALL)?])
++    }
++
++    pub(super) fn observe(&self, frame: &PerceptionFrame, behavior: &alife_gpu_backend::GpuTrainingRolloutReceipt,
++        world: &HeadlessWorld, before: [Custody; 2], listener: (Vec3f, f32), outcome: Tick) -> Result<Value>
++    {
++        let tick = frame.tick();
++        if self.atom.addressee != Some(frame.organism_id()) || tick.raw().checked_add(1) != Some(outcome.raw())
++            || outcome != world.tick() || !(OPENING..OPENING + TICKS).contains(&tick.raw())
++        { return Err("language pilot custody and sealed decision have different owners or ticks".into()); }
++        let heard = &frame.sensory().language_context.heard_tokens;
++        hear(heard, &self.atom, tick)?;
++        let mut offers = [None, None];
++        let mut full = Vec::new();
++        for (j, id) in PROPS.into_iter().enumerate() {
++            for (i, c) in frame.candidates().iter().enumerate().filter(|(_, c)| {
++                c.action_id == HeadlessActionIds::GRAB && c.target.entity == Some(id)
++            }) {
++                let CandidateObservationRef::ObjectSlot(slot) = c.observation else {
++                    return Err("language pilot unbound native Grab offer".into());
++                };
++                let s = frame.grounded_object_slots().iter().find(|s| s.slot_index == slot)
++                    .ok_or("language pilot missing native Grab observation")?;
++                let bit = 1_u32.checked_shl(u32::try_from(i)?).ok_or("language pilot invalid offer index")?;
++                let eligible = behavior.motor_masks[2] & bit != 0 || (behavior.representative_mask & bit != 0
++                    && behavior.forced_motor_slots.get(i).copied() == Some(2));
++                if offers[j].replace((i, slot, s.tracked_object_id, eligible)).is_some()
++                    || usize::from(c.candidate_index) != i || c.family != CandidateActionFamily::Contact
++                    || s.candidate_features()? != c.features
++                { return Err("language pilot malformed or duplicated native Grab offer".into()); }
++                full.push(json!({"entity":id,"candidate_index":i,"slot":slot,
++                    "track":s.tracked_object_id,"sealed_candidate":c,"sealed_slot":s,"eligible":eligible}));
++            }
++        }
++        if tick.raw() == OPENING {
++            let [Some(a), Some(b)] = offers else {
++                return Err("language pilot both opening native Grab offers were not present".into());
++            };
++            let order = match self.layout { Layout::A => a.0 < b.0 && a.1 < b.1, Layout::B => b.0 < a.0 && b.1 < a.1 };
++            if !a.3 || !b.3 || a.2 == b.2 || !order || before.iter().any(|p| {
++                p.owner.is_some() || p.player_held || p.activity_hold || p.consumed
++            }) { return Err("language pilot opening masks, distinct slot order, or free-custody control failed".into()); }
++        }
++        let (listener_position, listener_body_yaw) = listener;
++        let src = self.atom.source_position;
++        let audio_distance_m = (listener_position.x-src.x).hypot(listener_position.y-src.y)
++            .hypot(listener_position.z-src.z);
++        Ok(json!({"schema_version":1,"observer_only":true,"organism":frame.organism_id(),
++            "decision_tick":tick,"outcome_tick":outcome,"frame_digest":frame.frame_digest(),
++            "sealed_heard_tokens":heard,"same_target_grab_offers":full,
++            "acoustics":{"listener_position":listener_position,"listener_body_yaw":listener_body_yaw,
++                "sealed_listener_rotation":frame.body().pose.rotation,
++                "source_position":src,"source_strength":self.atom.confidence.raw(),"distance_m":audio_distance_m,
++                "starter_membership":self.starter_membership,"native_inherited_word_gain":self.inherited_word_gain},
++            "custody_before":before,"custody_after":self.custody(world)?}))
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn language_pilot_reads_a_real_player_atom_and_declines_foreign_or_expired() {
++        let owner = OrganismId(3);
++        let other = OrganismId(4);
++        let speaker = Vec3f::new(0.25, 0.0, 0.0);
++        let mut world = alife_world::HeadlessScenarioBuilder::new(77)
++            .agent("pilot-listener", owner, Vec3f::ZERO)
++            .social_agent("pilot-other", other, Vec3f::new(2.0, 0.0, 0.0), 0.0)
++            .build().unwrap();
++        let t = world.tick();
++        let words = [9, 1].map(|x| LanguageTokenId::new(x).unwrap());
++        let atom = world.emit_player_tokens(Some(owner), speaker, words.to_vec()).unwrap();
++        let heard = |w: &HeadlessWorld, who| {
++            w.sensory_report(who, w.tick()).unwrap().core_snapshot.language_context.heard_tokens
++        };
++        assert_eq!(atom.confidence.raw().to_bits(), 1.0_f32.to_bits());
++        assert!(hear(&heard(&world, owner), &atom, t).is_ok());
++        assert!(hear(&heard(&world, other), &atom, t).is_err());
++        assert_eq!(world.advance_tick().raw(), t.raw() + 1);
++        assert!(hear(&heard(&world, owner), &atom, world.tick()).is_ok());
++        assert_eq!(world.advance_tick().raw(), t.raw() + 2);
++        let h0 = heard(&world, owner);
++        assert!(h0.iter().flatten().all(|h| h.source_kind != UtteranceSourceKind::Player));
++        assert!(hear(&h0, &atom, world.tick()).is_ok());
++    }
++
++    #[test]
++    fn language_pilot_rejects_unbounded_or_answer_bearing_manifest() {
++        let mut m = json!({"schema":SCHEMA,"fixture_id":ID,"run_id":"opaque-0",
++            "source_current_sha256":SOURCE,"admission_sha256":"a".repeat(64),
++            "cell":{"layout":"a","tokens":[9,1]},"deadline_unix_seconds":1});
++        let parse = |v: &Value| parse_manifest(&serde_json::to_vec(v).unwrap()).is_ok();
++        assert!(parse(&m));
++        m["cell"]["tokens"] = json!([9,1,14]); assert!(!parse(&m));
++        m["cell"]["tokens"] = json!([9,2]); assert!(!parse(&m));
++        m["cell"]["tokens"] = json!([9,14]); assert!(parse(&m));
++        m["cell"]["expected_entity"] = json!(2); assert!(!parse(&m));
++        m["cell"].as_object_mut().unwrap().remove("expected_entity");
++        m["source_current_sha256"] = json!("b".repeat(64)); assert!(!parse(&m));
++    }
++}
+diff --git a/crates/alife_world/Cargo.toml b/crates/alife_world/Cargo.toml
+--- a/crates/alife_world/Cargo.toml
++++ b/crates/alife_world/Cargo.toml
+@@ -4,6 +4,9 @@
+ edition.workspace = true
+ publish.workspace = true
+ repository.workspace = true
++
++[features]
++retained-language-pilot = []
+ 
+ [dependencies]
+ alife_storage.workspace = true
+diff --git a/crates/alife_world/src/headless.rs b/crates/alife_world/src/headless.rs
+--- a/crates/alife_world/src/headless.rs
++++ b/crates/alife_world/src/headless.rs
+@@ -7059,6 +7059,28 @@
+                 || self.activity_grip_available(organism_id, target))
+     }
+ 
++    /// Detached research observer only. Checks the existing World predicate
++    /// without submitting a command, mutating custody or becoming a brain input.
++    #[cfg(feature = "retained-language-pilot")]
++    pub fn retained_language_pilot_grab_probe(
++        &self,
++        organism_id: OrganismId,
++        target: WorldEntityId,
++    ) -> (bool, bool) {
++        let pending = self.toy_rolls.contains_key(&target.raw())
++            || self.player_held_object().is_some()
++            || self.thermal_contact_candidate.is_some()
++            || self.pending_player_care.contains_key(&organism_id.raw());
++        let available = self.agent_entity_id(organism_id)
++            .is_ok_and(|agent| self.grab_target_is_legal(organism_id, agent, target));
++        (pending, available)
++    }
++
++    #[cfg(feature = "retained-language-pilot")]
++    pub fn retained_language_pilot_word_gain(&self, organism_id: OrganismId, token: u32) -> f32 {
++        self.inherited_word_gain(organism_id, token)
++    }
++
+     /// Read-only eligibility for opt-in offline safe-food supervision. This
+     /// authorizes a real Eat preparation/meal opportunity, never consumption.
+     /// Perception and production decoder masks must still ground the label.
