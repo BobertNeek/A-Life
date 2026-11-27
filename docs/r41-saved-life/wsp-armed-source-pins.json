@@ -1,0 +1,50 @@
+{
+  "actual_observer_elf_sha256": "f9e36c5a493da93b6f37a31cddae1e814c8680247f7ffd9b2ce6b2100cfc8ab4",
+  "actual_trusted_observer_hosted_head": "8d51ee7f893b059d2f0999bd498b7c80bee146e3",
+  "after": {
+    "crates/alife_game_app/Cargo.toml": "12a59fae67462ccd68b3e3fcd6ec7c2a315303d1f2f94758977347a12c1f109e",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs": "292756993ac4066487f708f6c660fd488ce5d1f8f76979ffd4e49fa60f13c943",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs": "326d518c677d6a9d2b65536f75cef7a65113c167230ba027f0203e61edc5bcf4",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/language_pilot.rs": "978e09b6516454a5a9d9868f1e0de96cc02d7bf4dd8925f8d2e23c5942ac05bf",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/wsp_cue_latch_armed_scope.rs": "73cfbb64aaabdfbe87253a858a9a6f187cf49f87eddeece6391945bd6138496d",
+    "crates/alife_game_app/src/gpu_live_runtime.rs": "55ef9737cbe4720c17c27665b444be8669e02212cea0bdcccbc91085545f3a18",
+    "crates/alife_game_app/src/gpu_live_runtime/contact211_f0_witness.rs": "bfb39d4a42e9e626671b86c8e0db9293b5f63492bdb9ceb830aae997a77d0fa1",
+    "crates/alife_game_app/src/gpu_live_runtime/cue_latch_observer.rs": "9972044a86f1503e7729e3725a6ed550be162022090049c664ac8894ecabbd33",
+    "crates/alife_game_app/src/gpu_live_runtime/staged_tick.rs": "229b7a6da60675ff723df2140a06aa519d0704ba20671f0fa36e13848e0e56bc",
+    "crates/alife_game_app/src/gpu_live_runtime/wsp_armed_driver.rs": "3f887591f30600eb014541cb129f95626c3b9ac30b22072ea4623911e82447a9",
+    "crates/alife_game_app/src/gpu_live_runtime/wsp_armed_latch.rs": "d3e6ee860714d185f1a15a9d225e16e905da0c9d5360e7652132895ddc1a1a04",
+    "crates/alife_gpu_backend/Cargo.toml": "bff0744f03f5bbdbe06f19ae85018e8fbdc1674f63587f47018a1a4d726ddfdd",
+    "crates/alife_gpu_backend/shaders/wsp_armed_contact211.wgsl": "c8e142eb72fa35cf70ddec38133904b0795207001435e1eb3af1a0488207ca08",
+    "crates/alife_gpu_backend/src/closed_loop_pipeline.rs": "ddcde3a4d3b3bc08fb866b7c9be32382a2554ec5ec56ec30b375cd0a3f7ecb02",
+    "crates/alife_gpu_backend/src/closed_loop_runtime.rs": "17af52a930ec6643f6d099b8d8e7f0ca1c2c713ec745696d156693ecad63136c",
+    "crates/alife_gpu_backend/src/closed_loop_runtime/tick.rs": "d88561a97b98bce11c563211deb7fa5b4bda4e5640db36dcc507a80c4b6734f4",
+    "crates/alife_gpu_backend/src/training_rollout.rs": "b54195189a9eb6ca43c78a3e24ae93c4c0ac4d66fe9ee69b7345361ad80550db"
+  },
+  "before": {
+    "crates/alife_game_app/Cargo.toml": "84aad6ab4b43297b0ab65d9223fc8b0fa641e0d6a7b6a80c5f6eca311e5d75d7",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs": "72f52ff6695770dab33b130a3d0922eba7829e600132f51cf4a476722af5e562",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs": "56fbf83bf75e6e7ef8ab874a31a6e7ad05a4c2116d8570ce3e15321a37081e45",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/language_pilot.rs": "c76576cc8d5eff262ff3ccde3e5dbe223fffb06666336d61174f8c369966feca",
+    "crates/alife_game_app/src/gpu_live_runtime.rs": "e10d82be042112a8721610838e828446ad0260cc4aff09f8215f953813a7db08",
+    "crates/alife_game_app/src/gpu_live_runtime/contact211_f0_witness.rs": "99c9b5e13d0a563fca07cbefacf9c9a759ac0b1349b1956aa6a63a29bb3b0f82",
+    "crates/alife_game_app/src/gpu_live_runtime/cue_latch_observer.rs": "8b0e6c6a47967df3573e8aef2cdea27335d73d8091f3e9cba4615525b7f7cce5",
+    "crates/alife_game_app/src/gpu_live_runtime/staged_tick.rs": "847e8dc99b94f2ad9fb607b53d348ceaaa1037cfc9f040eb0010f91c8dde082a",
+    "crates/alife_gpu_backend/Cargo.toml": "5b5f8e3cabbc7b8082742f9f51d4d5e9e8c49f5d54d33e2c10029b82c1e24e79",
+    "crates/alife_gpu_backend/src/closed_loop_pipeline.rs": "623e40b4f7e45fc8f18806b7d692866cc5ac44ba108db39c83b6032d8e6a36c7",
+    "crates/alife_gpu_backend/src/closed_loop_runtime.rs": "08f1d4a62af051b3d270328f9d29208015aab7f261c2127af34ec53fc9f225c7",
+    "crates/alife_gpu_backend/src/closed_loop_runtime/tick.rs": "077aca90de7d91a79a6cc854159a666d2b7651fb33c6b66bbc08cb4dfaf57d6b",
+    "crates/alife_gpu_backend/src/training_rollout.rs": "84c8f513b9f3053ec95d73bf00a063170853e2948a4c7e4463473d778a85dc07"
+  },
+  "compiled_or_launched": false,
+  "forward_sha256": "e88df75234accfef18a55844a940d9b2e60bc2bfceafec1d65b60f80339b093e",
+  "inverse_sha256": "7ac8ebeaa6ca20961a56d860dbbf5eda5bb34de223299590987f334d43c4c476",
+  "layer_pins": {
+    "APP": "e8f12e1df88e5a195bc4f8674d0836e14f60b3dc808c8937625379799e40826a",
+    "GPU": "106bb8c369a5336152cefa1adbed6085b29a8425b8687263d65301e710e41003",
+    "SCOPE": "78863a8373b4e4ef15a14642226407315edef8c6bf9ec60e6212065415722496"
+  },
+  "parent_source_tree_manifest_sha256": "9480540346c8c039c09867ae0eba0f90413a6d3d82a2067bbab380cf1679ad3b",
+  "same_elf_actual_gameplay_matched_proof": false,
+  "verified_local_apply_inverse_reapply": true,
+  "wsp_armed_weightcode_sha256": "460521877d9828fe9169e47c81dd3c7972957a98292dd499b4712077bac9483e"
+}

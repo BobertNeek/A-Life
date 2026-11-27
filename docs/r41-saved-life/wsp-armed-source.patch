@@ -1,0 +1,1528 @@
+--- a/crates/alife_game_app/Cargo.toml
++++ b/crates/alife_game_app/Cargo.toml
+@@ -92,6 +92,7 @@
+ contact211-rank32 = ["contact211-witness", "retained-language-pilot", "alife_gpu_backend/contact211-rank32"]
+ contact211-rank32-crossed = ["contact211-rank32"]
+ wsp-cue-latch-observer = ["contact211-rank32-crossed", "alife_world/wsp-cue-latch-observer"]
++wsp-cue-latch-armed = ["wsp-cue-latch-observer", "alife_gpu_backend/wsp-cue-latch-armed"]
+ bevy-app = [
+     "dep:accesskit",
+     "dep:bevy",
+--- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs
+@@ -30,6 +30,9 @@
+ #[cfg(feature = "wsp-cue-latch-observer")]
+ #[path = "saved_life_retention/wsp_cue_latch.rs"]
+ mod wsp_cue_latch;
++#[cfg(feature = "wsp-cue-latch-armed")]
++#[path = "saved_life_retention/wsp_cue_latch_armed_scope.rs"]
++mod wsp_cue_latch_armed_scope;
+ #[cfg(feature = "gpu-tests")]
+ pub use experiments::evaluate_saved_life_retention_experiment;
+ 
+@@ -412,6 +415,8 @@
+     let contact211 = experiment.as_ref().and_then(experiments::ExperimentIdentity::contact211_parity);
+     #[cfg(feature = "wsp-cue-latch-observer")]
+     let wsp_latch = experiment.as_ref().and_then(experiments::ExperimentIdentity::wsp_cue_latch);
++    #[cfg(feature = "wsp-cue-latch-armed")]
++    let wsp_armed = experiment.as_ref().and_then(experiments::ExperimentIdentity::wsp_armed);
+     if let Some(scope) = scent_scope {
+         scope.validate(&request)?;
+     }
+@@ -840,6 +845,11 @@
+     let language_setup = if let Some(spec) = language {
+         let sampler = runtime.foundation_training_sampling_state();
+         let t = runtime.world().tick();
++        #[cfg(feature = "wsp-cue-latch-armed")]
++        let opened=if wsp_armed.is_some_and(|s|s.edge()) {
++            spec.configure_wsp_contact_edge(runtime.world_mut(),id)?
++        }else{spec.configure(runtime.world_mut(),id)?};
++        #[cfg(not(feature = "wsp-cue-latch-armed"))]
+         let opened = spec.configure(runtime.world_mut(), id)?;
+         if sampler != runtime.foundation_training_sampling_state() || t != runtime.world().tick()
+             || !TeacherCues::observe(runtime.world()).clear()
+@@ -852,6 +862,15 @@
+         );
+         Some(opened)
+     } else { None };
++    #[cfg(feature = "wsp-cue-latch-armed")]
++    let mut armed_rows=0usize;
++    #[cfg(feature = "wsp-cue-latch-armed")]
++    if let Some(scope)=wsp_armed {
++        if language_setup.is_none()||contact211.is_some()||research_setup.is_some()||scent_scope.is_some()
++            ||request.direct_weights.is_some()||request.navigation_task.is_some()||!software_simulation
++        {return Err("armed cue latch cannot share a treatment or nonsoftware authority".into());}
++        scope.begin(&mut runtime,id,&source_sha,controlled_pressure)?;
++    }
+     #[cfg(feature = "wsp-cue-latch-observer")]
+     let mut latch_rows = 0usize;
+     #[cfg(feature = "wsp-cue-latch-observer")]
+@@ -987,6 +1006,10 @@
+         if wsp_latch.is_some() && !matches!(&tick,Ok(crate::gpu_live_runtime::GpuLiveTickOutcome::Progressed(_))) {
+             return Err("WSP CUE LATCH exact native decision failed; never retry or relabel".into());
+         }
++        #[cfg(feature = "wsp-cue-latch-armed")]
++        if wsp_armed.is_some() && !matches!(&tick,Ok(crate::gpu_live_runtime::GpuLiveTickOutcome::Progressed(_))) {
++            return Err("Armed cue latch stopped on unmatched actual native decision; no fallback".into());
++        }
+         let tick_error = tick.err().map(|e| e.to_string());
+         let after_tick = runtime.world().tick();
+         let after_pose = runtime
+@@ -1051,11 +1074,21 @@
+         if wsp_latch.is_some() && (steps.len()!=1 || after_tick.raw()!=before_tick.raw().saturating_add(1)) {
+             return Err("WSP CUE LATCH requires a fresh sealed native decision on every cut".into());
+         }
++        #[cfg(feature = "wsp-cue-latch-armed")]
++        if wsp_armed.is_some() && (steps.len()!=1||before_tick.raw().checked_add(1)!=Some(after_tick.raw())) {
++            return Err("armed cue latch needs one authentic sealed decision per World tick".into());
++        }
+         if let Some(step) = steps.pop() {
+             if step.frame.organism_id() != id || step.frame.tick() != before_tick {
+                 return Err("retention row identity mismatch".into());
+             }
+             step.patch.validate_contract()?;
++            #[cfg(feature = "wsp-cue-latch-armed")]
++            let armed_observation=if let Some(scope)=wsp_armed{
++                let native=scope.collect(&mut runtime,&step,rows,calls)?;
++                armed_rows+=1;
++                Some(native)
++            }else{None};
+             #[cfg(feature = "wsp-cue-latch-observer")]
+             let latch_observation = if let Some(scope)=wsp_latch {
+                 let native=scope.collect(&mut runtime,&step,rows,calls)?;
+@@ -1226,6 +1259,10 @@
+                         }
+                     };
+                 }
++                #[cfg(feature = "wsp-cue-latch-armed")]
++                if let Some(native)=armed_observation {
++                    row["wsp_armed_native_comparison_tape"]=native;
++                }
+                 #[cfg(feature = "wsp-cue-latch-observer")]
+                 if let Some(native)=latch_observation {
+                     row["wsp_cue_latch_native_observation"]=native;
+@@ -1449,6 +1486,23 @@
+         receipt["software_simulation_integrity_valid"]=serde_json::json!(false);
+         receipt["qualified"]=serde_json::json!(false);
+         receipt["retention_demonstrated"]=serde_json::json!(false);
++    }
++    #[cfg(feature = "wsp-cue-latch-armed")]
++    if let Some(scope)=wsp_armed {
++        let limit=wsp_cue_latch_armed_scope::LIMIT;
++        if rows!=limit||calls!=limit as u64||armed_rows!=limit||stop!="decision_limit"
++            ||runtime.world().tick().raw().checked_sub(source_world_tick)!=Some(limit as u64)
++            ||!alive||!software_simulation||!base_unchanged||!prior_clear||!unchanged||!cue_free
++            ||!endpoint_preserved||error.is_some()||controlled_pressure!=Some(0){
++            return Err("arm source accepted no valid settled causal transcript".into());
++        }
++        receipt["wsp_armed_native_integrity"]=serde_json::json!({
++            "complete_same_elf_arm":true,"native_cut_count":limit,
++            "scope_armed":scope.armed(),"physical_edge_fixture":scope.edge(),
++            "still_needs_independent_paired_native_grade":true, "scorecard_eligible":false});
++        for key in ["coverage_complete","measurement_valid","software_simulation_integrity_valid","qualified","retention_demonstrated"] {
++            receipt[key]=serde_json::json!(false);
++        }
+     }
+     alife_storage::write(
+         output.join("retention.json"),
+--- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
+@@ -86,6 +86,9 @@
+     #[cfg(feature = "wsp-cue-latch-observer")]
+     #[serde(skip_serializing_if = "Option::is_none")]
+     wsp_cue_latch: Option<super::wsp_cue_latch::Scope>,
++    #[cfg(feature = "wsp-cue-latch-armed")]
++    #[serde(skip_serializing_if="Option::is_none")]
++    wsp_armed: Option<super::wsp_cue_latch_armed_scope::Scope>,
+ }
+ 
+ impl ExperimentIdentity {
+@@ -111,6 +114,8 @@
+         self.contact211_parity.as_ref()
+     }
+ 
++    #[cfg(feature = "wsp-cue-latch-armed")]
++    pub(super) fn wsp_armed(&self)->Option<&super::wsp_cue_latch_armed_scope::Scope>{self.wsp_armed.as_ref()}
+     #[cfg(feature = "wsp-cue-latch-observer")]
+     pub(super) fn wsp_cue_latch(&self) -> Option<&super::wsp_cue_latch::Scope> {
+         self.wsp_cue_latch.as_ref()
+@@ -272,6 +277,8 @@
+             contact211_parity: None,
+             #[cfg(feature = "wsp-cue-latch-observer")]
+             wsp_cue_latch: None,
++        #[cfg(feature = "wsp-cue-latch-armed")]
++        wsp_armed: None,
+         },
+         request,
+         scent,
+@@ -313,6 +320,8 @@
+         contact211_parity: None,
+         #[cfg(feature = "wsp-cue-latch-observer")]
+         wsp_cue_latch: None,
++        #[cfg(feature = "wsp-cue-latch-armed")]
++        wsp_armed: None,
+     }, request, scent: None })
+ }
+ 
+@@ -354,6 +363,8 @@
+         contact211_parity: None,
+         #[cfg(feature = "wsp-cue-latch-observer")]
+         wsp_cue_latch: None,
++        #[cfg(feature = "wsp-cue-latch-armed")]
++        wsp_armed: None,
+     }, request, scent: None })
+ }
+ 
+@@ -417,6 +428,26 @@
+     struct Version { schema: u16 }
+     let version: Version = serde_json::from_slice(&bytes)?;
+     // New grammar fails closed before opening Current or creating an output.
++    #[cfg(not(feature = "wsp-cue-latch-armed"))]
++    if version.schema==13 {return Err("WSP armed cue latch feature is disabled".into());}
++    #[cfg(feature = "wsp-cue-latch-armed")]
++    if version.schema==super::wsp_cue_latch_armed_scope::SCHEMA {
++        use super::wsp_cue_latch_armed_scope as w;
++        let (scope,nested)=w::resolve(admission_root,&bytes)?;
++        let mut p=resolve_language_pilot(admission_root,&nested,true)?;
++        scope.binds(&p.identity.run_id,&p.identity.source_current_sha256,p.request.finalization_deadline_unix_seconds)?;
++        p.request.max_decisions=w::LIMIT;
++        p.request.max_world_ticks=w::LIMIT as u64;
++        p.request.validate(now()?)?;
++        p.identity.schema=w::SCHEMA;
++        p.identity.manifest_sha256=digest(&bytes);
++        p.identity.semantic_settings_sha256=digest(&serde_json::to_vec(&("armed-cue-latch-causal-pair-v1",
++            &p.identity.semantic_settings_sha256,scope.edge(),w::LIMIT))?);
++        p.identity.intervention=if scope.armed(){"wsp_armed_retention"}else{"wsp_immediate_control"};
++        p.identity.wsp_armed=Some(scope);
++        admitted_paths(admission_root,source,output,manifest_path)?;
++        return evaluate_saved_life_retention_inner(source,output,p.request,p.scent,Some(p.identity));
++    }
+     #[cfg(not(feature = "wsp-cue-latch-observer"))]
+     if version.schema == 9 { return Err("WSP CUE LATCH observer feature is disabled".into()); }
+     #[cfg(feature = "wsp-cue-latch-observer")]
+--- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/language_pilot.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/language_pilot.rs
+@@ -184,6 +184,8 @@
+ 
+ pub(super) struct Opened {
+     layout: Layout,
++    #[cfg(feature = "wsp-cue-latch-armed")]
++    acoustic_reach_edge: bool,
+     atom: Option<AudibleUtterance>,
+     starter_membership: Vec<bool>,
+     inherited_word_gain: Vec<f32>,
+@@ -333,6 +335,13 @@
+ 
+ impl Identity {
+     pub(super) fn configure(&self, world: &mut HeadlessWorld, owner: OrganismId) -> Result<Opened> {
++        self.configure_with_geometry(world,owner,false)
++    }
++    #[cfg(feature = "wsp-cue-latch-armed")]
++    pub(super) fn configure_wsp_contact_edge(&self, world: &mut HeadlessWorld, owner: OrganismId) -> Result<Opened> {
++        self.configure_with_geometry(world,owner,true)
++    }
++    fn configure_with_geometry(&self, world: &mut HeadlessWorld, owner: OrganismId, edge:bool) -> Result<Opened> {
+         let tick = world.tick();
+         let old = world.object_snapshots();
+         let body = old.iter().find(|o| o.organism_id == Some(owner)).ok_or("missing actual saved body")?;
+@@ -361,7 +370,10 @@
+         let (sn, cs) = body.body_yaw.sin_cos();
+         let at = |f: f32, l: f32| Vec3f::new(
+             body.position.x + f*cs - l*sn, body.position.y, body.position.z + f*sn + l*cs);
+-        let (near, far) = (at(1.047, 0.620), at(1.057, -0.620));
++        // Historical fixture unchanged. New isolated probe uses real props
++        // just beyond native 1.25m reach, not forced movement or ownership.
++        let (near, far) = if edge {(at(1.155,0.500),at(1.159,-0.500))}
++            else {(at(1.047, 0.620), at(1.057, -0.620))};
+         let berths = match self.cell.layout { Layout::A => [near, far], Layout::B => [far, near] };
+         let mut staged = world.clone();
+         for (id, p) in PROPS.into_iter().zip(berths) {
+@@ -370,7 +382,7 @@
+             expected.grounded_physical.velocity = Vec3f::ZERO;
+             staged.editor_move_object(id, p)?;
+             staged.editor_move_object(id, p)?;
+-            if staged.entity(id) != Some(&expected) || staged.retained_language_pilot_grab_probe(owner, id) != (false, true) {
++            if staged.entity(id) != Some(&expected) || staged.retained_language_pilot_grab_probe(owner, id) != (false, !edge) {
+                 return Err("language pilot exact prop or native Grab reach/permission mismatch".into());
+             }
+         }
+@@ -395,7 +407,10 @@
+             // change acoustic inputs, or skip the same physical fixture checks.
+             None
+         } else {
+-            let atom = staged.emit_player_tokens(Some(owner), at(0.25, 0.0), self.cell.tokens.clone())?;
++            // A genuine already-existing bounded World atom. The brain has to
++            // physically move from within its actual 6m radius to leave it.
++            let source=if edge {at(-5.980,0.0)}else{at(0.25,0.0)};
++            let atom = staged.emit_player_tokens(Some(owner), source, self.cell.tokens.clone())?;
+             if staged.audible_utterances().as_slice() != std::slice::from_ref(&atom)
+                 || atom.source_kind != UtteranceSourceKind::Player || atom.addressee != Some(owner)
+                 || atom.emitted_tick != tick || atom.expires_after_tick.raw() != OPENING + 1
+@@ -412,15 +427,22 @@
+         if visible(&post) != vis || post.contact_entities != pre.contact_entities
+             || staged.tick() != tick || staged.entity(body.id) != Some(body)
+         { return Err("language pilot sound changed common opening".into()); }
+-        let setup = json!({"observer_only":true,"tick":tick,"organism":owner,
++        let mut setup = json!({"observer_only":true,"tick":tick,"organism":owner,
+             "body_position":body.position,"body_yaw":body.body_yaw,"prop_positions":berths,
+             "prop_ids":PROPS,"visible_order":vis,"native_player_utterance":atom,
+             "starter_membership":starter_membership,"native_inherited_word_gain":inherited_word_gain,
+             "opening_world_heard_tokens":post.core_snapshot.language_context.heard_tokens,
+             "before_sound_sha256":digest(&serde_json::to_vec(&pre.core_snapshot)?),
+             "after_sound_sha256":digest(&serde_json::to_vec(&post.core_snapshot)?)});
++        if edge {
++            setup["armed_research_physical_only"] = json!({
++                "mode":"one_step_acoustics_and_native_reach_edge","not_forced_motion":true,
++                "opening_world_grab_legality":[false,false],"signed_stock_microsteps_unmodified":true});
++        }
+         *world = staged;
+-        Ok(Opened { layout:self.cell.layout, atom, starter_membership, inherited_word_gain, setup })
++        Ok(Opened { layout:self.cell.layout, atom, starter_membership, inherited_word_gain, setup,
++            #[cfg(feature = "wsp-cue-latch-armed")]
++            acoustic_reach_edge:edge })
+     }
+ }
+ 
+@@ -443,7 +465,20 @@
+             || outcome != world.tick() || !(OPENING..OPENING + TICKS).contains(&tick.raw())
+         { return Err("language pilot custody and sealed decision have different owners or ticks".into()); }
+         let heard = &frame.sensory().language_context.heard_tokens;
+-        hear(heard, self.atom.as_ref(), tick)?;
++        #[cfg(feature = "wsp-cue-latch-armed")]
++        let physical_dropout=self.acoustic_reach_edge && self.atom.as_ref().is_some_and(|a|{
++            let s=a.source_position;
++            let b=listener.0;
++            tick.raw()==a.expires_after_tick.raw() && tick.raw()==a.emitted_tick.raw().saturating_add(1)
++               && frame.body().pose.translation==b
++               && (b.x-s.x).hypot(b.y-s.y).hypot(b.z-s.z)>6.0
++               && heard.iter().all(Option::is_none)
++        });
++        #[cfg(not(feature = "wsp-cue-latch-armed"))]
++        let physical_dropout=false;
++        // Admitted driver separately joins the physical *pre*-World live atom;
++        // the post-World is legitimately already at the expiration boundary.
++        if !physical_dropout {hear(heard, self.atom.as_ref(), tick)?;}
+         let mut offers = [None, None];
+         let mut full = Vec::new();
+         for (j, id) in PROPS.into_iter().enumerate() {
+--- /dev/null
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/wsp_cue_latch_armed_scope.rs
+@@ -0,0 +1,175 @@
++//! Isolated signed same-executable causal trial. No old admission accepts this.
++use super::{digest, now, Result};
++use crate::gpu_live_runtime::{FoundationTrainingStep, GpuLiveBrainRuntime};
++use alife_core::OrganismId;
++use serde::{Deserialize,Serialize};
++use serde_json::{json,Value};
++use std::{fs,io::Read,path::Path};
++
++pub(super) const SCHEMA:u16=13;
++pub(super) const LIMIT:usize=3;
++const CURRENT:&str="55672f322eadc64e223289d9df9883f62d0cc01aa97c0478119ad6c51d2852ee";
++const LEXICAL:&str="488d8e0e3d551aae6d71657277d6698ee5fefbe64ea11bcae7f51cc92aa34d9c";
++const WEIGHTCODE:&str="460521877d9828fe9169e47c81dd3c7972957a98292dd499b4712077bac9483e";
++const WORDS:[u32;4]=[1050673152,1042284544,1050673152,1042284544];
++const NAME:&str="qualia.saved_life.wsp_cue_latch_armed.v1";
++
++#[derive(Clone,Copy,Debug,PartialEq,Eq,Serialize,Deserialize)]
++#[serde(rename_all="snake_case")]
++enum Role { Instantaneous, Armed }
++#[derive(Clone,Copy,Debug,PartialEq,Eq,Serialize,Deserialize)]
++#[serde(rename_all="snake_case")]
++enum Geometry { OriginalContact, AcousticAndReachEdge }
++
++#[derive(Deserialize)]
++#[serde(deny_unknown_fields)]
++struct Outer {schema:u16,scope:String,language_sha256:String,admission_sha256:String}
++
++#[derive(Debug,PartialEq,Eq,Serialize,Deserialize)]
++#[serde(deny_unknown_fields)]
++struct Binding {
++    scope:String, trial:String, role:Role, geometry:Geometry,
++    current_sha256:String, evaluator_sha256:String, language_sha256:String,
++    old_lexical_sha256:String, recurrent_weightcode_sha256:String,
++    output_max_decisions:u8, output_max_ticks:u8,
++    controlled_gpu_ns:u64, expires_unix_seconds:u64,
++}
++#[derive(Deserialize)]
++#[serde(deny_unknown_fields)]
++struct Admission {schema:String,binding:Binding,independent_grant_sha256:String}
++#[derive(Deserialize)]
++#[serde(deny_unknown_fields)]
++struct Grant {schema:String,binding:Binding}
++
++#[derive(Serialize)]
++pub(super) struct Scope {
++    schema:&'static str,binding:Binding,admission_sha256:String,
++    #[serde(skip)] lexical:[u32;32],
++}
++fn hex(v:&str)->bool {v.len()==64 && v.bytes().all(|i|matches!(i,b'0'..=b'9'|b'a'..=b'f'))}
++fn read(f:&Path,max:u64)->Result<Vec<u8>>{
++    let file=fs::File::open(f)?;
++    let mut b=Vec::new();
++    file.take(max+1).read_to_end(&mut b)?;
++    if b.is_empty() || b.len() as u64>max {return Err("armed latch leaf exceeds limit".into());}
++    Ok(b)
++}
++fn leaf(root:&Path,n:&str)->Result<Vec<u8>>{
++    let f=root.join(n);
++    if f.canonicalize()?!=f || !fs::symlink_metadata(&f)?.is_file() {return Err("armed latch noncanonical leaf".into());}
++    read(&f,16384)
++}
++fn no_leaf(root:&Path,n:&str)->Result<()>{
++    match fs::symlink_metadata(root.join(n)){
++        Err(e) if e.kind()==std::io::ErrorKind::NotFound=>Ok(()),
++        _=>Err("armed latch cannot coexist with an unrelated authorization or treatment packet".into()),
++    }
++}
++
++#[derive(Deserialize)]
++#[serde(deny_unknown_fields)]
++struct Lexical {
++    schema:String, source_current_sha256:String, source_actor_plane_sha256:String, train_free:bool,
++    vocabulary_source_sha256:String, convention:String, prototype_f32_bits_3x8:[[u32;8];3],
++    candidate_actual_f9_14_f32_bits:[u32;6], bounded_gain_and_ambiguity_f32_bits:[u32;2],
++}
++
++pub(super) fn resolve(root:&Path,raw:&[u8])->Result<(Scope,Vec<u8>)>{
++    if raw.len()>16384{return Err("armed latch outer bytes exceed limit".into());}
++    let p:Outer=serde_json::from_slice(raw)?;
++    if p.schema!=SCHEMA || p.scope!=NAME||!hex(&p.admission_sha256)||!hex(&p.language_sha256){
++        return Err("armed latch scope/envelope mismatch".into());
++    }
++    let a_raw=leaf(root,"wsp-armed-admission.v1.json")?;
++    if digest(&a_raw)!=p.admission_sha256{return Err("armed latch admission identity mismatch".into());}
++    let a:Admission=serde_json::from_slice(&a_raw)?;
++    let v=a.binding;
++    let t=now()?;
++    if a.schema!="qualia.saved_life.wsp_cue_latch_armed.admission.v1"
++       || !hex(&a.independent_grant_sha256) || v.scope!=NAME || v.trial.is_empty() || v.trial.len()>64
++       || !v.trial.bytes().all(|b|b.is_ascii_alphanumeric() || matches!(b,b'_'|b'-')) || v.current_sha256!=CURRENT
++       || !hex(&v.evaluator_sha256) || v.language_sha256!=p.language_sha256
++       || v.old_lexical_sha256!=LEXICAL || v.recurrent_weightcode_sha256!=WEIGHTCODE
++       || v.output_max_decisions!=LIMIT as u8 || v.output_max_ticks!=LIMIT as u8 || v.controlled_gpu_ns!=0
++       || v.expires_unix_seconds<=t || v.expires_unix_seconds>t.saturating_add(600)
++    {return Err("armed latch exact run/current/policy/scope/expiry is not admitted".into());}
++    let g=leaf(root,"wsp-armed-independent-grant.v1.json")?;
++    if digest(&g)!=a.independent_grant_sha256{return Err("armed latch independent grant digest mismatch".into());}
++    let g:Grant=serde_json::from_slice(&g)?;
++    if g.schema!="qualia.saved_life.wsp_cue_latch_armed.independent_grant.v1"||g.binding!=v
++       {return Err("armed latch operator granted a different trial/authority".into());}
++    for name in ["cue-latch-admission.v1.json","contact211-f0-admission.v1.json",
++       "contact211-rank32.weights.v1.json","contact211-stock-reference.v1.json"] {no_leaf(root,name)?;}
++    let exe=std::env::current_exe()?;
++    if digest(&read(&exe,256*1024*1024)?)!=v.evaluator_sha256{return Err("armed latch executing ELF differs".into());}
++    let inner=leaf(root,"wsp-armed-language-cell.schema5.json")?;
++    let lex=leaf(root,"wsp-armed-existing-lexical.v1.json")?;
++    let wp=leaf(root,"wsp-armed-direct-weightcode.v1.json")?;
++    if digest(&inner)!=v.language_sha256 || digest(&lex)!=LEXICAL || digest(&wp)!=WEIGHTCODE
++       {return Err("armed latch inner language or exact WeightCode bytes differ".into());}
++    let wp:Value=serde_json::from_slice(&wp)?;
++    if wp["schema"]!="qualia.private.wsp_cue_latch_armed.weightcode.v1"
++        || wp["exact_R44_current_sha256"]!=CURRENT || wp["f32_bits"]!=json!(WORDS)
++        || wp["modified_inherited_words"]!=0 || wp["global_recurrence_multiplier"]!=json!(1.0)
++        {return Err("armed latch packet is not exact fixed direct weights".into());}
++    let l:Lexical=serde_json::from_slice(&lex)?;
++    if l.schema!="qualia.experimental.contact_lexical_rank1.weights.v1" || l.source_current_sha256!=CURRENT
++       || l.source_actor_plane_sha256!="292dd9a7a26816e603e1d331d1c2715194442b2770b65c6ca4e2152f78a20bf3"
++       || !l.train_free || !hex(&l.vocabulary_source_sha256)||l.convention.is_empty()
++       {return Err("armed latch original lexical readout lineage differs".into());}
++    let mut w=[0;32];
++    for (i,q) in l.prototype_f32_bits_3x8.into_iter().enumerate(){w[i*8..i*8+8].copy_from_slice(&q);}
++    w[24..30].copy_from_slice(&l.candidate_actual_f9_14_f32_bits);
++    w[30..32].copy_from_slice(&l.bounded_gain_and_ambiguity_f32_bits);
++    Ok((Scope{schema:NAME,binding:v,admission_sha256:p.admission_sha256,lexical:w},inner))
++}
++
++impl Scope {
++    pub(super) fn binds(&self,run:&str,source:&str,end:Option<u64>)->Result<()>{
++        if self.binding.trial!=run||self.binding.current_sha256!=source
++          || end.is_none_or(|e|e>self.binding.expires_unix_seconds){return Err("armed latch run/time not matched".into());}
++        Ok(())
++    }
++    pub(super) fn edge(&self)->bool{self.binding.geometry==Geometry::AcousticAndReachEdge}
++    pub(super) fn armed(&self)->bool{self.binding.role==Role::Armed}
++    pub(super) fn begin(&self,r:&mut GpuLiveBrainRuntime,o:OrganismId,src:&str,p:Option<u64>)->Result<()>{
++        if p!=Some(0)||o.raw()!=3||r.world().tick().raw()!=3074||now()? >= self.binding.expires_unix_seconds{
++            return Err("armed latch needs exact bounded living R44 opening".into());
++        }
++        r.begin_wsp_armed_checked(o,src,self.armed()&&self.edge(),self.lexical,WORDS,LIMIT as u8)?;
++        Ok(())
++    }
++    pub(super) fn collect(&self,r:&mut GpuLiveBrainRuntime,s:&FoundationTrainingStep,rows:usize,calls:u64)->Result<Value>{
++        let t=s.frame.tick();
++        let q=r.take_wsp_armed_receipt().ok_or("armed latch missing independently stamped native pre-sample/settled receipt")?;
++        if rows>=LIMIT || calls!=rows as u64+1 || t.raw()!=3074+rows as u64 || q.decision!=t
++          || q.frame!=s.frame.frame_digest() || q.after!=s.patch.outcome().outcome_tick || q.after!=r.world().tick()
++          || q.presample.dispatch_generation!=s.behavior.dispatch_generation
++          || q.submitted_armed_payload && (!self.armed()||!self.edge()||!q.true_active_atom_dropout)
++          || q.true_active_atom_dropout && q.true_complete_heard || now()? >= self.binding.expires_unix_seconds{
++            return Err("armed latch sealed receipt crossed arm, frame or real decision".into());
++        }
++        let witnesses=q.presample.rows.iter().zip(&q.world_rows).map(|(w,b)|json!({
++            "native_index":w.candidate_index,"features":w.observed_f9_14_bits,
++            "track_audit_only":b.track.raw(),"observed_slot":b.observed_slot,
++            "physical_target_audit_only":b.physical_target.raw(),"actual_pre_world_free_legal":b.free_legal_before_motion,
++            "actual_logit_bits_before_sampler":w.stock_f32_bits,
++            "actual_representative":w.projected_representative,
++            "actual_hand":w.independently_projected_hand,
++            "representative_forces_hand":w.representative_can_force_hand,
++        })).collect::<Vec<_>>();
++        Ok(json!({
++            "schema":1,"scope":NAME,"decision_tick":q.decision,"outcome_tick":q.after,
++            "frame":q.frame,"world_signature":q.presample.world_signature_words,
++            "dispatch_generation":q.presample.dispatch_generation,"weight_generation":q.presample.weight_generation,
++            "current_true_complete_cue":q.true_complete_heard,
++            "original_graded_lexical_recognition_f32_bits":q.original_graded_lexical_f32_bits,
++            "same_intact_world_atom_real_dropout":q.true_active_atom_dropout,
++            "observed_referent_audit_only":q.genuinely_observed_referent,
++            "carried_candidate_audit_only":q.carried_target,"armed_payload_actually_submitted_not_gain":q.submitted_armed_payload,
++            "genuine_paid_same_target_pickup":q.genuine_paid_same_target_pickup,"hand_projection":witnesses,
++            "actual_pre_treatment_post_context_and_before_sampler":q.presample.true_after_context_before_treatment_and_before_sampler,
++            "one_arm_not_causal_difference_or_scorecard":true,
++        }))
++    }
++}
+--- a/crates/alife_game_app/src/gpu_live_runtime.rs
++++ b/crates/alife_game_app/src/gpu_live_runtime.rs
+@@ -57,6 +57,12 @@
+ pub use contact211_f0_witness::{Contact211F0Witness, Contact211WitnessRequest};
+ #[cfg(feature = "wsp-cue-latch-observer")]
+ mod cue_latch_observer;
++#[cfg(feature = "wsp-cue-latch-armed")]
++mod wsp_armed_latch;
++#[cfg(feature = "wsp-cue-latch-armed")]
++mod wsp_armed_driver;
++#[cfg(feature = "wsp-cue-latch-armed")]
++pub(crate) use wsp_armed_driver::NativeArmedReceipt;
+ #[cfg(feature = "wsp-cue-latch-observer")]
+ pub(crate) use cue_latch_observer::CueLatchObserverReceipt;
+ use cpu_preparation::{
+@@ -3798,6 +3804,8 @@
+     contact211_completed: Option<contact211_f0_witness::Contact211Observation>,
+     #[cfg(feature = "wsp-cue-latch-observer")]
+     cue_latch_observer: Option<cue_latch_observer::CueLatchObserver>,
++    #[cfg(feature = "wsp-cue-latch-armed")]
++    wsp_armed: Option<wsp_armed_driver::Driver>,
+     // Retained in ordinary gameplay saves without enabling the training sampler.
+     training_sampling_resume: BTreeMap<u64, Vec<u8>>,
+     #[cfg(feature = "foundation-training")]
+@@ -6124,6 +6132,8 @@
+             contact211_completed: None,
+             #[cfg(feature = "wsp-cue-latch-observer")]
+             cue_latch_observer: None,
++            #[cfg(feature = "wsp-cue-latch-armed")]
++            wsp_armed: None,
+             training_sampling_resume: BTreeMap::new(),
+             #[cfg(feature = "foundation-training")]
+             training_demonstrator: None,
+@@ -7938,6 +7948,8 @@
+         }
+         #[cfg(feature = "wsp-cue-latch-observer")]
+         self.finish_cue_latch_after_staged_world(&result);
++        #[cfg(feature = "wsp-cue-latch-armed")]
++        self.finish_wsp_armed(&result);
+         self.performance_metrics.rollback_clone_calls = self
+             .performance_metrics
+             .rollback_clone_calls
+--- a/crates/alife_game_app/src/gpu_live_runtime/contact211_f0_witness.rs
++++ b/crates/alife_game_app/src/gpu_live_runtime/contact211_f0_witness.rs
+@@ -100,7 +100,7 @@
+     }
+ 
+     #[cfg(feature = "contact211-rank32")]
+-    fn contact211_rank32_input(
++    pub(super) fn contact211_rank32_input(
+         &self, frame: &PerceptionFrame, world: &Contact211WorldWitness, weights: [u32; 32],
+     ) -> Option<alife_gpu_backend::training_rollout::Contact211Rank32Input> {
+         use alife_core::UtteranceSourceKind;
+@@ -270,6 +270,10 @@
+         // No strict/ref mismatch can use either stock branch. All host-side checks
+         // are finished before sampler accounting. B's backend independently checks
+         // backend ownership/generations and must succeed before host accounting.
++        #[cfg(feature = "wsp-cue-latch-armed")]
++        if self.wsp_armed.is_some() {
++            return self.submit_wsp_armed_signed(batch,prepared,before,configs,next_counter);
++        }
+         let dispatch = self.prepare_contact211_signed_submission(prepared, before, configs)?;
+         let strict = matches!(&dispatch, Contact211SignedSubmission::Strict(_, _));
+         if !strict {
+--- a/crates/alife_game_app/src/gpu_live_runtime/cue_latch_observer.rs
++++ b/crates/alife_game_app/src/gpu_live_runtime/cue_latch_observer.rs
+@@ -15,12 +15,12 @@
+ const MICROSTEPS: usize = 4;
+ 
+ #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+-struct Atom {
+-    id: u64,
+-    position_bits: [u32; 3],
+-    words: [u32; 2],
+-    emitted: Tick,
+-    expires: Tick,
++pub(super) struct Atom {
++    pub(super) id: u64,
++    pub(super) position_bits: [u32; 3],
++    pub(super) words: [u32; 2],
++    pub(super) emitted: Tick,
++    pub(super) expires: Tick,
+ }
+ 
+ #[derive(Debug)]
+@@ -63,7 +63,7 @@
+     receipt: Option<CueLatchObserverReceipt>,
+ }
+ 
+-fn verify_atom(world: &HeadlessWorld, f: &PerceptionFrame, w: &[f32; 32]) -> (Option<Atom>, Option<f32>) {
++pub(super) fn verify_atom(world: &HeadlessWorld, f: &PerceptionFrame, w: &[f32; 32]) -> (Option<Atom>, Option<f32>) {
+     let context = &f.sensory().language_context;
+     let t = f.tick().raw();
+     let live = world.audible_utterances().into_iter()
+@@ -176,6 +176,8 @@
+         old_qualified_words: [u32;32], new_seed_words: [u32;2], decisions: u8,
+     ) -> Result<(), ScaffoldContractError> {
+         let bad=|| ScaffoldContractError::InvalidDecisionEvidence;
++        #[cfg(feature = "wsp-cue-latch-armed")]
++        if self.wsp_armed.is_some() {return Err(bad());}
+         let handle=*self.handles.get(&owner.raw()).ok_or_else(bad)?;
+         let digest=format!("{:x}",Sha256::digest(old_qualified_words.iter().flat_map(|w|w.to_le_bytes()).collect::<Vec<_>>()));
+         if verified_current!=SOURCE_CURRENT || digest!=OLD_RANK32_F32_WORDS_LE || new_seed_words!=SEED_WORDS
+--- a/crates/alife_game_app/src/gpu_live_runtime/staged_tick.rs
++++ b/crates/alife_game_app/src/gpu_live_runtime/staged_tick.rs
+@@ -960,6 +960,10 @@
+                     self.backend.tick_memory_batch_training(&memory_batch, &configs)?
+                 }
+             } else {
++                #[cfg(feature = "wsp-cue-latch-armed")]
++                if self.wsp_armed.is_some() {
++                    return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
++                }
+                 #[cfg(feature = "contact211-witness")]
+                 self.require_contact211_signed_scope()?;
+                 self.backend.tick_memory_batch(&memory_batch)?
+@@ -1379,6 +1383,10 @@
+             runtime.capture_cue_latch_observer(
+                 &prepared.frame, captured.input.candidate_binding.as_ref(), captured.handle,
+             );
++            #[cfg(feature = "wsp-cue-latch-armed")]
++            runtime.capture_wsp_armed(
++                &prepared.frame, captured.input.candidate_binding.as_ref(), captured.handle,
++            )?;
+             collection.batch.push(PreparedGpuBrainFrame {
+             handle: captured.handle,
+             world_entity_id: captured.world_entity_id,
+--- /dev/null
++++ b/crates/alife_game_app/src/gpu_live_runtime/wsp_armed_driver.rs
+@@ -0,0 +1,278 @@
++//! Fresh-contact protocol driver; constructed by a separately authorized
++//! research evaluator, never by schema8/9/11 or an ordinary World dispatch.
++use super::*;
++use alife_core::{MotorChannel, PerceptionFrameDigest};
++use alife_gpu_backend::training_rollout::{Contact211PresampleAdmission, Contact211PresampleReport,
++    Contact211Rank32Input, GpuTrainingStateSnapshot};
++use alife_world::{ActionPhase, Contact211WorldRow, Contact211WorldWitness, CueLatchTrackWitness, GripTransferKind,
++    HeadlessActionIds};
++use sha2::{Digest,Sha256};
++use super::cue_latch_observer::verify_atom;
++use super::wsp_armed_latch::{ArmedCueLatch, Atom, Evidence, Phase, Readout, Settlement, Stamp, Track};
++
++const CURRENT:&str="55672f322eadc64e223289d9df9883f62d0cc01aa97c0478119ad6c51d2852ee";
++const LEXICAL_WORDS:&str="3bfb032d8b445caccecbc3a1400935cee21e471c2e333216125f172c4449e1f6";
++
++#[derive(Debug)]
++struct Cut {
++    stamp: Stamp,
++    world: Contact211WorldWitness,
++    readout: Readout,
++    expected_pre_life_handle: GpuBrainHandle,
++    chosen: Option<CueLatchTrackWitness>,
++    had_actual_heard_pair: bool,
++    original_graded_lexical_f32_bits: u32,
++    authenticated_active_dropout: bool,
++    native_dispatch: Option<(u64,u32,bool,Contact211PresampleReport)>,
++}
++#[derive(Debug)]
++pub(super) struct Driver {
++    owner: OrganismId,
++    handle: GpuBrainHandle,
++    core: ArmedCueLatch,
++    words: [u32;32],
++    lexical: [f32;32],
++    ticks_remaining: u8,
++    armed_prepared: Option<Cut>,
++    last_receipt: Option<NativeArmedReceipt>,
++    terminal: bool,
++}
++#[derive(Debug)]
++pub(crate) struct NativeArmedReceipt {
++    pub(crate) decision: Tick,
++    pub(crate) after: Tick,
++    pub(crate) frame: PerceptionFrameDigest,
++    pub(crate) true_complete_heard: bool,
++    pub(crate) original_graded_lexical_f32_bits: u32,
++    pub(crate) true_active_atom_dropout: bool,
++    pub(crate) carried_target: Option<WorldEntityId>,
++    pub(crate) genuinely_observed_referent: Option<WorldEntityId>,
++    pub(crate) world_rows: Vec<Contact211WorldRow>,
++    pub(crate) submitted_armed_payload: bool,
++    pub(crate) genuine_paid_same_target_pickup: bool,
++    pub(crate) presample: Contact211PresampleReport,
++}
++
++fn bad() -> ScaffoldContractError { ScaffoldContractError::InvalidDecisionEvidence }
++fn track(t:CueLatchTrackWitness) -> Track {
++    Track{track:t.observed_track.raw(),spawn:t.physical_spawn_key.0,target:t.physical_target.raw()}
++}
++
++fn visual_referent(rows:&[CueLatchTrackWitness], lexical:&[f32;32], s:f32) -> Option<CueLatchTrackWitness> {
++    if !s.is_finite() || s==0.0 || !(2..=32).contains(&rows.len()){return None;}
++    let band=lexical[31];
++    let mut winner=None;
++    let mut runnerup=f32::NEG_INFINITY;
++    for &r in rows {
++        let mut score=0.0_f32;
++        for (j,b) in r.appearance_bits.into_iter().enumerate() {
++            let x=f32::from_bits(b);
++            if !(0.0..=1.0).contains(&x) {return None;}
++            score+=x*lexical[24+j];
++        }
++        let score=score*s.signum();
++        if winner.is_none_or(|(v,_):(f32,CueLatchTrackWitness)|score>v) {
++            if let Some((v,_))=winner {runnerup=runnerup.max(v);}
++            winner=Some((score,r));
++        } else {runnerup=runnerup.max(score);}
++    }
++    let (value,r)=winner?;
++    (value>=band && value-runnerup>=band && r.current_target_free && r.stock_approach_offered).then_some(r)
++}
++
++fn checked_actual_presample_delta(p:&Contact211PresampleReport,w:&Contact211WorldWitness,submitted:bool)->bool {
++    if p.rows.len()!=w.rows.len() || !p.rows.iter().zip(&w.rows).all(|(g,o)|
++        g.candidate_index==o.candidate_index && g.observed_f9_14_bits==o.appearance_f9_14_bits) {return false;}
++    let Some((before,after))=&p.true_after_context_before_treatment_and_before_sampler else {
++        return !submitted;
++    };
++    if !submitted || before.len()!=after.len() || before.len()!=usize::from(w.sealed_candidate_count) {return false;}
++    let changes=before.iter().zip(after).enumerate().filter(|(_, (a,b))|a!=b).collect::<Vec<_>>();
++    changes.len()<=2 && changes.into_iter().all(|(i,(&a,&b))|
++       f32::from_bits(a).is_finite() && f32::from_bits(b).is_finite() &&
++       p.rows.iter().zip(&w.rows).any(|(g,o)|usize::from(g.candidate_index)==i
++         && o.free_legal_before_motion && g.stock_f32_bits==b
++         && (g.independently_projected_hand || g.representative_can_force_hand)))
++}
++
++fn opaque_atom(a:super::cue_latch_observer::Atom, owner:OrganismId) -> Atom {
++    let mut b=Vec::new();
++    b.extend(a.id.to_le_bytes());
++    b.extend(a.emitted.raw().to_le_bytes());
++    b.extend(a.expires.raw().to_le_bytes());
++    b.extend(owner.raw().to_le_bytes());
++    for u in a.position_bits.into_iter().chain(a.words) {b.extend(u.to_le_bytes());}
++    let digest=Sha256::digest(&b);
++    Atom{id:a.id,birth:a.emitted.raw(),expires:a.expires.raw(),
++        acoustic_digest:std::array::from_fn(|i|u64::from_le_bytes(digest[i*8..i*8+8].try_into().expect("32 digest bytes")))}
++}
++
++impl GpuLiveBrainRuntime {
++    /// Source-integration seam only. A future sealed *different* evaluator
++    /// profile owns actual independent authorization, never a command flag.
++    pub(crate) fn begin_wsp_armed_checked(
++        &mut self, owner: OrganismId, verified_current:&str, phase_is_armed:bool,
++        old_lexical:[u32;32], explicit_weightcode:[u32;4], len:u8,
++    ) -> Result<(),ScaffoldContractError> {
++        let handle=*self.handles.get(&owner.raw()).ok_or_else(bad)?;
++        let word_sha=format!("{:x}",Sha256::digest(old_lexical.iter().flat_map(|w|w.to_le_bytes()).collect::<Vec<_>>()));
++        if verified_current!=CURRENT || word_sha!=LEXICAL_WORDS
++            || explicit_weightcode!=super::wsp_armed_latch::WEIGHT_WORDS
++            || self.wsp_armed.is_some() || self.cue_latch_observer.is_some() || self.contact211_request.is_some()
++            || self.handles.len()!=1 || self.residents.len()!=1
++            || self.residents.get(&owner.raw()).is_none_or(|r|r.sleep_scheduler.state().phase!=SleepPhase::Awake)
++            || self.training_sampling.is_none_or(|x|x.demonstrator.is_some())
++            || self.training_demonstrator.is_some() || self.sensor_profile!=SensorProfile::GroundedTerrainVisionV1
++            || len!=3
++        {return Err(bad());}
++        // Full handle (includes backend instance) is checked below on every cut.
++        let phase=if phase_is_armed {Phase::ArmedRetention}else{Phase::ImmediateControl};
++        let core=ArmedCueLatch::new(phase,owner.raw(),u64::from(handle.generation())).ok_or_else(bad)?;
++        self.wsp_armed=Some(Driver{owner,handle,core,words:old_lexical,lexical:old_lexical.map(f32::from_bits),
++            ticks_remaining:len,armed_prepared:None,last_receipt:None,terminal:false});
++        Ok(())
++    }
++
++    pub(super) fn capture_wsp_armed(
++        &mut self, frame:&PerceptionFrame, binding:Option<&alife_world::GroundedCandidateBinding>,
++        handle:GpuBrainHandle,
++    ) -> Result<(),ScaffoldContractError> {
++        let Some(d)=self.wsp_armed.as_mut() else {return Ok(());};
++        if d.terminal || d.ticks_remaining==0 || d.armed_prepared.is_some()
++            || handle!=d.handle || frame.organism_id()!=d.owner || self.contact211_request.is_some()
++        {return Err(bad());}
++        let binding=binding.ok_or_else(bad)?;
++        let w=self.world.cue_latch_world_witness(frame,binding)?;
++        let contact=self.world.contact211_world_witness(frame,binding)?;
++        if contact.decision_tick!=w.tick || contact.organism!=w.organism
++            || contact.frame_digest!=w.frame_digest || contact.current_world_signature!=w.world_signature
++            || contact.hand_actually_empty!=w.hand_empty {return Err(bad());}
++        let stamp=Stamp{tick:w.tick.raw(),owner:w.organism.raw(),runtime_generation:u64::from(handle.generation()),
++            frame:w.frame_digest.0,world:w.world_signature.words};
++        let empty=frame.sensory().language_context.heard_tokens.iter().all(Option::is_none);
++        let (a,u)=verify_atom(&self.world,frame,&d.lexical);
++        let heard=a.is_some() && u.is_some_and(|f|f!=0.0) && !empty;
++        let old=d.core.bound();
++        let chosen=if heard {
++            visual_referent(&w.tracks,&d.lexical,u.unwrap_or(0.0))
++        } else if u==Some(0.0) && empty && a.is_some_and(|v|
++            old.is_some_and(|t|opaque_atom(v,d.owner)==t.2)) {
++            old.and_then(|t|visual_referent(&w.tracks,&d.lexical,t.1))
++                .filter(|r|old.is_some_and(|t|t.0==track(*r)))
++        } else {None};
++        let evidence=match (a,chosen) {
++            (Some(a),Some(t)) if heard=>Evidence::Heard{atom:opaque_atom(a,d.owner),target:track(t),signed:u.unwrap_or(0.0)},
++            (Some(a),Some(t)) if empty&&u==Some(0.0)=>Evidence::NativeDropout{atom:opaque_atom(a,d.owner),target:track(t)},
++            _=>Evidence::Reset,
++        };
++        let authenticated_active_dropout=w.hand_empty && matches!(evidence,Evidence::NativeDropout{..});
++        let readout=d.core.prepare(stamp,w.hand_empty,evidence).ok_or_else(bad)?;
++        d.armed_prepared=Some(Cut{stamp,world:contact,readout,expected_pre_life_handle:handle,
++            chosen,had_actual_heard_pair:heard,
++            original_graded_lexical_f32_bits:if heard {u.expect("verified complete positive-confidence cue").to_bits()}else{0},
++            authenticated_active_dropout,native_dispatch:None});
++        d.last_receipt=None;
++        Ok(())
++    }
++
++    pub(super) fn submit_wsp_armed_signed(
++        &mut self, batch:&GpuClosedLoopMemoryBatchInput<'_>, prepared:&[PreparedGpuBrainFrame],
++        before:&[GpuTrainingStateSnapshot], configs:&[alife_gpu_backend::GpuTrainingSamplingConfig], next_counter:u32,
++    ) -> Result<Vec<alife_gpu_backend::GpuClosedLoopTick>,ScaffoldContractError>{
++        let [row]=prepared else {return Err(bad());};
++        let [saved]=before else {return Err(bad());};
++        let [config]=configs else {return Err(bad());};
++        let d=self.wsp_armed.as_ref().ok_or_else(bad)?;
++        let c=d.armed_prepared.as_ref().ok_or_else(bad)?;
++        let f=&row.frame;
++        if c.native_dispatch.is_some() || d.terminal || config.demonstrator.is_some()
++            || row.handle!=d.handle || row.handle!=c.expected_pre_life_handle || row.handle!=saved.handle
++            || saved.tick!=c.stamp.tick || f.tick().raw()!=c.stamp.tick || f.frame_digest().0!=c.stamp.frame
++            || self.world.tick()!=c.world.decision_tick || self.world.canonical_signature_digest()?!=c.world.current_world_signature
++            || self.contact211_request.is_some()
++            || self.training_sampling.is_none_or(|p|p.demonstrator.is_some()||p.counter.checked_add(1)!=Some(next_counter))
++        {return Err(bad());}
++        let gate=Contact211PresampleAdmission {handle:row.handle,tick:f.tick(),frame_digest:f.frame_digest(),
++            world_signature_words:c.stamp.world,next_dispatch_generation:self.backend.contact211_presample_expected_dispatch(),
++            expected_weight_generation:saved.active_weight_generation};
++        let carry=if let Readout::Carry{target,signed}=c.readout {
++            let mut all=c.world.rows.iter().filter(|r|r.physical_target.raw()==target.target
++                && r.track.raw()==target.track && r.free_legal_before_motion);
++            let b=all.next();
++            if all.next().is_some() {return Err(bad());}
++            let roster=c.world.rows.iter().map(|r|(r.candidate_index,r.observed_slot,r.appearance_f9_14_bits,r.free_legal_before_motion)).collect::<Vec<_>>();
++            let grip=f.sensory().channels.tactile_contact[2];
++            if let Some(b)=b {Some(Contact211Rank32Input::try_bind_wsp_retained(f,b.candidate_index,signed,grip,d.words,&roster)?)} else {None}
++        } else {None};
++        let armed_submitted=carry.is_some();
++        // Full immediate old behavior is independent of whether the new state
++        // accepts a unique contact referent: both arms have same stock Rank32.
++        let input=if c.had_actual_heard_pair {
++            self.contact211_rank32_input(f,&c.world,d.words)
++        } else {carry};
++        let (expected_dispatch,expected_frame,expected_weight,expected_tick,expected_world)=
++           (gate.next_dispatch_generation,gate.frame_digest,gate.expected_weight_generation,gate.tick,gate.world_signature_words);
++        let (ticks,proof)=if let Some(input)=input.as_ref() {
++            self.backend.tick_memory_batch_training_contact211_rank32(batch,configs,gate,input)?
++        } else {
++            self.backend.tick_memory_batch_training_contact211_witness_strict(batch,configs,gate)?
++        };
++        self.training_sampling.as_mut().expect("proved signed counter").counter=next_counter;
++        // No fallback or retry after the device has already run. Missing
++        // evidence turns the bounded scope terminal without claiming a result.
++        let trace=proof.filter(|p|p.dispatch_generation==expected_dispatch &&
++            p.frame_digest==expected_frame && p.weight_generation==expected_weight
++            && p.tick==expected_tick && p.world_signature_words==expected_world
++            && checked_actual_presample_delta(p,&c.world,armed_submitted));
++        let d=self.wsp_armed.as_mut().expect("armed driver prepared");
++        let cut=d.armed_prepared.as_mut().expect("armed cut entered dispatch");
++        if let Some(t)=trace{
++            cut.native_dispatch=Some((expected_dispatch,next_counter,armed_submitted,t));
++        } else {d.terminal=true;d.core.abort();}
++        Ok(ticks)
++    }
++
++    pub(super) fn finish_wsp_armed(&mut self, result:&Result<Vec<LiveBrainTickSummary>,GameAppShellError>){
++        let Some(d)=self.wsp_armed.as_mut() else {return;};
++        let close=|d:&mut Driver|{d.terminal=true;d.last_receipt=None;d.core.abort();};
++        let Some(mut c)=d.armed_prepared.take() else {close(d);return;};
++        let Ok(summaries)=result else {close(d);return;};
++        let [summary]=summaries.as_slice() else {close(d);return;};
++        let [step]=self.last_foundation_training_steps.as_slice() else {close(d);return;};
++        let outcome=step.patch.outcome();
++        let Some(joint)=outcome.joint.as_ref() else {close(d);return;};
++        let Some(motor)=summary.motor_execution.as_ref() else {close(d);return;};
++        let Some((generation,_,submitted,presample))=c.native_dispatch.take() else {close(d);return;};
++        if d.terminal || summary.organism_id!=d.owner || summary.world_tick_before.raw()!=c.stamp.tick
++            || summary.world_tick_after!=outcome.outcome_tick || self.world.tick()!=outcome.outcome_tick
++            || step.before.handle!=d.handle || step.after_inference.handle!=d.handle ||
++            step.frame.frame_digest().0!=c.stamp.frame || step.frame.tick().raw()!=c.stamp.tick ||
++            outcome.organism_id!=d.owner || step.behavior.dispatch_generation!=generation
++        {close(d);return;}
++        let settled=c.chosen.and_then(|t|{
++            let e=t.physical_target;
++            let m=motor.channel_receipts.iter().any(|r|r.command.channel==MotorChannel::Manipulation
++                && r.command.primitive==HeadlessActionIds::GRAB && r.command.target.and_then(|p|p.entity)==Some(e)
++                && r.phase==ActionPhase::Completed
++                && r.grip_transfers.iter().any(|g|g.kind==GripTransferKind::Acquired && g.object==e
++                    && g.previous_owner.is_none() && g.new_owner==Some(d.owner)));
++            let pay=joint.channel_outcomes.iter().any(|r|r.channel==MotorChannel::Manipulation && r.physical.energy_cost.raw()>0.0
++                && r.physical.target_entity==Some(e) && r.execution_evidence.is_some_and(|x|
++                    x.succeeded && x.primitive==HeadlessActionIds::GRAB && x.command_target==Some(e)));
++            (m&&pay&&c.world.hand_actually_empty&&t.current_target_free&&self.world.entity(e).is_some_and(|w|
++                !w.consumed&&w.carried_by==Some(d.owner)&&w.tracking_key==t.physical_spawn_key)).then_some(Settlement::PaidAcquired(track(t)))
++        }).unwrap_or_else(||if self.world.cue_latch_hand_empty(d.owner){Settlement::Empty}else{Settlement::OtherOccupancy});
++        let Some(earned)=d.core.commit(c.stamp,outcome.outcome_tick.raw(),settled) else {close(d);return;};
++        d.ticks_remaining=d.ticks_remaining.saturating_sub(1);
++        d.last_receipt=Some(NativeArmedReceipt{decision:step.frame.tick(),after:outcome.outcome_tick,frame:step.frame.frame_digest(),
++            true_complete_heard:c.had_actual_heard_pair,original_graded_lexical_f32_bits:c.original_graded_lexical_f32_bits,
++            true_active_atom_dropout:c.authenticated_active_dropout,
++            carried_target:if matches!(c.readout,Readout::Carry{..}){c.chosen.map(|z|z.physical_target)}else{None},
++            submitted_armed_payload:submitted,genuine_paid_same_target_pickup:earned,
++            genuinely_observed_referent:c.chosen.map(|z|z.physical_target),world_rows:c.world.rows,presample});
++    }
++
++    pub(crate) fn take_wsp_armed_receipt(&mut self)->Option<NativeArmedReceipt>{
++        self.wsp_armed.as_mut()?.last_receipt.take()
++    }
++}
+--- /dev/null
++++ b/crates/alife_game_app/src/gpu_live_runtime/wsp_armed_latch.rs
+@@ -0,0 +1,244 @@
++//! Detached two-cell direct WeightCode. Only opaque witnesses produced by the
++//! signed World/runtime adapter may enter; this module never chooses an action.
++//! OFF omits the adapter and preserves byte-identical stock sampler inputs.
++
++pub(super) const WEIGHT_WORDS: [u32; 4] = [1050673152, 1042284544, 1050673152, 1042284544];
++const ONE_CUT_UNIT_NORM: f32 = f32::from_bits(1039384091);
++const LEFT_WEIGHT: usize = 0;
++const RIGHT_WEIGHT: usize = 2;
++
++/// The arm is digest/role-bound at admission, immutable through the run. Both
++/// process independent cohorts have unchanged immediate cue readout.
++#[derive(Debug, Copy, Clone, PartialEq, Eq)]
++pub(super) enum Phase { ImmediateControl, ArmedRetention }
++
++/// Native identity and generation are verified by the producer. Tick is a
++/// genuine World cut, never a behavior-feature or a cue fabricated from time.
++#[derive(Debug, Copy, Clone, PartialEq, Eq)]
++pub(super) struct Stamp {
++    pub(super) tick: u64,
++    pub(super) owner: u64,
++    pub(super) runtime_generation: u64,
++    pub(super) frame: [u64; 4],
++    pub(super) world: [u64; 4],
++}
++
++#[derive(Debug, Copy, Clone, PartialEq, Eq)]
++pub(super) struct Atom {
++    pub(super) id: u64,
++    pub(super) birth: u64,
++    pub(super) expires: u64,
++    pub(super) acoustic_digest: [u64; 4], // exact source/addressee/ordered packet/spawn
++}
++
++#[derive(Debug, Copy, Clone, PartialEq, Eq)]
++pub(super) struct Track {
++    pub(super) track: u64,
++    pub(super) spawn: [u64; 2],
++    pub(super) target: u64,
++}
++
++/// These values are constructed by a single authoritative pre-dispatch
++/// World+PerceptionFrame adapter, NOT from a manifest or logical label.
++#[derive(Debug, Copy, Clone)]
++pub(super) enum Evidence {
++    /// Exact complete same-current-atom signed rails and uniquely winning live visual feature.
++    Heard { atom: Atom, target: Track, signed: f32 },
++    /// The *same actual live atom* still exists. Renderer produced all empty
++    /// heard rows for this same frame and rebound the still-visible target.
++    /// No alternate track can inherit the old state.
++    NativeDropout { atom: Atom, target: Track },
++    /// No authorizable cue: acoustic absence / ambiguity / conflicting tracks /
++    /// non-free or invalid state / stale provenance. Never writes a logit.
++    Reset,
++}
++
++#[derive(Debug, Copy, Clone, PartialEq)]
++pub(super) enum Readout {
++    NoTransfer,
++    /// Existing immediate qualified path, not any special new injector.
++    Immediate,
++    /// Separate signed experimental retention bit; never written into actual HeardTokens.
++    Carry { target: Track, signed: f32 },
++}
++
++#[derive(Debug, Copy, Clone, PartialEq, Eq)]
++pub(super) enum Settlement {
++    /// Full successful same-stamp outcome; ordinary no-acquisition continuation.
++    Empty,
++    /// Real paid 211 plus completed world grip transfer for this exact target.
++    PaidAcquired(Track),
++    /// Actual own hand occupied by a different / unproven target.
++    OtherOccupancy,
++}
++
++#[derive(Debug, Copy, Clone)]
++struct Live { atom: Atom, target: Track, q: [f32; 2] }
++
++/// Only one staged signed native frame may remain pending. No learned state is
++/// published until true settled same-cut outcome; exceptions fail disarmed.
++#[derive(Debug, Copy, Clone)]
++struct Plan { stamp: Stamp, next: Option<Live>, retire: Option<Atom>, readout: Readout }
++
++#[derive(Debug)]
++pub(super) struct ArmedCueLatch {
++    phase: Phase,
++    who: (u64,u64),
++    previous: Option<u64>,
++    live: Option<Live>,
++    retired: Option<Atom>,
++    pending: Option<Plan>,
++    fault: bool,
++}
++
++fn valid_atom(a: Atom, t: u64) -> bool {
++    a.id != 0 && a.acoustic_digest != [0;4] && a.birth <= t && t <= a.expires
++        && a.expires.checked_sub(a.birth).is_some_and(|d|d<=1)
++}
++fn valid_track(t: Track) -> bool { t.track != 0 && t.spawn != [0;2] && t.target != 0 }
++
++fn advance(q: [f32;2], drive: f32) -> [f32;2] {
++    let u=[(-drive).max(0.0),drive.max(0.0)];
++    let mut cells=q;
++    for _ in 0..4 {
++        for (i,w) in [LEFT_WEIGHT,RIGHT_WEIGHT].into_iter().enumerate() {
++            let recurrent=f32::from_bits(WEIGHT_WORDS[w])*cells[i];
++            let entry=f32::from_bits(WEIGHT_WORDS[w+1])*u[i];
++            cells[i]=0.75*cells[i]+0.25*(recurrent+entry).tanh();
++        }
++    }
++    cells
++}
++
++impl ArmedCueLatch {
++    pub(super) fn new(phase: Phase, owner: u64, runtime_generation: u64) -> Option<Self> {
++        if owner==0 || runtime_generation==0 {return None;}
++        Some(Self {phase,who:(owner,runtime_generation),previous:None,live:None,
++                  retired:None,pending:None,fault:false})
++    }
++
++    /// Begin once, before actual signed sampler. None denotes a failed scope,
++    /// whereas NoTransfer is true stock-isomorphic dispatch for a valid scope.
++    pub(super) fn prepare(&mut self, stamp: Stamp, valid_empty_hand: bool, e: Evidence) -> Option<Readout> {
++        if self.fault || self.pending.is_some() || self.who!=(stamp.owner,stamp.runtime_generation)
++           || stamp.frame==[0;4] || stamp.world==[0;4]
++           || self.previous.is_some_and(|p|p.checked_add(1)!=Some(stamp.tick)) {
++            self.abort();return None;
++        }
++        let old=self.live;
++        let mut plan=Plan {stamp,next:None,retire:old.map(|x|x.atom),readout:Readout::NoTransfer};
++        if valid_empty_hand {
++            let scope=match e {
++                Evidence::Heard{atom,target,signed} if signed.is_finite() && signed!=0.0 && signed.abs()<=1.0 =>
++                    Some((atom,target,signed)),
++                Evidence::NativeDropout{atom,target} if old.is_some() => Some((atom,target,0.0)),
++                _=>None,
++            };
++            if let Some((atom,target,signed))=scope {
++                // Another utterance or referent cannot inherit old state. It
++                // starts from zero only if no prior state remained and its real
++                // signed pair was newly heard on this very cut.
++                let custody_bound=old.is_none_or(|x|x.atom==atom && x.target==target);
++                let new_only_current=old.is_some() || (signed!=0.0 && atom.birth==stamp.tick);
++                let opponent_unchanged=old.is_none_or(|x| signed==0.0 || (x.q[1]-x.q[0]).signum()==signed.signum());
++                if valid_atom(atom,stamp.tick) && valid_track(target) && custody_bound
++                   && new_only_current && opponent_unchanged && self.retired!=Some(atom) {
++                    // Discretize only the already-proved positive-confidence
++                    // complete native lexical event, not Sound or stored words.
++                    // NoTransfer on unavailable, rejected or unknown event.
++                    let input=if signed==0.0 {0.0}else{signed.signum()};
++                    let q=advance(old.map_or([0.0;2],|x|x.q),input);
++                    let carry=((q[1]-q[0])/ONE_CUT_UNIT_NORM).clamp(-1.0,1.0);
++                    if carry.is_finite() && carry!=0.0 {
++                        plan.next=Some(Live{atom,target,q});
++                        plan.retire=None;
++                        if signed!=0.0 { plan.readout=Readout::Immediate; }
++                        else if self.phase==Phase::ArmedRetention {
++                            plan.readout=Readout::Carry{target,signed:carry};
++                        }
++                    }
++                }
++            }
++        }
++        self.pending=Some(plan);
++        Some(plan.readout)
++    }
++
++    pub(super) fn bound(&self) -> Option<(Track,f32,Atom)> {
++        let v=self.live?;
++        (!self.fault).then_some((v.target,v.q[1]-v.q[0],v.atom))
++    }
++
++    /// Step's authenticated paid/custody adapter calls once after World
++    /// transaction. Return Some(true) only for actually earned same-target pickup.
++    pub(super) fn commit(&mut self, stamp: Stamp, outcome_tick: u64, settled: Settlement) -> Option<bool> {
++        if self.fault {return None;}
++        let Some(plan)=self.pending.take() else {self.abort();return None;};
++        if plan.stamp!=stamp || stamp.tick.checked_add(1)!=Some(outcome_tick) {
++            self.abort();return None;
++        }
++        let earned=matches!((plan.next,settled),
++            (Some(x),Settlement::PaidAcquired(track)) if x.target==track);
++        self.previous=Some(stamp.tick);
++        self.retired=self.retired.filter(|x|x.expires>=stamp.tick);
++        if let Some(a)=plan.retire {self.retired=Some(a);}
++        if settled!=Settlement::Empty {
++            if let Some(x)=plan.next {self.retired=Some(x.atom);}
++            self.live=None;
++        } else {
++            self.live=plan.next;
++        }
++        Some(earned)
++    }
++
++    pub(super) fn abort(&mut self) {
++        self.pending=None;
++        self.live=None;
++        self.retired=None;
++        self.fault=true;
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    const ATOM:Atom=Atom{id:19,birth:7,expires:8,acoustic_digest:[1,2,3,4]};
++    const TRACK:Track=Track{track:21,spawn:[5,4],target:18};
++    fn cut(t:u64)->Stamp{Stamp{tick:t,owner:3,runtime_generation:37,frame:[1,1,2,1],world:[2,2,3,2]}}
++    fn start(phase:Phase)->ArmedCueLatch {
++        let mut s=ArmedCueLatch::new(phase,3,37).unwrap();
++        let e=Evidence::Heard{atom:ATOM,target:TRACK,signed:0.75};
++        assert_eq!(s.prepare(cut(7),true,e),Some(Readout::Immediate));
++        assert!(s.live.is_none(), "cannot publish prior to actual settlement");
++        assert_eq!(s.commit(cut(7),8,Settlement::Empty),Some(false));
++        s
++    }
++    #[test]
++    fn genuine_dropout_is_only_treatment_then_true_silence() {
++        let mut a=start(Phase::ImmediateControl);
++        let mut b=start(Phase::ArmedRetention);
++        let e=Evidence::NativeDropout{atom:ATOM,target:TRACK};
++        assert_eq!(a.prepare(cut(8),true,e),Some(Readout::NoTransfer));
++        assert!(matches!(b.prepare(cut(8),true,e),Some(Readout::Carry{target:TRACK,signed}) if 0.0<signed&&signed<=1.0));
++        assert_eq!(a.commit(cut(8),9,Settlement::Empty),Some(false));
++        assert_eq!(b.commit(cut(8),9,Settlement::PaidAcquired(TRACK)),Some(true));
++        assert_eq!(b.prepare(cut(9),true,e),Some(Readout::NoTransfer));
++        assert_eq!(a.prepare(cut(9),true,Evidence::Reset),Some(Readout::NoTransfer));
++    }
++    #[test]
++    fn wrong_or_duplicate_binding_does_not_transmit() {
++        let mut x=start(Phase::ArmedRetention);
++        let other=Track{spawn:[4,5],..TRACK};
++        assert_eq!(x.prepare(cut(8),true,Evidence::NativeDropout{atom:ATOM,target:other}),Some(Readout::NoTransfer));
++        assert_eq!(x.prepare(cut(8),true,Evidence::NativeDropout{atom:ATOM,target:TRACK}),None);
++        assert_eq!(x.commit(cut(8),9,Settlement::Empty),None);
++    }
++    #[test]
++    fn only_paid_same_target_earns_reset() {
++        let mut x=start(Phase::ArmedRetention);
++        assert!(matches!(x.prepare(cut(8),true,Evidence::NativeDropout{atom:ATOM,target:TRACK}),
++            Some(Readout::Carry{..})));
++        assert_eq!(x.commit(cut(8),9,Settlement::OtherOccupancy),Some(false));
++        assert!(x.live.is_none());
++    }
++}
+--- a/crates/alife_gpu_backend/Cargo.toml
++++ b/crates/alife_gpu_backend/Cargo.toml
+@@ -24,3 +24,4 @@
+ training-rollout = []
+ contact211-witness = ["training-rollout"]
+ contact211-rank32 = ["contact211-witness"]
++wsp-cue-latch-armed = ["contact211-rank32"]
+--- /dev/null
++++ b/crates/alife_gpu_backend/shaders/wsp_armed_contact211.wgsl
+@@ -0,0 +1,103 @@
++// Appended only to the detached, signed decode module. Production shaders/sampler untouched.
++const WSP_ARMED_CONTACT211_MAGIC:u32 = 0x51333243u;
++const WSP_ARMED_CONTACT211_PAYLOAD_WORDS:u32 = 252u;
++
++fn wsp_armed_contact211_unit(x:f32) -> bool {
++  return finite_decode(x) && x >= 0.0 && x <= 1.0;
++}
++
++@compute @workgroup_size(1)
++fn apply_wsp_armed_contact211(@builtin(global_invocation_id) gid:vec3<u32>) {
++  if (any(gid != vec3<u32>(0u))) { return; }
++  let header=load_perception_header(0u);
++  if (!activity_contract_prevalidated(header) || (header.reserved & 0x80000000u)==0u
++      || header.candidate_count==0u || header.candidate_count>32u) { return; }
++  let sampling=header.reserved & 0x7fffffffu;
++  let port=sampling+11u;
++  if (!span_within(port, WSP_ARMED_CONTACT211_PAYLOAD_WORDS, arrayLength(&frame_payload_words))
++      || frame_payload_words[sampling+3u]!=0u
++      || frame_payload_words[port]!=WSP_ARMED_CONTACT211_MAGIC || frame_payload_words[port+1u]!=2u
++      || frame_payload_words[port+2u]!=header.candidate_count
++      || frame_payload_words[port+5u]!=header.tick_lo || frame_payload_words[port+6u]!=header.tick_hi
++      || frame_payload_words[port+7u]!=header.slot || frame_payload_words[port+8u]!=header.slot_generation
++      || frame_payload_words[port+9u]!=header.dispatch_generation_lo
++      || frame_payload_words[port+10u]!=header.dispatch_generation_hi) { return; }
++  let roster=frame_payload_words[port+3u];
++  let legal=frame_payload_words[port+4u];
++  let grip=bitcast<f32>(frame_payload_words[port+11u]);
++  let gain=bitcast<f32>(frame_payload_words[port+58u]);
++  let band=bitcast<f32>(frame_payload_words[port+59u]);
++  if (roster==0u || (legal & ~roster)!=0u || !wsp_armed_contact211_unit(grip) || grip==1.0
++      || !finite_decode(gain) || gain<=0.0 || gain>32.0
++      || !finite_decode(band) || band<=0.0 || band>=1.0) { return; }
++
++  // Separate cognitive state words, not synthetic acoustic rails.
++  let purpose=bitcast<f32>(frame_payload_words[port+12u]);
++  let bound_target=frame_payload_words[port+13u];
++  if (!finite_decode(purpose) || purpose==0.0 || abs(purpose)>1.0
++      || bound_target>=header.candidate_count
++      || (legal & (1u<<bound_target))==0u) { return; }
++  for (var j=14u; j<28u; j++) {
++    if (frame_payload_words[port+j]!=0u) { return; }
++  }
++
++  let brain=brain_slots[header.brain_slot_index];
++  var seen=0u;
++  var count=0u;
++  var indexes:array<u32,2>;
++  var axes:array<f32,2>;
++  var stock:array<f32,2>;
++  for (var i=0u; i<header.candidate_count; i++) {
++    let offer=load_candidate(header.candidate_offset+i*8u);
++    let bit=1u<<i;
++    // Action kind identifies a stock logistical port, never a noun or target.
++    if (offer.action_id!=211u) {
++      if ((roster & bit)!=0u) { return; }
++      continue;
++    }
++    if ((roster & bit)==0u || offer.candidate_index!=i || offer.family!=5u
++        || offer.observation_slot_or_max>=16u || factorized_motor_slot(offer.kind)!=2u
++        || !span_within(offer.feature_offset, 15u, arrayLength(&frame_payload_words))) { return; }
++    seen=seen|bit;
++    var axis=0.0;
++    for (var j=0u; j<6u; j++) {
++      let feature=frame_payload_words[offer.feature_offset+9u+j];
++      if (feature!=frame_payload_words[port+60u+i*6u+j]) { return; }
++      let x=bitcast<f32>(feature);
++      let k=bitcast<f32>(frame_payload_words[port+52u+j]);
++      if (!wsp_armed_contact211_unit(x) || !finite_decode(k) || abs(k)>1.0) { return; }
++      axis=axis+x*k;
++    }
++    // Same stock projection predicates used by the existing native signed
++    // sampler, before changing any logit. A representative can force Hand when
++    // the independent Hand channel is disabled.
++    let projected=(training_candidate_allowed(header,brain,i,0u)
++            && factorized_motor_slot(offer.kind)==2u)
++        || training_candidate_allowed(header,brain,i,3u);
++    if ((legal & bit)!=0u && projected) {
++      // Only this initial paired scope. A third legal projected prop, including
++      // an appearance alias, forces full abstention rather than rank tie break.
++      if (count>=2u) { return; }
++      indexes[count]=i;
++      axes[count]=axis;
++      stock[count]=load_state_f32(brain.candidate_logit_offset+i);
++      count++;
++    }
++  }
++  if (seen!=roster || count!=2u) { return; }
++  let direction=sign(purpose);
++  let a=direction*axes[0];
++  let b=direction*axes[1];
++  if (max(a,b)<band || abs(a-b)<band) { return; }
++  // Re-binding is a safety guard, not a selected-action/address override.
++  // Only accept a locally recomputed perceptual winner matching the same
++  // tracked referent. Actual existing sampler still decides both offers.
++  let winning_index=select(indexes[1],indexes[0],a>b);
++  if (winning_index!=bound_target) { return; }
++  let strength=gain*purpose*(1.0-grip);
++  let new_a=stock[0]+strength*axes[0];
++  let new_b=stock[1]+strength*axes[1];
++  if (!finite_decode(new_a) || !finite_decode(new_b)) { return; }
++  store_state_f32(brain.candidate_logit_offset+indexes[0],new_a);
++  store_state_f32(brain.candidate_logit_offset+indexes[1],new_b);
++}
+--- a/crates/alife_gpu_backend/src/closed_loop_pipeline.rs
++++ b/crates/alife_gpu_backend/src/closed_loop_pipeline.rs
+@@ -654,6 +654,8 @@
+     visible_self_grip_v1: bool,
+     #[cfg(feature = "contact211-rank32")]
+     contact211_rank32: bool,
++    #[cfg(feature = "wsp-cue-latch-armed")]
++    wsp_armed_latch: bool,
+ }
+ 
+ impl GpuActiveBatchUpload {
+@@ -678,6 +680,8 @@
+             h.dispatch_generation_lo,h.dispatch_generation_hi]);
+         self.frame_payload_words.extend(words);
+         self.contact211_rank32 = true;
++        #[cfg(feature = "wsp-cue-latch-armed")]
++        { self.wsp_armed_latch=words[1]==2; }
+         Ok(())
+     }
+ 
+@@ -1182,6 +1186,8 @@
+             visible_self_grip_v1,
+             #[cfg(feature = "contact211-rank32")]
+             contact211_rank32: false,
++            #[cfg(feature = "wsp-cue-latch-armed")]
++            wsp_armed_latch: false,
+             object_input_counts: entries
+                 .iter()
+                 .map(|entry| {
+@@ -1565,6 +1571,8 @@
+     visible_self_grip_layout: wgpu::PipelineLayout,
+     #[cfg(feature = "contact211-rank32")]
+     contact211_rank32_pipeline: std::sync::OnceLock<wgpu::ComputePipeline>,
++    #[cfg(feature = "wsp-cue-latch-armed")]
++    wsp_armed_latch_pipeline: std::sync::OnceLock<wgpu::ComputePipeline>,
+     select_pipeline: wgpu::ComputePipeline,
+     speech_decode_pipeline: wgpu::ComputePipeline,
+     prevalidate_eligibility_pipeline: wgpu::ComputePipeline,
+@@ -1912,6 +1920,8 @@
+             visible_self_grip_layout: pipeline_layout,
+             #[cfg(feature = "contact211-rank32")]
+             contact211_rank32_pipeline: std::sync::OnceLock::new(),
++            #[cfg(feature = "wsp-cue-latch-armed")]
++            wsp_armed_latch_pipeline: std::sync::OnceLock::new(),
+             select_pipeline,
+             speech_decode_pipeline,
+             prevalidate_eligibility_pipeline,
+@@ -3306,7 +3316,13 @@
+                 #[cfg(feature = "contact211-witness")]
+                 Some(readback) if contact211_presample => {
+                     self.record_pre_context_compute_pass(encoder, batch)?;
+-                    self.record_selector_logit_copy(encoder, buffers, batch, readback, false)?;
++                    #[cfg(feature = "wsp-cue-latch-armed")]
++                    let legacy_capture = !batch.wsp_armed_latch;
++                    #[cfg(not(feature = "wsp-cue-latch-armed"))]
++                    let legacy_capture = true;
++                    if legacy_capture {
++                        self.record_selector_logit_copy(encoder, buffers, batch, readback, false)?;
++                    }
+                     {
+                         let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                             label: Some("closed-loop-contact211-observe-pre-sample-context"),
+@@ -3314,12 +3330,23 @@
+                         });
+                         self.record_memory_context_only(&mut pass, batch)?;
+                     }
++                    #[cfg(feature = "wsp-cue-latch-armed")]
++                    if batch.wsp_armed_latch {
++                        self.record_selector_logit_copy(encoder, buffers, batch, readback, false)?;
++                    }
+                     #[cfg(feature = "contact211-rank32")]
+                     if batch.contact211_rank32 {
+                         let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                             label: Some("closed-loop-detached-contact211-rank32"),
+                             timestamp_writes: None,
+                         });
++                        #[cfg(feature = "wsp-cue-latch-armed")]
++                        if batch.wsp_armed_latch {
++                            self.record_wsp_armed_latch(&mut pass)?;
++                        } else {
++                            self.record_contact211_rank32(&mut pass)?;
++                        }
++                        #[cfg(not(feature = "wsp-cue-latch-armed"))]
+                         self.record_contact211_rank32(&mut pass)?;
+                     }
+                     // Preserve the true logits immediately before the existing draw:
+@@ -4146,6 +4173,31 @@
+             let _ = self.kernels.contact211_rank32_pipeline.set(pipeline);
+         }
+         let pipeline = self.kernels.contact211_rank32_pipeline.get().ok_or(GpuClosedLoopError::LayoutMismatch)?;
++        pass.set_pipeline(pipeline);
++        pass.set_bind_group(0, &self.bind_group, &[]);
++        pass.dispatch_workgroups(1,1,1);
++        Ok(())
++    }
++
++    #[cfg(feature = "wsp-cue-latch-armed")]
++    fn record_wsp_armed_latch<'pass>(
++        &'pass self, pass: &mut wgpu::ComputePass<'pass>,
++    ) -> Result<(), GpuClosedLoopError> {
++        if self.kernels.wsp_armed_latch_pipeline.get().is_none() {
++            let mut src = runtime_shader_source(CLOSED_LOOP_DECODE_WGSL).into_owned();
++            src.push_str("\n");
++            src.push_str(include_str!("../shaders/wsp_armed_contact211.wgsl"));
++            validate_production_shader_contract(&src, &["apply_wsp_armed_contact211"])?;
++            let device = &self.kernels.visible_self_grip_device;
++            let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
++                label: Some("closed-loop-detached-wsp-armed-contact211"),
++                source: wgpu::ShaderSource::Wgsl(src.into()),
++            });
++            let pipeline = create_compute_pipeline(device, &self.kernels.visible_self_grip_layout,
++                &shader, "apply_wsp_armed_contact211", &[]);
++            let _ = self.kernels.wsp_armed_latch_pipeline.set(pipeline);
++        }
++        let pipeline = self.kernels.wsp_armed_latch_pipeline.get().ok_or(GpuClosedLoopError::LayoutMismatch)?;
+         pass.set_pipeline(pipeline);
+         pass.set_bind_group(0, &self.bind_group, &[]);
+         pass.dispatch_workgroups(1,1,1);
+@@ -5248,6 +5300,8 @@
+             visible_self_grip_v1: false,
+             #[cfg(feature = "contact211-rank32")]
+             contact211_rank32: false,
++            #[cfg(feature = "wsp-cue-latch-armed")]
++            wsp_armed_latch: false,
+             joint_motor_modes: vec![0],
+         };
+ 
+@@ -5401,3 +5455,14 @@
+     full.push_str(include_str!("../shaders/contact211_rank32.wgsl"));
+     validate_production_shader_contract(&full, &["apply_contact211_rank32"]).unwrap();
+ }
++
++
++// Validate the exact source, not just its container's Rust syntax.
++#[cfg(all(test,feature="wsp-cue-latch-armed"))]
++#[test]
++fn wsp_armed_contact211_signed_shader_validates_without_device() {
++    let mut src=runtime_shader_source(CLOSED_LOOP_DECODE_WGSL).into_owned();
++    src.push_str("\n");
++    src.push_str(include_str!("../shaders/wsp_armed_contact211.wgsl"));
++    validate_production_shader_contract(&src,&["apply_wsp_armed_contact211"]).unwrap();
++}
+--- a/crates/alife_gpu_backend/src/closed_loop_runtime.rs
++++ b/crates/alife_gpu_backend/src/closed_loop_runtime.rs
+@@ -573,6 +573,8 @@
+     pub selector_diagnostic: Option<GpuSelectorDiagnosticReceipt>,
+     #[cfg(feature = "training-rollout")]
+     pub training_rollout: Option<crate::GpuTrainingRolloutReceipt>,
++    #[cfg(feature = "wsp-cue-latch-armed")]
++    pub(crate) wsp_armed_capture: Option<(Vec<u32>,Vec<u32>)>,
+ }
+ 
+ pub const GPU_SELECTOR_DIAGNOSTIC_SCHEMA_VERSION: u16 = 4;
+--- a/crates/alife_gpu_backend/src/closed_loop_runtime/tick.rs
++++ b/crates/alife_gpu_backend/src/closed_loop_runtime/tick.rs
+@@ -809,6 +809,8 @@
+         let mut ordered_selector_diagnostics = vec![None; batch.len()];
+         #[cfg(feature = "training-rollout")]
+         let mut ordered_training_receipts = vec![None; batch.len()];
++        #[cfg(feature = "wsp-cue-latch-armed")]
++        let mut ordered_wsp_armed_captures = vec![None;batch.len()];
+         if let Some(capture) = selector_diagnostic_error_capture.as_deref_mut() {
+             capture.later_stage = Some(GpuRuntimeSelectorDiagnosticStage::ValidateReceiptIdentity);
+         }
+@@ -1055,6 +1057,18 @@
+                             .get(&input.handle.class_id.raw())
+                             .and_then(|pool| pool.resident(input.handle).ok())
+                             .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
++                        #[cfg(feature = "wsp-cue-latch-armed")]
++                        if contact211_rank32.is_some_and(|x|x.is_wsp_armed()) {
++                            let count=input.frame.candidates().len();
++                            if !(2..=32).contains(&count) || capture.pre_context_logit_bits.len()!=count
++                                || capture.final_logit_bits.len()!=count {
++                                return Err(ScaffoldContractError::InvalidDecisionEvidence);
++                            }
++                            // Exactly schema2 wire makes the first copied region
++                            // after memory context; no ordinary label is promoted.
++                            ordered_wsp_armed_captures[*original_index]=Some((
++                                capture.pre_context_logit_bits.clone(),capture.final_logit_bits.clone()));
++                        }
+                         ordered_training_receipts[*original_index] =
+                             Some(crate::training_rollout::build_receipt(
+                                 input.frame,
+@@ -1183,6 +1197,8 @@
+                     selector_diagnostic: ordered_selector_diagnostics[index].clone(),
+                     #[cfg(feature = "training-rollout")]
+                     training_rollout: ordered_training_receipts[index].clone(),
++                    #[cfg(feature = "wsp-cue-latch-armed")]
++                    wsp_armed_capture: ordered_wsp_armed_captures[index].take(),
+                 });
+             }
+             Ok(ticks)
+--- a/crates/alife_gpu_backend/src/training_rollout.rs
++++ b/crates/alife_gpu_backend/src/training_rollout.rs
+@@ -348,6 +348,8 @@
+     pub dispatch_generation: u64,
+     pub weight_generation: u64,
+     pub rows: Vec<Contact211ProjectedRow>,
++    #[cfg(feature = "wsp-cue-latch-armed")]
++    pub true_after_context_before_treatment_and_before_sampler: Option<(Vec<u32>,Vec<u32>)>,
+ }
+ 
+ #[cfg(feature = "contact211-witness")]
+@@ -422,6 +424,8 @@
+         dispatch_generation: receipt.dispatch_generation,
+         weight_generation: receipt.active_weight_generation,
+         rows: out,
++        #[cfg(feature = "wsp-cue-latch-armed")]
++        true_after_context_before_treatment_and_before_sampler: tick.wsp_armed_capture.clone(),
+     })
+ }
+ 
+@@ -440,20 +444,48 @@
+ 
+ #[cfg(feature = "contact211-rank32")]
+ impl Contact211Rank32Input {
++    #[cfg(feature = "wsp-cue-latch-armed")]
++    pub(crate) fn is_wsp_armed(&self)->bool {self.words[1]==2}
++
+     pub fn try_bind(
+         frame: &PerceptionFrame, rails: [u32; 16], grip: f32, weights: [u32; 32],
+         roster: &[(u16, u16, [u32; 6], bool)],
++    ) -> Result<Self, ScaffoldContractError> {
++        Self::bind_rank32(frame, rails, grip, weights, roster, None)
++    }
++
++    /// Existing validated roster, separate address space; never manufacture heard
++    /// words/rails. The closed-loop caller must already possess private signed
++    /// World/dropout/recurrent evidence; this constructor checks GPU wire integrity.
++    #[cfg(feature = "wsp-cue-latch-armed")]
++    pub fn try_bind_wsp_retained(
++        frame: &PerceptionFrame, target_index: u16, drive: f32, grip: f32, weights: [u32;32],
++        roster: &[(u16,u16,[u32;6],bool)],
++    ) -> Result<Self, ScaffoldContractError> {
++        let cut=&frame.sensory().language_context;
++        if cut.teacher_channel_marker.is_some() || cut.heard_tokens.iter().any(Option::is_some())
++           || drive==0.0 || !drive.is_finite() || drive.abs()>1.0
++           || !roster.iter().any(|r|r.0==target_index && r.3)
++        {
++            return Err(ScaffoldContractError::InvalidDecisionEvidence);
++        }
++        Self::bind_rank32(frame,[0;16],grip,weights,roster,Some((target_index,drive.to_bits())))
++    }
++
++    fn bind_rank32(
++        frame:&PerceptionFrame, rails:[u32;16], grip:f32, weights:[u32;32],
++        roster:&[(u16,u16,[u32;6],bool)], retained:Option<(u16,u32)>,
+     ) -> Result<Self, ScaffoldContractError> {
+         use alife_core::{CandidateActionFamily, CandidateObservationRef};
+         let invalid = ScaffoldContractError::InvalidDecisionEvidence;
+         let count = frame.candidates().len();
+         if count == 0 || count > 32 || roster.is_empty() || roster.len() > 32
+             || !(0.0..1.0).contains(&grip)
+-            || rails.iter().any(|b| {
++            || (retained.is_none() && (rails.iter().any(|b| {
+                 let f = f32::from_bits(*b); !f.is_finite() || f == 0.0 || f.abs() > 1.0
+             })
+             || !rails[..8].iter().all(|b| f32::from_bits(*b).abs() == f32::from_bits(rails[0]).abs())
+-            || !rails[8..].iter().all(|b| f32::from_bits(*b).abs() == f32::from_bits(rails[8]).abs())
++            || !rails[8..].iter().all(|b| f32::from_bits(*b).abs() == f32::from_bits(rails[8]).abs())))
+             || weights[..24].iter().any(|b| f32::from_bits(*b).abs() != 1.0)
+             || weights[24..30].iter().any(|b| {
+                 let f=f32::from_bits(*b); !f.is_finite() || f.abs()>1.0
+@@ -469,6 +501,11 @@
+         words[2] = count as u32;
+         words[11] = grip.to_bits();
+         words[12..28].copy_from_slice(&rails);
++        if let Some((target,bits))=retained {
++            words[1]=2;
++            words[12]=bits;
++            words[13]=u32::from(target);
++        }
+         words[28..60].copy_from_slice(&weights);
+         let mut slots = 0_u32;
+         for &(i, slot, features, legal) in roster {
