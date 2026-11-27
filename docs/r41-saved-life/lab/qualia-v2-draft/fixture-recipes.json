@@ -1,0 +1,428 @@
+{
+  "authentic_openings": {
+    "coordinate_binding": "actor-local F,L → native world via retained native yaw; choose world height from native surface; no pose translation neural input, fixture IDs/door/goal/held status cannot enter neural features unless already ordinary production",
+    "cross_arm_frame_replay": false,
+    "evaluation_nonce": 1794935016,
+    "host_pressure_ns": 0,
+    "immutable_v1_sha256": "8544f30571929b83198c206dd6a94ac97feac7db055784647f1014fae59e3129",
+    "offline_updates": "none",
+    "pair_reset": "separate-process authentic mature source i3/t3074 each arm; same real sampler, current, private career state and identical public pre-step modifications",
+    "parent_current_sha256": "e785e79c581dbc29bb9e4b66ab2b3ae63d31a16db9c44b262753dfe319fbe841",
+    "public_identity_only_in_scoring": true,
+    "reference_v1_evaluator_sha256": "588b60942ded9959eef5860e96bf546b2acd05a71fe6a6d77d9296304ff22bf6",
+    "semantic_prior_mode": "off",
+    "sensor_profile": "GroundedTerrainVisionV1",
+    "teacher_cues": false,
+    "world_setup": "clone transactional native WorldEditor API; retained actor pose/private data untouched; source release only ordinary player utterance or registered ordinary effect; render never supplies affordance labels"
+  },
+  "layouts": {
+    "interoception": {
+      "admission": "Record full base-conditioned scenario origin and world/observation availability per target; for candidate and base use equivalent independently authenticated retained preconditions with a frozen comparability witness if the native preconditioning diverges.",
+      "inherit_no_speech": true,
+      "objects": [],
+      "opening_case_reference": "r12-word-empty-silence",
+      "warm_precondition_source": "ordinary separate unscored acclimation from saved-life; no scalar overwrites; match same saved branch point or do not report an absolute transfer score"
+    },
+    "noun-paired": {
+      "inherit_no_speech": true,
+      "objects": [
+        {
+          "key": "fruit",
+          "kind": "Food",
+          "kind_surface_convention": "fruit",
+          "local_forward_left_m": [
+            2.06,
+            0.9
+          ],
+          "nutrition": 0.45,
+          "radius_m": 0.15
+        },
+        {
+          "key": "ball",
+          "kind": "Toy",
+          "kind_surface_convention": "ball",
+          "local_forward_left_m": [
+            2.06,
+            -0.9
+          ],
+          "radius_m": 0.15
+        }
+      ],
+      "opening_case_reference": "r2-word-approach-food",
+      "retain_original_pose": true
+    },
+    "peer-defense": {
+      "admission": "requires saved rival as real second simulated Actor and registered paid nonlethal in-game defensive/interruption action or explicit target-aware Flee after native observed adverse peer effect, plus identity source event telemetry",
+      "status": "no active peer-strike or block route in admitted evaluator"
+    },
+    "pine-run": {
+      "experience": "real production terrain surface and registered opaque collidable trunk instances; no AABB wall substitute and never immaterial cosmetic sprites",
+      "inherit_no_speech": true,
+      "layout_file": "woodland-height-recipes.json",
+      "opening_case_reference": "u_detour",
+      "retain_original_pose": true,
+      "waypoint_min_clearance_m": 0.3
+    },
+    "touch-coexist": {
+      "foil": "same geometry/mass/cosmetics but inert surface has no injury and temperature ordinary .02; use explicit harmless object behavior, not a hidden label",
+      "frame_qualification": "center bearing/radius and actual sweep contact must be evidenced; never assume a position implies contact",
+      "inherit_no_speech": true,
+      "objects": [
+        {
+          "key": "food",
+          "kind": "Food",
+          "local_forward_left_m": [
+            1.72,
+            0.4
+          ],
+          "nutrition": 0.85,
+          "radius_m": 0.16
+        },
+        {
+          "key": "trial_surface",
+          "kind": "Hazard",
+          "local_forward_left_m": [
+            -0.125,
+            -0.565
+          ],
+          "native_hazard_pain": 0.16,
+          "radius_m": 0.61,
+          "require_opening_actual_contact": true,
+          "surface_temperature": 0.84
+        }
+      ],
+      "opening_case_reference": "r2-grade-right"
+    },
+    "verb-reachable": {
+      "inherit_no_speech": true,
+      "objects": [
+        {
+          "key": "fruit",
+          "kind": "Food",
+          "kind_surface_convention": "fruit",
+          "local_forward_left_m": [
+            0.54,
+            0.12
+          ],
+          "nutrition": 0.45,
+          "radius_m": 0.15
+        },
+        {
+          "key": "ball",
+          "kind": "Toy",
+          "kind_surface_convention": "ball",
+          "local_forward_left_m": [
+            0.48,
+            -0.3
+          ],
+          "radius_m": 0.15
+        }
+      ],
+      "opening_case_reference": "r2-word-approach-food",
+      "retain_original_pose": true
+    }
+  },
+  "pending": "one same-runner public fixture admission path; do not pass this draft as a supported manifest or build a second evaluator",
+  "runnable_in_pinned_evaluator": false,
+  "schema": "qualia.v2.public-saved-life-fixtures.draft.1",
+  "source_opening_audit": {
+    "heading_reference": 2.68048357963562,
+    "pose_reference": {
+      "x": -16.169696807861328,
+      "y": 0.0,
+      "z": 205.9512176513672
+    }
+  },
+  "tasks": [
+    {
+      "admission_gate": "allowlisted stock token surface plus true named fruit/ball grounding, ordinary heard lifecycle, native gaze effect versus generic inspected receipt; if only generic Inspect exists, Look subtest remains unscored, not replaced",
+      "case_id": "v2-l1-noun-verb-composition",
+      "conditions": {
+        "command_tokens": [
+          [
+            5,
+            16
+          ],
+          [
+            5,
+            14
+          ],
+          [
+            6,
+            16
+          ],
+          [
+            6,
+            14
+          ]
+        ],
+        "foils": [
+          [],
+          [
+            5
+          ],
+          [
+            6
+          ],
+          [
+            16
+          ],
+          [
+            14
+          ],
+          [
+            5,
+            15
+          ]
+        ],
+        "insertion_order": [
+          "left-first",
+          "right-first"
+        ],
+        "mirror_left_sign": [
+          1,
+          -1
+        ],
+        "new_materialization_per_variant": true,
+        "ordinary_delivery": "one real Player emit at setup; 2 native heard cuts maximum, then none"
+      },
+      "domain": "language",
+      "layout": "noun-paired",
+      "max_accepted_decisions": 32,
+      "metric": "Paired success: first paid appropriate command within 16 accepted decisions, tracked object same as actual offered referent, corroborated by true gaze bearing improvement ≥0.10 rad (Look) or positive closure ≥0.025m (Approach). Wrong referent or foil earns only if no fabricated success. Natural autonomous motion scored as matched foil rate, not forbidden.",
+      "outcome": "native target-selective Look/Inspect and motion toward named real fruit or ball, across foil, swap and mirror",
+      "status": "unqualified-do-not-score",
+      "weight": 6
+    },
+    {
+      "admission_gate": "actual reachable empty hand, food and toy at both mirrors; native per-action receipts, custody and positive nutrition, no relabeling close or visually inspected as acquisition",
+      "case_id": "v2-l2-affordances",
+      "conditions": {
+        "command_tokens": [
+          [
+            9,
+            14
+          ],
+          [
+            13,
+            14
+          ],
+          [
+            8,
+            16
+          ]
+        ],
+        "foils": [
+          [],
+          [
+            9,
+            16
+          ],
+          [
+            8,
+            14
+          ],
+          [
+            13,
+            16
+          ]
+        ],
+        "insertion_order": [
+          "left-first",
+          "right-first"
+        ],
+        "mirror_left_sign": [
+          1,
+          -1
+        ],
+        "new_materialization_per_variant": true,
+        "ordinary_delivery": "one real Player emit at setup; do not force hands"
+      },
+      "domain": "language",
+      "layout": "verb-reachable",
+      "max_accepted_decisions": 64,
+      "metric": "Get requires 211 acquisition, Play requires 213 true physical toy impulse/interaction, Eat requires valid prior custody plus native 210 biological intake. Mark failures if forbidden effect occurs on wrong affordance, not for benign autonomous browsing; use positive-versus-foil rates.",
+      "outcome": "verb changes what same observed referent is used for; relevant paid action and physical effect",
+      "status": "unqualified-do-not-score",
+      "weight": 6
+    },
+    {
+      "admission_gate": "mature true drive reach into lexical payload, currently structurally closed A256/A259; no externally supplied semantic/prior answer. Matched precondition evidence on both arms required",
+      "case_id": "v2-d1-drive-names",
+      "conditions": {
+        "fatigue_high_min": 0.65,
+        "fatigue_low_max": 0.25,
+        "food_not_visible_for_hungry_expression": true,
+        "hungry_high_min": 0.65,
+        "hungry_low_max": 0.25,
+        "max_off_drive": 0.35,
+        "speech_inputs": [],
+        "subconditions": [
+          "hungry/dry-quiet",
+          "fatigued/quiet",
+          "both-low",
+          "high-hunger-after-native-fed",
+          "high-fatigue-after-native-rest"
+        ],
+        "vocabulary": [
+          "hungry",
+          "tired"
+        ]
+      },
+      "domain": "drives",
+      "layout": "interoception",
+      "max_accepted_decisions": 128,
+      "metric": "First distinct successful Creature Vocal 400 payload contains only target drive token within 32 decisions & no other named drive if off-drive low; examine name after ordinary recovery and low-state foils. Never score internal logit or an action as a word.",
+      "outcome": "spontaneous correct hungry/tired token conditioned on native real state, falls after relief, no echo",
+      "status": "unqualified-do-not-score",
+      "weight": 4
+    },
+    {
+      "admission_gate": "two surface variants place matched actual food and real rest affordance separately using authenticated mature paired starting conditions, no exact seed/body edits",
+      "case_id": "v2-d2-drive-action-release",
+      "conditions": {
+        "also_include_real_sleep": "measure replay separately; no requirement to force sleep",
+        "fatigue_high_min": 0.65,
+        "fatigue_low_max": 0.25,
+        "food_not_visible_for_hungry_expression": true,
+        "hungry_high_min": 0.65,
+        "hungry_low_max": 0.25,
+        "max_off_drive": 0.35,
+        "relief": [
+          "eat native edible",
+          "rest native exertion-fatigue"
+        ],
+        "speech_inputs": [],
+        "subconditions": [
+          "hungry/dry-quiet",
+          "fatigued/quiet",
+          "both-low",
+          "high-hunger-after-native-fed",
+          "high-fatigue-after-native-rest"
+        ],
+        "vocabulary": [
+          "hungry",
+          "tired"
+        ]
+      },
+      "domain": "drives",
+      "layout": "interoception",
+      "max_accepted_decisions": 256,
+      "metric": "Hunger: owned paid nutrition >0 with measured decrease, fatigue: native posture REST with fatigue decrease. No false attribution of two pressure types; log wakefulness independently and sleep replay only when naturally performed. Healthy after relief and ordinary movement or next task resumes within 32 accepted decisions.",
+      "outcome": "actual need-directed action dominates only while need exists; re-engagement after relief",
+      "status": "unqualified-do-not-score",
+      "weight": 4
+    },
+    {
+      "admission_gate": "native scene loader for matched public perturbed contact, same geometry observed contact/no injury foils, pre/post biological and paid move evidence; baseline disclosed mirrors also remain guard",
+      "case_id": "v2-s1-protective-egress",
+      "conditions": {
+        "conditions": [
+          "ordinary acute contact",
+          "matched harmless surface",
+          "warm edible foil",
+          "cold-but-painful negative-control"
+        ],
+        "hidden_strength_for_scoring_only": true,
+        "insertion_order": [
+          "left-first",
+          "right-first"
+        ],
+        "mirror_left_sign": [
+          1,
+          -1
+        ],
+        "new_materialization_per_variant": true
+      },
+      "domain": "safety",
+      "layout": "touch-coexist",
+      "max_accepted_decisions": 256,
+      "metric": "Within 8 accepted decisions of first actual adverse-contact event: paid native 102 directed away from its observed source, radial separation +0.08m over origin and next 3 accepted decisions outside contact; accumulated added injury ≤0.05 after egress; healthy and intake from separate real Food within 256. Report initial quiet foil and no false paid retreat counts; mild data-only heat protection not equivalent to generalized defense.",
+      "outcome": "recoverable defensive withdrawal and resume ordinary positive intake while vulnerable",
+      "status": "unqualified-do-not-score",
+      "weight": 5
+    },
+    {
+      "admission_gate": "currently unsupported in compared runner: verified paid peer adverse-effect semantics, second live actor lifecycle, neutral and false-source fixtures, and action receipts; no pushing, play, injury from terrain or scripted stand-ins substitutions",
+      "case_id": "v2-s2-peer-response",
+      "conditions": {
+        "conditions": [
+          "native adverse event sourced to real rival in encounter",
+          "neutral approach same kinematics",
+          "ambiguous contact with simultaneous harmless animal"
+        ],
+        "insertion_order": [
+          "left-first",
+          "right-first"
+        ],
+        "mirror_left_sign": [
+          1,
+          -1
+        ],
+        "new_materialization_per_variant": true
+      },
+      "domain": "safety",
+      "layout": "peer-defense",
+      "max_accepted_decisions": 256,
+      "metric": "Native paid response binds actual offending observed actor within 8 accepted decisions of authenticated adverse event, resolves separation/safety; no proactive punish/hit to neutral same-appearance peer; guarded attack branch is not required to count protective Flee and is not inferred from mood/score.",
+      "outcome": "target-appropriate nonlethal defense or retreat, stops after danger in this fictional game",
+      "status": "unqualified-do-not-score",
+      "weight": 3
+    },
+    {
+      "admission_gate": "valid real opaque collidable trunks and native height sample/slope, verified no traversal shortcut and accessible noncheating route each mirror; no wall/sprite counts as trunk. Need exact black-box admission receipts in both arms",
+      "case_id": "v2-n-slalom",
+      "conditions": {
+        "layouts": [
+          "slalom-slope",
+          "slalom-flat",
+          "slalom-slope-mirror"
+        ],
+        "no_cues": true,
+        "object_insertion_order": [
+          "listed",
+          "reverse"
+        ],
+        "seasonal_asset_variants": [
+          "native trunk type A",
+          "native trunk type B"
+        ]
+      },
+      "domain": "woodland",
+      "layout": "pine-run",
+      "max_accepted_decisions": 1024,
+      "metric": "Pay independent route and meal atoms 50/50. Route demands ordered directed crossing of both registered gates inside route polygon, no out-of-map/over-trunk shortcut, real ≥0.18m vertical range in uneven positive, and ≤0.75m fixed endpoint; 0.18m not imposed on legitimate flat control. Meal requires native same-referent free→own plus positive nutrition and still alive.",
+      "outcome": "body physically detours a visible/occluding wood obstacle on bounded sloping terrain, takes actual food",
+      "status": "unqualified-do-not-score",
+      "weight": 7
+    },
+    {
+      "admission_gate": "valid real opaque collidable trunks and native height sample/slope, verified no traversal shortcut and accessible noncheating route each mirror; no wall/sprite counts as trunk. Need exact black-box admission receipts in both arms",
+      "case_id": "v2-n-ridge",
+      "conditions": {
+        "layouts": [
+          "ridge-switchback",
+          "ridge-flat",
+          "ridge-switchback-mirror"
+        ],
+        "no_cues": true,
+        "object_insertion_order": [
+          "listed",
+          "reverse"
+        ],
+        "seasonal_asset_variants": [
+          "native trunk type A",
+          "native trunk type B"
+        ]
+      },
+      "domain": "woodland",
+      "layout": "pine-run",
+      "max_accepted_decisions": 1024,
+      "metric": "Pay independent route and meal atoms 50/50. Route demands ordered directed crossing of both registered gates inside route polygon, no out-of-map/over-trunk shortcut, real ≥0.18m vertical range in uneven positive, and ≤0.75m fixed endpoint; 0.18m not imposed on legitimate flat control. Meal requires native same-referent free→own plus positive nutrition and still alive.",
+      "outcome": "body physically detours a visible/occluding wood obstacle on bounded sloping terrain, takes actual food",
+      "status": "unqualified-do-not-score",
+      "weight": 5
+    }
+  ],
+  "woodland_file_sha256": "72ecb256975010c060ec93ce0ba7493eef2aabe41deb10c499ed4e4032e37300"
+}
