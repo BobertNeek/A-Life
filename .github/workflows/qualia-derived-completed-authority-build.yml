@@ -1,0 +1,171 @@
+name: Qualia detached derived-authority build
+on:
+  push:
+    branches: ["bob/qualia-derived-authority-20261127"]
+    paths:
+      - ".github/workflows/qualia-derived-completed-authority-build.yml"
+      - "docs/r41-saved-life/publish-derived-completed-save-source.patch"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qualia-derived-authority-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-build:
+    if: github.ref == 'refs/heads/bob/qualia-derived-authority-20261127'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 42
+    env:
+      PIN_BASE: f466b83791cccb97568e6f718b92b052999cfb2b
+      PIN_PARENT: cbe4e85cbfe5e5194de1fd3bf30bd17a7121fa3d
+      PIN_PARENT_WORKFLOW_BLOB: 24259ec6947a7976575823f45ba1359f3583282b
+      PIN_RESEARCH_COMMIT: 0cd14f12a8012a9b00119a7b33939ca5e3dbeb53
+      PIN_RESEARCH_PATCH: 3dcf657b2b1149a7da52e7867c3bdbc4c4dfe8d4785b53c95f429c78aa1cd490
+      PIN_SLEEP_REPAIR_PATCH: c2815992c4e3e70a7b7bc42b307dc1d96e8c34483ea36cf2c98e06b9920282e6
+      PIN_LEGACY_PUBLICATION_PATCH: 692ec25acc620f502581e7299d952471c039812646e41f85cdd1d6f87ed5c66d
+      PIN_LATE_ARCHIVE_PATCH: ed46a3cedb6f0bfdcba54660be6e1645ea6ea9cc71c6b7015b255b790b66a17d
+      PIN_WRAPPER_PATCH: ab8b07f7ac688ff56e8ca4dfb59f2e44c492be8b3b3710601d77dea035675af6
+      PIN_LOCK: 155699e9274f8890bc8c335669a62de48203ba315a33388a8f0caca71f0f7f37
+      PIN_RUSTC_COMMIT: 0ef1bc386059596dada8fb65b50425aab2ea637a
+      RUST_TOOLCHAIN: "1.100.0"
+      TARGET: x86_64-unknown-linux-gnu
+      CARGO_BUILD_JOBS: "1"
+      CARGO_INCREMENTAL: "0"
+      CARGO_PROFILE_RELEASE_DEBUG: "0"
+      CARGO_PROFILE_RELEASE_INCREMENTAL: "false"
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Read only the detached source branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Reconstruct the pinned source and apply the single wrapper addition
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git merge-base --is-ancestor "$PIN_PARENT" HEAD
+          git merge-base --is-ancestor "$PIN_BASE" "$PIN_PARENT"
+          git merge-base --is-ancestor "$PIN_RESEARCH_COMMIT" "$PIN_PARENT"
+          test "$(git rev-parse "$PIN_PARENT:.github/workflows/qualia-sleep-boundary-build.yml")" = "$PIN_PARENT_WORKFLOW_BLOB"
+          wrapper_rel="docs/r41-saved-life/publish-derived-completed-save-source.patch"
+          git diff --exit-code "$PIN_PARENT" HEAD -- . \
+            ':(exclude).github/workflows/qualia-derived-completed-authority-build.yml' ":(exclude)$wrapper_rel"
+          git diff --exit-code "$PIN_BASE" HEAD -- \
+            docs/r41-saved-life/restore_source.py docs/r41-saved-life/SOURCE.json docs/r41-saved-life/patches
+          exact="$RUNNER_TEMP/qualia-wrapper-source"
+          target="$RUNNER_TEMP/qualia-wrapper-target"
+          evidence="$RUNNER_TEMP/qualia-wrapper-build-evidence"
+          printf 'EXACT_SRC=%s\nCARGO_TARGET_DIR=%s\nEVIDENCE=%s\n' "$exact" "$target" "$evidence" >> "$GITHUB_ENV"
+          mkdir "$evidence"
+          python3 docs/r41-saved-life/restore_source.py "$GITHUB_WORKSPACE" "$exact"
+
+          patches="$(mktemp -d "$RUNNER_TEMP/qualia-wrapper-patches.XXXXXXXX")"
+          extract() {
+            git show "$1:docs/r41-saved-life/$2" > "$patches/$2"
+            printf '%s  %s\n' "$3" "$patches/$2" | sha256sum -c -
+          }
+          extract "$PIN_RESEARCH_COMMIT" research-catalog-source-only.patch "$PIN_RESEARCH_PATCH"
+          extract "$PIN_PARENT" sleep-boundary-repair-source.patch "$PIN_SLEEP_REPAIR_PATCH"
+          extract "$PIN_PARENT" sleep-legacy-publication-source.patch "$PIN_LEGACY_PUBLICATION_PATCH"
+          extract "$PIN_PARENT" sleep-late-archive-retirement-source.patch "$PIN_LATE_ARCHIVE_PATCH"
+          extract "$GITHUB_SHA" publish-derived-completed-save-source.patch "$PIN_WRAPPER_PATCH"
+          cd "$exact"
+          for patch in research-catalog-source-only.patch sleep-boundary-repair-source.patch \
+             sleep-legacy-publication-source.patch sleep-late-archive-retirement-source.patch \
+             publish-derived-completed-save-source.patch; do
+            git apply --check --whitespace=error "$patches/$patch"
+            git apply --whitespace=error "$patches/$patch"
+          done
+          printf '%s  Cargo.lock\n' "$PIN_LOCK" | sha256sum -c -
+          printf '%s\n' \
+            "branch_commit=$GITHUB_SHA" "parent=$PIN_PARENT" "parent_workflow_blob=$PIN_PARENT_WORKFLOW_BLOB" \
+            "source=$PIN_BASE" "research_source_commit=$PIN_RESEARCH_COMMIT" "research_patch=$PIN_RESEARCH_PATCH" \
+            "sleep_repair_patch=$PIN_SLEEP_REPAIR_PATCH" "legacy_publication_patch=$PIN_LEGACY_PUBLICATION_PATCH" \
+            "late_archive_patch=$PIN_LATE_ARCHIVE_PATCH" "wrapper_patch=$PIN_WRAPPER_PATCH" "cargo_lock=$PIN_LOCK" \
+            "rustc_commit=$PIN_RUSTC_COMMIT" "rust_toolchain=$RUST_TOOLCHAIN" "target=$TARGET" > "$evidence/SOURCE-PINS.txt"
+
+      - name: Compile and link the one device-free entrypoint
+        run: |
+          set -euo pipefail
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --target "$TARGET"
+          version="$(rustc +"$RUST_TOOLCHAIN" -vV)"
+          grep -Fqx "release: $RUST_TOOLCHAIN" <<< "$version"
+          grep -Fqx "commit-hash: $PIN_RUSTC_COMMIT" <<< "$version"
+          grep -Fqx "host: $TARGET" <<< "$version"
+          cd "$EXACT_SRC"
+          timeout 8m cargo +"$RUST_TOOLCHAIN" fetch --locked --target "$TARGET"
+          timeout 28m cargo +"$RUST_TOOLCHAIN" build --frozen --offline --release --target "$TARGET" -j 1 \
+            -p alife_runtime --no-default-features --bin publish_derived_completed_save
+          install -m 0755 "$CARGO_TARGET_DIR/$TARGET/release/publish_derived_completed_save" "$EVIDENCE/publish_derived_completed_save"
+          LC_ALL=C readelf -h "$EVIDENCE/publish_derived_completed_save" > "$RUNNER_TEMP/qualia-wrapper-elf-header.txt"
+          grep -Eq 'Class:[[:space:]]+ELF64' "$RUNNER_TEMP/qualia-wrapper-elf-header.txt"
+          grep -Eq 'Machine:[[:space:]]+Advanced Micro Devices X86-64' "$RUNNER_TEMP/qualia-wrapper-elf-header.txt"
+          printf '%s\n' 'locked_targeted_compile_link=passed' 'linked_elf=ELF64-x86_64' > "$EVIDENCE/BUILD-CHECKS.txt"
+
+      - name: Verify only no-argument and synthetic invalid-input refusal
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' | tee -a "$EVIDENCE/BUILD-CHECKS.txt"
+          import hashlib
+          import os
+          from pathlib import Path
+          import subprocess
+          import tempfile
+
+          executable = Path(os.environ["EVIDENCE"]) / "publish_derived_completed_save"
+          with tempfile.TemporaryDirectory(prefix="qualia-wrapper-cli-refusal-") as name:
+              stage = Path(name).resolve()
+              inputs = stage / "inputs"
+              inputs.mkdir(mode=0o700)  # disjoint from the destination under the exact CLI guard
+              a, b = inputs / "empty-one.bin", inputs / "empty-two.bin"
+              a.touch(exist_ok=False)
+              b.touch(exist_ok=False)
+              assets, output = stage / "empty-assets", stage / "empty-output"
+              assets.mkdir(mode=0o700)
+              output.mkdir(mode=0o700)
+
+              def tree():
+                  return {str(p.relative_to(stage)): hashlib.sha256(p.read_bytes()).hexdigest()
+                          if p.is_file() else "dir" for p in stage.rglob("*")}
+
+              before = tree()
+              probes = [
+                  ("no_arguments_refused", [], "usage: publish_derived_completed_save"),
+                  ("synthetic_empty_input_refused", [str(p) for p in (a, b, assets, output)],
+                   "expected a bounded regular input, not an alias"),
+              ]
+              for label, args, expected in probes:
+                  result = subprocess.run(
+                      [str(executable), *args], cwd=stage, stdin=subprocess.DEVNULL,
+                      stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=15,
+                      env={"PATH": "/usr/bin:/bin", "LC_ALL": "C", "HOME": str(stage)})
+                  if result.returncode != 1 or result.stdout or expected not in result.stderr or tree() != before:
+                      raise SystemExit(f"wrong synthetic refusal boundary: {label} exit={result.returncode}")
+                  print(f"{label}=passed")
+              print("published_authority=false")
+              print("device_initialized=false")
+          PY
+          cd "$EVIDENCE"
+          sha256sum publish_derived_completed_save SOURCE-PINS.txt BUILD-CHECKS.txt > SHA256SUMS
+          sha256sum -c SHA256SUMS
+
+      - name: Upload the source-built helper and redacted checks only
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: qualia-derived-authority-build-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/qualia-wrapper-build-evidence/publish_derived_completed_save
+            ${{ runner.temp }}/qualia-wrapper-build-evidence/SOURCE-PINS.txt
+            ${{ runner.temp }}/qualia-wrapper-build-evidence/BUILD-CHECKS.txt
+            ${{ runner.temp }}/qualia-wrapper-build-evidence/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 5
+          compression-level: 3
