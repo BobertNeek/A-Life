@@ -1,0 +1,59 @@
+{
+  "schema": "qualia.public_technical_saved_life_receipt.v1",
+  "qualification": "Redacted aggregate and observed gameplay only. No trained data, private storage locations, raw traces, or held-out contents.",
+  "card": {
+    "id": "qualia-disclosed-29-v1",
+    "gameplay_cases": 29,
+    "zero_point_controls": 2,
+    "unchanged_from_parent": true
+  },
+  "comparison": {
+    "parent": "R43",
+    "candidate": "R44",
+    "score_parent": 96.66666666666667,
+    "score_candidate": 98.33333333333333,
+    "delta": 1.6666666666666667,
+    "improved": 1,
+    "unchanged": 28,
+    "regressed": 0,
+    "failed": 0,
+    "completed_utc": "2026-11-27T13:04:38.238583Z",
+    "decisions_per_arm": 8096,
+    "matching": "All 29 native pairs qualified under the same frozen scenes, observed inputs, budgets, exact mature save lineage, and pinned software Vulkan evaluator.",
+    "improvement": "In Mixed Root, grounded speech selected the real root, followed by custody and eating the real root."
+  },
+  "unscored_observations": {
+    "right_grade": {
+      "final_health_parent": 0.6567356,
+      "final_health_candidate": 0.91655225,
+      "both_meals_retained": true
+    },
+    "canonical_l": {
+      "extra_ticks_to_eat": 53,
+      "extra_blocked_steps": 17,
+      "same_meal": true,
+      "formal_pass_retained": true
+    },
+    "mixed_root_and_toy": {
+      "failed_toy_bites_parent": 209,
+      "failed_toy_bites_candidate": 20
+    }
+  },
+  "reopen": {
+    "exact_scored_current": true,
+    "separate_process": true,
+    "exit_code": 0,
+    "decisions": 0,
+    "world_ticks": 0,
+    "same_individual": true,
+    "source_unchanged": true,
+    "independently_accepted": true
+  },
+  "promotion": {
+    "completed_utc": "2026-11-27T13:07:57.534096Z",
+    "base": "R44",
+    "parent_preserved_for_rollback": true,
+    "private_off_host_backup_byte_readback_verified": true,
+    "next_gate": "Fresh unedited R44 control on every frozen case. No reuse of winner traces as fresh controls."
+  }
+}
