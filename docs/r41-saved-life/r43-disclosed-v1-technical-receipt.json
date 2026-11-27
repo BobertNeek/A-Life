@@ -1,0 +1,63 @@
+{
+  "schema": "qualia.public_technical_saved_life_receipt.v1",
+  "qualification": "Redacted aggregate and observed gameplay summary; no trained data, private locations, raw traces, or held-out contents.",
+  "card": {
+    "id": "qualia-disclosed-29-v1",
+    "gameplay_cases": 29,
+    "zero_point_controls": 2,
+    "unchanged_from_parent": true
+  },
+  "comparison": {
+    "parent": "R42",
+    "candidate": "R43",
+    "score_parent": 94.16666666666667,
+    "score_candidate": 96.66666666666667,
+    "delta": 2.5,
+    "improved": 1,
+    "unchanged": 28,
+    "regressed": 0,
+    "failed": 0,
+    "completed_utc": "2026-11-27T08:26:06.694057Z",
+    "matching": "Same frozen scenes, visible inputs, budgets, mature saved state and pinned shared software Vulkan evaluator. All 29 native pairs independently replayed.",
+    "improvement": "Formal U-maze traversal, preserving exact target food and nutrition",
+    "private_comparison_receipt_sha256": "fd3a346ae14c585438a76c20a3e3f74ab6e645f557da55b4b726e6c3751217b7"
+  },
+  "unscored_observations": {
+    "right_grade": {
+      "both_alive_and_ate_safely": true,
+      "final_health_parent": 0.9165522456,
+      "final_health_candidate": 0.656735599,
+      "damaging_contact_inputs_parent": 2,
+      "damaging_contact_inputs_candidate": 7,
+      "description": "Late reapproach and touch of the same hazard followed by repeated contact; internal pain was 0.6951751113 instead of zero at the endpoint."
+    },
+    "mixed_root_and_toy": {
+      "both_failed_existing_grounded_expression_atom": true,
+      "root_nutrition_parent": 0.65,
+      "root_nutrition_candidate": 0,
+      "failed_toy_bites_parent": 20,
+      "failed_toy_bites_candidate": 209,
+      "description": "Candidate fixated on the scented toy instead of reaching the real Root meal."
+    }
+  },
+  "reopen": {
+    "completed_utc": "2026-11-27T08:26:15.863904Z",
+    "exact_scored_current": true,
+    "separate_process": true,
+    "exit_code": 0,
+    "decisions": 0,
+    "world_ticks": 0,
+    "same_individual": true,
+    "source_unchanged": true,
+    "independently_accepted": true,
+    "saved_world_neural_memory_and_sampling_state_preserved": true,
+    "private_acceptance_receipt_sha256": "25409a8af97f1ebcb69d7d97e3c8d982d4373e85882d8b436e33354cfe80bb1f"
+  },
+  "promotion": {
+    "completed_utc": "2026-11-27T08:28:39.824456Z",
+    "base": "R43",
+    "parent_preserved_for_rollback": true,
+    "private_off_host_backup_byte_readback_verified": true,
+    "next_gate": "Fresh unedited R43 control on all 29 cases; no winner-as-control substitution."
+  }
+}
