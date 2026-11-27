@@ -25,6 +25,8 @@ jobs:
       # Choose one patch. 'repair' proves the retired fallback and repaired
       # production remapper in one focused compile; no duplicate build needed.
       VARIANT: repair
+      PIN_LATE_CI_PREIMAGE: 36dce1f6b3e0ff06e98e6da424512546ea77dda2
+      PIN_LATE_CI_WORKFLOW_BLOB: de1718ef97ca6b15ec70016df352f8c4d1467cc7
       PIN_SOURCE: f466b83791cccb97568e6f718b92b052999cfb2b
       PIN_RESEARCH_COMMIT: 0cd14f12a8012a9b00119a7b33939ca5e3dbeb53
       PIN_RESEARCH_PATCH: 3dcf657b2b1149a7da52e7867c3bdbc4c4dfe8d4785b53c95f429c78aa1cd490
@@ -57,6 +59,8 @@ jobs:
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           git merge-base --is-ancestor "$PIN_SOURCE" HEAD
           git merge-base --is-ancestor "$PIN_RESEARCH_COMMIT" HEAD
+          git merge-base --is-ancestor "$PIN_LATE_CI_PREIMAGE" HEAD
+          test "$(git rev-parse "$PIN_LATE_CI_PREIMAGE:.github/workflows/qualia-sleep-boundary-build.yml")" = "$PIN_LATE_CI_WORKFLOW_BLOB"
           git diff --exit-code "$PIN_SOURCE" HEAD -- docs/r41-saved-life/{restore_source.py,SOURCE.json,patches}
           export EXACT_SRC="$RUNNER_TEMP/qualia-source"
           export CARGO_TARGET_DIR="$RUNNER_TEMP/cargo-target"
@@ -112,14 +116,79 @@ jobs:
             -- first_sleep_generation_regression --test-threads=1 2>&1 | tee -a "$EVIDENCE/build.log"
           # Avoid a successful no-test build or accidentally testing a crate-wide cfg(test) closure.
           grep -F 'test result: ok. 2 passed; 0 failed;' "$EVIDENCE/build.log"
-          timeout 15m cargo +"$RUST_TOOLCHAIN" test --frozen --offline --release --target "$TARGET" -j 1 \
-            -p alife_game_app --features foundation-training,gpu-tests --lib \
-            -- late_archive_requires_its_distinct_explicit_operator_admission --test-threads=1 2>&1 | tee -a "$EVIDENCE/build.log"
-          grep -E '^test .*late_archive_requires_its_distinct_explicit_operator_admission \.\.\. ok$' "$EVIDENCE/build.log"
           timeout 7m cargo +"$RUST_TOOLCHAIN" build --frozen --offline --release --target "$TARGET" -j 1 \
             -p alife_game_app --features foundation-training,gpu-tests --bin evaluate_saved_life_retention 2>&1 | tee -a "$EVIDENCE/build.log"
           install -m 0755 "$CARGO_TARGET_DIR/$TARGET/release/evaluate_saved_life_retention" "$EVIDENCE/evaluate_saved_life_retention"
           readelf -h -d "$EVIDENCE/evaluate_saved_life_retention" | tee -a "$EVIDENCE/build.log"
+          # Exercise the actual production-closure entrypoint, not a crate-wide cfg(test) build.
+          printf 'late_cli_preimage=%s\nlate_cli_preimage_blob=%s\n' "$PIN_LATE_CI_PREIMAGE" "$PIN_LATE_CI_WORKFLOW_BLOB" | tee -a "$EVIDENCE/build.log"
+          PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY' | tee -a "$EVIDENCE/build.log"
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          import subprocess
+          import tempfile
+          import time
+
+          cli = Path(os.environ["EVIDENCE"]) / "evaluate_saved_life_retention"
+          sha = lambda b: hashlib.sha256(b).hexdigest()
+          with cli.open("rb") as elf:
+              elf_sha = hashlib.file_digest(elf, "sha256").hexdigest()
+          # Derive the case label from the reconstruction's checked-in smoke
+          # geometry. No live/testdata fixture, Current, real owner, or world is used.
+          base = Path("docs/research-saved-life")
+          catalog = json.loads((base / "research-catalog.v1.json").read_bytes())
+          rubric = json.loads((base / "research-rubric.v1.json").read_bytes())
+          old_case, case = "contact-hot-left", "exposed-recover-harmful"
+          matches = [row for row in catalog["cases"] if row["id"] == old_case]
+          if len(matches) != 1 or any(row["id"] == case for row in catalog["cases"]):
+              raise SystemExit("pinned public smoke catalog labels changed")
+          matches[0]["id"] = case
+          rubric["cases"][case] = rubric["cases"].pop(old_case)
+          catalog_bytes = json.dumps(catalog, sort_keys=True).encode()
+          rubric_bytes = json.dumps(rubric, sort_keys=True).encode()
+          ordinary = "qualia.saved_life.operator_research_admission.v1"
+          late = "qualia.saved_life.operator_research_late_archive_admission.v1"
+
+
+          def probe(label, profile, admission, expected):
+              with tempfile.TemporaryDirectory(prefix="qualia-late-cli-no-current-") as name:
+                  stage = Path(name).resolve()
+                  (stage / "research-catalog.v1.json").write_bytes(catalog_bytes)
+                  (stage / "research-rubric.v1.json").write_bytes(rubric_bytes)
+                  pins = dict(catalog_sha256=sha(catalog_bytes), rubric_sha256=sha(rubric_bytes),
+                              evaluator_sha256=elf_sha)
+                  (stage / "operator-research-admission.v1.json").write_text(json.dumps(dict(
+                      schema=admission, admitted_case_ids=[case], **pins)))
+                  manifest = stage / "manifest.json"
+                  manifest.write_text(json.dumps(dict(schema=2, profile=profile, run_id="ci-late-refusal",
+                      owner=1, source_current_sha256="a" * 64, input={"kind": "complete_saved_life"},
+                      case_id=case, expected_world_seed=17, evaluation_nonce=42,
+                      deadline_unix_seconds=int(time.time()) + 60, max_output_bytes=268435456, **pins)))
+                  absent = stage / "INTENTIONALLY-NO-CURRENT"
+                  out = stage / "NO-NATIVE-OUTPUT"
+                  before = {p.name: sha(p.read_bytes()) for p in stage.iterdir()}
+                  result = subprocess.run(
+                      [str(cli), "--experiment-manifest", str(stage), str(absent), str(out), str(manifest)],
+                      cwd=stage, capture_output=True, text=True, timeout=30,
+                      env={"PATH": "/usr/bin:/bin", "LC_ALL": "C"})
+                  after = {p.name: sha(p.read_bytes()) for p in stage.iterdir() if p.is_file()}
+                  if (result.returncode <= 0 or expected not in result.stderr
+                          or before != after or len(list(stage.iterdir())) != len(before)
+                          or absent.exists() or out.exists()):
+                      raise SystemExit(f"wrong compiled boundary for {label}: "
+                                       f"{result.returncode}: {result.stderr!r}")
+                  print(f"{label}: reached compiled expected boundary, no Current opened or GPU started")
+
+
+          probe("strict-original refuses late admission", "research_strict_original_retirement_v1", late,
+                "strict-original retirement is unavailable")
+          probe("late profile refuses ordinary admission", "research_late_archive_retirement_v1", ordinary,
+                "research case, evaluator or rubric was not explicitly admitted")
+          probe("separately admitted late profile reaches absent Current",
+                "research_late_archive_retirement_v1", late, "No such file or directory (os error 2)")
+          PY
           cd "$EVIDENCE"
           sha256sum evaluate_saved_life_retention build.log > SHA256SUMS
           sha256sum -c SHA256SUMS
