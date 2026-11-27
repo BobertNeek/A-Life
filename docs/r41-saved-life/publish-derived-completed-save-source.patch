@@ -1,0 +1,120 @@
+diff --git a/crates/alife_runtime/src/bin/publish_derived_completed_save.rs b/crates/alife_runtime/src/bin/publish_derived_completed_save.rs
+new file mode 100644
+index 0000000..cb51354
+--- /dev/null
++++ b/crates/alife_runtime/src/bin/publish_derived_completed_save.rs
+@@ -0,0 +1,114 @@
++//! Device-free republishing of an independently authenticated Completed save.
++//! An empty scratch directory is required. A successful result is a new G1
++//! authority, never the source's historical public pointer or a training Current.
++use alife_core::ConsolidationState;
++use alife_runtime::{GpuDurableSaveManifest, GpuSleepTransactionJournalV2};
++use alife_world::persistence::{PortableAssetDigest, PortableSaveFile};
++use serde_json::{Value, json};
++use std::{
++    error::Error,
++    fs,
++    io::Read,
++    path::{Component, Path, PathBuf},
++};
++
++type Result<T> = std::result::Result<T, Box<dyn Error>>;
++
++fn bounded_read(path: &Path, cap: u64) -> Result<Vec<u8>> {
++    let meta = fs::symlink_metadata(path)?;
++    if !meta.is_file() || meta.len() == 0 || meta.len() > cap {
++        return Err("expected a bounded regular input, not an alias".into());
++    }
++    let mut bytes = Vec::new();
++    fs::File::open(path)?.take(cap + 1).read_to_end(&mut bytes)?;
++    if bytes.len() as u64 != meta.len() {
++        return Err("file changed while being read".into());
++    }
++    Ok(bytes)
++}
++
++fn real_directory(path: &Path) -> Result<PathBuf> {
++    if !fs::symlink_metadata(path)?.is_dir() {
++        return Err("expected a real directory, not an alias".into());
++    }
++    Ok(path.canonicalize()?)
++}
++
++fn artifact(root: &Path, pointer: &Value, kind: &str) -> Result<PathBuf> {
++    let name = pointer[kind]["file_name"].as_str().ok_or("missing artifact filename")?;
++    let mut parts = Path::new(name).components();
++    if !matches!(parts.next(), Some(Component::Normal(_))) || parts.next().is_some() {
++        return Err("unexpected path in newly published pointer".into());
++    }
++    Ok(root.join(name))
++}
++
++fn main() -> Result<()> {
++    let args: Vec<PathBuf> = std::env::args_os().skip(1).map(PathBuf::from).collect();
++    let [source_save, source_journal, asset_root, destination] = args.as_slice() else {
++        return Err("usage: publish_derived_completed_save EXACT_SAVE EXACT_EMPTY_JOURNAL ASSET_ROOT EMPTY_PRIVATE_DIRECTORY".into());
++    };
++    let destination = real_directory(destination)?;
++    let asset_root = real_directory(asset_root)?;
++    let original_save = source_save.canonicalize()?;
++    let original_journal = source_journal.canonicalize()?;
++    if destination.starts_with(&asset_root)
++        || asset_root.starts_with(&destination)
++        || [&original_save, &original_journal].into_iter().any(|file| {
++            file.parent().is_some_and(|root| destination.starts_with(root) || root.starts_with(&destination))
++        })
++        || fs::read_dir(&destination)?.next().is_some()
++    {
++        return Err("derived authority destination must be disjoint and empty".into());
++    }
++
++    let save_bytes = bounded_read(source_save, 2 << 20)?;
++    let journal_bytes = bounded_read(source_journal, 256 << 10)?;
++    let save = PortableSaveFile::from_json_str(std::str::from_utf8(&save_bytes)?)?;
++    save.validate_with_asset_root(&asset_root)?;
++    let [creature] = save.creatures.as_slice() else {
++        return Err("requires exactly one actual saved creature".into());
++    };
++    let brain = creature.gpu_brain.as_ref().ok_or("missing saved GPU state")?;
++    let anchor = PortableAssetDigest::for_bytes(&save_bytes);
++    let expected_journal: GpuSleepTransactionJournalV2 = serde_json::from_slice(&journal_bytes)?;
++    expected_journal.validate()?;
++    if !matches!(&brain.sleep.consolidation, ConsolidationState::Completed { .. })
++        || !expected_journal.entries.is_empty()
++        || expected_journal.exact_base_manifest_digest != anchor.0
++        || expected_journal.exact_base_checkpoint_tick != save.world.tick
++        || serde_json::to_vec_pretty(&save)? != save_bytes
++        || serde_json::to_vec_pretty(&expected_journal)? != journal_bytes
++    {
++        return Err("source is not an exact canonical Completed save and its empty journal".into());
++    }
++
++    // The production writer, not this tool, creates the fresh authority and
++    // its empty reset journal. This path never initializes a device or ticks.
++    let path = destination.join("world.json");
++    let published = GpuDurableSaveManifest::publish_snapshot(&path, &asset_root, &save)?;
++    let (durable, reopened) = GpuDurableSaveManifest::open_loaded(&path, &asset_root)?;
++    let envelope: Value = serde_json::from_slice(&bounded_read(&path, 4 << 20)?)?;
++    let pointer = &envelope["gpu_checkpoint_authority"];
++    if reopened != published
++        || reopened.save != save
++        || reopened.authority_generation() != Some(1)
++        || !pointer.get("prior_generation").is_some_and(Value::is_null)
++        || !pointer.get("prior_authority_digest").is_some_and(Value::is_null)
++        || reopened.exact_save_anchor_digest()? != anchor
++        || durable.load_sleep_transaction_journal(&reopened)? != expected_journal
++        || bounded_read(&artifact(&destination, pointer, "save")?, 2 << 20)? != save_bytes
++        || bounded_read(&artifact(&destination, pointer, "journal")?, 256 << 10)? != journal_bytes
++        || bounded_read(source_save, 2 << 20)? != save_bytes
++        || bounded_read(source_journal, 256 << 10)? != journal_bytes
++    {
++        return Err("derived scratch authority did not reopen byte-exactly; no admission".into());
++    }
++    println!("{}", json!({
++        "schema": "qualia.derived_completed_save_writer.v1",
++        "generation": 1, "exact_save_anchor": anchor.0, "tick": save.world.tick.raw(),
++        "source_save_and_journal_unchanged": true, "historical_public_pointer": false,
++        "requires_independent_sha256_readback": true, "world_ticks": 0, "device_initialized": false,
++    }));
++    Ok(())
++}
