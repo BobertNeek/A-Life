@@ -1,0 +1,42 @@
+{
+  "authored_overlay_may_touch_only_exact_path_list": true,
+  "forward_sha256": "dab4a38f54fba616f9d789cd9e1b4853b09eee5229da91362b29be6aab686cde",
+  "lock_sha256": "155699e9274f8890bc8c335669a62de48203ba315a33388a8f0caca71f0f7f37",
+  "overlaid_source_after_sha256": {
+    "crates/alife_game_app/Cargo.toml": "c5470f80a1bf3631ec74487a1b2f07af1cdb547eda07057fe57e7cc7363c30ae",
+    "crates/alife_game_app/src/gpu_live_runtime.rs": "6c9c403ebf90a076394072a06c88fd7d8cd6cabc1814c43634f0f16009a47001",
+    "crates/alife_game_app/src/gpu_live_runtime/contact211_f0_witness.rs": "f891ef0e5eee4befb5d0da1c02aa6a48ecfe51e5f0dc2e31eaad704cc5301b71",
+    "crates/alife_game_app/src/gpu_live_runtime/staged_tick.rs": "a114bbde487e9812989ba113919239bb783a9d01196f912719d4f9e54936edd3",
+    "crates/alife_gpu_backend/Cargo.toml": "2a24ca740307ebf3ff3b641f99b9d8c9abd11e75ed5d7891c07989956da98250",
+    "crates/alife_gpu_backend/src/closed_loop_pipeline.rs": "9ef871faf3c30841aa7bedef265eb3cce42c5f983cea43149bd1c77799330701",
+    "crates/alife_gpu_backend/src/closed_loop_runtime.rs": "69bac11ff904dba9090006d9356668579e5cf5c24d434cdd958994105e6b9a45",
+    "crates/alife_gpu_backend/src/closed_loop_runtime/tick.rs": "76fb059576f857b88f7d33eeff6fadab7ec8d13139747959b2c12b2d2ebce2c6",
+    "crates/alife_gpu_backend/src/training_rollout.rs": "3fd5cf9cff9483556d0ad5340ce3e3d7e5c02b3a3f5cf752e7ee3bf314f25fa7",
+    "crates/alife_world/Cargo.toml": "429ac84f9221f7c0296701a0a042da8d56e91e82f1b527c97a5f390cb60e902f",
+    "crates/alife_world/src/candidate_enumerator.rs": "f05e4c0f033d56297cc7c2619f6f438df1fccf178eb0971a6e0afc95e99d8f68",
+    "crates/alife_world/src/headless.rs": "9349e47eae65be8d75f631f8001663f8c276d71bf9627d4f4b47d784f66dd6d8",
+    "crates/alife_world/src/headless/contact211_witness.rs": "4f445b4558a441f2fd6693afb32671d899737fc940f8e0105155a8c646951a29"
+  },
+  "overlaid_source_before_sha256": {
+    "crates/alife_game_app/Cargo.toml": "afc7dce56e6c1f49881ab5e029df2f5ada93a6d5b0d3eba1f05dc54741744ac5",
+    "crates/alife_game_app/src/gpu_live_runtime.rs": "b4b3f2da8995a55e12179ff3efef2de01698f6d10252582045f4e2ef7469f503",
+    "crates/alife_game_app/src/gpu_live_runtime/staged_tick.rs": "c16b350a3d21c782b7bc6915ca6e9b6af94554dced49e2054e6e2890ec72be7f",
+    "crates/alife_gpu_backend/Cargo.toml": "70abd451cbc5d57cabef8b55a4426c809f49e6b2565f2db0b703080ca7967c73",
+    "crates/alife_gpu_backend/src/closed_loop_pipeline.rs": "fb6ff4560ab704c5c28fdeb94c310b0dd73ce5bad6518ee2b5deec823cc14f65",
+    "crates/alife_gpu_backend/src/closed_loop_runtime.rs": "6ab9151fda73dd30e3064143277f5d54f683ae87cebe0dc0a9f305d57f6d1605",
+    "crates/alife_gpu_backend/src/closed_loop_runtime/tick.rs": "25df6d7c687a81caf7d4592ee28f31f715645fe8aef7acb7023ee83f1a2bc6d7",
+    "crates/alife_gpu_backend/src/training_rollout.rs": "9c2596ea662fa096ede135478d1db53ff9b6cafdee8f0a3e04dd98c8ba2d3ef2",
+    "crates/alife_world/Cargo.toml": "48f623d724595500ae36cd1e50a92cc78ef6e0b44a3a449b2a3a55ad0befd37e",
+    "crates/alife_world/src/candidate_enumerator.rs": "2ec8c084b8aabbbd26a6c906735da1eef3f689ad98a75d18787a2eab8a3d5e80",
+    "crates/alife_world/src/headless.rs": "4705e10a8395cf8a9f4d2adcd97e78705464043e91cc975e12c39372e7e787ae"
+  },
+  "policy_or_native_result": false,
+  "prior_commit": "b00de30b27b8d501c5e01f8df527ffa3471a2d10",
+  "prior_tree": "a1f474ce9feb2dd70356d93004698525fe7d2bad",
+  "schema": "qualia.contact211_f0_compile_source.v1",
+  "unchanged_shaders_sha256": {
+    "crates/alife_gpu_backend/shaders/closed_loop_decode.wgsl": "2df2efb57ee6f783bfbe602ab383ba1b8fe3da6535d3dadab5e4ea2bcf550ea2",
+    "crates/alife_gpu_backend/shaders/closed_loop_memory_context.wgsl": "ace0526896c3d7159280a33a1f0f6d33aa68ac46ef4ca6f4b01cce23698e267c",
+    "crates/alife_gpu_backend/shaders/training_rollout.wgsl": "54e1c91392d1261cf29380d0a53e67561842303ce5e584a1ff159789a05449b2"
+  }
+}
