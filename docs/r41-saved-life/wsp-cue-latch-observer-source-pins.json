@@ -1,0 +1,50 @@
+{
+  "actual_source_parent_hosted_commit": "de8b39fb47d768513eed4cd2e8f8647d5f22e88f",
+  "base_optional_observer_peer_pin": "fa190c7b536f976f30918f660996461072e31bcccce5102f43c4b920f2ee7e1a",
+  "combined_forward_sha256": "de1d62c7e6bfc85da2bd865ca3a9ce8de99a5f4a72fbfd9a7435230c4548628f",
+  "combined_inverse_sha256": "8fc4527e0d6e6a3fd79e71faf68137b6bcb74ee7d2f69effa8dd8804d5e967f4",
+  "combined_source_after_sha256": {
+    "crates/alife_game_app/Cargo.toml": "84aad6ab4b43297b0ab65d9223fc8b0fa641e0d6a7b6a80c5f6eca311e5d75d7",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs": "72f52ff6695770dab33b130a3d0922eba7829e600132f51cf4a476722af5e562",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs": "56fbf83bf75e6e7ef8ab874a31a6e7ad05a4c2116d8570ce3e15321a37081e45",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/wsp_cue_latch.rs": "5be428cbf6050ad934d413054a692bae4d75e26d604925b002140b707cc60007",
+    "crates/alife_game_app/src/gpu_live_runtime.rs": "e10d82be042112a8721610838e828446ad0260cc4aff09f8215f953813a7db08",
+    "crates/alife_game_app/src/gpu_live_runtime/cue_latch_observer.rs": "8b0e6c6a47967df3573e8aef2cdea27335d73d8091f3e9cba4615525b7f7cce5",
+    "crates/alife_game_app/src/gpu_live_runtime/staged_tick.rs": "847e8dc99b94f2ad9fb607b53d348ceaaa1037cfc9f040eb0010f91c8dde082a",
+    "crates/alife_world/Cargo.toml": "e54bd4cf515902aef896d6a2acc30512a9243e24118c8e37e4288bb260330bd5",
+    "crates/alife_world/src/headless.rs": "13780d92c292e74dc75e37526e9eb52adb96eaaaaf7339a008a2f6f529205d26",
+    "crates/alife_world/src/headless/cue_latch_observer.rs": "306b9651f576bef3743308c8aa019f6d14a9a822314862dc02f1c6e0682debf6"
+  },
+  "combined_source_before_sha256": {
+    "crates/alife_game_app/Cargo.toml": "b8ef3fb37b90a93adbb72a3aeaa846f57e968b5cca892d88978c25f5d17dfa18",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs": "76a9999d4b7381cf04b88574ee4f31f5f2ebaadc193c99d6e3a04af8eac07819",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs": "a5253b9b158e82ff8f21094b8eff3d1546951df1a4aab2f1450a7f604bcd5827",
+    "crates/alife_game_app/src/gpu_live_runtime.rs": "369037f0ce8e629c5447013c76d1809171ca8a6188d315dc16f32ce91bbf5bc0",
+    "crates/alife_game_app/src/gpu_live_runtime/staged_tick.rs": "665ea13f4ef5fa3f0e1c1f3a4d0c0f84fbbc8f80587a62bd7eab1722ed6020c6",
+    "crates/alife_world/Cargo.toml": "429ac84f9221f7c0296701a0a042da8d56e91e82f1b527c97a5f390cb60e902f",
+    "crates/alife_world/src/headless.rs": "9349e47eae65be8d75f631f8001663f8c276d71bf9627d4f4b47d784f66dd6d8"
+  },
+  "current_parent": "55672f322eadc64e223289d9df9883f62d0cc01aa97c0478119ad6c51d2852ee",
+  "existing_working_evaluator_untouched": "e8bbc20aa030d1ee81a81e15730e6c1218954be93c2eab73b6f010ec671d6fc5",
+  "launch_authorized": false,
+  "native_or_hosted_build": false,
+  "native_pair_read_only_harness_sha256": "b4908066bd05f6a5ad0f7a544a08407a28926d122f0d868d1c07bcaa9e86e2eb",
+  "official_card_or_existing_rank32_changed": false,
+  "offline_test_sha256": "ac684824559c86ccf8ed78d42f7ff7035002cd62bbb6d5d3007fa63735dfeeb5",
+  "runtime_install": false,
+  "schema": "qualia.private.wsp_cue_latch_combined_source_and_admission.v1",
+  "second_layer_admission_forward_sha256": "ebe79d0ea1b52556f0bf9bdedd1f3fd055bb91bfead40a316c33c3cde9e25d53",
+  "second_layer_admission_inverse_sha256": "1053ff3d57f92d4c26da9718bb743c1133b8938e7823f4b36c7e93beff347d41",
+  "source_integrity_checks": {
+    "actual_paid_manipulation_and_owner_rejoined": true,
+    "both_exact_three_cut_arms_same_semantic_hash": true,
+    "checkpoint_or_training_or_shader_surface_not_touched": true,
+    "combined_full_ten_leaf_preimage_and_byte_inverse": true,
+    "feature_default_off_early_manifest_refusal": true,
+    "five_leaf_preimage_exact_and_own_admission_invertible": true,
+    "fixed_budget_real_reference_and_no_selection_scope": true,
+    "original_rank32_and_language_parsers_unchanged": true,
+    "real_native_scope_begin_and_after_unchanged_tick_collection": true,
+    "rust_cpu_test_uses_real_world_capture_heard_advance_and_stale_refusal": true
+  }
+}
