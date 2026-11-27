@@ -1,0 +1,199 @@
+name: Qualia detached one-cut recommit test build
+on:
+  push:
+    branches: ["bob/qualia-g3-recommit-software-20261127"]
+    paths:
+      - ".github/workflows/qualia-g3-recommit-probe-build.yml"
+      - "docs/r41-saved-life/g3-recommit-probe-source.patch"
+      - "docs/r41-saved-life/g3-recommit-explicit-software-vulkan.patch"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qualia-recommit-probe-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compile-integration:
+    if: github.ref == 'refs/heads/bob/qualia-g3-recommit-software-20261127'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 46
+    env:
+      PIN_BASE: f466b83791cccb97568e6f718b92b052999cfb2b
+      PIN_SLEEP_PARENT: cbe4e85cbfe5e5194de1fd3bf30bd17a7121fa3d
+      PIN_WRAPPER_PARENT: 5cb8ebea10aed1fa6428c5166f27bf8b8eac5dd3
+      PIN_WRAPPER_WORKFLOW: 6971fd0d112e8841f175990d79a019f612cf3743
+      PIN_RESEARCH_COMMIT: 0cd14f12a8012a9b00119a7b33939ca5e3dbeb53
+      PIN_RESEARCH_PATCH: 3dcf657b2b1149a7da52e7867c3bdbc4c4dfe8d4785b53c95f429c78aa1cd490
+      PIN_SLEEP_REPAIR_PATCH: c2815992c4e3e70a7b7bc42b307dc1d96e8c34483ea36cf2c98e06b9920282e6
+      PIN_LEGACY_PUBLICATION_PATCH: 692ec25acc620f502581e7299d952471c039812646e41f85cdd1d6f87ed5c66d
+      PIN_LATE_ARCHIVE_PATCH: ed46a3cedb6f0bfdcba54660be6e1645ea6ea9cc71c6b7015b255b790b66a17d
+      PIN_WRAPPER_PATCH: ab8b07f7ac688ff56e8ca4dfb59f2e44c492be8b3b3710601d77dea035675af6
+      PIN_PROBE_PATCH: 45d98eb14b7eca2cbf7973fc6962cb141768f34be23e4b25f3bd112cef0c5b6a
+      PIN_ADMISSION_PATCH: 0d4a7d4499803c3f4c769d89bfdbb12406d9cf69dd87bc65a6a89d8b0f20ea64
+      PIN_TEST_SOURCE: 7b794ed46dae5a4d1309a47704d9853d929d239bfe4918eb74280d2b261b86d5
+      PIN_LOCK: 155699e9274f8890bc8c335669a62de48203ba315a33388a8f0caca71f0f7f37
+      PIN_RUSTC_COMMIT: 0ef1bc386059596dada8fb65b50425aab2ea637a
+      RUST_TOOLCHAIN: "1.100.0"
+      TARGET: x86_64-unknown-linux-gnu
+      CARGO_BUILD_JOBS: "1"
+      CARGO_INCREMENTAL: "0"
+      CARGO_PROFILE_RELEASE_DEBUG: "0"
+      CARGO_PROFILE_RELEASE_INCREMENTAL: "false"
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Read only the detached source branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Reconstruct the pinned source and apply the two test-only additions
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git merge-base --is-ancestor "$PIN_WRAPPER_PARENT" HEAD
+          git merge-base --is-ancestor "$PIN_SLEEP_PARENT" "$PIN_WRAPPER_PARENT"
+          git merge-base --is-ancestor "$PIN_BASE" "$PIN_SLEEP_PARENT"
+          git merge-base --is-ancestor "$PIN_RESEARCH_COMMIT" "$PIN_SLEEP_PARENT"
+          test "$(git rev-parse "$PIN_WRAPPER_PARENT:.github/workflows/qualia-derived-completed-authority-build.yml")" = "$PIN_WRAPPER_WORKFLOW"
+          git diff --exit-code "$PIN_WRAPPER_PARENT" HEAD -- . \
+            ':(exclude).github/workflows/qualia-g3-recommit-probe-build.yml' \
+            ':(exclude)docs/r41-saved-life/g3-recommit-probe-source.patch' \
+            ':(exclude)docs/r41-saved-life/g3-recommit-explicit-software-vulkan.patch'
+          git diff --exit-code "$PIN_BASE" HEAD -- \
+            docs/r41-saved-life/restore_source.py docs/r41-saved-life/SOURCE.json docs/r41-saved-life/patches
+          exact="$RUNNER_TEMP/qualia-probe-source"
+          target_dir="$RUNNER_TEMP/qualia-probe-target"
+          evidence="$RUNNER_TEMP/qualia-probe-build-evidence"
+          printf 'EXACT_SRC=%s\nCARGO_TARGET_DIR=%s\nEVIDENCE=%s\n' "$exact" "$target_dir" "$evidence" >> "$GITHUB_ENV"
+          mkdir "$evidence"
+          python3 docs/r41-saved-life/restore_source.py "$GITHUB_WORKSPACE" "$exact"
+          patches="$(mktemp -d "$RUNNER_TEMP/qualia-probe-patches.XXXXXXXX")"
+          extract() {
+            git show "$1:docs/r41-saved-life/$2" > "$patches/$2"
+            printf '%s  %s\n' "$3" "$patches/$2" | sha256sum -c -
+          }
+          extract "$PIN_RESEARCH_COMMIT" research-catalog-source-only.patch "$PIN_RESEARCH_PATCH"
+          extract "$PIN_SLEEP_PARENT" sleep-boundary-repair-source.patch "$PIN_SLEEP_REPAIR_PATCH"
+          extract "$PIN_SLEEP_PARENT" sleep-legacy-publication-source.patch "$PIN_LEGACY_PUBLICATION_PATCH"
+          extract "$PIN_SLEEP_PARENT" sleep-late-archive-retirement-source.patch "$PIN_LATE_ARCHIVE_PATCH"
+          extract "$PIN_WRAPPER_PARENT" publish-derived-completed-save-source.patch "$PIN_WRAPPER_PATCH"
+          extract "$GITHUB_SHA" g3-recommit-probe-source.patch "$PIN_PROBE_PATCH"
+          extract "$GITHUB_SHA" g3-recommit-explicit-software-vulkan.patch "$PIN_ADMISSION_PATCH"
+          cd "$exact"
+          for patch in research-catalog-source-only.patch sleep-boundary-repair-source.patch \
+             sleep-legacy-publication-source.patch sleep-late-archive-retirement-source.patch \
+             publish-derived-completed-save-source.patch g3-recommit-probe-source.patch \
+             g3-recommit-explicit-software-vulkan.patch; do
+            git apply --check --whitespace=error "$patches/$patch"
+            git apply --whitespace=error "$patches/$patch"
+          done
+          printf '%s  %s\n' "$PIN_TEST_SOURCE" crates/alife_game_app/tests/external_completed_sleep_recommit.rs \
+            "$PIN_LOCK" Cargo.lock | sha256sum -c -
+          printf '%s\n' \
+            "branch_commit=$GITHUB_SHA" "base=$PIN_BASE" "sleep_parent=$PIN_SLEEP_PARENT" \
+            "wrapper_parent=$PIN_WRAPPER_PARENT" "wrapper_workflow_blob=$PIN_WRAPPER_WORKFLOW" \
+            "research_commit=$PIN_RESEARCH_COMMIT" "research_patch=$PIN_RESEARCH_PATCH" \
+            "sleep_repair_patch=$PIN_SLEEP_REPAIR_PATCH" "legacy_publication_patch=$PIN_LEGACY_PUBLICATION_PATCH" \
+            "late_archive_patch=$PIN_LATE_ARCHIVE_PATCH" "wrapper_patch=$PIN_WRAPPER_PATCH" \
+            "probe_patch=$PIN_PROBE_PATCH" "admission_patch=$PIN_ADMISSION_PATCH" "test_source=$PIN_TEST_SOURCE" \
+            "cargo_lock=$PIN_LOCK" "rustc_commit=$PIN_RUSTC_COMMIT" "rust_toolchain=$RUST_TOOLCHAIN" "target=$TARGET" \
+            > "$evidence/SOURCE-PINS.txt"
+
+      - name: Link only the targeted integration test without running any test
+        run: |
+          set -euo pipefail
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --target "$TARGET"
+          version="$(rustc +"$RUST_TOOLCHAIN" -vV)"
+          grep -Fqx "release: $RUST_TOOLCHAIN" <<< "$version"
+          grep -Fqx "commit-hash: $PIN_RUSTC_COMMIT" <<< "$version"
+          grep -Fqx "host: $TARGET" <<< "$version"
+          cd "$EXACT_SRC"
+          timeout 8m cargo +"$RUST_TOOLCHAIN" fetch --locked --target "$TARGET"
+          log="$RUNNER_TEMP/qualia-probe-cargo.jsonl"
+          if ! timeout 30m cargo +"$RUST_TOOLCHAIN" test --frozen --offline --release --target "$TARGET" -j 1 \
+            -p alife_game_app --features foundation-training,gpu-tests --test external_completed_sleep_recommit \
+            --no-run --message-format=json-render-diagnostics > "$log"; then
+            tail -c 40000 "$log" >&2
+            exit 1
+          fi
+          executable="$(python3 - "$log" <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          import sys
+
+          events = []
+          for line in Path(sys.argv[1]).read_text().splitlines():
+              if line.startswith("{"):
+                  events.append(json.loads(line))
+          done = [e for e in events if e.get("reason") == "build-finished"]
+          if len(done) != 1 or done[0].get("success") is not True:
+              raise SystemExit("targeted compile/link not completed")
+          name = "external_completed_sleep_recommit"
+          selected = [Path(e["executable"]) for e in events
+                      if e.get("reason") == "compiler-artifact" and e.get("executable")
+                      and "test" in e.get("target", {}).get("kind", [])
+                      and e["target"].get("name") == name and e.get("profile", {}).get("test") is True]
+          expected = (Path(os.environ["CARGO_TARGET_DIR"]) / os.environ["TARGET"] / "release" / "deps").resolve()
+          if (len(selected) != 1 or selected[0].parent.resolve() != expected
+                  or not selected[0].name.startswith(name + "-")
+                  or not selected[0].is_file() or selected[0].is_symlink()):
+              raise SystemExit("could not uniquely identify the exact integration-test executable")
+          print(selected[0])
+          PY
+          )"
+          install -m 0755 "$executable" "$EVIDENCE/external_completed_sleep_recommit"
+          LC_ALL=C readelf -h "$EVIDENCE/external_completed_sleep_recommit" > "$RUNNER_TEMP/qualia-probe-elf-header.txt"
+          grep -Eq 'Class:[[:space:]]+ELF64' "$RUNNER_TEMP/qualia-probe-elf-header.txt"
+          grep -Eq 'Machine:[[:space:]]+Advanced Micro Devices X86-64' "$RUNNER_TEMP/qualia-probe-elf-header.txt"
+          printf '%s\n' 'locked_targeted_integration_link=passed' 'linked_elf=ELF64-x86_64' > "$EVIDENCE/BUILD-CHECKS.txt"
+
+      - name: Synthetic missing-admission refusal only, no source snapshot or GPU
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' | tee -a "$EVIDENCE/BUILD-CHECKS.txt"
+          import os
+          from pathlib import Path
+          import subprocess
+          import tempfile
+
+          exe = Path(os.environ["EVIDENCE"]) / "external_completed_sleep_recommit"
+          with tempfile.TemporaryDirectory(prefix="qualia-probe-admission-refusal-") as name:
+              empty = Path(name).resolve()
+              result = subprocess.run(
+                  [str(exe), "--ignored", "--exact", "externally_supplied_completed_sleep_recommits_one_cut",
+                   "--nocapture", "--test-threads=1"],
+                  cwd=empty, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=15,
+                  env={"PATH": "/usr/bin:/bin", "LC_ALL": "C", "HOME": str(empty)})
+              if (result.returncode != 101 or "running 1 test" not in result.stdout
+                      or "0 passed; 1 failed;" not in result.stdout
+                      or "requires explicit software Vulkan test admission; never falls back" not in result.stderr
+                      or "restored_before_only_tick" in result.stdout or any(empty.iterdir())):
+                  raise SystemExit(f"wrong input-independent admission refusal exit={result.returncode}")
+              print("synthetic_missing_admission_refused=passed")
+              print("opened_real_input=false")
+              print("device_initialized=false")
+              print("native_tick_executed=false")
+          PY
+          cd "$EVIDENCE"
+          sha256sum external_completed_sleep_recommit SOURCE-PINS.txt BUILD-CHECKS.txt > SHA256SUMS
+          sha256sum -c SHA256SUMS
+
+      - name: Upload only the linked test executable and redacted build checks
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: qualia-g3-recommit-test-build-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/qualia-probe-build-evidence/external_completed_sleep_recommit
+            ${{ runner.temp }}/qualia-probe-build-evidence/SOURCE-PINS.txt
+            ${{ runner.temp }}/qualia-probe-build-evidence/BUILD-CHECKS.txt
+            ${{ runner.temp }}/qualia-probe-build-evidence/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 5
+          compression-level: 3

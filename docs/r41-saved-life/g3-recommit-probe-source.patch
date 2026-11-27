@@ -1,0 +1,264 @@
+diff --git a/crates/alife_game_app/tests/external_completed_sleep_recommit.rs b/crates/alife_game_app/tests/external_completed_sleep_recommit.rs
+new file mode 100644
+index 0000000..c116015
+--- /dev/null
++++ b/crates/alife_game_app/tests/external_completed_sleep_recommit.rs
+@@ -0,0 +1,258 @@
++#![cfg(feature = "gpu-tests")]
++
++use std::{
++    env, fs,
++    io::Write,
++    path::{Path, PathBuf},
++    time::{Duration, Instant},
++};
++
++use alife_core::{ConsolidationState, OrganismId, PolicyBackend};
++use alife_game_app::{
++    AppShellLaunchConfig, GpuDurableSaveManifest, GpuLiveBrainRuntime, GpuLiveTickOutcome,
++};
++use alife_gpu_backend::{GpuClosedLoopBackend, GpuLearningStateSnapshot, GpuRuntimeProfile};
++use serde_json::{Value, json};
++
++// The supplied root must be a small, immutable private snapshot closure. Only
++// the newly created destination is passed to a runtime that can write.
++fn copy_input(source: &Path, destination: &Path, budget: &mut (u64, u32), depth: u8) {
++    assert!(depth <= 16, "snapshot tree exceeds the depth limit");
++    for entry in fs::read_dir(source).expect("read source snapshot directory") {
++        let entry = entry.expect("read source snapshot entry");
++        assert!(budget.1 > 0, "snapshot tree exceeds the entry limit");
++        budget.1 -= 1;
++        let kind = entry.file_type().expect("stat source snapshot entry");
++        let path = destination.join(entry.file_name());
++        if kind.is_dir() {
++            fs::create_dir(&path).expect("create private snapshot subdirectory");
++            copy_input(&entry.path(), &path, budget, depth + 1);
++        } else if kind.is_file() {
++            let size = entry.metadata().expect("stat source snapshot file").len();
++            assert!(size <= budget.0, "snapshot tree exceeds the byte limit");
++            budget.0 -= size;
++            assert_eq!(
++                fs::copy(entry.path(), path).expect("copy snapshot file"),
++                size,
++                "source snapshot changed size during copy"
++            );
++        } else {
++            panic!("snapshot tree must not contain links or special files");
++        }
++    }
++}
++
++fn input_path(name: &str) -> PathBuf {
++    PathBuf::from(env::var_os(name).unwrap_or_else(|| panic!("{name} is required")))
++}
++
++fn write_launch_input(path: &Path, value: &impl serde::Serialize) {
++    fs::OpenOptions::new()
++        .create_new(true)
++        .write(true)
++        .open(path)
++        .expect("create one private launch input")
++        .write_all(&serde_json::to_vec_pretty(value).expect("serialize exact saved launch input"))
++        .expect("write private launch input");
++}
++
++fn live_observation(runtime: &mut GpuLiveBrainRuntime, owner: OrganismId) -> Value {
++    let metrics = runtime.performance_metrics();
++    let (coordinator, worker) = runtime.exact_checkpoint_state_for_test();
++    let sleep = runtime.sleep_state_for_test(owner);
++    let learning = runtime.learning_state_for_test(owner);
++    let (slot, slot_error) = match learning {
++        Ok(state) => (slot_observation(state), None),
++        Err(error) => (Value::Null, Some(error.to_string())),
++    };
++    json!({
++        "tick": runtime.world_tick_for_test().raw(),
++        "owner": owner.raw(),
++        "coordinator": coordinator,
++        "worker": worker,
++        "matching_durable_permit": runtime.durable_completed_sleep_permitted_ids_for_test()
++            .contains(&owner),
++        "transactions_started": metrics.exact_checkpoint_transactions_started,
++        "transactions_completed": metrics.exact_checkpoint_transactions_completed,
++        "sleep_promotions": metrics.sleep_promotion_calls,
++        "sleep": sleep.as_ref().ok(),
++        "sleep_error": sleep.err().map(|error| error.to_string()),
++        "gpu_slot": slot,
++        "gpu_slot_error": slot_error,
++    })
++}
++
++fn slot_observation(state: GpuLearningStateSnapshot) -> Value {
++    json!({
++        "weight_bank": state.active_weight_bank,
++        "weight_generation": state.active_weight_generation,
++        "eligibility_bank": state.active_eligibility_bank,
++        "eligibility_generation": state.active_eligibility_generation,
++        "replay_generation": state.replay_journal_generation,
++        "replay_cursor": state.replay_journal_cursor,
++        "replay_event_count": state.replay_journal_event_count,
++        "learning_transaction_generation": state.transaction_generation,
++    })
++}
++
++#[test]
++#[ignore = "requires an explicit private immutable authority snapshot, scratch destination and Vulkan"]
++fn externally_supplied_completed_sleep_recommits_one_cut() {
++    let source = fs::canonicalize(input_path("QUALIA_RECOMMIT_SOURCE_ROOT"))
++        .expect("resolve immutable authority snapshot root");
++    let requested = input_path("QUALIA_RECOMMIT_OUTPUT_ROOT");
++    assert!(requested.is_absolute(), "use an absolute scratch destination");
++    let destination = fs::canonicalize(requested.parent().expect("scratch destination parent"))
++        .expect("resolve scratch parent")
++        .join(requested.file_name().expect("scratch destination name"));
++    assert!(
++        !destination.starts_with(&source) && !source.starts_with(&destination),
++        "scratch destination and immutable source must be disjoint"
++    );
++    let owner = OrganismId(
++        env::var("QUALIA_RECOMMIT_OWNER")
++            .expect("explicit source organism ID")
++            .parse()
++            .expect("numeric source organism ID"),
++    );
++    let expected_anchor =
++        env::var("QUALIA_RECOMMIT_BASE_ANCHOR").expect("explicit typed exact-save anchor");
++    let expected_authority_generation: u64 = env::var("QUALIA_RECOMMIT_AUTHORITY_GENERATION")
++        .expect("explicit packaged authority generation")
++        .parse()
++        .expect("numeric packaged authority generation");
++
++    fs::create_dir(&destination).expect("scratch destination must not already exist");
++    copy_input(&source, &destination, &mut (512 * 1024 * 1024, 2048), 0);
++    let save_path = destination.join("world.json");
++    let (durable, exact) =
++        GpuDurableSaveManifest::open_loaded(&save_path, &destination).expect("validated exact save");
++    assert_eq!(exact.authority_generation(), Some(expected_authority_generation));
++    let anchor = exact.exact_save_anchor_digest().expect("typed exact-save anchor");
++    assert_eq!(anchor.0, expected_anchor, "wrong exact checkpoint");
++    assert!(
++        durable.load_sleep_transaction_journal(&exact)
++            .expect("authenticate input journal").entries.is_empty(),
++        "probe requires an exact Completed boundary with no later journal"
++    );
++    let saved_world = exact.save.restore_headless_world().expect("exact snapshot world");
++    let owner_record = saved_world.organism_registry().get(owner).expect("original owner");
++    assert!(owner_record.lifecycle().is_alive(), "source owner is not alive");
++    let world_identity = saved_world.canonical_signature_digest().expect("world identity");
++    let brain = exact.save.creatures.iter()
++        .find(|creature| creature.organism_id == owner)
++        .and_then(|creature| creature.gpu_brain.as_ref())
++        .expect("exact source owner's GPU brain");
++    let ConsolidationState::Completed { request, staged } = brain.sleep.consolidation else {
++        panic!("the supplied original owner has no staged Completed replay");
++    };
++    assert!(brain.replay_journal_event_count > 0, "source replay must be nonempty");
++    let expected_brain = brain.promoted_completed_sleep_state().expect("valid staged destination");
++    let next_tick = brain.checkpoint_tick.raw().checked_add(1).expect("one more tick");
++
++    let launch = AppShellLaunchConfig {
++        fixture_root: destination.clone(),
++        config_path: destination.join(".recommit-probe.config.json"),
++        asset_manifest_path: destination.join(".recommit-probe.assets.json"),
++        save_path,
++        asset_root: destination,
++        start_paused: false,
++        brain_policy: PolicyBackend::NeuralClosedLoopGpu,
++    };
++    write_launch_input(&launch.config_path, &exact.save.config);
++    write_launch_input(&launch.asset_manifest_path, &exact.save.assets);
++    let backend = GpuClosedLoopBackend::new_required(GpuRuntimeProfile::production_v1())
++        .expect("real production GPU profile with Vulkan adapter");
++    let mut runtime = GpuLiveBrainRuntime::from_p34_launch(backend, &launch)
++        .expect("normal durable game-runtime startup");
++    println!("{}", json!({
++        "schema": "alife.external_completed_sleep_recommit_probe.v1",
++        "phase": "restored_before_only_tick",
++        "adapter": runtime.authority_telemetry().adapter,
++        "exact_save_anchor": anchor.0,
++        "source_authority_generation": exact.authority_generation(),
++        "cycle": request.cycle_id,
++        "expected_generation": staged.output_generation,
++        "expected_bank": staged.output_weight_bank,
++        "observed": live_observation(&mut runtime, owner),
++    }));
++    assert_eq!(runtime.world_tick_for_test(), exact.save.world.tick);
++    assert_eq!(
++        runtime.world_snapshot().canonical_signature_digest().expect("restored world"),
++        world_identity,
++        "restore changed the same-life world before the probe"
++    );
++    assert_eq!(runtime.sleep_state_for_test(owner).expect("restored sleep"), brain.sleep);
++    let installed = runtime.learning_state_for_test(owner).expect("restored live GPU bank");
++    assert_eq!(
++        (installed.active_weight_generation, installed.active_weight_bank),
++        (brain.active_weight_generation, brain.active_weight_bank)
++    );
++
++    // Exactly one ordinary living-world cut; never request a new capture or
++    // grant a permit from the probe. Even a NoProgress return is not retried.
++    let outcome = runtime.tick_outcome();
++    let outcome_label = match &outcome {
++        Ok(GpuLiveTickOutcome::Progressed(_)) => "progressed".to_string(),
++        Ok(GpuLiveTickOutcome::NoProgress(reason)) => format!("no_progress:{reason:?}"),
++        Err(error) => format!("error:{error}"),
++    };
++    println!("{}", json!({
++        "schema": "alife.external_completed_sleep_recommit_probe.v1",
++        "phase": "after_only_tick",
++        "outcome": outcome_label,
++        "observed": live_observation(&mut runtime, owner),
++    }));
++    assert!(
++        matches!(outcome, Ok(GpuLiveTickOutcome::Progressed(_))),
++        "one normal game tick did not progress: {outcome_label}"
++    );
++    assert_eq!(runtime.world_tick_for_test().raw(), next_tick);
++    let committed = runtime.sleep_state_for_test(owner).expect("live owner after one cut");
++    assert_eq!(committed, expected_brain.sleep, "one normal cut did not recommit this replay");
++    let active = runtime.learning_state_for_test(owner).expect("read actual post-cut GPU bank");
++    assert_eq!(
++        (active.active_weight_generation, active.active_weight_bank,
++            active.active_eligibility_generation, active.active_eligibility_bank),
++        (staged.output_generation, staged.output_weight_bank,
++            staged.eligibility_reset_generation, staged.output_eligibility_bank)
++    );
++    assert_eq!(
++        (active.replay_journal_generation, active.replay_journal_cursor,
++            active.replay_journal_event_count, active.transaction_generation),
++        (staged.replay_journal_generation, staged.replay_journal_cursor,
++            staged.replay_journal_event_count, expected_brain.learning_transaction_generation)
++    );
++
++    // Drain only the existing exact-checkpoint worker. The live cut above,
++    // never a shutdown drain, must produce the real GPU commit.
++    let deadline = Instant::now() + Duration::from_secs(30);
++    loop {
++        runtime.poll_exact_checkpoint_for_test().expect("poll only existing exact worker");
++        let latest = durable.load().expect("read latest authoritative pointer");
++        assert_eq!(latest.exact_save_anchor_digest().expect("post-cut anchor"), anchor);
++        assert_eq!(latest.save, exact.save, "journal-only recommit changed exact base");
++        let journal = durable.load_sleep_transaction_journal(&latest)
++            .expect("validate authoritative rollback journal");
++        if let Some(edge) = journal.entries.iter().find(|entry| {
++            entry.organism_id == owner && entry.source == brain.sleep && entry.target == committed
++        }) {
++            assert_eq!(edge.transition_tick.raw(), next_tick);
++            assert!(latest.authority_generation() > exact.authority_generation());
++            println!("{}", json!({
++                "schema": "alife.external_completed_sleep_recommit_probe.v1",
++                "phase": "authoritative_exact_edge",
++                "cycle": request.cycle_id,
++                "base_anchor": anchor.0,
++                "authority_generation": latest.authority_generation(),
++                "journal_digest": journal.journal_digest,
++                "edge_digest": edge.entry_digest,
++                "gpu_slot": slot_observation(active),
++            }));
++            break;
++        }
++        assert!(!runtime.exact_checkpoint_failed_for_test(), "authoritative worker failed");
++        assert!(Instant::now() < deadline, "no authoritative recommit edge after the only cut");
++        std::thread::sleep(Duration::from_millis(1));
++    }
++}

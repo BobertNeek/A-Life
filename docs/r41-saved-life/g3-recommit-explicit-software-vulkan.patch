@@ -1,0 +1,113 @@
+diff --git a/crates/alife_game_app/tests/external_completed_sleep_recommit.rs b/crates/alife_game_app/tests/external_completed_sleep_recommit.rs
+index c116015..462aeaf 100644
+--- a/crates/alife_game_app/tests/external_completed_sleep_recommit.rs
++++ b/crates/alife_game_app/tests/external_completed_sleep_recommit.rs
+@@ -98,6 +98,11 @@ fn slot_observation(state: GpuLearningStateSnapshot) -> Value {
+ #[test]
+ #[ignore = "requires an explicit private immutable authority snapshot, scratch destination and Vulkan"]
+ fn externally_supplied_completed_sleep_recommits_one_cut() {
++    assert_eq!(
++        env::var("QUALIA_RECOMMIT_VULKAN_MODE").ok().as_deref(),
++        Some("isolated-software-vulkan-runtime-test"),
++        "this detached probe requires explicit software Vulkan test admission; never falls back"
++    );
+     let source = fs::canonicalize(input_path("QUALIA_RECOMMIT_SOURCE_ROOT"))
+         .expect("resolve immutable authority snapshot root");
+     let requested = input_path("QUALIA_RECOMMIT_OUTPUT_ROOT");
+@@ -147,6 +152,12 @@ fn externally_supplied_completed_sleep_recommits_one_cut() {
+         panic!("the supplied original owner has no staged Completed replay");
+     };
+     assert!(brain.replay_journal_event_count > 0, "source replay must be nonempty");
++    assert_eq!(request.input_generation, brain.active_weight_generation);
++    assert_eq!(staged.output_generation, request.expected_output_generation);
++    assert_eq!(brain.active_weight_generation.checked_add(1), Some(staged.output_generation));
++    assert_eq!(brain.replay_journal_generation.checked_add(1), Some(staged.replay_journal_generation));
++    assert_eq!((staged.replay_journal_cursor, staged.replay_journal_event_count), (0, 0));
++    assert_eq!(brain.sleep.last_consolidated_cycle_id.checked_add(1), Some(request.cycle_id));
+     let expected_brain = brain.promoted_completed_sleep_state().expect("valid staged destination");
+     let next_tick = brain.checkpoint_tick.raw().checked_add(1).expect("one more tick");
+ 
+@@ -161,14 +172,26 @@ fn externally_supplied_completed_sleep_recommits_one_cut() {
+     };
+     write_launch_input(&launch.config_path, &exact.save.config);
+     write_launch_input(&launch.asset_manifest_path, &exact.save.assets);
+-    let backend = GpuClosedLoopBackend::new_required(GpuRuntimeProfile::production_v1())
+-        .expect("real production GPU profile with Vulkan adapter");
++    let backend =
++        GpuClosedLoopBackend::new_software_vulkan_runtime_test(GpuRuntimeProfile::production_v1())
++            .expect("explicit software Vulkan runtime test; no hardware or Noop fallback");
++    let adapter = backend.software_runtime_test_adapter_info().expect("actual test adapter");
++    assert_eq!(format!("{:?}", adapter.backend), "Vulkan");
++    assert_eq!(format!("{:?}", adapter.device_type), "Cpu");
+     let mut runtime = GpuLiveBrainRuntime::from_p34_launch(backend, &launch)
+         .expect("normal durable game-runtime startup");
+     println!("{}", json!({
+         "schema": "alife.external_completed_sleep_recommit_probe.v1",
+         "phase": "restored_before_only_tick",
+         "adapter": runtime.authority_telemetry().adapter,
++        "software_vulkan_device": {
++            "backend": format!("{:?}", adapter.backend),
++            "device_type": format!("{:?}", adapter.device_type),
++            "name": adapter.name,
++            "driver": adapter.driver,
++            "driver_info": adapter.driver_info,
++        },
++        "hardware_qualification": false,
+         "exact_save_anchor": anchor.0,
+         "source_authority_generation": exact.authority_generation(),
+         "cycle": request.cycle_id,
+@@ -188,6 +211,12 @@ fn externally_supplied_completed_sleep_recommits_one_cut() {
+         (installed.active_weight_generation, installed.active_weight_bank),
+         (brain.active_weight_generation, brain.active_weight_bank)
+     );
++    assert_eq!(
++        (installed.replay_journal_generation, installed.replay_journal_cursor,
++            installed.replay_journal_event_count, installed.transaction_generation),
++        (brain.replay_journal_generation, brain.replay_journal_cursor,
++            brain.replay_journal_event_count, brain.learning_transaction_generation)
++    );
+ 
+     // Exactly one ordinary living-world cut; never request a new capture or
+     // grant a permit from the probe. Even a NoProgress return is not retried.
+@@ -210,6 +239,17 @@ fn externally_supplied_completed_sleep_recommits_one_cut() {
+     assert_eq!(runtime.world_tick_for_test().raw(), next_tick);
+     let committed = runtime.sleep_state_for_test(owner).expect("live owner after one cut");
+     assert_eq!(committed, expected_brain.sleep, "one normal cut did not recommit this replay");
++    assert_eq!(
++        committed.consolidation,
++        ConsolidationState::Committed {
++            cycle_id: request.cycle_id, output_generation: staged.output_generation,
++            output_digest: staged.output_digest,
++        }
++    );
++    // Committing replay is not waking. The counter advances only on a later
++    // natural Waking -> Awake transition, outside this one-cut test.
++    assert_eq!(committed.last_consolidated_cycle_id, brain.sleep.last_consolidated_cycle_id);
++    assert_eq!(committed.cycles_completed, brain.sleep.cycles_completed);
+     let active = runtime.learning_state_for_test(owner).expect("read actual post-cut GPU bank");
+     assert_eq!(
+         (active.active_weight_generation, active.active_weight_bank,
+@@ -238,7 +278,12 @@ fn externally_supplied_completed_sleep_recommits_one_cut() {
+             entry.organism_id == owner && entry.source == brain.sleep && entry.target == committed
+         }) {
+             assert_eq!(edge.transition_tick.raw(), next_tick);
+-            assert!(latest.authority_generation() > exact.authority_generation());
++            assert_eq!(journal.entries.len(), 1, "unexpected additional durable transitions");
++            assert_eq!(
++                latest.authority_generation(),
++                expected_authority_generation.checked_add(1),
++                "the single committed transition needs the next authority generation"
++            );
+             println!("{}", json!({
+                 "schema": "alife.external_completed_sleep_recommit_probe.v1",
+                 "phase": "authoritative_exact_edge",
+@@ -246,6 +291,9 @@ fn externally_supplied_completed_sleep_recommits_one_cut() {
+                 "base_anchor": anchor.0,
+                 "authority_generation": latest.authority_generation(),
+                 "journal_digest": journal.journal_digest,
++                "committed_replay_cycle": request.cycle_id,
++                "last_consolidated_cycle_id": committed.last_consolidated_cycle_id,
++                "waking_or_biological_counters_advanced": false,
+                 "edge_digest": edge.entry_digest,
+                 "gpu_slot": slot_observation(active),
+             }));
