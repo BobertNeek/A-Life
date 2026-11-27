@@ -1,0 +1,413 @@
+diff --git a/crates/alife_gpu_backend/Cargo.toml b/crates/alife_gpu_backend/Cargo.toml
+index 83884ad..8d90a3c 100644
+--- a/crates/alife_gpu_backend/Cargo.toml
++++ b/crates/alife_gpu_backend/Cargo.toml
+@@ -24,3 +24,5 @@ gpu-tests = ["test-support"]
+ training-rollout = []
+ # Read-only native planner diagnostics; never enabled by a production profile.
+ research-n4096-shape = []
++# Explicit offline software runtime tests only; no production profile enables this.
++research-n4096-auxiliary = ["research-n4096-shape", "gpu-tests"]
+diff --git a/crates/alife_gpu_backend/src/closed_loop_buffers/bucket.rs b/crates/alife_gpu_backend/src/closed_loop_buffers/bucket.rs
+index 3e93c50..9850c5d 100644
+--- a/crates/alife_gpu_backend/src/closed_loop_buffers/bucket.rs
++++ b/crates/alife_gpu_backend/src/closed_loop_buffers/bucket.rs
+@@ -4518,6 +4518,21 @@ impl GpuFixedClassArenaBuffers {
+         Ok(())
+     }
+ 
++    #[cfg(feature = "research-n4096-auxiliary")]
++    pub(crate) fn owned_n4096_auxiliary_words(
++        &self,
++        ranges: &GpuFixedSlotRanges,
++    ) -> Result<&wgpu::Buffer, GpuClosedLoopError> {
++        self.validate_ranges(ranges)?;
++        if self.arena_ownership_token == 0
++            || self.slot_capacity != 1
++            || self.max_neurons != alife_core::N4096ResearchLayoutV1::NEURON_COUNT
++        {
++            return Err(GpuClosedLoopError::StaleOrForeignHandle);
++        }
++        Ok(&self.mutable_state_words)
++    }
++
+     fn validate_ranges(&self, ranges: &GpuFixedSlotRanges) -> Result<(), GpuClosedLoopError> {
+         if ranges.arena_ownership_token != self.arena_ownership_token
+             || ranges.slot >= self.slot_capacity
+diff --git a/crates/alife_gpu_backend/src/lib.rs b/crates/alife_gpu_backend/src/lib.rs
+index 57f0b5c..1208895 100644
+--- a/crates/alife_gpu_backend/src/lib.rs
++++ b/crates/alife_gpu_backend/src/lib.rs
+@@ -17,6 +17,8 @@ pub mod runtime;
+ mod startup_diagnostics;
+ #[cfg(feature = "research-n4096-shape")]
+ pub mod research_n4096_shape;
++#[cfg(feature = "research-n4096-auxiliary")]
++pub mod research_n4096_auxiliary;
+ #[cfg(feature = "training-rollout")]
+ pub mod training_rollout;
+ #[cfg(feature = "training-rollout")]
+diff --git a/crates/alife_gpu_backend/src/research_n4096_auxiliary.rs b/crates/alife_gpu_backend/src/research_n4096_auxiliary.rs
+new file mode 100644
+index 0000000..23431bb
+--- /dev/null
++++ b/crates/alife_gpu_backend/src/research_n4096_auxiliary.rs
+@@ -0,0 +1,345 @@
++//! Explicit detached physical carrier probe. A class-4 arena is allocated,
++//! read back and dropped locally; it cannot become a cognition resident.
++
++use std::ops::Range;
++
++use alife_core::{BrainCapacityClass, CanonicalDigestBuilder, ScaffoldContractError, Tick};
++use serde::Serialize;
++use wgpu::util::DeviceExt;
++
++use crate::closed_loop_buffers::{
++    GpuFixedClassArenaBuffers, GpuFixedClassArenaPlan, GpuFixedSlotRanges,
++};
++use crate::closed_loop_runtime::map_gpu_contract_error;
++use crate::closed_loop_sleep::read_gpu_word_ranges;
++use crate::research_n4096_shape::{address_bands, N4096LobeAddressBandsV1};
++use crate::{GpuBrainHandle, GpuClosedLoopBackend, GpuV11Checkpoint};
++
++const OLD: usize = alife_core::N2048FoundationLayoutV1::NEURON_COUNT as usize;
++const WIDE: usize = alife_core::N4096ResearchLayoutV1::NEURON_COUNT as usize;
++const WORDS: usize = WIDE * 4;
++const PAYLOAD_BYTES: u64 = WORDS as u64 * 4;
++
++fn mismatch() -> ScaffoldContractError {
++    ScaffoldContractError::ConsolidationGenerationMismatch
++}
++
++struct SingleAuxiliaryArena {
++    buffers: GpuFixedClassArenaBuffers,
++    row: GpuFixedSlotRanges,
++    bytes: u64,
++}
++
++impl SingleAuxiliaryArena {
++    fn allocate(
++        device: &wgpu::Device,
++        profile_ceiling: u64,
++        expected_bytes: u64,
++    ) -> Result<Self, ScaffoldContractError> {
++        let plan = GpuFixedClassArenaPlan::new(BrainCapacityClass::n4096_research(), 1, profile_ceiling)
++            .map_err(map_gpu_contract_error)?;
++        let bytes = plan.aggregate_resident_bytes();
++        if bytes != expected_bytes {
++            return Err(mismatch());
++        }
++        let row = plan.slot_ranges(0).map_err(map_gpu_contract_error)?;
++        let buffers = GpuFixedClassArenaBuffers::allocate(device, &plan)
++            .map_err(map_gpu_contract_error)?;
++        Ok(Self { buffers, row, bytes })
++    }
++
++    fn write_and_read(
++        &self,
++        device: &wgpu::Device,
++        queue: &wgpu::Queue,
++        words: &[u32],
++    ) -> Result<Vec<Vec<u32>>, ScaffoldContractError> {
++        let target = self.buffers.owned_n4096_auxiliary_words(&self.row)
++            .map_err(map_gpu_contract_error)?;
++        let layout = &self.row.layout;
++        let ranges = [
++            layout.activation_a_words.clone(),
++            layout.activation_b_words.clone(),
++            layout.homeostasis_words.clone(),
++        ];
++        let writes = validate_intervals(&self.row.mutable_state_words, &ranges, words.len())?;
++        let upload = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
++            label: Some("detached-n4096-explicit-zero-q-upload"),
++            contents: bytemuck::cast_slice(words),
++            usage: wgpu::BufferUsages::COPY_SRC,
++        });
++        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
++            label: Some("detached-n4096-activation-homeostasis-only"),
++        });
++        for (offset, range) in writes.into_iter().zip(&ranges) {
++            encoder.copy_buffer_to_buffer(
++                &upload, offset, target, u64::from(range.start) * 4, range.len() as u64 * 4,
++            );
++        }
++        queue.submit(Some(encoder.finish()));
++        // The same ordered queue submits the fresh device-to-map copy after
++        // the destination writes; raw CPU upload is never used as readback.
++        read_gpu_word_ranges(
++            device, queue,
++            &[(target, ranges[0].clone()), (target, ranges[1].clone()), (target, ranges[2].clone())],
++            "detached-n4096-auxiliary-device-readback", None,
++        )
++    }
++}
++
++fn validate_intervals(
++    bound: &Range<u32>,
++    ranges: &[Range<u32>; 3],
++    payload_words: usize,
++) -> Result<[u64; 3], ScaffoldContractError> {
++    if payload_words != WORDS
++        || ranges[0].len() != WIDE || ranges[1].len() != WIDE || ranges[2].len() != 2 * WIDE
++        || bound.start > ranges[0].start || ranges[0].end > ranges[1].start
++        || ranges[1].end > ranges[2].start || ranges[2].end > bound.end
++    {
++        return Err(mismatch());
++    }
++    Ok([0, WIDE as u64 * 4, WIDE as u64 * 8])
++}
++
++fn lift_h(
++    bands: &[N4096LobeAddressBandsV1],
++    old: [&[u32]; 3],
++) -> Result<Vec<u32>, ScaffoldContractError> {
++    let mut words = vec![0; WORDS];
++    for (j, (channels, offset)) in [(1, 0), (1, WIDE), (2, 2 * WIDE)].into_iter().enumerate() {
++        if old[j].len() != OLD * channels {
++            return Err(mismatch());
++        }
++        let row = &mut words[offset..offset+WIDE*channels];
++        for band in bands {
++            for (legacy, wide) in band.old.clone().zip(band.inherited_h.clone()) {
++                let i = legacy as usize * channels;
++                let k = wide as usize * channels;
++                row[k..k+channels].copy_from_slice(&old[j][i..i+channels]);
++            }
++        }
++    }
++    Ok(words)
++}
++
++fn verify_readback(
++    bands: &[N4096LobeAddressBandsV1],
++    old: [&[u32]; 3],
++    rows: &[Vec<u32>],
++) -> Result<[u64; 4], ScaffoldContractError> {
++    if rows.len() != 3 {
++        return Err(mismatch());
++    }
++    let mut digest = CanonicalDigestBuilder::new(b"alife.gpu.research.n4096.hq-readback.v1");
++    for (j, channels) in [1, 1, 2].into_iter().enumerate() {
++        let row = &rows[j];
++        if row.len() != WIDE * channels || old[j].len() != OLD * channels {
++            return Err(mismatch());
++        }
++        for band in bands {
++            for (legacy, wide) in band.old.clone().zip(band.inherited_h.clone()) {
++                let i = legacy as usize * channels;
++                let k = wide as usize * channels;
++                if row[k..k+channels] != old[j][i..i+channels] {
++                    return Err(mismatch());
++                }
++            }
++            for wide in band.detached_q.clone() {
++                let k = wide as usize * channels;
++                if row[k..k+channels].iter().any(|word| *word != 0) {
++                    return Err(mismatch());
++                }
++            }
++        }
++        digest.write_sequence_len(row.len());
++        for &word in row {
++            digest.write_u32(word);
++        }
++    }
++    Ok(digest.finish256())
++}
++
++#[derive(Debug, Clone, PartialEq)]
++struct AuthorityCut {
++    graph_epoch: u64,
++    v11: GpuV11Checkpoint,
++    // Existing production admission, dispatch, selection and perception counters.
++    counters: [u64; 5],
++}
++
++#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
++pub struct N4096DetachedDeviceWitnessV1 {
++    pub schema: &'static str,
++    pub checkpoint_tick_asserted_by_caller: u64,
++    pub source_slot_generation: u32,
++    pub source_graph_epoch: u64,
++    pub ordinary_snapshot_digest_before_after: [u64; 4],
++    pub device_exact_h_q_readback_digest: [u64; 4],
++    pub recorded_device_limits_digest: [u64; 4],
++    pub source_vulkan_adapter: String,
++    pub physical_arena_bytes: u64,
++    pub readback_bytes: u64,
++    pub reserved_additional_bytes: u64,
++    pub projected_h_words: usize,
++    pub checked_q_positive_zero_words: usize,
++    pub ordinary_dispatch_counters_before_after: [u64; 5],
++    pub cognition_resident_admitted: bool,
++    pub checkpoint_or_score_published: bool,
++}
++
++impl GpuClosedLoopBackend {
++    fn detached_width_source_cut(&self, source: GpuBrainHandle) -> Result<AuthorityCut, ScaffoldContractError> {
++        self.validate_handle_backend(source)?;
++        if self.organisms.len() != 1
++            || self.organisms.get(&source.organism_id().raw()).copied() != Some(source)
++            || source.class_id() != BrainCapacityClass::n2048().id()
++            || !self.sleep_jobs.is_empty()
++        {
++            return Err(ScaffoldContractError::BrainOwnershipMismatch);
++        }
++        let row = self.class_buckets.get(&source.class_id().raw())
++            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?.resident(source)?;
++        if row.pending_eligibility.is_some() || row.transaction_generation == 0 {
++            return Err(mismatch());
++        }
++        Ok(AuthorityCut {
++            graph_epoch: row.transaction_generation,
++            v11: row.v11.checkpoint(),
++            counters: [
++                self.admission_receipt().allocation_generation, self.next_dispatch_generation,
++                self.completed_dispatch_count(), self.completed_selection_count(), self.perception_upload_count(),
++            ],
++        })
++    }
++
++    /// Synchronous, one-slot trace only. The app must independently authenticate
++    /// ordinary Current/zero tick/world and same life before issuing this call.
++    /// No free CPU words or externally hydrated snapshot can initialize the arena.
++    pub fn verify_detached_n4096_auxiliary(
++        &mut self,
++        source: GpuBrainHandle,
++        checkpoint_tick: Tick,
++        expected_ordinary_snapshot_digest: [u64; 4],
++        expected_ordinary_v11: &GpuV11Checkpoint,
++    ) -> Result<N4096DetachedDeviceWitnessV1, ScaffoldContractError> {
++        if !self.is_software_runtime_test() || expected_ordinary_snapshot_digest == [0; 4] {
++            return Err(ScaffoldContractError::NeuralBackendUnavailable);
++        }
++        self.ensure_ready()?;
++        let cut = self.detached_width_source_cut(source)?;
++        // A compact ordinary snapshot digest does not include V11 topology.
++        // The separately authenticated V11 input is comparison-only.
++        if &cut.v11 != expected_ordinary_v11 {
++            return Err(mismatch());
++        }
++        let plan = self.inspect_detached_n4096_quotient_shape().map_err(map_gpu_contract_error)?;
++        let single = &plan.single_slot_if_separately_owned;
++        let source_bytes = self.class_buckets.get(&source.class_id().raw())
++            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
++            .resident(source)?.ranges.mutable_state_words.len() as u64 * 4;
++        let auxiliary_bytes = single.planner.residency_bytes;
++        let reserve = auxiliary_bytes.checked_add(PAYLOAD_BYTES * 2)
++            .and_then(|x| x.checked_add(source_bytes)).ok_or_else(mismatch)?;
++        if !single.fits_recorded_device_buffer_limits || !single.fits_existing_residency_budget
++            || plan.current_accounted_physical_bytes.checked_add(reserve)
++                .is_none_or(|peak| peak > plan.profile_physical_ceiling_bytes)
++        {
++            return Err(ScaffoldContractError::NeuralBackendUnavailable);
++        }
++
++        let snapshot = self.snapshot_brain(source, checkpoint_tick)?;
++        if snapshot.canonical_digest() != expected_ordinary_snapshot_digest
++            || self.detached_width_source_cut(source)? != cut
++        {
++            return Err(mismatch());
++        }
++        let source_parts = snapshot.into_parts();
++        if source_parts.learning_transaction_generation != cut.graph_epoch
++            || source_parts.pending_eligibility.is_some()
++        {
++            return Err(mismatch());
++        }
++        let old = [
++            source_parts.activation_a_bits.as_slice(), source_parts.activation_b_bits.as_slice(),
++            source_parts.neuron_homeostasis_bits.as_slice(),
++        ];
++        let bands = address_bands().map_err(map_gpu_contract_error)?;
++        let upload = lift_h(&bands, old)?;
++        let guards = [wgpu::ErrorFilter::OutOfMemory, wgpu::ErrorFilter::Validation, wgpu::ErrorFilter::Internal]
++            .map(|filter| self.device.push_error_scope(filter));
++        let native = (|| -> Result<_, ScaffoldContractError> {
++            let aux = SingleAuxiliaryArena::allocate(
++                &self.device, plan.profile_physical_ceiling_bytes, auxiliary_bytes,
++            )?;
++            let rows = aux.write_and_read(&self.device, &self.queue, &upload)?;
++            Ok((aux.bytes, verify_readback(&bands, old, &rows)?))
++        })();
++        let mut device_error = false;
++        for scope in guards.into_iter().rev() {
++            device_error |= pollster::block_on(scope.pop()).is_some();
++        }
++        self.ensure_ready()?;
++        if device_error {
++            return Err(ScaffoldContractError::NeuralBackendUnavailable);
++        }
++        let (physical_arena_bytes, device_exact_h_q_readback_digest) = native?;
++        if self.detached_width_source_cut(source)? != cut
++            || self.snapshot_brain(source, checkpoint_tick)?.canonical_digest()
++                != expected_ordinary_snapshot_digest
++        {
++            return Err(mismatch());
++        }
++        Ok(N4096DetachedDeviceWitnessV1 {
++            schema: "alife.research.n4096.same-backend-auxiliary-witness.v1",
++            checkpoint_tick_asserted_by_caller: checkpoint_tick.raw(),
++            source_slot_generation: source.generation(),
++            source_graph_epoch: cut.graph_epoch,
++            ordinary_snapshot_digest_before_after: expected_ordinary_snapshot_digest,
++            device_exact_h_q_readback_digest,
++            recorded_device_limits_digest: plan.device_limits_digest,
++            source_vulkan_adapter: self.hardware_receipt().adapter_name.clone(),
++            physical_arena_bytes,
++            readback_bytes: PAYLOAD_BYTES,
++            reserved_additional_bytes: reserve,
++            projected_h_words: OLD * 4,
++            checked_q_positive_zero_words: OLD * 4,
++            ordinary_dispatch_counters_before_after: cut.counters,
++            cognition_resident_admitted: false,
++            checkpoint_or_score_published: false,
++        })
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn n4096_aux_fields_are_bounded_and_any_nonzero_q_refuses() {
++        let r = [0..4096, 4096..8192, 12288..20480];
++        assert_eq!(validate_intervals(&(0..20480), &r, WORDS).unwrap(), [0, 16384, 32768]);
++        assert!(validate_intervals(&(1..20480), &r, WORDS).is_err());
++        let bad = [0..4096, 4095..8191, 12288..20480];
++        assert!(validate_intervals(&(0..20480), &bad, WORDS).is_err());
++        assert!(validate_intervals(&(0..20479), &r, WORDS).is_err());
++        let bands = address_bands().unwrap();
++        let a = (0..OLD as u32).collect::<Vec<_>>();
++        let b = vec![0xbfa00000; OLD];
++        let home = vec![0x3fa00000; 2*OLD];
++        let old = [a.as_slice(), b.as_slice(), home.as_slice()];
++        let packed = lift_h(&bands, old).unwrap();
++        let mut rows = vec![packed[..WIDE].to_vec(), packed[WIDE..2*WIDE].to_vec(), packed[2*WIDE..].to_vec()];
++        assert!(verify_readback(&bands, old, &rows).is_ok());
++        for (j, channels) in [1, 1, 2].into_iter().enumerate() {
++            let index = bands.last().unwrap().detached_q.end as usize * channels - 1;
++            for word in [1, 0x80000000] {
++                rows[j][index] = word;
++                assert!(verify_readback(&bands, old, &rows).is_err());
++            }
++            rows[j][index] = 0;
++        }
++        rows[1][0] ^= 1;
++        assert!(verify_readback(&bands, old, &rows).is_err());
++    }
++}
+diff --git a/crates/alife_gpu_backend/src/research_n4096_shape.rs b/crates/alife_gpu_backend/src/research_n4096_shape.rs
+index c974b99..28eed0d 100644
+--- a/crates/alife_gpu_backend/src/research_n4096_shape.rs
++++ b/crates/alife_gpu_backend/src/research_n4096_shape.rs
+@@ -80,7 +80,7 @@ pub struct N4096QuotientShapeV1 {
+     pub live_physical_probe_run: bool,
+ }
+ 
+-fn address_bands() -> Result<Vec<N4096LobeAddressBandsV1>, GpuClosedLoopError> {
++pub(crate) fn address_bands() -> Result<Vec<N4096LobeAddressBandsV1>, GpuClosedLoopError> {
+     use GpuClosedLoopError::LayoutMismatch;
+     let legacy = N2048FoundationLayoutV1::lobe_layout();
+     let width = N4096ResearchLayoutV1::lobe_layout().map_err(|_| LayoutMismatch)?;

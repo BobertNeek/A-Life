@@ -1,0 +1,562 @@
+diff --git a/crates/alife_game_app/Cargo.toml b/crates/alife_game_app/Cargo.toml
+index 15f694e..5848f05 100644
+--- a/crates/alife_game_app/Cargo.toml
++++ b/crates/alife_game_app/Cargo.toml
+@@ -125,6 +125,8 @@ gpu-tests = [
+ ]
+ retained-language-pilot = ["foundation-training", "gpu-tests", "alife_world/retained-language-pilot"]
+ retained-language-composition-v3 = ["retained-language-pilot", "alife_world/retained-language-composition-v3"]
++# Explicit detached diagnostic, never in defaults or a promotion profile.
++retained-n4096-auxiliary = ["foundation-training", "gpu-tests", "alife_gpu_backend/research-n4096-auxiliary"]
+ vfx-hanabi = ["bevy-app", "dep:bevy_hanabi", "bevy_hanabi/3d"]
+ production-voxel-frontend = [
+     "bevy-app",
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs
+index 2871f1b..244cc3b 100644
+--- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs
+@@ -30,6 +30,9 @@ mod language_composition_v3;
+ #[cfg(feature = "gpu-tests")]
+ pub use experiments::evaluate_saved_life_retention_experiment;
+ 
++#[cfg(feature = "retained-n4096-auxiliary")]
++mod n4096_auxiliary_intake;
++
+ const MAX_TRACE_BYTES: usize = 16 * 1024 * 1024;
+ 
+ /// Observer serialization only. The caller supplies the already sealed decision
+@@ -401,6 +404,12 @@ fn evaluate_saved_life_retention_inner(
+     #[cfg(feature = "gpu-tests")] experiment: Option<experiments::ExperimentIdentity>,
+ ) -> Result<serde_json::Value> {
+     request.validate(now()?)?;
++    #[cfg(feature = "retained-n4096-auxiliary")]
++    let width = experiment.as_ref().and_then(experiments::ExperimentIdentity::n4096_auxiliary);
++    #[cfg(feature = "retained-n4096-auxiliary")]
++    if let Some(spec) = width {
++        spec.require_zero_request(&request)?;
++    }
+     #[cfg(feature = "gpu-tests")]
+     let research = experiment.as_ref().and_then(experiments::ExperimentIdentity::research);
+     #[cfg(feature = "retained-language-pilot")]
+@@ -498,6 +507,10 @@ fn evaluate_saved_life_retention_inner(
+     let mut baseline = read_current_training_checkpoint(&source)?;
+     let mut baseline_bytes = original.clone();
+     baseline.require_living_continuation()?;
++    #[cfg(feature = "retained-n4096-auxiliary")]
++    if let Some(spec) = width {
++        spec.require_portable_bytes(&baseline)?;
++    }
+     #[cfg(feature = "retained-language-pilot")]
+     if language.is_some() {
+         let life = baseline.life.as_ref().ok_or("language pilot requires exact living state")?;
+@@ -654,6 +667,10 @@ fn evaluate_saved_life_retention_inner(
+         .iter()
+         .filter_map(|c| c.gpu_brain.clone())
+         .collect::<Vec<_>>();
++    #[cfg(feature = "retained-n4096-auxiliary")]
++    let expected_v11 = width.map(|spec| spec.exact_saved_v11(
++        &baseline, &loaded.save.assets, &checkpoints, id, world.tick(),
++    )).transpose()?;
+     if scent_scope.is_some() {
+         let [checkpoint] = checkpoints.as_slice() else {
+             return Err("retained near-field requires one exact saved brain".into());
+@@ -781,6 +798,27 @@ fn evaluate_saved_life_retention_inner(
+     if !prior_off(runtime.semantic_prior_metrics()) {
+         return Err("retention prior is not dormant and off".into());
+     }
++    #[cfg(feature = "retained-n4096-auxiliary")]
++    if let Some(spec) = width {
++        // New branch exits before every paid step, scene mutation, and finalizer.
++        let expected_v11 = expected_v11.as_ref().ok_or("missing exact saved V11")?;
++        let result = spec.inspect_exact_zero(
++            &mut runtime, &baseline, id, &source, &source_sha, expected_v11,
++        )?;
++        receipt["n4096_auxiliary_zero_inspection"] = result;
++        receipt["status"] = serde_json::json!("n4096_auxiliary_zero_inspection_only");
++        receipt["captured_decisions"] = serde_json::json!(0);
++        receipt["world_ticks"] = serde_json::json!(0);
++        receipt["control_calls"] = serde_json::json!(0);
++        receipt["source_unchanged"] = serde_json::json!(true);
++        receipt["gpu_restored"] = serde_json::json!(true);
++        receipt["neural_execution"] = serde_json::json!(false);
++        receipt["measurement_valid"] = serde_json::json!(false);
++        receipt["retention_demonstrated"] = serde_json::json!(false);
++        drop(final_headroom);
++        alife_storage::write(output.join("retention.json"), serde_json::to_vec_pretty(&receipt)?)?;
++        return Ok(receipt);
++    }
+     if let Some(edit) = &request.direct_weights {
+         let (next, bytes, calibration) = retained_direct_weights::install_and_seal_direct_weights(
+             &mut runtime,
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
+index 81ff130..ec5f730 100644
+--- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
+@@ -17,6 +17,8 @@ enum ScenarioV1 {
+     LCorner,
+     PublishedCardCase,
+     ResearchCatalog,
++    #[cfg(feature = "retained-n4096-auxiliary")]
++    N4096AuxiliaryZero,
+     #[cfg(feature = "retained-language-pilot")]
+     LanguagePilotV2,
+     #[cfg(feature = "retained-language-composition-v3")]
+@@ -79,6 +81,9 @@ pub(super) struct ExperimentIdentity {
+     visible_self_grip_v1: Option<[u32; 16]>,
+     #[serde(skip_serializing_if = "Option::is_none")]
+     research: Option<super::research_catalog::Identity>,
++    #[cfg(feature = "retained-n4096-auxiliary")]
++    #[serde(skip_serializing_if = "Option::is_none")]
++    n4096_auxiliary: Option<super::n4096_auxiliary_intake::Admission>,
+     #[cfg(feature = "retained-language-pilot")]
+     #[serde(skip_serializing_if = "Option::is_none")]
+     language_pilot: Option<super::language_pilot::Identity>,
+@@ -88,6 +93,11 @@ pub(super) struct ExperimentIdentity {
+ }
+ 
+ impl ExperimentIdentity {
++    #[cfg(feature = "retained-n4096-auxiliary")]
++    pub(super) fn n4096_auxiliary(&self) -> Option<&super::n4096_auxiliary_intake::Admission> {
++        self.n4096_auxiliary.as_ref()
++    }
++
+     pub(super) fn card_case(&self) -> Option<&str> {
+         self.card_case.as_deref()
+     }
+@@ -137,6 +147,10 @@ fn resolve(bytes: &[u8]) -> Result<ResolvedExperiment> {
+     let config: ManifestV1 = serde_json::from_slice(bytes)
+         .map_err(|e| format!("experiment compatibility: invalid or unsupported typed settings: {e}"))?;
+     let is_card = config.scenario == ScenarioV1::PublishedCardCase;
++    #[cfg(feature = "retained-n4096-auxiliary")]
++    if config.scenario == ScenarioV1::N4096AuxiliaryZero {
++        return Err("N4096 auxiliary inspection requires its own schema".into());
++    }
+     if config.schema != 1 || config.scenario == ScenarioV1::ResearchCatalog || is_card != config.card_case.is_some() {
+         return Err("experiment compatibility: unsupported manifest schema".into());
+     }
+@@ -228,6 +242,8 @@ fn resolve(bytes: &[u8]) -> Result<ResolvedExperiment> {
+         ScenarioV1::RetainedOpening | ScenarioV1::CueFreeFoodPlacement => None,
+         ScenarioV1::PublishedCardCase => card.and_then(|c| c.navigation),
+         ScenarioV1::ResearchCatalog => return Err("research requires a separate admitted manifest profile".into()),
++        #[cfg(feature = "retained-n4096-auxiliary")]
++        ScenarioV1::N4096AuxiliaryZero => return Err("N4096 auxiliary inspection requires its own schema".into()),
+         #[cfg(feature = "retained-language-pilot")]
+         ScenarioV1::LanguagePilotV2 => return Err("language pilot requires a separate admitted manifest profile".into()),
+         #[cfg(feature = "retained-language-composition-v3")]
+@@ -259,6 +275,8 @@ fn resolve(bytes: &[u8]) -> Result<ResolvedExperiment> {
+             intervention,
+             visible_self_grip_v1,
+             research: None,
++            #[cfg(feature = "retained-n4096-auxiliary")]
++            n4096_auxiliary: None,
+             #[cfg(feature = "retained-language-pilot")]
+             language_pilot: None,
+             #[cfg(feature = "retained-language-composition-v3")]
+@@ -298,6 +316,8 @@ fn resolve_research(root: &Path, bytes: &[u8]) -> Result<ResolvedExperiment> {
+         owner: config.owner, source_current_sha256: config.source_current_sha256,
+         scenario: ScenarioV1::ResearchCatalog, card_case: None, intervention: "research_input",
+         visible_self_grip_v1: None, research: Some(research),
++        #[cfg(feature = "retained-n4096-auxiliary")]
++        n4096_auxiliary: None,
+         #[cfg(feature = "retained-language-pilot")]
+         language_pilot: None,
+         #[cfg(feature = "retained-language-composition-v3")]
+@@ -333,6 +353,8 @@ fn resolve_language_pilot(root: &Path, bytes: &[u8]) -> Result<ResolvedExperimen
+         scenario: ScenarioV1::LanguagePilotV2, card_case: None,
+         intervention: "language_pilot_external_player_only",
+         visible_self_grip_v1: None, research: None, language_pilot: Some(cell),
++        #[cfg(feature = "retained-n4096-auxiliary")]
++        n4096_auxiliary: None,
+         #[cfg(feature = "retained-language-composition-v3")]
+         language_composition_v3: None,
+     }, request, scent: None })
+@@ -367,10 +389,39 @@ fn resolve_language_composition_v3(root: &Path, bytes: &[u8]) -> Result<Resolved
+         scenario: ScenarioV1::LanguageCompositionV3, card_case: None,
+         intervention: "language_composition_v3_observer_witness_only",
+         visible_self_grip_v1: None, research: None, language_pilot: None,
++        #[cfg(feature = "retained-n4096-auxiliary")]
++        n4096_auxiliary: None,
+         language_composition_v3: Some(cell),
+     }, request, scent: None })
+ }
+ 
++#[cfg(feature = "retained-n4096-auxiliary")]
++fn resolve_n4096_auxiliary(root: &Path, bytes: &[u8]) -> Result<ResolvedExperiment> {
++    use super::n4096_auxiliary_intake as n;
++    let admission = n::resolve(root, bytes, now()?)?;
++    let request = SavedLifeRetentionRequest {
++        schema: 3, evaluation_nonce: admission.evaluation_nonce,
++        cue_free_food_placement: false, direct_weights: None, navigation_task: None,
++        max_decisions: 0, max_world_ticks: 0,
++        deadline_unix_seconds: admission.deadline_unix_seconds,
++        finalization_deadline_unix_seconds: None, max_output_bytes: n::OUTPUT_BYTES,
++    };
++    request.validate(now()?)?;
++    let semantic_settings_sha256 = digest(&serde_json::to_vec(&(n::SCOPE, &admission))?);
++    Ok(ResolvedExperiment { identity: ExperimentIdentity {
++        schema: n::SCHEMA, run_id: admission.run_id.clone(), manifest_sha256: digest(bytes),
++        semantic_settings_sha256, owner: admission.owner,
++        source_current_sha256: admission.source_current_sha256.clone(),
++        scenario: ScenarioV1::N4096AuxiliaryZero, card_case: None,
++        intervention: "detached_n4096_zero_inspection_only",
++        visible_self_grip_v1: None, research: None, n4096_auxiliary: Some(admission),
++        #[cfg(feature = "retained-language-pilot")]
++        language_pilot: None,
++        #[cfg(feature = "retained-language-composition-v3")]
++        language_composition_v3: None,
++    }, request, scent: None })
++}
++
+ fn canonical_inside(root: &Path, path: &Path) -> Result<std::path::PathBuf> {
+     let actual = path.canonicalize()?;
+     if actual != path || actual == root || !actual.starts_with(root) {
+@@ -430,6 +481,19 @@ pub fn evaluate_saved_life_retention_experiment(
+     #[derive(Deserialize)]
+     struct Version { schema: u16 }
+     let version: Version = serde_json::from_slice(&bytes)?;
++    #[cfg(not(feature = "retained-n4096-auxiliary"))]
++    if version.schema == 12 {
++        return Err("N4096 auxiliary inspection feature is disabled".into());
++    }
++    #[cfg(feature = "retained-n4096-auxiliary")]
++    if version.schema == super::n4096_auxiliary_intake::SCHEMA {
++        let p = resolve_n4096_auxiliary(admission_root, &bytes)?;
++        admitted_paths(admission_root, source, output, manifest_path)?;
++        super::n4096_auxiliary_intake::validate_private_source(admission_root, source)?;
++        return evaluate_saved_life_retention_inner(
++            source, output, p.request, p.scent, Some(p.identity),
++        );
++    }
+     #[cfg(not(feature = "retained-language-composition-v3"))]
+     if version.schema == 6 {
+         return Err("v3 language composition feature is disabled".into());
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/n4096_auxiliary_intake.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/n4096_auxiliary_intake.rs
+new file mode 100644
+index 0000000..a327f65
+--- /dev/null
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/n4096_auxiliary_intake.rs
+@@ -0,0 +1,294 @@
++//! Strict, detached 0/0 intake for one physical AUXILIARY class-4 carrier.
++//! No scenario, policy edit, World tick, wider resident, or scoring path.
++
++use super::*;
++use alife_core::{BrainCapacityClass, OrganismId, SleepPhase, Tick};
++use alife_gpu_backend::{GpuLiveTopologyCheckpointV1, GpuV11Checkpoint};
++use alife_training::CurrentTrainingCheckpointV1;
++use alife_world::{AssetManifest, GpuBrainSaveState};
++use serde::{Deserialize, Serialize};
++use std::io::Read;
++
++pub(super) const SCHEMA: u16 = 12;
++pub(super) const SCOPE: &str = "qualia.saved_life.n4096_auxiliary_zero.v1";
++pub(super) const OUTPUT_BYTES: u64 = 256 * 1024 * 1024;
++const LEAF: &str = "n4096-auxiliary-admission.v1.json";
++const MAX_CONTROL: u64 = 16 * 1024;
++const MAX_ELF: u64 = 256 * 1024 * 1024;
++const MAX_TOPOLOGY: usize = 16 * 1024 * 1024;
++
++#[derive(Deserialize)]
++#[serde(deny_unknown_fields)]
++struct Envelope {
++    schema: u16,
++    scope: String,
++    admission_sha256: String,
++}
++
++#[derive(Debug, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++pub(super) struct Admission {
++    schema: u16,
++    scope: String,
++    pub(super) run_id: String,
++    pub(super) owner: u64,
++    pub(super) evaluation_nonce: u64,
++    pub(super) deadline_unix_seconds: u64,
++    pub(super) source_current_sha256: String,
++    evaluator_sha256: String,
++    source_world_json_sha256: String,
++    source_sleep_journal_sha256: String,
++    source_live_topology_sha256: String,
++    expected_restored_world_signature: [u64; 4],
++    expected_restored_native_snapshot: [u64; 4],
++}
++
++fn exact_sha(value: &str) -> bool {
++    value.len() == 64 && value.bytes().all(|c| matches!(c, b'0'..=b'9' | b'a'..=b'f'))
++}
++
++fn envelope(bytes: &[u8]) -> Result<Envelope> {
++    if bytes.len() as u64 > MAX_CONTROL {
++        return Err("N4096 auxiliary manifest exceeds bounded input".into());
++    }
++    let envelope: Envelope = serde_json::from_slice(bytes)?;
++    if envelope.schema != SCHEMA || envelope.scope != SCOPE || !exact_sha(&envelope.admission_sha256) {
++        return Err("unexpected N4096 auxiliary zero envelope".into());
++    }
++    Ok(envelope)
++}
++
++fn parse_admission(bytes: &[u8], expected_sha: &str, now: u64) -> Result<Admission> {
++    if bytes.len() as u64 > MAX_CONTROL || digest(bytes) != expected_sha {
++        return Err("N4096 auxiliary exact admission digest mismatch".into());
++    }
++    let a: Admission = serde_json::from_slice(bytes)?;
++    if a.schema != 1 || a.scope != SCOPE || a.owner == 0 || a.evaluation_nonce == 0
++        || a.run_id.is_empty() || a.run_id.len() > 64
++        || !a.run_id.bytes().all(|c| c.is_ascii_alphanumeric() || matches!(c, b'_' | b'-'))
++        || a.deadline_unix_seconds <= now || a.deadline_unix_seconds > now.saturating_add(120)
++        || a.expected_restored_world_signature == [0; 4]
++        || a.expected_restored_native_snapshot == [0; 4]
++        || ![&a.source_current_sha256, &a.evaluator_sha256, &a.source_world_json_sha256,
++             &a.source_sleep_journal_sha256, &a.source_live_topology_sha256].into_iter().all(|v| exact_sha(v))
++    {
++        return Err("N4096 auxiliary admission identity, digest, or deadline refused".into());
++    }
++    Ok(a)
++}
++
++#[cfg(target_os = "linux")]
++fn private_path(path: &Path, mode: u32, dir: bool) -> Result<()> {
++    use std::os::unix::fs::MetadataExt;
++    let m = fs::symlink_metadata(path)?;
++    // A Linux detached owner-only admission, never ordinary user gameplay.
++    if path.canonicalize()? != path || m.mode() & 0o7777 != mode
++        || m.uid() != fs::metadata("/proc/self")?.uid()
++        || (if dir { !m.is_dir() } else { !m.is_file() })
++    {
++        return Err("N4096 auxiliary requires canonical owner-only admission files".into());
++    }
++    Ok(())
++}
++
++#[cfg(not(target_os = "linux"))]
++fn private_path(_: &Path, _: u32, _: bool) -> Result<()> {
++    Err("N4096 auxiliary inspection is admitted only on the pinned Linux test runtime".into())
++}
++
++fn hash_file(path: &Path, ceiling: u64) -> Result<String> {
++    let m = fs::symlink_metadata(path)?;
++    if !m.is_file() || m.len() == 0 || m.len() > ceiling {
++        return Err("N4096 auxiliary requires a bounded regular pinned file".into());
++    }
++    let mut source = fs::File::open(path)?.take(ceiling + 1);
++    let mut hasher = Sha256::new();
++    let mut bytes = 0u64;
++    let mut chunk = [0u8; 65536];
++    loop {
++        let n = source.read(&mut chunk)?;
++        if n == 0 {
++            break;
++        }
++        bytes += n as u64;
++        hasher.update(&chunk[..n]);
++    }
++    if bytes != m.len() {
++        return Err("N4096 auxiliary file length changed while hashing".into());
++    }
++    Ok(format!("{:x}", hasher.finalize()))
++}
++
++pub(super) fn resolve(root: &Path, bytes: &[u8], now: u64) -> Result<Admission> {
++    let e = envelope(bytes)?;
++    private_path(root, 0o700, true)?;
++    let path = root.join(LEAF);
++    private_path(&path, 0o400, false)?;
++    let mut raw = Vec::new();
++    fs::File::open(&path)?.take(MAX_CONTROL + 1).read_to_end(&mut raw)?;
++    let a = parse_admission(&raw, &e.admission_sha256, now)?;
++    if hash_file(&std::env::current_exe()?, MAX_ELF)? != a.evaluator_sha256 {
++        return Err("N4096 auxiliary evaluator executable mismatch".into());
++    }
++    Ok(a)
++}
++
++pub(super) fn validate_private_source(root: &Path, source: &Path) -> Result<()> {
++    if !source.starts_with(root) {
++        return Err("N4096 auxiliary Current must be local to its admission".into());
++    }
++    private_path(source, 0o400, false)
++}
++
++impl Admission {
++    pub(super) fn require_zero_request(&self, r: &SavedLifeRetentionRequest) -> Result<()> {
++        if r.schema != 3 || r.max_decisions != 0 || r.max_world_ticks != 0
++            || r.cue_free_food_placement || r.navigation_task.is_some() || r.direct_weights.is_some()
++            || r.evaluation_nonce != self.evaluation_nonce || r.deadline_unix_seconds != self.deadline_unix_seconds
++            || r.finalization_deadline_unix_seconds.is_some() || r.max_output_bytes != OUTPUT_BYTES
++            || std::env::var("ALIFE_EXPLICIT_SOFTWARE_RETENTION_TEST").ok().as_deref() != Some("1")
++            || std::env::var("ALIFE_EXPLICIT_RETENTION_ARCHIVE_TEST").ok().as_deref() == Some("1")
++            || std::env::var("ALIFE_EXPLICIT_FIXED_HOST_PRESSURE_NS").ok().is_some()
++        {
++            return Err("N4096 auxiliary requires an unmodified explicit software 0/0 inspection".into());
++        }
++        Ok(())
++    }
++
++    pub(super) fn require_portable_bytes(&self, current: &CurrentTrainingCheckpointV1) -> Result<()> {
++        let life = current.life.as_ref().ok_or("N4096 auxiliary requires full saved life")?;
++        if digest(life.world_json.as_bytes()) != self.source_world_json_sha256
++            || digest(life.sleep_journal_json.as_bytes()) != self.source_sleep_journal_sha256
++        {
++            return Err("N4096 auxiliary exact World/journal source hashes differ".into());
++        }
++        Ok(())
++    }
++
++    pub(super) fn exact_saved_v11(
++        &self,
++        current: &CurrentTrainingCheckpointV1,
++        manifest: &AssetManifest,
++        checkpoints: &[GpuBrainSaveState],
++        owner: OrganismId,
++        world_tick: Tick,
++    ) -> Result<GpuV11Checkpoint> {
++        let [g] = checkpoints else { return Err("N4096 auxiliary requires one exact saved brain".into()); };
++        if g.organism_id != owner || owner.raw() != self.owner || g.checkpoint_tick != world_tick
++            || g.capacity_class_id != BrainCapacityClass::n2048().id()
++            || g.sleep.phase != SleepPhase::Awake || g.pending_eligibility.is_some()
++            || g.pending_experience_transaction.is_some() || g.learning_transaction_generation == 0
++        {
++            return Err("N4096 auxiliary source resident/cut is not an exact awake ordinary N2048".into());
++        }
++        let reference = g.live_structural_topology.as_ref().ok_or("missing exact saved live topology")?;
++        let mut matches = manifest.entries.iter().filter(|leaf| leaf.asset_id == reference.asset_id);
++        let saved = matches.next().ok_or("missing exact live topology manifest reference")?;
++        if matches.next().is_some() || saved.digest != reference.digest
++            || saved.size_bytes.is_none_or(|n| n == 0 || n > MAX_TOPOLOGY as u64)
++        {
++            return Err("N4096 auxiliary live topology identity/size refused".into());
++        }
++        let life = current.life.as_ref().ok_or("N4096 auxiliary requires full saved life")?;
++        let wire = life.asset_bytes(&saved.relative_path)?;
++        if saved.size_bytes != Some(wire.len() as u64) || digest(&wire) != self.source_live_topology_sha256 {
++            return Err("N4096 auxiliary exact live topology bytes differ".into());
++        }
++        let topology: GpuLiveTopologyCheckpointV1 = serde_json::from_slice(&wire)?;
++        topology.validate_for_capacity(&BrainCapacityClass::n2048())?;
++        if topology.phenotype_hash != g.phenotype_hash || topology.neuron_count != 2048 {
++            return Err("N4096 auxiliary live topology phenotype binding differs".into());
++        }
++        Ok(topology.v11_checkpoint)
++    }
++
++    pub(super) fn inspect_exact_zero(
++        &self,
++        runtime: &mut GpuLiveBrainRuntime,
++        current: &CurrentTrainingCheckpointV1,
++        owner: OrganismId,
++        source: &Path,
++        source_sha: &str,
++        expected_v11: &GpuV11Checkpoint,
++    ) -> Result<serde_json::Value> {
++        let world = runtime.world();
++        let before = world.canonical_signature_digest()?;
++        let tick = world.tick();
++        let sampling = runtime.foundation_training_sampling_state();
++        if before.words != self.expected_restored_world_signature || world.seed() != current.seed
++            || source_sha != self.source_current_sha256.as_str()
++            || sampling.is_none() || sampling != current.saved_training_sampling()?
++            || now()? >= self.deadline_unix_seconds
++        {
++            return Err("N4096 auxiliary actual restored World/Current/sampling differs before device copy".into());
++        }
++        let device = runtime.verify_detached_n4096_restored_resident(
++            owner, self.expected_restored_native_snapshot, expected_v11,
++        )?;
++        if runtime.world().tick() != tick || runtime.world().canonical_signature_digest()? != before
++            || runtime.foundation_training_sampling_state() != sampling
++            || runtime.live_foundation_compiler_inputs(owner)? != &current.handoff.compiler_inputs
++            || now()? >= self.deadline_unix_seconds
++            || hash_file(source, alife_training::MAX_CURRENT_CHECKPOINT_BYTES)? != source_sha
++            || device.checkpoint_tick_asserted_by_caller != tick.raw()
++        {
++            return Err("N4096 auxiliary changed or outlived exact ordinary restored cut".into());
++        }
++        Ok(serde_json::json!({
++            "kind": "detached_class4_0_0_device_carrier_inspection",
++            "actual_restored_world_signature_before_after": before,
++            "actual_world_tick_before_after": tick.raw(),
++            "ordinary_sampler_unchanged": true,
++            "source_current_sha256": source_sha,
++            "source_world_json_sha256": self.source_world_json_sha256,
++            "source_sleep_journal_sha256": self.source_sleep_journal_sha256,
++            "source_live_topology_sha256": self.source_live_topology_sha256,
++            "evaluator_sha256": self.evaluator_sha256,
++            "paid_world_ticks": 0, "paid_decisions": 0,
++            "checkpoint_published": false, "scored": false, "native_wider_resident": false,
++            "bounded_physical_device": device,
++        }))
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    fn exact_envelope() -> serde_json::Value {
++        serde_json::json!({"schema":12,"scope":SCOPE,"admission_sha256":"a".repeat(64)})
++    }
++    fn exact_admission() -> serde_json::Value {
++        serde_json::json!({"schema":1,"scope":SCOPE,"run_id":"shape-only","owner":1,"evaluation_nonce":3,
++            "deadline_unix_seconds":110,"source_current_sha256":"a".repeat(64),"evaluator_sha256":"b".repeat(64),
++            "source_world_json_sha256":"c".repeat(64),"source_sleep_journal_sha256":"d".repeat(64),
++            "source_live_topology_sha256":"e".repeat(64),"expected_restored_world_signature":[1,2,3,4],
++            "expected_restored_native_snapshot":[5,6,7,8]})
++    }
++
++    #[test]
++    fn n4096_aux_wire_has_no_world_clock_or_behavior_knobs() {
++        let m = exact_envelope();
++        assert!(envelope(&serde_json::to_vec(&m).unwrap()).is_ok());
++        for forbidden in ["source_tick", "max_world_ticks", "direct_weights", "fixture_id", "pending_state"] {
++            let mut refused = m.clone();
++            refused[forbidden] = serde_json::json!(1);
++            assert!(envelope(&serde_json::to_vec(&refused).unwrap()).is_err());
++        }
++    }
++
++    #[test]
++    fn n4096_aux_admission_requires_exact_private_hash_and_live_world_neural_pins() {
++        let a = exact_admission();
++        let b = serde_json::to_vec(&a).unwrap();
++        assert!(parse_admission(&b, &digest(&b), 100).is_ok());
++        assert!(parse_admission(&b, &"f".repeat(64), 100).is_err());
++        assert!(parse_admission(&b, &digest(&b), 110).is_err());
++        for key in ["expected_restored_world_signature", "expected_restored_native_snapshot"] {
++            let mut rejected = a.clone();
++            rejected[key] = serde_json::json!([0,0,0,0]);
++            let bytes = serde_json::to_vec(&rejected).unwrap();
++            assert!(parse_admission(&bytes, &digest(&bytes), 100).is_err());
++        }
++    }
++}
+diff --git a/crates/alife_game_app/src/gpu_live_runtime.rs b/crates/alife_game_app/src/gpu_live_runtime.rs
+index 363f8b5..2497f6e 100644
+--- a/crates/alife_game_app/src/gpu_live_runtime.rs
++++ b/crates/alife_game_app/src/gpu_live_runtime.rs
+@@ -8167,6 +8167,25 @@ impl GpuLiveBrainRuntime {
+         not(any(feature = "bevy-app", feature = "foundation-training")),
+         allow(dead_code)
+     )]
++    #[cfg(feature = "retained-n4096-auxiliary")]
++    pub(crate) fn verify_detached_n4096_restored_resident(
++        &mut self,
++        owner: OrganismId,
++        expected_neural: [u64; 4],
++        expected_v11: &alife_gpu_backend::GpuV11Checkpoint,
++    ) -> Result<alife_gpu_backend::research_n4096_auxiliary::N4096DetachedDeviceWitnessV1, GameAppShellError> {
++        let tick = self.world.tick();
++        let handle = self.handles.get(&owner.raw()).copied()
++            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
++        if self.handles.len() != 1 || self.residents.len() != 1
++            || !self.world.organism_registry().get(owner).is_some_and(|r| r.lifecycle().is_alive())
++        {
++            return Err(ScaffoldContractError::BrainOwnershipMismatch.into());
++        }
++        self.backend.verify_detached_n4096_auxiliary(handle, tick, expected_neural, expected_v11)
++            .map_err(Into::into)
++    }
++
+     pub(crate) const fn world(&self) -> &HeadlessWorld {
+         &self.world
+     }

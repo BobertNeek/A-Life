@@ -1,0 +1,35 @@
+{
+  "basis_exact_shared_source": "8d90e0853cfbf991ac75e02c9ee55ee4cedc3c99",
+  "cli_harness_sha256": "6c4121552371e2645872795edfdeab0c13616c0f44de2f66f0b8bb191d56c8c5",
+  "exact_after": {
+    "crates/alife_game_app/Cargo.toml": "bbddd599b8ce01cf76ff85467436c4fcd90cc827d057f470526b7121764ee7da",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs": "f623f7774fbd377171b75d357c9d6f51c39e589475edd50e161779513a92020d",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs": "683f6bc1d31acea83a9017cde116dcef509b32b0448aae8d523613bdefe47303",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/n4096_auxiliary_intake.rs": "dfaa9663ee3c59856dda0ede7093e37f83e43858da6b82f893239b7b905673dd",
+    "crates/alife_game_app/src/gpu_live_runtime.rs": "11e9aa3aac6b707d5519aec5f7e1d3eaa1bbd4f307043069941e4a5812d6d41f",
+    "crates/alife_gpu_backend/Cargo.toml": "4eeea29b4588da8874ead23ab372442706f594181e8b97c6cf775901890fe525",
+    "crates/alife_gpu_backend/src/closed_loop_buffers/bucket.rs": "1e656c8fb7b978492ba0de4ce54ed5f60328663200c36aa8ceb75f2d19ac28c7",
+    "crates/alife_gpu_backend/src/lib.rs": "61b6e5fb2b5ede8551b60269ef85eefad95c04884864a8506e7928a63ec7d432",
+    "crates/alife_gpu_backend/src/research_n4096_auxiliary.rs": "9e4dfe71fb92b79e28e6c6c9813b5d7cfded832ca5378a90e0373e1e339562ad",
+    "crates/alife_gpu_backend/src/research_n4096_shape.rs": "da1400d76cac9cfde823b72d06e120f1921d8e8ad8430341028f143fcc6d4b4f"
+  },
+  "exact_before": {
+    "crates/alife_game_app/Cargo.toml": "e07e4f4df130879a693c03c93222d6b8072ee02a10d5ff208e5f6404ab51372f",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs": "32689634ab0c19985bf18a0e528431d78d0a67552e4ad42bdb2ca32fce939080",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs": "70385a6292f077c044510282a072b68083f6c8a34138eead5bb91342ef07e26a",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/n4096_auxiliary_intake.rs": null,
+    "crates/alife_game_app/src/gpu_live_runtime.rs": "b4b3f2da8995a55e12179ff3efef2de01698f6d10252582045f4e2ef7469f503",
+    "crates/alife_gpu_backend/Cargo.toml": "70abd451cbc5d57cabef8b55a4426c809f49e6b2565f2db0b703080ca7967c73",
+    "crates/alife_gpu_backend/src/closed_loop_buffers/bucket.rs": "f7c173d7f53015d402f2de9d6736ed807f50ac5ca243ba1f910cfe3a40c86abd",
+    "crates/alife_gpu_backend/src/lib.rs": "3dee911a8d3c87f08105d47846da19080a855cc4e3c10df728ec4c71a9d53aef",
+    "crates/alife_gpu_backend/src/research_n4096_auxiliary.rs": null,
+    "crates/alife_gpu_backend/src/research_n4096_shape.rs": null
+  },
+  "is_run_or_approved": false,
+  "patches": {
+    "N4096-NATIVE-AUXILIARY-FIRST-SLICE.patch": "118c6799e41d984af873b7f8d37b279a123ebcc81b3b2961e374d68842922e47",
+    "N4096-NATIVE-CLASS4-SHAPE.patch": "d2832919ff0de2777c7a75775ea2539ecf9544f7d2566240864d689dc50e1c73",
+    "N4096-SHARED-APP-ZERO-INTAKE.patch": "20ebe4cf4abcc9403ab379d6a1b9972caa252ea2ccf4fa91a6f94d2cc258c747"
+  },
+  "schema": "qualia.n4096.source-only.pinned-hosted-input.v1"
+}

@@ -1,0 +1,373 @@
+diff --git a/crates/alife_gpu_backend/Cargo.toml b/crates/alife_gpu_backend/Cargo.toml
+index 07505db..83884ad 100644
+--- a/crates/alife_gpu_backend/Cargo.toml
++++ b/crates/alife_gpu_backend/Cargo.toml
+@@ -22,3 +22,5 @@ default = []
+ test-support = []
+ gpu-tests = ["test-support"]
+ training-rollout = []
++# Read-only native planner diagnostics; never enabled by a production profile.
++research-n4096-shape = []
+diff --git a/crates/alife_gpu_backend/src/closed_loop_buffers/bucket.rs b/crates/alife_gpu_backend/src/closed_loop_buffers/bucket.rs
+index 52eb763..3e93c50 100644
+--- a/crates/alife_gpu_backend/src/closed_loop_buffers/bucket.rs
++++ b/crates/alife_gpu_backend/src/closed_loop_buffers/bucket.rs
+@@ -1995,6 +1995,19 @@ impl GpuFixedClassArenaPlan {
+         capacity: BrainCapacityClass,
+         slot_capacity: u32,
+         aggregate_resident_ceiling_bytes: u64,
++    ) -> Result<Self, GpuClosedLoopError> {
++        let mut owned = Self::new_unowned(capacity, slot_capacity, aggregate_resident_ceiling_bytes)?;
++        owned.arena_ownership_token = NEXT_BUCKET_OWNERSHIP_TOKEN
++            .try_update(Ordering::Relaxed, Ordering::Relaxed, |value| value.checked_add(1))
++            .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
++        Ok(owned)
++    }
++
++    // Shared exact sizing/capacity math; this private result owns no GPU or token.
++    fn new_unowned(
++        capacity: BrainCapacityClass,
++        slot_capacity: u32,
++        aggregate_resident_ceiling_bytes: u64,
+     ) -> Result<Self, GpuClosedLoopError> {
+         capacity
+             .validate_contract()
+@@ -2309,18 +2322,39 @@ impl GpuFixedClassArenaPlan {
+         {
+             return Err(GpuClosedLoopError::CapacityExceeded);
+         }
+-        let arena_ownership_token = NEXT_BUCKET_OWNERSHIP_TOKEN
+-            .try_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
+-                value.checked_add(1)
+-            })
+-            .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
+         Ok(Self {
+             capacity,
+             slot_capacity,
+             strides,
+             relative_layout,
+             sizes,
+-            arena_ownership_token,
++            arena_ownership_token: 0,
++        })
++    }
++
++    /// Uses the real allocator's size/range planner but returns no authority or buffer.
++    #[cfg(feature = "research-n4096-shape")]
++    pub(crate) fn new_n4096_shape(
++        slots: u32,
++        ceiling_bytes: u64,
++    ) -> Result<crate::research_n4096_shape::N4096FixedPlannerReadoutV1, GpuClosedLoopError> {
++        let plan = Self::new_unowned(BrainCapacityClass::n4096_research(), slots, ceiling_bytes)?;
++        let slot = plan.slot_ranges(0)?;
++        let sizes = plan.buffer_sizes();
++        Ok(crate::research_n4096_shape::N4096FixedPlannerReadoutV1 {
++            slot_capacity: plan.slot_capacity(),
++            allocation: plan.slot_allocation_receipt()?,
++            residency_bytes: sizes.aggregate,
++            storage_buffers_bytes: [
++                sizes.brain_slots, sizes.phenotype_identities, sizes.immutable_plan_words,
++                sizes.immutable_weight_words, sizes.dispatch_header_words,
++                sizes.frame_payload_words, sizes.mutable_state_words,
++            ],
++            compact_readback_bytes: sizes.compact_readback,
++            slot0_mutable_words: slot.mutable_state_words,
++            slot0_activation_a_words: slot.layout.activation_a_words,
++            slot0_activation_b_words: slot.layout.activation_b_words,
++            slot0_homeostasis_words: slot.layout.homeostasis_words,
+         })
+     }
+ 
+@@ -3944,6 +3978,10 @@ impl GpuFixedClassArenaBuffers {
+         device: &wgpu::Device,
+         plan: &GpuFixedClassArenaPlan,
+     ) -> Result<Self, GpuClosedLoopError> {
++        #[cfg(feature = "research-n4096-shape")]
++        if plan.arena_ownership_token == 0 {
++            return Err(GpuClosedLoopError::StaleOrForeignHandle);
++        }
+         let sizes = plan.buffer_sizes();
+         let limits = device.limits();
+         if plan.slot_capacity() > limits.max_compute_workgroups_per_dimension
+diff --git a/crates/alife_gpu_backend/src/lib.rs b/crates/alife_gpu_backend/src/lib.rs
+index 80c2274..57f0b5c 100644
+--- a/crates/alife_gpu_backend/src/lib.rs
++++ b/crates/alife_gpu_backend/src/lib.rs
+@@ -15,6 +15,8 @@ pub mod closed_loop_sleep;
+ pub mod closed_loop_v11;
+ pub mod runtime;
+ mod startup_diagnostics;
++#[cfg(feature = "research-n4096-shape")]
++pub mod research_n4096_shape;
+ #[cfg(feature = "training-rollout")]
+ pub mod training_rollout;
+ #[cfg(feature = "training-rollout")]
+diff --git a/crates/alife_gpu_backend/src/research_n4096_shape.rs b/crates/alife_gpu_backend/src/research_n4096_shape.rs
+new file mode 100644
+index 0000000..c974b99
+--- /dev/null
++++ b/crates/alife_gpu_backend/src/research_n4096_shape.rs
+@@ -0,0 +1,263 @@
++//! Detached, feature-gated read-only measurement of the native class-4 planner.
++//! No allocation, buffer handle, adapter call, dispatch or class admission is exposed.
++
++use std::ops::Range;
++
++use alife_core::{
++    BrainCapacityClass, LobeKind, N2048FoundationLayoutV1, N4096ResearchLayoutV1,
++};
++use serde::Serialize;
++
++use crate::closed_loop_buffers::GpuFixedClassArenaPlan;
++use crate::{GpuClosedLoopBackend, GpuClosedLoopError, GpuSlotAllocationReceipt};
++
++const H: u32 = N2048FoundationLayoutV1::NEURON_COUNT;
++const WIDE: u32 = N4096ResearchLayoutV1::NEURON_COUNT;
++
++#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
++pub struct N4096FixedPlannerReadoutV1 {
++    pub slot_capacity: u32,
++    pub allocation: GpuSlotAllocationReceipt,
++    pub residency_bytes: u64,
++    // Native storage order: slot, identity, immutable plan, immutable weights,
++    // dispatch rows, frame payload, mutable. Compact readback is not storage.
++    pub storage_buffers_bytes: [u64; 7],
++    pub compact_readback_bytes: u64,
++    pub slot0_mutable_words: Range<u32>,
++    pub slot0_activation_a_words: Range<u32>,
++    pub slot0_activation_b_words: Range<u32>,
++    pub slot0_homeostasis_words: Range<u32>,
++}
++
++#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
++pub struct N4096LobeAddressBandsV1 {
++    pub kind: LobeKind,
++    pub old: Range<u32>,
++    pub inherited_h: Range<u32>,
++    pub detached_q: Range<u32>,
++}
++
++#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
++pub struct N4096BudgetProjectionV1 {
++    pub planner: N4096FixedPlannerReadoutV1,
++    pub largest_storage_binding_bytes: u64,
++    pub prospective_physical_peak_bytes: u64,
++    pub prospective_logical_commit_bytes: u64,
++    pub fits_recorded_device_buffer_limits: bool,
++    pub fits_existing_residency_budget: bool,
++}
++
++#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
++#[serde(tag = "status", rename_all = "snake_case")]
++pub enum N4096DefaultChunkV1 {
++    Projected { projection: N4096BudgetProjectionV1 },
++    PlannerCapacityRejected { slot_capacity: u32 },
++}
++
++#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
++pub struct N4096QuotientShapeV1 {
++    pub schema: &'static str,
++    pub research_class_id: u16,
++    pub neuron_slots: u32,
++    pub recurrent_rows_limit: u32,
++    pub total_rows_limit: u32,
++    pub nominal_bytes_per_word: u32,
++    pub address_bands: Vec<N4096LobeAddressBandsV1>,
++    pub device_limits_digest: [u64; 4],
++    pub device_max_buffer_bytes: u64,
++    pub device_max_storage_binding_bytes: u64,
++    pub device_max_workgroups_per_dimension: u32,
++    pub current_runtime_profile_digest: [u64; 4],
++    pub current_accounted_physical_bytes: u64,
++    pub current_accounted_logical_bytes: u64,
++    pub current_allocation_generation: u64,
++    pub profile_physical_ceiling_bytes: u64,
++    pub profile_logical_ceiling_bytes: u64,
++    pub single_slot_if_separately_owned: N4096BudgetProjectionV1,
++    pub class_storage_binding_ceiling_bytes: u64,
++    pub unchanged_profile_new_chunk: N4096DefaultChunkV1,
++    pub installed: bool,
++    pub live_physical_probe_run: bool,
++}
++
++fn address_bands() -> Result<Vec<N4096LobeAddressBandsV1>, GpuClosedLoopError> {
++    use GpuClosedLoopError::LayoutMismatch;
++    let legacy = N2048FoundationLayoutV1::lobe_layout();
++    let width = N4096ResearchLayoutV1::lobe_layout().map_err(|_| LayoutMismatch)?;
++    let mut bands = Vec::with_capacity(legacy.regions.len());
++    let mut old_at = 0;
++    let mut new_at = 0;
++    if legacy.regions.len() != width.regions.len() {
++        return Err(LayoutMismatch);
++    }
++    for (old, wide) in legacy.regions.iter().zip(width.regions.iter()) {
++        if old.kind != wide.kind || !old.enabled || !wide.enabled || old.len == 0
++            || old.start != old_at || wide.start != new_at || wide.len != 2 * old.len
++        {
++            return Err(LayoutMismatch);
++        }
++        let cut = wide.start + old.len;
++        old_at += old.len;
++        new_at += wide.len;
++        bands.push(N4096LobeAddressBandsV1 {
++            kind: old.kind,
++            old: old.start..old_at,
++            inherited_h: wide.start..cut,
++            detached_q: cut..new_at,
++        });
++    }
++    if old_at != H || new_at != WIDE {
++        return Err(LayoutMismatch);
++    }
++    Ok(bands)
++}
++
++fn check_arena_offsets(plan: &N4096FixedPlannerReadoutV1) -> Result<(), GpuClosedLoopError> {
++    let enclosing = &plan.slot0_mutable_words;
++    let a = &plan.slot0_activation_a_words;
++    let b = &plan.slot0_activation_b_words;
++    let home = &plan.slot0_homeostasis_words;
++    let wide = WIDE as usize;
++    if enclosing.start > a.start || a.len() != wide || b.len() != wide
++        || home.len() != 2 * wide || a.end > b.start || b.end > home.start
++        || home.end > enclosing.end
++    {
++        return Err(GpuClosedLoopError::InvalidOffsetDomain);
++    }
++    Ok(())
++}
++
++impl GpuClosedLoopBackend {
++    /// Does not touch a buffer, token, device API, dispatch, world or checkpoint.
++    /// In intended use only call this in a detached research process after
++    /// opening one ordinary N2048 resident. Do not write these data into a save.
++    pub fn inspect_detached_n4096_quotient_shape(
++        &self,
++    ) -> Result<N4096QuotientShapeV1, GpuClosedLoopError> {
++        use GpuClosedLoopError::{ArithmeticOverflow, CapacityExceeded, LayoutMismatch};
++        let current = self.admission_receipt();
++        let budget = self.runtime_budget();
++        let class = BrainCapacityClass::n4096_research();
++        let execution = class.execution();
++        if self.organisms.len() != 1 || current.live_brains != 1
++            || self.organisms.values().any(|h| h.class_id() != BrainCapacityClass::n2048().id())
++            || self.class_buckets.contains_key(&class.id().raw())
++            || &current.runtime != budget
++        {
++            return Err(LayoutMismatch);
++        }
++        current.validate_contract().map_err(|_| LayoutMismatch)?;
++        budget.validate_for(execution).map_err(|_| CapacityExceeded)?;
++        let remaining = budget.max_hot_brains
++            .checked_sub(current.live_brains)
++            .ok_or(CapacityExceeded)?;
++        let normal_chunk = u32::from(budget.growth_chunk_slots).min(remaining);
++        if normal_chunk == 0 {
++            return Err(CapacityExceeded);
++        }
++
++        let project = |slots| -> Result<N4096BudgetProjectionV1, GpuClosedLoopError> {
++            let planner = GpuFixedClassArenaPlan::new_n4096_shape(
++                slots, budget.physical_allocation_ceiling_bytes
++            )?;
++            check_arena_offsets(&planner)?;
++            let maximum = planner.storage_buffers_bytes.into_iter().max().ok_or(LayoutMismatch)?;
++            let prospective_physical_peak_bytes = current.physical_allocated_bytes
++                .checked_add(planner.residency_bytes).ok_or(ArithmeticOverflow)?;
++            let prospective_logical_commit_bytes = current.logical_committed_bytes
++                .checked_add(planner.allocation.logical_slot_commit_bytes).ok_or(ArithmeticOverflow)?;
++            Ok(N4096BudgetProjectionV1 {
++                fits_recorded_device_buffer_limits: maximum <= budget.max_buffer_size
++                    && maximum <= budget.max_storage_buffer_binding_size
++                    && planner.compact_readback_bytes <= budget.max_buffer_size
++                    && slots <= budget.max_compute_workgroups_per_dimension,
++                fits_existing_residency_budget: prospective_physical_peak_bytes <= budget.physical_allocation_ceiling_bytes
++                    && prospective_logical_commit_bytes <= budget.logical_neural_heap_budget_bytes,
++                planner, largest_storage_binding_bytes: maximum,
++                prospective_physical_peak_bytes, prospective_logical_commit_bytes,
++            })
++        };
++
++        let single = project(1)?;
++        let default_chunk = match project(normal_chunk) {
++            Ok(projection) => N4096DefaultChunkV1::Projected { projection },
++            Err(CapacityExceeded) => N4096DefaultChunkV1::PlannerCapacityRejected {
++                slot_capacity: normal_chunk,
++            },
++            Err(other) => return Err(other),
++        };
++        Ok(N4096QuotientShapeV1 {
++            schema: "alife.research.n4096.native-planner-shape.v1",
++            research_class_id: class.id().raw(),
++            neuron_slots: execution.max_neurons(),
++            recurrent_rows_limit: execution.max_recurrent_synapses(),
++            total_rows_limit: execution.max_total_synapses(),
++            nominal_bytes_per_word: 4,
++            address_bands: address_bands()?,
++            device_limits_digest: budget.adapter_limits_digest,
++            device_max_buffer_bytes: budget.max_buffer_size,
++            device_max_storage_binding_bytes: budget.max_storage_buffer_binding_size,
++            device_max_workgroups_per_dimension: budget.max_compute_workgroups_per_dimension,
++            current_runtime_profile_digest: budget.profile_digest,
++            current_accounted_physical_bytes: current.physical_allocated_bytes,
++            current_accounted_logical_bytes: current.logical_committed_bytes,
++            current_allocation_generation: current.allocation_generation,
++            profile_physical_ceiling_bytes: budget.physical_allocation_ceiling_bytes,
++            profile_logical_ceiling_bytes: budget.logical_neural_heap_budget_bytes,
++            single_slot_if_separately_owned: single,
++            class_storage_binding_ceiling_bytes: execution.required_max_buffer_size()
++                .min(execution.required_max_storage_buffer_binding_size()),
++            unchanged_profile_new_chunk: default_chunk,
++            installed: false,
++            live_physical_probe_run: false,
++        })
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn n4096_shape_real_fixed_planner_lobe_bands_and_exact_offsets() {
++        let p = GpuFixedClassArenaPlan::new_n4096_shape(1, 2 * 1024 * 1024 * 1024).unwrap();
++        check_arena_offsets(&p).unwrap();
++        assert_eq!(p.allocation.class_id_raw, BrainCapacityClass::N4096_RESEARCH_ID.raw());
++        assert_eq!(p.residency_bytes, 8_311_536);
++        assert_eq!(p.allocation.logical_slot_commit_bytes, 8_224_964);
++        assert_eq!(p.storage_buffers_bytes[2], 5_921_536);
++        assert_eq!(p.slot0_activation_a_words, 0..4096);
++        assert_eq!(p.slot0_activation_b_words, 4096..8192);
++        assert_eq!(p.slot0_homeostasis_words, 12288..20480);
++        let bands = address_bands().unwrap();
++        let mut seen = [false; WIDE as usize];
++        let mut count = 0;
++        for lobe in bands {
++            assert_eq!(lobe.old.len(), lobe.inherited_h.len());
++            assert_eq!(lobe.old.len(), lobe.detached_q.len());
++            count += lobe.old.len();
++            for x in lobe.inherited_h.chain(lobe.detached_q) {
++                assert!(!seen[x as usize]);
++                seen[x as usize] = true;
++            }
++        }
++        assert_eq!(count, H as usize);
++        assert!(seen.into_iter().all(|x| x));
++    }
++
++    #[test]
++    fn n4096_shape_no_production_admission_and_cannot_raise_ceiling() {
++        assert!(BrainCapacityClass::production_for_id(BrainCapacityClass::N4096_RESEARCH_ID).is_err());
++        assert_eq!(BrainCapacityClass::production_classes().len(), 3);
++        let two_gib = 2 * 1024 * 1024 * 1024;
++        let last = GpuFixedClassArenaPlan::new_n4096_shape(22, two_gib).unwrap();
++        assert_eq!(last.storage_buffers_bytes[2], 130_273_792);
++        for slots in [23, 32] {
++            assert_eq!(GpuFixedClassArenaPlan::new_n4096_shape(slots, two_gib),
++                Err(GpuClosedLoopError::CapacityExceeded));
++        }
++        assert!(GpuFixedClassArenaPlan::new_n4096_shape(1, 1).is_err());
++        assert!(GpuFixedClassArenaPlan::new_n4096_shape(0, u64::MAX).is_err());
++        assert!(GpuFixedClassArenaPlan::new_n4096_shape(u32::MAX, u64::MAX).is_err());
++    }
++}
