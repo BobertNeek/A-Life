@@ -22,6 +22,8 @@ jobs:
       run:
         shell: bash
     env:
+      PIN_FIRST_CROSSED: 2ccb3364ffea6fbb6a8d517174aad6984a807112
+      PIN_CPU_HARNESS: d31e44da4df32dd83bd9848ed663cbc4cfc262bcf9d6e2784cce5e43f01fe319
       PIN_RANK_COMMIT: 3c9c6e50391834023490b8edecff45ee4e133e0c
       PIN_CROSSED_PATCH: d6ed64c12f5e9a58b80f2a1737f7c29b7d4029842916e87747df92f5e8c6a9da
       PIN_CROSSED_LEAVES: 7fe116bae6f1b493d31d2c742d2cea684804bc8b6a22aa0599378828a24ceaf2
@@ -67,14 +69,16 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Verify exact Rank32 ancestry and crossed four-leaf source-only push
+      - name: Verify exact Rank32 ancestry, unchanged behavioral overlay, and isolated CPU harness retry
         run: |
           set -euo pipefail
           export LC_ALL=C
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test "$(git rev-list --parents -n 1 "$PIN_RANK_COMMIT")" = "$PIN_RANK_COMMIT $PIN_PARENT"
           git merge-base --is-ancestor "$PIN_RANK_COMMIT" HEAD
-          test "$(git rev-list --count "$PIN_RANK_COMMIT..HEAD")" = 4
+          test "$(git rev-list --count "$PIN_RANK_COMMIT..HEAD")" = 6
+          test "$(git rev-list --count "$PIN_FIRST_CROSSED..HEAD")" = 2
+          git merge-base --is-ancestor "$PIN_FIRST_CROSSED" HEAD
           test -z "$(git rev-list --merges "$PIN_RANK_COMMIT..HEAD")"
           test "$(git rev-parse "$PIN_PARENT^{tree}")" = "$PIN_PARENT_TREE"
           test "$(git rev-list --parents -n 1 "$PIN_PARENT")" = "$PIN_PARENT $PIN_STRICT_PREDECESSOR"
@@ -100,8 +104,10 @@ jobs:
           cp='docs/r41-saved-life/contact211-rank32-crossed-source.patch'
           cl='docs/r41-saved-life/contact211-rank32-crossed-source-pins.json'
           cc='docs/r41-saved-life/contact211-rank32-crossed-source-check.py'
-          diff -u <(printf 'A\t%s\n' "$cw" "$cp" "$cl" "$cc" | sort) <(git diff --name-status --no-renames "$PIN_RANK_COMMIT" HEAD | sort)
-          for path in "$workflow" "$rank_overlay" "$rank_leaves" "$rank_check" "$strict_overlay" "$strict_leaves" "$strict_check" "$overlay" "$leaves" "$cw" "$cp" "$cl" "$cc"; do
+          ch='docs/r41-saved-life/contact211-rank32-crossed-cpu-harness.rs'
+          diff -u <(printf 'A\t%s\n' "$cw" "$cp" "$cl" "$cc" "$ch" | sort) <(git diff --name-status --no-renames "$PIN_RANK_COMMIT" HEAD | sort)
+          diff -u <(printf 'M\t%s\nA\t%s\n' "$cw" "$ch" | sort) <(git diff --name-status --no-renames "$PIN_FIRST_CROSSED" HEAD | sort)
+          for path in "$workflow" "$rank_overlay" "$rank_leaves" "$rank_check" "$strict_overlay" "$strict_leaves" "$strict_check" "$overlay" "$leaves" "$cw" "$cp" "$cl" "$cc" "$ch"; do
             test -f "$path" && test ! -L "$path"
             test "$(git ls-tree HEAD -- "$path" | cut -d' ' -f1)" = 100644
           done
@@ -109,7 +115,7 @@ jobs:
             "$PIN_F0_PATCH" "$overlay" "$PIN_F0_LEAVES" "$leaves" \
             "$PIN_STRICT_PATCH" "$strict_overlay" "$PIN_STRICT_LEAVES" "$strict_leaves" "$PIN_STRICT_CHECK" "$strict_check" \
             "$PIN_RANK_PATCH" "$rank_overlay" "$PIN_RANK_LEAVES" "$rank_leaves" "$PIN_RANK_CHECK" "$rank_check" \
-            "$PIN_CROSSED_PATCH" "$cp" "$PIN_CROSSED_LEAVES" "$cl" "$PIN_CROSSED_CHECK" "$cc" | sha256sum -c -
+            "$PIN_CROSSED_PATCH" "$cp" "$PIN_CROSSED_LEAVES" "$cl" "$PIN_CROSSED_CHECK" "$cc" "$PIN_CPU_HARNESS" "$ch" | sha256sum -c -
 
           exact="$RUNNER_TEMP/qualia-contact211-rank32-exact"
           layer="$RUNNER_TEMP/qualia-contact211-rank32-layers"
@@ -351,13 +357,21 @@ jobs:
           disk_available="$(df -PB1 "$CARGO_TARGET_DIR" | awk 'NR==2 {print $4}')"
           test "$disk_available" -ge 10737418240
           printf 'pre_observer_build_free_bytes=%s\n' "$disk_available" | tee -a "$F0_EVIDENCE/qualification.txt"
-          timeout 35m cargo +"$RUST_TOOLCHAIN" build --frozen --offline --no-default-features \
-            --target "$TARGET" -j 2 -p alife_game_app --features contact211-rank32-crossed \
-            --bin evaluate_saved_life_retention
-          printf 'cargo_build_crossed_on=PASS features=contact211-rank32-crossed profile=dev opt_level=1 debug=0 incremental=false\n' \
-            | tee -a "$F0_EVIDENCE/qualification.txt"
+          auth_harness="$GITHUB_WORKSPACE/docs/r41-saved-life/contact211-rank32-crossed-cpu-harness.rs"
+          exact_harness="crates/alife_game_app/tests/contact211_rank32_crossed_cpu.rs"
+          printf '%s  %s\n' "$PIN_CPU_HARNESS" "$auth_harness" | sha256sum -c -
+          test ! -e "$exact_harness" && test ! -L "$exact_harness"
+          mkdir -p "$(dirname "$exact_harness")"
+          install -m 0644 "$auth_harness" "$exact_harness"
+          cmp -s "$auth_harness" "$exact_harness"
+          trap 'rm -f -- "$exact_harness"' EXIT
           timeout 25m cargo +"$RUST_TOOLCHAIN" test --frozen --offline --no-default-features \
-            --target "$TARGET" -j 2 -p alife_game_app --lib --features contact211-rank32-crossed \
+            --target "$TARGET" -j 2 -p alife_game_app --test contact211_rank32_crossed_cpu --features contact211-rank32 \
+            actual_shared_admission_refuses_crossed_while_off_without_checkpoint -- --nocapture | tee "$F0_LAYER/crossed-cpu-off.log"
+          grep -Fq 'actual_shared_admission_refuses_crossed_while_off_without_checkpoint ... ok' "$F0_LAYER/crossed-cpu-off.log"
+          grep -Eq '^test result: ok. 1 passed; 0 failed; 0 ignored;' "$F0_LAYER/crossed-cpu-off.log"
+          timeout 25m cargo +"$RUST_TOOLCHAIN" test --frozen --offline --no-default-features \
+            --target "$TARGET" -j 2 -p alife_game_app --test contact211_rank32_crossed_cpu --features contact211-rank32-crossed \
             language_pilot::tests -- --nocapture | tee "$F0_LAYER/crossed-cpu.log"
           grep -Fq 'crossed_sequences_do_not_expand_standalone_schema5_or_emit_a_quiet_atom ... ok' "$F0_LAYER/crossed-cpu.log"
           grep -Fq 'crossed_physical_order_is_independent_of_focal_routing ... ok' "$F0_LAYER/crossed-cpu.log"
@@ -366,6 +380,11 @@ jobs:
           grep -Eq '^test result: ok. 4 passed; 0 failed; 0 ignored;' "$F0_LAYER/crossed-cpu.log"
           printf 'crossed_real_headless_cpu_and_legacy_tests=PASS four_tests_no_private_checkpoint_no_native_evaluator\n' \
             | tee -a "$F0_EVIDENCE/qualification.txt"
+          printf '%s  %s\n' "$PIN_CPU_HARNESS" "$exact_harness" | sha256sum -c -
+          rm -f -- "$exact_harness"
+          trap - EXIT
+          printf 'crossed_actual_feature_off_refusal=PASS before_checkpoint_or_output_access\ncrossed_asset_free_cpu_harness_sha256=%s\n' \
+            "$PIN_CPU_HARNESS" | tee -a "$F0_EVIDENCE/qualification.txt"
           timeout 20m cargo +"$RUST_TOOLCHAIN" test --frozen --offline --no-default-features \
             --target "$TARGET" -j 2 -p alife_gpu_backend --lib --features contact211-rank32,gpu-tests \
             contact211_rank32_signed_shader_validates_without_device -- --nocapture \
@@ -373,6 +392,12 @@ jobs:
           grep -Fq 'closed_loop_pipeline::contact211_rank32_signed_shader_validates_without_device ... ok' "$F0_LAYER/naga-validation.log"
           grep -Eq '^test result: ok. 1 passed; 0 failed; 0 ignored;' "$F0_LAYER/naga-validation.log"
           printf 'exact_signed_WGSL_cpu_naga=PASS one_test_no_device_or_native_eval\n' | tee -a "$F0_EVIDENCE/qualification.txt"
+          test "$(df -PB1 "$CARGO_TARGET_DIR" | awk 'NR==2 {print $4}')" -ge 10737418240
+          timeout 35m cargo +"$RUST_TOOLCHAIN" build --frozen --offline --no-default-features \
+            --target "$TARGET" -j 2 -p alife_game_app --features contact211-rank32-crossed \
+            --bin evaluate_saved_life_retention
+          printf 'cargo_build_crossed_on=PASS features=contact211-rank32-crossed profile=dev opt_level=1 debug=0 incremental=false\n' \
+            | tee -a "$F0_EVIDENCE/qualification.txt"
           python3 -I - "$F0_LAYER/checked-tree.json" <<'PY'
           from hashlib import sha256
           import json, pathlib, sys
@@ -389,6 +414,8 @@ jobs:
           raw="$CARGO_TARGET_DIR/$TARGET/debug/evaluate_saved_life_retention"
           dst="$F0_EVIDENCE/evaluate_saved_life_retention"
           test -x "$raw" && test -f "$raw" && test ! -L "$raw" && test ! -e "$dst"
+          LC_ALL=C grep -aFq -- 'rank32_payload_submitted' "$raw"
+          printf 'crossed_elf_schema8_only_marker=PASS rank32_payload_submitted\n' | tee -a "$F0_EVIDENCE/qualification.txt"
           bytes="$(stat -c %s "$raw")"
           test "$bytes" -ge 1048576 && test "$bytes" -le 268435456
           readelf -W -h "$raw" > "$F0_LAYER/elf-header.txt"
