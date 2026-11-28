@@ -1,0 +1,519 @@
+name: Qualia retained Quiet preimage witness asset-only native byte link
+on:
+  push:
+    branches: ["bob/qualia-retained-praise-quiet-preimage-linked-20261128"]
+    paths: [".github/workflows/qualia-retained-praise-quiet-preimage-linked.yml"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qualia-retained-praise-quiet-preimage-linked-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  asset-only-link:
+    if: github.ref == 'refs/heads/bob/qualia-retained-praise-quiet-preimage-linked-20261128'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    env:
+      PIN_WITNESS_COMPILER_HEAD: "67f6526583e26144add0ff95bde2ad1c127baf27"
+      PIN_WITNESS_COMPILER_TREE: "e2a71992616ae1458ceed5f43aeb22d5404f9050"
+      PIN_WITNESS_COMPILER_WORKFLOW_BLOB: "b275716cd12255c2cc7c9ec650bc514dc5c5c963"
+      PIN_WITNESS_COMPILER_WORKFLOW_SHA256: "cf9f5bf9fe9507524e67a3c0f3f54885677c336ce26e3f4d0a2e9af86ea5d1d5"
+      PIN_WITNESS_COMPILER_RUN: "46130830249"
+      PIN_WITNESS_COMPILER_JOB: "140935366477"
+      PIN_LINKED_HEAD: 8521e9f5103dadd4d0afe972360661cd5195c097
+      PIN_LINKED_TREE: b3455af13242832ebfbbfa055b1313d0f116ab5a
+      PIN_LINKED_WORKFLOW_BLOB: 8a0ed9822676bffee64fe9c1fe2898517d25e629
+      PIN_LINKED_WORKFLOW_SHA256: 63b4364d8dddac8839b9a483665362b293404ec5882a26912dcb7ebf641cfb68
+      PIN_LINKED_RUN: "46124865300"
+      PIN_WITNESS_FORWARD: 1e024f79219b566a854b79d5055e2dd010596d53acfe686dd3fd1eacac10f430
+      PIN_WITNESS_FORWARD_BLOB: 1df3af86dcccdf06e76da22bdd6b4cfbca939969
+      PIN_WITNESS_INVERSE: 42aad825939b27e403840eec12e34dac069df84347e4d8f4753ed7aa7c2d8950
+      PIN_WITNESS_INVERSE_BLOB: a4ceb8f2d22ad3de5103039dce9e77c4c2ea7b04
+      PIN_WITNESS_PINS: 2da5900b3fbe500aeb6e555e9ec8c256a1c84a0fd86313d05e65baca922c358b
+      PIN_WITNESS_PINS_BLOB: cbb02c2af389c4d10a911418e21338236f02c67b
+      PIN_COMPILER_HEAD: 73245d82462c3a2d3b3c08532e45fc315bdc2f2b
+      PIN_COMPILER_TREE: 835225362dd55ed6709c3b16fbf99612e9c11f0e
+      PIN_COMPILER_WORKFLOW_BLOB: be1a77014f168018b97a7d882bf312f857ee7575
+      PIN_COMPILER_WORKFLOW_SHA256: 859072660282e88e9988437adeb941441b1a3638901a55a5f4a7f21d4b049d58
+      PIN_COMPILER_RUN: "46124165223"
+      PIN_COMPILER_JOB: "140914920186"
+      PIN_COMPILER_TEXT_ARTIFACT: "15254449357"
+      PIN_COMPILER_TEXT_ZIP_SHA256: 1a3c3185588b40dfcdb5259e0c8d9862a8a92213dce0b58df48e0f5d6892657c
+      PIN_MATCH_FORWARD_BLOB: c1a6f52ba27f98a66058315061c4a4922d22ec30
+      PIN_MATCH_INVERSE_BLOB: 6622bb863a88aa4ea33ad9dbfaa468c2db038dc2
+      PIN_MATCH_PINS_BLOB: fabff0803ea18725761600609811c7a8bcdb8eed
+      PIN_INHERITED_HEAD: 6322f16a9c7d57ee5df576002fcbd503e7e8fb38
+      PIN_INHERITED_TREE: 24cbc1ffe4e69f67a2ac8ba950b9e38cd58a22d6
+      PIN_INHERITED_WORKFLOW_BLOB: 92c091d5eaed0bfe79a5ae6ff45cd5843338154d
+      PIN_INHERITED_WORKFLOW_SHA256: 4f572a6635afc9f6fbd97f98ca1fb2135a4f38c75a3148dae9a0f093d5f03884
+      PIN_MATCH_FORWARD: 97360073f9eaea9053b824b31d9d2e5501cd4ae4fb8b284d3651a671b44e52cd
+      PIN_MATCH_INVERSE: 3299ea27f27a8b22a63d4b2781bb31a4d738ca3a11bc5eb9ea77943ca0555e20
+      PIN_MATCH_PINS: cf10505948e97937b068b46d567f46395474decbf282353b4d2aecc909418287
+      PIN_QUALIFIED_CPU_HEAD: 0808c8b77e93152d458cfaef1c1ce92da78672c8
+      PIN_QUALIFIED_CPU_TREE: f5e52abba2cafa8e4daa03a26c16c576fc233bb1
+      PIN_QUALIFIED_CPU_WORKFLOW_BLOB: 76c8854b9ed0aa8095449c832c1d7c9b31bb1c66
+      PIN_QUALIFIED_CPU_WORKFLOW_SHA256: 75ba0582c658e8aaa590e1f40362e895b7f742774d4a4d7d166c82c94176b5ec
+      PIN_QUALIFIED_CPU_RUN: "46117005488"
+      PIN_QUALIFIED_CPU_JOB: "140892965616"
+      PIN_QUALIFIED_CPU_ARTIFACT: "15251992900"
+      PIN_QUALIFIED_CPU_ARTIFACT_ZIP_SHA256: f55ca238a191b2c7c65462c67548d4862528cc62b238d3bde8a458e4c669e884
+      PIN_FAILED_HEAD: c1658822ab5fcb2a744f4d0c84a61e5f1fc323a5
+      PIN_FAILED_TREE: d8d324112aeb339d280340f0a2eff7479cd8592d
+      PIN_PARENT: 23a27f3b45aa5aa9e6d44bf86f7b83aa4de27a66
+      PIN_PARENT_TREE: a20a4b8223b43dc7a660537df2907e532ed0a0da
+      PIN_PARENT_PREDECESSOR: 52fac4138cd5e11d0b37c5b76c3295c7a3056fc5
+      PIN_RESTORE: f466b83791cccb97568e6f718b92b052999cfb2b
+      PIN_MANIFEST_BLOB: 7010cd90fb587a18cd75c6109d95e5311e5a9a86
+      PIN_RESTORE_BLOB: 28b3868f208796f8d2f96a870f7589f1ed0360e5
+      PIN_PRAISE_PATCH_BLOB: 95f99c968f9a549c197ecee8f5a40ab8b14206b7
+      PIN_PRAISE_PINS_BLOB: 155e34e1b23853428c8e19efb2d96b6b4a83d7ff
+      PIN_PRAISE_PATCH: aa1b1f7240eecd588f88f2b074740492ad456926aabe2eca48603cbd1d02dba5
+      PIN_PRAISE_PINS: 5b58908ab217e2de6bcacbd297a1bc581eb3aa7fa30c24ae73b4840b6d4e5818
+      PIN_FORWARD: 446b7d5f120c1d0df17ca33c5b09a0372c3db037234293015ea9c9a1aca0b10f
+      PIN_INVERSE: a94b2a991d7f24ca3b7cfe942f310cc00ba4f36fe2315f209f6426d6dd1e5f1d
+      PIN_PINS: 73af9e5369452bd321055528d1cda3e8a4375aad8bbbe5495b0ca6c7f2e0a25e
+      PIN_CLI: 4e7ae13bf6fb496a175166ebaf3e9feb66598ec9cd35644c02203ea58bc6b570
+      PIN_LOCK: 155699e9274f8890bc8c335669a62de48203ba315a33388a8f0caca71f0f7f37
+      PIN_RUSTC_COMMIT: 0ef1bc386059596dada8fb65b50425aab2ea637a
+      RUST_TOOLCHAIN: "1.100.0"
+      TARGET: x86_64-unknown-linux-gnu
+      CARGO_BUILD_JOBS: "2"
+      CARGO_INCREMENTAL: "0"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_DEV_OPT_LEVEL: "1"
+      CARGO_PROFILE_DEV_INCREMENTAL: "false"
+      CARGO_PROFILE_TEST_DEBUG: "0"
+      CARGO_PROFILE_TEST_OPT_LEVEL: "1"
+      CARGO_PROFILE_TEST_INCREMENTAL: "false"
+      CARGO_TERM_COLOR: never
+      LC_ALL: C
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout exact source-only push
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Authenticate sole new workflow plus exact green witness compiler parent
+        run: |
+          set -Eeuo pipefail
+          stage=pin-shapes
+          trap 'rc=$?; printf "::error title=Matched Praise source admission::%s failed (exit %s)\n" "$stage" "$rc" >&2; exit "$rc"' ERR
+          phase() { stage="$1"; printf '[matched Praise source admission] %s\n' "$stage"; }
+          phase pin-shapes
+          for value in "$PIN_WITNESS_COMPILER_HEAD" "$PIN_WITNESS_COMPILER_TREE" "$PIN_WITNESS_COMPILER_WORKFLOW_BLOB"; do
+            [[ "$value" =~ ^[0-9a-f]{40}$ ]]
+          done
+          for value in "$PIN_LINKED_HEAD" "$PIN_LINKED_TREE" "$PIN_LINKED_WORKFLOW_BLOB"             "$PIN_WITNESS_FORWARD_BLOB" "$PIN_WITNESS_INVERSE_BLOB" "$PIN_WITNESS_PINS_BLOB"; do
+            [[ "$value" =~ ^[0-9a-f]{40}$ ]]
+          done
+          for value in "$PIN_COMPILER_HEAD" "$PIN_COMPILER_TREE" "$PIN_COMPILER_WORKFLOW_BLOB" \
+            "$PIN_MATCH_FORWARD_BLOB" "$PIN_MATCH_INVERSE_BLOB" "$PIN_MATCH_PINS_BLOB" \
+            "$PIN_INHERITED_HEAD" "$PIN_INHERITED_TREE" "$PIN_INHERITED_WORKFLOW_BLOB" \
+            "$PIN_QUALIFIED_CPU_HEAD" "$PIN_QUALIFIED_CPU_TREE" "$PIN_QUALIFIED_CPU_WORKFLOW_BLOB" \
+            "$PIN_FAILED_HEAD" "$PIN_FAILED_TREE" "$PIN_PARENT" "$PIN_PARENT_TREE" "$PIN_PARENT_PREDECESSOR" \
+            "$PIN_RESTORE" "$PIN_MANIFEST_BLOB" "$PIN_RESTORE_BLOB" \
+            "$PIN_PRAISE_PATCH_BLOB" "$PIN_PRAISE_PINS_BLOB"; do
+            [[ "$value" =~ ^[0-9a-f]{40}$ ]]
+          done
+          phase exact-checkout-and-ancestry
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git show -s --format=%P HEAD)" = "$PIN_WITNESS_COMPILER_HEAD"
+          test "$(git rev-parse "$PIN_WITNESS_COMPILER_HEAD^{tree}")" = "$PIN_WITNESS_COMPILER_TREE"
+          test "$(git show -s --format=%P "$PIN_WITNESS_COMPILER_HEAD")" = "$PIN_LINKED_HEAD"
+          test "$(git rev-parse "$PIN_LINKED_HEAD^{tree}")" = "$PIN_LINKED_TREE"
+          test "$(git show -s --format=%P "$PIN_LINKED_HEAD")" = "$PIN_COMPILER_HEAD"
+          test "$(git rev-parse "$PIN_COMPILER_HEAD^{tree}")" = "$PIN_COMPILER_TREE"
+          test "$(git show -s --format=%P "$PIN_COMPILER_HEAD")" = "$PIN_INHERITED_HEAD"
+          test "$(git rev-parse "$PIN_INHERITED_HEAD^{tree}")" = "$PIN_INHERITED_TREE"
+          test "$(git show -s --format=%P "$PIN_INHERITED_HEAD")" = "$PIN_QUALIFIED_CPU_HEAD"
+          test "$(git rev-parse "$PIN_QUALIFIED_CPU_HEAD^{tree}")" = "$PIN_QUALIFIED_CPU_TREE"
+          test "$(git show -s --format=%P "$PIN_QUALIFIED_CPU_HEAD")" = "$PIN_FAILED_HEAD"
+          test "$(git rev-parse "$PIN_FAILED_HEAD^{tree}")" = "$PIN_FAILED_TREE"
+          test "$(git show -s --format=%P "$PIN_FAILED_HEAD")" = "$PIN_PARENT"
+          test "$(git rev-parse "$PIN_PARENT^{tree}")" = "$PIN_PARENT_TREE"
+          test "$(git show -s --format=%P "$PIN_PARENT")" = "$PIN_PARENT_PREDECESSOR"
+          git merge-base --is-ancestor "$PIN_RESTORE" "$PIN_PARENT"
+          phase sole-workflow-addition-and-four-unchanged-qualified-witness-leaves
+          own=.github/workflows/qualia-retained-praise-quiet-preimage-linked.yml
+          check=.github/workflows/qualia-retained-praise-quiet-preimage-check.yml
+          linked=.github/workflows/qualia-retained-matched-praise-linked.yml
+          w=docs/r41-saved-life/QUIET-WITNESS-PREIMAGE
+          source_leaves=("$check" "$w-PINS.json" "$w.inverse.patch" "$w.patch")
+          compiler=.github/workflows/qualia-retained-matched-praise-compiler.yml
+          inherited=.github/workflows/qualia-retained-neutral-route-elf.yml
+          prior=.github/workflows/qualia-retained-neutral-route-cpu.yml
+          x=docs/r41-saved-life/MATCHED-PRAISE-FAST-DELTA
+          parent_paths=("$compiler" "$x-PINS.json" "$x.inverse.patch" "$x.patch")
+          diff -u <(printf 'A\t%s\n' "$own") \
+            <(git diff --name-status --no-renames "$PIN_WITNESS_COMPILER_HEAD" HEAD)
+          diff -u <(printf 'A\t%s\n' "${source_leaves[@]}") \
+            <(git diff --name-status --no-renames "$PIN_LINKED_HEAD" "$PIN_WITNESS_COMPILER_HEAD")
+          test "$(git rev-parse "$PIN_WITNESS_COMPILER_HEAD:$check")" = "$PIN_WITNESS_COMPILER_WORKFLOW_BLOB"
+          printf '%s  %s\n' "$PIN_WITNESS_COMPILER_WORKFLOW_SHA256" "$check" | sha256sum -c -
+          diff -u <(printf 'A\t%s\n' "$linked") \
+            <(git diff --name-status --no-renames "$PIN_COMPILER_HEAD" "$PIN_LINKED_HEAD")
+          diff -u <(printf 'A\t%s\n' "${parent_paths[@]}") \
+            <(git diff --name-status --no-renames "$PIN_INHERITED_HEAD" "$PIN_COMPILER_HEAD")
+          diff -u <(printf 'A\t%s\n' "$inherited") \
+            <(git diff --name-status --no-renames "$PIN_QUALIFIED_CPU_HEAD" "$PIN_INHERITED_HEAD")
+          for leaf in "$own" "${source_leaves[@]}" "$linked" "${parent_paths[@]}"; do
+            test "$(git ls-tree HEAD -- "$leaf" | cut -d' ' -f1)" = 100644
+            test -f "$leaf" && test ! -L "$leaf"
+          done
+          test "$(git rev-parse "$PIN_LINKED_HEAD:$linked")" = "$PIN_LINKED_WORKFLOW_BLOB"
+          printf '%s  %s\n' "$PIN_LINKED_WORKFLOW_SHA256" "$linked" | sha256sum -c -
+          test "$(git rev-parse "HEAD:$w.patch")" = "$PIN_WITNESS_FORWARD_BLOB"
+          test "$(git rev-parse "HEAD:$w.inverse.patch")" = "$PIN_WITNESS_INVERSE_BLOB"
+          test "$(git rev-parse "HEAD:$w-PINS.json")" = "$PIN_WITNESS_PINS_BLOB"
+          printf '%s  %s\n' "$PIN_WITNESS_FORWARD" "$w.patch" "$PIN_WITNESS_INVERSE" "$w.inverse.patch" \
+            "$PIN_WITNESS_PINS" "$w-PINS.json" | sha256sum -c -
+          test "$(git rev-parse "$PIN_COMPILER_HEAD:$compiler")" = "$PIN_COMPILER_WORKFLOW_BLOB"
+          printf '%s  %s\n' "$PIN_COMPILER_WORKFLOW_SHA256" "$compiler" | sha256sum -c -
+          test "$(git rev-parse "$PIN_COMPILER_HEAD:$x.patch")" = "$PIN_MATCH_FORWARD_BLOB"
+          test "$(git rev-parse "$PIN_COMPILER_HEAD:$x.inverse.patch")" = "$PIN_MATCH_INVERSE_BLOB"
+          test "$(git rev-parse "$PIN_COMPILER_HEAD:$x-PINS.json")" = "$PIN_MATCH_PINS_BLOB"
+          test "$(git rev-parse "$PIN_QUALIFIED_CPU_HEAD:$prior")" = "$PIN_QUALIFIED_CPU_WORKFLOW_BLOB"
+          test "$(git rev-parse "$PIN_INHERITED_HEAD:$inherited")" = "$PIN_INHERITED_WORKFLOW_BLOB"
+          printf '%s  %s\n' "$PIN_QUALIFIED_CPU_WORKFLOW_SHA256" "$prior" \
+            "$PIN_INHERITED_WORKFLOW_SHA256" "$inherited" | sha256sum -c -
+          phase unchanged-exact-restore-and-prior-blob-pins
+          test "$(git rev-parse "$PIN_RESTORE:docs/r41-saved-life/SOURCE.json")" = "$PIN_MANIFEST_BLOB"
+          test "$(git rev-parse "$PIN_RESTORE:docs/r41-saved-life/restore_source.py")" = "$PIN_RESTORE_BLOB"
+          git diff --exit-code "$PIN_RESTORE" HEAD -- docs/r41-saved-life/{SOURCE.json,restore_source.py,patches}
+          test "$(git rev-parse "HEAD:docs/r41-saved-life/PRAISE-INGRESS.patch")" = "$PIN_PRAISE_PATCH_BLOB"
+          test "$(git rev-parse "HEAD:docs/r41-saved-life/PRAISE-INGRESS-PINS.json")" = "$PIN_PRAISE_PINS_BLOB"
+          phase six-unchanged-source-inputs-and-three-exact-successor-leaves
+          printf '%s  %s\n' \
+            "$PIN_PRAISE_PATCH" docs/r41-saved-life/PRAISE-INGRESS.patch \
+            "$PIN_PRAISE_PINS" docs/r41-saved-life/PRAISE-INGRESS-PINS.json \
+            "$PIN_FORWARD" docs/r41-saved-life/NEUTRAL-ROUTE.patch \
+            "$PIN_INVERSE" docs/r41-saved-life/NEUTRAL-ROUTE.inverse.patch \
+            "$PIN_PINS" docs/r41-saved-life/NEUTRAL-ROUTE-PINS.json \
+            "$PIN_CLI" scripts/qualia-check-neutral-route-cpu.py \
+            "$PIN_MATCH_FORWARD" "$x.patch" "$PIN_MATCH_INVERSE" "$x.inverse.patch" \
+            "$PIN_MATCH_PINS" "$x-PINS.json" | sha256sum -c -
+          phase exact-independent-source-restore
+          umask 077
+          exact="$RUNNER_TEMP/qualia-quiet-preimage-exact"
+          evidence="$RUNNER_TEMP/qualia-quiet-preimage-linked-evidence"
+          mkdir -- "$evidence"
+          printf 'EXACT_SRC=%s\nCARGO_TARGET_DIR=%s\nEVIDENCE=%s\n' "$exact" "$RUNNER_TEMP/qualia-quiet-preimage-target" "$evidence" >> "$GITHUB_ENV"
+          python3 -IB docs/r41-saved-life/restore_source.py "$GITHUB_WORKSPACE" "$exact"
+
+      - name: Verify exact inherited overlays and ten-leaf witness reversal
+        run: |
+          set -euo pipefail
+          cd "$EXACT_SRC"
+          python3 -IB - "$GITHUB_WORKSPACE" <<'PY'
+          from hashlib import sha256
+          from pathlib import Path
+          import json,os,subprocess,sys,tomllib
+
+          docs=Path(sys.argv[1])/'docs/r41-saved-life'
+          e=os.environ
+          def leaf(path):
+              p=Path(path)
+              assert not p.is_symlink(),path
+              if not p.exists(): return None
+              assert p.is_file() and p.stat().st_size<2_000_000,path
+              raw=p.read_bytes()
+              return {'bytes':len(raw),'sha256':sha256(raw).hexdigest()}
+          def digest(path): return leaf(path)['sha256']
+          def files():
+              candidates=list(Path('.').rglob('*'))
+              assert not any(p.is_symlink() for p in candidates)
+              return {str(p) for p in candidates if p.is_file()}
+          def touched(patch):
+              rows=subprocess.check_output(['git','apply','--numstat','-z',str(patch)]).rstrip(b'\0').split(b'\0')
+              paths=[r.decode().split('\t',2)[2] for r in rows]
+              assert len(paths)==len(set(paths))
+              return set(paths)
+          def apply(patch,*flags):
+              for command in (('--check',),()):
+                  subprocess.run(['git','apply','--whitespace=error',*flags,*command,str(patch)],check=True)
+          stock=set(files())
+          assert len(stock)==827 and digest('Cargo.lock')==e['PIN_LOCK']
+          app='crates/alife_game_app/'
+          gpu='crates/alife_gpu_backend/'
+          retain=app+'src/foundation_training_cycle/saved_life_retention'
+          observer=app+'src/gpu_live_runtime/retained_neutral_route'
+          prior=docs/'PRAISE-INGRESS.patch'
+          prior_pins=docs/'PRAISE-INGRESS-PINS.json'
+          assert digest(prior)==e['PIN_PRAISE_PATCH'] and digest(prior_pins)==e['PIN_PRAISE_PINS']
+          p=json.loads(prior_pins.read_bytes())
+          assert p['source_anchor_commit']==e['PIN_RESTORE']
+          assert p['source_manifest_git_blob']==e['PIN_MANIFEST_BLOB']
+          assert p['forward_sha256']==e['PIN_PRAISE_PATCH']
+          pset={app+'Cargo.toml',retain+'.rs',retain+'/experiments.rs',retain+'/praise_probe.rs'}
+          assert set(p['changed_leaves'])==touched(prior)==pset
+          def check_praise(phase):
+              for path,v in p['changed_leaves'].items():
+                  actual=leaf(path)
+                  assert (actual['sha256'] if actual else None)==v[phase],(phase,path)
+              assert digest('Cargo.lock')==e['PIN_LOCK']
+          check_praise('before')
+          apply(prior)
+          check_praise('after')
+          assert files()==stock|{retain+'/praise_probe.rs'}
+
+          forward=docs/'NEUTRAL-ROUTE.patch'
+          inverse=docs/'NEUTRAL-ROUTE.inverse.patch'
+          pins=docs/'NEUTRAL-ROUTE-PINS.json'
+          assert digest(forward)==e['PIN_FORWARD'] and digest(inverse)==e['PIN_INVERSE'] and digest(pins)==e['PIN_PINS']
+          q=json.loads(pins.read_bytes())
+          assert q['base_praise_evaluator_source_commit']==e['PIN_PARENT']
+          assert q['base_stock_source_manifest']==e['PIN_MANIFEST_BLOB']
+          assert q['base_praise_patch_sha256']==e['PIN_PRAISE_PATCH']
+          assert q['base_praise_patch_git_blob']==e['PIN_PRAISE_PATCH_BLOB']
+          assert q['base_praise_pins_git_blob']==e['PIN_PRAISE_PINS_BLOB']
+          assert q['forward_sha256']==e['PIN_FORWARD'] and q['inverse_sha256']==e['PIN_INVERSE']
+          assert q['mechanical_forward_and_inverse_same_bytes_verified'] and not q['compiled'] and not q['device_or_game_run']
+          additions={observer+'.rs',observer+'/scope.rs',app+'tests/retained_neutral_route_scope.rs'}
+          existing={app+'Cargo.toml',retain+'.rs',retain+'/experiments.rs',app+'src/gpu_live_runtime.rs',
+                    gpu+'Cargo.toml',gpu+'src/closed_loop_runtime.rs',gpu+'src/closed_loop_runtime/training_capture.rs'}
+          allowed=existing|additions
+          assert len(q['changed_leaves'])==10
+          fields={v['path']:v for v in q['changed_leaves']}
+          assert set(fields)==allowed==touched(forward)==touched(inverse)
+          assert {path for path,v in fields.items() if v['preimage'] is None}==additions
+          assert all(v['successor'] is not None for v in fields.values())
+          def check(phase):
+              for path,v in fields.items(): assert leaf(path)==v[phase],(phase,path)
+              assert digest('Cargo.lock')==e['PIN_LOCK']
+              expected=stock|{retain+'/praise_probe.rs'}
+              if phase=='successor': expected|=additions
+              assert files()==expected
+          manifests={path:tomllib.loads(Path(path).read_text()) for path in (app+'Cargo.toml',gpu+'Cargo.toml')}
+          check('preimage'); apply(forward); check('successor')
+          apply(inverse); check('preimage')
+          apply(forward); check('successor')
+          name='research-retained-neutral-paid-route-v1'
+          expected={
+              app+'Cargo.toml':['foundation-training','gpu-tests','alife_gpu_backend/'+name],
+              gpu+'Cargo.toml':['gpu-tests','training-rollout'],
+          }
+          for path,before in manifests.items():
+              after=tomllib.loads(Path(path).read_text())
+              assert after['features'].pop(name)==expected[path] and before==after
+              assert name not in after['features'].get('default',[])
+          print('827-leaf exact source; prior four-leaf overlay; this ten-leaf forward/inverse/forward exact; stock feature default unchanged')
+          matched=docs/'MATCHED-PRAISE-FAST-DELTA.patch'
+          undo=docs/'MATCHED-PRAISE-FAST-DELTA.inverse.patch'
+          match_pins=docs/'MATCHED-PRAISE-FAST-DELTA-PINS.json'
+          assert digest(matched)==e['PIN_MATCH_FORWARD']
+          assert digest(undo)==e['PIN_MATCH_INVERSE'] and digest(match_pins)==e['PIN_MATCH_PINS']
+          m=json.loads(match_pins.read_bytes())
+          assert m['schema']=='qualia.retained_matched_praise.source_pins.v1'
+          assert m['public_elf_source_head_without_successor']==e['PIN_INHERITED_HEAD']
+          assert m['qualified_neutral_source_overlay_sha256']==e['PIN_FORWARD']
+          assert m['stock_exact_source_manifest_git_blob']==e['PIN_MANIFEST_BLOB']
+          assert m['added_outer_manifest_schema']==20
+          assert m['forward_sha256']==e['PIN_MATCH_FORWARD'] and m['inverse_sha256']==e['PIN_MATCH_INVERSE']
+          assert m['device_authority'] is False and m['source_compiled'] is False
+          new_one=retain+'/matched_praise.rs'
+          pathset={app+'Cargo.toml',retain+'.rs',retain+'/experiments.rs',new_one,observer+'.rs'}
+          checks={v['path']:v for v in m['leaves']}
+          assert len(m['leaves'])==len(checks)==5
+          assert set(checks)==pathset==touched(matched)==touched(undo)
+          assert {path for path,v in checks.items() if v['preimage'] is None}=={new_one}
+          assert all(v['postimage'] is not None for v in checks.values())
+          exact_before=files()
+          app_before=tomllib.loads(Path(app+'Cargo.toml').read_text())
+          def match_check(phase):
+              for path,v in checks.items(): assert leaf(path)==v[phase],(phase,path)
+              assert digest('Cargo.lock')==e['PIN_LOCK']
+              assert files()==(exact_before|{new_one} if phase=='postimage' else exact_before),phase
+          match_check('preimage'); apply(matched); match_check('postimage')
+          apply(undo); match_check('preimage')
+          apply(matched); match_check('postimage')
+          feature='research-retained-matched-praise-fast-delta-v1'
+          app_after=tomllib.loads(Path(app+'Cargo.toml').read_text())
+          assert app_after['features'].pop(feature)==[
+              'research-retained-neutral-paid-route-v1','research-retained-praise-ingress-v1']
+          assert app_after==app_before and feature not in app_after['features'].get('default',[])
+          print('Five-leaf matched Praise forward/inverse/forward exact, unchanged lock and old Cargo defaults')
+          witness=docs/'QUIET-WITNESS-PREIMAGE.patch'
+          anti=docs/'QUIET-WITNESS-PREIMAGE.inverse.patch'
+          witness_pins=docs/'QUIET-WITNESS-PREIMAGE-PINS.json'
+          assert digest(witness)==e['PIN_WITNESS_FORWARD']
+          assert digest(anti)==e['PIN_WITNESS_INVERSE']
+          assert digest(witness_pins)==e['PIN_WITNESS_PINS']
+          w=json.loads(witness_pins.read_bytes())
+          assert w['restore_commit']==e['PIN_RESTORE'] and w['parent_linked_commit']==e['PIN_LINKED_HEAD']
+          assert w['parent_exact_matched_overlay_sha256']==e['PIN_MATCH_FORWARD']
+          assert w['pinned_reconstructed_world_sha256']==digest('crates/alife_world/src/headless.rs')
+          assert w['patches']['QUIET-PREIMAGE.patch']==e['PIN_WITNESS_FORWARD']
+          assert w['patches']['QUIET-PREIMAGE.inverse.patch']==e['PIN_WITNESS_INVERSE']
+          core='crates/alife_core/'
+          world='crates/alife_world/'
+          new_leaves={retain+'/matched_praise/quiet_witness.rs',world+'tests/retained_canonical_preimage.rs'}
+          old_leaves={app+'Cargo.toml',retain+'.rs',retain+'/experiments.rs',retain+'/matched_praise.rs',
+                      core+'Cargo.toml',core+'src/canonical_digest.rs',world+'Cargo.toml',world+'src/headless.rs'}
+          wm=w['exact_ten_leaves']
+          assert set(wm)==new_leaves|old_leaves==touched(witness)==touched(anti) and len(wm)==10
+          assert {path for path,r in wm.items() if r['before'] is None}==new_leaves
+          assert all(rec['after'] is not None for rec in wm.values())
+          witness_base=files()
+          def witness_check(phase):
+              for path,rec in wm.items():
+                  actual=leaf(path)
+                  expected=None if rec[phase] is None else {'bytes':rec[phase+'_bytes'],'sha256':rec[phase]}
+                  assert actual==expected,(phase,path)
+              assert digest('Cargo.lock')==e['PIN_LOCK']
+              assert files()==(witness_base|new_leaves if phase=='after' else witness_base)
+          manifest_feature={
+              app+'Cargo.toml':('research-retained-matched-praise-quiet-witness-v1',
+                 ['research-retained-matched-praise-fast-delta-v1','alife_world/research-world-signature-preimage-v1']),
+              core+'Cargo.toml':('research-canonical-preimage-v1',[]),
+              world+'Cargo.toml':('research-world-signature-preimage-v1',['alife_core/research-canonical-preimage-v1']),
+          }
+          before_toml={path:tomllib.loads(Path(path).read_text()) for path in manifest_feature}
+          witness_check('before'); apply(witness); witness_check('after')
+          apply(anti); witness_check('before')
+          apply(witness); witness_check('after')
+          for path,(feature,requires) in manifest_feature.items():
+              after_toml=tomllib.loads(Path(path).read_text())
+              assert after_toml['features'].pop(feature)==requires
+              if not after_toml['features'] and 'features' not in before_toml[path]:
+                  del after_toml['features']
+              assert after_toml==before_toml[path]
+          print('Ten-leaf Quiet witness forward/inverse/forward exact; locked dependencies and all default features unchanged')
+          PY
+
+      - name: Link precisely one Quiet witness ON evaluator, never invoke it
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --target "$TARGET"
+          version="$(rustc +"$RUST_TOOLCHAIN" -vV)"
+          grep -Fqx "release: $RUST_TOOLCHAIN" <<< "$version"
+          grep -Fqx "commit-hash: $PIN_RUSTC_COMMIT" <<< "$version"
+          grep -Fqx "host: $TARGET" <<< "$version"
+          cd "$EXACT_SRC"
+          mkdir -p -- "$CARGO_TARGET_DIR"
+          have_space() { test "$(df -PB1 "$CARGO_TARGET_DIR" | awk 'NR==2 {print $4}')" -ge "$1"; }
+          have_space 10737418240
+          timeout 8m cargo +"$RUST_TOOLCHAIN" fetch --locked --target "$TARGET"
+          have_space 8589934592
+          features=foundation-training,gpu-tests,research-retained-praise-ingress-v1,research-retained-neutral-paid-route-v1,research-retained-matched-praise-fast-delta-v1,research-retained-matched-praise-quiet-witness-v1
+          linked="$CARGO_TARGET_DIR/$TARGET/debug/evaluate_saved_life_retention"
+          kept="$EVIDENCE/evaluate_saved_life_retention"
+          test ! -e "$linked" && test ! -L "$linked"
+          test ! -e "$kept" && test ! -L "$kept"
+          timeout 25m cargo +"$RUST_TOOLCHAIN" build --locked --frozen --offline --target "$TARGET" \
+            --no-default-features -p alife_game_app --features "$features" --bin evaluate_saved_life_retention
+          # No further Cargo. Keep exact link bytes; never run the target or loader.
+          printf '%s  Cargo.lock\n' "$PIN_LOCK" | sha256sum -c -
+          test -f "$linked" && test -x "$linked" && test ! -L "$linked"
+          linked_sha="$(sha256sum "$linked" | awk '{print $1}')"
+          install -m 0500 -- "$linked" "$kept"
+          cmp -s -- "$linked" "$kept"
+          python3 -IB - "$linked" "$EVIDENCE" "$linked_sha" "$features" <<'PY'
+          from hashlib import file_digest, sha256
+          from pathlib import Path
+          import json,os,re,stat,subprocess,sys
+
+          source, dest, expected, features = sys.argv[1:]
+          src, out = Path(source), Path(dest)
+          keep = out/'evaluate_saved_life_retention'
+          def identity(x):
+              return (x.st_dev,x.st_ino,x.st_uid,x.st_mode,x.st_size,x.st_nlink,x.st_ctime_ns,x.st_mtime_ns)
+          def checked(path, exact_mode=None, header=False):
+              a = path.lstat()
+              assert stat.S_ISREG(a.st_mode) and a.st_uid==os.getuid()
+              assert 16*1024**2<=a.st_size<=128*1024**2
+              if exact_mode is not None:
+                  assert stat.S_IMODE(a.st_mode)==exact_mode and a.st_nlink==1
+              fd=os.open(path,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK|os.O_CLOEXEC)
+              with os.fdopen(fd,'rb') as f:
+                  assert identity(os.fstat(f.fileno()))==identity(a) and f.read(4)==b'\x7fELF'
+                  f.seek(0)
+                  actual=file_digest(f,'sha256').hexdigest()
+                  assert actual==expected
+                  abi=None
+                  if header:
+                      # A read-only fd to a static file; readelf does not invoke the interpreter.
+                      abi=subprocess.check_output(['/usr/bin/readelf','--wide','--file-header',
+                          '--program-headers','--dynamic','--notes',f'/proc/self/fd/{fd}'],
+                          pass_fds=(fd,),timeout=10)
+                  assert identity(os.fstat(f.fileno()))==identity(a)
+              assert identity(path.lstat())==identity(a)
+              return a, abi
+          s0,_=checked(src)
+          k0,header=checked(keep,0o500,True)
+          assert s0.st_size==k0.st_size and (s0.st_dev,s0.st_ino)!=(k0.st_dev,k0.st_ino)
+          assert header is not None and 64<len(header)<=64*1024
+          abi=header.decode('ascii')
+          assert re.search(r'^\s+Class:\s+ELF64$',abi,re.M)
+          assert re.search(r'^\s+Data:\s+2.s complement, little endian$',abi,re.M)
+          assert re.search(r'^\s+Machine:\s+Advanced Micro Devices X86-64$',abi,re.M)
+          assert re.search(r'^\s+Type:\s+(?:DYN|EXEC) ',abi,re.M)
+          interp='/lib64/ld-linux-x86-64.so.2'
+          assert f'[Requesting program interpreter: {interp}]' in abi
+          assert not re.search(r'\((?:RPATH|RUNPATH)\)',abi)
+          ids=re.findall(r'Build ID: ([a-f0-9]{16,128})',abi)
+          needed=re.findall(r'\(NEEDED\)\s+Shared library: \[([A-Za-z0-9_.+\-]+)\]',abi)
+          assert len(ids)==1 and len(needed)==len(set(needed))==len(re.findall(r'\(NEEDED\)',abi))
+          assert 'libc.so.6' in needed
+          s1,_=checked(src)
+          k1,_=checked(keep,0o500)
+          assert identity(s1)==identity(s0) and identity(k1)==identity(k0)
+          with (out/'ELF-HEADER.txt').open('xb') as f: f.write(header)
+          assert (out/'ELF-HEADER.txt').read_bytes()==header
+          e=os.environ
+          proof={'schema':'qualia.retained_matched_praise.quiet_witness_hosted_asset_only_linked.v1',
+                 'producer_commit':e['GITHUB_SHA'],'producer_run':int(e['GITHUB_RUN_ID']),
+                 'producer_run_attempt':int(e['GITHUB_RUN_ATTEMPT']),
+                 'qualified_compiler_head':e['PIN_WITNESS_COMPILER_HEAD'],
+                 'qualified_compiler_tree':e['PIN_WITNESS_COMPILER_TREE'],
+                 'qualified_compiler_run':int(e['PIN_WITNESS_COMPILER_RUN']),
+                 'qualified_compiler_job':int(e['PIN_WITNESS_COMPILER_JOB']),
+                 'qualified_compiler_workflow_git_blob':e['PIN_WITNESS_COMPILER_WORKFLOW_BLOB'],
+                 'qualified_compiler_workflow_sha256':e['PIN_WITNESS_COMPILER_WORKFLOW_SHA256'],
+                 'qualified_off_and_on_cargo_check_only':True,
+                 'witness_forward_sha256':e['PIN_WITNESS_FORWARD'],
+                 'witness_inverse_sha256':e['PIN_WITNESS_INVERSE'],
+                 'witness_pins_sha256':e['PIN_WITNESS_PINS'],
+                 'stock_source_manifest_git_blob':e['PIN_MANIFEST_BLOB'],
+                 'neutral_overlay_sha256':e['PIN_FORWARD'],
+                 'matched_forward_sha256':e['PIN_MATCH_FORWARD'],
+                 'matched_inverse_sha256':e['PIN_MATCH_INVERSE'],
+                 'matched_pins_sha256':e['PIN_MATCH_PINS'],
+                 'cargo_lock_sha256':e['PIN_LOCK'],'rustc_commit':e['PIN_RUSTC_COMMIT'],
+                 'target':e['TARGET'],'profile':'dev-opt1-debug0-no-incremental',
+                 'features':features.split(','),'elf_sha256':expected,'elf_bytes':k1.st_size,
+                 'elf_build_id':ids[0],'elf_interpreter':interp,'elf_needed':sorted(needed),
+                 'static_elf_header_sha256':sha256(header).hexdigest(),'static_elf_header_bytes':len(header),
+                 'rpath_or_runpath_present':False,'single_on_link_exact_copy':True,
+                 'producer_executed_elf':False,'claimed_identical_to_compiler_only_check_output':False,
+                 'fixture_checkpoint_receipt_or_private_data_used':False,
+                 'authorizes_native_or_next':False,'authorizes_praise_b':False}
+          with (out/'PROOF.json').open('x') as f: f.write(json.dumps(proof,sort_keys=True,indent=2)+'\n')
+          PY
+          cmp -s -- "$linked" "$kept"
+          test "$(sha256sum "$kept" | awk '{print $1}')" = "$linked_sha"
+          cd "$EVIDENCE"
+          diff -u <(printf '%s\n' ELF-HEADER.txt PROOF.json evaluate_saved_life_retention) \
+            <(find . -mindepth 1 -maxdepth 1 -type f -printf '%f\n' | LC_ALL=C sort)
+          test -z "$(find . -mindepth 1 -maxdepth 1 ! -type f -print)"
+          sha256sum ELF-HEADER.txt PROOF.json evaluate_saved_life_retention
+
+      - name: Retain only unexecuted link bytes, static ELF header and digest proof
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: qualia-retained-praise-quiet-preimage-linked-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/qualia-quiet-preimage-linked-evidence/evaluate_saved_life_retention
+            ${{ runner.temp }}/qualia-quiet-preimage-linked-evidence/ELF-HEADER.txt
+            ${{ runner.temp }}/qualia-quiet-preimage-linked-evidence/PROOF.json
+          if-no-files-found: error
+          retention-days: 5
+          compression-level: 3
