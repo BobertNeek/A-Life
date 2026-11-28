@@ -1,0 +1,277 @@
+name: Qualia retained neutral route CPU qualification
+on:
+  push:
+    branches: ["bob/qualia-retained-neutral-route-cpu-20261128"]
+    paths: [".github/workflows/qualia-retained-neutral-route-cpu.yml"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qualia-retained-neutral-route-cpu-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  source-only:
+    if: github.ref == 'refs/heads/bob/qualia-retained-neutral-route-cpu-20261128'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 65
+    env:
+      PIN_PARENT: 23a27f3b45aa5aa9e6d44bf86f7b83aa4de27a66
+      PIN_PARENT_TREE: a20a4b8223b43dc7a660537df2907e532ed0a0da
+      PIN_PARENT_PREDECESSOR: 52fac4138cd5e11d0b37c5b76c3295c7a3056fc5
+      PIN_RESTORE: f466b83791cccb97568e6f718b92b052999cfb2b
+      PIN_MANIFEST_BLOB: 7010cd90fb587a18cd75c6109d95e5311e5a9a86
+      PIN_RESTORE_BLOB: 28b3868f208796f8d2f96a870f7589f1ed0360e5
+      PIN_PRAISE_PATCH_BLOB: 95f99c968f9a549c197ecee8f5a40ab8b14206b7
+      PIN_PRAISE_PINS_BLOB: 155e34e1b23853428c8e19efb2d96b4a83d7ff
+      PIN_PRAISE_PATCH: aa1b1f7240eecd588f88f2b074740492ad456926aabe2eca48603cbd1d02dba5
+      PIN_PRAISE_PINS: 5b58908ab217e2de6bcacbd297a1bc581eb3aa7fa30c24ae73b4840b6d4e5818
+      PIN_FORWARD: 446b7d5f120c1d0df17ca33c5b09a0372c3db037234293015ea9c9a1aca0b10f
+      PIN_INVERSE: a94b2a991d7f24ca3b7cfe942f310cc00ba4f36fe2315f209f6426d6dd1e5f1d
+      PIN_PINS: 857ccb963e252ed84b7041d3db9127fee7130ea3e2a2d0d006ca4a98a0196965
+      PIN_CLI: 4e7ae13bf6fb496a175166ebaf3e9feb66598ec9cd35644c02203ea58bc6b570
+      PIN_LOCK: 155699e9274f8890bc8c335669a62de48203ba315a33388a8f0caca71f0f7f37
+      PIN_RUSTC_COMMIT: 0ef1bc386059596dada8fb65b50425aab2ea637a
+      RUST_TOOLCHAIN: "1.100.0"
+      TARGET: x86_64-unknown-linux-gnu
+      CARGO_BUILD_JOBS: "2"
+      CARGO_INCREMENTAL: "0"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_DEV_OPT_LEVEL: "1"
+      CARGO_PROFILE_DEV_INCREMENTAL: "false"
+      CARGO_PROFILE_TEST_DEBUG: "0"
+      CARGO_PROFILE_TEST_OPT_LEVEL: "1"
+      CARGO_PROFILE_TEST_INCREMENTAL: "false"
+      CARGO_TERM_COLOR: never
+      LC_ALL: C
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout exact source-only push
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Authenticate exact parent and five source-only added blobs
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git show -s --format=%P HEAD)" = "$PIN_PARENT"
+          test "$(git rev-parse "$PIN_PARENT^{tree}")" = "$PIN_PARENT_TREE"
+          test "$(git show -s --format=%P "$PIN_PARENT")" = "$PIN_PARENT_PREDECESSOR"
+          git merge-base --is-ancestor "$PIN_RESTORE" "$PIN_PARENT"
+          leaves=(
+            .github/workflows/qualia-retained-neutral-route-cpu.yml
+            docs/r41-saved-life/NEUTRAL-ROUTE.patch
+            docs/r41-saved-life/NEUTRAL-ROUTE.inverse.patch
+            docs/r41-saved-life/NEUTRAL-ROUTE-PINS.json
+            scripts/qualia-check-neutral-route-cpu.py
+          )
+          diff -u <(printf 'A\t%s\n' "${leaves[@]}" | LC_ALL=C sort) \
+            <(git diff --name-status --no-renames "$PIN_PARENT" HEAD | LC_ALL=C sort)
+          for path in "${leaves[@]}"; do
+            test "$(git ls-tree HEAD -- "$path" | cut -d' ' -f1)" = 100644
+            test -f "$path" && test ! -L "$path"
+          done
+          test "$(git rev-parse "$PIN_RESTORE:docs/r41-saved-life/SOURCE.json")" = "$PIN_MANIFEST_BLOB"
+          test "$(git rev-parse "$PIN_RESTORE:docs/r41-saved-life/restore_source.py")" = "$PIN_RESTORE_BLOB"
+          git diff --exit-code "$PIN_RESTORE" HEAD -- docs/r41-saved-life/{SOURCE.json,restore_source.py,patches}
+          test "$(git rev-parse "HEAD:docs/r41-saved-life/PRAISE-INGRESS.patch")" = "$PIN_PRAISE_PATCH_BLOB"
+          test "$(git rev-parse "HEAD:docs/r41-saved-life/PRAISE-INGRESS-PINS.json")" = "$PIN_PRAISE_PINS_BLOB"
+          printf '%s  %s\n' \
+            "$PIN_PRAISE_PATCH" docs/r41-saved-life/PRAISE-INGRESS.patch \
+            "$PIN_PRAISE_PINS" docs/r41-saved-life/PRAISE-INGRESS-PINS.json \
+            "$PIN_FORWARD" docs/r41-saved-life/NEUTRAL-ROUTE.patch \
+            "$PIN_INVERSE" docs/r41-saved-life/NEUTRAL-ROUTE.inverse.patch \
+            "$PIN_PINS" docs/r41-saved-life/NEUTRAL-ROUTE-PINS.json \
+            "$PIN_CLI" scripts/qualia-check-neutral-route-cpu.py | sha256sum -c -
+          umask 077
+          exact="$RUNNER_TEMP/qualia-neutral-route-exact"
+          out="$RUNNER_TEMP/qualia-neutral-route-evidence"
+          mkdir -- "$out"
+          printf 'EXACT_SRC=%s\nEVIDENCE=%s\nCARGO_TARGET_DIR=%s\n' "$exact" "$out" "$RUNNER_TEMP/qualia-neutral-route-target" >> "$GITHUB_ENV"
+          python3 -IB docs/r41-saved-life/restore_source.py "$GITHUB_WORKSPACE" "$exact"
+
+      - name: Verify exact source overlay in both directions before compilation
+        run: |
+          set -euo pipefail
+          cd "$EXACT_SRC"
+          python3 -IB - "$GITHUB_WORKSPACE" <<'PY'
+          from hashlib import sha256
+          from pathlib import Path
+          import json,os,subprocess,sys,tomllib
+
+          docs=Path(sys.argv[1])/'docs/r41-saved-life'
+          e=os.environ
+          def leaf(path):
+              p=Path(path)
+              assert not p.is_symlink(),path
+              if not p.exists(): return None
+              assert p.is_file() and p.stat().st_size<2_000_000,path
+              raw=p.read_bytes()
+              return {'bytes':len(raw),'sha256':sha256(raw).hexdigest()}
+          def digest(path): return leaf(path)['sha256']
+          def files():
+              candidates=list(Path('.').rglob('*'))
+              assert not any(p.is_symlink() for p in candidates)
+              return {str(p) for p in candidates if p.is_file()}
+          def touched(patch):
+              rows=subprocess.check_output(['git','apply','--numstat','-z',str(patch)]).rstrip(b'\0').split(b'\0')
+              paths=[r.decode().split('\t',2)[2] for r in rows]
+              assert len(paths)==len(set(paths))
+              return set(paths)
+          def apply(patch,*flags):
+              for command in (('--check',),()):
+                  subprocess.run(['git','apply','--whitespace=error',*flags,*command,str(patch)],check=True)
+          stock=set(files())
+          assert len(stock)==827 and digest('Cargo.lock')==e['PIN_LOCK']
+          app='crates/alife_game_app/'
+          gpu='crates/alife_gpu_backend/'
+          retain=app+'src/foundation_training_cycle/saved_life_retention'
+          observer=app+'src/gpu_live_runtime/retained_neutral_route'
+          prior=docs/'PRAISE-INGRESS.patch'
+          prior_pins=docs/'PRAISE-INGRESS-PINS.json'
+          assert digest(prior)==e['PIN_PRAISE_PATCH'] and digest(prior_pins)==e['PIN_PRAISE_PINS']
+          p=json.loads(prior_pins.read_bytes())
+          assert p['source_anchor_commit']==e['PIN_RESTORE']
+          assert p['source_manifest_git_blob']==e['PIN_MANIFEST_BLOB']
+          assert p['forward_sha256']==e['PIN_PRAISE_PATCH']
+          pset={app+'Cargo.toml',retain+'.rs',retain+'/experiments.rs',retain+'/praise_probe.rs'}
+          assert set(p['changed_leaves'])==touched(prior)==pset
+          def check_praise(phase):
+              for path,v in p['changed_leaves'].items():
+                  actual=leaf(path)
+                  assert (actual['sha256'] if actual else None)==v[phase],(phase,path)
+              assert digest('Cargo.lock')==e['PIN_LOCK']
+          check_praise('before')
+          apply(prior)
+          check_praise('after')
+          assert files()==stock|{retain+'/praise_probe.rs'}
+
+          forward=docs/'NEUTRAL-ROUTE.patch'
+          inverse=docs/'NEUTRAL-ROUTE.inverse.patch'
+          pins=docs/'NEUTRAL-ROUTE-PINS.json'
+          assert digest(forward)==e['PIN_FORWARD'] and digest(inverse)==e['PIN_INVERSE'] and digest(pins)==e['PIN_PINS']
+          q=json.loads(pins.read_bytes())
+          assert q['base_praise_evaluator_source_commit']==e['PIN_PARENT']
+          assert q['base_stock_source_manifest']==e['PIN_MANIFEST_BLOB']
+          assert q['base_praise_patch_sha256']==e['PIN_PRAISE_PATCH']
+          assert q['base_praise_patch_git_blob']==e['PIN_PRAISE_PATCH_BLOB']
+          assert q['base_praise_pins_git_blob']==e['PIN_PRAISE_PINS_BLOB']
+          assert q['forward_sha256']==e['PIN_FORWARD'] and q['inverse_sha256']==e['PIN_INVERSE']
+          assert q['mechanical_forward_and_inverse_same_bytes_verified'] and not q['compiled'] and not q['device_or_game_run']
+          additions={observer+'.rs',observer+'/scope.rs',app+'tests/retained_neutral_route_scope.rs'}
+          existing={app+'Cargo.toml',retain+'.rs',retain+'/experiments.rs',app+'src/gpu_live_runtime.rs',
+                    gpu+'Cargo.toml',gpu+'src/closed_loop_runtime.rs',gpu+'src/closed_loop_runtime/training_capture.rs'}
+          allowed=existing|additions
+          assert len(q['changed_leaves'])==10
+          fields={v['path']:v for v in q['changed_leaves']}
+          assert set(fields)==allowed==touched(forward)==touched(inverse)
+          assert {path for path,v in fields.items() if v['preimage'] is None}==additions
+          assert all(v['successor'] is not None for v in fields.values())
+          def check(phase):
+              for path,v in fields.items(): assert leaf(path)==v[phase],(phase,path)
+              assert digest('Cargo.lock')==e['PIN_LOCK']
+              expected=stock|{retain+'/praise_probe.rs'}
+              if phase=='successor': expected|=additions
+              assert files()==expected
+          manifests={path:tomllib.loads(Path(path).read_text()) for path in (app+'Cargo.toml',gpu+'Cargo.toml')}
+          check('preimage'); apply(forward); check('successor')
+          apply(inverse); check('preimage')
+          apply(forward); check('successor')
+          name='research-retained-neutral-paid-route-v1'
+          expected={
+              app+'Cargo.toml':['foundation-training','gpu-tests','alife_gpu_backend/'+name],
+              gpu+'Cargo.toml':['gpu-tests','training-rollout'],
+          }
+          for path,before in manifests.items():
+              after=tomllib.loads(Path(path).read_text())
+              assert after['features'].pop(name)==expected[path] and before==after
+              assert name not in after['features'].get('default',[])
+          print('827-leaf exact source; prior four-leaf overlay; this ten-leaf forward/inverse/forward exact; stock feature default unchanged')
+          PY
+
+      - name: Compile exact OFF and ON shared CLI, then focused CPU-only tests
+        run: |
+          set -euo pipefail
+          umask 077
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --target "$TARGET"
+          version="$(rustc +"$RUST_TOOLCHAIN" -vV)"
+          grep -Fqx "release: $RUST_TOOLCHAIN" <<< "$version"
+          grep -Fqx "commit-hash: $PIN_RUSTC_COMMIT" <<< "$version"
+          grep -Fqx "host: $TARGET" <<< "$version"
+          cd "$EXACT_SRC"
+          mkdir -p -- "$CARGO_TARGET_DIR"
+          have_space() { test "$(df -PB1 "$CARGO_TARGET_DIR" | awk 'NR==2 {print $4}')" -ge "$1"; }
+          have_space 10737418240
+          timeout 8m cargo +"$RUST_TOOLCHAIN" fetch --locked --target "$TARGET"
+          args=(--frozen --offline --target "$TARGET" --no-default-features -p alife_game_app)
+          off_features=foundation-training,gpu-tests,research-retained-praise-ingress-v1
+          on_features="$off_features,research-retained-neutral-paid-route-v1"
+          target_elf="$CARGO_TARGET_DIR/$TARGET/debug/evaluate_saved_life_retention"
+          keep_off="$RUNNER_TEMP/neutral-route-transient-off"
+          assert_elf() { test -f "$1" && test -x "$1" && test ! -L "$1"; }
+          timeout 22m cargo +"$RUST_TOOLCHAIN" build "${args[@]}" --features "$off_features" --bin evaluate_saved_life_retention
+          assert_elf "$target_elf"
+          install -m 0700 -- "$target_elf" "$keep_off"
+          off_sha="$(sha256sum "$keep_off" | awk '{print $1}')"
+          have_space 8589934592
+          timeout 20m cargo +"$RUST_TOOLCHAIN" build "${args[@]}" --features "$on_features" --bin evaluate_saved_life_retention
+          assert_elf "$target_elf"
+          on_sha="$(sha256sum "$target_elf" | awk '{print $1}')"
+          test "$off_sha" != "$on_sha"
+          python3 -IB "$GITHUB_WORKSPACE/scripts/qualia-check-neutral-route-cpu.py" \
+            --off "$keep_off" --off-sha256 "$off_sha" --on "$target_elf" --on-sha256 "$on_sha" \
+            | tee "$RUNNER_TEMP/neutral-route-cli.log"
+          grep -Fx '21 synthetic shared CLI refusals; no Current decode/output, GPU, or World execution' "$RUNNER_TEMP/neutral-route-cli.log"
+          have_space 8589934592
+          timeout 15m cargo +"$RUST_TOOLCHAIN" test "${args[@]}" --features "$on_features" \
+            --test retained_neutral_route_scope -- --test-threads=1 2>&1 | tee "$RUNNER_TEMP/neutral-route-pure.log"
+          python3 -IB - "$RUNNER_TEMP/neutral-route-pure.log" "$EVIDENCE" "$off_sha" "$on_sha" <<'PY'
+          from pathlib import Path
+          import json,os,re,sys
+          test_log,out,off,on=sys.argv[1:]
+          text=Path(test_log).read_text()
+          want={'relative_world_boundaries_are_finite_and_not_polls_or_old_tick',
+                'quiet_scope_cannot_encode_dose_and_requires_exact_actual_opening',
+                'true_zero_named_word_does_not_alias_missing_or_invalid_raw_evidence'}
+          actual=re.findall(r'^test ([a-z0-9_]+) \.\.\. ok$',text,re.M)
+          assert len(actual)==3 and set(actual)==want
+          assert len(re.findall(r'^test result: ok\. 3 passed; 0 failed; 0 ignored;',text,re.M))==1
+          assert re.fullmatch(r'[0-9a-f]{64}',off) and re.fullmatch(r'[0-9a-f]{64}',on) and off!=on
+          e=os.environ
+          proof={'schema':'qualia.retained-neutral-route.hosted-cpu.v1',
+                 'commit':e['GITHUB_SHA'],'parent':e['PIN_PARENT'],'stock_restore':e['PIN_RESTORE'],
+                 'patch_sha256':e['PIN_FORWARD'],'inverse_sha256':e['PIN_INVERSE'],
+                 'pinned_rust_commit':e['PIN_RUSTC_COMMIT'],'source_round_trip':True,
+                 'observer_feature_off_build':True,'observer_feature_on_build':True,
+                 'synthetic_shared_cli_refusals':21,'standalone_cpu_passed':sorted(actual),
+                 'transient_off_elf_sha256':off,'transient_on_elf_sha256':on,
+                 'elf_archived':False,'real_current_decoded':False,'device_or_world_executed':False,
+                 'traces_payment_score_or_learning_observed':False}
+          evidence=Path(out)
+          (evidence/'proof.json').write_text(json.dumps(proof,sort_keys=True,indent=2)+'\n')
+          (evidence/'TEST-SUMMARY.txt').write_text('Actual OFF/ON shared CLI: 21 synthetic refusals\n'+'\n'.join(sorted(actual))+'\n')
+          PY
+          cd "$EVIDENCE"
+          sha256sum proof.json TEST-SUMMARY.txt > SHA256SUMS
+          sha256sum -c SHA256SUMS
+          diff -u <(printf '%s\n' SHA256SUMS TEST-SUMMARY.txt proof.json) \
+            <(find . -mindepth 1 -maxdepth 1 -printf '%f\n' | LC_ALL=C sort)
+          test -z "$(find . -mindepth 1 -maxdepth 1 ! -type f -print)"
+
+      - name: Retain only three text proof leaves
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: qualia-retained-neutral-route-cpu-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/qualia-neutral-route-evidence/proof.json
+            ${{ runner.temp }}/qualia-neutral-route-evidence/TEST-SUMMARY.txt
+            ${{ runner.temp }}/qualia-neutral-route-evidence/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 5
+          compression-level: 3

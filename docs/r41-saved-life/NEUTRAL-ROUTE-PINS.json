@@ -1,0 +1,117 @@
+{
+  "schema": "qualia.neutral-selected-route.source-pins.v1",
+  "base_praise_evaluator_source_commit": "23a27f3b45aa5aa9e6d44bf86f7b83aa4de27a66",
+  "base_stock_source_anchor": "c5d250178cb70a10f99f78ebcc974e0ad5533b41",
+  "base_stock_source_manifest": "7010cd90fb587a18cd75c6109d95e5311e5a9a86",
+  "base_praise_patch_sha256": "aa1b1f7240eecd588f88f2b074740492ad456926aabe2eca48603cbd1d02dba5",
+  "base_praise_patch_git_blob": "95f99c968f9a549c197ecee8f5a40ab8b14206b7",
+  "base_praise_pins_git_blob": "155e34e1b23853428c8e19efb2d96b4a83d7ff",
+  "forward_sha256": "446b7d5f120c1d0df17ca33c5b09a0372c3db037234293015ea9c9a1aca0b10f",
+  "inverse_sha256": "a94b2a991d7f24ca3b7cfe942f310cc00ba4f36fe2315f209f6426d6dd1e5f1d",
+  "changed_leaves": [
+    {
+      "path": "crates/alife_game_app/Cargo.toml",
+      "preimage": {
+        "bytes": 3980,
+        "sha256": "f62770a183757eebfc1b0f83da102e9deddccc3298548376f2bea79f5ffac891"
+      },
+      "successor": {
+        "bytes": 4120,
+        "sha256": "133dc04d723d936cc303e6744a0e7f471c0a68389f53dcc81910d99b32cd2d28"
+      }
+    },
+    {
+      "path": "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs",
+      "preimage": {
+        "bytes": 24473,
+        "sha256": "b535d51ed3347a8e3f05ee3c981a9a42b6ecf31ea26fe7162667874b99fbe8e3"
+      },
+      "successor": {
+        "bytes": 29920,
+        "sha256": "b1b933cdec94d227d9f24cb0cbd53a40db92e36e3c6122326611cd018c0a33d7"
+      }
+    },
+    {
+      "path": "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs",
+      "preimage": {
+        "bytes": 73509,
+        "sha256": "72ce5000739a2f3382aea40c26e490dc912cf4d706bf7e92f7ec20a7f3b23eb9"
+      },
+      "successor": {
+        "bytes": 78500,
+        "sha256": "86a4146d553b6ae381659f9605dc6b75e3326c29724b1465f6b89b318cdae989"
+      }
+    },
+    {
+      "path": "crates/alife_game_app/src/gpu_live_runtime/retained_neutral_route/scope.rs",
+      "preimage": null,
+      "successor": {
+        "bytes": 3152,
+        "sha256": "c7605cee593bb4e6f6ec26092d7254a839144a5277e090a7e2ad87aaa213749f"
+      }
+    },
+    {
+      "path": "crates/alife_game_app/src/gpu_live_runtime/retained_neutral_route.rs",
+      "preimage": null,
+      "successor": {
+        "bytes": 19639,
+        "sha256": "b73d24cce3017fffbcd8e32e44f3cef1869d956671ca52672cd14c5703158def"
+      }
+    },
+    {
+      "path": "crates/alife_game_app/src/gpu_live_runtime.rs",
+      "preimage": {
+        "bytes": 594166,
+        "sha256": "b4b3f2da8995a55e12179ff3efef2de01698f6d10252582045f4e2ef7469f503"
+      },
+      "successor": {
+        "bytes": 594265,
+        "sha256": "93be3a4fc8bab6a4c6f125e48bbe0274b35d54e9dd47fb6bba40b786e7ed4aeb"
+      }
+    },
+    {
+      "path": "crates/alife_game_app/tests/retained_neutral_route_scope.rs",
+      "preimage": null,
+      "successor": {
+        "bytes": 2609,
+        "sha256": "e49d800558b487aa0d1bacf956804b895adb58550195a93acaf24aeeaf9b9f16"
+      }
+    },
+    {
+      "path": "crates/alife_gpu_backend/Cargo.toml",
+      "preimage": {
+        "bytes": 493,
+        "sha256": "70abd451cbc5d57cabef8b55a4426c809f49e6b2565f2db0b703080ca7967c73"
+      },
+      "successor": {
+        "bytes": 569,
+        "sha256": "e48e5ad502911d180f6dfbe6caf0ae65f16afaea3592124f130c7f3e472e91c7"
+      }
+    },
+    {
+      "path": "crates/alife_gpu_backend/src/closed_loop_runtime/training_capture.rs",
+      "preimage": {
+        "bytes": 15286,
+        "sha256": "c7db0bfaacc4a7bf4ad71ee1ce1c9a95d87ff9865293bb373c2c4011154df9b2"
+      },
+      "successor": {
+        "bytes": 30390,
+        "sha256": "ba779d9d838c8611b378a4785512a37a9157c6616cc2951c0120f25d24c2fbbc"
+      }
+    },
+    {
+      "path": "crates/alife_gpu_backend/src/closed_loop_runtime.rs",
+      "preimage": {
+        "bytes": 288121,
+        "sha256": "6ab9151fda73dd30e3064143277f5d54f683ae87cebe0dc0a9f305d57f6d1605"
+      },
+      "successor": {
+        "bytes": 288238,
+        "sha256": "1c4496467d82f324a30d088a8fc12758b61d644d4f989562531087cd05c485d7"
+      }
+    }
+  ],
+  "mechanical_forward_and_inverse_same_bytes_verified": true,
+  "compiled": false,
+  "device_or_game_run": false
+}
