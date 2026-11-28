@@ -1,0 +1,274 @@
+name: Qualia detached recurrent WGSL validation only
+
+"on":
+  push:
+    branches: ["bob/qualia-recurrent-witness-naga-only-20261128"]
+    paths:
+      - ".github/workflows/qualia-recurrent-witness-naga-only-check.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qualia-recurrent-witness-naga-only-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate-only:
+    if: github.repository == 'BobertNeek/A-Life' && github.ref == 'refs/heads/bob/qualia-recurrent-witness-naga-only-20261128' && github.run_attempt == '1'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: bash
+    env:
+      PIN_PARENT: c2ad4ad6004f2f60831cb3e364eaeb23b67fff18
+      PIN_PARENT_TREE: 0771b06dca96dc7d27fe1fc05e3c1c09d6753129
+      PIN_PACKAGE: 784a3c3033b71b1c2a4a28d9b78fb3f773c0b3ac9c11e708989e2d848226f491
+      PIN_PATCH: 5b1ea52d8979149a8d63ab6dd6673f421f55d67a36f14277898e683b9470ff47
+      PIN_LOCK: 155699e9274f8890bc8c335669a62de48203ba315a33388a8f0caca71f0f7f37
+      RUST_TOOLCHAIN: '1.100.0'
+      PIN_RUSTC: 0ef1bc386059596dada8fb65b50425aab2ea637a
+      TARGET: x86_64-unknown-linux-gnu
+      CARGO_BUILD_JOBS: '2'
+      CARGO_INCREMENTAL: '0'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
+      CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
+    steps:
+      - name: Check out only the three new source carrier leaves
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /.github/workflows/qualia-recurrent-witness-naga-only-check.yml
+            /docs/r41-saved-life/recurrent-witness-naga-only-source.patch
+            /docs/r41-saved-life/recurrent-witness-naga-only-source-pins.json
+
+      - name: Authenticate ancestry and project the existing public recovery to five exact source leaves
+        run: |
+          set -euo pipefail
+          export LC_ALL=C
+          w='.github/workflows/qualia-recurrent-witness-naga-only-check.yml'
+          p='docs/r41-saved-life/recurrent-witness-naga-only-source.patch'
+          m='docs/r41-saved-life/recurrent-witness-naga-only-source-pins.json'
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-list --parents -n 1 HEAD)" = "$GITHUB_SHA $PIN_PARENT"
+          test "$(git rev-parse "$PIN_PARENT^{tree}")" = "$PIN_PARENT_TREE"
+          diff -u <(printf 'A\t%s\n' "$w" "$p" "$m" | sort) \
+            <(git diff --name-status --no-renames "$PIN_PARENT" HEAD | sort)
+          for f in "$w" "$p" "$m"; do
+            test -f "$f" && test ! -L "$f"
+            test "$(git ls-tree HEAD -- "$f" | cut -d' ' -f1)" = 100644
+          done
+          printf '%s  %s\n' "$PIN_PACKAGE" "$m" "$PIN_PATCH" "$p" | sha256sum -c -
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+          cd "$GITHUB_WORKSPACE"
+          python3 -IB - "$m" "$p" "$RUNNER_TEMP/qualia-recurrent-naga-only" <<'PY'
+          import hashlib
+          import json
+          import os
+          import re
+          import subprocess
+          import sys
+          import tomllib
+          from pathlib import Path
+
+          root = Path.cwd()
+          pins, new_patch, only = map(Path, sys.argv[1:])
+          pins = pins.resolve(strict=True)
+          new_patch = new_patch.resolve(strict=True)
+          digest = lambda b: hashlib.sha256(b).hexdigest()
+          p = json.loads(pins.read_bytes())
+          assert p["schema"] == "qualia.public.recurrent_witness_naga_source_pins.v1"
+          assert p["runtime_authority"] is False and p["native_or_live_result_claimed"] is False
+          assert p["new_patch_sha256"] == digest(new_patch.read_bytes()) == os.environ["PIN_PATCH"]
+          r = p["repositories"]
+          assert r["name"] == os.environ["GITHUB_REPOSITORY"]
+          assert r["parent"] == os.environ["PIN_PARENT"] and r["parent_tree"] == os.environ["PIN_PARENT_TREE"]
+          assert p["toolchain"] == dict(rust=os.environ["RUST_TOOLCHAIN"], rustc_commit=os.environ["PIN_RUSTC"],
+                                       target=os.environ["TARGET"])
+          assert only.is_absolute() and not only.exists()
+          only.mkdir(mode=0o700)
+          mini = only / "standalone"
+          mini.mkdir()
+          envelope = only / "public_recovery"
+          envelope.mkdir()
+          def git(*args, **kw):
+              return subprocess.check_output(["git", *args], cwd=root, **kw)
+          def object_bytes(ref, path):
+              assert git("ls-tree", ref, "--", path).startswith(b"100644 blob ")
+              b = git("show", f"{ref}:{path}")
+              assert len(b) <= 200000
+              return b
+          for label in ("source", "anchor"):
+              assert git("rev-parse", f"{r[label]}^{{tree}}").decode().strip() == r[label + "_tree"]
+          assert git("rev-list", "--parents", "-n", "1", r["parent"]).decode().strip() == r["parent"] + " " + r["parent_of_parent"]
+          assert git("rev-list", "--parents", "-n", "1", r["source"]).decode().strip() == r["source"] + " " + r["anchor"]
+          git("merge-base", "--is-ancestor", r["source"], r["parent"])
+          docs = "docs/r41-saved-life/"
+          stock_manifest = object_bytes(r["source"], docs + "SOURCE.json")
+          assert digest(stock_manifest) == p["restore"]["manifest_sha256"]
+          assert digest(object_bytes(r["source"], docs + "restore_source.py")) == p["restore"]["script_sha256"]
+          historical_restore_patches = set(git("ls-tree", "-r", "--name-only", r["source"], "--", docs + "patches").decode().splitlines())
+          assert len(historical_restore_patches) == p["restore"]["patch_count"] == 69
+          exact_files = json.loads(stock_manifest)
+          for row in exact_files:
+              assert isinstance(row, list) and len(row) == 3
+          exact = {row[0]: tuple(row[1:]) for row in exact_files}
+          assert len(exact) == len(exact_files) == p["restore"]["manifest_leaf_count"] == 827
+          shader_root = "crates/alife_gpu_backend/shaders/"
+          shaders = ("closed_loop_abi.wgsl", "closed_loop_activity_validation.wgsl", "closed_loop_recurrent.wgsl")
+          trainer = "crates/alife_gpu_backend/src/training_rollout.rs"
+          picked = dict(zip((shader_root + name for name in shaders), shaders))
+          picked.update({"Cargo.lock": "workspace_lock", trainer: "training_source"})
+          stock = {i["path"]: i for i in p["public_inputs"]}
+          assert len(picked) == len(stock) == len(p["public_inputs"]) == 5 and picked.keys() == stock.keys()
+          assert not ({docs + "patches/" + f + ".patch" for f in picked} & historical_restore_patches)
+          inputs = mini / "inputs"
+          inputs.mkdir()
+          trainer_on_disk = envelope / trainer
+          trainer_on_disk.parent.mkdir(parents=True)
+          for f, name in picked.items():
+              b = object_bytes(r["anchor"], f)
+              assert stock[f]["destination"] == name
+              assert (len(b), digest(b)) == exact[f] == (stock[f]["bytes"], stock[f]["sha256"])
+              if f == trainer:
+                  trainer_on_disk.write_bytes(b)
+              elif f == "Cargo.lock":
+                  workspace_lock = b
+                  assert digest(b) == os.environ["PIN_LOCK"] and b == object_bytes(r["parent"], f)
+              else:
+                  assert b == object_bytes(r["parent"], f)
+                  (inputs / name).write_bytes(b)
+
+          def parse_numstat(patch):
+              raw = subprocess.check_output(["git", "apply", "--numstat", "-z", "-"], input=patch, cwd=envelope)
+              paths = []
+              assert raw.endswith(b"\0")
+              for row in raw[:-1].split(b"\0"):
+                  a, b, path = row.decode().split("\t", 2)
+                  assert a.isdecimal() and b.isdecimal() and re.fullmatch(r"[A-Za-z0-9_./-]+", path)
+                  paths.append(path)
+              assert len(paths) == len(set(paths))
+              return set(paths)
+
+          assert len(p["historical_patches"]) == 12
+          trainer_digests = []
+          for layer in p["historical_patches"]:
+              git("merge-base", "--is-ancestor", layer["commit"], r["parent"])
+              b = object_bytes(layer["commit"], layer["path"])
+              assert digest(b) == layer["sha256"]
+              touched = picked.keys() & parse_numstat(b)
+              assert touched == ({trainer} if layer["touches_training_guard"] else set())
+              if touched:
+                  for flag in (["--check"], []):
+                      subprocess.run(["git", "apply", f"--include={trainer}", *flag, "-"], cwd=envelope, input=b, check=True)
+                  trainer_digests.append(digest(trainer_on_disk.read_bytes()))
+          assert trainer_digests == p["training_guard_reconstruction"]["postimages"] and len(trainer_digests) == 3
+          composer = trainer_on_disk.read_text(encoding="utf-8")
+          matches = re.findall(r'let mut source = source\.replace\(("(?:\\.|[^"\\])*"),\s*("(?:\\.|[^"\\])*")\);', composer)
+          assert len(matches) == 1
+          hook, guard = (json.loads(s).encode() for s in matches[0])
+          gp = p["training_guard_reconstruction"]
+          assert (digest(hook), digest(guard)) == (gp["hook_sha256"], gp["guard_sha256"])
+          assert guard.startswith(hook) and b"count - offset < 11u" in guard
+          stock_inputs = {inputs / "stock_request_hook.txt": hook, inputs / "native_training_guard.txt": guard}
+          for file, b in stock_inputs.items():
+              file.write_bytes(b)
+          trainer_on_disk.unlink()
+
+          patch = new_patch.read_bytes()
+          stand = {"Cargo.lock", "Cargo.toml", "src/lib.rs", "inputs/detached_recurrent.wgsl"}
+          assert parse_numstat(patch) == stand == p["standalone_leaves"].keys()
+          assert patch.count(b"\nnew file mode 100644\n") == len(stand)
+          for flag in (["--check"], [], ["--reverse", "--check"]):
+              subprocess.run(["git", "apply", "--whitespace=error-all", *flag, "-"], cwd=mini, input=patch, check=True)
+          for path, spec in p["standalone_leaves"].items():
+              file = mini / path
+              assert file.is_file() and not file.is_symlink()
+              b = file.read_bytes()
+              assert (len(b), digest(b)) == (spec["bytes"], spec["sha256"])
+          assert {str(q.relative_to(mini)) for q in mini.rglob("*") if q.is_file()} == stand | {
+             *(f"inputs/{name}" for name in shaders), "inputs/stock_request_hook.txt", "inputs/native_training_guard.txt"}
+          assert not any(q.is_symlink() for q in mini.rglob("*"))
+          assert not list(q for q in envelope.rglob("*") if q.is_file())
+
+          def registry_keys(pkgs):
+              result = {}
+              for pkg in pkgs:
+                  if "source" in pkg:
+                      assert pkg["source"] == "registry+https://github.com/rust-lang/crates.io-index"
+                      result[(pkg["name"], pkg["version"])] = pkg
+              return result
+          inherited = tomllib.loads(workspace_lock.decode())["package"]
+          reduced = tomllib.loads((mini / "Cargo.lock").read_text())["package"]
+          upstream = registry_keys(inherited)
+          registry = registry_keys(reduced)
+          assert len(registry) == p["registry"]["pinned_registry_packages"] == 31
+          assert len(reduced) == len(registry) + 1
+          assert [x["name"] for x in reduced if "source" not in x] == [p["registry"]["root"]]
+          assert all(k in upstream and v["checksum"] == upstream[k]["checksum"] for k, v in registry.items())
+          def key_for(ref, known):
+              parts = ref.split()
+              assert 1 <= len(parts) <= 2
+              hits = [k for k in known if k[0] == parts[0] and (len(parts) == 1 or k[1] == parts[1])]
+              assert len(hits) == 1
+              return hits[0]
+          for k, v in registry.items():
+              deps = {key_for(x, registry.keys()) for x in v.get("dependencies", [])}
+              allowed = {key_for(x, upstream.keys()) for x in upstream[k].get("dependencies", [])}
+              assert deps <= allowed
+          manifest = tomllib.loads((mini / "Cargo.toml").read_text())
+          assert manifest["dependencies"] == {"naga": {"version": "=29.0.3", "default-features": False, "features": ["wgsl-in"]}}
+          assert list(manifest.keys()) == ["package", "dependencies", "workspace"]
+          assert manifest["workspace"] == {"resolver": "3"}
+          print(f"public_parent_tree={r['parent_tree']}; exact_projected_source_leaves=5; stock_and_detached_pipeline_sources=present")
+          print("source_authentication_pass=true; only_exact_registry_subgraph=31; no_world_or_checkpoint_materialized=true")
+          PY
+
+      - name: Resolve only the locked Naga parser dependency and run two offline source tests
+        run: |
+          set -euo pipefail
+          test ! -e /dev/kfd && test ! -e /dev/nvidia0
+          if compgen -G '/dev/dri/renderD*' >/dev/null; then exit 1; fi
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --target "$TARGET"
+          version="$(rustc +"$RUST_TOOLCHAIN" -vV)"
+          grep -Fqx "release: $RUST_TOOLCHAIN" <<< "$version"
+          grep -Fqx "commit-hash: $PIN_RUSTC" <<< "$version"
+          grep -Fqx "host: $TARGET" <<< "$version"
+          printf '%s\n' "$version"
+          only="$RUNNER_TEMP/qualia-recurrent-naga-only"
+          export CARGO_HOME="$only/registry"
+          export CARGO_TARGET_DIR="$only/target"
+          mkdir "$CARGO_HOME" "$CARGO_TARGET_DIR"
+          cd "$only/standalone"
+          test "$(df -PB1 . | awk 'NR==2{print $4}')" -ge 2147483648
+          timeout 4m cargo +"$RUST_TOOLCHAIN" fetch --locked --target "$TARGET"
+          export CARGO_NET_OFFLINE=true
+          timeout 2m cargo +"$RUST_TOOLCHAIN" metadata --frozen --offline --format-version 1 \
+            --filter-platform "$TARGET" > "$only/cargo-metadata.json"
+          python3 -IB - "$only/cargo-metadata.json" <<'PY'
+          import json, sys, tomllib
+          from pathlib import Path
+          data = json.loads(Path(sys.argv[1]).read_bytes())
+          lock = tomllib.loads(Path("Cargo.lock").read_text())["package"]
+          expected = {(x["name"], x["version"], x.get("source")) for x in lock}
+          packages = {(x["name"], x["version"], x.get("source")) for x in data["packages"]}
+          assert packages <= expected
+          assert [(x["name"], x["version"]) for x in data["packages"] if x.get("source") is None] == [
+              ("qualia-note24-recurrent-naga-only", "0.1.0")]
+          naga = [x["id"] for x in data["packages"] if x["name"] == "naga" and x["version"] == "29.0.3"]
+          assert len(naga) == 1
+          nodes = [x for x in data["resolve"]["nodes"] if x["id"] == naga[0]]
+          assert len(nodes) == 1 and nodes[0]["features"] == ["wgsl-in"]
+          print("resolved_only_naga_wgsl_in=true; unrelated_device_or_backend_packages=false")
+          PY
+          timeout 10m cargo +"$RUST_TOOLCHAIN" test --frozen --offline --lib --target "$TARGET" -- --test-threads=1 2>&1 \
+            | tee "$only/naga-device-free.txt"
+          grep -Eq '^test result: ok\. 2 passed; 0 failed; 0 ignored;' "$only/naga-device-free.txt"
+          printf '%s  %s\n' 'a237cab77cccd45b09ce577a17a4f79c98dedd840320c86a0ff1c70de8eb9661' 'Cargo.lock' | sha256sum -c -
+          printf '%s\n' 'qualification=stock_and_detached_naga_abi_only; tests=2; runtime=false; published_artifact=false'

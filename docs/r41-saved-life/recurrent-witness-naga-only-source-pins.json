@@ -1,0 +1,167 @@
+{
+  "schema": "qualia.public.recurrent_witness_naga_source_pins.v1",
+  "repositories": {
+    "name": "BobertNeek/A-Life",
+    "parent": "c2ad4ad6004f2f60831cb3e364eaeb23b67fff18",
+    "parent_tree": "0771b06dca96dc7d27fe1fc05e3c1c09d6753129",
+    "parent_of_parent": "a7460787147680a78c88a0531659e814a38085bf",
+    "source": "f466b83791cccb97568e6f718b92b052999cfb2b",
+    "source_tree": "23462813a8d22e80428fa0b9f199b0cfc5654f0e",
+    "anchor": "c5d250178cb70a10f99f78ebcc974e0ad5533b41",
+    "anchor_tree": "e9844c8237ac5a297f9fe6c21bcf55e8d196323f"
+  },
+  "restore": {
+    "manifest_sha256": "16a63a8f3fb12262f7da2830e3721fc727e20073a8795e91ccfb0765913288ad",
+    "script_sha256": "bd554f6fa39054ddc08d17487e18ee4edc314c249eabfad2261bf8c1a53c3cef",
+    "manifest_leaf_count": 827,
+    "patch_count": 69,
+    "method": "exact_projected_f466_public_git_blobs"
+  },
+  "toolchain": {
+    "rust": "1.100.0",
+    "rustc_commit": "0ef1bc386059596dada8fb65b50425aab2ea637a",
+    "target": "x86_64-unknown-linux-gnu"
+  },
+  "public_inputs": [
+    {
+      "path": "Cargo.lock",
+      "bytes": 161668,
+      "sha256": "155699e9274f8890bc8c335669a62de48203ba315a33388a8f0caca71f0f7f37",
+      "destination": "workspace_lock"
+    },
+    {
+      "path": "crates/alife_gpu_backend/shaders/closed_loop_abi.wgsl",
+      "bytes": 36407,
+      "sha256": "9db6ac665b90a03ad29b1014542fdd769e50d8ec6063dfe7f1b4dc722b5eea5b",
+      "destination": "closed_loop_abi.wgsl"
+    },
+    {
+      "path": "crates/alife_gpu_backend/shaders/closed_loop_activity_validation.wgsl",
+      "bytes": 5235,
+      "sha256": "3a444e5dd346438e09b0b96f90be76c252d42543c1920560cb9c99d26b73d1eb",
+      "destination": "closed_loop_activity_validation.wgsl"
+    },
+    {
+      "path": "crates/alife_gpu_backend/shaders/closed_loop_recurrent.wgsl",
+      "bytes": 10254,
+      "sha256": "f04596f14543b57aabf50fe062da89713fc18bd95ef2b7d78d07300b368825fa",
+      "destination": "closed_loop_recurrent.wgsl"
+    },
+    {
+      "path": "crates/alife_gpu_backend/src/training_rollout.rs",
+      "bytes": 20620,
+      "sha256": "9c2596ea662fa096ede135478d1db53ff9b6cafdee8f0a3e04dd98c8ba2d3ef2",
+      "destination": "training_source"
+    }
+  ],
+  "historical_patches": [
+    {
+      "commit": "0cd14f12a8012a9b00119a7b33939ca5e3dbeb53",
+      "path": "docs/r41-saved-life/research-catalog-source-only.patch",
+      "sha256": "3dcf657b2b1149a7da52e7867c3bdbc4c4dfe8d4785b53c95f429c78aa1cd490",
+      "touches_training_guard": false
+    },
+    {
+      "commit": "7a5061285be79275d914f3f8852eaace75c9af1b",
+      "path": "docs/r41-saved-life/sleep-boundary-repair-source.patch",
+      "sha256": "c2815992c4e3e70a7b7bc42b307dc1d96e8c34483ea36cf2c98e06b9920282e6",
+      "touches_training_guard": false
+    },
+    {
+      "commit": "7a5061285be79275d914f3f8852eaace75c9af1b",
+      "path": "docs/r41-saved-life/sleep-legacy-publication-source.patch",
+      "sha256": "692ec25acc620f502581e7299d952471c039812646e41f85cdd1d6f87ed5c66d",
+      "touches_training_guard": false
+    },
+    {
+      "commit": "b00de30b27b8d501c5e01f8df527ffa3471a2d10",
+      "path": "docs/r41-saved-life/retained-language-pilot-source.patch",
+      "sha256": "f0a836086d20e47e434eb947ebc9083f52dc50c344403d24e8ede08ae23ad657",
+      "touches_training_guard": false
+    },
+    {
+      "commit": "8aef03ea2608b82ce24261400961b3b16b04789c",
+      "path": "docs/r41-saved-life/contact211-f0-source.patch",
+      "sha256": "dab4a38f54fba616f9d789cd9e1b4853b09eee5229da91362b29be6aab686cde",
+      "touches_training_guard": true
+    },
+    {
+      "commit": "aaa0c3b0cfd7b588fb2d202178c3a7016aa68ab3",
+      "path": "docs/r41-saved-life/contact211-strict-source.patch",
+      "sha256": "18ac5322a3e41e2c6ff1e67cf4c9b7eb0d3d3a4cbfbb9f002add7b60e3b43c77",
+      "touches_training_guard": false
+    },
+    {
+      "commit": "3c9c6e50391834023490b8edecff45ee4e133e0c",
+      "path": "docs/r41-saved-life/contact211-rank32-source.patch",
+      "sha256": "0069bf5a621d6092868540d76ffe3e3a7d06329ac00fdd4a5ad02afcc9edbb38",
+      "touches_training_guard": true
+    },
+    {
+      "commit": "de8b39fb47d768513eed4cd2e8f8647d5f22e88f",
+      "path": "docs/r41-saved-life/contact211-rank32-crossed-source.patch",
+      "sha256": "d6ed64c12f5e9a58b80f2a1737f7c29b7d4029842916e87747df92f5e8c6a9da",
+      "touches_training_guard": false
+    },
+    {
+      "commit": "8d51ee7f893b059d2f0999bd498b7c80bee146e3",
+      "path": "docs/r41-saved-life/wsp-cue-latch-observer-source.patch",
+      "sha256": "de1d62c7e6bfc85da2bd865ca3a9ce8de99a5f4a72fbfd9a7435230c4548628f",
+      "touches_training_guard": false
+    },
+    {
+      "commit": "cd215f531bdada0777b2bb530af2681bddfd6866",
+      "path": "docs/r41-saved-life/wsp-armed-source.patch",
+      "sha256": "9aca5cf46f8884e2b23bf2b5bd6dbb911e2f0c4cef537caf0bf5e72d587de99a",
+      "touches_training_guard": true
+    },
+    {
+      "commit": "a7460787147680a78c88a0531659e814a38085bf",
+      "path": "docs/r41-saved-life/wsp-shared-crossed-source.patch",
+      "sha256": "da7ccf322ea35ed66fb5b6cc055514bc5b9265332fc651e2052b107b9248d47f",
+      "touches_training_guard": false
+    },
+    {
+      "commit": "c2ad4ad6004f2f60831cb3e364eaeb23b67fff18",
+      "path": "docs/r41-saved-life/wsp-schema16-steady-food-source.patch",
+      "sha256": "f2c142ab5fa54018e0ba52431b52141b08aa848ef460db49c32e1205378d8b6d",
+      "touches_training_guard": false
+    }
+  ],
+  "training_guard_reconstruction": {
+    "postimages": [
+      "3fd5cf9cff9483556d0ad5340ce3e3d7e5c02b3a3f5cf752e7ee3bf314f25fa7",
+      "84c8f513b9f3053ec95d73bf00a063170853e2948a4c7e4463473d778a85dc07",
+      "a6febb2ea3c18abd96605f2f248ad2015e0eef9da612ea2bdeb6023708504763"
+    ],
+    "hook_sha256": "d75577498c91ec79b4c5cd1ef50b4c998d46b37afb76d63739305155107d967b",
+    "guard_sha256": "2f19d67fbb947c4825105b0c5402b9f07e96ebbc2f3807ff9b25d3234cc84cc0"
+  },
+  "new_patch_sha256": "5b1ea52d8979149a8d63ab6dd6673f421f55d67a36f14277898e683b9470ff47",
+  "standalone_leaves": {
+    "Cargo.toml": {
+      "bytes": 229,
+      "sha256": "613f47f9221752ca1ec26d2ed5d972fefaf7793c9406d67c123b68be77e21f68"
+    },
+    "Cargo.lock": {
+      "bytes": 7038,
+      "sha256": "a237cab77cccd45b09ce577a17a4f79c98dedd840320c86a0ff1c70de8eb9661"
+    },
+    "src/lib.rs": {
+      "bytes": 3458,
+      "sha256": "1df1b3bf1eb3ec109d530ab2715241487b972cf4e7b5f416952fa68651bea78c"
+    },
+    "inputs/detached_recurrent.wgsl": {
+      "bytes": 17595,
+      "sha256": "aa486e3a6e4b75349de478c907e2befdc300be72cccca2564673a7c8c0de4e4c"
+    }
+  },
+  "registry": {
+    "root": "qualia-note24-recurrent-naga-only",
+    "naga": "29.0.3",
+    "only_feature": "wgsl-in",
+    "pinned_registry_packages": 31
+  },
+  "runtime_authority": false,
+  "native_or_live_result_claimed": false
+}
