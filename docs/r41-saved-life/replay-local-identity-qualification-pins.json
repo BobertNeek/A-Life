@@ -1,0 +1,47 @@
+{
+  "git_base_commit": "c5d250178cb70a10f99f78ebcc974e0ad5533b41",
+  "launches_game_or_device": false,
+  "lock_sha256": "155699e9274f8890bc8c335669a62de48203ba315a33388a8f0caca71f0f7f37",
+  "qualifier_only": true,
+  "qualifier_patch_sha256": "ff01b665d7f86633f43e9c7181b2eddbdea7d57f798ff843f86b0bc6b514caf9",
+  "reserve_patch_sha256": "381c4bc9aba771256439ce8729ed02223385942c80e199acf7eb88b45dc72568",
+  "run": {
+    "cargo_features": [
+      "training-rollout",
+      "gpu-tests"
+    ],
+    "cargo_package": "alife_gpu_backend",
+    "rustc_git_commit": "0ef1bc386059596dada8fb65b50425aab2ea637a",
+    "selected_tests": [
+      "closed_loop_buffers::bucket::sleep_replay_identity_qualification::rejects_malformed_native_identity_words_in_the_relocated_slot",
+      "closed_loop_runtime::sleep_replay_identity_qualification::inserted_recurrence_and_shifted_action_decoder_survive_nonzero_slot_relocation",
+      "closed_loop_runtime::sleep_replay_identity_qualification::native_target_major_is_not_the_canonical_ordinal",
+      "closed_loop_runtime::sleep_replay_identity_qualification::rejects_foreign_arena_out_of_range_reserved_and_stale_digest"
+    ],
+    "target": "x86_64-unknown-linux-gnu",
+    "toolchain": "1.100.0",
+    "unit_filter": "sleep_replay_identity_qualification::"
+  },
+  "schema": "qualia.source_only.sleep_replay_identity_qualification.v1",
+  "source_leaves": {
+    "crates/alife_gpu_backend/src/closed_loop_buffers/bucket.rs": {
+      "qualifier": "51e51413c14cdbf9801e8aae2d13a8fe721e972eb37b05b664e5a6962d8d7a12",
+      "reconstructed": "83499f927fcf1f57bdbec53593b9cbb411ceae843a72be62e573ce77708daf12",
+      "reserve": "ff74277d46b9747a0af046807290d733200a38713b5fefa6149fa030fb54598d"
+    },
+    "crates/alife_gpu_backend/src/closed_loop_runtime.rs": {
+      "qualifier": "717a2d8432fa7b9ef06f647ed73f3a697c514a161d92ee406507f97560b8cc2b",
+      "reconstructed": "6ab9151fda73dd30e3064143277f5d54f683ae87cebe0dc0a9f305d57f6d1605",
+      "reserve": "353b8d876a9a79d85819064c7ac7f88a356fb3d6e1deb73ed06c6d0161ad1010"
+    },
+    "crates/alife_gpu_backend/src/closed_loop_runtime/sleep_replay_identity_qualification.rs": {
+      "qualifier": "f4db21a5b016f0606b6ce784cdcce4f550ff3fbc01308c2fade755c1d410e111",
+      "reconstructed": null,
+      "reserve": null
+    }
+  },
+  "source_manifest_git_blob": "7010cd90fb587a18cd75c6109d95e5311e5a9a86",
+  "source_restore_commit": "f466b83791cccb97568e6f718b92b052999cfb2b",
+  "source_restore_script_git_blob": "28b3868f208796f8d2f96a870f7589f1ed0360e5",
+  "uses_retained_save_or_model_data": false
+}

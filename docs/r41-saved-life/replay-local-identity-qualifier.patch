@@ -1,0 +1,427 @@
+diff --git a/crates/alife_gpu_backend/src/closed_loop_buffers/bucket.rs b/crates/alife_gpu_backend/src/closed_loop_buffers/bucket.rs
+index c1b68a1..d0ee37b 100644
+--- a/crates/alife_gpu_backend/src/closed_loop_buffers/bucket.rs
++++ b/crates/alife_gpu_backend/src/closed_loop_buffers/bucket.rs
+@@ -5220,3 +5220,57 @@ mod fixed_arena_tests {
+         ));
+     }
+ }
++
++#[cfg(all(test, feature = "training-rollout"))]
++impl GpuFixedSlotUpload {
++    pub(crate) fn qualification_physical_sleep_spans(
++        &self,
++    ) -> Result<Vec<GpuReplaySynapseSpanRecord>, GpuClosedLoopError> {
++        read_pod_prefix(
++            &self.mutable_state_words,
++            self.ranges.mutable_state_words.start,
++            &self.ranges.layout.replay_span_words,
++            self.brain_slot.typed_counts().replay_capture_synapses,
++        )
++    }
++}
++
++#[cfg(test)]
++mod sleep_replay_identity_qualification {
++    use super::*;
++    use alife_core::{BrainGenome, DevelopmentState, NormalizedScalar, PhenotypeCompiler, Tick};
++
++    #[test]
++    fn rejects_malformed_native_identity_words_in_the_relocated_slot() {
++        let capacity = BrainCapacityClass::n512();
++        let genome = BrainGenome::scaffold(97, capacity.id());
++        let development =
++            DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(0.35).unwrap());
++        let phenotype = PhenotypeCompiler::compile(
++            &genome,
++            &capacity,
++            &development,
++            alife_core::SensorProfile::GroundedObjectSlotsV1,
++        )
++        .unwrap();
++        let plan = GpuFixedClassArenaPlan::new(capacity, 2, 512 * 1024 * 1024).unwrap();
++        let mut upload = plan.prepare_slot_upload(1, 3, &phenotype).unwrap();
++        let expected = upload.sleep_replay_local_endpoints(0).unwrap();
++        let local = (upload.ranges.layout.synapse_learning_metadata_words.start
++            - upload.ranges.immutable_plan_words.start) as usize;
++        let out_of_range = upload.record().neuron_count;
++        for (offset, invalid) in [
++            (std::mem::offset_of!(GpuSynapseLearningMetadata, global_synapse_id), 1),
++            (std::mem::offset_of!(GpuSynapseLearningMetadata, kind), 2),
++            (std::mem::offset_of!(GpuSynapseLearningMetadata, reserved), 1),
++            (std::mem::offset_of!(GpuSynapseLearningMetadata, source_neuron), out_of_range),
++            (std::mem::offset_of!(GpuSynapseLearningMetadata, target_neuron), out_of_range),
++        ] {
++            let index = local + offset / std::mem::size_of::<u32>();
++            let saved = std::mem::replace(&mut upload.immutable_plan_words[index], invalid);
++            assert_eq!(upload.sleep_replay_local_endpoints(0), Err(GpuClosedLoopError::MalformedUpload));
++            upload.immutable_plan_words[index] = saved;
++            assert_eq!(upload.sleep_replay_local_endpoints(0).unwrap(), expected);
++        }
++    }
++}
+diff --git a/crates/alife_gpu_backend/src/closed_loop_runtime.rs b/crates/alife_gpu_backend/src/closed_loop_runtime.rs
+index 28f952f..e894e2d 100644
+--- a/crates/alife_gpu_backend/src/closed_loop_runtime.rs
++++ b/crates/alife_gpu_backend/src/closed_loop_runtime.rs
+@@ -2719,6 +2719,54 @@ fn compile_v11_slot_upload(
+     Ok(upload)
+ }
+ 
++// CPU-only planning boundary used by the real sleep structural caller. The
++// authenticated resident is selected by the caller before entering this step.
++fn collect_v11_sleep_replay_local_activity(
++    plan: &GpuFixedClassArenaPlan,
++    slot: &GpuBrainSlot,
++    phenotype: &BrainPhenotype,
++    state: &GpuV11CausalState,
++    replay: &alife_core::sleep::BoundedReplayBatch,
++) -> Result<Vec<(u32, u32, u32)>, ScaffoldContractError> {
++    let native = compile_v11_slot_upload(
++        plan, slot, phenotype, state,
++    )
++    .map_err(map_gpu_contract_error)?;
++    if native.brain_slot() != slot {
++        return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
++    }
++    replay.validate_contract(
++        phenotype.replay_capture_plan().event_capacity(),
++        phenotype.replay_capture_plan().sample_capacity(),
++        slot.record().synapse_count,
++    )?;
++    let mut active = Vec::with_capacity(32);
++    for span in &replay.synapse_spans {
++        let invalid = || ScaffoldContractError::ConsolidationGenerationMismatch;
++        let start = usize::try_from(span.sample_start).map_err(|_| invalid())?;
++        let count = usize::try_from(span.sample_count).map_err(|_| invalid())?;
++        let end = start.checked_add(count).ok_or_else(|| invalid())?;
++        let samples = replay.eligibility_samples.get(start..end).ok_or_else(invalid)?;
++        let eligibility = samples
++            .iter()
++            .map(|sample| u32::from(sample.eligibility_q15.unsigned_abs()))
++            .max()
++            .unwrap_or(0);
++        if eligibility == 0 {
++            continue;
++        }
++        let (source, target) = native
++            .sleep_replay_local_endpoints(span.local_synapse_id)
++            .map_err(map_gpu_contract_error)?;
++        active.push((source, target, eligibility));
++        if active.len() == 32 {
++            break;
++        }
++    }
++    drop(native);
++    Ok(active)
++}
++
+ impl GpuLiveTopologyCheckpointV1 {
+     /// Device-free projection through the same fixed-slot compiler used by
+     /// native restore. Physical offsets and slot generations are not identities.
+@@ -3318,49 +3366,15 @@ impl GpuClosedLoopBackend {
+             .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+         let resident = pool.resident(handle)?;
+         let bucket = pool.bucket_for_handle(handle)?;
+-        let native = compile_v11_slot_upload(
+-            &bucket.plan, &resident.brain_slot, &resident.phenotype, &resident.v11,
+-        )
+-        .map_err(map_gpu_contract_error)?;
+-        if native.brain_slot() != &resident.brain_slot {
+-            return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
+-        }
+         let phenotype = &resident.phenotype;
+-        let replay = &evidence.batch;
+-        replay.validate_contract(
+-            phenotype.replay_capture_plan().event_capacity(),
+-            phenotype.replay_capture_plan().sample_capacity(),
+-            resident.brain_slot.record().synapse_count,
++        let active = collect_v11_sleep_replay_local_activity(
++            &bucket.plan, &resident.brain_slot, phenotype, &resident.v11, &evidence.batch,
+         )?;
+         let base_pairs = phenotype
+             .synapses()
+             .iter()
+             .map(|synapse| (synapse.source(), synapse.target()))
+             .collect::<std::collections::BTreeSet<_>>();
+-        let mut active = Vec::with_capacity(32);
+-        for span in &replay.synapse_spans {
+-            let invalid = || ScaffoldContractError::ConsolidationGenerationMismatch;
+-            let start = usize::try_from(span.sample_start).map_err(|_| invalid())?;
+-            let count = usize::try_from(span.sample_count).map_err(|_| invalid())?;
+-            let end = start.checked_add(count).ok_or_else(|| invalid())?;
+-            let samples = replay.eligibility_samples.get(start..end).ok_or_else(invalid)?;
+-            let eligibility = samples
+-                .iter()
+-                .map(|sample| u32::from(sample.eligibility_q15.unsigned_abs()))
+-                .max()
+-                .unwrap_or(0);
+-            if eligibility == 0 {
+-                continue;
+-            }
+-            let (source, target) = native
+-                .sleep_replay_local_endpoints(span.local_synapse_id)
+-                .map_err(map_gpu_contract_error)?;
+-            active.push((source, target, eligibility));
+-            if active.len() == 32 {
+-                break;
+-            }
+-        }
+-        drop(native);
+         // Local growth proposals are anchored in replay eligibility. Unit
+         // coactivation is proposal support, not an observed firing count.
+         const CANONICAL_SLEEP_STRUCTURAL_REGION: u16 = 0;
+@@ -7148,3 +7162,6 @@ mod controlled_host_pressure_tests {
+         assert!(validate_controlled_host_pressure(true, false, 0, 1).is_err());
+     }
+ }
++
++#[cfg(all(test, feature = "training-rollout"))]
++mod sleep_replay_identity_qualification;
+diff --git a/crates/alife_gpu_backend/src/closed_loop_runtime/sleep_replay_identity_qualification.rs b/crates/alife_gpu_backend/src/closed_loop_runtime/sleep_replay_identity_qualification.rs
+new file mode 100644
+index 0000000..955e138
+--- /dev/null
++++ b/crates/alife_gpu_backend/src/closed_loop_runtime/sleep_replay_identity_qualification.rs
+@@ -0,0 +1,241 @@
++//! Device-free address tests. In-code scaffold and events are mechanism
++//! fixtures, not retained-lifetime data, learned behavior, or a score.
++use super::*;
++use alife_core::sleep::{
++    BoundedReplayBatch, ReplayEligibilitySample, ReplaySynapseSpan, SleepReplayEvent,
++    BOUNDED_REPLAY_BATCH_SCHEMA_VERSION,
++};
++use alife_core::{
++    BrainGenome, CandidateFeatureDigest, CompiledSynapseKind, DevelopmentState,
++    ExperienceSequenceId, NeuromodulatorSample, NeuromodulatoryFrame, NormalizedScalar,
++    PhenotypeCompiler, Tick,
++};
++
++fn scaffold() -> (BrainCapacityClass, BrainPhenotype) {
++    let capacity = BrainCapacityClass::n2048();
++    let genome = BrainGenome::scaffold(97, capacity.id());
++    let development =
++        DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(0.35).unwrap());
++    let phenotype = PhenotypeCompiler::compile(
++        &genome,
++        &capacity,
++        &development,
++        SensorProfile::GroundedObjectSlotsV1,
++    )
++    .unwrap();
++    (capacity, phenotype)
++}
++
++fn batch(lanes: &[(u32, i16)]) -> BoundedReplayBatch {
++    let mut replay = BoundedReplayBatch {
++        schema_version: BOUNDED_REPLAY_BATCH_SCHEMA_VERSION,
++        events: vec![SleepReplayEvent {
++            sequence_id: ExperienceSequenceId(1),
++            originating_tick: Tick::new(7),
++            frame_digest: PerceptionFrameDigest([11, 0, 0, 0]),
++            candidate_feature_digest: CandidateFeatureDigest([13, 0]),
++            action_id: ActionId(1),
++            family: CandidateActionFamily::Idle,
++            modulator: NeuromodulatorSample::from_frame(
++                NeuromodulatoryFrame::try_new([0.0; 8]).unwrap(),
++            ),
++        }],
++        synapse_spans: lanes
++            .iter()
++            .enumerate()
++            .map(|(index, &(id, _))| ReplaySynapseSpan {
++                local_synapse_id: id,
++                sample_start: index as u32,
++                sample_count: 1,
++                reserved: 0,
++            })
++            .collect(),
++        eligibility_samples: lanes
++            .iter()
++            .map(|&(_, eligibility_q15)| ReplayEligibilitySample {
++                event_index: 0,
++                eligibility_q15,
++            })
++            .collect(),
++        canonical_digest: [0; 4],
++    };
++    replay.canonical_digest = replay.recompute_canonical_digest().unwrap();
++    replay
++}
++
++#[test]
++fn native_target_major_is_not_the_canonical_ordinal() {
++    let (capacity, phenotype) = scaffold();
++    let plan = GpuFixedClassArenaPlan::new(capacity, 1, 512 * 1024 * 1024).unwrap();
++    let state = GpuV11CausalState::for_phenotype(&phenotype).unwrap();
++    let base = plan.prepare_slot_upload(0, 1, &phenotype).unwrap();
++    let native = compile_v11_slot_upload(&plan, base.brain_slot(), &phenotype, &state).unwrap();
++    let plain = crate::GpuPhenotypeUpload::try_from(&phenotype).unwrap();
++    let (canonical, local) = plain
++        .canonical_to_local_synapse
++        .iter()
++        .copied()
++        .enumerate()
++        .find(|&(canonical, local)| {
++            let inherited = &phenotype.synapses()[canonical];
++            let wrong = &phenotype.synapses()[local as usize];
++            inherited.kind() == CompiledSynapseKind::Recurrent
++                && (inherited.source(), inherited.target()) != (wrong.source(), wrong.target())
++        })
++        .expect("public scaffold must exercise a semantic ordinal mismatch");
++    let expected = &phenotype.synapses()[canonical];
++    assert_eq!(plain.source_indices[local as usize], expected.source());
++    let target = expected.target() as usize;
++    assert!((plain.target_offsets[target]..plain.target_offsets[target + 1]).contains(&local));
++    let replay = batch(&[(local, -51)]);
++    assert_eq!(
++        collect_v11_sleep_replay_local_activity(
++            &plan, native.brain_slot(), &phenotype, &state, &replay,
++        )
++        .unwrap(),
++        vec![(expected.source(), expected.target(), 51)]
++    );
++}
++
++#[test]
++fn inserted_recurrence_and_shifted_action_decoder_survive_nonzero_slot_relocation() {
++    let (capacity, phenotype) = scaffold();
++    let plan = GpuFixedClassArenaPlan::new(capacity, 2, 512 * 1024 * 1024).unwrap();
++    let plain = crate::GpuPhenotypeUpload::try_from(&phenotype).unwrap();
++    let target = 0;
++    let insertion = plain.target_offsets[target as usize + 1];
++    assert!((insertion as usize) < plain.source_indices.len());
++    let source = (1..phenotype.neuron_count())
++        .find(|&source| !phenotype.synapses().iter().any(|s| {
++            s.kind() == CompiledSynapseKind::Recurrent && s.source() == source && s.target() == target
++        }))
++        .unwrap();
++
++    let mut state = GpuV11CausalState::for_phenotype(&phenotype).unwrap();
++    // This input exercises the ordinary V11 insertion machinery only. It
++    // makes no claim about how a living model would discover these endpoints.
++    let edge = CoactivationEvidence {
++        region: 0,
++        source,
++        target,
++        coactivation: 100,
++        eligibility: 0,
++        concept_gap_support: 0,
++    };
++    assert_eq!(state.apply_structural_phase(&[edge]).unwrap().structural.accepted_edges, 1);
++
++    let base = plan.prepare_slot_upload(1, 7, &phenotype).unwrap();
++    let native = compile_v11_slot_upload(&plan, base.brain_slot(), &phenotype, &state).unwrap();
++    assert_eq!(native.record().recurrent_synapse_count, base.record().recurrent_synapse_count + 1);
++    assert_eq!(native.record().synapse_count, base.record().synapse_count + 1);
++    assert_eq!((native.record().slot, native.record().slot_generation), (1, 7));
++    let topology = native.live_topology_checkpoint(phenotype.phenotype_hash(), state.checkpoint()).unwrap();
++    assert_eq!(topology.target_offsets[target as usize + 1], insertion + 1);
++    assert_eq!(topology.source_indices[insertion as usize], source);
++    assert_eq!(topology.route_indices[insertion as usize], 0);
++    assert_eq!(topology.alpha_bits[insertion as usize], (-0.0_f32).to_bits());
++
++    let displaced_canonical = plain.canonical_to_local_synapse.iter()
++        .position(|&id| id == insertion).unwrap();
++    let displaced = &phenotype.synapses()[displaced_canonical];
++    assert_eq!(displaced.kind(), CompiledSynapseKind::Recurrent);
++    assert_ne!((displaced.source(), displaced.target()), (source, target));
++    assert_eq!(topology.source_indices[insertion as usize + 1], displaced.source());
++
++    let decoder_before = plain.decoder_weight_indices[0].global_synapse_id;
++    let decoder_after = topology.decoder_weight_global_synapse_ids[0];
++    assert_eq!(decoder_after, decoder_before + 1);
++    let decoder = &phenotype.synapses()[plain.canonical_to_local_synapse.iter()
++        .position(|&id| id == decoder_before).unwrap()];
++    assert!(matches!(
++        decoder.kind(),
++        CompiledSynapseKind::Decoder(coordinate)
++            if coordinate.head() == alife_core::DecoderHeadKind::ActionCandidate
++    ));
++    assert!(decoder_before >= base.record().recurrent_synapse_count);
++    // The last new local ID is outside the old canonical count, but inside
++    // the actual resident count. Test this upper legal boundary too.
++    let last_before = base.record().synapse_count - 1;
++    let last_after = native.record().synapse_count - 1;
++    assert_eq!(last_after, base.record().synapse_count);
++    assert!(decoder_after < last_after);
++    let last = &phenotype.synapses()[plain.canonical_to_local_synapse.iter()
++        .position(|&id| id == last_before).unwrap()];
++    let replay = batch(&[(insertion, 41), (insertion + 1, -42), (decoder_after, 43), (last_after, 44)]);
++    let expected = vec![
++        (source, target, 41),
++        (displaced.source(), displaced.target(), 42),
++        (decoder.source(), decoder.target(), 43),
++        (last.source(), last.target(), 44),
++    ];
++    assert_eq!(
++        collect_v11_sleep_replay_local_activity(&plan, native.brain_slot(), &phenotype, &state, &replay)
++            .unwrap(),
++        expected
++    );
++
++    // Independently join one real physical capture-plan span whose stored ID
++    // changed after insertion. Supply an in-code sample, not a retained event.
++    let old_spans = base.qualification_physical_sleep_spans().unwrap();
++    let new_spans = native.qualification_physical_sleep_spans().unwrap();
++    assert_eq!(old_spans.len(), new_spans.len());
++    let (old_span, new_span) = old_spans.iter().zip(&new_spans)
++        .find(|(old, _)| {
++            old.local_synapse_id >= insertion
++                && old.local_synapse_id < base.record().recurrent_synapse_count
++        })
++        .expect("the physical plan should retain a displaced captured recurrent row");
++    assert_eq!(old_span.sample_start, new_span.sample_start);
++    assert_eq!(old_span.local_synapse_id + 1, new_span.local_synapse_id);
++    let captured = &phenotype.synapses()[plain.canonical_to_local_synapse.iter()
++        .position(|&id| id == old_span.local_synapse_id).unwrap()];
++    assert_eq!(
++        collect_v11_sleep_replay_local_activity(
++            &plan, native.brain_slot(), &phenotype, &state,
++            &batch(&[(new_span.local_synapse_id, -31)]),
++        ).unwrap(),
++        vec![(captured.source(), captured.target(), 31)],
++    );
++
++    // Rebuilding the other physical slot from the same topology must not
++    // reinterpret a local ordinal as an absolute plan-buffer address.
++    let other_base = plan.prepare_slot_upload(0, 3, &phenotype).unwrap();
++    let other = compile_v11_slot_upload(&plan, other_base.brain_slot(), &phenotype, &state).unwrap();
++    assert_ne!(native.brain_slot().word_ranges(), other.brain_slot().word_ranges());
++    assert_eq!(
++        collect_v11_sleep_replay_local_activity(&plan, other.brain_slot(), &phenotype, &state, &replay)
++            .unwrap(),
++        expected
++    );
++    // Same slot/generation, but the supplied resident plan pre-dates the insertion.
++    assert_eq!(
++        collect_v11_sleep_replay_local_activity(&plan, base.brain_slot(), &phenotype, &state, &replay),
++        Err(ScaffoldContractError::InvalidSparseProjectionSchema)
++    );
++}
++
++#[test]
++fn rejects_foreign_arena_out_of_range_reserved_and_stale_digest() {
++    let (capacity, phenotype) = scaffold();
++    let plan = GpuFixedClassArenaPlan::new(capacity, 1, 512 * 1024 * 1024).unwrap();
++    let foreign_plan = GpuFixedClassArenaPlan::new(capacity, 1, 512 * 1024 * 1024).unwrap();
++    let state = GpuV11CausalState::for_phenotype(&phenotype).unwrap();
++    let base = plan.prepare_slot_upload(0, 9, &phenotype).unwrap();
++    let slot = compile_v11_slot_upload(&plan, base.brain_slot(), &phenotype, &state).unwrap();
++    let replay = batch(&[(0, 17)]);
++    assert_eq!(
++        collect_v11_sleep_replay_local_activity(&foreign_plan, slot.brain_slot(), &phenotype, &state, &replay),
++        Err(ScaffoldContractError::InvalidSparseProjectionSchema)
++    );
++    let mut bad_span = replay.clone();
++    bad_span.synapse_spans[0].reserved = 1;
++    bad_span.canonical_digest = bad_span.recompute_canonical_digest().unwrap();
++    let mut stale = replay;
++    stale.eligibility_samples[0].eligibility_q15 = 18;
++    for invalid in [batch(&[(slot.record().synapse_count, 0)]), bad_span, stale] {
++        assert_eq!(
++            collect_v11_sleep_replay_local_activity(&plan, slot.brain_slot(), &phenotype, &state, &invalid),
++            Err(ScaffoldContractError::ConsolidationGenerationMismatch)
++        );
++    }
++}
