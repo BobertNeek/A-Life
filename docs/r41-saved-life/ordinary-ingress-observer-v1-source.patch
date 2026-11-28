@@ -312,7 +312,7 @@ diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_rete
 new file mode 100644
 --- /dev/null
 +++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_observer.rs
-@@ -0,0 +1,674 @@
+@@ -0,0 +1,675 @@
 +//! Private serialization of already-captured stock inference boundaries.
 +//! This module does not call World perception, the backend, or another readback.
 +use super::*;
@@ -906,6 +906,11 @@ new file mode 100644
 +        )).collect::<Vec<_>>();
 +        Ok(digest(&serde_json::to_vec(&(&s.v11, edges))?))
 +    };
++    let receptor_effect_f32_bits_order: [u32; 10] = [
++        r.interoceptive_gain, r.regional_excitability, r.projection_gain, r.local_threshold_shift,
++        r.attention_gain, r.plasticity_appetitive, r.plasticity_aversive, r.structural_growth_gate,
++        r.sleep_gate, r.consolidation_gate,
++    ].map(f32::to_bits);
 +    let metadata = serde_json::to_vec(&serde_json::json!({
 +        "actor":actor, "tick":tick, "frame_digest":b.frame_digest,
 +        "phenotype":before.phenotype.phenotype_hash(),
@@ -925,11 +930,7 @@ new file mode 100644
 +        "route_schedule_digest":step.throttle.route_schedule_digest,
 +        "neural_work_receipt_digest":step.work.receipt_digest,
 +        "receptor_source_chemistry_version":r.source_chemistry_version,
-+        "receptor_effect_f32_bits_order": [
-+            r.interoceptive_gain, r.regional_excitability, r.projection_gain, r.local_threshold_shift,
-+            r.attention_gain, r.plasticity_appetitive, r.plasticity_aversive, r.structural_growth_gate,
-+            r.sleep_gate, r.consolidation_gate,
-+        ].map(f32::to_bits),
++        "receptor_effect_f32_bits_order":receptor_effect_f32_bits_order,
 +        "ordered_sections": {
 +            "finalized_frame_deterministic_raw77_not_device_copy":77,
 +            "finalized_frame_deterministic_heard_and_prior256_not_device_copy":256,

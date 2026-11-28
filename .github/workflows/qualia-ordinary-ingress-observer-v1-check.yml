@@ -23,9 +23,14 @@ jobs:
         shell: bash
     env:
       PIN_WORD_PARENT: a1b1add6ba4d5c0bb067b75496f6b03fdb0db1de
+      PIN_FAILED_INGRESS_HEAD: 97a3e2cde67d9870ca5416b72ff9c1b0466991a5
+      PIN_FAILED_INGRESS_TREE: 92a6185d8a93cd8d3a95be4a792b272f0f182ec2
+      PIN_FAILED_INGRESS_WF: 8c5773c5059542ce02faa0d59d2b702fcc9182c5cd2808c03bf3ec1215e3ced8
+      PIN_FAILED_INGRESS_PATCH: 2c23478acfb25c560129c27745097de4425e4191f596207d62e355616c51ea65
+      PIN_FAILED_INGRESS_PINS: ad4eb6fe2c54dad05d9cb541850c127d16ace2cd5845f4d200a1a1537c99e1a6
       PIN_WORD_PARENT_WORKFLOW: 075da08148939fe1266f79125b6f6943552b827cbab451b6dcedc2491b038555
-      PIN_INGRESS_PATCH: 2c23478acfb25c560129c27745097de4425e4191f596207d62e355616c51ea65
-      PIN_INGRESS_PINS: ad4eb6fe2c54dad05d9cb541850c127d16ace2cd5845f4d200a1a1537c99e1a6
+      PIN_INGRESS_PATCH: 24ddeea1c586284f06909dc7fb1e71bc42f854e7444a78ef5d2938e2b249694a
+      PIN_INGRESS_PINS: 6f70cad34556f69f5d3c6202f705c38382f7b2b15b51a92c41a21e94782c4a92
       PIN_INGRESS_CLI: f71f51f4c12b42bc30789bca4c46f289d4161ebb38c87b4e9038db372e647669
       PIN_DE8: de8b39fb47d768513eed4cd2e8f8647d5f22e88f
       PIN_DE8_TREE: d45c0bb7d00e3cc7490dbcfd1e8fbbc3a7336002
@@ -86,7 +91,18 @@ jobs:
           set -euo pipefail
           export LC_ALL=C
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git show -s --format=%P HEAD)" = "$PIN_WORD_PARENT"
+          test "$(git show -s --format=%P HEAD)" = "$PIN_FAILED_INGRESS_HEAD"
+          test "$(git show -s --format=%P "$PIN_FAILED_INGRESS_HEAD")" = "$PIN_WORD_PARENT"
+          test "$(git rev-parse "$PIN_FAILED_INGRESS_HEAD^{tree}")" = "$PIN_FAILED_INGRESS_TREE"
+          # Accept exactly the first failed published parent, not an arbitrary ancestor.
+          git show "$PIN_FAILED_INGRESS_HEAD:.github/workflows/qualia-ordinary-ingress-observer-v1-check.yml" | sha256sum | cut -d' ' -f1 | grep -Fx "$PIN_FAILED_INGRESS_WF"
+          git show "$PIN_FAILED_INGRESS_HEAD:docs/r41-saved-life/ordinary-ingress-observer-v1-source.patch" | sha256sum | cut -d' ' -f1 | grep -Fx "$PIN_FAILED_INGRESS_PATCH"
+          git show "$PIN_FAILED_INGRESS_HEAD:docs/r41-saved-life/ordinary-ingress-observer-v1-source-pins.json" | sha256sum | cut -d' ' -f1 | grep -Fx "$PIN_FAILED_INGRESS_PINS"
+          diff -u <(printf 'M\t%s\n' \
+            '.github/workflows/qualia-ordinary-ingress-observer-v1-check.yml' \
+            'docs/r41-saved-life/ordinary-ingress-observer-v1-source.patch' \
+            'docs/r41-saved-life/ordinary-ingress-observer-v1-source-pins.json' \
+            | sort) <(git diff --name-status --no-renames "$PIN_FAILED_INGRESS_HEAD" HEAD | sort)
           test "$(git show -s --format=%P "$PIN_WORD_PARENT")" = "$PIN_DE8"
           test "$(git rev-parse "$PIN_DE8^{tree}")" = "$PIN_DE8_TREE"
           test "$(git show -s --format=%P "$PIN_DE8")" = "$PIN_DE8_PARENT"
