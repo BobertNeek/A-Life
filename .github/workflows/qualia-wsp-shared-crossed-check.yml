@@ -23,6 +23,8 @@ jobs:
         shell: bash
     env:
       PIN_ARMED_HEAD: cd215f531bdada0777b2bb530af2681bddfd6866
+      PIN_FIXTURE_FIRST: 3b0a53c5268b99e29306982913e401b1eecb6d6a
+      PIN_FIXTURE_MKDIR: a854963cbda4ba08643d9ccf74ce5ab4f3460733
       PIN_ARMED_SOURCE: 6457529ef814c1def3ca60be6e42e367a83637d70f0ff5cd0d6aecb3cf206ad1
       PIN_FIXTURE_PATCH: da7ccf322ea35ed66fb5b6cc055514bc5b9265332fc651e2052b107b9248d47f
       PIN_FIXTURE_SOURCE: 902e475c792ddf73e1a5b4dd04212665dd63368aada8a2beedfbe3841f8b9d52
@@ -90,13 +92,17 @@ jobs:
           set -euo pipefail
           export LC_ALL=C
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git rev-list --parents -n 1 HEAD)" = "$GITHUB_SHA $PIN_ARMED_HEAD"
+          test "$(git rev-list --parents -n 1 HEAD)" = "$GITHUB_SHA $PIN_FIXTURE_MKDIR"
+          test "$(git rev-list --parents -n 1 "$PIN_FIXTURE_MKDIR")" = "$PIN_FIXTURE_MKDIR $PIN_FIXTURE_FIRST"
+          test "$(git rev-list --parents -n 1 "$PIN_FIXTURE_FIRST")" = "$PIN_FIXTURE_FIRST $PIN_ARMED_HEAD"
           test "$(git rev-list --parents -n 1 "$PIN_ARMED_HEAD")" = "$PIN_ARMED_HEAD $PIN_OBSERVER_HEAD"
           printf 'exact_schema16_parent_tree=%s\n' "$(git rev-parse "$PIN_ARMED_HEAD^{tree}")"
           fw='.github/workflows/qualia-wsp-shared-crossed-check.yml'
           fp='docs/r41-saved-life/wsp-shared-crossed-source.patch'
           fl='docs/r41-saved-life/wsp-shared-crossed-source-pins.json'
           fh='docs/r41-saved-life/wsp-shared-crossed-source-cpu.rs'
+          diff -u <(printf 'M\t%s\n' "$fw") <(git diff --name-status --no-renames "$PIN_FIXTURE_FIRST" "$PIN_FIXTURE_MKDIR")
+          diff -u <(printf 'M\t%s\n' "$fw") <(git diff --name-status --no-renames "$PIN_FIXTURE_MKDIR" HEAD)
           diff -u <(printf 'A\t%s\n' "$fw" "$fp" "$fl" "$fh" | sort) <(git diff --name-status --no-renames "$PIN_ARMED_HEAD" HEAD | sort)
           for f in "$fw" "$fp" "$fl" "$fh"; do
             test -f "$f" && test ! -L "$f"
