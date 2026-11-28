@@ -1,0 +1,337 @@
+diff --git a/crates/alife_core/src/phenotype/record.rs b/crates/alife_core/src/phenotype/record.rs
+index 9c8d0e3..9b47062 100644
+--- a/crates/alife_core/src/phenotype/record.rs
++++ b/crates/alife_core/src/phenotype/record.rs
+@@ -142,6 +142,18 @@ pub struct BrainPhenotype {
+     plasticity_abi_digest: Blake3Digest,
+     budgets: CompiledBudgets,
+     phenotype_hash: PhenotypeHash,
++    // Ordinary encoding omits None; a parked phenotype cannot serialize.
++    // The production deserializer has no authority to reconstruct this marker.
++    #[cfg(feature = "research-n4096-parked-transport")]
++    #[serde(skip_serializing_if = "Option::is_none", serialize_with = "refuse_parked_serialization")]
++    parked_n4096_source_hash: Option<PhenotypeHash>,
++}
++
++#[cfg(feature = "research-n4096-parked-transport")]
++fn refuse_parked_serialization<S: serde::Serializer>(
++    _value: &Option<PhenotypeHash>, _serializer: S,
++) -> Result<S::Ok, S::Error> {
++    Err(serde::ser::Error::custom("parked N4096 phenotype has no serializable authority"))
+ }
+ 
+ impl BrainPhenotype {
+@@ -564,6 +576,8 @@ impl BrainPhenotype {
+             plasticity_abi_digest,
+             budgets,
+             phenotype_hash: PhenotypeHash([0; 4]),
++            #[cfg(feature = "research-n4096-parked-transport")]
++            parked_n4096_source_hash: None,
+         };
+         match growth_source {
+             Some((source, source_inputs)) => {
+@@ -580,6 +594,121 @@ impl BrainPhenotype {
+         Ok(value)
+     }
+ 
++    /// Constructs only the compiled **layout** of one parked H-only research
++    /// resident. No authority, lifetime state, or arbitrary recipe is minted.
++    ///
++    /// A new backend slot may adopt it only with an exact mature native
++    /// transport and a distinct parked (non-runnable) owner transaction.
++    #[doc(hidden)]
++    #[cfg(feature = "research-n4096-parked-transport")]
++    pub fn compile_parked_n4096_h_only(
++        source: &Self,
++        source_inputs: &PhenotypeCompilerInputs,
++    ) -> Result<Self, ScaffoldContractError> {
++        use super::SensorEncoderAssignment;
++        let fail = ScaffoldContractError::PhenotypeCompile;
++        let base = BrainCapacityClass::n2048();
++        let target = BrainCapacityClass::n4096_research();
++        source_inputs.validate_against(&base)?;
++        source.validate_against(&base)?;
++        if source.compiler_inputs_digest() != source_inputs.canonical_digest()
++            || source.lobe_layout() != &crate::N2048FoundationLayoutV1::lobe_layout()
++            || source.foundation_abi().migrated_n2048_foundation_v1().is_some()
++            || source.neuron_count != base.execution().max_neurons()
++        {
++            return Err(fail);
++        }
++        let layout = super::N4096ResearchLayoutV1::lobe_layout()?;
++        let map = |old| super::migration::remap_packed_neuron(old, source.lobe_layout(), &layout);
++        let dormant = NeuronDynamics::new(
++            0.0, 1.0, crate::ActivationFunction::Tanh, 1.0, 0.0, 0.0,
++        );
++        let mut widened = source.clone();
++        widened.parked_n4096_source_hash = Some(source.phenotype_hash);
++        widened.brain_class_id = target.id();
++        widened.neuron_count = target.execution().max_neurons();
++        widened.neuron_dynamics = vec![dormant; widened.neuron_count as usize];
++        for (i, d) in source.neuron_dynamics.iter().copied().enumerate() {
++            widened.neuron_dynamics[map(i as u32)? as usize] = d;
++        }
++        for (next, old) in widened.synapses.iter_mut().zip(&source.synapses) {
++            let mut row = CompiledSynapse::new(map(old.source())?, map(old.target())?,
++                old.genetic_weight(), old.alpha(), old.route_index(), old.kind());
++            row.set_receptor_index(old.receptor_index());
++            *next = row;
++        }
++        let assignments = source.sensor_encoder.assignments().iter().map(|old| {
++            let (min, max) = old.clamp_range();
++            Ok(SensorEncoderAssignment::new(old.source_group(), old.source_index(),
++                map(old.target_neuron())?, old.scale(), old.bias(), min, max))
++        }).collect::<Result<Vec<_>, ScaffoldContractError>>()?;
++        widened.sensor_encoder = SensorEncoderPlan::try_new(source.sensor_profile, assignments)?;
++        widened.decoder = CandidateDecoderPlan::try_new(
++            map(source.decoder.motor_start())?, source.decoder.motor_width(),
++            source.decoder.feature_count(), source.decoder.flattened_input_lane_count(),
++            source.decoder.memory_channel().copied(), source.decoder.families().to_vec(),
++        )?;
++        // Keep route rows and their ordering, decoder indexing, exact old
++        // replay capture identities and history semantics. Whole live learned
++        // topology/banks are transported separately from immutable genetic rows.
++        widened.lobe_layout = layout;
++        widened.budgets.capacity_class_id = target.id();
++        widened.budgets.execution_abi_digest = target.canonical_digest();
++        widened.budgets.global.neuron_count = widened.neuron_count;
++        widened.persistent_address_map = PersistentAddressMap::compile(
++            &widened.lobe_layout, &widened.projections, &widened.synapses,
++        )?;
++        (widened.route_abi_digest, widened.plasticity_abi_digest) = compute_abi_digests(
++            &target, &widened.foundation_abi_selection, &widened.projections, &widened.synapses,
++        );
++        widened.sensor_encoder.validate_n2048_growth(&widened, source, source_inputs)?;
++        widened.phenotype_hash = widened.recompute_phenotype_hash()?;
++        widened.validate_against(&target)?;
++        Ok(widened)
++    }
++
++    #[doc(hidden)]
++    #[cfg(feature = "research-n4096-parked-transport")]
++    pub const fn is_parked_n4096_h_only(&self) -> bool {
++        self.parked_n4096_source_hash.is_some()
++    }
++
++    #[cfg(feature = "research-n4096-parked-transport")]
++    fn validate_parked_h_only_shape(
++        &self, capacity: &BrainCapacityClass,
++    ) -> Result<(), ScaffoldContractError> {
++        let fail = ScaffoldContractError::PhenotypeCompile;
++        let old = crate::N2048FoundationLayoutV1::lobe_layout();
++        let new = super::N4096ResearchLayoutV1::lobe_layout()?;
++        if capacity.id() != BrainCapacityClass::N4096_RESEARCH_ID
++            || self.parked_n4096_source_hash.is_none_or(|x| x == PhenotypeHash([0; 4]))
++            || self.neuron_count != capacity.execution().max_neurons()
++            || self.lobe_layout != new
++            || self.foundation_abi_selection.capacity_class_id() != BrainCapacityClass::N2048_ID
++            || self.foundation_abi_selection.migrated_n2048_foundation_v1().is_some()
++            || !old.regions.iter().zip(&new.regions).all(|(a, b)| {
++                a.kind == b.kind && a.len.checked_mul(2) == Some(b.len)
++                    && a.start % 16 == 0 && b.start % 16 == 0
++            })
++        {
++            return Err(fail);
++        }
++        let is_h = |i: u32| {
++            new.lobe_by_neuron_index(i).is_some_and(|region| {
++                old.region(region.kind).is_some_and(|prior| i - region.start < prior.len)
++            })
++        };
++        if self.synapses.iter().any(|row| !(is_h(row.source()) && is_h(row.target())))
++            || self.sensor_encoder.assignments().iter().any(|row| !is_h(row.target_neuron()))
++            || !(0..u32::from(self.decoder.motor_width())).all(|i| {
++                self.decoder.motor_start().checked_add(i).is_some_and(is_h)
++            })
++        {
++            return Err(fail);
++        }
++        Ok(())
++    }
++
+     pub fn recompute_phenotype_hash(&self) -> Result<PhenotypeHash, ScaffoldContractError> {
+         let mut d = CanonicalDigestBuilder::new(PHENOTYPE_DOMAIN);
+         d.write_u16(self.schema_version);
+@@ -687,6 +816,13 @@ impl BrainPhenotype {
+         write_blake3(&mut d, self.route_abi_digest);
+         write_blake3(&mut d, self.plasticity_abi_digest);
+         encode_budgets(&mut d, &self.budgets);
++        #[cfg(feature = "research-n4096-parked-transport")]
++        if let Some(source) = self.parked_n4096_source_hash {
++            d.write_bytes(b"alife.research.parked-n4096-h-only.v1");
++            for word in source.0 {
++                d.write_u64(word);
++            }
++        }
+         Ok(PhenotypeHash(d.finish256()))
+     }
+ 
+@@ -695,9 +831,21 @@ impl BrainPhenotype {
+         capacity: &BrainCapacityClass,
+     ) -> Result<(), ScaffoldContractError> {
+         capacity.validate_contract()?;
++        #[cfg(feature = "research-n4096-parked-transport")]
++        let parked = self.parked_n4096_source_hash.is_some();
++        #[cfg(not(feature = "research-n4096-parked-transport"))]
++        let parked = false;
++        let parked_source_capacity = BrainCapacityClass::n2048();
++        let semantic_capacity = if parked {
++            #[cfg(feature = "research-n4096-parked-transport")]
++            self.validate_parked_h_only_shape(capacity)?;
++            &parked_source_capacity
++        } else {
++            capacity
++        };
+         self.foundation_abi_selection
+-            .validate_against(capacity, self.sensor_profile)?;
+-        if self
++            .validate_against(semantic_capacity, self.sensor_profile)?;
++        if !parked && self
+             .foundation_abi_selection
+             .n2048_experimental_graph()
+             .is_some()
+@@ -723,7 +871,7 @@ impl BrainPhenotype {
+         if self.language_codebook != self.foundation_abi_selection.language_codebook() {
+             return Err(ScaffoldContractError::PhenotypeCompile);
+         }
+-        self.cognitive_architecture.validate_against(capacity)?;
++        self.cognitive_architecture.validate_against(semantic_capacity)?;
+         self.lobe_layout
+             .validate_for_neuron_count(self.neuron_count)?;
+         self.budgets.validate_against(capacity)?;
+@@ -971,14 +1119,14 @@ impl BrainPhenotype {
+             || memory_count.checked_add(cognitive_count)
+                 != Some(self.budgets.global.memory_decoder_synapses)
+             || !memory_channel_valid
+-            || (n2048
++            || ((n2048 || parked)
+                 && (candidate_count
+                     != crate::N2048FoundationLayoutV1::CANDIDATE_DECODER_SYNAPSE_COUNT
+                     || speech_count
+                         != crate::N2048FoundationLayoutV1::SPEECH_DECODER_SYNAPSE_COUNT
+                     || memory_count
+                         != crate::N2048FoundationLayoutV1::MEMORY_DECODER_SYNAPSE_COUNT))
+-            || (n4096
++            || (n4096 && !parked
+                 && (candidate_count != 7_168
+                     || speech_count
+                         != crate::N2048FoundationLayoutV1::SPEECH_DECODER_SYNAPSE_COUNT
+@@ -1111,6 +1259,8 @@ impl<'de> Deserialize<'de> for BrainPhenotype {
+             plasticity_abi_digest: w.plasticity_abi_digest,
+             budgets: w.budgets,
+             phenotype_hash: w.phenotype_hash,
++            #[cfg(feature = "research-n4096-parked-transport")]
++            parked_n4096_source_hash: None,
+         };
+         let capacity =
+             BrainCapacityClass::supported_for_id(value.brain_class_id).map_err(D::Error::custom)?;
+diff --git a/crates/alife_core/tests/n4096_parked_h_only.rs b/crates/alife_core/tests/n4096_parked_h_only.rs
+new file mode 100644
+index 0000000..fcfc2ff
+--- /dev/null
++++ b/crates/alife_core/tests/n4096_parked_h_only.rs
+@@ -0,0 +1,87 @@
++#![cfg(feature = "research-n4096-parked-transport")]
++
++use alife_core::{
++    BrainCapacityClass, BrainGenome, BrainPhenotype, DevelopmentState, LobeKind, NormalizedScalar,
++    N2048FoundationLayoutV1, PhenotypeCompiler, PhenotypeCompilerInputs,
++    PhenotypeGrowthMigration, SensorProfile, Tick,
++};
++
++fn compile(seed: u64) -> (BrainPhenotype, PhenotypeCompilerInputs) {
++    let capacity = BrainCapacityClass::n2048();
++    let genome = BrainGenome::scaffold(seed, capacity.id());
++    let development =
++        DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(1.0).unwrap());
++    let inputs = PhenotypeCompilerInputs::try_new(
++        genome, &capacity, development, SensorProfile::GroundedObjectSlotsV1,
++    ).unwrap();
++    let phenotype = PhenotypeCompiler::compile_validated(&inputs,&capacity).unwrap();
++    (phenotype,inputs)
++}
++
++#[test]
++fn actual_compiler_emits_4096_h_only_layout_with_no_extra_decoder_or_recurrent_rows() {
++    let (original,input) = compile(0x4096_2048);
++    let raw = serde_json::to_vec(&original).unwrap();
++    let width = BrainPhenotype::compile_parked_n4096_h_only(&original, &input).unwrap();
++    assert!(width.is_parked_n4096_h_only());
++    assert_eq!(width.neuron_count(), 4096);
++    assert_eq!(width.synapses().len(), original.synapses().len());
++    assert_eq!(width.projections(),original.projections());
++    assert_eq!(width.replay_capture_plan(),original.replay_capture_plan());
++    assert_eq!(width.language_codebook(),original.language_codebook());
++    assert_eq!(width.candidate_decoder().motor_width(),original.candidate_decoder().motor_width());
++    assert_ne!(width.phenotype_hash(), original.phenotype_hash());
++    let source_layout=N2048FoundationLayoutV1::lobe_layout();
++    let address=|i| {
++        let r=source_layout.lobe_by_neuron_index(i).unwrap();
++        width.lobe_layout().region(r.kind).unwrap().start + i-r.start
++    };
++    let base_interoception = source_layout.region(LobeKind::InteroceptiveMotivational).unwrap();
++    let wider_interoception = width.lobe_layout().region(LobeKind::InteroceptiveMotivational).unwrap();
++    assert_eq!((base_interoception.start,wider_interoception.start),(256,512));
++    let mut saw_shifted_real_interoceptive_input=false;
++    let old_assignments=original.sensor_encoder().assignments();
++    let wide_assignments=width.sensor_encoder().assignments();
++    assert_eq!(old_assignments.len(),wide_assignments.len());
++    for (before, after) in old_assignments.iter().zip(wide_assignments) {
++        assert_eq!(after.target_neuron(),address(before.target_neuron()));
++        assert_eq!(before.source_group(),after.source_group());
++        assert_eq!(before.source_index(),after.source_index());
++        assert_eq!(before.scale().to_bits(),after.scale().to_bits());
++        assert_eq!(before.bias().to_bits(),after.bias().to_bits());
++        if base_interoception.contains_neuron(before.target_neuron()) {
++            saw_shifted_real_interoceptive_input=true;
++            assert_ne!(before.target_neuron(),after.target_neuron(),
++                "old receiver would falsely reject or leave an input in the wrong lobe");
++        }
++    }
++    assert!(saw_shifted_real_interoceptive_input,"fixture must contain a real shifted input");
++    for (before, after) in original.synapses().iter().zip(width.synapses()) {
++        assert_eq!(after.source(),address(before.source()));
++        assert_eq!(after.target(),address(before.target()));
++        assert_eq!(before.genetic_weight().to_bits(),after.genetic_weight().to_bits());
++        assert_eq!(before.alpha().to_bits(),after.alpha().to_bits());
++        assert_eq!(before.receptor_index(),after.receptor_index());
++        assert_eq!(before.route_index(),after.route_index());
++        assert_eq!(before.kind(),after.kind());
++    }
++    assert_eq!(serde_json::to_vec(&original).unwrap(),raw);
++    assert_eq!(serde_json::from_slice::<BrainPhenotype>(&raw).unwrap(),original);
++    assert!(serde_json::to_vec(&width).is_err());
++}
++
++#[test]
++fn parked_marker_is_never_promoted_or_imported_and_legacy_class4_stays_exact() {
++    let (original,input)=compile(0x4096_2049);
++    let (_foreign, foreign_input)=compile(0x4096_2050);
++    assert!(BrainPhenotype::compile_parked_n4096_h_only(&original,&foreign_input).is_err());
++    let old=PhenotypeGrowthMigration::compile_n2048_to_n4096(&original,&input).unwrap();
++    assert!(!old.phenotype.is_parked_n4096_h_only());
++    assert_eq!(old.phenotype.candidate_decoder().decoder_synapse_count(),7168);
++    let legacy_wire=serde_json::to_vec(&old.phenotype).unwrap();
++    assert_eq!(serde_json::from_slice::<BrainPhenotype>(&legacy_wire).unwrap(),old.phenotype);
++    assert!(BrainCapacityClass::production_for_id(old.phenotype.brain_class_id()).is_err());
++    let mut json=serde_json::to_value(&old.phenotype).unwrap();
++    json["parked_n4096_source_hash"]=serde_json::json!([1,2,3,4]);
++    assert!(!serde_json::from_value::<BrainPhenotype>(json).unwrap().is_parked_n4096_h_only());
++}
+diff --git a/crates/alife_gpu_backend/src/closed_loop_runtime.rs b/crates/alife_gpu_backend/src/closed_loop_runtime.rs
+index d36f8e1..779904b 100644
+--- a/crates/alife_gpu_backend/src/closed_loop_runtime.rs
++++ b/crates/alife_gpu_backend/src/closed_loop_runtime.rs
+@@ -5108,6 +5108,12 @@ impl GpuClosedLoopBackend {
+         allow_research: bool,
+     ) -> Result<GpuBrainHandle, ScaffoldContractError> {
+         self.ensure_ready()?;
++        // A separately owned parked transaction is the only possible consumer.
++        // Generic insertion/restore must not make this compiled shape runnable.
++        #[cfg(feature = "research-n4096-parked-transport")]
++        if phenotype.is_parked_n4096_h_only() {
++            return Err(ScaffoldContractError::UnsupportedProductionBrainClass);
++        }
+         organism_id
+             .validate()
+             .map_err(|_| ScaffoldContractError::BrainOwnershipMismatch)?;

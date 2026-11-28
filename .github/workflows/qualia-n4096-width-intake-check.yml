@@ -1,7 +1,7 @@
-name: Qualia detached N4096 parked live transport CPU qualification
+name: Qualia detached parked N4096 real H-only compiler and registry CPU qualification
 on:
   push:
-    branches: ["bob/qualia-n4096-parked-transport-source-20261128"]
+    branches: ["bob/qualia-n4096-parked-h-only-registry-source-20261128"]
     paths: [".github/workflows/qualia-n4096-width-intake-check.yml"]
 
 permissions:
@@ -13,10 +13,13 @@ concurrency:
 
 jobs:
   source-only:
-    if: github.ref == 'refs/heads/bob/qualia-n4096-parked-transport-source-20261128'
+    if: github.ref == 'refs/heads/bob/qualia-n4096-parked-h-only-registry-source-20261128'
     runs-on: ubuntu-24.04
-    timeout-minutes: 52
+    timeout-minutes: 65
     env:
+      PIN_TRANSPORT_HEAD: a84098b683ff37067e7b79c090a93ab212ee5ce1
+      PIN_H_ONLY_META: ede42cb6103512f488bee1cf0e80a1c114d1d1f60a9e3ffa177d8750c49972d7
+      PIN_REGISTRY_META: 6f663d878e8a62a66ed24ce8c4f2d76dda2e1365fedbc8177dbc4fc966861b4b
       PIN_EXACT_EMITTED_WIDTH: d31f45d1f6b0157493080be9b89e45337d7cc4a7
       PIN_EXACT_EMITTED_WIDTH_TREE: 61dc2bf5226e87f3a3b92312708e254ff36d5d28
       PIN_PARKED_META: 63e7fc70c3b4ccbe9fbde78e2fe8d8efd05a31a33ddbb176608b14675024df56
@@ -68,14 +71,22 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git show -s --format=%P HEAD)" = "$PIN_EXACT_EMITTED_WIDTH"
+          test "$(git show -s --format=%P HEAD)" = "$PIN_TRANSPORT_HEAD"
+          test "$(git show -s --format=%P "$PIN_TRANSPORT_HEAD")" = "$PIN_EXACT_EMITTED_WIDTH"
+          diff -u <(printf '%s\n' \
+            $'M\t.github/workflows/qualia-n4096-width-intake-check.yml' \
+            $'A\tdocs/r41-saved-life/N4096-PARKED-H-ONLY-COMPILER.patch' \
+            $'A\tdocs/r41-saved-life/H-ONLY-COMPILER-PINS.json' \
+            $'A\tdocs/r41-saved-life/N4096-PARKED-NATIVE-REGISTRY.patch' \
+            $'A\tdocs/r41-saved-life/NATIVE-REGISTRY-PINS.json' | LC_ALL=C sort) \
+            <(git diff --name-status --no-renames "$PIN_TRANSPORT_HEAD" HEAD | LC_ALL=C sort)
           test "$(git rev-parse "$PIN_EXACT_EMITTED_WIDTH^{tree}")" = "$PIN_EXACT_EMITTED_WIDTH_TREE"
           test "$(git show -s --format=%P "$PIN_EXACT_EMITTED_WIDTH")" = "$PIN_WIDTH_PARENT"
           diff -u <(printf '%s\n' \
             $'M\t.github/workflows/qualia-n4096-width-intake-check.yml' \
             $'A\tdocs/r41-saved-life/N4096-PARKED-LIVE-TRANSPORT.patch' \
             $'A\tdocs/r41-saved-life/n4096-parked-transport-source-pins.v1.json' | LC_ALL=C sort) \
-            <(git diff --name-status --no-renames "$PIN_EXACT_EMITTED_WIDTH" HEAD | LC_ALL=C sort)
+            <(git diff --name-status --no-renames "$PIN_EXACT_EMITTED_WIDTH" "$PIN_TRANSPORT_HEAD" | LC_ALL=C sort)
           test "$(git rev-parse "$PIN_WIDTH_PARENT^{tree}")" = "$PIN_WIDTH_PARENT_TREE"
           test "$(git show -s --format=%P "$PIN_WIDTH_PARENT")" = "$PIN_V3_HOST"
           diff -u <(printf '%s\n' \
@@ -287,7 +298,58 @@ jobs:
           print('exact parked transport source, five leaves and forward/inverse/forward verified')
           PY
 
-      - name: Locked Rust; OFF compile and two named pure transport CPU tests
+
+      - name: Exact independently testable H-only compiler then registry overlays
+        run: |
+          set -euo pipefail
+          cd "$EXACT_SRC"
+          python3 -IB - "$GITHUB_WORKSPACE" <<'PY' | tee -a "$EVIDENCE/build.log"
+          from hashlib import sha256
+          from pathlib import Path
+          import json,os,subprocess,sys
+          docs=Path(sys.argv[1])/'docs/r41-saved-life'
+          def digest(path):
+              p=Path(path)
+              assert not p.is_symlink() and (not p.exists() or p.is_file()),p
+              return sha256(p.read_bytes()).hexdigest() if p.exists() else None
+          def approved(name,meta,want,allowed):
+              p=docs/(name+'.patch'); m=docs/meta
+              assert digest(m)==os.environ[want]
+              info=json.loads(m.read_bytes())
+              assert info['base_emitted_carrier_git']==os.environ['PIN_EXACT_EMITTED_WIDTH']
+              transport=json.loads((docs/'n4096-parked-transport-source-pins.v1.json').read_bytes())
+              assert info['composes_after_exact_transport_sha256']==transport['patch_sha256']
+              assert digest(p)==info['forward'] and not info['compiled_or_native']
+              assert set(info['leaves'])==allowed
+              paths={x.decode().split('\t',2)[2] for x in subprocess.check_output(
+                  ['git','apply','--numstat','-z',p]).rstrip(b'\0').split(b'\0')}
+              assert paths==allowed
+              def verify(k):
+                  assert digest('Cargo.lock')==os.environ['PIN_LOCK']
+                  for path,d in info['leaves'].items():assert digest(path)==d[k],(k,path,digest(path),d[k])
+              def apply(*args):
+                  for check in (['--check'], []):
+                      subprocess.run(['git','apply','--whitespace=error',*args,*check,p],check=True)
+              verify('before');apply();verify('after')
+              apply('--reverse');verify('before');apply();verify('after')
+              return info
+          compiler=approved('N4096-PARKED-H-ONLY-COMPILER','H-ONLY-COMPILER-PINS.json','PIN_H_ONLY_META',{
+              'crates/alife_core/src/phenotype/record.rs','crates/alife_core/tests/n4096_parked_h_only.rs',
+              'crates/alife_gpu_backend/src/closed_loop_runtime.rs',
+          })
+          registry=approved('N4096-PARKED-NATIVE-REGISTRY','NATIVE-REGISTRY-PINS.json','PIN_REGISTRY_META',{
+              'crates/alife_gpu_backend/src/closed_loop_runtime.rs','crates/alife_gpu_backend/src/closed_loop_checkpoint.rs',
+              'crates/alife_gpu_backend/src/closed_loop_runtime/research_n4096_parked.rs',
+              'crates/alife_gpu_backend/src/research_n4096_auxiliary.rs',
+              'crates/alife_gpu_backend/src/research_n4096_parked_transport.rs',
+          })
+          target='crates/alife_gpu_backend/src/closed_loop_runtime.rs'
+          assert registry['composes_after_h_only_compiler_sha256']==compiler['forward']
+          assert registry['leaves'][target]['before']==compiler['leaves'][target]['after']
+          print('exact 3- and 5-leaf source-only compiler and real registry overlays each forward/inverse/forward')
+          PY
+
+      - name: Locked Rust and real typed compiler + native plan CPU tests
         run: |
           set -euo pipefail
           rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --target "$TARGET"
@@ -297,29 +359,37 @@ jobs:
           grep -Fqx "host: $TARGET" <<< "$version"
           printf '%s\n' "$version" | tee -a "$EVIDENCE/build.log"
           cd "$EXACT_SRC"
-          mkdir -p "$CARGO_TARGET_DIR"
+          mkdir -p -- "$CARGO_TARGET_DIR"
           test "$(df -PB1 "$CARGO_TARGET_DIR" | awk 'NR==2 {print $4}')" -ge 10737418240
           timeout 8m cargo +"$RUST_TOOLCHAIN" fetch --locked --target "$TARGET" 2>&1 | tee -a "$EVIDENCE/build.log"
           timeout 18m cargo +"$RUST_TOOLCHAIN" check --frozen --offline --target "$TARGET" --no-default-features \
             -p alife_gpu_backend --lib 2>&1 | tee "$EVIDENCE/parked-off-check.log"
-          timeout 24m cargo +"$RUST_TOOLCHAIN" test --frozen --offline --target "$TARGET" --no-default-features \
-            -p alife_gpu_backend --lib --features research-n4096-parked-transport parked_transport_ -- --nocapture \
-            2>&1 | tee "$EVIDENCE/parked-transport-cpu.log"
-          grep -Fq 'parked_transport_preserves_csr_v11_and_complete_learned_bank_roundtrip ... ok' "$EVIDENCE/parked-transport-cpu.log"
-          grep -Fq 'parked_transport_rejects_q_alias_order_and_bad_ordered_readback ... ok' "$EVIDENCE/parked-transport-cpu.log"
-          grep -Eq '^test result: ok. 2 passed; 0 failed; 0 ignored;' "$EVIDENCE/parked-transport-cpu.log"
+          timeout 20m cargo +"$RUST_TOOLCHAIN" test --frozen --offline --target "$TARGET" --no-default-features \
+            -p alife_core --test n4096_parked_h_only --features research-n4096-parked-transport \
+            -- --nocapture 2>&1 | tee "$EVIDENCE/parked-h-only-cpu.log"
+          grep -Fq 'actual_compiler_emits_4096_h_only_layout_with_no_extra_decoder_or_recurrent_rows ... ok' "$EVIDENCE/parked-h-only-cpu.log"
+          grep -Fq 'parked_marker_is_never_promoted_or_imported_and_legacy_class4_stays_exact ... ok' "$EVIDENCE/parked-h-only-cpu.log"
+          grep -Eq '^test result: ok. 2 passed; 0 failed; 0 ignored;' "$EVIDENCE/parked-h-only-cpu.log"
+          timeout 25m cargo +"$RUST_TOOLCHAIN" test --frozen --offline --target "$TARGET" --no-default-features \
+            -p alife_gpu_backend --lib --features research-n4096-parked-transport parked_ -- --nocapture \
+            2>&1 | tee "$EVIDENCE/parked-registry-cpu.log"
+          for t in parked_transport_preserves_csr_v11_and_complete_learned_bank_roundtrip parked_transport_rejects_q_alias_order_and_bad_ordered_readback parked_terminal_refuses_offline_device_and_queue_lending parked_compiled_fixed_layout_matches_live_semantic_map_without_q_rows; do
+            grep -Fq "$t ... ok" "$EVIDENCE/parked-registry-cpu.log"
+          done
+          grep -Eq '^test result: ok. 4 passed; 0 failed; 0 ignored;' "$EVIDENCE/parked-registry-cpu.log"
           cd "$EVIDENCE"
-          sha256sum build.log parked-off-check.log parked-transport-cpu.log > SHA256SUMS
+          sha256sum build.log parked-off-check.log parked-h-only-cpu.log parked-registry-cpu.log > SHA256SUMS
           sha256sum -c SHA256SUMS
 
-      - name: Retain bounded source-only test logs (no binary or checkpoint)
+      - name: Retain exact source/test logs only, never a runnable executable or saved life
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: qualia-n4096-parked-transport-cpu-${{ github.sha }}
+          name: qualia-n4096-parked-registry-cpu-${{ github.sha }}
           path: |
             ${{ runner.temp }}/qualia-n4096-width-intake-evidence/build.log
             ${{ runner.temp }}/qualia-n4096-width-intake-evidence/parked-off-check.log
-            ${{ runner.temp }}/qualia-n4096-width-intake-evidence/parked-transport-cpu.log
+            ${{ runner.temp }}/qualia-n4096-width-intake-evidence/parked-h-only-cpu.log
+            ${{ runner.temp }}/qualia-n4096-width-intake-evidence/parked-registry-cpu.log
             ${{ runner.temp }}/qualia-n4096-width-intake-evidence/SHA256SUMS
           if-no-files-found: error
           retention-days: 5

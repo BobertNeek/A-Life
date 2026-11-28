@@ -1,0 +1,556 @@
+diff --git a/crates/alife_gpu_backend/src/closed_loop_checkpoint.rs b/crates/alife_gpu_backend/src/closed_loop_checkpoint.rs
+index c3b2c2a..0368b0b 100644
+--- a/crates/alife_gpu_backend/src/closed_loop_checkpoint.rs
++++ b/crates/alife_gpu_backend/src/closed_loop_checkpoint.rs
+@@ -1886,6 +1886,25 @@ impl GpuClosedLoopBackend {
+         restore
+     }
+ 
++    #[cfg(feature = "research-n4096-parked-transport")]
++    pub(crate) fn restore_process_local_parked_snapshot(
++        &mut self, handle: GpuBrainHandle, snapshot: GpuBrainCheckpointSnapshot,
++    ) -> Result<GpuBrainRestoreReceipt, ScaffoldContractError> {
++        let resident = self.class_buckets.get(&handle.class_id().raw())
++            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?.resident(handle)?;
++        if handle.class_id() != alife_core::BrainCapacityClass::N4096_RESEARCH_ID
++            || !resident.phenotype.is_parked_n4096_h_only()
++            || snapshot.parts.organism_id != handle.organism_id()
++            || snapshot.parts.phenotype_hash != handle.phenotype_hash()
++            || snapshot.parts.pending_eligibility.is_some()
++        {
++            return Err(ScaffoldContractError::BrainOwnershipMismatch);
++        }
++        snapshot.validate()?;
++        let digest=snapshot.canonical_digest();
++        self.restore_brain_inner(handle,snapshot.into_parts(),digest)
++    }
++
+     fn restore_brain_inner(
+         &mut self,
+         handle: GpuBrainHandle,
+diff --git a/crates/alife_gpu_backend/src/closed_loop_runtime/research_n4096_parked.rs b/crates/alife_gpu_backend/src/closed_loop_runtime/research_n4096_parked.rs
+new file mode 100644
+index 0000000..ebce918
+--- /dev/null
++++ b/crates/alife_gpu_backend/src/closed_loop_runtime/research_n4096_parked.rs
+@@ -0,0 +1,354 @@
++//! One process-local parked registry cut. Never gives a runnable or durable
++//! resident capability. The app must bind the real portable World beforehand;
++//! this module is the backend half, not a grant to execute the evaluator.
++
++use super::*;
++use crate::research_n4096_parked_transport::{exact_v11, ParkedExpectedTransport};
++use alife_core::{PhenotypeCompilerInputs, Tick};
++
++#[derive(Debug, Clone, Serialize)]
++pub struct N4096ParkedRegistryWitnessV1 {
++    pub schema: &'static str,
++    pub actual_owner: u64,
++    pub checkpoint_tick_asserted_by_app: u64,
++    pub old_class_id: u16,
++    pub parked_class_id: u16,
++    pub parked_slot_generation: u32,
++    pub actual_registered_neuron_count: u32,
++    pub actual_recurrent_row_count: u32,
++    pub actual_decoder_row_count: u32,
++    pub source_native_digest: [u64; 4],
++    pub source_live_topology_digest: [u64; 4],
++    pub parked_native_digest: [u64; 4],
++    pub parked_live_topology_digest: [u64; 4],
++    pub mapped_h_q_digest: [u64; 4],
++    pub exact_device_limits_digest: [u64; 4],
++    pub ordinary_neural_dispatch_counters: [u64; 4],
++    pub old_and_parked_allocation_generation: [u64; 2],
++    pub actual_parked_arena_bytes: u64,
++    pub guarded_native_peak_bytes: u64,
++    pub old_slot_unresolvable: bool,
++    pub native_runnable: bool,
++    pub checkpoint_authority: bool,
++}
++
++fn mismatch() -> ScaffoldContractError {
++    ScaffoldContractError::BrainOwnershipMismatch
++}
++fn no_room() -> ScaffoldContractError {
++    ScaffoldContractError::NeuralBackendUnavailable
++}
++
++// This is the exact guard used by the otherwise public device/queue borrow.
++// The production branch remains the original OFF byte semantics.
++pub(super) fn require_open_before_lending_offline_queue(
++    terminal:bool,
++)->Result<(),ScaffoldContractError>{
++    if terminal {
++        return Err(ScaffoldContractError::UnsupportedProductionBrainClass);
++    }
++    Ok(())
++}
++
++fn slot_readback_reserve(r: &GpuFixedSlotRanges) -> Result<u64, ScaffoldContractError> {
++    [r.immutable_plan_words.len(), r.immutable_weight_words.len(),
++        r.mutable_state_words.len()].into_iter()
++        .try_fold(0u64, |s, n| {
++            s.checked_add((n as u64).checked_mul(4).ok_or_else(no_room)?)
++                .ok_or_else(no_room)
++        })
++}
++
++fn slot_upload_reserve(r: &GpuFixedSlotRanges) -> Result<u64, ScaffoldContractError> {
++    slot_readback_reserve(r)?.checked_add(r.brain_slot_bytes.end-r.brain_slot_bytes.start)
++        .and_then(|s| s.checked_add(r.identity_bytes.end-r.identity_bytes.start))
++        .ok_or_else(no_room)
++}
++
++impl GpuClosedLoopBackend {
++    /// Authenticates actual current source buffers locally. Caller expectations
++    /// only constrain this snapshot. No externally given CPU buffer initializes
++    /// H/Q. The returned handle identifies the parked slot for the app's
++    /// registry check only; all normal backend entrypoints are now terminal.
++    ///
++    /// This is a detached research test primitive, reachable only from an
++    /// independently reviewed app scope when a future source/lease authorizes
++    /// it. Passing carries no phenotype checkpoint or inference authorization.
++    #[doc(hidden)]
++    #[allow(clippy::too_many_arguments)]
++    pub fn park_same_life_n4096_zero_for_test(
++        &mut self, source: GpuBrainHandle, checkpoint_tick: Tick,
++        compiler: &PhenotypeCompilerInputs, exact_source_snapshot: [u64; 4],
++        exact_source_topology: [u64; 4], exact_source_v11: &GpuV11Checkpoint,
++        exact_carrier_h_q: [u64; 4], maximum_admitted_device_peak: u64,
++    ) -> Result<(GpuBrainHandle, N4096ParkedRegistryWitnessV1), ScaffoldContractError> {
++        self.ensure_ready()?;
++        self.validate_handle_backend(source)?;
++        let source_class = BrainCapacityClass::n2048();
++        let wide_class = BrainCapacityClass::n4096_research();
++        if !self.is_software_runtime_test()
++            || source.class_id != source_class.id()
++            || self.organisms.len() != 1
++            || self.organisms.get(&source.organism_id.raw()) != Some(&source)
++            || self.admission.live_brains != 1
++            || self.class_buckets.contains_key(&wide_class.id().raw())
++            || self.slot_generation_watermarks.keys().any(|&(c,_)| c == wide_class.id().raw())
++            || !self.sleep_jobs.is_empty()
++            || !self.committed_sleep.is_empty()
++            || self.pending_inference_timing.is_some()
++            || [exact_source_snapshot,exact_source_topology,exact_carrier_h_q].contains(&[0; 4])
++            || maximum_admitted_device_peak == 0
++            || maximum_admitted_device_peak > self.runtime_budget.physical_allocation_ceiling_bytes
++        {
++            return Err(mismatch());
++        }
++        let counters = parked_native_counters(self);
++        let allocator_before = self.admission.allocation_generation;
++        let old_idx = self.class_buckets.get(&source_class.id().raw())
++            .ok_or_else(mismatch)?.bucket_index_for_handle(source).ok_or_else(mismatch)?;
++        let old = self.class_buckets.get(&source_class.id().raw())
++            .ok_or_else(mismatch)?.resident(source)?;
++        if old.pending_eligibility.is_some() || old.pending_eligibility_record.is_some()
++            || old.inactive_eligibility_generation != 0
++            || !exact_v11(&old.v11.checkpoint(),exact_source_v11)
++            || old.phenotype.compiler_inputs_digest() != compiler.canonical_digest()
++        {
++            return Err(mismatch());
++        }
++        #[cfg(feature = "training-rollout")]
++        if old.training_phenotype.is_some() {
++            return Err(mismatch());
++        }
++        let phenotype = BrainPhenotype::compile_parked_n4096_h_only(&old.phenotype, compiler)?;
++        let old_reserve = slot_readback_reserve(&old.ranges)?;
++        let plan = GpuFixedClassArenaPlan::new(wide_class, 1,
++            self.runtime_budget.physical_allocation_ceiling_bytes).map_err(map_gpu_contract_error)?;
++        self.runtime_budget.validate_for(wide_class.execution())?;
++        crate::GpuClassBucketPlan::validate_adapter(&phenotype, &self.runtime_budget)
++            .map_err(map_gpu_contract_error)?;
++        let wide_ranges = plan.slot_ranges(0).map_err(map_gpu_contract_error)?;
++        let physical = plan.aggregate_resident_bytes();
++        let logical = plan.slot_allocation_receipt().map_err(map_gpu_contract_error)?
++            .logical_slot_commit_bytes;
++        // Conservative overlapping storage: both counted arenas; complete
++        // wide queue upload staging; full restore write scratch; full mapped
++        // capture on each side. Not a report of total Vulkan driver memory.
++        let peak = self.admission.physical_allocated_bytes.checked_add(physical)
++            .and_then(|s| s.checked_add(old_reserve))
++            .and_then(|s| s.checked_add(slot_upload_reserve(&wide_ranges).ok()?))
++            .and_then(|s| s.checked_add((wide_ranges.mutable_state_words.len() as u64).checked_mul(4)?))
++            .and_then(|s| s.checked_add(slot_readback_reserve(&wide_ranges).ok()?))
++            .ok_or_else(no_room)?;
++        if peak > maximum_admitted_device_peak
++            || self.admission.logical_committed_bytes.checked_add(logical)
++                .is_none_or(|s| s > self.runtime_budget.logical_neural_heap_budget_bytes)
++        {
++            return Err(no_room());
++        }
++        let source_topology = self.checkpoint_live_topology(source)?;
++        let source_snapshot = self.snapshot_brain(source, checkpoint_tick)?;
++        if source_topology.canonical_digest != exact_source_topology
++            || !exact_v11(&source_topology.v11_checkpoint,exact_source_v11)
++            || source_snapshot.canonical_digest() != exact_source_snapshot
++            || parked_native_counters(self) != counters
++        {
++            return Err(mismatch());
++        }
++        let expected = ParkedExpectedTransport::derive_exact(
++            &source_topology,&source_snapshot,phenotype.phenotype_hash(),
++        )?;
++        let base_upload = plan.prepare_slot_upload(0,1,&phenotype).map_err(map_gpu_contract_error)?;
++        let prepared_v11 = GpuV11CausalState::restore(expected.expected_topology().v11_checkpoint.clone())?;
++        let upload = compile_v11_slot_upload(&plan,base_upload.brain_slot(),&phenotype,&prepared_v11)
++            .map_err(map_gpu_contract_error)?;
++        let compiled = upload.live_topology_checkpoint(phenotype.phenotype_hash(),prepared_v11.checkpoint())
++            .map_err(map_gpu_contract_error)?;
++        if &compiled != expected.expected_topology()
++            || !exact_v11(&compiled.v11_checkpoint,&expected.expected_topology().v11_checkpoint)
++            || upload.record().neuron_count != wide_class.execution().max_neurons()
++        {
++            return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
++        }
++
++        // All pre-flight translation/compile can refuse cleanly. Any later
++        // queue/registry failure ends this detached backend, even if the OS
++        // device error status hasn't yet arrived.
++        let guards = [wgpu::ErrorFilter::OutOfMemory,wgpu::ErrorFilter::Validation,wgpu::ErrorFilter::Internal]
++            .map(|f| self.device.push_error_scope(f));
++        let result=(|| {
++            let mut bucket = ClassBucketRuntime::from_plan(&self.device,Arc::clone(&self.kernels),plan)
++                .map_err(map_gpu_contract_error)?;
++            bucket.buffers.write_v11_topology_upload(&self.queue,&upload).map_err(map_gpu_contract_error)?;
++            let submission = self.queue.submit(std::iter::empty());
++            self.device.poll(wgpu::PollType::Wait {submission_index:Some(submission),timeout:None})
++                .map_err(|_| no_room())?;
++            let handle = GpuBrainHandle {
++                backend_instance_id:self.backend_instance_id,class_id:wide_class.id(),
++                slot:0,generation:1,organism_id:source.organism_id,
++                phenotype_hash:phenotype.phenotype_hash(),
++            };
++            let snapshot = expected.expected_snapshot().clone();
++            let parts = snapshot.clone().into_parts();
++            {
++                let old=self.class_buckets.get(&source_class.id().raw())
++                    .ok_or_else(mismatch)?.resident(source)?;
++                let learning_sequence_guard=LearningSequenceGuard::restore_validated(
++                    handle.organism_id,handle.phenotype_hash,parts.last_learning_replay_key,
++                )?;
++                if bucket.free_slots.pop()!=Some(0) { return Err(mismatch()); }
++                bucket.generations[0]=1;
++                bucket.slots[0]=Some(ResidentBrainSlot {
++                    developmental_plasticity:old.developmental_plasticity.clone(),
++                    ownership:GpuBrainSlotOwnership {
++                        organism_id:handle.organism_id,phenotype_hash:handle.phenotype_hash,
++                        sensor_profile:phenotype.sensor_profile(),
++                    },
++                    phenotype:phenotype.clone(),
++                    #[cfg(feature = "training-rollout")]
++                    training_phenotype:None,
++                    brain_slot:upload.brain_slot().clone(),ranges:upload.ranges().clone(),
++                    active_eligibility_bank:parts.active_eligibility_bank,
++                    active_eligibility_generation:parts.active_eligibility_generation,
++                    inactive_eligibility_generation:parts.inactive_eligibility_generation,
++                    active_weight_bank:parts.active_weight_bank,
++                    active_weight_generation:parts.active_weight_generation,
++                    replay_journal_generation:parts.replay_journal_generation,
++                    replay_journal_cursor:parts.replay_journal_cursor,
++                    replay_journal_event_count:parts.replay_journal_event_count,
++                    transaction_generation:parts.learning_transaction_generation,
++                    logical_dispatch_generation:parts.logical_dispatch_generation,
++                    activity_sequence_cursor:old.activity_sequence_cursor,
++                    brain_atp_q16:old.brain_atp_q16,last_world_atp_tick:old.last_world_atp_tick,
++                    last_completed_gpu_time_ns:old.last_completed_gpu_time_ns,
++                    last_activity:old.last_activity.as_ref().map(|a| ResidentActivity {
++                        throttle:a.throttle.clone(),work:a.work.clone(),
++                    }),
++                    v11:prepared_v11,sleep_plan:old.sleep_plan,learning_sequence_guard,
++                    pending_eligibility:None,pending_eligibility_record:None,
++                });
++            }
++            // The temporary slot is addressable only inside the exclusive
++            // borrow. Public organism ownership still points at the old slot.
++            if self.class_buckets.insert(wide_class.id().raw(),ClassBucketPool {chunks:vec![bucket]}).is_some() {
++                return Err(mismatch());
++            }
++            self.restore_process_local_parked_snapshot(handle,snapshot)?;
++            let first_topology=self.checkpoint_live_topology(handle)?;
++            let first_snapshot=self.snapshot_brain(handle,checkpoint_tick)?;
++            expected.verify_actual_mapped(&first_topology,&first_snapshot)?;
++            let first_hq=expected.check_mapped_hq(&source_snapshot,&first_snapshot)?;
++            if first_hq!=exact_carrier_h_q || parked_native_counters(self)!=counters
++                || self.organisms.get(&source.organism_id.raw())!=Some(&source)
++                || self.snapshot_brain(source,checkpoint_tick)?.canonical_digest()!=exact_source_snapshot
++                || self.checkpoint_live_topology(source)?.canonical_digest!=exact_source_topology
++            {
++                return Err(mismatch());
++            }
++            let old_bucket=self.class_buckets.get_mut(&source_class.id().raw())
++                .and_then(|p|p.chunks.get_mut(old_idx)).ok_or_else(mismatch)?;
++            if !old_bucket.contains(source) { return Err(mismatch()); }
++            old_bucket.slots[source.slot as usize].take().ok_or_else(mismatch)?;
++            // Retain its charged bytes until process exit; never offer that
++            // slot for another admission or expose the former owner.
++            old_bucket.retired.insert(source.slot);
++            if self.organisms.insert(handle.organism_id.raw(),handle)!=Some(source)
++                || self.slot_generation_watermarks.insert((wide_class.id().raw(),0),1).is_some()
++            {
++                return Err(mismatch());
++            }
++            self.commit_admission_event(GpuAllocationEventKind::AdmitFromNewChunk,handle,peak)?;
++            let actual=self.organisms.get(&handle.organism_id.raw()).copied().ok_or_else(mismatch)?;
++            if actual!=handle || self.organisms.len()!=1 || self.admission.live_brains!=1
++                || self.admission.allocation_generation.checked_sub(1)!=Some(allocator_before)
++                || parked_native_counters(self)!=counters
++                || self.class_buckets[&source_class.id().raw()].bucket_index_for_handle(source).is_some()
++            {
++                return Err(mismatch());
++            }
++            // Take the final readback through the actual authoritative lookup.
++            let final_topology=self.checkpoint_live_topology(actual)?;
++            let final_snapshot=self.snapshot_brain(actual,checkpoint_tick)?;
++            expected.verify_actual_mapped(&final_topology,&final_snapshot)?;
++            if expected.check_mapped_hq(&source_snapshot,&final_snapshot)?!=first_hq
++                || parked_native_counters(self)!=counters || self.device_lost.load(Ordering::Acquire)
++            {
++                return Err(mismatch());
++            }
++            Ok((actual,N4096ParkedRegistryWitnessV1{
++                schema:"alife.research.n4096.parked-native-registry-zero.v1",
++                actual_owner:actual.organism_id.raw(),checkpoint_tick_asserted_by_app:checkpoint_tick.raw(),
++                old_class_id:source_class.id().raw(),parked_class_id:actual.class_id.raw(),
++                parked_slot_generation:actual.generation,
++                actual_registered_neuron_count:final_topology.neuron_count,
++                actual_recurrent_row_count:final_topology.recurrent_synapse_count,
++                actual_decoder_row_count:final_topology.decoder_synapse_count,
++                source_native_digest:exact_source_snapshot,source_live_topology_digest:exact_source_topology,
++                parked_native_digest:final_snapshot.canonical_digest(),
++                parked_live_topology_digest:final_topology.canonical_digest,
++                mapped_h_q_digest:first_hq,exact_device_limits_digest:self.hardware.limits_digest,
++                ordinary_neural_dispatch_counters:counters,
++                old_and_parked_allocation_generation:[allocator_before,self.admission.allocation_generation],
++                actual_parked_arena_bytes:physical,guarded_native_peak_bytes:peak,
++                old_slot_unresolvable:true,native_runnable:false,checkpoint_authority:false,
++            }))
++        })();
++        let mut device_error=false;
++        for scope in guards.into_iter().rev() {
++            device_error |= pollster::block_on(scope.pop()).is_some();
++        }
++        self.parked_n4096_terminal=true;
++        if device_error || self.device_lost.load(Ordering::Acquire) {
++            return Err(no_room());
++        }
++        result
++    }
++}
++
++fn parked_native_counters(backend:&GpuClosedLoopBackend)->[u64;4]{
++    [backend.next_dispatch_generation,backend.completed_dispatch_count(),
++     backend.completed_selection_count(),backend.perception_upload_count()]
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use alife_core::{BrainGenome,DevelopmentState,NormalizedScalar,PhenotypeCompiler};
++
++    #[test]
++    fn parked_terminal_refuses_offline_device_and_queue_lending() {
++        assert_eq!(require_open_before_lending_offline_queue(true),
++            Err(ScaffoldContractError::UnsupportedProductionBrainClass));
++        assert_eq!(require_open_before_lending_offline_queue(false),Ok(()));
++    }
++
++    #[test]
++    fn parked_compiled_fixed_layout_matches_live_semantic_map_without_q_rows() {
++        let base=BrainCapacityClass::n2048();
++        let wide=BrainCapacityClass::n4096_research();
++        let genome=BrainGenome::scaffold(0x40404,base.id());
++        let growth=DevelopmentState::new(genome.id,Tick::ZERO,NormalizedScalar::new(1.0).unwrap());
++        let inputs=PhenotypeCompilerInputs::try_new(genome,&base,growth,SensorProfile::GroundedObjectSlotsV1).unwrap();
++        let source=PhenotypeCompiler::compile_validated(&inputs,&base).unwrap();
++        let target=BrainPhenotype::compile_parked_n4096_h_only(&source,&inputs).unwrap();
++        let old_plan=GpuFixedClassArenaPlan::new(base,1,u64::MAX).unwrap();
++        let new_plan=GpuFixedClassArenaPlan::new(wide,1,u64::MAX).unwrap();
++        let old_base=old_plan.prepare_slot_upload(0,1,&source).unwrap();
++        let new_base=new_plan.prepare_slot_upload(0,1,&target).unwrap();
++        let old_v11=GpuV11CausalState::for_phenotype(&source).unwrap();
++        let old_upload=compile_v11_slot_upload(&old_plan,old_base.brain_slot(),&source,&old_v11).unwrap();
++        let old_topology=old_upload.live_topology_checkpoint(source.phenotype_hash(),old_v11.checkpoint()).unwrap();
++        // Independent validated source has real default dendritic state. Use
++        // the same typed projection as the future cut, never synthesize the
++        // target's V11 from default wide branches.
++        let target_v11=crate::research_n4096_parked_transport::transport_v11_for_compiled_test(
++            &old_topology.v11_checkpoint,
++        ).unwrap();
++        let target_v11=GpuV11CausalState::restore(target_v11).unwrap();
++        let new_upload=compile_v11_slot_upload(&new_plan,new_base.brain_slot(),&target,&target_v11).unwrap();
++        let new_topology=new_upload.live_topology_checkpoint(target.phenotype_hash(),target_v11.checkpoint()).unwrap();
++        ParkedExpectedTransport::compare_compiled_h_only_layout(&old_topology,&new_topology).unwrap();
++        assert_eq!(new_topology.neuron_count,4096);
++        assert_eq!(new_topology.recurrent_synapse_count,old_topology.recurrent_synapse_count);
++        assert_eq!(new_topology.decoder_synapse_count,old_topology.decoder_synapse_count);
++    }
++}
+diff --git a/crates/alife_gpu_backend/src/closed_loop_runtime.rs b/crates/alife_gpu_backend/src/closed_loop_runtime.rs
+index 779904b..6d03c6b 100644
+--- a/crates/alife_gpu_backend/src/closed_loop_runtime.rs
++++ b/crates/alife_gpu_backend/src/closed_loop_runtime.rs
+@@ -10,6 +10,10 @@ mod selector_exploration;
+ #[cfg(feature = "gpu-tests")]
+ mod software_training_test;
+ mod tick;
++#[cfg(feature = "research-n4096-parked-transport")]
++mod research_n4096_parked;
++#[cfg(feature = "research-n4096-parked-transport")]
++pub use research_n4096_parked::N4096ParkedRegistryWitnessV1;
+ #[cfg(feature = "training-rollout")]
+ pub use live_policy::GpuLivePolicyInstallReceipt;
+ #[cfg(feature = "training-rollout")]
+@@ -2753,6 +2757,8 @@ pub struct GpuClosedLoopBackend {
+     runtime_budget: GpuRuntimeBudget,
+     activity_policy: BrainActivityPolicyV1,
+     admission: GpuAdmissionReceipt,
++    #[cfg(feature = "research-n4096-parked-transport")]
++    parked_n4096_terminal: bool,
+     pub(crate) class_buckets: BTreeMap<u16, ClassBucketPool>,
+     slot_generation_watermarks: BTreeMap<(u16, u32), u32>,
+     pub(crate) organisms: BTreeMap<u64, GpuBrainHandle>,
+@@ -2915,6 +2921,8 @@ impl GpuClosedLoopBackend {
+             runtime_budget,
+             activity_policy,
+             admission,
++            #[cfg(feature = "research-n4096-parked-transport")]
++            parked_n4096_terminal: false,
+             class_buckets: BTreeMap::new(),
+             slot_generation_watermarks: BTreeMap::new(),
+             organisms: BTreeMap::new(),
+@@ -2954,6 +2962,10 @@ impl GpuClosedLoopBackend {
+     /// admission, generations, counters, and replay state are new and cannot
+     /// accept handles issued by the live backend.
+     pub fn new_staging_like_live(&self) -> Result<Self, ScaffoldContractError> {
++        #[cfg(feature = "research-n4096-parked-transport")]
++        if self.parked_n4096_terminal {
++            return Err(ScaffoldContractError::UnsupportedProductionBrainClass);
++        }
+         #[cfg(feature = "gpu-tests")]
+         if self.offline_software_training_test {
+             return Err(ScaffoldContractError::NeuralBackendUnavailable);
+@@ -2984,6 +2996,8 @@ impl GpuClosedLoopBackend {
+             runtime_budget: self.runtime_budget,
+             activity_policy: self.activity_policy,
+             admission: GpuAdmissionReceipt::empty(self.runtime_budget),
++            #[cfg(feature = "research-n4096-parked-transport")]
++            parked_n4096_terminal: false,
+             class_buckets: BTreeMap::new(),
+             slot_generation_watermarks: BTreeMap::new(),
+             organisms: BTreeMap::new(),
+@@ -3026,6 +3040,8 @@ impl GpuClosedLoopBackend {
+     pub fn offline_training_device_queue(
+         &self,
+     ) -> Result<(&wgpu::Device, &wgpu::Queue), ScaffoldContractError> {
++        #[cfg(feature = "research-n4096-parked-transport")]
++        research_n4096_parked::require_open_before_lending_offline_queue(self.parked_n4096_terminal)?;
+         if !matches!(self.state, GpuBackendState::Ready) || self.device_lost.load(Ordering::Acquire)
+         {
+             return Err(ScaffoldContractError::NeuralBackendUnavailable);
+@@ -5457,6 +5473,10 @@ impl GpuClosedLoopBackend {
+     }
+ 
+     pub(crate) fn ensure_ready(&mut self) -> Result<(), ScaffoldContractError> {
++        #[cfg(feature = "research-n4096-parked-transport")]
++        if self.parked_n4096_terminal {
++            return Err(ScaffoldContractError::UnsupportedProductionBrainClass);
++        }
+         // Explicit software fixtures expose only the quiescent offline queue.
+         // They cannot mint resident handles, live dispatches or restore targets.
+         #[cfg(feature = "gpu-tests")]
+@@ -5477,6 +5497,10 @@ impl GpuClosedLoopBackend {
+         &self,
+         handle: GpuBrainHandle,
+     ) -> Result<(), ScaffoldContractError> {
++        #[cfg(feature = "research-n4096-parked-transport")]
++        if self.parked_n4096_terminal {
++            return Err(ScaffoldContractError::UnsupportedProductionBrainClass);
++        }
+         if handle.backend_instance_id == self.backend_instance_id {
+             Ok(())
+         } else {
+diff --git a/crates/alife_gpu_backend/src/research_n4096_auxiliary.rs b/crates/alife_gpu_backend/src/research_n4096_auxiliary.rs
+index 2debddc..9c053a7 100644
+--- a/crates/alife_gpu_backend/src/research_n4096_auxiliary.rs
++++ b/crates/alife_gpu_backend/src/research_n4096_auxiliary.rs
+@@ -123,7 +123,7 @@ fn lift_h(
+     Ok(words)
+ }
+ 
+-fn verify_readback(
++pub(crate) fn verify_readback(
+     bands: &[N4096LobeAddressBandsV1],
+     old: [&[u32]; 3],
+     rows: &[Vec<u32>],
+diff --git a/crates/alife_gpu_backend/src/research_n4096_parked_transport.rs b/crates/alife_gpu_backend/src/research_n4096_parked_transport.rs
+index 7db3148..fda2fc5 100644
+--- a/crates/alife_gpu_backend/src/research_n4096_parked_transport.rs
++++ b/crates/alife_gpu_backend/src/research_n4096_parked_transport.rs
+@@ -83,7 +83,7 @@ fn transport_v11(
+     Ok(out)
+ }
+ 
+-fn exact_v11(a: &GpuV11Checkpoint, b: &GpuV11Checkpoint) -> bool {
++pub(crate) fn exact_v11(a: &GpuV11Checkpoint, b: &GpuV11Checkpoint) -> bool {
+     a == b && a.dendritic_branches.branches().iter().zip(b.dendritic_branches.branches())
+         .all(|(p, q)| p.threshold.to_bits() == q.threshold.to_bits()
+             && p.output_gain.to_bits() == q.output_gain.to_bits()
+@@ -269,6 +269,46 @@ impl ParkedExpectedTransport {
+         Ok(())
+     }
+ 
++    #[cfg(test)]
++    pub(crate) fn compare_compiled_h_only_layout(
++        source: &GpuLiveTopologyCheckpointV1,
++        compiled: &GpuLiveTopologyCheckpointV1,
++    ) -> Result<()> {
++        let map = HqAddresses::new()?;
++        let expected = transport_topology(
++            source, &BrainCapacityClass::n2048(), &BrainCapacityClass::n4096_research(),
++            &map.forward, compiled.phenotype_hash,
++        )?;
++        if compiled != &expected || !exact_v11(&compiled.v11_checkpoint,&expected.v11_checkpoint) {
++            return Err(invalid());
++        }
++        Ok(())
++    }
++
++    pub(crate) fn expected_topology(&self) -> &GpuLiveTopologyCheckpointV1 {
++        &self.topology
++    }
++
++    pub(crate) fn expected_snapshot(&self) -> &GpuBrainCheckpointSnapshot {
++        &self.native
++    }
++
++    pub(crate) fn check_mapped_hq(
++        &self, source: &GpuBrainCheckpointSnapshot, mapped: &GpuBrainCheckpointSnapshot,
++    ) -> Result<[u64; 4]> {
++        let source = source.clone().into_parts();
++        let mapped = mapped.clone().into_parts();
++        let refs = [
++            source.activation_a_bits.as_slice(),
++            source.activation_b_bits.as_slice(),
++            source.neuron_homeostasis_bits.as_slice(),
++        ];
++        crate::research_n4096_auxiliary::verify_readback(
++            &address_bands().map_err(|_| invalid())?, refs,
++            &[mapped.activation_a_bits, mapped.activation_b_bits, mapped.neuron_homeostasis_bits],
++        )
++    }
++
+     // Expected topology recomputation alone is not readback. The device
+     // caller must use an independently mapped capture tied to its actual slot.
+     pub(crate) fn verify_actual_mapped(
+@@ -446,3 +486,8 @@ mod tests {
+         assert!(ParkedExpectedTransport::derive_exact(&source,&native,source.phenotype_hash).is_err());
+     }
+ }
++
++#[cfg(test)]
++pub(crate) fn transport_v11_for_compiled_test(source: &GpuV11Checkpoint) -> Result<GpuV11Checkpoint> {
++    transport_v11(source, &HqAddresses::new()?.forward, WIDE as u32)
++}

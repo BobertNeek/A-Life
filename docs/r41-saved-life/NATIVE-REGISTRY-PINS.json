@@ -1,0 +1,37 @@
+{
+  "base_emitted_carrier_git": "d31f45d1f6b0157493080be9b89e45337d7cc4a7",
+  "compiled_or_native": false,
+  "composes_after_exact_transport_sha256": "3bc64a53caaf465eb527f2ca9158ee603fe4814650692102dc70180458d897ec",
+  "composes_after_h_only_compiler_sha256": "068f0b351c593cf5f7ff52eb12bba9414ddcdabd3398ce899f2209c6c39f7f24",
+  "following_delta_explicit_tick_import_only": true,
+  "forward": "4b0aad4ee092a8dd9bfd3165906329167cac7aff696e421d50b7c79d2df8ce32",
+  "inverse": "15caaa7c69ea550b4e18f5893c8ad51f4da3a72d8918ec1d698ea8e02d1dbe76",
+  "leaves": {
+    "crates/alife_gpu_backend/src/closed_loop_checkpoint.rs": {
+      "after": "56d1707a11891d3f00d29fb3b81cbc643683d22c547618bdd61f31e2112279d6",
+      "before": "435dd9f0a9686f1ecb5f1665427b78e44df29844e771a62b4c2760b64310860d"
+    },
+    "crates/alife_gpu_backend/src/closed_loop_runtime.rs": {
+      "after": "fcdee2525b403a7dbe99fee3da858ce1fb2f8f5f6f4f3e7515ed2257253fe864",
+      "before": "30bea4a52986e4201e965694706b7d2377eb18647855286ceee40a7150aa5be3"
+    },
+    "crates/alife_gpu_backend/src/closed_loop_runtime/research_n4096_parked.rs": {
+      "after": "bb26221c0c2e2e32c08256bf0fdb4380a956db3ae4e2c6116cd80ef6a92b56b5",
+      "before": null
+    },
+    "crates/alife_gpu_backend/src/research_n4096_auxiliary.rs": {
+      "after": "5e2a1d26c77af8d02b36586631a0455ba100bb138470f121674445279172dd84",
+      "before": "014e2860997e6396ea2ee359ea6ea7bc8326ad23537981d433fca1d3f54a2962"
+    },
+    "crates/alife_gpu_backend/src/research_n4096_parked_transport.rs": {
+      "after": "1ba233a2822c7f2d4e70bc339179f1fc7fdeb41c7b6d589968cb64ecf1d7a708",
+      "before": "be3ea0afcd4fbecfacde5e89c874d3cc5ea9622b7a207f79587bd8b1d802948a"
+    }
+  },
+  "prior": "b918cea52de448bb63cdd10b8630b1b24481a6f874d0c8171777a750f4586395",
+  "prior_typed_encoder_conformance_tests_repin_only": true,
+  "private_current_or_app_live_authority": false,
+  "roundtrip_static_verified": true,
+  "schema": "qualia.n4096.parked-native-registry-source.v1",
+  "terminal_offline_queue_refusal_only_new_runtime_delta": true
+}
