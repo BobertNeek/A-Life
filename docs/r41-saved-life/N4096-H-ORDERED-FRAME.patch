@@ -475,8 +475,8 @@ new file mode 100644
 +        {
 +            let mut dst=source.slice(..).get_mapped_range_mut();
 +            let first=seal.lengths[0] as usize;
-+            dst[..first].copy_from_slice(bytemuck::cast_slice(batch.dispatch_header_words()));
-+            dst[first..].copy_from_slice(bytemuck::cast_slice(batch.frame_payload_words()));
++            dst.slice(..first).copy_from_slice(bytemuck::cast_slice(batch.dispatch_header_words()));
++            dst.slice(first..).copy_from_slice(bytemuck::cast_slice(batch.frame_payload_words()));
 +        }
 +        source.unmap();
 +        let read=backend.device.create_buffer(&wgpu::BufferDescriptor{

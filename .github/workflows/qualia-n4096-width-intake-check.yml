@@ -1,7 +1,7 @@
 name: Qualia exact N4096 H-only ordered frame CPU qualification
 on:
   push:
-    branches: ["bob/qualia-n4096-h-ordered-frame-cpu-20261128"]
+    branches: ["bob/qualia-n4096-h-ordered-frame-wgpu29-cpu-20261128"]
     paths: [".github/workflows/qualia-n4096-width-intake-check.yml"]
 
 permissions:
@@ -13,14 +13,16 @@ concurrency:
 
 jobs:
   source-only:
-    if: github.ref == 'refs/heads/bob/qualia-n4096-h-ordered-frame-cpu-20261128'
+    if: github.ref == 'refs/heads/bob/qualia-n4096-h-ordered-frame-wgpu29-cpu-20261128'
     runs-on: ubuntu-24.04
     timeout-minutes: 65
     env:
+      PIN_H_FRAME_RETRY_PARENT: 9c722ac12b58b15453b285bac2fc73d275bd783e
+      PIN_H_FRAME_RETRY_TREE: 4121c0a66f58e59d9b34be0a722da5523041966a
       PIN_H_FRAME_PARENT: ea436109492335803e504981d990eaf63dd8f800
       PIN_H_FRAME_TREE: f0387b1a500947e1b80cdd2ed09a54a8800e765b
-      PIN_H_FRAME_PATCH: 4b49e1147eed1daa8d93fd24be66280e830cbbec23b5aecb44af50751c9aa7f1
-      PIN_H_FRAME_PINS: d3a712a7750f36f14988e90bf95ef2af9715144ec5fd7717ea9e205a140be1b5
+      PIN_H_FRAME_PATCH: e2b2d7d2fe5b436fd10f72246a76ddbd6546463edd619e6612a7e1bdfefa4247
+      PIN_H_FRAME_PINS: 4f0a2102ed76fc5e4826fc3a1e7625e6b5071fdd297580c86281c58be11ea291
       PIN_OWNER_PREFIX_PARENT: 4a9cb1e1163067232b6d55c7dae564fb9545bc06
       PIN_OWNER_PREFIX_TREE: 6d6f34c006f43e5451aa506fac4c091bfeed1891
       PIN_OWNER_PREFIX_PATCH: a1c0e8bae43d6844184b1150551bd358608d53517cdb5ca4454ddae10daac3e5
@@ -91,13 +93,23 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git show -s --format=%P HEAD)" = "$PIN_H_FRAME_PARENT"
+          test "$(git show -s --format=%P HEAD)" = "$PIN_H_FRAME_RETRY_PARENT"
+          test "$(git rev-parse "$PIN_H_FRAME_RETRY_PARENT^{tree}")" = "$PIN_H_FRAME_RETRY_TREE"
+          test "$(git show -s --format=%P "$PIN_H_FRAME_RETRY_PARENT")" = "$PIN_H_FRAME_PARENT"
+          diff -u <(printf '%s\n' \
+            $'M\t.github/workflows/qualia-n4096-width-intake-check.yml' \
+            $'M\tdocs/r41-saved-life/N4096-H-ORDERED-FRAME.patch' \
+            $'M\tdocs/r41-saved-life/N4096-H-ORDERED-FRAME-PINS.json' | LC_ALL=C sort) \
+            <(git diff --name-status --no-renames "$PIN_H_FRAME_RETRY_PARENT" HEAD | LC_ALL=C sort)
+          test "$(git rev-parse "$PIN_H_FRAME_RETRY_PARENT:.github/workflows/qualia-n4096-width-intake-check.yml")" = 44bfc7d1962348d379b5f5a1e6ed10899c6fb776
+          test "$(git rev-parse "$PIN_H_FRAME_RETRY_PARENT:docs/r41-saved-life/N4096-H-ORDERED-FRAME.patch")" = b61d365c32e803c5c571ece54d5b61ee25fa2d8c
+          test "$(git rev-parse "$PIN_H_FRAME_RETRY_PARENT:docs/r41-saved-life/N4096-H-ORDERED-FRAME-PINS.json")" = 114affc5b24b4db061ec6599f9936170afe601a3
           test "$(git rev-parse "$PIN_H_FRAME_PARENT^{tree}")" = "$PIN_H_FRAME_TREE"
           diff -u <(printf '%s\n' \
             $'M\t.github/workflows/qualia-n4096-width-intake-check.yml' \
             $'A\tdocs/r41-saved-life/N4096-H-ORDERED-FRAME.patch' \
             $'A\tdocs/r41-saved-life/N4096-H-ORDERED-FRAME-PINS.json' | LC_ALL=C sort) \
-            <(git diff --name-status --no-renames "$PIN_H_FRAME_PARENT" HEAD | LC_ALL=C sort)
+            <(git diff --name-status --no-renames "$PIN_H_FRAME_PARENT" "$PIN_H_FRAME_RETRY_PARENT" | LC_ALL=C sort)
           test "$(git show -s --format=%P "$PIN_H_FRAME_PARENT")" = "$PIN_OWNER_PREFIX_PARENT"
           test "$(git rev-parse "$PIN_OWNER_PREFIX_PARENT^{tree}")" = "$PIN_OWNER_PREFIX_TREE"
           diff -u <(printf '%s\n' \

@@ -28,10 +28,10 @@
       "git_blob": "a6823bd3d00e26e1343d6003d3a0cd8a5a5d8a1e"
     },
     "crates/alife_gpu_backend/src/closed_loop_pipeline/research_n4096_h_record/owned_frame.rs": {
-      "after": "77cacd53c7551031ed3932baba75f2908848b027d0ffdd98e7561d4f2bf183bd",
+      "after": "591b53c962db728d58ed2f03e6bd9785ceb35442e3feae835b68b2756501db23",
       "before": null,
-      "bytes": 21299,
-      "git_blob": "9e5dfcb7e78e0fa704fe52969f57eb0f4e221ffd"
+      "bytes": 21311,
+      "git_blob": "da19afc24fda6b6bf6c7c0168b613cb3901b1e23"
     },
     "crates/alife_gpu_backend/src/closed_loop_runtime.rs": {
       "after": "918d5db541ed04436ef8372de23bb8edc76e0fb98377006c9597d4b18434c57e",
@@ -49,9 +49,9 @@
   "compiled_or_device_or_native_upload_or_submit_seen": false,
   "exact_parent": "ea436109492335803e504981d990eaf63dd8f800",
   "exact_parent_tree": "f0387b1a500947e1b80cdd2ed09a54a8800e765b",
-  "forward": "4b49e1147eed1daa8d93fd24be66280e830cbbec23b5aecb44af50751c9aa7f1",
+  "forward": "e2b2d7d2fe5b436fd10f72246a76ddbd6546463edd619e6612a7e1bdfefa4247",
   "guarded_q_and_stock_n2048_preserved": true,
-  "inverse": "7bfc58b8994d8b4221bc8c3128421fc6f703efa704dda36215b61fff8ab3ab98",
+  "inverse": "d36d9d9546eadcb27ed808ce979751784605536ff02f6b02a8834ec5c323e63c",
   "ownership_guard_includes_existing_and_proposed_curated_classes": true,
   "parent_cpu_run": 46103168813,
   "parent_cpu_terminal_sha256": "5a9fab08cdea7637b2c397d7251f8e044395d9d3a7c056aaab89f88d4bbeb1af",
