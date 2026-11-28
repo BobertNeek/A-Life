@@ -1,0 +1,86 @@
+{
+  "changed_since_prior_leaf": "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/matched_praise/quiet_witness.rs",
+  "exact_ten_leaves": {
+    "crates/alife_core/Cargo.toml": {
+      "after": "fd7ccee2f085d56ebee9c7f3d386c621b3478d38e7ea0e04e54ca40f5417b89d",
+      "after_bytes": 450,
+      "before": "c542707452f2f763337b9704ed3c5f9418e0a907000538d6d503dcb2a98b0bef",
+      "before_bytes": 402
+    },
+    "crates/alife_core/src/canonical_digest.rs": {
+      "after": "b4ba3848f88d081adfd3e6dfebd53277bade0b88ac7262281741a09b4d9d5734",
+      "after_bytes": 5639,
+      "before": "42904b304dbe6fae7f1dd6724cee063495abc1c87b139881ba24c95bba3b1cd2",
+      "before_bytes": 5161
+    },
+    "crates/alife_game_app/Cargo.toml": {
+      "after": "55b777fa4cc812ddbc9c7a28e92691bb0e50431adc23763c8466b4a4649ddb69",
+      "after_bytes": 4407,
+      "before": "f0cf1b1dfd939dc523f5607eaffdde8111287a53d4b115457cc41e02f6d984c7",
+      "before_bytes": 4252
+    },
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs": {
+      "after": "867b3ad66de48633a2e89f8bb5323dab472625180556314c441ed1b2f20ec05a",
+      "after_bytes": 81794,
+      "before": "06966f678d17487278a8ea95d574e9a40577e31e60643f293bac9757c8101651",
+      "before_bytes": 81530
+    },
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs": {
+      "after": "cdc91009fac5121739f141c83d3525bb730670e87ec705c1e2dc00ed9c615f85",
+      "after_bytes": 35124,
+      "before": "90d87ee443877b854d55c90dd0e39e84c1a8a88b94a14f60e7c7dc3aa3d1c513",
+      "before_bytes": 33444
+    },
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/matched_praise.rs": {
+      "after": "9485bd77bb1339ee8a493b644f7b1d9a118272384cc1037683e394e6c0938ec4",
+      "after_bytes": 36086,
+      "before": "4b317e1ce697f959c700449e52db6387d3af075c4ae762b5084db910e68098dd",
+      "before_bytes": 33198
+    },
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/matched_praise/quiet_witness.rs": {
+      "after": "88a1ceecc9928a222369df2444738772ec9ca210e36489f0b989b83a7f50ff50",
+      "after_bytes": 11655,
+      "before": null,
+      "before_bytes": null
+    },
+    "crates/alife_world/Cargo.toml": {
+      "after": "5ca7140898c32c6534fc7af056f3f90aee21e3b953a2d839f31513e0c4bf0135",
+      "after_bytes": 404,
+      "before": "3946a9571697e86c53ad729a4f4b810e10bac6f02b62321bd84766db7406e51c",
+      "before_bytes": 307
+    },
+    "crates/alife_world/src/headless.rs": {
+      "after": "076a2e3bf1b177dbcc645a4338ee7ef2768d9c472d757485c6257e700edd559b",
+      "after_bytes": 658150,
+      "before": "876c0361a97165de48e00c68f44959970c5d9ec1043a489ae590fcd100c6574e",
+      "before_bytes": 657107
+    },
+    "crates/alife_world/tests/retained_canonical_preimage.rs": {
+      "after": "502d60d1b4be18309a690446659959726b7fc4735727aca46c9cfafd17161ca3",
+      "after_bytes": 1164,
+      "before": null,
+      "before_bytes": null
+    }
+  },
+  "parent_exact_matched_overlay_sha256": "97360073f9eaea9053b824b31d9d2e5501cd4ae4fb8b284d3651a671b44e52cd",
+  "parent_linked_commit": "8521e9f5103dadd4d0afe972360661cd5195c097",
+  "patches": {
+    "OPENAT.inverse.patch": "742b87afdf68f433c415025b61eee3ea159fc888e987390388eb225f7b24083b",
+    "OPENAT.patch": "5fdc934f9067f9b20bd963a6d90e845c15162ae06b64b0921511d68dd61ff0c8",
+    "QUIET-PREIMAGE.inverse.patch": "42aad825939b27e403840eec12e34dac069df84347e4d8f4753ed7aa7c2d8950",
+    "QUIET-PREIMAGE.patch": "1e024f79219b566a854b79d5055e2dd010596d53acfe686dd3fd1eacac10f430"
+  },
+  "pinned_reconstructed_world_sha256": "876c0361a97165de48e00c68f44959970c5d9ec1043a489ae590fcd100c6574e",
+  "prior_source_pins_sha256": "5486d063b50ae64635f080890c1734fc72e70acf0f6ecd211cfb8320a377c4d8",
+  "restore_anchor": "c5d250178cb70a10f99f78ebcc974e0ad5533b41",
+  "restore_commit": "f466b83791cccb97568e6f718b92b052999cfb2b",
+  "scope": "Source-only default-OFF quiet witness. No actual Current, native, treatment, or arena.",
+  "source_only_helpers": {
+    "held_openat.rs.in": "f33ce4633476ef0560979807e2c0867888587f87bfe574ccb7a4d166ebb16db2",
+    "render_openat.py": "cc91143f90433ace7ea290f86ffa8e7e407632ecc0d6585725bb34e128c1b3e1",
+    "seal_openat.py": "d16ac5be1184ab9237f02d400d0761fedb5994a99c10228ee97192629a8d2b19",
+    "test_inert_witness.py": "8174b5b280cb7979eff2c30ed38153f4a1e32946419b05eebd06f40833d9d74b",
+    "test_openat_custody.py": "e24d4e27a11a6212b930aaf491b1c611f9e18bd658df2b9bf8e70a17f0c2ee4d",
+    "verify_quiet_evidence.py": "410b9a204cabde1b1b00882de35d3ea5059dd68287fcd48b176f7f521072c6a9"
+  }
+}
