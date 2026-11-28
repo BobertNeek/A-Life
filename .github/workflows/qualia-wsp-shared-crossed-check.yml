@@ -544,6 +544,7 @@ jobs:
           printf '%s\n' "$version" | tee -a "$F0_EVIDENCE/qualification.txt"
           cd "$EXACT_SRC"
           timeout 8m cargo +"$RUST_TOOLCHAIN" fetch --locked --target "$TARGET"
+          mkdir -p -- "$CARGO_TARGET_DIR"
           test "$(df -PB1 "$CARGO_TARGET_DIR" | awk 'NR==2{print $4}')" -ge 10737418240
           source="$GITHUB_WORKSPACE/docs/r41-saved-life/wsp-shared-crossed-source-cpu.rs"
           testfile=crates/alife_game_app/tests/wsp_shared_crossed_source_cpu.rs
