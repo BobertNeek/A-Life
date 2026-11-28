@@ -1,0 +1,215 @@
+name: Qualia opt-in retained Praise source qualification
+on:
+  push:
+    branches: ["bob/qualia-retained-praise-ingress-cpu-20261128"]
+    paths: [".github/workflows/qualia-retained-praise-ingress-cpu.yml"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qualia-retained-praise-ingress-cpu-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  source-only:
+    if: github.ref == 'refs/heads/bob/qualia-retained-praise-ingress-cpu-20261128'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 65
+    env:
+      PIN_PARENT: 1abdee4763f99ec2c5e94ae309e4159bfe230045
+      PIN_PARENT_TREE: 454be369f9f4ca4979de43d9d56b1cbcce6f94bc
+      PIN_RESTORE: f466b83791cccb97568e6f718b92b052999cfb2b
+      PIN_MANIFEST_BLOB: 7010cd90fb587a18cd75c6109d95e5311e5a9a86
+      PIN_RESTORE_BLOB: 28b3868f208796f8d2f96a870f7589f1ed0360e5
+      PIN_PATCH: aa1b1f7240eecd588f88f2b074740492ad456926aabe2eca48603cbd1d02dba5
+      PIN_PINS: 5b58908ab217e2de6bcacbd297a1bc581eb3aa7fa30c24ae73b4840b6d4e5818
+      PIN_CLI: 5b4599843722a341b02e7a705d0e2495688f7fc125e9061535dc384dbf114e26
+      PIN_PURE: ab9f6ae6a030f3c4381bc8402dbba624660e93c6e3dd6d46f8a0e424dc8becfd
+      PIN_LOCK: 155699e9274f8890bc8c335669a62de48203ba315a33388a8f0caca71f0f7f37
+      PIN_RUSTC_COMMIT: 0ef1bc386059596dada8fb65b50425aab2ea637a
+      RUST_TOOLCHAIN: "1.100.0"
+      TARGET: x86_64-unknown-linux-gnu
+      CARGO_BUILD_JOBS: "2"
+      CARGO_INCREMENTAL: "0"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_DEV_OPT_LEVEL: "1"
+      CARGO_PROFILE_DEV_INCREMENTAL: "false"
+      CARGO_PROFILE_TEST_DEBUG: "0"
+      CARGO_PROFILE_TEST_OPT_LEVEL: "1"
+      CARGO_PROFILE_TEST_INCREMENTAL: "false"
+      CARGO_TERM_COLOR: never
+      LC_ALL: C
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout exact source-only push
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Authenticate five outbound source files and restore exact evaluator closure
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git show -s --format=%P HEAD)" = "$PIN_PARENT"
+          test "$(git rev-parse "$PIN_PARENT^{tree}")" = "$PIN_PARENT_TREE"
+          git merge-base --is-ancestor "$PIN_RESTORE" "$PIN_PARENT"
+          diff -u <(printf '%s\n' \
+            $'A\t.github/workflows/qualia-retained-praise-ingress-cpu.yml' \
+            $'A\tdocs/r41-saved-life/PRAISE-INGRESS-PINS.json' \
+            $'A\tdocs/r41-saved-life/PRAISE-INGRESS.patch' \
+            $'A\tdocs/r41-saved-life/praise-ingress-pure.rs' \
+            $'A\tscripts/qualia-check-praise-ingress-cpu.py' | LC_ALL=C sort) \
+            <(git diff --name-status --no-renames "$PIN_PARENT" HEAD | LC_ALL=C sort)
+          test "$(git rev-parse "$PIN_RESTORE:docs/r41-saved-life/SOURCE.json")" = "$PIN_MANIFEST_BLOB"
+          test "$(git rev-parse "$PIN_RESTORE:docs/r41-saved-life/restore_source.py")" = "$PIN_RESTORE_BLOB"
+          git diff --exit-code "$PIN_RESTORE" HEAD -- docs/r41-saved-life/{SOURCE.json,restore_source.py,patches}
+          umask 077
+          exact="$RUNNER_TEMP/qualia-retained-praise-exact"
+          evidence="$RUNNER_TEMP/qualia-retained-praise-evidence"
+          mkdir "$evidence"
+          printf 'EXACT_SRC=%s\nEVIDENCE=%s\nCARGO_TARGET_DIR=%s\n' "$exact" "$evidence" "$RUNNER_TEMP/qualia-retained-praise-target" >> "$GITHUB_ENV"
+          python3 -IB docs/r41-saved-life/restore_source.py "$GITHUB_WORKSPACE" "$exact"
+          printf '%s  %s\n' \
+            "$PIN_PATCH" docs/r41-saved-life/PRAISE-INGRESS.patch \
+            "$PIN_PINS" docs/r41-saved-life/PRAISE-INGRESS-PINS.json \
+            "$PIN_PURE" docs/r41-saved-life/praise-ingress-pure.rs \
+            "$PIN_CLI" scripts/qualia-check-praise-ingress-cpu.py \
+            | sha256sum -c -
+
+      - name: Reversible four-leaf source overlay and exact pure-test shim
+        run: |
+          set -euo pipefail
+          cd "$EXACT_SRC"
+          python3 -IB - "$GITHUB_WORKSPACE" <<'PY'
+          from hashlib import sha256
+          from pathlib import Path
+          import json,os,subprocess,sys,tomllib
+          work=Path(sys.argv[1]); docs=work/'docs/r41-saved-life'
+          patch=docs/'PRAISE-INGRESS.patch'
+          pins=docs/'PRAISE-INGRESS-PINS.json'
+          def read(path):
+              path=Path(path)
+              assert path.is_file() and not path.is_symlink() and path.stat().st_size<2_000_000,path
+              return path.read_bytes()
+          def digest(path):return sha256(read(path)).hexdigest()
+          def item(k):
+              assert not Path(k).is_symlink(),k
+              return digest(k) if Path(k).exists() else None
+          assert digest(pins)==os.environ['PIN_PINS']
+          q=json.loads(read(pins))
+          assert q['source_anchor_commit']==os.environ['PIN_RESTORE']
+          assert q['source_manifest_git_blob']==os.environ['PIN_MANIFEST_BLOB']
+          assert q['forward_sha256']==os.environ['PIN_PATCH']==digest(patch)
+          assert q['cpu_cli_harness_sha256']==os.environ['PIN_CLI']
+          assert q['sealed_row_does_not_claim_payment'] and q['source_apply_inverse_reapply']
+          assert not q['rust_compile_or_device_or_cli_executed'] and not q['private_checkpoint_or_model_read']
+          assert not q['game_outcome_credit_reserve_or_score_observed']
+          app='crates/alife_game_app/'
+          module=app+'src/foundation_training_cycle/saved_life_retention'
+          allowed={app+'Cargo.toml',module+'.rs',module+'/experiments.rs',module+'/praise_probe.rs'}
+          fields=q['changed_leaves']
+          touched={l.decode().split('\t',2)[2] for l in subprocess.check_output(
+              ['git','apply','--numstat','-z',patch]).rstrip(b'\0').split(b'\0')}
+          assert set(fields)==allowed==touched
+          assert sum(v['before'] is None for v in fields.values())==1 and fields[module+'/praise_probe.rs']['before'] is None
+          prior_features=tomllib.loads(read(app+'Cargo.toml').decode())
+          def check(phase):
+              assert digest('Cargo.lock')==os.environ['PIN_LOCK']
+              for path,meta in fields.items():
+                  assert item(path)==meta[phase],(phase,path)
+                  if phase=='after':
+                      assert subprocess.check_output(['git','hash-object',path]).decode().strip()==meta['after_git_blob']
+          def apply(*flags):
+              for cmd in (('--check',),()):
+                  subprocess.run(['git','apply','--whitespace=error',*flags,*cmd,patch],check=True)
+          check('before');apply();check('after');apply('--reverse');check('before');apply();check('after')
+          features=tomllib.loads(read(app+'Cargo.toml').decode())
+          assert features['features'].pop('research-retained-praise-ingress-v1')==['foundation-training','gpu-tests']
+          assert prior_features==features and 'research-retained-praise-ingress-v1' not in features['features'].get('default',[])
+          expected=docs/'praise-ingress-pure.rs'
+          assert digest(expected)==os.environ['PIN_PURE']
+          harness=Path(app+'tests/retained_praise_probe_pure.rs')
+          harness.parent.mkdir(exist_ok=True)
+          with harness.open('xb') as f:f.write(read(expected))
+          print('four exact source leaves round-trip; installed one exact pure test shim')
+          PY
+
+      - name: Build locked OFF and ON parser bins; three pure Rust tests and fifteen CLI refusals
+        run: |
+          set -euo pipefail
+          umask 077
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --target "$TARGET"
+          version="$(rustc +"$RUST_TOOLCHAIN" -vV)"
+          grep -Fqx "release: $RUST_TOOLCHAIN" <<< "$version"
+          grep -Fqx "commit-hash: $PIN_RUSTC_COMMIT" <<< "$version"
+          grep -Fqx "host: $TARGET" <<< "$version"
+          cd "$EXACT_SRC"
+          mkdir -p -- "$CARGO_TARGET_DIR"
+          have_space() { test "$(df -PB1 "$CARGO_TARGET_DIR" | awk 'NR==2 {print $4}')" -ge "$1"; }
+          have_space 10737418240
+          timeout 8m cargo +"$RUST_TOOLCHAIN" fetch --locked --target "$TARGET"
+          args=(--frozen --offline --target "$TARGET" --no-default-features -p alife_game_app)
+          off_feature=foundation-training,gpu-tests
+          on_feature=research-retained-praise-ingress-v1
+          exe="$CARGO_TARGET_DIR/$TARGET/debug/evaluate_saved_life_retention"
+          off="$RUNNER_TEMP/retained-praise-ordinary-off"
+          keep_elf() { test -f "$1" && test -x "$1" && test ! -L "$1"; }
+          timeout 22m cargo +"$RUST_TOOLCHAIN" build "${args[@]}" --features "$off_feature" --bin evaluate_saved_life_retention
+          keep_elf "$exe"
+          install -m 0700 "$exe" "$off"
+          off_sha="$(sha256sum "$off" | awk '{print $1}')"
+          have_space 8589934592
+          timeout 20m cargo +"$RUST_TOOLCHAIN" build "${args[@]}" --features "$on_feature" --bin evaluate_saved_life_retention
+          keep_elf "$exe"
+          on_sha="$(sha256sum "$exe" | awk '{print $1}')"
+          test "$off_sha" != "$on_sha"
+          python3 -IB "$GITHUB_WORKSPACE/scripts/qualia-check-praise-ingress-cpu.py" \
+            --off "$off" --off-sha256 "$off_sha" --on "$exe" --on-sha256 "$on_sha" \
+            | tee "$RUNNER_TEMP/qualia-praise-cli.log"
+          grep -Fx '15 actual CLI device-free refusals; no real Current, output, GPU or World used' "$RUNNER_TEMP/qualia-praise-cli.log"
+          have_space 8589934592
+          timeout 20m cargo +"$RUST_TOOLCHAIN" test "${args[@]}" --features "$on_feature" \
+            --test retained_praise_probe_pure -- --test-threads=1 2>&1 | tee "$RUNNER_TEMP/qualia-praise-pure.log"
+          python3 -IB - "$RUNNER_TEMP/qualia-praise-pure.log" "$EVIDENCE" "$off_sha" "$on_sha" <<'PY'
+          from pathlib import Path
+          import json,os,re,sys
+          path,out,off,on=sys.argv[1:]
+          text=Path(path).read_text()
+          want={'exact_scope_offsets_and_poll_do_not_duplicate_a_queued_event',
+                'failed_or_zero_cost_sealed_decision_is_not_physical_payment_evidence',
+                'passive_consumption_has_no_sealed_decision_and_unexpected_doses_are_refused'}
+          actual=re.findall(r'^test praise_probe::tests::([a-z0-9_]+) \.\.\. ok$',text,re.M)
+          assert len(actual)==3 and set(actual)==want
+          assert len(re.findall(r'^test result: ok\. 3 passed; 0 failed; 0 ignored;',text,re.M))==1
+          proof={'schema':'qualia.n2048.praise-ingress-hosted-cpu.v1','commit':os.environ['GITHUB_SHA'],
+                 'exact_source_restore':os.environ['PIN_RESTORE'],'patch_sha256':os.environ['PIN_PATCH'],
+                 'pinned_rust_commit':os.environ['PIN_RUSTC_COMMIT'],'default_off_build_passed':True,
+                 'opt_in_build_passed':True,'actual_cli_refusals':15,'pure_passed':sorted(actual),
+                 'transient_off_elf_sha256':off,'transient_on_elf_sha256':on,
+                 'real_current_gpu_world_or_learning':False,'elf_archived':False,
+                 'official_score_or_reserve_measurement':False}
+          evidence=Path(out)
+          (evidence/'proof.json').write_text(json.dumps(proof,sort_keys=True,indent=2)+'\n')
+          (evidence/'TEST-SUMMARY.txt').write_text('OFF/ON bounded synthetic CLI: 15 refusals\n' + '\n'.join(sorted(actual))+'\n')
+          PY
+          cd "$EVIDENCE"
+          sha256sum proof.json TEST-SUMMARY.txt > SHA256SUMS
+          sha256sum -c SHA256SUMS
+          test "$(find . -mindepth 1 -maxdepth 1 -type f | wc -l)" -eq 3
+
+      - name: Retain only CPU and CLI text proof
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: qualia-retained-praise-ingress-cpu-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/qualia-retained-praise-evidence/proof.json
+            ${{ runner.temp }}/qualia-retained-praise-evidence/TEST-SUMMARY.txt
+            ${{ runner.temp }}/qualia-retained-praise-evidence/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 5
+          compression-level: 3

@@ -1,0 +1,39 @@
+{
+  "actual_private_r44_admission_pins_not_present": true,
+  "changed_leaves": {
+    "crates/alife_game_app/Cargo.toml": {
+      "after": "f62770a183757eebfc1b0f83da102e9deddccc3298548376f2bea79f5ffac891",
+      "after_git_blob": "8719c2e828692a7504982acbf3431273cd1b63be",
+      "before": "e2bc4c9122b8bc1ffb1f9e647df34e99ea7d8905d82437329f8aac20e5089bc3"
+    },
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs": {
+      "after": "72ce5000739a2f3382aea40c26e490dc912cf4d706bf7e92f7ec20a7f3b23eb9",
+      "after_git_blob": "b8a51889e6962e690ef4f787ba36b2006ef043eb",
+      "before": "a1aefac0636f0ed0cced55aae585b494c86f3a9993c75bd7da43d7f3d33db4e2"
+    },
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs": {
+      "after": "b535d51ed3347a8e3f05ee3c981a9a42b6ecf31ea26fe7162667874b99fbe8e3",
+      "after_git_blob": "a422b41a13f10f294be41ac86d75217aea9f6a5c",
+      "before": "d63d3c5da0eabb861c51bebf4914cce4bca78ed23ef5d225ea63e46846799b44"
+    },
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/praise_probe.rs": {
+      "after": "ca39706aa858ea5800556c0d6818dbc395dcc1e82d4c0cf44031dff5e636534f",
+      "after_git_blob": "b27491082d9a258f8028de28dda6be96b0466b91",
+      "before": null
+    }
+  },
+  "cpu_cli_harness_sha256": "5b4599843722a341b02e7a705d0e2495688f7fc125e9061535dc384dbf114e26",
+  "forward_sha256": "aa1b1f7240eecd588f88f2b074740492ad456926aabe2eca48603cbd1d02dba5",
+  "game_outcome_credit_reserve_or_score_observed": false,
+  "inverse_sha256": "a6fce4283242c4c8de961631972a81833be2b3b81c153a9e230f46f65e884b04",
+  "private_checkpoint_or_model_read": false,
+  "pure_tests_authored": 5,
+  "rust_compile_or_device_or_cli_executed": false,
+  "schema": "qualia.n2048.praise-ingress.source-check.v1",
+  "sealed_row_does_not_claim_payment": true,
+  "source_anchor_commit": "f466b83791cccb97568e6f718b92b052999cfb2b",
+  "source_apply_inverse_reapply": true,
+  "source_boundaries_static_checks": true,
+  "source_manifest_git_blob": "7010cd90fb587a18cd75c6109d95e5311e5a9a86",
+  "supersedes_forward_sha256": "13ab2cdb42091637059e69882dcbf0e92e465fda0c6411e5856c8e19a8db58c7"
+}

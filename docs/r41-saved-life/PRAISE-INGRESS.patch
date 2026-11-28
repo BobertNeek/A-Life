@@ -1,0 +1,551 @@
+diff --git a/crates/alife_game_app/Cargo.toml b/crates/alife_game_app/Cargo.toml
+--- a/crates/alife_game_app/Cargo.toml
++++ b/crates/alife_game_app/Cargo.toml
+@@ -117,6 +117,7 @@
+ gpu-runtime = ["dep:alife_archive", "dep:alife_gpu_backend", "dep:alife_runtime"]
+ foundation-training = ["gpu-runtime", "dep:alife_training", "alife_training/receipt-lineage", "alife_runtime/training-rollout", "dep:sha2", "dep:bytemuck"]
+ cpu-training = ["foundation-training", "alife_training/cpu-backend"]
++research-retained-praise-ingress-v1 = ["foundation-training", "gpu-tests"]
+ gpu-tests = [
+     "gpu-runtime",
+     "dep:alife_training",
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs
+--- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs
+@@ -12,6 +12,8 @@
+ 
+ #[cfg(feature = "gpu-tests")]
+ mod experiments;
++#[cfg(feature = "research-retained-praise-ingress-v1")]
++mod praise_probe;
+ #[cfg(feature = "gpu-tests")]
+ #[path = "saved_life_retention/card_cases.rs"]
+ mod card_cases;
+@@ -504,6 +506,14 @@
+         return Err("retained near-field owner does not match sole living resident".into());
+     }
+     let source_world_tick = world.tick().raw();
++    #[cfg(feature = "research-retained-praise-ingress-v1")]
++    let mut praise = experiment.as_ref().and_then(|e| e.praise_calibration_v1()).map(|spec| {
++        let probe = spec.bind(source_world_tick, loaded.save.world.pending_player_care.is_empty())?;
++        if !world.audible_utterances().is_empty() {
++            return Err("praise calibration requires a naturally silent restored opening");
++        }
++        Ok((spec, probe))
++    }).transpose()?;
+     if world.seed() != baseline.seed {
+         return Err("retention source world seed mismatch".into());
+     }
+@@ -575,6 +585,18 @@
+         .iter()
+         .filter_map(|c| c.gpu_brain.clone())
+         .collect::<Vec<_>>();
++    #[cfg(feature = "research-retained-praise-ingress-v1")]
++    if praise.is_some() {
++        let [checkpoint] = checkpoints.as_slice() else {
++            return Err("praise calibration requires one exact saved brain".into());
++        };
++        if checkpoint.organism_id != id
++            || checkpoint.capacity_class_id != alife_core::BrainCapacityClass::N2048_ID
++            || checkpoint.sensor_profile.profile()? != alife_core::SensorProfile::GroundedTerrainVisionV1
++        {
++            return Err("praise calibration requires the sole N2048 GroundedTerrainVisionV1 brain".into());
++        }
++    }
+     if scent_scope.is_some() {
+         let [checkpoint] = checkpoints.as_slice() else {
+             return Err("retained near-field requires one exact saved brain".into());
+@@ -843,6 +865,29 @@
+             .collect::<BTreeMap<_, _>>();
+         if foods.len() > 1024 {
+             return Err("retention food observation bound exceeded".into());
++        }
++        #[cfg(feature = "research-retained-praise-ingress-v1")]
++        if let Some((spec, probe)) = &mut praise {
++            if probe.should_queue(before_tick.raw())? {
++                // Use the game's lawful real Hand producer once. The only
++                // brain-facing signal is the normal World event, not arm,
++                // timing label, reward weight or assessment metadata.
++                match runtime.provide_player_interaction_v1(
++                    id, spec.position(), alife_world::PlayerInteractionV1::Praise,
++                ) {
++                    Ok(alife_world::PlayerInteractionQueueOutcomeV1::Queued) => {
++                        probe.accepted_queue(before_tick.raw())?;
++                    }
++                    Ok(alife_world::PlayerInteractionQueueOutcomeV1::NoReceivedDose) => {
++                        error = Some("native Hand input delivered no queued Praise dose".into());
++                        break "praise_queue_refused";
++                    }
++                    Err(e) => {
++                        error = Some(format!("native Hand Praise queue refused: {e}"));
++                        break "praise_queue_refused";
++                    }
++                }
++            }
+         }
+         calls += 1;
+         #[cfg(feature = "gpu-tests")]
+@@ -877,6 +922,17 @@
+         {
+             return Err("retention observed a non-canonical tick/row boundary".into());
+         }
++        #[cfg(feature = "research-retained-praise-ingress-v1")]
++        let newly_consumed_praise = if let Some((_, probe)) = &mut praise {
++            match probe.observe(before_tick, after_tick, runtime.world().last_player_care(id),
++                !steps.is_empty()) {
++                Ok(dose) => dose,
++                Err(e) => {
++                    error = Some(e.into());
++                    break "praise_consumption_unmatched";
++                }
++            }
++        } else { None };
+         #[cfg(feature = "gpu-tests")]
+         if published_case.is_some_and(|name| name.starts_with("r2-grade-")) && after_tick != before_tick {
+             if published_body.len() >= 256 {
+@@ -1026,6 +1082,18 @@
+             #[cfg(feature = "gpu-tests")]
+             let row = {
+                 let mut row = row;
++                #[cfg(feature = "research-retained-praise-ingress-v1")]
++                if praise.is_some() {
++                    // This row exists only for an actual, validated sealed
++                    // decision. Dose/row coexistence does not prove credit.
++                    row["praise_calibration"] = serde_json::json!({
++                        "acoustic_praise_f32_bits": step.frame.sensory().channels.auditory_acoustic[1].to_bits(),
++                        "fresh_actual_dose": newly_consumed_praise,
++                        "sealed_row_sequence_id": step.patch.header().sequence_id,
++                        "sealed_neural_dispatch_generation": step.patch.decision().neural_evidence()?.dispatch_generation,
++                        "credited_route_verified": false,
++                    });
++                }
+                 if let Some(spec) = case_stimulus {
+                     let heard = &step.frame.sensory().language_context.heard_tokens;
+                     let expected = if before_tick.raw().saturating_sub(source_world_tick) < 2 {
+@@ -1205,6 +1273,19 @@
+         receipt["retention_demonstrated"] = serde_json::json!(false);
+         receipt["published_case_software_integrity"] = receipt["software_simulation_integrity_valid"].clone();
+         receipt["software_simulation_integrity_valid"] = serde_json::json!(false);
++    }
++    #[cfg(feature = "research-retained-praise-ingress-v1")]
++    if let Some((spec, probe)) = praise {
++        receipt["praise_calibration"] = probe.summary(spec);
++        // Never mistake this diagnostic for the frozen native scorecard,
++        // a matched learning result, or certified ordinary silence.
++        receipt["measurement_valid"] = serde_json::json!(false);
++        receipt["software_simulation_integrity_valid"] = serde_json::json!(false);
++        receipt["qualified"] = serde_json::json!(false);
++        receipt["retention_demonstrated"] = serde_json::json!(false);
++        if receipt["praise_calibration"]["observed_player_dose"].is_object() {
++            receipt["cue_free"] = serde_json::json!(false);
++        }
+     }
+     alife_storage::write(
+         output.join("retention.json"),
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
+--- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
+@@ -25,6 +25,8 @@
+     IndexedNearField {},
+     DirectWeights { edit: DirectWeightEditRequest },
+     VisibleSelfGripV1 { edit: DirectWeightEditRequest, words: [u32; 16] },
++    #[cfg(feature = "research-retained-praise-ingress-v1")]
++    PraiseCalibrationV1 { calibration: super::praise_probe::Spec },
+ }
+ 
+ #[derive(Debug, Clone, Deserialize)]
+@@ -72,9 +74,17 @@
+     intervention: &'static str,
+     #[serde(skip_serializing_if = "Option::is_none")]
+     visible_self_grip_v1: Option<[u32; 16]>,
++    #[cfg(feature = "research-retained-praise-ingress-v1")]
++    #[serde(skip_serializing_if = "Option::is_none")]
++    praise_calibration_v1: Option<super::praise_probe::Spec>,
+ }
+ 
+ impl ExperimentIdentity {
++    #[cfg(feature = "research-retained-praise-ingress-v1")]
++    pub(super) fn praise_calibration_v1(&self) -> Option<super::praise_probe::Spec> {
++        self.praise_calibration_v1
++    }
++
+     pub(super) fn card_case(&self) -> Option<&str> {
+         self.card_case.as_deref()
+     }
+@@ -110,8 +120,29 @@
+     let config: ManifestV1 = serde_json::from_slice(bytes)
+         .map_err(|e| format!("experiment compatibility: invalid or unsupported typed settings: {e}"))?;
+     let is_card = config.scenario == ScenarioV1::PublishedCardCase;
+-    if config.schema != 1 || is_card != config.card_case.is_some() {
++    #[cfg(feature = "research-retained-praise-ingress-v1")]
++    let praise_calibration_v1 = match &config.intervention {
++        InterventionV1::PraiseCalibrationV1 { calibration } => Some(*calibration),
++        _ => None,
++    };
++    #[cfg(feature = "research-retained-praise-ingress-v1")]
++    let expected_schema = if praise_calibration_v1.is_some() { super::praise_probe::SCHEMA } else { 1 };
++    #[cfg(not(feature = "research-retained-praise-ingress-v1"))]
++    let expected_schema = 1;
++    if config.schema != expected_schema || is_card != config.card_case.is_some() {
+         return Err("experiment compatibility: unsupported manifest schema".into());
++    }
++    #[cfg(feature = "research-retained-praise-ingress-v1")]
++    if let Some(spec) = praise_calibration_v1 {
++        use super::praise_probe::{CUTS, MAX_BYTES, MAX_OUTPUT, MIN_OUTPUT};
++        spec.validate()?;
++        if config.scenario != ScenarioV1::RetainedOpening || config.card_case.is_some()
++            || config.max_decisions != CUTS as usize || config.max_world_ticks != CUTS
++            || !(MIN_OUTPUT..=MAX_OUTPUT).contains(&config.max_output_bytes)
++            || bytes.len() > MAX_BYTES
++        {
++            return Err("praise calibration requires an unchanged retained opening with four bounded cuts".into());
++        }
+     }
+     let card = config.card_case.as_deref().map(|name| {
+         super::card_cases::case(name).ok_or("unsupported published report card case")
+@@ -185,6 +216,8 @@
+             retained_direct_weights::validate_experiment_edit_shape(&edit)?;
+             ("visible_self_grip_v1", None, Some(edit), Some(words))
+         }
++        #[cfg(feature = "research-retained-praise-ingress-v1")]
++        InterventionV1::PraiseCalibrationV1 { .. } => ("praise_calibration_v1", None, None, None),
+     };
+     if bytes.len() > MAX_SMALL_CONFIG_BYTES
+         && !direct_weights.as_ref().is_some_and(|edit| edit.schema == 3)
+@@ -226,6 +259,8 @@
+             card_case: config.card_case,
+             intervention,
+             visible_self_grip_v1,
++            #[cfg(feature = "research-retained-praise-ingress-v1")]
++            praise_calibration_v1,
+         },
+         request,
+         scent,
+@@ -284,6 +319,13 @@
+         .take((MAX_CONFIG_BYTES + 1) as u64)
+         .read_to_end(&mut bytes)?;
+     let resolved = resolve(&bytes)?;
++    #[cfg(feature = "research-retained-praise-ingress-v1")]
++    if resolved.identity.praise_calibration_v1().is_some()
++        && (std::env::var_os("ALIFE_EXPLICIT_FIXED_HOST_PRESSURE_NS").is_some()
++            || std::env::var("ALIFE_EXPLICIT_RETENTION_ARCHIVE_TEST").ok().as_deref() == Some("1"))
++    {
++        return Err("praise calibration refuses controlled pressure or archive mode".into());
++    }
+     evaluate_saved_life_retention_inner(
+         source,
+         output,
+@@ -410,6 +452,62 @@
+         assert!(resolved(&oversized).is_err());
+     }
+ 
++    fn praise_manifest(arm: &str) -> serde_json::Value {
++        let mut v = base(serde_json::json!({"kind":"praise_calibration_v1","calibration":{
++            "arm":arm,"expected_start_world_tick":100,"hand_world_position":[0.0,1.0,2.0]
++        }}));
++        v["schema"] = serde_json::json!(18);
++        v["scenario"] = serde_json::json!("retained_opening");
++        v["max_decisions"] = serde_json::json!(4);
++        v["max_world_ticks"] = serde_json::json!(4);
++        v
++    }
++
++    #[cfg(not(feature = "research-retained-praise-ingress-v1"))]
++    #[test]
++    fn praise_ingress_is_off_in_an_ordinary_build() {
++        for arm in ["quiet", "praise", "delayed_yoked"] {
++            assert!(resolved(&praise_manifest(arm)).is_err());
++        }
++        let a = resolved(&base(serde_json::json!({"kind":"control"}))).unwrap();
++        assert!(!serde_json::to_value(&a.identity).unwrap().as_object().unwrap().contains_key("praise_calibration_v1"));
++    }
++
++    #[cfg(feature = "research-retained-praise-ingress-v1")]
++    #[test]
++    fn praise_ingress_is_a_distinct_bounded_research_profile_without_other_treatments() {
++        let a = resolved(&praise_manifest("quiet")).unwrap();
++        let b = resolved(&praise_manifest("praise")).unwrap();
++        let c = resolved(&praise_manifest("delayed_yoked")).unwrap();
++        assert_ne!(a.identity.semantic_settings_sha256, b.identity.semantic_settings_sha256);
++        assert_ne!(b.identity.semantic_settings_sha256, c.identity.semantic_settings_sha256);
++        for s in [a, b, c] {
++            assert_eq!(s.identity.schema, 18);
++            assert!(s.identity.praise_calibration_v1().is_some());
++            assert!(s.identity.card_case().is_none() && s.scent.is_none());
++            assert!(s.request.direct_weights.is_none() && s.request.navigation_task.is_none());
++            assert!(!s.request.cue_free_food_placement);
++        }
++        let stock = resolved(&base(serde_json::json!({"kind":"control"}))).unwrap();
++        assert!(!serde_json::to_value(&stock.identity).unwrap().as_object().unwrap().contains_key("praise_calibration_v1"));
++        for (k, v) in [("schema", serde_json::json!(1)), ("scenario", serde_json::json!("cue_free_food_placement")),
++            ("card_case", serde_json::json!("r2-word-approach-food")), ("max_world_ticks", serde_json::json!(5)),
++            ("max_decisions", serde_json::json!(3)), ("max_output_bytes", serde_json::json!(67108864))] {
++            let mut invalid = praise_manifest("praise");
++            invalid[k] = v;
++            assert!(resolved(&invalid).is_err(), "accepted bad {k}");
++        }
++        assert!(resolved(&praise_manifest("positive_reward_scalar")).is_err());
++        for k in ["dose", "credit_tick", "displayed_action", "clicked_at", "forced_candidate", "arbitrary_offset"] {
++            let mut bad = praise_manifest("praise");
++            bad["intervention"]["calibration"][k] = serde_json::json!(1);
++            assert!(resolved(&bad).is_err(), "accepted untrusted {k}");
++        }
++        let mut ordinary_on_praise_schema = praise_manifest("quiet");
++        ordinary_on_praise_schema["intervention"] = serde_json::json!({"kind":"control"});
++        assert!(resolved(&ordinary_on_praise_schema).is_err());
++    }
++
+     #[test]
+     fn canonical_local_admission_rejects_escape_alias_and_overwrite() {
+         let path = std::env::temp_dir().canonicalize().unwrap().join(format!(
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/praise_probe.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/praise_probe.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/praise_probe.rs
+@@ -0,0 +1,246 @@
++//! Exposed, unscored current-action Praise diagnostic. Scheduling and receipt
++//! observation only: no reward scalar, forced decision, replay, or UI click.
++use alife_core::{Tick, Validate, Vec3f};
++use alife_world::{PlayerCareKind, PlayerCareKindSet, PlayerCareReceipt};
++use serde::{Deserialize, Serialize};
++
++pub(super) const SCHEMA: u16 = 18;
++pub(super) const CUTS: u64 = 4;
++pub(super) const MAX_BYTES: usize = 16 * 1024;
++pub(super) const MIN_OUTPUT: u64 = 128 * 1024 * 1024;
++pub(super) const MAX_OUTPUT: u64 = 256 * 1024 * 1024;
++
++#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
++#[serde(rename_all = "snake_case")]
++pub(super) enum Arm {
++    Quiet,
++    Praise,
++    DelayedYoked,
++}
++
++impl Arm {
++    fn offset(self) -> Option<u64> {
++        match self {
++            Self::Quiet => None,
++            Self::Praise => Some(0),
++            Self::DelayedYoked => Some(2),
++        }
++    }
++}
++
++#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++pub(super) struct Spec {
++    pub(super) arm: Arm,
++    pub(super) expected_start_world_tick: u64,
++    pub(super) hand_world_position: [f32; 3],
++}
++
++impl Spec {
++    pub(super) fn validate(self) -> Result<(), &'static str> {
++        if self.expected_start_world_tick.checked_add(CUTS).is_none()
++            || self.hand_world_position.iter().any(|n| !n.is_finite())
++            || self.position().validate().is_err()
++        {
++            return Err("praise calibration invalid restored tick or Hand origin");
++        }
++        Ok(())
++    }
++
++    pub(super) fn position(self) -> Vec3f {
++        let [x, y, z] = self.hand_world_position;
++        Vec3f::new(x, y, z)
++    }
++
++    pub(super) fn bind(
++        self, world_tick: u64, pending_care_empty: bool,
++    ) -> Result<Probe, &'static str> {
++        self.validate()?;
++        if self.expected_start_world_tick != world_tick || !pending_care_empty {
++            return Err("praise calibration requires exact restored tick with no pending player care");
++        }
++        Ok(Probe {
++            scheduled: self.arm.offset().map(|offset| world_tick + offset),
++            origin: world_tick,
++            queued: None,
++            observed: None,
++        })
++    }
++}
++
++#[derive(Debug, Clone, Copy, Serialize)]
++pub(super) struct ObservedPlayerDose {
++    pub(super) consume_world_tick: Tick,
++    pub(super) actual_world_receipt: PlayerCareReceipt,
++    /// An ordinary sealed decision row co-occurs. Such a row can describe
++    /// a failed or zero-cost action. False includes passive consumption.
++    pub(super) same_boundary_has_sealed_decision_row: bool,
++}
++
++pub(super) struct Probe {
++    origin: u64,
++    scheduled: Option<u64>,
++    queued: Option<u64>,
++    observed: Option<ObservedPlayerDose>,
++}
++
++impl Probe {
++    pub(super) fn should_queue(&self, before: u64) -> Result<bool, &'static str> {
++        let offset = before.checked_sub(self.origin).ok_or("praise calibration clock regressed")?;
++        if offset >= CUTS {
++            return Err("praise calibration exceeded its cut bound");
++        }
++        if self.queued.is_none() && self.scheduled.is_some_and(|t| before > t) {
++            return Err("praise calibration passed an unserved scheduled boundary");
++        }
++        Ok(self.queued.is_none() && self.scheduled == Some(before))
++    }
++
++    pub(super) fn accepted_queue(&mut self, before: u64) -> Result<(), &'static str> {
++        if !self.should_queue(before)? {
++            return Err("praise calibration queue is not a one-shot at its admitted boundary");
++        }
++        self.queued = Some(before);
++        Ok(())
++    }
++
++    pub(super) fn observe(
++        &mut self, before: Tick, after: Tick, latest: Option<PlayerCareReceipt>, sealed_decision_row: bool,
++    ) -> Result<Option<ObservedPlayerDose>, &'static str> {
++        let wanted = self.queued == Some(before.raw()) && self.observed.is_none();
++        if after == before {
++            if sealed_decision_row || latest.is_some_and(|r| r.applied_tick.raw() > before.raw()) {
++                return Err("praise calibration saw a dose/row without a World cut");
++            }
++            // Polling can repeat a world tick; never redeliver.
++            return Ok(None);
++        }
++        if before.raw().checked_add(1) != Some(after.raw()) {
++            return Err("praise calibration saw a noncanonical World cut");
++        }
++        let fresh = latest.filter(|r| r.applied_tick.raw() > before.raw());
++        match (wanted, fresh) {
++            (false, None) => Ok(None), // old historical receipt is not a new dose
++            (true, Some(r)) if r.applied_tick == after
++                && r.kinds == PlayerCareKindSet::single(PlayerCareKind::Praise) =>
++            {
++                let dose = ObservedPlayerDose {
++                    consume_world_tick: after,
++                    actual_world_receipt: r,
++                    same_boundary_has_sealed_decision_row: sealed_decision_row,
++                };
++                self.observed = Some(dose);
++                Ok(Some(dose))
++            }
++            _ => Err("praise calibration missing or unexpected authoritative player dose"),
++        }
++    }
++
++    pub(super) fn summary(&self, spec: Spec) -> serde_json::Value {
++        serde_json::json!({
++            "scope": "retained-player-praise-calibration-v1",
++            "arm": spec.arm,
++            "restored_world_tick": self.origin,
++            "scheduled_queue_world_tick": self.scheduled,
++            "queued_world_tick": self.queued,
++            "observed_player_dose": self.observed,
++            "scheduled_delivery_completed": if self.scheduled.is_some() {
++                Some(self.observed.is_some())
++            } else { None },
++            "displayed_action_observed": false,
++            "ui_click_observed": false,
++            "retrospective_tag_present": false,
++            "physical_payment_verified": false,
++            "credited_route_verified": false,
++            "reserve_verified": false,
++            "learning_effect_verified": false,
++            "scorecard_eligible": false
++        })
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    fn make(arm: Arm) -> Spec {
++        Spec { arm, expected_start_world_tick: 100, hand_world_position: [0.0; 3] }
++    }
++
++    fn tick(n: u64) -> Tick { Tick::new(n) }
++
++    // Pure reducer fixture, not a claim that World delivered anything.
++    fn care(n: u64, kind: PlayerCareKind) -> PlayerCareReceipt {
++        PlayerCareReceipt {
++            kinds: PlayerCareKindSet::single(kind), applied_tick: tick(n),
++            praise_signal_before: 0.0, praise_signal_after: 0.25,
++            loneliness_before: 0.0, loneliness_after: 0.0,
++        }
++    }
++
++    #[test]
++    fn exact_scope_offsets_and_poll_do_not_duplicate_a_queued_event() {
++        let mut quiet = make(Arm::Quiet).bind(100, true).unwrap();
++        for n in 100..104 { assert!(!quiet.should_queue(n).unwrap()); }
++        assert!(quiet.should_queue(104).is_err());
++        assert!(quiet.observe(tick(100), tick(101), Some(care(99, PlayerCareKind::Praise)), true).unwrap().is_none());
++        let mut immediate = make(Arm::Praise).bind(100, true).unwrap();
++        assert!(immediate.should_queue(100).unwrap());
++        immediate.accepted_queue(100).unwrap();
++        assert!(!immediate.should_queue(100).unwrap());
++        assert!(immediate.accepted_queue(100).is_err());
++        assert!(immediate.observe(tick(100), tick(100), None, false).unwrap().is_none());
++        let row = immediate.observe(tick(100), tick(101), Some(care(101, PlayerCareKind::Praise)), true).unwrap().unwrap();
++        assert!(row.same_boundary_has_sealed_decision_row);
++        assert!(!immediate.should_queue(101).unwrap());
++        assert!(immediate.observe(tick(101), tick(102), Some(care(101, PlayerCareKind::Praise)), true).unwrap().is_none());
++        let mut delayed = make(Arm::DelayedYoked).bind(100, true).unwrap();
++        assert!(!delayed.should_queue(100).unwrap());
++        assert!(!delayed.should_queue(101).unwrap());
++        assert!(delayed.should_queue(102).unwrap());
++        assert!(delayed.should_queue(103).is_err());
++        delayed.accepted_queue(102).unwrap();
++        assert!(!delayed.should_queue(102).unwrap());
++    }
++
++    #[test]
++    fn failed_or_zero_cost_sealed_decision_is_not_physical_payment_evidence() {
++        // Both synthetic rows may exist on a settled World boundary. The
++        // ingress observer receives only row presence, not a cost verdict.
++        for (action_succeeded, physical_cost) in [(false, 0.25_f32), (true, 0.0_f32)] {
++            assert!(!action_succeeded || physical_cost == 0.0);
++            let spec = make(Arm::Praise);
++            let mut probe = spec.bind(100, true).unwrap();
++            probe.accepted_queue(100).unwrap();
++            let dose = probe.observe(tick(100), tick(101), Some(care(101, PlayerCareKind::Praise)), true)
++                .unwrap().unwrap();
++            let wire = serde_json::to_value(dose).unwrap();
++            assert_eq!(wire["same_boundary_has_sealed_decision_row"], true);
++            assert!(wire.get("same_boundary_has_paid_row").is_none());
++            assert_eq!(probe.summary(spec)["physical_payment_verified"], false);
++            assert_eq!(probe.summary(spec)["credited_route_verified"], false);
++        }
++    }
++
++    #[test]
++    fn passive_consumption_has_no_sealed_decision_and_unexpected_doses_are_refused() {
++        let s = make(Arm::DelayedYoked);
++        let mut probe = s.bind(100, true).unwrap();
++        probe.accepted_queue(102).unwrap();
++        let row = probe.observe(tick(102), tick(103), Some(care(103, PlayerCareKind::Praise)), false).unwrap().unwrap();
++        assert!(!row.same_boundary_has_sealed_decision_row);
++        assert_eq!(probe.summary(s)["credited_route_verified"], false);
++        assert_eq!(probe.summary(s)["retrospective_tag_present"], false);
++        assert!(probe.observe(tick(103), tick(104), Some(care(104, PlayerCareKind::Praise)), true).is_err());
++        let mut miss = make(Arm::Praise).bind(100, true).unwrap();
++        miss.accepted_queue(100).unwrap();
++        assert!(miss.observe(tick(100), tick(101), None, true).is_err());
++        assert!(miss.observe(tick(100), tick(101), Some(care(101, PlayerCareKind::Pet)), true).is_err());
++        assert!(miss.observe(tick(100), tick(100), Some(care(101, PlayerCareKind::Praise)), false).is_err());
++        assert!(miss.observe(tick(100), tick(102), None, false).is_err());
++        assert!(make(Arm::Praise).bind(99, true).is_err());
++        assert!(make(Arm::Praise).bind(100, false).is_err());
++        let bad = Spec { expected_start_world_tick: u64::MAX, ..make(Arm::Quiet) };
++        assert!(bad.validate().is_err());
++    }
++}
