@@ -1,0 +1,548 @@
+diff --git a/crates/alife_core/Cargo.toml b/crates/alife_core/Cargo.toml
+index ff3ff82..a76a342 100644
+--- a/crates/alife_core/Cargo.toml
++++ b/crates/alife_core/Cargo.toml
+@@ -17,3 +17,7 @@ thiserror.workspace = true
+ [dev-dependencies]
+ bincode.workspace = true
+ serde_json.workspace = true
++
++[features]
++# Opt-in typed transport for a detached parked research build.
++research-n4096-parked-transport = []
+diff --git a/crates/alife_core/src/structural_plasticity.rs b/crates/alife_core/src/structural_plasticity.rs
+index 0bbbce5..638682a 100644
+--- a/crates/alife_core/src/structural_plasticity.rs
++++ b/crates/alife_core/src/structural_plasticity.rs
+@@ -246,6 +246,56 @@ impl StructuralPlasticityState {
+         Ok(())
+     }
+ 
++    /// Lossless order-preserving persistent-address transport for a detached
++    /// class-4 research layout. Missing addresses may represent unused wide
++    /// reserve lanes, but a candidate or live edge may never use one.
++    #[doc(hidden)]
++    #[cfg(feature = "research-n4096-parked-transport")]
++    pub fn remap_parked_research_addresses(
++        &self,
++        target_count: u32,
++        from_to: &[Option<u32>],
++    ) -> Result<Self, StructuralPlasticityError> {
++        self.validate_contract()?;
++        if from_to.len() != self.neuron_count as usize
++            || !matches!((self.neuron_count, target_count), (2048, 4096) | (4096, 2048))
++        {
++            return Err(StructuralPlasticityError::InvalidInputLength);
++        }
++        let used = from_to.iter().flatten().copied().collect::<Vec<_>>();
++        if used.len() != 2048
++            || used.iter().any(|&index| index >= target_count)
++            || used.windows(2).any(|pair| pair[0] >= pair[1])
++        {
++            return Err(StructuralPlasticityError::NodeOutOfRange);
++        }
++        let remap = |index: u32| {
++            from_to.get(index as usize).copied().flatten()
++                .ok_or(StructuralPlasticityError::NodeOutOfRange)
++        };
++        let mut mapped = self.clone();
++        mapped.neuron_count = target_count;
++        for candidate in mapped.candidates.values_mut().flatten() {
++            candidate.source = remap(candidate.source)?;
++            candidate.target = remap(candidate.target)?;
++        }
++        let mut connections = BTreeMap::new();
++        for (&old_target, edges) in &self.connections {
++            let target = remap(old_target)?;
++            let mut next_edges = edges.clone();
++            for edge in &mut next_edges {
++                edge.source = remap(edge.source)?;
++                edge.target = target;
++            }
++            if connections.insert(target, next_edges).is_some() {
++                return Err(StructuralPlasticityError::DuplicateConnection);
++            }
++        }
++        mapped.connections = connections;
++        mapped.validate_contract()?;
++        Ok(mapped)
++    }
++
+     pub fn discover_candidates(
+         &mut self,
+         evidence: &[CoactivationEvidence],
+diff --git a/crates/alife_gpu_backend/Cargo.toml b/crates/alife_gpu_backend/Cargo.toml
+index 8d90a3c..676ea8f 100644
+--- a/crates/alife_gpu_backend/Cargo.toml
++++ b/crates/alife_gpu_backend/Cargo.toml
+@@ -26,3 +26,5 @@ training-rollout = []
+ research-n4096-shape = []
+ # Explicit offline software runtime tests only; no production profile enables this.
+ research-n4096-auxiliary = ["research-n4096-shape", "gpu-tests"]
++# Internal parked transport; adds no evaluator ingress or resident authority.
++research-n4096-parked-transport = ["research-n4096-auxiliary", "alife_core/research-n4096-parked-transport"]
+diff --git a/crates/alife_gpu_backend/src/lib.rs b/crates/alife_gpu_backend/src/lib.rs
+index 1208895..67090fb 100644
+--- a/crates/alife_gpu_backend/src/lib.rs
++++ b/crates/alife_gpu_backend/src/lib.rs
+@@ -46,3 +46,6 @@ pub use runtime::{
+     probe_local_wgpu_runtime_for_graphics_backend, required_storage_buffers, GpuRuntimeBackendKind,
+     GpuRuntimeHardwareProbe, P29_RUNTIME_SCHEMA_VERSION,
+ };
++
++#[cfg(feature = "research-n4096-parked-transport")]
++mod research_n4096_parked_transport;
+diff --git a/crates/alife_gpu_backend/src/research_n4096_parked_transport.rs b/crates/alife_gpu_backend/src/research_n4096_parked_transport.rs
+new file mode 100644
+index 0000000..7db3148
+--- /dev/null
++++ b/crates/alife_gpu_backend/src/research_n4096_parked_transport.rs
+@@ -0,0 +1,448 @@
++//! Internal, non-runnable N4096 transport. This file owns no GPU, resident,
++//! format, or permit. The destination phenotype hash is only a validated
++//! shape parameter; callers must later obtain it from the sealed compiler.
++#![allow(dead_code)] // First isolated slice: no production or runtime caller.
++
++use alife_core::{
++    BrainCapacityClass, CompiledSynapseKind, DendriticBranchSet, PhenotypeHash, ScaffoldContractError,
++    N2048FoundationLayoutV1, N4096ResearchLayoutV1,
++};
++use crate::{
++    GpuBrainCheckpointSnapshot, GpuLiveTopologyCheckpointV1, GpuV11Checkpoint,
++};
++use crate::research_n4096_shape::address_bands;
++
++type Result<T> = std::result::Result<T, ScaffoldContractError>;
++const OLD: usize = N2048FoundationLayoutV1::NEURON_COUNT as usize;
++const WIDE: usize = N4096ResearchLayoutV1::NEURON_COUNT as usize;
++const META_WORDS: usize = 8;
++
++fn invalid() -> ScaffoldContractError {
++    ScaffoldContractError::InvalidSparseProjectionSchema
++}
++
++struct HqAddresses {
++    forward: Vec<Option<u32>>,
++    inverse: Vec<Option<u32>>,
++}
++
++impl HqAddresses {
++    fn new() -> Result<Self> {
++        let mut forward = vec![None; OLD];
++        let mut inverse = vec![None; WIDE];
++        for band in address_bands().map_err(|_| invalid())? {
++            for (old, new) in band.old.zip(band.inherited_h) {
++                if forward[old as usize].replace(new).is_some()
++                    || inverse[new as usize].replace(old).is_some()
++                {
++                    return Err(invalid());
++                }
++            }
++        }
++        let values: Vec<_> = forward.iter().flatten().collect();
++        if values.len() != OLD || values.windows(2).any(|p| p[0] >= p[1])
++            || inverse.iter().flatten().count() != OLD
++        {
++            return Err(invalid());
++        }
++        Ok(Self { forward, inverse })
++    }
++}
++
++fn address(map: &[Option<u32>], old: u32) -> Result<u32> {
++    map.get(old as usize).copied().flatten().ok_or_else(invalid)
++}
++
++fn transport_v11(
++    old: &GpuV11Checkpoint, map: &[Option<u32>], new_count: u32,
++) -> Result<GpuV11Checkpoint> {
++    if old.neuron_count as usize != map.len() || old.pending_lifetime_synapse.is_some() {
++        return Err(invalid());
++    }
++    let mut out = old.clone();
++    out.neuron_count = new_count;
++    let mut branches = out.dendritic_branches.branches().to_vec();
++    for branch in &mut branches {
++        branch.target = address(map, branch.target)?;
++        for tap in &mut branch.inputs {
++            tap.source = address(map, tap.source)?;
++        }
++    }
++    out.dendritic_branches = DendriticBranchSet::new(branches)?;
++    out.structural = old.structural
++        .remap_parked_research_addresses(new_count, map).map_err(|_| invalid())?;
++    for span in &mut out.sparse_spans {
++        span.target = address(map, span.target)?;
++        for edge in &mut span.edges {
++            edge.source = address(map, edge.source)?;
++            edge.target = address(map, edge.target)?;
++        }
++    }
++    // Work receipts are retained historical observations. They neither mint
++    // a replay capability nor claim that the wider layout performed the work.
++    Ok(out)
++}
++
++fn exact_v11(a: &GpuV11Checkpoint, b: &GpuV11Checkpoint) -> bool {
++    a == b && a.dendritic_branches.branches().iter().zip(b.dendritic_branches.branches())
++        .all(|(p, q)| p.threshold.to_bits() == q.threshold.to_bits()
++            && p.output_gain.to_bits() == q.output_gain.to_bits()
++            && p.inputs.iter().zip(&q.inputs).all(|(x, y)| x.weight.to_bits() == y.weight.to_bits()))
++        && a.sparse_spans.iter().zip(&b.sparse_spans)
++            .all(|(p, q)| p.edges.iter().zip(&q.edges)
++                .all(|(x, y)| x.weight.to_bits() == y.weight.to_bits()))
++}
++
++fn transport_topology(
++    old: &GpuLiveTopologyCheckpointV1, source_cap: &BrainCapacityClass,
++    target_cap: &BrainCapacityClass, map: &[Option<u32>], target_hash: PhenotypeHash,
++) -> Result<GpuLiveTopologyCheckpointV1> {
++    old.validate_for_capacity(source_cap)?;
++    let n = target_cap.execution().max_neurons();
++    if old.neuron_count as usize != map.len() || target_hash == PhenotypeHash([0; 4]) {
++        return Err(invalid());
++    }
++    let recurrent = old.recurrent_synapse_count as usize;
++    let decoder = old.decoder_synapse_count as usize;
++    let total = old.total_synapse_count as usize;
++    if total > target_cap.execution().max_total_synapses() as usize
++        || recurrent > target_cap.execution().max_recurrent_synapses() as usize
++        || old.synapse_learning_metadata_words.len() != total.checked_mul(META_WORDS).ok_or_else(invalid)?
++        || old.decoder_eligibility_metadata_words.len() != decoder.checked_mul(META_WORDS).ok_or_else(invalid)?
++    {
++        return Err(invalid());
++    }
++
++    let mut out = old.clone();
++    out.phenotype_hash = target_hash;
++    out.neuron_count = n;
++    // A stable monotone H map and empty Q reductions preserve byte order of
++    // real live CSR edges, including acquired edges and within-target order.
++    let mut counts = vec![0u32; n as usize];
++    for (i, (&wide, pair)) in map.iter().zip(old.target_offsets.windows(2)).enumerate() {
++        if let Some(wide) = wide {
++            let count = counts.get_mut(wide as usize).ok_or_else(invalid)?;
++            *count = pair[1] - pair[0];
++            for local in pair[0] as usize..pair[1] as usize {
++                let meta = &old.synapse_learning_metadata_words[local*META_WORDS..][..META_WORDS];
++                if meta[0] as usize != local || meta[1] != CompiledSynapseKind::RECURRENT_RAW
++                    || meta[2] != old.source_indices[local] || meta[3] as usize != i
++                    || meta[5] as usize != local || meta[6] != u32::MAX || meta[7] != 0
++                {
++                    return Err(invalid());
++                }
++            }
++        } else if pair[0] != pair[1] {
++            return Err(invalid());
++        }
++    }
++    let mut offsets = Vec::with_capacity(n as usize+1);
++    offsets.push(0u32);
++    for count in counts {
++        offsets.push(offsets.last().copied().unwrap_or(0).checked_add(count).ok_or_else(invalid)?);
++    }
++    if offsets.last().copied() != Some(old.recurrent_synapse_count) {
++        return Err(invalid());
++    }
++    out.target_offsets = offsets;
++    for source in &mut out.source_indices {
++        *source = address(map, *source)?;
++    }
++    for (i, words) in out.synapse_learning_metadata_words.chunks_exact_mut(META_WORDS).enumerate() {
++        if words[0] as usize != i || words[7] != 0 {
++            return Err(invalid());
++        }
++        words[2] = address(map, words[2])?;
++        words[3] = address(map, words[3])?;
++    }
++    // The checked production codec's motor_index in eligibility metadata
++    // is an absolute activation-neuron address, NOT its decoder-local ordinal.
++    // Other decoder globals/lane/order are unchanged, so all bank/replay
++    // physical row IDs remain stable. No sorting/rerouting to make this pass.
++    for (i, words) in out.decoder_eligibility_metadata_words.chunks_exact_mut(META_WORDS).enumerate() {
++        let id = recurrent.checked_add(i).ok_or_else(invalid)?;
++        let old_syn = &old.synapse_learning_metadata_words[id*META_WORDS..][..META_WORDS];
++        if words[0] as usize != id || words[4] != old_syn[2] || words[5] != old_syn[4]
++            || words[6] as usize != i || words[7] != 0
++            || old_syn[1] != CompiledSynapseKind::DECODER_RAW
++            || old_syn[5] as usize != i || old_syn[6] as usize != i
++        {
++            return Err(invalid());
++        }
++        words[4] = address(map, words[4])?;
++    }
++    out.v11_checkpoint = transport_v11(&old.v11_checkpoint, map, n)?;
++    out.canonical_digest = out.recompute_canonical_digest()?;
++    out.validate_for_capacity(target_cap)?;
++    Ok(out)
++}
++
++fn transport_activation(
++    old: &[u32], map: &[Option<u32>], new_count: usize, stride: usize,
++) -> Result<Vec<u32>> {
++    if !matches!(stride, 1 | 2) || old.len() != map.len().checked_mul(stride).ok_or_else(invalid)? {
++        return Err(invalid());
++    }
++    let mut result = vec![0u32; new_count.checked_mul(stride).ok_or_else(invalid)?];
++    for (i, values) in old.chunks_exact(stride).enumerate() {
++        if let Some(new) = map[i] {
++            let start = new as usize * stride;
++            result.get_mut(start..start+stride).ok_or_else(invalid)?.copy_from_slice(values);
++        } else if values.iter().any(|word| *word != 0) {
++            return Err(invalid()); // Reject negative zero in any Q lane.
++        }
++    }
++    Ok(result)
++}
++
++fn transport_snapshot(
++    old: &GpuBrainCheckpointSnapshot, old_topology: &GpuLiveTopologyCheckpointV1,
++    new_topology: &GpuLiveTopologyCheckpointV1, map: &[Option<u32>],
++) -> Result<GpuBrainCheckpointSnapshot> {
++    let mut parts = old.clone().into_parts();
++    if parts.phenotype_hash != old_topology.phenotype_hash
++        || parts.activation_a_bits.len() != old_topology.neuron_count as usize
++        || parts.lifetime_bank_0_bits.len() != old_topology.total_synapse_count as usize
++        || parts.recurrent_eligibility_bank_0_bits.len() != old_topology.recurrent_synapse_count as usize
++        || parts.decoder_eligibility_bank_0_bits.len() != old_topology.decoder_synapse_count as usize
++        || parts.pending_eligibility.is_some()
++        || parts.inactive_eligibility_generation != 0
++    {
++        return Err(invalid());
++    }
++    let n = new_topology.neuron_count as usize;
++    parts.activation_a_bits = transport_activation(&parts.activation_a_bits, map, n, 1)?;
++    parts.activation_b_bits = transport_activation(&parts.activation_b_bits, map, n, 1)?;
++    parts.neuron_homeostasis_bits = transport_activation(&parts.neuron_homeostasis_bits, map, n, 2)?;
++    parts.phenotype_hash = new_topology.phenotype_hash;
++    if let Some(ref mut key) = parts.last_learning_replay_key {
++        if key.organism_id != parts.organism_id || key.phenotype_hash != old_topology.phenotype_hash {
++            return Err(ScaffoldContractError::LearningEvidenceMismatch);
++        }
++        // Re-key the in-bank duplicate guard only; the same organism,
++        // sequence, ring, physical span IDs, cursor and journal generation
++        // remain unchanged. This never reissues a scheduler/durable permit.
++        key.phenotype_hash = new_topology.phenotype_hash;
++    }
++    GpuBrainCheckpointSnapshot::try_from_parts(parts)
++}
++
++// No Deserialize/public threshold or resident authority. A later backend
++// transaction may consume this only after its actual source/compiled plan
++// ownership check. This is an expected translation, not device readback.
++pub(crate) struct ParkedExpectedTransport {
++    topology: GpuLiveTopologyCheckpointV1,
++    native: GpuBrainCheckpointSnapshot,
++}
++
++impl ParkedExpectedTransport {
++    pub(crate) fn derive_exact(
++        old: &GpuLiveTopologyCheckpointV1, native: &GpuBrainCheckpointSnapshot,
++        compiled_target_shape: PhenotypeHash,
++    ) -> Result<Self> {
++        let map = HqAddresses::new()?;
++        let base = BrainCapacityClass::n2048();
++        let width = BrainCapacityClass::n4096_research();
++        if compiled_target_shape == old.phenotype_hash {
++            return Err(ScaffoldContractError::BrainOwnershipMismatch);
++        }
++        let topology = transport_topology(old, &base, &width, &map.forward, compiled_target_shape)?;
++        let wide_native = transport_snapshot(native, old, &topology, &map.forward)?;
++        let derived = Self { topology, native: wide_native };
++        derived.verify_projection_back(old, native, &map)?;
++        Ok(derived)
++    }
++
++    fn verify_projection_back(
++        &self, old: &GpuLiveTopologyCheckpointV1, native: &GpuBrainCheckpointSnapshot,
++        map: &HqAddresses,
++    ) -> Result<()> {
++        let base = BrainCapacityClass::n2048();
++        let width = BrainCapacityClass::n4096_research();
++        let back = transport_topology(&self.topology, &width, &base, &map.inverse, old.phenotype_hash)?;
++        let back_native = transport_snapshot(&self.native, &self.topology, &back, &map.inverse)?;
++        if &back != old || !exact_v11(&back.v11_checkpoint, &old.v11_checkpoint)
++            || &back_native != native || back_native.canonical_digest() != native.canonical_digest()
++        {
++            return Err(invalid());
++        }
++        Ok(())
++    }
++
++    // Expected topology recomputation alone is not readback. The device
++    // caller must use an independently mapped capture tied to its actual slot.
++    pub(crate) fn verify_actual_mapped(
++        &self, mapped_topology: &GpuLiveTopologyCheckpointV1,
++        mapped_native: &GpuBrainCheckpointSnapshot,
++    ) -> Result<()> {
++        if mapped_topology != &self.topology
++            || !exact_v11(&mapped_topology.v11_checkpoint, &self.topology.v11_checkpoint)
++            || mapped_native != &self.native
++            || mapped_native.canonical_digest() != self.native.canonical_digest()
++        {
++            return Err(invalid());
++        }
++        Ok(())
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use alife_core::{
++        CandidateActionFamily, CoactivationEvidence, DendriticBranch,
++        DendriticInputRef, ExperienceSequenceId, OrganismId, OutcomeCreditReplayKey,
++        StructuralPlasticityConfig, StructuralPlasticityState, Tick,
++    };
++    use bytemuck::Zeroable;
++    use crate::{
++        GpuBrainCheckpointParts, GpuReplayEventRecord, GpuReplaySynapseSpanRecord,
++        GpuV11SparseEdge, GpuV11SparseSpan, GpuV11WorkReceipt,
++        GPU_BRAIN_CHECKPOINT_SCHEMA_VERSION, GPU_LIVE_TOPOLOGY_CHECKPOINT_SCHEMA_VERSION,
++        GPU_V11_CAUSAL_STATE_SCHEMA_VERSION,
++    };
++
++    // Device-free fixture with a structural edge and learned-row bank. It is
++    // deliberately not a claim to have accessed a private save or a resident.
++    fn fixture() -> (GpuLiveTopologyCheckpointV1, GpuBrainCheckpointSnapshot) {
++        let old_hash = PhenotypeHash([1, 2, 3, 4]);
++        let mut structural = StructuralPlasticityState::new(
++            OLD as u32, StructuralPlasticityConfig::default(),
++        ).unwrap();
++        structural.discover_candidates(&[CoactivationEvidence {
++            region: 0, source: 280, target: 440,
++            coactivation: 700, eligibility: 30, concept_gap_support: 0,
++        }]).unwrap();
++        let mut topology = GpuLiveTopologyCheckpointV1 {
++            schema_version: GPU_LIVE_TOPOLOGY_CHECKPOINT_SCHEMA_VERSION,
++            phenotype_hash: old_hash, neuron_count: OLD as u32,
++            total_synapse_count: 2, recurrent_synapse_count: 1, decoder_synapse_count: 1,
++            target_offsets: (0..=OLD).map(|i| if i > 440 { 1 } else { 0 }).collect(),
++            source_indices: vec![280], route_indices: vec![0],
++            genetic_weight_bits: vec![0.25f32.to_bits(), 0.5f32.to_bits()],
++            alpha_bits: vec![0.01f32.to_bits(), 0.02f32.to_bits()],
++            synapse_learning_metadata_words: vec![
++                 0, 1, 280, 440, 0, 0, u32::MAX, 0,
++                 1, 2, 1800, 1800, 0, 0, 0, 0,
++            ],
++            decoder_eligibility_metadata_words: vec![1, 0, 0, 0, 1800, 0, 0, 0],
++            decoder_synapse_starts: vec![0],
++            decoder_weight_global_synapse_ids: vec![1], memory_weight_indices: vec![1],
++            v11_checkpoint: GpuV11Checkpoint {
++                schema_version: GPU_V11_CAUSAL_STATE_SCHEMA_VERSION, neuron_count: OLD as u32,
++                dendritic_branches: DendriticBranchSet::new(vec![DendriticBranch::new(
++                    440, -0.0, 1.0, vec![DendriticInputRef::new(280, -0.0).unwrap()],
++                ).unwrap()]).unwrap(), structural,
++                sparse_spans: vec![GpuV11SparseSpan {
++                    target: 440, edges: vec![GpuV11SparseEdge {
++                        source: 280, target: 440, route: 0, weight: 0.25,
++                    }],
++                }],
++                pending_lifetime_synapse: None, work: GpuV11WorkReceipt::default(),
++            },
++            canonical_digest: [0;4],
++        };
++        topology.canonical_digest = topology.recompute_canonical_digest().unwrap();
++        let mut activation_a_bits = vec![0; OLD];
++        activation_a_bits[280] = (-0.125f32).to_bits();
++        activation_a_bits[440] = (0.125f32).to_bits();
++        let events = vec![GpuReplayEventRecord {
++            sequence_id: [7,0], originating_tick: [5,0],
++            frame_digest: [1;8], candidate_feature_digest: [1;4],
++            action_id: 1, family: u32::from(CandidateActionFamily::Idle.raw()),
++            ..GpuReplayEventRecord::zeroed()
++        }, GpuReplayEventRecord::zeroed()];
++        let native = GpuBrainCheckpointSnapshot::try_from_parts(GpuBrainCheckpointParts {
++            schema_version: GPU_BRAIN_CHECKPOINT_SCHEMA_VERSION,
++            organism_id: OrganismId(1), phenotype_hash: old_hash, checkpoint_tick: Tick::new(10),
++            active_activation_side: 1, logical_dispatch_generation: 2,
++            activation_a_bits, activation_b_bits: vec![0.125f32.to_bits(); OLD],
++            neuron_homeostasis_bits: vec![0.25f32.to_bits(); OLD*2],
++            active_weight_generation: 2, active_weight_bank: 1,
++            lifetime_bank_0_bits: vec![0, 0.125f32.to_bits()],
++            lifetime_bank_1_bits: vec![0.5f32.to_bits(), 0.25f32.to_bits()],
++            fast_bank_0_bits: vec![0.125f32.to_bits(), 0],
++            fast_bank_1_bits: vec![0, 0.25f32.to_bits()],
++            active_eligibility_generation: 2, inactive_eligibility_generation: 0,
++            active_eligibility_bank: 1, learning_transaction_generation: 4,
++            recurrent_eligibility_bank_0_bits: vec![0.25f32.to_bits()],
++            recurrent_eligibility_bank_1_bits: vec![0.5f32.to_bits()],
++            decoder_eligibility_bank_0_bits: vec![0.125f32.to_bits()],
++            decoder_eligibility_bank_1_bits: vec![0.25f32.to_bits()],
++            replay_journal_generation: 1, replay_journal_cursor: 1, replay_journal_event_count: 1,
++            replay_events: events,
++            replay_spans: vec![GpuReplaySynapseSpanRecord {
++                local_synapse_id: 0, sample_start: 0, sample_count: 1, reserved: 0,
++            }],
++            replay_samples: vec![
++                crate::pack_replay_eligibility_sample(0, 8),
++                crate::pack_replay_eligibility_sample(1, 0),
++            ],
++            last_learning_replay_key: Some(OutcomeCreditReplayKey {
++                organism_id: OrganismId(1), phenotype_hash: old_hash,
++                sequence_id: ExperienceSequenceId(7),
++            }),
++            pending_eligibility: None,
++        }).unwrap();
++        (topology, native)
++    }
++
++    #[test]
++    fn parked_transport_preserves_csr_v11_and_complete_learned_bank_roundtrip() {
++        let (source, native) = fixture();
++        let id = PhenotypeHash([5,6,7,8]);
++        let expected = ParkedExpectedTransport::derive_exact(&source,&native,id).unwrap();
++        let map = HqAddresses::new().unwrap();
++        let h = address(&map.forward, 280).unwrap();
++        let h_target = address(&map.forward, 440).unwrap();
++        let h_decoder = address(&map.forward, 1800).unwrap();
++        let wide = &expected.topology;
++        assert_eq!(wide.target_offsets.len(), WIDE+1);
++        assert_eq!(&wide.target_offsets[h_target as usize..][..2], &[0,1]);
++        assert_eq!(wide.source_indices, [h]);
++        assert_eq!(wide.decoder_eligibility_metadata_words[4], h_decoder);
++        assert_eq!(wide.v11_checkpoint.dendritic_branches.branches()[0].target,h_target);
++        let frame=expected.native.clone().into_parts();
++        assert_eq!(frame.activation_a_bits[h as usize], (-0.125f32).to_bits());
++        assert_eq!(wide.v11_checkpoint.dendritic_branches.branches()[0].inputs[0].weight.to_bits(), (-0.0f32).to_bits());
++        assert!(map.inverse.iter().enumerate().filter(|(_, row)| row.is_none())
++            .all(|(i, _)| frame.activation_a_bits[i] | frame.activation_b_bits[i]
++                | frame.neuron_homeostasis_bits[i*2] | frame.neuron_homeostasis_bits[i*2+1] == 0));
++        assert_eq!(frame.last_learning_replay_key.unwrap().phenotype_hash,id);
++        assert_eq!(frame.lifetime_bank_1_bits,native.clone().into_parts().lifetime_bank_1_bits);
++        assert_eq!(frame.replay_samples,native.into_parts().replay_samples);
++    }
++
++    #[test]
++    fn parked_transport_rejects_q_alias_order_and_bad_ordered_readback() {
++        let (source, native) = fixture();
++        let id = PhenotypeHash([5,6,7,8]);
++        let expected = ParkedExpectedTransport::derive_exact(&source,&native,id).unwrap();
++        let map = HqAddresses::new().unwrap();
++        let q = map.inverse.iter().position(Option::is_none).unwrap();
++        let mut bad=expected.native.clone().into_parts();
++        // Authoritative snapshots already reject raw negative zero (including
++        // on H). Exercise the mapped raw check without unwrapping such a save.
++        bad.activation_b_bits[q]=(-0.0f32).to_bits();
++        assert!(transport_activation(&bad.activation_b_bits,&map.inverse,OLD,1).is_err());
++        assert!(GpuBrainCheckpointSnapshot::try_from_parts(bad.clone()).is_err());
++        // A nonzero Q word is a valid float, but not valid parked readback.
++        bad.activation_b_bits[q]=1.0f32.to_bits();
++        let bad=GpuBrainCheckpointSnapshot::try_from_parts(bad).unwrap();
++        assert!(expected.verify_actual_mapped(&expected.topology,&bad).is_err());
++        assert!(transport_snapshot(&bad,&expected.topology,&source,&map.inverse).is_err());
++        let mut foreign=source.clone();
++        foreign.decoder_eligibility_metadata_words[4]+=1;
++        foreign.canonical_digest=foreign.recompute_canonical_digest().unwrap();
++        assert!(ParkedExpectedTransport::derive_exact(&foreign,&native,id).is_err());
++        let mut aliased=map.forward.clone();
++        aliased[1]=aliased[0];
++        assert!(source.v11_checkpoint.structural
++            .remap_parked_research_addresses(WIDE as u32,&aliased).is_err());
++        let mut reordered=map.forward.clone();
++        reordered.swap(0,1);
++        assert!(source.v11_checkpoint.structural
++            .remap_parked_research_addresses(WIDE as u32,&reordered).is_err());
++        assert!(ParkedExpectedTransport::derive_exact(&source,&native,source.phenotype_hash).is_err());
++    }
++}

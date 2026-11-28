@@ -1,0 +1,30 @@
+{
+  "build_licenses_native": false,
+  "device_or_private_current": false,
+  "parent_git": "d31f45d1f6b0157493080be9b89e45337d7cc4a7",
+  "parent_tree": "61dc2bf5226e87f3a3b92312708e254ff36d5d28",
+  "patch_sha256": "3bc64a53caaf465eb527f2ca9158ee603fe4814650692102dc70180458d897ec",
+  "paths": {
+    "crates/alife_core/Cargo.toml": {
+      "after": "f50952cc174a1f212d72b5bd17908e4a2415dbf4d16c96bbdee52b2fabf62af5",
+      "before": "c542707452f2f763337b9704ed3c5f9418e0a907000538d6d503dcb2a98b0bef"
+    },
+    "crates/alife_core/src/structural_plasticity.rs": {
+      "after": "c94ac378de656db081d3488f9f9626077388baed4ca6ef3eaa5de5570af57274",
+      "before": "1a7b761df355c13dccd40a983f10fb085b5ff5c9085ef9e0ffd25f938570f82d"
+    },
+    "crates/alife_gpu_backend/Cargo.toml": {
+      "after": "fbaea08aec82b69f1ed4147288c443991c01425247cb900b169914cc2edc0380",
+      "before": "4eeea29b4588da8874ead23ab372442706f594181e8b97c6cf775901890fe525"
+    },
+    "crates/alife_gpu_backend/src/lib.rs": {
+      "after": "d71292f08f7dc3c8663e62cfec800e6430b2e5de026683b6616a0e37e1e4d65d",
+      "before": "61b6e5fb2b5ede8551b60269ef85eefad95c04884864a8506e7928a63ec7d432"
+    },
+    "crates/alife_gpu_backend/src/research_n4096_parked_transport.rs": {
+      "after": "be3ea0afcd4fbecfacde5e89c874d3cc5ea9622b7a207f79587bd8b1d802948a",
+      "before": null
+    }
+  },
+  "schema": "qualia.n4096.parked-transport-source-pins.v1"
+}

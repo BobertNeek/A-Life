@@ -1,7 +1,7 @@
-name: Qualia detached N4096 ordinary proof and carrier source qualification
+name: Qualia detached N4096 parked live transport CPU qualification
 on:
   push:
-    branches: ["bob/qualia-n4096-ordinary-zero-proof-source-20261127"]
+    branches: ["bob/qualia-n4096-parked-transport-source-20261128"]
     paths: [".github/workflows/qualia-n4096-width-intake-check.yml"]
 
 permissions:
@@ -13,10 +13,13 @@ concurrency:
 
 jobs:
   source-only:
-    if: github.ref == 'refs/heads/bob/qualia-n4096-ordinary-zero-proof-source-20261127'
+    if: github.ref == 'refs/heads/bob/qualia-n4096-parked-transport-source-20261128'
     runs-on: ubuntu-24.04
-    timeout-minutes: 65
+    timeout-minutes: 52
     env:
+      PIN_EXACT_EMITTED_WIDTH: d31f45d1f6b0157493080be9b89e45337d7cc4a7
+      PIN_EXACT_EMITTED_WIDTH_TREE: 61dc2bf5226e87f3a3b92312708e254ff36d5d28
+      PIN_PARKED_META: 63e7fc70c3b4ccbe9fbde78e2fe8d8efd05a31a33ddbb176608b14675024df56
       PIN_WIDTH_PARENT: 0319c7f76a4d6e60c62c93ec2558b197b94e139d
       PIN_WIDTH_PARENT_TREE: e4abafe0669bc503add8d455204acd0d1f1edd9e
       PIN_ORDINARY_META: c69bf0fee0d6c745d11937ca8aca06314d9db10f992211ebd7a15a41d03907ad
@@ -65,7 +68,14 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git show -s --format=%P HEAD)" = "$PIN_WIDTH_PARENT"
+          test "$(git show -s --format=%P HEAD)" = "$PIN_EXACT_EMITTED_WIDTH"
+          test "$(git rev-parse "$PIN_EXACT_EMITTED_WIDTH^{tree}")" = "$PIN_EXACT_EMITTED_WIDTH_TREE"
+          test "$(git show -s --format=%P "$PIN_EXACT_EMITTED_WIDTH")" = "$PIN_WIDTH_PARENT"
+          diff -u <(printf '%s\n' \
+            $'M\t.github/workflows/qualia-n4096-width-intake-check.yml' \
+            $'A\tdocs/r41-saved-life/N4096-PARKED-LIVE-TRANSPORT.patch' \
+            $'A\tdocs/r41-saved-life/n4096-parked-transport-source-pins.v1.json' | LC_ALL=C sort) \
+            <(git diff --name-status --no-renames "$PIN_EXACT_EMITTED_WIDTH" HEAD | LC_ALL=C sort)
           test "$(git rev-parse "$PIN_WIDTH_PARENT^{tree}")" = "$PIN_WIDTH_PARENT_TREE"
           test "$(git show -s --format=%P "$PIN_WIDTH_PARENT")" = "$PIN_V3_HOST"
           diff -u <(printf '%s\n' \
@@ -73,7 +83,7 @@ jobs:
             $'A\tdocs/r41-saved-life/N4096-ORDINARY-ZERO-PROOF-SOURCE.patch' \
             $'A\tdocs/r41-saved-life/n4096-ordinary-zero-proof-pins.v1.json' \
             $'A\tscripts/check_n4096_ordinary_proof_device_free.py' | LC_ALL=C sort) \
-            <(git diff --name-status --no-renames "$PIN_WIDTH_PARENT" HEAD | LC_ALL=C sort)
+            <(git diff --name-status --no-renames "$PIN_WIDTH_PARENT" "$PIN_EXACT_EMITTED_WIDTH" | LC_ALL=C sort)
           test "$(git show -s --format=%P "$PIN_V3_HOST")" = "$PIN_V3_PARENT"
           test "$(git rev-parse "$PIN_V3_PARENT^{tree}")" = "$PIN_V3_PARENT_TREE"
           test "$(git show -s --format=%P "$PIN_V3_PARENT")" = "$PIN_V3_FIRST"
@@ -93,7 +103,7 @@ jobs:
             $'A\tdocs/r41-saved-life/n4096-width-hosted-pins.v1.json' \
             $'A\tscripts/check_n4096_app_device_free.py' \
             $'A\tscripts/check_n4096_ordinary_proof_device_free.py' | LC_ALL=C sort) \
-            <(git diff --name-status --no-renames "$PIN_V3_HOST" HEAD | LC_ALL=C sort)
+            <(git diff --name-status --no-renames "$PIN_V3_HOST" "$PIN_EXACT_EMITTED_WIDTH" | LC_ALL=C sort)
           export EXACT_SRC="$RUNNER_TEMP/qualia-n4096-width-intake-source"
           export CARGO_TARGET_DIR="$RUNNER_TEMP/qualia-n4096-width-intake-target"
           export EVIDENCE="$RUNNER_TEMP/qualia-n4096-width-intake-evidence"
@@ -233,7 +243,51 @@ jobs:
           print('full signed source reconstructed; all ten exact width leaves plus five-leaf proof overlay forward/reverse/forward')
           PY
 
-      - name: Rust pin, genuine shared OFF CLI and targeted native allocator CPU tests
+
+      - name: Authenticated reversible parked transport source
+        run: |
+          set -euo pipefail
+          cd "$EXACT_SRC"
+          python3 -IB - "$GITHUB_WORKSPACE" <<'PY' | tee -a "$EVIDENCE/build.log"
+          import hashlib,json,os,pathlib,subprocess,sys
+          docs=pathlib.Path(sys.argv[1])/'docs/r41-saved-life'
+          meta=docs/'n4096-parked-transport-source-pins.v1.json'
+          patch=docs/'N4096-PARKED-LIVE-TRANSPORT.patch'
+          def digest(ref):
+              f=pathlib.Path(ref)
+              assert not f.is_symlink() and (not f.exists() or f.is_file()),f
+              return hashlib.sha256(f.read_bytes()).hexdigest() if f.exists() else None
+          assert digest(meta)==os.environ['PIN_PARKED_META']
+          pins=json.loads(meta.read_bytes())
+          assert pins['parent_git']==os.environ['PIN_EXACT_EMITTED_WIDTH']
+          assert pins['parent_tree']==os.environ['PIN_EXACT_EMITTED_WIDTH_TREE']
+          assert not pins['device_or_private_current'] and not pins['build_licenses_native']
+          assert digest(patch)==pins['patch_sha256']
+          allowed={
+              'crates/alife_core/Cargo.toml',
+              'crates/alife_core/src/structural_plasticity.rs',
+              'crates/alife_gpu_backend/Cargo.toml',
+              'crates/alife_gpu_backend/src/lib.rs',
+              'crates/alife_gpu_backend/src/research_n4096_parked_transport.rs',
+          }
+          paths=pins['paths']
+          assert set(paths)==allowed
+          names={x.decode().split('\t',2)[2] for x in subprocess.check_output(
+            ['git','apply','--numstat','-z',patch]).rstrip(b'\0').split(b'\0')}
+          assert names==allowed
+          def verify(mode):
+              assert digest('Cargo.lock')==os.environ['PIN_LOCK']
+              for k,v in paths.items():
+                  assert digest(k)==v[mode],(mode,k,digest(k),v[mode])
+          def apply(*flags):
+              for check in (['--check'],[]):
+                  subprocess.run(['git','apply','--whitespace=error',*flags,*check,patch],check=True)
+          verify('before'); apply(); verify('after')
+          apply('--reverse'); verify('before'); apply(); verify('after')
+          print('exact parked transport source, five leaves and forward/inverse/forward verified')
+          PY
+
+      - name: Locked Rust; OFF compile and two named pure transport CPU tests
         run: |
           set -euo pipefail
           rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --target "$TARGET"
@@ -246,64 +300,26 @@ jobs:
           mkdir -p "$CARGO_TARGET_DIR"
           test "$(df -PB1 "$CARGO_TARGET_DIR" | awk 'NR==2 {print $4}')" -ge 10737418240
           timeout 8m cargo +"$RUST_TOOLCHAIN" fetch --locked --target "$TARGET" 2>&1 | tee -a "$EVIDENCE/build.log"
-          timeout 24m cargo +"$RUST_TOOLCHAIN" build --frozen --offline --target "$TARGET" --no-default-features             -p alife_game_app --features retained-language-composition-v3 --bin evaluate_saved_life_retention             2>&1 | tee -a "$EVIDENCE/build.log"
-          off="$CARGO_TARGET_DIR/$TARGET/debug/evaluate_saved_life_retention"
-          test -f "$off" && test -x "$off" && test ! -L "$off"
-          install -m 0700 "$off" "$RUNNER_TEMP/n4096-shared-feature-off"
-          timeout 15m cargo +"$RUST_TOOLCHAIN" test --frozen --offline --target "$TARGET" --no-default-features             -p alife_gpu_backend --lib --features research-n4096-auxiliary n4096_ -- --nocapture             2>&1 | tee "$EVIDENCE/width-planner-carrier-cpu.log"
-          grep -Fq 'n4096_shape_real_fixed_planner_lobe_bands_and_exact_offsets ... ok' "$EVIDENCE/width-planner-carrier-cpu.log"
-          grep -Fq 'n4096_shape_no_production_admission_and_cannot_raise_ceiling ... ok' "$EVIDENCE/width-planner-carrier-cpu.log"
-          grep -Fq 'n4096_aux_fields_are_bounded_and_any_nonzero_q_refuses ... ok' "$EVIDENCE/width-planner-carrier-cpu.log"
-          grep -Eq '^test result: ok. 3 passed; 0 failed; 0 ignored;' "$EVIDENCE/width-planner-carrier-cpu.log"
-
-      - name: Sole explicit ON shared ELF and device-free CLI refusal/parity
-        run: |
-          set -euo pipefail
-          cd "$EXACT_SRC"
-          test "$(df -PB1 "$CARGO_TARGET_DIR" | awk 'NR==2 {print $4}')" -ge 8589934592
-          timeout 17m cargo +"$RUST_TOOLCHAIN" build --frozen --offline --target "$TARGET" --no-default-features             -p alife_game_app --features retained-language-composition-v3,retained-n4096-auxiliary             --bin evaluate_saved_life_retention 2>&1 | tee -a "$EVIDENCE/build.log"
-          raw="$CARGO_TARGET_DIR/$TARGET/debug/evaluate_saved_life_retention"
-          test -f "$raw" && test -x "$raw" && test ! -L "$raw"
-          install -m 0700 "$raw" "$EVIDENCE/evaluate_saved_life_retention"
-          python3 -IB - "$EVIDENCE/width-source-compiled.json" "$EVIDENCE/evaluate_saved_life_retention" "$RUNNER_TEMP/n4096-shared-feature-off" <<'PY'
-          from hashlib import sha256
-          import json,os,pathlib,sys
-          dst,on,off=map(pathlib.Path,sys.argv[1:])
-          pins=json.loads(pathlib.Path('n4096-final-source-pins.json').read_bytes())
-          for k,v in pins.items():
-              p=pathlib.Path(k)
-              assert p.is_file() and not p.is_symlink() and sha256(p.read_bytes()).hexdigest()==v,k
-          assert sha256(pathlib.Path('Cargo.lock').read_bytes()).hexdigest()==os.environ['PIN_LOCK']
-          b,a=on.read_bytes(),off.read_bytes()
-          assert b[:4]==a[:4]==b'\x7fELF' and max(len(a),len(b))<268435456
-          markers=(b'n4096_auxiliary_zero_inspection_only',b'n4096_ordinary_zero_proof_only')
-          assert all(marker in b and marker not in a for marker in markers)
-          assert sha256(a).digest()!=sha256(b).digest()
-          dst.write_text(json.dumps({'schema':'qualia.compiled_n4096_ordinary_proof_and_width_source_only.v1',
-              'event_head':os.environ['GITHUB_SHA'],'source_leaves':pins,'binary_sha256':sha256(b).hexdigest(),
-              'qualified_predecessor_head':os.environ['PIN_WIDTH_PARENT'],'ordinary_proof_and_carrier_same_elf':True,
-              'off_binary_sha256':sha256(a).hexdigest(),'native_device_or_game_run':False,
-              'private_Input_in_artifact':False,'score_or_native_capacity_claim':False},sort_keys=True,indent=2)+'\n')
-          PY
-          python3 -IB "$GITHUB_WORKSPACE/scripts/check_n4096_app_device_free.py"             "$RUNNER_TEMP/n4096-shared-feature-off" "$EVIDENCE/evaluate_saved_life_retention"             | tee "$EVIDENCE/width-cli-cpu.log"
-          python3 -IB "$GITHUB_WORKSPACE/scripts/check_n4096_ordinary_proof_device_free.py" \
-            "$RUNNER_TEMP/n4096-shared-feature-off" "$EVIDENCE/evaluate_saved_life_retention" \
-            | tee "$EVIDENCE/ordinary-proof-cli-cpu.log"
+          timeout 18m cargo +"$RUST_TOOLCHAIN" check --frozen --offline --target "$TARGET" --no-default-features \
+            -p alife_gpu_backend --lib 2>&1 | tee "$EVIDENCE/parked-off-check.log"
+          timeout 24m cargo +"$RUST_TOOLCHAIN" test --frozen --offline --target "$TARGET" --no-default-features \
+            -p alife_gpu_backend --lib --features research-n4096-parked-transport parked_transport_ -- --nocapture \
+            2>&1 | tee "$EVIDENCE/parked-transport-cpu.log"
+          grep -Fq 'parked_transport_preserves_csr_v11_and_complete_learned_bank_roundtrip ... ok' "$EVIDENCE/parked-transport-cpu.log"
+          grep -Fq 'parked_transport_rejects_q_alias_order_and_bad_ordered_readback ... ok' "$EVIDENCE/parked-transport-cpu.log"
+          grep -Eq '^test result: ok. 2 passed; 0 failed; 0 ignored;' "$EVIDENCE/parked-transport-cpu.log"
           cd "$EVIDENCE"
-          sha256sum evaluate_saved_life_retention width-source-compiled.json build.log width-planner-carrier-cpu.log width-cli-cpu.log ordinary-proof-cli-cpu.log > SHA256SUMS
+          sha256sum build.log parked-off-check.log parked-transport-cpu.log > SHA256SUMS
           sha256sum -c SHA256SUMS
 
-      - name: Retain source-only qualification artifact
+      - name: Retain bounded source-only test logs (no binary or checkpoint)
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: qualia-n4096-ordinary-zero-proof-source-${{ github.sha }}
+          name: qualia-n4096-parked-transport-cpu-${{ github.sha }}
           path: |
-            ${{ runner.temp }}/qualia-n4096-width-intake-evidence/evaluate_saved_life_retention
-            ${{ runner.temp }}/qualia-n4096-width-intake-evidence/width-source-compiled.json
             ${{ runner.temp }}/qualia-n4096-width-intake-evidence/build.log
-            ${{ runner.temp }}/qualia-n4096-width-intake-evidence/width-planner-carrier-cpu.log
-            ${{ runner.temp }}/qualia-n4096-width-intake-evidence/width-cli-cpu.log
-            ${{ runner.temp }}/qualia-n4096-width-intake-evidence/ordinary-proof-cli-cpu.log
+            ${{ runner.temp }}/qualia-n4096-width-intake-evidence/parked-off-check.log
+            ${{ runner.temp }}/qualia-n4096-width-intake-evidence/parked-transport-cpu.log
             ${{ runner.temp }}/qualia-n4096-width-intake-evidence/SHA256SUMS
           if-no-files-found: error
           retention-days: 5
