@@ -1,0 +1,88 @@
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_diagnostic_role.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_diagnostic_role.rs
+--- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_diagnostic_role.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_diagnostic_role.rs
+@@ -78,7 +78,6 @@
+ pub(super) fn diagnostic_disposition<'a>(
+     pair:&'a IndependentlyClosedCase,
+     c:&FreshDiagnosticCandidate<'a>,
+-    authenticated_cases:[&str;2],
+ ) -> Result<DiagnosticDisposition<'a>>{
+     // This is only a finish predicate. A reviewed ordinary
+     // operator must have an independently anchored root ticket and a real
+@@ -86,10 +85,7 @@
+     let a=&pair.actual_off;
+     let r=&pair.actual_reference;
+     if c.authority_purpose!=PURPOSE || c.case_id!=pair.case_id
+-        // These are the roles of the independently authenticated live profile,
+-        // not case names chosen by the caller or by the public fixture.
+-        || authenticated_cases[0]==authenticated_cases[1]
+-        || !authenticated_cases.contains(&c.case_id)
++        || !["artificial-primary","artificial-foil"].contains(&c.case_id)
+         || c.authorized_independent_disposition_sha256!=pair.independent_disposition_sha256
+         || c.matched_current_sha256!=pair.matched_current_sha256
+         || c.actual_executing_elf_sha256!=pair.actual_executing_elf_sha256
+@@ -135,9 +131,7 @@
+     const A:&str="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+     const B:&str="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+     const C:&str="cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
+-    const R:&str="qa-witness-alpha";
+-    const F:&str="qa-witness-beta";
+-    const CASES:[&str;2]=[R,F];
++    const R:&str="artificial-primary";
+     fn end(w:&str,k:u64)->Endpoint{
+         Endpoint{
+             raw_sha256:w.into(),body_without_timing_sha256:A.into(),
+@@ -170,33 +164,27 @@
+     #[test]
+     fn diagnostic_only_must_have_distinct_true_timing_and_never_grants(){
+         let p=pair();let x=end(C,3);let c=candidate(&x);
+-        let r=diagnostic_disposition(&p,&c,CASES).unwrap();
++        let r=diagnostic_disposition(&p,&c).unwrap();
+         assert!(r.diagnostic_scope_only && !r.ordinary_checkpoint_equal && !r.equal_future_behavior_proven);
+         assert!(!r.scorecard_eligible && !r.authorizes_next_or_reopen);
+         assert_eq!(r.distinct_actual_next_dispatch_gpu_ns,[1,2,3]);
+-        assert!(diagnostic_disposition(&p,&c,[F,R]).is_ok());
+-        assert!(diagnostic_disposition(&p,&c,[R,R]).is_err());
+-        assert!(diagnostic_disposition(&p,&c,[F,"qa-witness-third"]).is_err());
+-        let mut other=pair();other.case_id=F.into();
+-        let mut c=c;c.case_id=F;
+-        assert!(diagnostic_disposition(&other,&c,CASES).is_ok());
+     }
+     #[test]
+     fn rejects_alias_false_ancestry_and_other_role(){
+         let p=pair();let x=end(C,3);let mut c=candidate(&x);
+         c.authorized_independent_disposition_sha256=B;
+-        assert!(diagnostic_disposition(&p,&c,CASES).is_err());
++        assert!(diagnostic_disposition(&p,&c).is_err());
+         c.authorized_independent_disposition_sha256=A;c.run_id="ref";
+-        assert!(diagnostic_disposition(&p,&c,CASES).is_err());
+-        c.run_id="actual-new";c.case_id=F;
+-        assert!(diagnostic_disposition(&p,&c,CASES).is_err());
++        assert!(diagnostic_disposition(&p,&c).is_err());
++        c.run_id="actual-new";c.case_id="artificial-foil";
++        assert!(diagnostic_disposition(&p,&c).is_err());
+     }
+     #[test]
+     fn rejects_non_time_or_the_same_next_input(){
+         let p=pair();let mut x=end(C,3);x.world_without_timing_sha256=C.into();
+-        assert!(diagnostic_disposition(&p,&candidate(&x),CASES).is_err());
+-        let x=end(C,2);assert!(diagnostic_disposition(&p,&candidate(&x),CASES).is_err());
++        assert!(diagnostic_disposition(&p,&candidate(&x)).is_err());
++        let x=end(C,2);assert!(diagnostic_disposition(&p,&candidate(&x)).is_err());
+         let x=end(C,3);let mut c=candidate(&x);c.actual_complete_projected_rows_sha256=B;
+-        assert!(diagnostic_disposition(&p,&c,CASES).is_err());
++        assert!(diagnostic_disposition(&p,&c).is_err());
+     }
+ }
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_native_custody.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_native_custody.rs
+--- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_native_custody.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_native_custody.rs
+@@ -452,7 +452,7 @@
+             case_id:&s.case_id,run_id:&s.run_id,actual_ordinary_persisted_original:&end,
+             actual_state_window_sha256:&state,actual_complete_projected_rows_sha256:&action,
+             actual_control_decisions:self.count,actual_world_ticks:receipt["world_ticks"].as_u64().unwrap_or(0),
+-        },[s.profile.primary_case.as_str(),s.profile.foil_case.as_str()])?;
++        })?;
+         let mut out=serde_json::to_value(f)?;
+         out["ready_for_private_custody_verification"]=serde_json::json!(true);
+         out["actual_start_sha256"]=serde_json::json!(s.actual_start_sha256);

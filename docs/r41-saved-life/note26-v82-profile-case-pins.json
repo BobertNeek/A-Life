@@ -1,0 +1,17 @@
+{
+  "after": {
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_diagnostic_role.rs": "07c97705fca95e1c6cfce8955b2e467a2b7f2a0c9a19f5d3d88f63d30874981d",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_native_custody.rs": "a825cc38ed84c5c83762d0d9a9beaab8653ddefaf5ae0984513df68c392e7249"
+  },
+  "authorizes_any_native_or_export": false,
+  "before": {
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_diagnostic_role.rs": "6b1625990399926d70ee3ff36c3553b1d0a44ac37e8d68110bc668c4cab1115d",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_native_custody.rs": "2493b81f7fb96d012f938120d8d14678002aa3e0e5b588f55b47786fe10c1312"
+  },
+  "exact_checked_tree_sha256": "ad142acb7f7dd73c9fdac7962094d21c296b34c4a607a5e64409082ceb042251",
+  "exact_lock_sha256": "155699e9274f8890bc8c335669a62de48203ba315a33388a8f0caca71f0f7f37",
+  "exact_public_parent": "65893f0295d4040c943b09514211414288ee036c",
+  "forward_sha256": "38c59b89414cdc6def67854727dec75b16410c388a34c7c1a1d9efd5a6176edb",
+  "inverse_sha256": "286f57e59b8bfbf2333678b9e7f9eae679618290bc9dee2c0ea3341a21957dbb",
+  "schema": "qualia.note26.source_only_real_profile_bound_capture.v1"
+}
