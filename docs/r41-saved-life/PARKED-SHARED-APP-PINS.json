@@ -1,0 +1,58 @@
+{
+  "base_emitted_carrier_git": "d31f45d1f6b0157493080be9b89e45337d7cc4a7",
+  "compiled_or_native": false,
+  "forward": "d27a29431095bd0dbd4573fb61912e6f3b5040abf166bed462c64621bed1e86f",
+  "h_only_compiler_sha256": "ebaef8f9ebee1887e14d103ee5e21ec9fc647868fa579ea303996ec19c8f9306",
+  "inverse": "53b85004cbcc2b160dbc2bd1558edc3e0dea5c9aabfdc1f9ccc529df5626b3f5",
+  "leaves": {
+    "crates/alife_game_app/Cargo.toml": {
+      "after": "71ae0b8a6ee7166e6a710c36be3837867cc6e9f27bcf5c887bfb81b124ff7c4f",
+      "before": "bbddd599b8ce01cf76ff85467436c4fcd90cc827d057f470526b7121764ee7da"
+    },
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs": {
+      "after": "f74dc95b155bc627715f862ba928324676d8cf598e0d4fc8aedf278f934a58e7",
+      "before": "8d7a67344aff5ed11d843cf8af7bd670769a05f602ee12445b0bcd38ede77af1"
+    },
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs": {
+      "after": "bca0095a01ac17b4e17b564bcebc1c4c0c22bbc5a7e4c522b9429daf18e34c39",
+      "before": "d2ae0e258e6151a1fea63f113e2cb646347b6baf936463dc83d03efd384d9005"
+    },
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/n4096_auxiliary_intake.rs": {
+      "after": "b7b8dade03bd11abec4a1e3cdd89ff147503ccc271508c91a3578a98956303a9",
+      "before": "ca37441575ccbae4c8c7ea38012456ff88592d5d2d83f207e8cb12937cced1f4"
+    },
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/n4096_parked_intake.rs": {
+      "after": "0066ac0bd383787932c5bd008cd3aeb8e5a105163ea327b4c48d9a1829e9a832",
+      "before": null
+    },
+    "crates/alife_game_app/src/gpu_live_runtime.rs": {
+      "after": "0acd5e565e506d9b448396ff7bfe4308aaf6d91d514c4dfb58752d0644aa7060",
+      "before": "d61d5bab9d65b0c1499f6347594a2c95058d4f038fae61f6098e0557b5fa18dd"
+    },
+    "crates/alife_game_app/tests/n4096_parked_intake_cpu.rs": {
+      "after": "c9984fa879e73a6b4afe7f279568b782c4ee67d2c4bafe0ba0fffb237e3d02eb",
+      "before": null
+    }
+  },
+  "native_registry_sha256": "10470a8f1708abb56608f8b2c49d1c2799d5087f2cab93da24a090e629e95eca",
+  "previous_exact_app_forward": "51bab8f8d51838958276566e60e89e45ac96f1fa743614eda2ae4824a9787320",
+  "prior": "ddf2f5866857e1a2ab6001404a2ad4b5407e7f251acc3496a57606a1749e1b02",
+  "private_data_or_native_authority": false,
+  "qualified_core": {
+    "artifact": 15241599227,
+    "commit": "c1899515c25e3844818a985efb29a1682a06e64d",
+    "compiler_cpu_tests": 2,
+    "default_off_built": true,
+    "job": 140819546607,
+    "logs_only_zip_sha256": "8f58431e3d8ba6d35180953ecc5522bcfa647768105f9ddc7ed29aa7ace4ed98",
+    "push_run": 46093495615,
+    "registry_cpu_tests": 4,
+    "tree": "99939c999bc3e6aa8ac9d44791b4540cf60e085a"
+  },
+  "schema": "qualia.n4096.parked-shared-app-source.v1",
+  "schema1_direct_rejection_only_new_app_source_delta": "ecd8e262684aae5b6520dcbda12701d83e579285a5bcc698146e235ba9199e01",
+  "scope_selector_schema1_guard_only_new_delta": true,
+  "static_apply_inverse": true,
+  "transport_hosted_git": "a84098b683ff37067e7b79c090a93ab212ee5ce1",
+  "wire_schema": 17
+}
