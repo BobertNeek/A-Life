@@ -1,0 +1,40 @@
+{
+  "after": {
+    "crates/alife_game_app/Cargo.toml": "4481fe2b8a6031176b510798655953c4f6454ec377d923fed35619ad732ed762",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs": "2921602d55ef7370ce4f31bde7b44219b3c81eab4e8fe30141c5c968fea65e2f",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs": "f52b273d5abf020e512263310736e1b64fb82c47ba85da0b19cf6d93a763374e",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_diagnostic_role.rs": "6b1625990399926d70ee3ff36c3553b1d0a44ac37e8d68110bc668c4cab1115d",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_native_custody.rs": "00c07b23fb90a2b681159720dc8465f50eb72ade2f59f7272a27f552ab9eebda",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_observer.rs": "4413ad2f3d6a86e96d0e59b90fa622e893775fa5ef3fbb826bfe60e495fabf39",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_predecessor.rs": "5083d453af6221c942062a0e9defe439e717e8ebd151603523af7937e42c35f6",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_prefork_residual.rs": "180a51d0fb6ef3f201e2033d8b65d4e82bbadb134f52804946a901066619813f",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_timing_relation.rs": "1c60461fc2bb4092dfdc461492b68f4f565f8724264d84d7c97347d0b4713f9b"
+  },
+  "authorizes_native": false,
+  "basis_git_commit": "bb3cf7b6bf6ed7d6a300d8f880387ea00f2754f7",
+  "basis_git_tree": "c30fceed1ea9ec22bad34e52bbc99a3887f37f8f",
+  "before": {
+    "crates/alife_game_app/Cargo.toml": "bce5a91b832158eb9dbf4a28e452b9b359cc84341007105b7874e56e985915de",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs": "39b92d56e6346d0c56aeaf30d821358c3879150566c348ec3be4a8318325b1d4",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs": "33f4908544234288d0e83431bdd44c786821bf4d271525686ce5942d78bdb9e0",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_diagnostic_role.rs": null,
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_native_custody.rs": null,
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_observer.rs": "b0af898d4961ef7744724d767772517065131a7e55d6299fc8453e0a3ed4df34",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_predecessor.rs": "a909ab93e01220683375f42621cbd1d7bbad7273c712b40a0641f1dbcfb6c17e",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_prefork_residual.rs": null,
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_timing_relation.rs": null
+  },
+  "observed_seven_parents": {
+    "crates/alife_game_app/Cargo.toml": "bce5a91b832158eb9dbf4a28e452b9b359cc84341007105b7874e56e985915de",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs": "39b92d56e6346d0c56aeaf30d821358c3879150566c348ec3be4a8318325b1d4",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs": "33f4908544234288d0e83431bdd44c786821bf4d271525686ce5942d78bdb9e0",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_observer.rs": "b0af898d4961ef7744724d767772517065131a7e55d6299fc8453e0a3ed4df34",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_predecessor.rs": "a909ab93e01220683375f42621cbd1d7bbad7273c712b40a0641f1dbcfb6c17e",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_row_parity.rs": "7da711baf06bcca51ba04e1d532df059abb6ad664a31b8564427b602256798ea",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_wire.rs": "d7def7a07841981aff038175c56018a8552610db1088d8c9b95f601867c2a659"
+  },
+  "overlay_sha256": "1d7fa0e2560b22d35e3e29f18a3baa224217c4a9ce92cd55f4b2181f3f88a1b3",
+  "schema": "qualia.prefork_timing_diagnostic.public_source_closure.v1",
+  "source_only": true,
+  "unchanged_required_lock_sha256": "155699e9274f8890bc8c335669a62de48203ba315a33388a8f0caca71f0f7f37"
+}

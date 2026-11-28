@@ -1,0 +1,1713 @@
+diff --git a/crates/alife_game_app/Cargo.toml b/crates/alife_game_app/Cargo.toml
+--- a/crates/alife_game_app/Cargo.toml
++++ b/crates/alife_game_app/Cargo.toml
+@@ -88,6 +88,7 @@
+ 
+ [features]
+ retained-ordinary-ingress-observer-v1 = ["foundation-training", "gpu-tests"]
++retained-prefork-timing-diagnostic-v1 = ["retained-ordinary-ingress-observer-v1"]
+ retained-word-local-grounding-v1 = ["foundation-training", "gpu-tests", "alife_world/word-local-grounding-v1"]
+ default = []
+ contact211-witness = ["foundation-training", "alife_world/contact211-witness", "alife_gpu_backend/contact211-witness"]
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs
+--- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs
+@@ -24,6 +24,18 @@
+ #[cfg(feature = "retained-ordinary-ingress-observer-v1")]
+ #[path = "saved_life_retention/ordinary_ingress_wire.rs"]
+ mod ordinary_ingress_wire;
++#[cfg(all(target_os = "linux", feature = "retained-prefork-timing-diagnostic-v1"))]
++#[path = "saved_life_retention/ordinary_ingress_diagnostic_role.rs"]
++mod ordinary_ingress_diagnostic_role;
++#[cfg(all(target_os = "linux", feature = "retained-prefork-timing-diagnostic-v1"))]
++#[path = "saved_life_retention/ordinary_ingress_timing_relation.rs"]
++mod ordinary_ingress_timing_relation;
++#[cfg(all(target_os = "linux", feature = "retained-prefork-timing-diagnostic-v1"))]
++#[path = "saved_life_retention/ordinary_ingress_prefork_residual.rs"]
++mod ordinary_ingress_prefork_residual;
++#[cfg(all(target_os = "linux", feature = "retained-prefork-timing-diagnostic-v1"))]
++#[path = "saved_life_retention/ordinary_ingress_native_custody.rs"]
++mod ordinary_ingress_native_custody;
+ #[cfg(feature = "gpu-tests")]
+ #[path = "saved_life_retention/card_cases.rs"]
+ mod card_cases;
+@@ -441,6 +453,8 @@
+     let research = experiment.as_ref().and_then(experiments::ExperimentIdentity::research);
+     #[cfg(feature = "retained-ordinary-ingress-observer-v1")]
+     let ingress_scope = experiment.as_ref().and_then(experiments::ExperimentIdentity::ordinary_ingress);
++    #[cfg(all(target_os = "linux", feature = "retained-prefork-timing-diagnostic-v1"))]
++    let diag_scope=experiment.as_ref().and_then(experiments::ExperimentIdentity::prefork_timing_diagnostic);
+     #[cfg(feature = "retained-language-pilot")]
+     let language = experiment.as_ref().and_then(experiments::ExperimentIdentity::language_pilot);
+     #[cfg(all(feature = "retained-language-pilot", feature = "contact211-witness"))]
+@@ -512,6 +526,10 @@
+     let ingress_headroom = if ingress_scope.is_some_and(|s| s.mode == ordinary_ingress_observer::Mode::Capture) {
+         Some(budget.reserve(ordinary_ingress_observer::MAX_BYTES as u64)?)
+     } else { None };
++    #[cfg(all(target_os = "linux", feature = "retained-prefork-timing-diagnostic-v1"))]
++    let _diag_headroom=if diag_scope.is_some(){
++        Some(budget.reserve(ordinary_ingress_prefork_residual::MAX_BYTES as u64)?)
++    }else{None};
+     // Protect two bounded private-life/Current copies before any biological step.
+     let final_headroom = budget.reserve(
+         (original.len() as u64)
+@@ -575,6 +593,8 @@
+         return Err("retained near-field owner does not match sole living resident".into());
+     }
+     let source_world_tick = world.tick().raw();
++    #[cfg(all(target_os = "linux", feature = "retained-prefork-timing-diagnostic-v1"))]
++    let mut diagnostic=diag_scope.map(|s|ordinary_ingress_native_custody::Held::new(s,source_world_tick)).transpose()?;
+     #[cfg(feature = "retained-ordinary-ingress-observer-v1")]
+     let mut ingress = if let Some(s) = ingress_scope {
+         ordinary_ingress_observer::validate_live_scope(s, source_world_tick)?;
+@@ -1289,6 +1309,8 @@
+             bytes.push(b'\n');
+             #[cfg(feature = "retained-ordinary-ingress-observer-v1")]
+             if let Some(observer) = &mut ingress { observer.observe(&step, &bytes); }
++            #[cfg(all(target_os = "linux", feature = "retained-prefork-timing-diagnostic-v1"))]
++            if let Some(held)=&mut diagnostic{held.observe(&step,&bytes);}
+             rows_bytes = rows_bytes
+                 .checked_add(bytes.len())
+                 .ok_or("retention trace size overflow")?;
+@@ -1515,10 +1537,33 @@
+             receipt[key] = serde_json::json!(false);
+         }
+     }
++    #[cfg(all(target_os = "linux", feature = "retained-prefork-timing-diagnostic-v1"))]
++    let pending=if let Some(held)=diagnostic{
++        let integrity=stop=="decision_limit"&&rows==256&&calls==256&&alive
++          &&runtime.world().tick().raw().saturating_sub(source_world_tick)==256
++          &&software_simulation&&controlled_pressure==Some(0)&&error.is_none()
++          &&base_unchanged&&prior_clear&&unchanged&&cue_free&&endpoint_preserved;
++        for k in ["scorecard_eligible","measurement_valid","coverage_complete",
++                  "software_simulation_integrity_valid","qualified","retention_demonstrated"]{
++            receipt[k]=serde_json::json!(false);
++        }
++        match held.finish(&output,integrity,&receipt){
++            Ok(p)=>{receipt["prefork_timing_diagnostic_v1"]=p.observation.clone();Some(p)}
++            Err(e)=>{
++                receipt["prefork_timing_diagnostic_v1"]=serde_json::json!({
++                    "schema":ordinary_ingress_diagnostic_role::PURPOSE,"diagnostic_scope_only":true,
++                    "ready_for_private_custody_verification":false,"reason":e.to_string(),
++                    "scorecard_eligible":false,"authorizes_next_or_reopen":false});
++                None
++            }
++        }
++    }else{None};
+     alife_storage::write(
+         output.join("retention.json"),
+         serde_json::to_vec_pretty(&receipt)?,
+     )?;
++    #[cfg(all(target_os = "linux", feature = "retained-prefork-timing-diagnostic-v1"))]
++    if let Some(p)=pending{p.seal_after_receipt()?;}
+     Ok(receipt)
+ }
+ 
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
+--- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
+@@ -80,6 +80,9 @@
+     #[cfg(feature = "retained-ordinary-ingress-observer-v1")]
+     #[serde(skip_serializing_if = "Option::is_none")]
+     ordinary_ingress: Option<super::ordinary_ingress_observer::Scope>,
++    #[cfg(all(target_os = "linux", feature = "retained-prefork-timing-diagnostic-v1"))]
++    #[serde(skip_serializing_if = "Option::is_none")]
++    prefork_timing_diagnostic: Option<super::ordinary_ingress_native_custody::Scope>,
+     #[cfg(feature = "retained-word-local-grounding-v1")]
+     #[serde(skip_serializing_if = "Option::is_none")]
+     word_local_grounding: Option<WordLocalScope>,
+@@ -110,6 +113,10 @@
+ }
+ 
+ impl ExperimentIdentity {
++    #[cfg(all(target_os = "linux", feature = "retained-prefork-timing-diagnostic-v1"))]
++    pub(super) fn prefork_timing_diagnostic(&self) -> Option<&super::ordinary_ingress_native_custody::Scope> {
++        self.prefork_timing_diagnostic.as_ref()
++    }
+     #[cfg(feature = "retained-ordinary-ingress-observer-v1")]
+     pub(super) fn ordinary_ingress(&self) -> Option<&super::ordinary_ingress_observer::Scope> {
+         self.ordinary_ingress.as_ref()
+@@ -292,6 +299,8 @@
+             research: None,
+             #[cfg(feature = "retained-ordinary-ingress-observer-v1")]
+             ordinary_ingress: None,
++        #[cfg(all(target_os = "linux", feature = "retained-prefork-timing-diagnostic-v1"))]
++        prefork_timing_diagnostic: None,
+             #[cfg(feature = "retained-word-local-grounding-v1")]
+             word_local_grounding: None,
+             #[cfg(feature = "retained-language-pilot")]
+@@ -335,6 +344,8 @@
+         visible_self_grip_v1: None, research: Some(research),
+         #[cfg(feature = "retained-ordinary-ingress-observer-v1")]
+         ordinary_ingress: None,
++        #[cfg(all(target_os = "linux", feature = "retained-prefork-timing-diagnostic-v1"))]
++        prefork_timing_diagnostic: None,
+         #[cfg(feature = "retained-word-local-grounding-v1")]
+         word_local_grounding: None,
+         #[cfg(feature = "retained-language-pilot")]
+@@ -380,6 +391,8 @@
+         visible_self_grip_v1: None, research: None, language_pilot: Some(cell),
+         #[cfg(feature = "retained-ordinary-ingress-observer-v1")]
+         ordinary_ingress: None,
++        #[cfg(all(target_os = "linux", feature = "retained-prefork-timing-diagnostic-v1"))]
++        prefork_timing_diagnostic: None,
+         #[cfg(feature = "retained-word-local-grounding-v1")]
+         word_local_grounding: None,
+         #[cfg(all(feature = "retained-language-pilot", feature = "contact211-witness"))]
+@@ -523,6 +536,35 @@
+         return Err("experiment path is redirected or outside its admission root".into());
+     }
+     Ok(actual)
++}
++
++#[cfg(all(target_os = "linux", feature = "retained-prefork-timing-diagnostic-v1"))]
++fn resolve_prefork_timing_diagnostic(root:&Path, room:&Path, bytes:&[u8])->Result<ResolvedExperiment>{
++    use super::ordinary_ingress_native_custody as diag;
++    #[derive(Deserialize)]
++    #[serde(deny_unknown_fields)]
++    struct Envelope{schema:u16,settings:ManifestV1,custody:diag::Descriptors}
++    if bytes.len()>MAX_SMALL_CONFIG_BYTES{return Err("Note19 typed manifest exceeds cap".into());}
++    let e:Envelope=serde_json::from_slice(bytes)?;
++    let card=e.settings.card_case.as_deref().and_then(super::card_cases::case)
++        .ok_or("Note19 requires a genuine published Root/foil case")?;
++    if e.schema!=diag::SCHEMA || e.settings.schema!=1 || e.settings.scenario!=ScenarioV1::PublishedCardCase
++       || !matches!(&e.settings.intervention,InterventionV1::Control{})
++       || !card.player_tokens.is_empty() || card.navigation.is_some()
++       || e.settings.max_decisions!=256 || e.settings.max_world_ticks!=256
++       || e.settings.max_output_bytes!=256*1024*1024
++       || std::env::var("ALIFE_EXPLICIT_FIXED_HOST_PRESSURE_NS").as_deref()!=Ok("0"){
++        return Err("Note19 only permits unchanged cue-free stock Control 256/256 with real fixed applied pressure 0".into());
++    }
++    let mut p=resolve(&serde_json::to_vec(&e.settings)?)?;
++    let exact_manifest=digest(bytes);
++    let scope=diag::authorize(e.custody,diag::Expected{
++        root,room,run_id:&e.settings.run_id,case_id:e.settings.card_case.as_deref().ok_or("Note19 case missing")?,
++        current_sha256:&e.settings.source_current_sha256,actual_manifest_sha256:&exact_manifest,
++        owner:e.settings.owner,nonce:e.settings.evaluation_nonce,semantic_sha256:&p.identity.semantic_settings_sha256,
++    })?;
++    p.identity.schema=diag::SCHEMA;p.identity.manifest_sha256=exact_manifest;p.identity.prefork_timing_diagnostic=Some(scope);
++    Ok(p)
+ }
+ 
+ fn admitted_paths(
+@@ -576,6 +618,19 @@
+     #[derive(Deserialize)]
+     struct Version { schema: u16 }
+     let version: Version = serde_json::from_slice(&bytes)?;
++    #[cfg(not(all(target_os = "linux", feature = "retained-prefork-timing-diagnostic-v1")))]
++    if version.schema==82{return Err("prefork timing diagnostic feature unavailable".into());}
++    #[cfg(all(target_os = "linux", feature = "retained-prefork-timing-diagnostic-v1"))]
++    if version.schema==super::ordinary_ingress_native_custody::SCHEMA {
++        admitted_paths(admission_root,source,output,manifest_path)?;
++        let room=manifest_path.parent().ok_or("diagnostic admission room missing")?;
++        if room==admission_root || source!=room.join("Current.alife-checkpoint")
++            || output!=room.join("native-output") || manifest_path!=room.join("experiment.json"){
++            return Err("Note19 refuses a noncanonical new role or reused native room".into());
++        }
++        let p=resolve_prefork_timing_diagnostic(admission_root,room,&bytes)?;
++        return evaluate_saved_life_retention_inner(source,output,p.request,p.scent,Some(p.identity));
++    }
+ 
+     #[cfg(not(feature = "retained-ordinary-ingress-observer-v1"))]
+     if version.schema == 81 { return Err("ordinary ingress recorder feature is disabled".into()); }
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_diagnostic_role.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_diagnostic_role.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_diagnostic_role.rs
+@@ -0,0 +1,190 @@
++//! Separate Note19 disposition, never the schema81 Capture predecessor API.
++//! Detached App review core. This file contains no path handling or grant mint.
++use super::*;
++use super::ordinary_ingress_timing_relation::{exact_timing_relation,Endpoint};
++use serde::Serialize;
++
++pub(super) const PURPOSE:&str="qualia.saved_life.prefork_timing_diagnostic.v1";
++pub(super) const CUTS:usize=7;
++pub(super) const NO_SCORE:bool=false;
++
++fn pin(s:&str)->bool{
++    s.len()==64 && s.bytes().all(|c|c.is_ascii_digit()||(b'a'..=b'f').contains(&c)) && s.bytes().any(|c|c!=b'0')
++}
++
++#[derive(Debug,Clone,PartialEq,Eq,Serialize)]
++pub(super) struct ArmKey {
++    pub run_id:String,
++    pub signed_root_ticket_sha256:String,
++    pub started_witness_sha256:String,
++    pub process_group_identity_sha256:String,
++    pub exact_native_retention_sha256:String,
++    pub exact_raw_rows_sha256:String,
++}
++
++/// Constructed only after independent rooted OFF/Reference comparison and
++/// immutable raw file and actual process/fence rehash. This is deliberately
++/// not Deserialize: a user JSON cannot construct this runtime type.
++pub(super) struct IndependentlyClosedCase {
++    pub case_id:String,
++    pub matched_current_sha256:String,
++    pub actual_executing_elf_sha256:String,
++    pub frozen_case_and_native_setup_sha256:String,
++    pub actual_boot_environment_hardware_and_seed_sha256:String,
++    pub independent_disposition_sha256:String,
++    pub selected_reference_state_sha256:String,
++    pub selected_reference_complete_projected_rows_sha256:String,
++    pub actual_off:ArmKey,
++    pub actual_reference:ArmKey,
++    pub off_raw_endpoint:Endpoint,
++    pub reference_raw_endpoint:Endpoint,
++}
++
++/// Same scope identity must come from actual prepared candidate/reference
++/// and trusted separately minted new diagnostic host authority, not from
++/// deserializing a user-copied HOLD or supplying this scope from CLI.
++pub(super) struct FreshDiagnosticCandidate<'a>{
++    pub authority_purpose:&'a str,
++    pub authorized_independent_disposition_sha256:&'a str,
++    pub signed_fresh_diagnostic_ticket_sha256:&'a str,
++    pub matched_current_sha256:&'a str,
++    pub actual_executing_elf_sha256:&'a str,
++    pub frozen_case_and_native_setup_sha256:&'a str,
++    pub actual_boot_environment_hardware_and_seed_sha256:&'a str,
++    pub case_id:&'a str,
++    pub run_id:&'a str,
++    pub actual_ordinary_persisted_original:&'a Endpoint,
++    pub actual_state_window_sha256:&'a str,
++    pub actual_complete_projected_rows_sha256:&'a str,
++    pub actual_control_decisions:usize,
++    pub actual_world_ticks:u64,
++}
++
++// A helper may never issue either old Capture or future continuation authority.
++// Keep actual distinct native endpoints and the stored next-input differences.
++#[derive(Serialize)]
++pub(super) struct DiagnosticDisposition<'a>{
++    pub schema:&'static str,
++    pub case_id:&'a str,
++    pub paired_actual_raw_endpoint_sha256:[&'a str;3],
++    pub distinct_actual_next_dispatch_gpu_ns:[u64;3],
++    pub diagnostic_scope_only:bool,
++    pub ordinary_checkpoint_equal:bool,
++    pub equal_future_behavior_proven:bool,
++    pub scorecard_eligible:bool,
++    pub authorizes_next_or_reopen:bool,
++}
++
++pub(super) fn diagnostic_disposition<'a>(
++    pair:&'a IndependentlyClosedCase,
++    c:&FreshDiagnosticCandidate<'a>,
++) -> Result<DiagnosticDisposition<'a>>{
++    // This is only a finish predicate. A reviewed ordinary
++    // operator must have an independently anchored root ticket and a real
++    // same-ELF OFF/Reference close before the separate diagnostic starts.
++    let a=&pair.actual_off;
++    let r=&pair.actual_reference;
++    if c.authority_purpose!=PURPOSE || c.case_id!=pair.case_id
++        || !["artificial-primary","artificial-foil"].contains(&c.case_id)
++        || c.authorized_independent_disposition_sha256!=pair.independent_disposition_sha256
++        || c.matched_current_sha256!=pair.matched_current_sha256
++        || c.actual_executing_elf_sha256!=pair.actual_executing_elf_sha256
++        || c.frozen_case_and_native_setup_sha256!=pair.frozen_case_and_native_setup_sha256
++        || c.actual_boot_environment_hardware_and_seed_sha256!=pair.actual_boot_environment_hardware_and_seed_sha256
++        || c.actual_state_window_sha256!=pair.selected_reference_state_sha256
++        || c.actual_complete_projected_rows_sha256!=pair.selected_reference_complete_projected_rows_sha256
++        || c.actual_control_decisions!=256 || c.actual_world_ticks!=256
++        || a.run_id==r.run_id || c.run_id==a.run_id || c.run_id==r.run_id
++        || a.process_group_identity_sha256==r.process_group_identity_sha256
++        || a.started_witness_sha256==r.started_witness_sha256
++        || a.signed_root_ticket_sha256==r.signed_root_ticket_sha256
++        || [a.signed_root_ticket_sha256.as_str(),r.signed_root_ticket_sha256.as_str()].contains(&c.signed_fresh_diagnostic_ticket_sha256)
++        || [a.signed_root_ticket_sha256.as_str(),a.started_witness_sha256.as_str(),a.process_group_identity_sha256.as_str(),
++            a.exact_native_retention_sha256.as_str(),a.exact_raw_rows_sha256.as_str(),
++            r.signed_root_ticket_sha256.as_str(),r.started_witness_sha256.as_str(),r.process_group_identity_sha256.as_str(),
++            r.exact_native_retention_sha256.as_str(),r.exact_raw_rows_sha256.as_str(),
++            c.signed_fresh_diagnostic_ticket_sha256,c.authorized_independent_disposition_sha256,
++            c.matched_current_sha256,c.actual_executing_elf_sha256,c.frozen_case_and_native_setup_sha256,
++            c.actual_boot_environment_hardware_and_seed_sha256,c.actual_state_window_sha256,
++            c.actual_complete_projected_rows_sha256].into_iter().any(|s|!pin(s))
++        || !exact_timing_relation(&pair.off_raw_endpoint,&pair.reference_raw_endpoint)
++        || !exact_timing_relation(&pair.reference_raw_endpoint,c.actual_ordinary_persisted_original)
++        || !exact_timing_relation(&pair.off_raw_endpoint,c.actual_ordinary_persisted_original)
++    {
++        return Err("timing-separated diagnostic did not match rooted actual stock/Reference/control proof".into());
++    }
++    let off=&pair.off_raw_endpoint;
++    let rf=&pair.reference_raw_endpoint;
++    let x=c.actual_ordinary_persisted_original;
++    Ok(DiagnosticDisposition{
++        schema:PURPOSE,case_id:c.case_id,
++        paired_actual_raw_endpoint_sha256:[&off.raw_sha256,&rf.raw_sha256,&x.raw_sha256],
++        distinct_actual_next_dispatch_gpu_ns:[off.actual_next_gpu_ns,rf.actual_next_gpu_ns,x.actual_next_gpu_ns],
++        diagnostic_scope_only:true,ordinary_checkpoint_equal:false,equal_future_behavior_proven:false,
++        scorecard_eligible:NO_SCORE,authorizes_next_or_reopen:false,
++    })
++}
++
++#[cfg(test)]
++mod tests{
++    use super::*;
++    const A:&str="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
++    const B:&str="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
++    const C:&str="cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
++    const R:&str="artificial-primary";
++    fn end(w:&str,k:u64)->Endpoint{
++        Endpoint{
++            raw_sha256:w.into(),body_without_timing_sha256:A.into(),
++            world_without_timing_sha256:A.into(),journal_without_timing_sha256:B.into(),
++            actual_next_gpu_ns:k,actual_throttle_seal:[k;4],actual_world_anchor:w.into(),
++            actual_journal_seal:[k+1;4],actual_private_life_sha256:w.into(),
++        }
++    }
++    fn arm(l:&str,w:&str)->ArmKey{
++        ArmKey{run_id:l.into(),signed_root_ticket_sha256:w.into(),
++            started_witness_sha256:w.into(),process_group_identity_sha256:w.into(),
++            exact_native_retention_sha256:w.into(),exact_raw_rows_sha256:w.into()}
++    }
++    fn pair()->IndependentlyClosedCase{
++        IndependentlyClosedCase{case_id:R.into(),matched_current_sha256:A.into(),
++            actual_executing_elf_sha256:A.into(),frozen_case_and_native_setup_sha256:A.into(),
++            actual_boot_environment_hardware_and_seed_sha256:A.into(),independent_disposition_sha256:A.into(),
++            selected_reference_state_sha256:A.into(),selected_reference_complete_projected_rows_sha256:A.into(),
++            actual_off:arm("off",A),actual_reference:arm("ref",B),
++            off_raw_endpoint:end(A,1),reference_raw_endpoint:end(B,2)}
++    }
++    fn candidate(x:&Endpoint)->FreshDiagnosticCandidate<'_>{
++        FreshDiagnosticCandidate{authority_purpose:PURPOSE,authorized_independent_disposition_sha256:A,
++            signed_fresh_diagnostic_ticket_sha256:C,matched_current_sha256:A,
++            actual_executing_elf_sha256:A,frozen_case_and_native_setup_sha256:A,
++            actual_boot_environment_hardware_and_seed_sha256:A,case_id:R,run_id:"actual-new",
++            actual_ordinary_persisted_original:x,actual_state_window_sha256:A,
++            actual_complete_projected_rows_sha256:A,actual_control_decisions:256,actual_world_ticks:256}
++    }
++    #[test]
++    fn diagnostic_only_must_have_distinct_true_timing_and_never_grants(){
++        let p=pair();let x=end(C,3);let c=candidate(&x);
++        let r=diagnostic_disposition(&p,&c).unwrap();
++        assert!(r.diagnostic_scope_only && !r.ordinary_checkpoint_equal && !r.equal_future_behavior_proven);
++        assert!(!r.scorecard_eligible && !r.authorizes_next_or_reopen);
++        assert_eq!(r.distinct_actual_next_dispatch_gpu_ns,[1,2,3]);
++    }
++    #[test]
++    fn rejects_alias_false_ancestry_and_other_role(){
++        let p=pair();let x=end(C,3);let mut c=candidate(&x);
++        c.authorized_independent_disposition_sha256=B;
++        assert!(diagnostic_disposition(&p,&c).is_err());
++        c.authorized_independent_disposition_sha256=A;c.run_id="ref";
++        assert!(diagnostic_disposition(&p,&c).is_err());
++        c.run_id="actual-new";c.case_id="artificial-foil";
++        assert!(diagnostic_disposition(&p,&c).is_err());
++    }
++    #[test]
++    fn rejects_non_time_or_the_same_next_input(){
++        let p=pair();let mut x=end(C,3);x.world_without_timing_sha256=C.into();
++        assert!(diagnostic_disposition(&p,&candidate(&x)).is_err());
++        let x=end(C,2);assert!(diagnostic_disposition(&p,&candidate(&x)).is_err());
++        let x=end(C,3);let mut c=candidate(&x);c.actual_complete_projected_rows_sha256=B;
++        assert!(diagnostic_disposition(&p,&c).is_err());
++    }
++}
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_native_custody.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_native_custody.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_native_custody.rs
+@@ -0,0 +1,583 @@
++//! New opt-in timing diagnostic; no executable pathname is created for residuals.
++use super::*;
++use super::ordinary_ingress_diagnostic_role::{self as D, FreshDiagnosticCandidate};
++use super::ordinary_ingress_prefork_residual as residual;
++use super::ordinary_ingress_timing_relation as timing;
++use serde::{Deserialize, Serialize};
++use std::{io::{Read,Write},os::fd::{AsRawFd,BorrowedFd},os::unix::{fs::{FileExt,MetadataExt},net::UnixStream},time::Duration};
++
++pub(super) const SCHEMA:u16=82;
++const TICKET_SCHEMA:&str="qualia.private.note19.diagnostic_root_ticket.v2";
++const START_SCHEMA:&str="qualia.private.note19.actual_diagnostic_start.v3";
++const CAP:u64=128*1024;
++const MAX_START:u64=8192;
++const PRESEAL:i32=0x2|0x4;
++const SEALED:i32=PRESEAL|0x1|0x8;
++const GET:i32=1034;const ADD:i32=1033;
++extern "C" {
++    fn fcntl(fd:i32,cmd:i32,...)->i32;
++    fn getsockopt(fd:i32,level:i32,option:i32,out:*mut std::ffi::c_void,len:*mut u32)->i32;
++}
++#[repr(C)]
++struct PeerCredentials{pid:i32,uid:u32,gid:u32}
++fn socket_peer(s:&UnixStream)->Result<(u32,u32)>{
++    const SOL_SOCKET:i32=1;const SO_PEERCRED:i32=17;
++    let mut p=PeerCredentials{pid:0,uid:u32::MAX,gid:u32::MAX};
++    let mut n=std::mem::size_of::<PeerCredentials>() as u32;
++    let result=unsafe{getsockopt(s.as_raw_fd(),SOL_SOCKET,SO_PEERCRED,
++          (&mut p as *mut PeerCredentials).cast::<std::ffi::c_void>(),&mut n)};
++    if result!=0||n!=std::mem::size_of::<PeerCredentials>() as u32||p.pid<=0{
++        return Err("trusted controller socket peer credentials unavailable".into());
++    }
++    Ok((p.pid as u32,p.uid))
++}
++
++#[derive(Clone,Debug,PartialEq,Eq,Serialize,Deserialize)]
++#[serde(deny_unknown_fields)]
++struct OriginalIdentity{device:u64,inode:u64,uid:u32,mode:u32}
++fn meta_identity(k:&fs::Metadata)->OriginalIdentity{
++    OriginalIdentity{device:k.dev(),inode:k.ino(),uid:k.uid(),mode:k.mode()&0o7777}
++}
++fn exact_private_directory(path:&Path,uid:u32)->Result<OriginalIdentity>{
++    let m=fs::symlink_metadata(path)?;
++    let k=meta_identity(&m);
++    if !m.is_dir()||k.uid!=uid||k.mode!=0o700||k.inode==0||path.canonicalize()?!=path{
++        return Err("Note19 requires genuine canonical owner0700 cohort and role rooms".into());
++    }
++    Ok(k)
++}
++
++fn pin(v:&str)->bool{
++    ordinary_ingress_predecessor::is_sha(v) && v.bytes().any(|b|b!=b'0')
++}
++#[derive(Clone,Debug,Eq,PartialEq,Serialize,Deserialize)]
++#[serde(deny_unknown_fields)]
++pub(super) struct ProcessKey{
++    pub pid:u32,pub ppid:u32,pub pgrp:u32,pub session:u32,pub start_ticks:u64,pub namespace:String,
++}
++impl ProcessKey{
++    pub(super) fn same(&self,o:&Self)->bool{
++        self.pid==o.pid && self.start_ticks==o.start_ticks && self.namespace==o.namespace
++    }
++}
++fn process(pid:u32)->Result<ProcessKey>{
++    let p=Path::new("/proc").join(pid.to_string());
++    let q=fs::read_to_string(p.join("stat"))?;
++    let (_,tail)=q.rsplit_once(')').ok_or("missing actual proc comm delimiter")?;
++    let v:Vec<_>=tail.split_ascii_whitespace().collect();
++    if v.len()<20 || v[0]=="Z"{return Err("invalid active process snapshot".into());}
++    let x=ProcessKey{pid,ppid:v[1].parse()?,pgrp:v[2].parse()?,session:v[3].parse()?,
++        start_ticks:v[19].parse()?,namespace:fs::read_link(p.join("ns/pid"))?.to_str().ok_or("invalid namespace")?.into()};
++    if x.pid==0 || x.start_ticks==0 || !x.namespace.starts_with("pid:["){
++        return Err("missing genuine namespace clock".into());
++    }
++    Ok(x)
++}
++fn actual_boot()->Result<String>{
++    Ok(fs::read_to_string("/proc/sys/kernel/random/boot_id")?.trim_end().to_owned())
++}
++fn bounded(p:&Path,cap:u64)->Result<Vec<u8>>{
++    let mut b=Vec::new();
++    fs::File::open(p)?.take(cap+1).read_to_end(&mut b)?;
++    if b.is_empty() || b.len() as u64>cap{return Err("bounded exact native input refused".into());}
++    Ok(b)
++}
++fn private(p:&Path,cap:u64)->Result<Vec<u8>>{
++    private_bound(p,cap,None)
++}
++fn private_bound(p:&Path,cap:u64,expected:Option<&OriginalIdentity>)->Result<Vec<u8>>{
++    let s=fs::symlink_metadata(p)?;
++    if p.canonicalize()?!=p || !s.is_file() || s.uid()!=fs::metadata("/proc/self")?.uid()
++        || s.mode()&0o077!=0 || s.nlink()!=1 || s.len()==0 || s.len()>cap
++        || expected.is_some_and(|k|*k!=meta_identity(&s)){
++        return Err("unsafe private Note19 original path".into());
++    }
++    let f=fs::File::open(p)?;
++    let k=|m:fs::Metadata|(m.dev(),m.ino(),m.len(),m.uid(),m.mode(),m.mtime_nsec(),m.ctime_nsec());
++    if k(f.metadata()?)!=k(s.clone()){return Err("actual private input changed".into());}
++    let mut b=Vec::new();
++    (&f).take(cap+1).read_to_end(&mut b)?;
++    if b.len() as u64!=s.len() || k(f.metadata()?)!=k(s.clone()) || k(fs::symlink_metadata(p)?)!=k(s){
++        return Err("actual private input changed".into());
++    }
++    Ok(b)
++}
++fn hash_exe(path:&Path)->Result<String>{
++    let mut f=fs::File::open(path)?;
++    if f.metadata()?.len()>64*1024*1024{return Err("unexpected Note19 actual ELF size".into());}
++    let mut h=Sha256::new();let mut n=0usize;let mut b=[0u8;64*1024];
++    loop{let r=f.read(&mut b)?;if r==0{break;}n+=r;h.update(&b[..r]);}
++    if n==0 || n as u64!=f.metadata()?.len(){return Err("actual Note19 ELF changed".into());}
++    Ok(format!("{:x}",h.finalize()))
++}
++fn lockline(pid:u32,fd:i32)->Result<Vec<String>>{
++    let raw=fs::read_to_string(format!("/proc/{pid}/fdinfo/{fd}"))?;
++    let mut lines=raw.lines().filter(|l|l.starts_with("lock:"));
++    let q=lines.next().ok_or("actual already-held common lock missing")?;
++    let words:Vec<_>=q.split_ascii_whitespace().skip(2).map(str::to_string).collect();
++    if lines.next().is_some() || words.len()<5 || words[0]!="FLOCK" || words[1]!="ADVISORY" || words[2]!="WRITE"{
++        return Err("not an already-held exclusive native fence".into());
++    }
++    Ok(words)
++}
++fn duplicate(fd:i32)->Result<std::os::fd::OwnedFd>{
++    if !(3..=4096).contains(&fd){return Err("Note19 inherited descriptor out of range".into());}
++    // Descriptor numbers are accepted only through actual /proc checks and
++    // the complete independently verified root supervisor ceremony.
++    if !Path::new(&format!("/proc/self/fd/{fd}")).exists(){
++        return Err("missing inherited supervisor descriptor".into());
++    }
++    Ok(unsafe{BorrowedFd::borrow_raw(fd)}.try_clone_to_owned()?)
++}
++fn get_seals(f:&fs::File)->i32{unsafe{fcntl(f.as_raw_fd(),GET)}}
++
++#[derive(Deserialize)]
++#[serde(deny_unknown_fields)]
++pub(super) struct Descriptors{
++    fence_fd:i32,
++    audit_socket_fd:i32,
++    residual_memfd:i32,
++}
++#[derive(Deserialize)]
++#[serde(deny_unknown_fields)]
++struct RootTicket{
++    schema:String,purpose:String,run_id:String,case_id:String,case_pair_sha256:String,foil_pair_sha256:String,
++    evaluator_sha256:String,current_sha256:String,manifest_sha256:String,raw_proc_environ_sha256:String,
++    argv_sha256:String,boot:String,fence_device:u64,fence_inode:u64,source_current_tick:u64,owner:u64,
++    evaluation_nonce:u64,observed_first_physical_fork_decision_tick:u64,next_or_score_authorized:bool,
++    profile_sha256:String, independent_profile_proof_sha256:String,
++}
++#[derive(Clone,Deserialize)]
++#[serde(deny_unknown_fields)]
++pub(super) struct HostStart{
++    schema:String,pub root_ticket_sha256:String,pub child:ProcessKey,pub parent:ProcessKey,
++    pub fence_device:u64,pub fence_inode:u64,pub case_pair_sha256:String,pub foil_pair_sha256:String,manifest_sha256:String,
++    pub evaluator_sha256:String,pub raw_proc_environ_sha256:String,argv_sha256:String,pub boot:String,case_id:String,run_id:String,
++    pub actual_start_utc:String,actual_start_monotonic_ns:u64,
++    permit_sha256:String,profile_sha256:String,independent_profile_proof_sha256:String,
++    custody_identity:CustodyIdentity,
++}
++#[derive(Serialize)]
++pub(super) struct Scope{
++    pub case_id:String,pub run_id:String,pub root_ticket_sha256:String,pub actual_start_sha256:String,
++    pub scorecard_eligible:bool,
++    #[serde(skip)] verified: ordinary_ingress_predecessor::TimingAncestry,
++    #[serde(skip)] start:HostStart,
++    #[serde(skip)] profile:VerifiedStockV11Profile,
++    #[serde(skip)] fence_fd:i32,
++    #[serde(skip)] m:fs::File,
++}
++
++// Private wire, not a public fixture or mutable policy input. Only this module
++// can instantiate VerifiedStockV11Profile after external permit and exact bytes.
++#[derive(Clone,Debug,Deserialize)]
++#[serde(deny_unknown_fields)]
++pub(super) struct V11Expectation {
++    pub ordinal:usize,pub target:u32,pub operand_a:u32,pub operand_b:u32,
++    pub threshold_bits:u32,pub output_gain_bits:u32,
++}
++#[derive(Debug,Deserialize)]
++#[serde(deny_unknown_fields)]
++struct ProfileWire {
++    schema:String,current_sha256:String,evaluator_sha256:String,owner:u64,
++    primary_case:String,foil_case:String,first:u64,fork:u64,
++    phenotype_identity_sha256:String,initial_phenotype_asset_sha256:String,
++    source_descriptor_sha256:String,
++    axes:[u32;8],branch_count:usize,rows:[V11Expectation;3],
++    speech_input:u32,speech_output:u32,canonical_payload:u32,
++    base_recurrent:u32,live_prefix_insertion:u32,
++}
++#[derive(Debug)]
++pub(super) struct VerifiedStockV11Profile {
++    pub primary_case:String,pub foil_case:String,pub first:u64,pub fork:u64,pub owner:u64,
++    pub phenotype_identity_sha256:String,pub initial_phenotype_asset_sha256:String,
++    pub axes:[u32;8],pub branch_count:usize,pub rows:[V11Expectation;3],
++    pub speech_input:u32,pub speech_output:u32,pub canonical_payload:u32,
++    pub base_recurrent:u32,pub live_prefix_insertion:u32,
++    _authenticated:(),
++}
++#[derive(Deserialize)]
++#[serde(deny_unknown_fields)]
++struct PrivatePermit {
++    schema:String,root_ticket_sha256:String,profile_sha256:String,independent_profile_proof_sha256:String,
++    evaluator_sha256:String,current_sha256:String,run_id:String,case_id:String,
++    boot:String,fence_device:u64,fence_inode:u64,authority_is_only_diagnostic:bool,
++    custody_identity:CustodyIdentity,
++}
++#[derive(Deserialize)]
++#[serde(deny_unknown_fields)]
++struct PrivateStockProof {
++    schema:String,current_sha256:String,evaluator_sha256:String,profile_sha256:String,
++    initial_phenotype_asset_sha256:String,phenotype_identity_sha256:String,
++    source_descriptor_sha256:String,verified_original_descriptor:bool,authorizes_next_or_score:bool,
++}
++// The external permit itself commits all four opened file identities, the
++// actual protected controller launch identity, and distinct cohort/room dirs.
++// The permit file can be precreated owner0400 before out-of-band issuance; its
++// own stable dev/inode/uid/mode does not depend on its eventual bytes.
++#[derive(Clone,Debug,PartialEq,Eq,Deserialize)]
++#[serde(deny_unknown_fields)]
++struct CustodyIdentity{
++    cohort:OriginalIdentity,room:OriginalIdentity,authority_leaves:[OriginalIdentity;4],
++    controller_exe_sha256:String,controller_argv_sha256:String,controller_environ_sha256:String,
++}
++impl CustodyIdentity{
++    fn actual(&self,cohort:OriginalIdentity,room:OriginalIdentity)->bool{
++        self.cohort==cohort && self.room==room && self.room!=self.cohort
++        && self.authority_leaves.iter().enumerate().all(|(i,k)| k.inode!=0 && k.uid==self.room.uid
++          && (k.mode==0o400||k.mode==0o600) && self.authority_leaves[..i].iter().all(|v| (v.device,v.inode)!=(k.device,k.inode)))
++        && [&self.controller_exe_sha256,&self.controller_argv_sha256,&self.controller_environ_sha256].into_iter().all(|v|pin(v))
++    }
++}
++fn profile_id(s:&str)->bool{
++    !s.is_empty() && s.len()<=64 && s.bytes().all(|b| b.is_ascii_alphanumeric()||b==b'-'||b==b'_')
++}
++fn profile_contract(w:&ProfileWire)->bool{
++    const N:u32=2048;const WEIGHTS:u32=32768;const SP:u32=32;const WORDS:u32=SP*SP;
++    w.schema=="qualia.private.note19.stock_v11_profile.v1" && w.owner>0 && w.first>0
++       && w.first.checked_add(6)==Some(w.fork) && w.first.checked_add(256).is_some()
++       && profile_id(&w.primary_case) && profile_id(&w.foil_case) && w.primary_case!=w.foil_case
++       && [&w.phenotype_identity_sha256,&w.initial_phenotype_asset_sha256,&w.source_descriptor_sha256]
++          .into_iter().all(|s|pin(s))
++       && w.axes.iter().all(|x|*x<N)
++       && w.axes.iter().enumerate().all(|(i,x)|!w.axes[..i].contains(x))
++       && w.branch_count>=3 && w.branch_count<=N as usize
++       && w.rows.iter().enumerate().all(|(i,r)|r.ordinal<w.branch_count
++          && (i==0||w.rows[i-1].ordinal.checked_add(1)==Some(r.ordinal))
++          && r.target==w.rows[0].target && w.axes.contains(&r.target)
++          && r.operand_a!=r.operand_b && w.axes.contains(&r.operand_a) && w.axes.contains(&r.operand_b)
++          && f32::from_bits(r.threshold_bits).is_finite()
++          && f32::from_bits(r.output_gain_bits).is_finite() && f32::from_bits(r.output_gain_bits)!=0.0)
++       && w.speech_input.checked_add(SP).is_some_and(|end|end<=w.speech_output)
++       && w.speech_output.checked_add(SP).is_some_and(|end|end<=N)
++       && w.canonical_payload.checked_add(WORDS).is_some_and(|end|end<=WEIGHTS)
++       && w.base_recurrent>0 && w.base_recurrent<=WEIGHTS-WORDS
++       && (1..=16).contains(&w.live_prefix_insertion)
++}
++fn verify_profile(
++    raw_permit:&[u8],raw_profile:&[u8],raw_proof:&[u8],externally_pinned_permit:&str,
++    externally_pinned_profile:&str,externally_pinned_proof:&str,root_sha:&str,t:&RootTicket,custody:&CustodyIdentity,
++)->Result<VerifiedStockV11Profile>{
++    if ![externally_pinned_permit,externally_pinned_profile,externally_pinned_proof,root_sha].into_iter().all(pin)
++       || [raw_permit,raw_profile,raw_proof].into_iter().any(|b|b.is_empty()||b.len()>8192)
++       || digest(raw_permit)!=externally_pinned_permit || digest(raw_profile)!=externally_pinned_profile
++       || digest(raw_proof)!=externally_pinned_proof {
++        return Err("independently anchored private permit/profile/proof digest mismatch".into());
++    }
++    let p:PrivatePermit=serde_json::from_slice(raw_permit)?;
++    let w:ProfileWire=serde_json::from_slice(raw_profile)?;
++    let q:PrivateStockProof=serde_json::from_slice(raw_proof)?;
++    if p.schema!="qualia.private.note19.stock_v11_permit.v2" || !p.authority_is_only_diagnostic
++       || &p.custody_identity!=custody
++       || p.root_ticket_sha256!=root_sha || p.profile_sha256!=externally_pinned_profile
++       || p.independent_profile_proof_sha256!=externally_pinned_proof
++       || t.profile_sha256!=externally_pinned_profile || t.independent_profile_proof_sha256!=externally_pinned_proof
++       || p.evaluator_sha256!=t.evaluator_sha256 || p.current_sha256!=t.current_sha256
++       || p.run_id!=t.run_id || p.case_id!=t.case_id || p.boot!=t.boot
++       || (p.fence_device,p.fence_inode)!=(t.fence_device,t.fence_inode)
++       || w.current_sha256!=t.current_sha256 || w.evaluator_sha256!=t.evaluator_sha256 || w.owner!=t.owner
++       || w.first!=t.source_current_tick || w.fork!=t.observed_first_physical_fork_decision_tick
++       || (t.case_id!=w.primary_case && t.case_id!=w.foil_case) || !profile_contract(&w)
++       || q.schema!="qualia.private.note19.stock_v11_independent_source.v1"
++       || !q.verified_original_descriptor || q.authorizes_next_or_score
++       || q.current_sha256!=w.current_sha256 || q.evaluator_sha256!=w.evaluator_sha256
++       || q.profile_sha256!=externally_pinned_profile
++       || q.initial_phenotype_asset_sha256!=w.initial_phenotype_asset_sha256
++       || q.phenotype_identity_sha256!=w.phenotype_identity_sha256 || q.source_descriptor_sha256!=w.source_descriptor_sha256{
++        return Err("typed private permit/profile lacks independent exact role and original identity".into());
++    }
++    Ok(VerifiedStockV11Profile{primary_case:w.primary_case,foil_case:w.foil_case,first:w.first,fork:w.fork,owner:w.owner,
++        phenotype_identity_sha256:w.phenotype_identity_sha256,initial_phenotype_asset_sha256:w.initial_phenotype_asset_sha256,
++        axes:w.axes,branch_count:w.branch_count,rows:w.rows,speech_input:w.speech_input,speech_output:w.speech_output,
++        canonical_payload:w.canonical_payload,base_recurrent:w.base_recurrent,live_prefix_insertion:w.live_prefix_insertion,
++        _authenticated:()})
++}
++
++pub(super) struct Expected<'a>{
++    pub root:&'a Path,pub room:&'a Path,pub run_id:&'a str,pub case_id:&'a str,pub current_sha256:&'a str,
++    pub actual_manifest_sha256:&'a str,pub owner:u64,pub nonce:u64,pub semantic_sha256:&'a str,
++}
++fn current_identity(s:&HostStart,fence:i32)->Result<()>{
++    if process(s.child.pid)?!=s.child || process(s.parent.pid)?!=s.parent
++        || std::process::id()!=s.child.pid || s.child.ppid!=s.parent.pid
++        || s.child.pgrp!=s.child.pid || s.child.session!=s.child.pid
++        || actual_boot()?!=s.boot{
++        return Err("lost actual diagnostic parent/start/pidfd provenance".into());
++    }
++    let l=fs::metadata(format!("/proc/{}/fd/{fence}",s.child.pid))?;
++    let p=fs::metadata(format!("/proc/{}/fd/{fence}",s.parent.pid))?;
++    if (l.dev(),l.ino())!=(s.fence_device,s.fence_inode) || (p.dev(),p.ino())!=(l.dev(),l.ino())
++        || lockline(s.child.pid,fence)?!=lockline(s.parent.pid,fence)?{
++        return Err("lost already-held common process OFD".into());
++    }
++    Ok(())
++}
++pub(super) fn authorize(d:Descriptors,e:Expected<'_>)->Result<Scope>{
++    let ids=[d.fence_fd,d.audit_socket_fd,d.residual_memfd];
++    if ids.iter().any(|i| !(3..=4096).contains(i))||ids[0]==ids[1]||ids[0]==ids[2]||ids[1]==ids[2]
++      || !e.room.starts_with(e.root){
++        return Err("separate Note19 typed inherited custody required".into());
++    }
++    let owner_uid=fs::metadata("/proc/self")?.uid();
++    let cohort=exact_private_directory(e.root,owner_uid)?;
++    let room=exact_private_directory(e.room,owner_uid)?;
++    // A direct CLI, a generic manifest or a fake historical 81 pin cannot
++    // start this role. The verified parent must release an actual one-shot
++    // inherited start message after checking /proc exec, PIDFD and OFD.
++    let socket=UnixStream::from(duplicate(d.audit_socket_fd)?);
++    let (peer_pid,peer_uid)=socket_peer(&socket)?;
++    socket.set_read_timeout(Some(Duration::from_secs(5)))?;
++    let mut raw=Vec::new();
++    socket.take(MAX_START+1).read_to_end(&mut raw)?;
++    if raw.is_empty() || raw.len() as u64>MAX_START{return Err("actual parent start proof missing".into());}
++    let start_sha=digest(&raw);let s:HostStart=serde_json::from_slice(&raw)?;
++    if s.schema!=START_SCHEMA || peer_pid!=s.parent.pid || peer_uid!=owner_uid
++       || !s.custody_identity.actual(cohort,room){
++        return Err("independent controller socket peer or stamped directory identity refused".into());
++    }
++    current_identity(&s,d.fence_fd)?;
++    let raw=private_bound(&e.room.join("root-authority.json"),8192,Some(&s.custody_identity.authority_leaves[0]))?;
++    let root_sha=digest(&raw);
++    let t:RootTicket=serde_json::from_slice(&raw)?;
++    if t.schema!=TICKET_SCHEMA || t.purpose!=D::PURPOSE || t.run_id!=e.run_id || t.case_id!=e.case_id
++       || t.owner!=e.owner || t.owner==0 || t.evaluation_nonce!=e.nonce || t.next_or_score_authorized
++       || t.current_sha256!=e.current_sha256 || t.manifest_sha256!=e.actual_manifest_sha256
++       || t.case_pair_sha256==t.foil_pair_sha256
++       || [&t.case_pair_sha256,&t.foil_pair_sha256,&t.evaluator_sha256,&t.raw_proc_environ_sha256,&t.argv_sha256,
++           &t.profile_sha256,&t.independent_profile_proof_sha256]
++          .iter().any(|p|!pin(p)){
++        return Err("separate scoped true Note19 root authority refused".into());
++    }
++    if s.root_ticket_sha256!=root_sha || s.case_id!=t.case_id || s.run_id!=t.run_id
++        || s.evaluator_sha256!=t.evaluator_sha256 || s.raw_proc_environ_sha256!=t.raw_proc_environ_sha256
++        || s.argv_sha256!=t.argv_sha256 || s.boot!=t.boot || s.manifest_sha256!=t.manifest_sha256
++        || (s.fence_device,s.fence_inode)!=(t.fence_device,t.fence_inode)
++        || s.actual_start_monotonic_ns==0 || s.case_pair_sha256!=t.case_pair_sha256 || s.foil_pair_sha256!=t.foil_pair_sha256
++        || digest(&bounded(Path::new("/proc/self/environ"),1<<20)?)!=s.raw_proc_environ_sha256
++        || digest(&bounded(Path::new("/proc/self/cmdline"),64<<10)?)!=s.argv_sha256 || hash_exe(Path::new("/proc/self/exe"))?!=s.evaluator_sha256{
++        return Err("guarded Note19 real process executable/argv/environment differs".into());
++    }
++    let controller=Path::new("/proc").join(peer_pid.to_string());
++    if hash_exe(&controller.join("exe"))?!=s.custody_identity.controller_exe_sha256
++      || digest(&bounded(&controller.join("cmdline"),64<<10)?)!=s.custody_identity.controller_argv_sha256
++      || digest(&bounded(&controller.join("environ"),1<<20)?)!=s.custody_identity.controller_environ_sha256
++      || process(peer_pid)?!=s.parent{
++        return Err("actual separately pinned controller launch identity refused".into());
++    }
++    // This channel conveys the independent host pin, not an expected digest
++    // supplied by the profile file. The private controller must have already
++    // checked the same immutable permit and profile BEFORE spawn.
++    let leaves=&s.custody_identity.authority_leaves;
++    let permit=private_bound(&e.room.join("note19-profile-permit.json"),8192,Some(&leaves[1]))?;
++    let profile=private_bound(&e.room.join("note19-stock-v11-profile.json"),8192,Some(&leaves[2]))?;
++    let proof=private_bound(&e.room.join("note19-stock-profile-proof.json"),8192,Some(&leaves[3]))?;
++    if !s.custody_identity.actual(exact_private_directory(e.root,owner_uid)?,exact_private_directory(e.room,owner_uid)?){
++        return Err("independently stamped private rooms changed".into());
++    }
++    let profile=verify_profile(&permit,&profile,&proof,&s.permit_sha256,&s.profile_sha256,
++        &s.independent_profile_proof_sha256,&root_sha,&t,&s.custody_identity)?;
++    let m=fs::File::from(duplicate(d.residual_memfd)?);
++    let k=m.metadata()?;
++    let link=fs::read_link(format!("/proc/self/fd/{}",d.residual_memfd))?;
++    if !link.to_string_lossy().starts_with("/memfd:qualia-note19-held") || k.len()!=CAP || k.nlink()!=0
++      || k.uid()!=fs::metadata(format!("/proc/{}",s.parent.pid))?.uid()
++      || k.mode()&0o077!=0 || get_seals(&m)!=PRESEAL{
++        return Err("required anonymous verifier-only sized custody missing".into());
++    }
++    let mut zero=[0u8;4];m.read_exact_at(&mut zero,0)?;
++    if zero!=[0;4]{return Err("cannot reuse previously populated custody".into());}
++    let verified=ordinary_ingress_predecessor::prove_timing_ancestry(e.root, e.case_id,e.run_id,e.current_sha256,
++        e.semantic_sha256, e.owner,e.nonce,&s,&profile)?;
++    Ok(Scope{case_id:t.case_id,run_id:t.run_id,root_ticket_sha256:root_sha,actual_start_sha256:start_sha,
++        scorecard_eligible:false,verified,start:s,profile,fence_fd:d.fence_fd,m})
++}
++
++pub(super) struct Held<'a>{
++    s:&'a Scope, count:usize,cuts:usize,state:Sha256,action:Sha256,bytes:Vec<u8>,failed:bool,
++}
++impl<'a> Held<'a>{
++    pub(super) fn new(s:&'a Scope,tick:u64)->Result<Self>{
++        if tick!=s.profile.first{return Err("Note19 not at authentic opening".into());}
++        Ok(Self{s,count:0,cuts:0,state:Sha256::new(),action:Sha256::new(),bytes:b"ALIFE-NOTE19-PREFORK-1\n".to_vec(),failed:false})
++    }
++    pub(super) fn observe(&mut self,step:&crate::FoundationTrainingStep,row:&[u8]){
++        if !self.failed && self.cut(step,row).is_err(){self.failed=true;self.bytes.clear();}
++    }
++    fn cut(&mut self,step:&crate::FoundationTrainingStep,row:&[u8])->Result<()>{
++        let tick=step.frame.tick().raw();
++        if tick!=self.s.profile.first+self.count as u64 || self.count>=256{return Err("new diagnostic row not sequential".into());}
++        ordinary_ingress_row_parity::update(&mut self.action,row,self.count,step.frame.organism_id().raw(),tick)?;
++        if self.count<8{
++            let par=ordinary_ingress_observer::capture(step)?;
++            self.state.update(u32::try_from(par.len())?.to_le_bytes());
++            self.state.update(&par);
++        }
++        if tick<=self.s.profile.fork{
++            let v=residual::build(step,&self.s.profile)?;
++            if self.bytes.len()+4+v.len()>residual::MAX_BYTES{return Err("new diagnostic residual cap".into());}
++            self.bytes.extend_from_slice(&u32::try_from(v.len())?.to_le_bytes());
++            self.bytes.extend_from_slice(&v);self.cuts+=1;
++        }
++        self.count+=1;
++        Ok(())
++    }
++    pub(super) fn finish(self,output:&Path,integrity:bool,receipt:&serde_json::Value)->Result<Pending<'a>>{
++        if !integrity||self.failed||self.count!=256||self.cuts!=D::CUTS{return Err("Note19 complete held capture is not qualified".into());}
++        let s=self.s;
++        current_identity(&s.start,s.fence_fd)?;
++        let raw_sha=receipt["final_endpoint"]["sha256"].as_str().filter(|x|pin(x)).ok_or("actual Note19 final already published is missing")?;
++        let rows=receipt["rows_sha256"].as_str().filter(|x|pin(x)).ok_or("actual raw rows missing")?;
++        let raw=private(&output.join("final.alife-checkpoint"),64<<20)?;
++        let end=timing::endpoint(&raw,raw_sha,s.profile.owner,s.profile.first+256)?;
++        drop(raw);
++        let state=format!("{:x}",self.state.finalize());
++        let action=format!("{:x}",self.action.finalize());
++        let observed_setup=digest(&serde_json::to_vec(&receipt["published_case_setup"])?);
++        if receipt["retained_experiment"]["identity"]["run_id"]!=s.run_id || observed_setup!=s.verified.native_setup_sha256
++           || receipt["retained_experiment"]["identity"]["manifest_sha256"]!=s.start.manifest_sha256
++           || receipt["source_sha256"]!=s.verified.case.matched_current_sha256
++           || receipt["hardware"]!=s.verified.actual_reference_hardware
++           || receipt["sampling_after"]!=s.verified.actual_reference_final_sampler
++           || raw_sha==s.verified.case.off_raw_endpoint.raw_sha256 || raw_sha==s.verified.case.reference_raw_endpoint.raw_sha256
++           || rows==s.verified.case.actual_off.exact_raw_rows_sha256 || rows==s.verified.case.actual_reference.exact_raw_rows_sha256{
++            return Err("actual new run alias or incompatible setup".into());
++        }
++        let f=D::diagnostic_disposition(&s.verified.case,&FreshDiagnosticCandidate{
++            authority_purpose:D::PURPOSE,authorized_independent_disposition_sha256:&s.start.case_pair_sha256,
++            signed_fresh_diagnostic_ticket_sha256:&s.root_ticket_sha256,matched_current_sha256:&s.verified.case.matched_current_sha256,
++            actual_executing_elf_sha256:&s.start.evaluator_sha256,frozen_case_and_native_setup_sha256:&observed_setup,
++            actual_boot_environment_hardware_and_seed_sha256:&s.verified.case.actual_boot_environment_hardware_and_seed_sha256,
++            case_id:&s.case_id,run_id:&s.run_id,actual_ordinary_persisted_original:&end,
++            actual_state_window_sha256:&state,actual_complete_projected_rows_sha256:&action,
++            actual_control_decisions:self.count,actual_world_ticks:receipt["world_ticks"].as_u64().unwrap_or(0),
++        })?;
++        let mut out=serde_json::to_value(f)?;
++        out["ready_for_private_custody_verification"]=serde_json::json!(true);
++        out["actual_start_sha256"]=serde_json::json!(s.actual_start_sha256);
++        out["root_ticket_sha256"]=serde_json::json!(s.root_ticket_sha256);
++        out["run_id"]=serde_json::json!(s.run_id);
++        out["private_profile_permit_sha256"]=serde_json::json!(s.start.permit_sha256);
++        out["private_expected_profile_sha256"]=serde_json::json!(s.start.profile_sha256);
++        out["actual_raw_rows_sha256"]=serde_json::json!(rows);
++        out["actual_raw_endpoint_sha256"]=serde_json::json!(raw_sha);
++        out["actual_state_window_sha256"]=serde_json::json!(state);
++        out["actual_complete_projected_rows_sha256"]=serde_json::json!(action);
++        out["held_payload_sha256"]=serde_json::json!(digest(&self.bytes));
++        out["held_payload_bytes"]=serde_json::json!(self.bytes.len());
++        Ok(Pending{s,bytes:self.bytes,observation:out})
++    }
++}
++pub(super) struct Pending<'a>{s:&'a Scope,bytes:Vec<u8>,pub observation:serde_json::Value}
++impl Pending<'_>{
++    pub(super) fn seal_after_receipt(self)->Result<()>{
++        current_identity(&self.s.start,self.s.fence_fd)?;
++        let f=&self.s.m;
++        if get_seals(f)!=PRESEAL || self.bytes.is_empty() || self.bytes.len()>residual::MAX_BYTES{
++            return Err("unavailable bounded anonymous custody".into());
++        }
++        // Only the real accepted native candidate's memory crosses to the
++        // verifier-owned anonymous file, AFTER the real native receipt.
++        f.write_all_at(&u32::try_from(self.bytes.len())?.to_le_bytes(),0)?;
++        f.write_all_at(&self.bytes,4)?;
++        f.sync_all()?;
++        let rc=unsafe{fcntl(f.as_raw_fd(),ADD,0x1|0x8)};
++        if rc!=0 || get_seals(f)!=SEALED{return Err("unqualified sealed custody, do not consume".into());}
++        Ok(())
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use serde_json::{json,Value};
++    fn leaf(x:&Value)->Vec<u8>{serde_json::to_vec(x).unwrap()}
++    fn fixture()->(Value,Value,Value,Vec<u8>){
++        let current="1".repeat(64);let elf="2".repeat(64);let asset="3".repeat(64);
++        let identity="4".repeat(64);let descriptor="5".repeat(64);
++        let r=|ordinal,operand_a,operand_b,threshold:f32|json!({"ordinal":ordinal,"target":57,
++            "operand_a":operand_a,"operand_b":operand_b,"threshold_bits":threshold.to_bits(),
++            "output_gain_bits":0.015625f32.to_bits()});
++        let profile=json!({"schema":"qualia.private.note19.stock_v11_profile.v1",
++            "current_sha256":current,"evaluator_sha256":elf,"owner":77,"primary_case":"artificial-one",
++            "foil_case":"artificial-two","first":41,"fork":47,"initial_phenotype_asset_sha256":asset,
++            "phenotype_identity_sha256":identity,"source_descriptor_sha256":descriptor,
++            "axes":[50,51,52,53,54,55,56,57],"branch_count":10,"rows":[r(2,50,51,0.125),r(3,52,50,0.375),r(4,53,50,0.875)],
++            "speech_input":100,"speech_output":200,"canonical_payload":300,
++            "base_recurrent":500,"live_prefix_insertion":3});
++        let profile_sha=digest(&leaf(&profile));
++        let proof=json!({"schema":"qualia.private.note19.stock_v11_independent_source.v1",
++            "current_sha256":current,"evaluator_sha256":elf,"profile_sha256":profile_sha,
++            "initial_phenotype_asset_sha256":asset,"phenotype_identity_sha256":identity,
++            "source_descriptor_sha256":descriptor,"verified_original_descriptor":true,"authorizes_next_or_score":false});
++        let proof_sha=digest(&leaf(&proof));
++        let boot="artificial-host";
++        let root=leaf(&json!({"schema":TICKET_SCHEMA,"purpose":D::PURPOSE,"run_id":"artificial-fresh",
++            "case_id":"artificial-one","case_pair_sha256":"a".repeat(64),"foil_pair_sha256":"b".repeat(64),
++            "evaluator_sha256":elf,"current_sha256":current,"manifest_sha256":"c".repeat(64),
++            "raw_proc_environ_sha256":"d".repeat(64),"argv_sha256":"e".repeat(64),"boot":boot,
++            "fence_device":999,"fence_inode":111,"source_current_tick":41,"owner":77,"evaluation_nonce":5,
++            "observed_first_physical_fork_decision_tick":47,"next_or_score_authorized":false,
++            "profile_sha256":profile_sha,"independent_profile_proof_sha256":proof_sha}));
++        let permit=json!({"schema":"qualia.private.note19.stock_v11_permit.v2","root_ticket_sha256":digest(&root),
++            "profile_sha256":profile_sha,"independent_profile_proof_sha256":proof_sha,"evaluator_sha256":elf,
++            "current_sha256":current,"run_id":"artificial-fresh","case_id":"artificial-one","boot":boot,
++            "fence_device":999,"fence_inode":111,"authority_is_only_diagnostic":true,"custody_identity":invented_identity()});
++        (permit,profile,proof,root)
++    }
++    fn invented_identity()->Value{
++        let d=|inode,mode| json!({"device":700,"inode":inode,"uid":71,"mode":mode});
++        json!({"cohort":d(800,0o700),"room":d(801,0o700),"authority_leaves":[d(802,0o400),d(803,0o400),d(804,0o400),d(805,0o400)],
++               "controller_exe_sha256":"a".repeat(64),"controller_argv_sha256":"b".repeat(64),"controller_environ_sha256":"c".repeat(64)})
++    }
++    fn expected_identity()->CustodyIdentity{
++        serde_json::from_value(invented_identity()).unwrap()
++    }
++    #[test]
++    fn detached_profile_accepts_only_the_independently_pinned_triad(){
++        let (p,w,q,r)=fixture();let t:RootTicket=serde_json::from_slice(&r).unwrap();
++        let (p,w,q)=(leaf(&p),leaf(&w),leaf(&q));
++        let (a,b,c,d)=(digest(&p),digest(&w),digest(&q),digest(&r));
++        let v=verify_profile(&p,&w,&q,&a,&b,&c,&d,&t,&expected_identity()).unwrap();
++        assert_eq!(v.axes,[50,51,52,53,54,55,56,57]);
++        assert_eq!(v.rows[1].threshold_bits,0.375f32.to_bits());
++        assert!(verify_profile(b"",&w,&q,&a,&b,&c,&d,&t,&expected_identity()).is_err());
++        assert!(verify_profile(&p,&w,&q,"",&b,&c,&d,&t,&expected_identity()).is_err());
++    }
++    #[test]
++    fn detached_profile_rejects_entire_rehashed_untrusted_bundle(){
++        let (mut p,mut w,mut q,r)=fixture();
++        let external=digest(&leaf(&p));
++        let mut t:Value=serde_json::from_slice(&r).unwrap();
++        w["rows"][1]["threshold_bits"]=json!(0.390625f32.to_bits());
++        let nw=leaf(&w);let b=digest(&nw);q["profile_sha256"]=json!(b);
++        let nq=leaf(&q);let c=digest(&nq);t["profile_sha256"]=json!(b);t["independent_profile_proof_sha256"]=json!(c);
++        let nr=leaf(&t);let d=digest(&nr);
++        p["root_ticket_sha256"]=json!(d);p["profile_sha256"]=json!(b);p["independent_profile_proof_sha256"]=json!(c);
++        let t:RootTicket=serde_json::from_slice(&nr).unwrap();
++        // Mutator recomputed all in-room hashes; it cannot write the external
++        // permit that the protected controller owned before those room files.
++        assert!(verify_profile(&leaf(&p),&nw,&nq,&external,&b,&c,&d,&t,&expected_identity()).is_err());
++    }
++    #[test]
++    fn detached_profile_refuses_other_role_and_duplicate_member(){
++        let (mut p,w,q,r)=fixture();let t:RootTicket=serde_json::from_slice(&r).unwrap();
++        let (w,q)=(leaf(&w),leaf(&q));let (b,c,d)=(digest(&w),digest(&q),digest(&r));
++        p["case_id"]=json!("artificial-two");
++        let p=leaf(&p);
++        assert!(verify_profile(&p,&w,&q,&digest(&p),&b,&c,&d,&t,&expected_identity()).is_err());
++        let (mut next,_,_,_)=fixture();
++        next["custody_identity"]["controller_argv_sha256"]=json!("f".repeat(64));
++        let nick=leaf(&next);
++        assert!(verify_profile(&nick,&w,&q,&digest(&nick),&b,&c,&d,&t,&expected_identity()).is_err());
++        let real=expected_identity();
++        assert!(real.actual(real.cohort.clone(),real.room.clone()));
++        let mut h=real.room.clone();h.mode=0o750;
++        assert!(!real.actual(real.cohort.clone(),h));
++        let mut aliased=expected_identity();aliased.authority_leaves[1]=aliased.authority_leaves[0].clone();
++        assert!(!aliased.actual(aliased.cohort.clone(),aliased.room.clone()));
++        let original=String::from_utf8(p).unwrap();
++        assert!(serde_json::from_str::<PrivatePermit>(&original).is_ok());
++        let duplicate=[r#"{"\u0073chema":"artificial-duplicate","#,&original[1..]].concat();
++        assert!(serde_json::from_str::<PrivatePermit>(&duplicate).is_err());
++    }
++}
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_observer.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_observer.rs
+--- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_observer.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_observer.rs
+@@ -520,7 +520,7 @@
+     Ok((n as usize, digest_words(take(f)?), digest_words(take(l)?)))
+ }
+ 
+-fn capture(step: &crate::FoundationTrainingStep) -> Result<Vec<u8>> {
++pub(super) fn capture(step: &crate::FoundationTrainingStep) -> Result<Vec<u8>> {
+     let frame = &step.frame;
+     let before = &step.before;
+     let after = &step.after_inference;
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_predecessor.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_predecessor.rs
+--- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_predecessor.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_predecessor.rs
+@@ -542,3 +542,240 @@
+         assert!(!id("../reference"));
+     }
+ }
++
++#[cfg(all(target_os="linux",feature="retained-prefork-timing-diagnostic-v1"))]
++pub(super) struct TimingAncestry {
++    pub case:super::ordinary_ingress_diagnostic_role::IndependentlyClosedCase,
++    pub native_setup_sha256:String,
++    pub actual_reference_hardware:serde_json::Value,
++    pub actual_reference_final_sampler:serde_json::Value,
++}
++#[cfg(all(target_os="linux",feature="retained-prefork-timing-diagnostic-v1"))]
++fn same_child(c:&Child,s:&super::ordinary_ingress_native_custody::ProcessKey)->bool{
++    c.pid==s.pid && c.namespace==s.namespace && c.proc_start_ticks==s.start_ticks
++}
++#[cfg(all(target_os="linux",feature="retained-prefork-timing-diagnostic-v1"))]
++fn timing_final(root:&Path,a:&Arm,owner:u64,tick:u64)->Result<super::ordinary_ingress_timing_relation::Endpoint>{
++    let room=checked_path(root,&a.relative_room)?;
++    let out=checked_path(&room,"native-output")?;
++    let path=checked_path(&out,"final.alife-checkpoint")?;
++    let (f,n)=private_file(&path,64<<20)?;
++    let mut b=Vec::new();
++    f.take(n+1).read_to_end(&mut b)?;
++    if b.len() as u64!=n{return Err("actual Note19 original changed".into());}
++    super::ordinary_ingress_timing_relation::endpoint(&b,&a.final_checkpoint_sha256,owner,tick)
++}
++#[cfg(all(target_os="linux",feature="retained-prefork-timing-diagnostic-v1"))]
++fn same_new_pair(root:&Path,a:&Acceptance,run:&str,start:&super::ordinary_ingress_native_custody::HostStart,
++    profile:&super::ordinary_ingress_native_custody::VerifiedStockV11Profile)->Result<(Observed,Observed)>{
++    if a.schema!="qualia.private.note19.sealed_same_case_timing_parents.v1" || !a.independently_accepted
++       || a.scorecard_eligible || a.evaluator_sha256!=start.evaluator_sha256 || a.window_start_tick!=profile.first
++       || a.initial_phenotype_sha256!=profile.initial_phenotype_asset_sha256
++       || a.compiled_sensor_profile!="GroundedTerrainVisionV1"
++       || ![a.scope_sha256.as_str(),a.current_sha256.as_str(),a.independent_verifier_sha256.as_str(),
++          a.independent_comparison_sha256.as_str(),a.native_setup_sha256.as_str(),a.sampling_sha256.as_str(),
++          a.parity_sha256.as_str(),a.opening_world_sha256.as_str(),a.initial_phenotype_sha256.as_str()].into_iter().all(is_sha)
++       || a.off.role!=Role::DefaultOff || a.reference.role!=Role::Reference
++       || a.off.run_id==a.reference.run_id || a.off.run_id==run || a.reference.run_id==run
++       || a.off.relative_room==a.reference.relative_room
++       || a.off.authority_sha256==a.reference.authority_sha256
++       || a.off.manifest_sha256==a.reference.manifest_sha256 || a.off.started_sha256==a.reference.started_sha256
++       || a.off.process_sha256==a.reference.process_sha256 || a.off.release_sha256==a.reference.release_sha256
++       || a.off.rows_sha256==a.reference.rows_sha256 || a.off.native_receipt_sha256==a.reference.native_receipt_sha256
++       || a.off.final_checkpoint_sha256==a.reference.final_checkpoint_sha256{
++       return Err("Note19 genuine same-case already-closed pair identities differ".into());
++    }
++    // These exact bytes must be separately reviewed and pinned by the protected
++    // host authority. Unlike 81, this is a timing-only disposition, not a substituted proof.
++    rehash(&checked_path(root,"note19-independent-verifier.source")?,&a.independent_verifier_sha256,VERIFIER_SOURCE)?;
++    let note=checked_path(root,if a.case_id==profile.primary_case {"note19-root-independent-comparison.json"}
++        else {"note19-foil-independent-comparison.json"})?;
++    #[derive(Deserialize)]
++    #[serde(deny_unknown_fields)]
++    struct Independent{
++        schema:String,current_sha256:String,evaluator_sha256:String,case_id:String,
++        off_process:String,reference_process:String,off_release:String,reference_release:String,
++        raw_finals:[String;2],complete_projected_rows_sha256:String,scope_sha256:String,
++        can_grant_capture_or_continuation_or_score:bool,
++    }
++    let n:Independent=json_leaf(&note,&a.independent_comparison_sha256,SMALL)?;
++    if n.schema!="qualia.private.note19.independent_same_case_projection.v1"
++      || n.current_sha256!=a.current_sha256 || n.evaluator_sha256!=a.evaluator_sha256 || n.case_id!=a.case_id
++      || n.off_process!=a.off.process_sha256 || n.reference_process!=a.reference.process_sha256
++      || n.off_release!=a.off.release_sha256 || n.reference_release!=a.reference.release_sha256
++      || n.raw_finals!=[a.off.final_checkpoint_sha256.clone(),a.reference.final_checkpoint_sha256.clone()]
++      || n.scope_sha256!=a.scope_sha256 || n.can_grant_capture_or_continuation_or_score{
++        return Err("Note19 independent original case projection evidence differs".into());
++    }
++    let x=check_arm(root,a,&a.off)?;let y=check_arm(root,a,&a.reference)?;
++    if x.process.child==y.process.child || same_child(&x.process.child,&start.child) || same_child(&y.process.child,&start.child)
++       || x.process.boot_id!=start.boot || y.process.boot_id!=start.boot
++       || (x.process.fence_device,x.process.fence_inode)!=(start.fence_device,start.fence_inode)
++       || (y.process.fence_device,y.process.fence_inode)!=(start.fence_device,start.fence_inode)
++       || x.release.actual_shared_fence_released_utc>=y.process.started_at_utc
++       || !fixed_utc(&start.actual_start_utc) || y.release.actual_shared_fence_released_utc>=start.actual_start_utc
++       || x.process.source_asset_sha256!=y.process.source_asset_sha256
++       || x.process.clean_env_sha256!=y.process.clean_env_sha256
++       || x.process.raw_proc_environ_sha256!=start.raw_proc_environ_sha256
++       || y.process.raw_proc_environ_sha256!=start.raw_proc_environ_sha256
++       || x.exact_sampler_after!=y.exact_sampler_after || x.exact_hardware!=y.exact_hardware
++       || x.normalized_rows_sha256!=n.complete_projected_rows_sha256 || y.normalized_rows_sha256!=n.complete_projected_rows_sha256{
++        return Err("Note19 source genuine separately reaped same-ELF pair changed".into());
++    }
++    Ok((x,y))
++}
++#[cfg(all(target_os="linux",feature="retained-prefork-timing-diagnostic-v1"))]
++#[derive(Debug,PartialEq,Eq)]
++struct ForkSlice{
++    primitive:u32, succeeded:bool, contact:String, direction_bits:[u32;3], paid_energy_bits:u32,
++}
++#[cfg(all(target_os="linux",feature="retained-prefork-timing-diagnostic-v1"))]
++#[derive(Debug,PartialEq)]
++struct ForkFrame{
++    locomotion:ForkSlice,physics:Vec<serde_json::Value>,pose_before:Vec<serde_json::Value>,pose_after:Vec<serde_json::Value>,
++}
++#[cfg(all(target_os="linux",feature="retained-prefork-timing-diagnostic-v1"))]
++fn material_fork_row(raw:&[u8],tick:u64,actor:u64)->Result<ForkFrame>{
++    let q:serde_json::Value=serde_json::from_slice(raw)?;
++    if q["decision_tick"]!=tick || q["organism"]!=actor{
++        return Err("Note19 nonmatched physical fork row".into());
++    }
++    let list=q["joint_physical"]["channel_outcomes"].as_array().ok_or("no actual per-channel paid execution")?;
++    let mut it=list.iter().filter(|x|x["channel"]=="Locomotion");
++    let x=it.next().ok_or("no genuine locomotion cut")?;
++    if it.next().is_some(){return Err("ambiguous physical locomotion".into());}
++    let e=&x["execution_evidence"];let p=&x["physical"];
++    let f=|v:&serde_json::Value|->Result<u32>{
++        let x=v.as_f64().ok_or("missing actual f32 physical value")? as f32;
++        if !x.is_finite(){return Err("nonfinite actual locomotion".into());}
++        Ok(x.to_bits())
++    };
++    let locomotion=ForkSlice{
++        primitive:u32::try_from(e["primitive"].as_u64().ok_or("missing real primitive")?)?,
++        succeeded:e["succeeded"].as_bool().ok_or("missing actual execution status")?,
++        contact:p["contact"].as_str().ok_or("missing actual contact")?.to_owned(),
++        direction_bits:[f(&p["displacement"]["x"])?,f(&p["displacement"]["y"])?,f(&p["displacement"]["z"])?],
++        paid_energy_bits:f(&p["energy_cost"])?,
++    };
++    let mut physics=Vec::with_capacity(list.len());
++    for channel in list {
++        let mut q=channel.clone();
++        q["execution_evidence"].as_object_mut().ok_or("missing per-slot execution")?.remove("command_target");
++        q["physical"].as_object_mut().ok_or("missing per-slot physics")?.remove("target_entity");
++        physics.push(q);
++    }
++    let pose_before=q["observer_pose_before"].as_array().ok_or("missing real pre-action pose")?.clone();
++    let pose_after=q["observer_pose_after"].as_array().ok_or("missing real post-action pose")?.clone();
++    if pose_before.len()!=2 || pose_after.len()!=2 {return Err("invalid original body pose cut".into());}
++    Ok(ForkFrame{locomotion,physics,pose_before,pose_after})
++}
++#[cfg(all(target_os="linux",feature="retained-prefork-timing-diagnostic-v1"))]
++fn real_fork_rows(root:&Path,a:&Acceptance,first:u64)->Result<Vec<ForkFrame>>{
++    let out=checked_path(&checked_path(root,&a.off.relative_room)?,"native-output")?;
++    let (f,len)=private_file(&out.join("rows.jsonl"),NATIVE_ROWS)?;
++    let mut reader=BufReader::with_capacity(64<<10,f);let mut out=Vec::new();let mut line=Vec::new();
++    let mut raw=Sha256::new();let mut n=0u64;
++    for i in 0..256 {
++        line.clear();
++        n+=(&mut reader).take((1<<20)+1).read_until(b'\n',&mut line)? as u64;
++        if line.is_empty()||line.len()>1<<20||n>len{return Err("actual fork original bounded rows missing".into());}
++        raw.update(&line);
++        if i<7{out.push(material_fork_row(&line,first+i as u64,a.owner)?);}
++    }
++    if n!=len || !reader.fill_buf()?.is_empty() || format!("{:x}",raw.finalize())!=a.off.rows_sha256{
++        return Err("actual OFF originals changed while checking real physical fork".into());
++    }
++    Ok(out)
++}
++#[cfg(all(target_os="linux",feature="retained-prefork-timing-diagnostic-v1"))]
++fn actual_fork(root:&[ForkFrame],foil:&[ForkFrame])->bool{
++    root.len()==7 && foil.len()==7 && root[..6]==foil[..6] && root[6]!=foil[6] && root[6].pose_before==foil[6].pose_before
++      && root[6].locomotion.primitive==103 && f32::from_bits(root[6].locomotion.paid_energy_bits)==0.0
++      && root[6].locomotion.direction_bits.iter().all(|x|f32::from_bits(*x)==0.0)
++      && foil[6].locomotion.primitive==101 && foil[6].locomotion.succeeded && foil[6].locomotion.contact=="Moved"
++      && f32::from_bits(foil[6].locomotion.paid_energy_bits)>0.0
++      && foil[6].locomotion.direction_bits.iter().any(|x|f32::from_bits(*x)!=0.0)
++}
++#[cfg(all(target_os="linux",feature="retained-prefork-timing-diagnostic-v1"))]
++pub(super) fn prove_timing_ancestry(
++    root:&Path,case:&str,run:&str,current:&str,semantic:&str,owner:u64,nonce:u64,
++    start:&super::ordinary_ingress_native_custody::HostStart,
++    profile:&super::ordinary_ingress_native_custody::VerifiedStockV11Profile,
++)->Result<TimingAncestry>{
++    use super::ordinary_ingress_diagnostic_role::{ArmKey,IndependentlyClosedCase};
++    use super::ordinary_ingress_timing_relation::exact_timing_relation;
++    let a:Acceptance=json_leaf(&checked_path(root,"note19-current-case.json")?,&start.case_pair_sha256,SMALL)?;
++    let b:Acceptance=json_leaf(&checked_path(root,"note19-counterfactual-case.json")?,&start.foil_pair_sha256,SMALL)?;
++    let (root_label,foil_label)=(profile.primary_case.as_str(),profile.foil_case.as_str());
++    if a.case_id!=case || ![(root_label,foil_label),(foil_label,root_label)].contains(&(a.case_id.as_str(),b.case_id.as_str()))
++       || a.case_id==b.case_id || a.owner!=owner || b.owner!=owner || a.current_sha256!=current || b.current_sha256!=current
++       || a.evaluation_nonce!=nonce || b.evaluation_nonce!=nonce || a.initial_phenotype_sha256!=b.initial_phenotype_sha256
++       || a.sampling_sha256!=b.sampling_sha256 || a.native_setup_sha256==b.native_setup_sha256{
++        return Err("Note19 independently matched real pair roles/source did not join".into());
++    }
++    let compare_scope=digest(&serde_json::to_vec(&(super::ordinary_ingress_observer::PURPOSE,semantic,nonce,profile.first))?);
++    if a.scope_sha256!=compare_scope{return Err("actually prepared same-case semantic setup differs".into());}
++    let (x,y)=same_new_pair(root,&a,run,start,profile)?;let (u,v)=same_new_pair(root,&b,run,start,profile)?;
++    let all=[&a.off,&a.reference,&b.off,&b.reference];
++    let names=all.iter().map(|k|k.run_id.as_str()).collect::<std::collections::BTreeSet<_>>();
++    let rooms=all.iter().map(|k|k.relative_room.as_str()).collect::<std::collections::BTreeSet<_>>();
++    let ids=[&x.process.child,&y.process.child,&u.process.child,&v.process.child];
++    if names.len()!=4 || rooms.len()!=4 || ids.iter().enumerate().any(|(i,p)|ids[..i].iter().any(|q| q.pid==p.pid && q.namespace==p.namespace && q.proc_start_ticks==p.proc_start_ticks))
++       || y.exact_hardware!=v.exact_hardware{
++        return Err("cross-case reused actual closed native ancestor or hardware differs".into());
++    }
++    let aa=real_fork_rows(root,&a,profile.first)?;let bb=real_fork_rows(root,&b,profile.first)?;
++    if !(if a.case_id==root_label{actual_fork(&aa,&bb)}else{actual_fork(&bb,&aa)}){
++        return Err("actual in-run Root/ActivityToy physical fork no longer admits all seven pre-action cuts".into());
++    }
++    let (off,reference)=(timing_final(root,&a.off,owner,profile.first+256)?,timing_final(root,&a.reference,owner,profile.first+256)?);
++    let (bo,br)=(timing_final(root,&b.off,owner,profile.first+256)?,timing_final(root,&b.reference,owner,profile.first+256)?);
++    if !exact_timing_relation(&off,&reference) || !exact_timing_relation(&bo,&br){
++        return Err("true independently matched raw endpoint proof beyond timing-only relation".into());
++    }
++    let e=y.reference_evidence.as_ref().ok_or("actual Reference evidence absent")?;
++    if e.persisted_continuation.next_completed_gpu_time_ns!=reference.actual_next_gpu_ns
++       || e.persisted_continuation.throttle_sequence_digest!=reference.actual_throttle_seal{
++        return Err("actual native Reference persisted continuation wire mismatch".into());
++    }
++    let arm=|h:&Arm|ArmKey {run_id:h.run_id.clone(),signed_root_ticket_sha256:h.authority_sha256.clone(),
++        started_witness_sha256:h.started_sha256.clone(),process_group_identity_sha256:h.process_sha256.clone(),
++        exact_native_retention_sha256:h.native_receipt_sha256.clone(),exact_raw_rows_sha256:h.rows_sha256.clone()};
++    let common=digest(&serde_json::to_vec(&(&start.boot,start.fence_device,start.fence_inode,
++        &start.raw_proc_environ_sha256,&y.exact_hardware,&y.exact_sampler_after))?);
++    Ok(TimingAncestry{native_setup_sha256:a.native_setup_sha256.clone(),actual_reference_hardware:y.exact_hardware.clone(),
++        actual_reference_final_sampler:y.exact_sampler_after.clone(),case:IndependentlyClosedCase{
++        case_id:a.case_id,matched_current_sha256:current.into(),actual_executing_elf_sha256:start.evaluator_sha256.clone(),
++        frozen_case_and_native_setup_sha256:a.native_setup_sha256,
++        actual_boot_environment_hardware_and_seed_sha256:common,independent_disposition_sha256:start.case_pair_sha256.clone(),
++        selected_reference_state_sha256:e.state_window_sha256.clone(),
++        selected_reference_complete_projected_rows_sha256:e.ordinary_action_evidence_sha256.clone(),
++        actual_off:arm(&a.off),actual_reference:arm(&a.reference),off_raw_endpoint:off,reference_raw_endpoint:reference,
++    }})
++}
++
++#[cfg(all(test,target_os="linux",feature="retained-prefork-timing-diagnostic-v1"))]
++mod note19_fork_tests{
++    use super::*;
++    use serde_json::json;
++    fn row(t:u64,action:u32,paid:f32,dx:f32)->Vec<u8>{
++        serde_json::to_vec(&json!({"decision_tick":t,"organism":3,
++            "observer_pose_before":[{"x":0.0,"y":0.0,"z":0.0},0.0],
++            "observer_pose_after":[{"x":dx,"y":0.0,"z":0.0},0.0],
++            "joint_physical":{"channel_outcomes":[{"channel":"Locomotion",
++                "execution_evidence":{"primitive":action,"succeeded":true,"command_target":9},
++                "physical":{"contact":if dx!=0.0{"Moved"}else{"None"},
++              "energy_cost":paid,"target_entity":9,"displacement":{"x":dx,"y":0.0,"z":0.0}}}]}})).unwrap()
++    }
++    #[test]
++    fn at_most_seven_only_after_real_fork_is_reconstructed(){
++        let mk=|i:u64|material_fork_row(&row(41+i,103,0.0,0.0),41+i,3).unwrap();
++        let root:Vec<_>=(0..7).map(mk).collect();
++        let mut foil:Vec<_>=(0..7).map(mk).collect();
++        assert!(!actual_fork(&root,&foil));
++        foil[6]=material_fork_row(&row(47,101,0.081,0.051),47,3).unwrap();
++        assert!(actual_fork(&root,&foil));
++        foil[2]=material_fork_row(&row(43,101,0.081,0.051),43,3).unwrap();
++        assert!(!actual_fork(&root,&foil));
++    }
++}
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_prefork_residual.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_prefork_residual.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_prefork_residual.rs
+@@ -0,0 +1,233 @@
++//! Detached, owner-only research projection of existing App snapshots.
++//! No launch/dispatch/state change/storage. Not schema81.
++use super::*;
++use super::ordinary_ingress_native_custody::{VerifiedStockV11Profile,V11Expectation};
++use alife_core::{CompiledSynapseKind, DecoderHeadKind};
++use alife_gpu_backend::{training_rollout::GpuTrainingStateSnapshot as Snapshot,GpuPhenotypeUpload};
++use std::ops::Range;
++
++const WIDTH:u32=2048;
++const W:u32=32;
++const COUNT:u32=1024;
++pub(super) const MAX_BYTES:usize=96*1024;
++
++fn words(s:&Snapshot,r:Range<u32>)->Result<&[u32]> {
++    let a=r.start.checked_sub(s.mutable_word_base).ok_or("prefork range before slot")?;
++    let b=r.end.checked_sub(s.mutable_word_base).ok_or("prefork range before slot")?;
++    s.mutable_words.get(a as usize..b as usize).ok_or_else(||"prefork outside actual capture".into())
++}
++fn bank(s:&Snapshot,side:u8)->Result<&[u32]> {
++    let r=s.brain_slot.word_ranges();
++    let span=match side {
++        0=>r.activation_a_words.clone(),
++        1=>r.activation_b_words.clone(),
++        _=>return Err("prefork bad activation side".into()),
++    };
++    if span.len()!=WIDTH as usize {return Err("prefork exact width mismatch".into());}
++    words(s,span)
++}
++fn axes(a:&[u32],layout:&[u32;8])->Result<[u32;8]> {
++    let mut x=[0;8];
++    for (i,k) in layout.iter().enumerate(){
++        x[i]=*a.get(*k as usize).ok_or("prefork tap outside active bank")?;
++        if !f32::from_bits(x[i]).is_finite(){return Err("nonfinite prefork tap".into());}
++    }
++    Ok(x)
++}
++fn sides(a:u8,b:u8,n:u8)->bool {
++    a<2 && b<2 && (1..=4).contains(&n) && a^(n&1)==b
++}
++fn gates(x:[u32;8],axes:&[u32;8],rows:&[V11Expectation;3])->Result<[(u32,bool);3]> {
++    let mut out=[(0,false);3];
++    let f=|n|->Result<f32>{
++        let j=axes.iter().position(|&k|k==n).ok_or("missing independently bounded operand")?;
++        Ok(f32::from_bits(x[j]))
++    };
++    // Taps are actual +1/-1, independently checked against both native
++    // descriptors. Calculation is operand-derived, never an observed GPU mask.
++    for (i,r) in rows.iter().enumerate() {
++        let excess=(f(r.operand_a)?-f(r.operand_b)?)-f32::from_bits(r.threshold_bits);
++        if !excess.is_finite(){return Err("nonfinite V11 excess".into());}
++        out[i]=(excess.to_bits(),excess>0.0);
++    }
++    Ok(out)
++}
++fn gather_binding(s:&Snapshot,pf:&VerifiedStockV11Profile)->Result<(u32,String)>{
++    let plan=s.phenotype.speech_decoder().ok_or("no native SpeechPayload")?;
++    plan.validate_against(&s.phenotype)?;
++    let c=plan.decoder_synapse_start();
++    let info=s.brain_slot.record();
++    if plan.head()!=DecoderHeadKind::SpeechPayload || plan.input_width()!=32 || plan.output_width()!=32
++       || plan.decoder_synapse_count()!=COUNT || c!=pf.canonical_payload
++       || s.phenotype.synapses().len()!=32768 {
++        return Err("prefork typed mature payload plan changed".into());
++    }
++    // The canonical phenotype is NOT in the backend-head order. Use the
++    // same pure native packing API used to admit the original phenotype.
++    let u=GpuPhenotypeUpload::try_from(s.phenotype.as_ref())?;
++    let base_recurrent=u32::try_from(u.source_indices.len())?;
++    if base_recurrent!=pf.base_recurrent || u.decoder_eligibility_metadata.len() as u32!=32768-base_recurrent
++        || u.canonical_to_local_synapse.len()!=32768 || u.synapse_learning_metadata.len()!=32768
++        || u.decoder_eligibility_metadata.iter().filter(|m|m.decoder_head==DecoderHeadKind::SpeechPayload.raw()).count()!=COUNT as usize {
++        return Err("genuine stock auxiliary decoder packing differs".into());
++    }
++    // Native bucket.rs:3396–3407 increments each decoder global ID on
++    // actual recurrent-prefix insertion. The independent stock profile
++    // commits the original count, also checked on the actual short snapshot.
++    let delta=info.recurrent_synapse_count.checked_sub(base_recurrent).ok_or("missing live recurrent prefix")?;
++    if delta!=pf.live_prefix_insertion || info.synapse_count.checked_sub(32768)!=Some(delta)
++       || s.structural_synapses.len()!=delta as usize
++       || s.structural_synapses.iter().any(|e|e.slot_index>=info.recurrent_synapse_count) {
++        return Err("no exact typed mature live decoder displacement".into());
++    }
++    let canonical=s.phenotype.synapses().get(c as usize..(c+COUNT) as usize)
++        .ok_or("missing canonical SpeechPayload span")?;
++    let mut start=None;
++    let mut immutable=Sha256::new();
++    for (idx,syn) in canonical.iter().enumerate(){
++        let i=idx as u32;
++        let CompiledSynapseKind::Decoder(coord)=syn.kind() else {
++            return Err("not a decoder in stock payload span".into());
++        };
++        let g0=*u.canonical_to_local_synapse.get(c as usize+idx).ok_or("missing typed canonical-to-packed map")?;
++        let d=g0.checked_sub(base_recurrent).ok_or("payload not in native decoder prefix")? as usize;
++        let m=u.decoder_eligibility_metadata.get(d).ok_or("missing native packed payload metadata")?;
++        let p=u.synapse_learning_metadata.get(g0 as usize).ok_or("missing native packed synapse identity")?;
++        let gene=u.genetic_weights.get(g0 as usize).ok_or("missing packed inherited weight")?.to_bits();
++        let alpha=u.alpha.get(g0 as usize).ok_or("missing packed inherited alpha")?.to_bits();
++        if coord.head()!=DecoderHeadKind::SpeechPayload || syn.source()!=pf.speech_input+i/W || syn.target()!=pf.speech_output+i%W
++           || m.decoder_head!=DecoderHeadKind::SpeechPayload.raw() || m.global_synapse_id!=g0
++           || m.input_lane!=i/W || m.motor_index!=syn.source() || m.reserved!=0
++           || p.global_synapse_id!=g0 || p.source_neuron!=syn.source() || p.target_neuron!=syn.target()
++           || p.kind!=syn.kind().kind_raw() || gene!=syn.genetic_weight().to_bits() || alpha!=syn.alpha().to_bits() {
++            return Err("true native packed payload coordinate/metadata/bit mapping mismatch".into());
++        }
++        let live=g0.checked_add(delta).ok_or("live payload ID overflow")?;
++        let first=*start.get_or_insert(live);
++        if first.checked_add(i)!=Some(live){
++            return Err("actual packed payload mapping is not a contiguous typed 32x32 slice".into());
++        }
++        immutable.update(gene.to_le_bytes()); immutable.update(alpha.to_le_bytes());
++    }
++    let g=start.ok_or("empty live payload binding")?;
++    if g.checked_add(COUNT)!=Some(info.synapse_count){
++        return Err("actual checked payload mapping does not terminate at live bank extent".into());
++    }
++    Ok((g,format!("{:x}",immutable.finalize())))
++}
++fn payload(s:&Snapshot,pf:&VerifiedStockV11Profile)->Result<(u32,String,Vec<u32>)>{
++    let (g,immutable)=gather_binding(s,pf)?;
++    let r=s.brain_slot.word_ranges();
++    let trim=|b:&Range<u32>|->Result<Range<u32>>{
++        let i=b.start.checked_add(g).ok_or("weight start overflow")?;
++        let j=i.checked_add(COUNT).ok_or("weight end overflow")?;
++        if j>b.end{return Err("payload outside active bank extent".into());}
++        Ok(i..j)
++    };
++    let (f,l)=match s.active_weight_bank {
++        0=>(&r.fast_weight_words,&r.lifetime_weight_words),
++        1=>(&r.fast_weight_bank_1_words,&r.lifetime_weight_bank_1_words),
++        _=>return Err("invalid active native payload weight bank".into()),
++    };
++    let f=words(s,trim(f)?)?; let l=words(s,trim(l)?)?;
++    let mut out=Vec::with_capacity(COUNT as usize*2);
++    for (&fast,&life) in f.iter().zip(l) {
++        if !f32::from_bits(fast).is_finite() || !f32::from_bits(life).is_finite(){
++            return Err("nonfinite same-generation payload weight".into());
++        }
++        out.extend_from_slice(&[fast,life]);
++    }
++    Ok((g,immutable,out))
++}
++
++/// Call only after the unchanged schema81 snapshot identity checks used
++/// for in-memory hashing, and only inside the separate new role. This
++/// function cannot write or release anything.
++pub(super) fn build(step:&crate::FoundationTrainingStep,pf:&VerifiedStockV11Profile)->Result<Vec<u8>>{
++    let (pre,post,b)=(&step.before,&step.after_inference,&step.behavior);
++    let tick=step.frame.tick().raw();
++    let n=step.throttle.microsteps;
++    if !(pf.first..=pf.fork).contains(&tick) || !sides(pre.active_activation_side,post.active_activation_side,n)
++       || pre.tick!=tick || post.tick!=tick || b.tick!=tick || b.organism_id!=step.frame.organism_id().raw()
++       || b.frame_digest!=step.frame.frame_digest() || pre.handle!=post.handle
++       || pre.phenotype.phenotype_hash()!=post.phenotype.phenotype_hash()
++       || digest(&serde_json::to_vec(&pre.phenotype.phenotype_hash())?)!=pf.phenotype_identity_sha256
++       || step.memory_upload.final_frame_digest()!=b.frame_digest
++       || pre.active_weight_generation!=b.active_weight_generation
++       || post.active_weight_generation!=b.active_weight_generation
++       || pre.active_weight_bank!=post.active_weight_bank
++       || post.logical_dispatch_generation!=b.dispatch_generation
++       || step.throttle.dispatch_generation!=b.dispatch_generation
++       || step.throttle.pressure.completed_gpu_time_ns!=0
++       || step.work.counters.microsteps!=u32::from(n)
++       || step.work.counters.neuron_updates!=u64::from(WIDTH)*u64::from(n) {
++        return Err("not actual matched pre/post resident boundary".into());
++    }
++    let q=pre.v11.dendritic_branches.branches();
++    if q.len()!=pf.branch_count || q!=post.v11.dendritic_branches.branches(){
++        return Err("actual V11 descriptor provenance changed".into());
++    }
++    for r in &pf.rows{
++        let d=q.get(r.ordinal).ok_or("missing exact independent stock V11 ordinal")?;
++        if d.target!=r.target || d.threshold.to_bits()!=r.threshold_bits || d.output_gain.to_bits()!=r.output_gain_bits
++           || d.inputs.len()!=2 || d.inputs[0].source!=r.operand_a || d.inputs[0].weight.to_bits()!=1f32.to_bits()
++           || d.inputs[1].source!=r.operand_b || d.inputs[1].weight.to_bits()!=(-1f32).to_bits(){
++            return Err("not the three exact independently bound stock payload V11 branches".into());
++        }
++    }
++    let first=axes(bank(pre,pre.active_activation_side)?,&pf.axes)?;
++    // The final dispatch reads its predecessor from the other ping-pong
++    // bank. On 3 microsteps its middle predecessor has been overwritten.
++    let last=if n>1 {axes(bank(post,post.active_activation_side^1)?,&pf.axes)?} else {first};
++    let active=bank(post,post.active_activation_side)?;
++    let activations=active.get(pf.speech_input as usize..(pf.speech_input+W) as usize).ok_or("missing 32 final payload inputs")?;
++    if activations.iter().any(|v|!f32::from_bits(*v).is_finite()){
++        return Err("nonfinite actual final payload input".into());
++    }
++    let (global_start,immutable_digest,matrix)=payload(post,pf)?;
++    let h=serde_json::to_vec(&serde_json::json!({
++        "schema":"qualia.private.r44.prefork_residual_frame.v1",
++        "organism":b.organism_id,"tick":tick,"frame_digest":b.frame_digest,
++        "slot":pre.handle.slot(),"slot_generation":pre.handle.generation(),
++        "phenotype":post.phenotype.phenotype_hash(),"actual_dispatch":b.dispatch_generation,
++        "enabled_routes":step.throttle.enabled_route_ids,
++        "route_schedule_digest":step.throttle.route_schedule_digest,
++        "actual_microsteps":n,"represented_microstep_sources":[0,n-1],
++        "unrecorded_middle_microsteps":n.saturating_sub(2),
++        "axes":pf.axes,"native_first_firing_operand_bits":first,"native_last_firing_operand_bits":last,
++        "v11_first_derived_pre_gate_excess_bits_and_open":gates(first,&pf.axes,&pf.rows)?,
++        "v11_last_derived_pre_gate_excess_bits_and_open":gates(last,&pf.axes,&pf.rows)?,
++        "v11_typed_rows":pf.rows.each_ref().map(|r|r.ordinal),"authoritative_observed_gpu_gate_mask":false,
++        "active_weight_generation":b.active_weight_generation,"active_weight_bank":post.active_weight_bank,
++        "payload_live_global_start":global_start,"payload_mutable_word_order":["fast","lifetime"],
++        "payload_immutable_genetic_alpha_words_sha256":immutable_digest,
++        "payload_activation_count":W,"payload_coordinate_count":COUNT,
++        "scorecard_eligible":false,"continuation_equivalent":false,"authorizes_capture":false,
++    }))?;
++    let mut bytes=Vec::with_capacity(4+h.len()+4*(activations.len()+matrix.len()));
++    bytes.extend_from_slice(&u32::try_from(h.len())?.to_le_bytes());
++    bytes.extend_from_slice(&h);
++    for v in activations.iter().chain(matrix.iter()){bytes.extend_from_slice(&v.to_le_bytes());}
++    if bytes.len()>MAX_BYTES/7 {return Err("prefork seven-cut aggregate wire cap".into());}
++    Ok(bytes)
++}
++
++#[cfg(test)]
++mod tests{
++    use super::*;
++    #[test]
++    fn ping_pong_requires_real_side(){
++        assert!(sides(1,0,3));assert!(sides(1,1,2));
++        assert!(!sides(1,1,3));assert!(!sides(0,0,0));assert!(!sides(1,0,5));
++    }
++    #[test]
++    fn mathematical_gate_is_strictly_positive(){
++        let labels=[20,21,22,23,24,25,26,27];
++        let x=[0.125f32,0.375,0.625,0.875,0.0,0.0,0.0,0.0].map(f32::to_bits);
++        let r=|ordinal,operand_a,operand_b,threshold:f32|V11Expectation{ordinal,target:27,operand_a,operand_b,
++            threshold_bits:threshold.to_bits(),output_gain_bits:0.015625f32.to_bits()};
++        let rows=[r(2,21,20,0.25),r(3,23,20,0.5),r(4,22,20,0.75)];
++        let a=gates(x,&labels,&rows).unwrap();
++        assert!(!a[0].1 && a[1].1 && !a[2].1);
++    }
++}
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_timing_relation.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_timing_relation.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_timing_relation.rs
+@@ -0,0 +1,219 @@
++//! Default-off diagnostic endpoint relation. Does not grant any role, change
++//! either checkpoint, change schema81, or certify a continuation.
++//! Caller must separately bind genuine native raw reads/parents before use.
++use super::*;
++use alife_runtime::GpuSleepTransactionJournalV2;
++use alife_world::{PortableAssetDigest, PortableSaveFile, ThrottleReplaySaveState};
++use serde::{Deserialize, Serialize};
++use std::{collections::BTreeSet, ops::Range};
++
++const HEADER:usize=56;
++const LIMIT:usize=64*1024*1024;
++const NESTED:usize=8*1024*1024;
++
++fn ws(b:u8)->bool{matches!(b,b' '|b'\r'|b'\n'|b'\t')}
++fn trim(mut b:&[u8])->&[u8]{
++    while b.first().copied().is_some_and(ws){b=&b[1..];}
++    b
++}
++fn take<'a,T:Deserialize<'a>>(r:&mut &'a [u8])->Result<T>{
++    *r=trim(r);
++    let raw=*r;
++    let mut it=serde_json::Deserializer::from_slice(raw).into_iter::<T>();
++    let x=it.next().ok_or("missing JSON token")??;
++    let n=it.byte_offset();
++    if n==0 || n>raw.len(){return Err("invalid lexical token boundary".into());}
++    *r=&raw[n..];
++    Ok(x)
++}
++fn members<'a,const N:usize>(raw:&'a [u8], wanted:[&str;N])->Result<[&'a [u8];N]>{
++    let mut r=trim(raw).strip_prefix(b"{").ok_or("diagnostic object required")?;
++    let mut found=[None;N];
++    let mut seen=BTreeSet::new();
++    loop{
++        let key:String=take(&mut r)?;
++        if seen.len()>=16384 || !seen.insert(key.clone()){return Err("duplicate or excessive diagnostic object members".into());}
++        r=trim(trim(r).strip_prefix(b":").ok_or("missing diagnostic colon")?);
++        let start=r;
++        take::<serde::de::IgnoredAny>(&mut r)?;
++        if let Some(i)=wanted.iter().position(|k|*k==key.as_str()){found[i]=Some(&start[..start.len()-r.len()]);}
++        let q=trim(r);
++        if let Some(t)=q.strip_prefix(b","){r=t;}
++        else if let Some(t)=q.strip_prefix(b"}"){
++            if !trim(t).is_empty(){return Err("trailing diagnostic object".into());}
++            break;
++        }else{return Err("invalid diagnostic object delimiter".into());}
++    }
++    if found.iter().any(Option::is_none){return Err("missing exact projected member".into());}
++    Ok(found.map(|x|x.expect("checked members")))
++}
++fn single(raw:&[u8])->Result<&[u8]>{
++    let mut q=trim(trim(raw).strip_prefix(b"[").ok_or("expected single creature")?);
++    let start=q;
++    take::<serde::de::IgnoredAny>(&mut q)?;
++    let bound=start.len()-q.len();
++    let tail=trim(q).strip_prefix(b"]").ok_or("expected sole creature")?;
++    if !trim(tail).is_empty(){return Err("unexpected creature array tail".into());}
++    Ok(&start[..bound])
++}
++fn span(raw:&[u8],p:&[u8])->Result<Range<usize>>{
++    let a=(p.as_ptr() as usize).checked_sub(raw.as_ptr() as usize).ok_or("projection starts before original")?;
++    let b=a.checked_add(p.len()).ok_or("projection offset overflow")?;
++    if raw.get(a..b)!=Some(p) || a==b{return Err("projection not inside original".into());}
++    Ok(a..b)
++}
++fn project_hash(raw:&[u8],mut changes:Vec<(Range<usize>,Vec<u8>)>)->Result<String>{
++    changes.sort_by_key(|x|x.0.start);
++    let mut h=Sha256::new();let mut at=0;
++    for (r,marker) in changes{
++        h.update(raw.get(at..r.start).ok_or("overlapping projection")?);
++        h.update(marker);at=r.end;
++    }
++    h.update(raw.get(at..).ok_or("outside projection")?);
++    Ok(format!("{:x}",h.finalize()))
++}
++fn native_scalar<'a,T>(x:&'a [u8])->Result<T> where T:Deserialize<'a>+Serialize{
++    let v=serde_json::from_slice(x)?;
++    if serde_json::to_vec(&v)?!=x{return Err("non-native exact timed-field lexeme".into());}
++    Ok(v)
++}
++fn pretty_compact(raw:&[u8])->Result<Vec<u8>>{
++    // Reproduce serde_json's two-space PrettyFormatter without Float parse
++    // and reserialization. The entire typed world is checked independently.
++    let mut out=Vec::with_capacity(raw.len());
++    let mut groups:Vec<(u8,bool)>=Vec::new();let mut i=0;
++    let line=|out:&mut Vec<u8>,n:usize|{
++        out.push(b'\n'); for _ in 0..n{out.extend_from_slice(b"  ");}
++    };
++    while i<raw.len(){
++        let b=raw[i];
++        if ws(b){return Err("expected compact exact producer world".into());}
++        if matches!(b,b'}'|b']'){
++            let (open,contents)=groups.pop().ok_or("unbalanced compact world")?;
++            if !matches!((open,b),(b'{',b'}')|(b'[',b']')){return Err("invalid world bracket".into());}
++            if contents{line(&mut out,groups.len());}
++            out.push(b);i+=1;continue;
++        }
++        let n=groups.len();
++        if let Some(last)=groups.last_mut(){
++            if !last.1{last.1=true;line(&mut out,n);}
++        }
++        match b{
++            b'{'|b'['=>{groups.push((b,false));out.push(b);i+=1;}
++            b','=>{out.push(b);line(&mut out,groups.len());i+=1;}
++            b':'=>{out.extend_from_slice(b": ");i+=1;}
++            b'"'=>{
++                let start=i;
++                i+=1;
++                let mut closed=false;
++                while i<raw.len(){
++                    match raw[i]{
++                        b'\\'=>{i=i.checked_add(2).ok_or("malformed world escape")?;}
++                        b'"'=>{i+=1;closed=true;break;}
++                        _=>i+=1,
++                    }
++                }
++                if !closed{return Err("unfinished compact world string".into());}
++                out.extend_from_slice(&raw[start..i]);
++            }
++            _=>{out.push(b);i+=1;}
++        }
++        if groups.len()>128 || out.len()>NESTED{return Err("bounded diagnostic pretty projection exceeded".into());}
++    }
++    if !groups.is_empty(){return Err("unclosed compact producer world".into());}
++    Ok(out)
++}
++
++#[derive(Debug,Clone,PartialEq,Eq,Serialize)]
++pub(super) struct Endpoint {
++    pub raw_sha256:String,
++    pub body_without_timing_sha256:String,
++    pub world_without_timing_sha256:String,
++    pub journal_without_timing_sha256:String,
++    pub actual_next_gpu_ns:u64,
++    pub actual_throttle_seal:[u64;4],
++    pub actual_world_anchor:String,
++    pub actual_journal_seal:[u64;4],
++    pub actual_private_life_sha256:String,
++}
++
++pub(super) fn endpoint(raw:&[u8],trusted_raw:&str,actor:u64,tick:u64)->Result<Endpoint>{
++    if raw.len()<=HEADER || raw.len()>LIMIT || &raw[..16]!=b"ALIFE-CURRENT-1\n"
++        || u64::from_le_bytes(raw[16..24].try_into()?)!=(raw.len()-HEADER) as u64
++        || Sha256::digest(&raw[HEADER..])[..]!=raw[24..HEADER] || digest(raw)!=trusted_raw{
++        return Err("false exact native checkpoint bytes/header SHA".into());
++    }
++    let body=&raw[HEADER..];
++    let [life,tag]=members(body,["life","same_individual"])?;
++    let [world_quote,journal_quote]=members(life,["world_json","sleep_journal_json"])?;
++    let [life_hash_raw]=members(tag,["private_life_sha256"])?;
++    let life_hash:String=native_scalar(life_hash_raw)?;
++    if digest(life)!=life_hash || world_quote.len()>NESTED || journal_quote.len()>NESTED{
++        return Err("false private-life seal or nested extent".into());
++    }
++    let world:String=native_scalar(world_quote)?;
++    let journal:String=native_scalar(journal_quote)?;
++    let world_raw=world.as_bytes();let journal_raw=journal.as_bytes();
++    let portable=PortableSaveFile::from_json_str(&world)?;
++    if portable.creatures.len()!=1 || portable.creatures[0].organism_id.raw()!=actor
++        || portable.world.tick.raw()!=tick{
++        return Err("unmatched single actor or World final cut".into());
++    }
++    let gpu=portable.creatures[0].gpu_brain.as_ref().ok_or("missing living GPU stock")?;
++    if gpu.checkpoint_tick.raw()!=tick{return Err("native cognitive endpoint differs".into());}
++    let [creatures]=members(world_raw,["creatures"])?;
++    let [gpu_raw]=members(single(creatures)?,["gpu_brain"])?;
++    let [throttle_raw]=members(gpu_raw,["throttle_replay"])?;
++    let [next_raw,sequence_raw]=members(throttle_raw,["next_completed_gpu_time_ns","sequence_digest"])?;
++    let next:u64=native_scalar(next_raw)?;let seq:[u64;4]=native_scalar(sequence_raw)?;
++    let t:ThrottleReplaySaveState=serde_json::from_slice(throttle_raw)?;
++    t.validate()?;
++    let previous=t.last_checkpoint.as_ref().ok_or("no actual previously applied throttle")?;
++    if t!=gpu.throttle_replay || t.next_completed_gpu_time_ns!=next || t.sequence_digest!=seq
++        || next==0 || previous.completed_gpu_time_ns!=0 || previous.organism_id_raw!=actor
++        || previous.tick.checked_add(1)!=Some(tick) || t.last_world_atp_tick!=Some(previous.tick){
++        return Err("unsupported pressure/timing evidence".into());
++    }
++    let [anchor_raw,journal_seal_raw]=members(journal_raw,["exact_base_manifest_digest","journal_digest"])?;
++    let anchor:String=native_scalar(anchor_raw)?;let journal_seal:[u64;4]=native_scalar(journal_seal_raw)?;
++    let j:GpuSleepTransactionJournalV2=serde_json::from_slice(journal_raw)?;
++    j.validate()?;
++    let observed_anchor=PortableAssetDigest::for_bytes(&pretty_compact(world_raw)?).0;
++    if !j.entries.is_empty() || j.exact_base_checkpoint_tick.raw()!=tick
++        || j.journal_digest!=journal_seal || j.exact_base_manifest_digest!=anchor || observed_anchor!=anchor{
++        return Err("false actual exact world anchor or sleep journal seal".into());
++    }
++    let w=project_hash(world_raw,vec![(span(world_raw,next_raw)?,b"0".to_vec()),
++        (span(world_raw,sequence_raw)?,b"[0,0,0,0]".to_vec())])?;
++    let s=project_hash(journal_raw,vec![(span(journal_raw,anchor_raw)?,b"0".to_vec()),
++        (span(journal_raw,journal_seal_raw)?,b"[0,0,0,0]".to_vec())])?;
++    let body_digest=project_hash(body,vec![
++        (span(body,world_quote)?,serde_json::to_vec(&format!("fixed-world:{w}"))?),
++        (span(body,journal_quote)?,serde_json::to_vec(&format!("fixed-journal:{s}"))?),
++        (span(body,life_hash_raw)?,b"0".to_vec())])?;
++    Ok(Endpoint{raw_sha256:trusted_raw.into(),body_without_timing_sha256:body_digest,
++        world_without_timing_sha256:w,journal_without_timing_sha256:s,
++        actual_next_gpu_ns:next,actual_throttle_seal:seq,actual_world_anchor:anchor,
++        actual_journal_seal:journal_seal,actual_private_life_sha256:life_hash})
++}
++
++pub(super) fn exact_timing_relation(a:&Endpoint,b:&Endpoint)->bool{
++    a.raw_sha256!=b.raw_sha256 && a.actual_next_gpu_ns!=b.actual_next_gpu_ns
++      && a.actual_world_anchor!=b.actual_world_anchor && a.actual_private_life_sha256!=b.actual_private_life_sha256
++      && a.actual_throttle_seal.iter().zip(b.actual_throttle_seal).all(|(x,y)|*x!=y)
++      && a.actual_journal_seal.iter().zip(b.actual_journal_seal).all(|(x,y)|*x!=y)
++      && a.body_without_timing_sha256==b.body_without_timing_sha256
++      && a.world_without_timing_sha256==b.world_without_timing_sha256
++      && a.journal_without_timing_sha256==b.journal_without_timing_sha256
++}
++
++#[cfg(test)]
++mod tests{
++    use super::*;
++    #[test]
++    fn typed_lexeme_pretty_does_not_round(){
++        assert_eq!(pretty_compact(br#"{"a":[17.012345678901234567,-0.0,{}],"s":"x\\t"}"#).unwrap(),
++            b"{\n  \"a\": [\n    17.012345678901234567,\n    -0.0,\n    {}\n  ],\n  \"s\": \"x\\\\t\"\n}");
++        assert!(members(br#"{"a":0,"\u0061":1}"#,["a"]).is_err());
++    }
++}
