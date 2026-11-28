@@ -1,0 +1,188 @@
+diff --git a/crates/alife_gpu_backend/src/closed_loop_v11/reciprocal_readback_contract.rs b/crates/alife_gpu_backend/src/closed_loop_v11/reciprocal_readback_contract.rs
+--- a/crates/alife_gpu_backend/src/closed_loop_v11/reciprocal_readback_contract.rs
++++ b/crates/alife_gpu_backend/src/closed_loop_v11/reciprocal_readback_contract.rs
+@@ -327,184 +327,3 @@
+     assert!(prove_exact_one_materialized_direction(&phenotype, &before, &after, &after,
+         Direction { route: 0, ..edge }).is_err());
+ }
+-
+-// A separate *test-only* CPU proofable fixture, not an engine admission API.
+-// The normal core chooses and scores the winner in the existing region. The
+-// accepted portable v11 record already has a separate native placement route.
+-// This never constructs/releases a live AddLifetimeSynapse lifetime request.
+-
+-#[derive(Clone, Copy, PartialEq, Eq)]
+-struct DiscoveryBudgetRegion(u16);
+-
+-#[repr(u16)]
+-#[derive(Clone, Copy, PartialEq, Eq)]
+-enum AuditedRecurrentPlacement {
+-    TemporalToMemory = 9,
+-    MemoryToTemporal = 10,
+-}
+-
+-#[derive(Clone, Copy)]
+-struct SyntheticRoutedFixturePulse {
+-    region: DiscoveryBudgetRegion,
+-    placement: AuditedRecurrentPlacement,
+-    observations: alife_core::CoactivationEvidence,
+-}
+-
+-fn fixture_place_one(
+-    phenotype: &BrainPhenotype,
+-    before: &GpuV11Checkpoint,
+-    pulse: SyntheticRoutedFixturePulse,
+-) -> Result<(GpuLiveTopologyCheckpointV1, Direction)> {
+-    use super::{GpuV11CausalState, GpuV11SparseEdge, GpuV11SparseSpan};
+-
+-    let evidence = pulse.observations;
+-    if pulse.region != DiscoveryBudgetRegion(0) || pulse.region.0 != evidence.region {
+-        return Err(invalid());
+-    }
+-    let installed = structural_bits(before)?;
+-    if installed.len() >= 4 || installed.contains_key(&(evidence.source, evidence.target)) {
+-        return Err(invalid());
+-    }
+-    // Readback is local throughout. Real production ownership/slot authorization
+-    // and real directional samples are absent by construction in this module.
+-    let mut copy = GpuV11CausalState::restore(before.clone())?;
+-    let queued = copy.structural.candidate_count();
+-    copy.structural.discover_candidates(&[evidence]).map_err(|_| invalid())?;
+-    // Refuse both pre-existing same-pair accumulation and crowding out old
+-    // contenders. The fixture cannot replace, remove or reprioritize anyone.
+-    if queued.checked_add(1) != Some(copy.structural.candidate_count()) {
+-        return Err(invalid());
+-    }
+-    let work = copy.structural.apply_structural_phase().map_err(|_| invalid())?;
+-    if work.accepted_edges != 1 || work.pruned_edges != 0
+-        || copy.structural.candidate_count() != queued
+-    {
+-        return Err(invalid());
+-    }
+-    let mut materialized: EdgeBits = copy.structural.connections()
+-        .map(|(source, target, weight)| ((source, target), weight.to_bits())).collect();
+-    let installed_bits = materialized.remove(&(evidence.source, evidence.target)).ok_or_else(invalid)?;
+-    if materialized != installed {
+-        // The stock scorer really selected a different candidate or altered
+-        // another connection. Discard the detached result; never force our pair.
+-        return Err(invalid());
+-    }
+-    let d = Direction { source: evidence.source, target: evidence.target,
+-        route: pulse.placement as u16, installed_bits };
+-    qualify_recurrent_route(phenotype, d)?;
+-
+-    let edge = GpuV11SparseEdge { source: d.source, target: d.target,
+-        route: u32::from(d.route), weight: f32::from_bits(d.installed_bits) };
+-    match copy.sparse_spans.binary_search_by_key(&d.target, |s| s.target) {
+-        Ok(i) => {
+-            let edges = &mut copy.sparse_spans[i].edges;
+-            let place = edges.binary_search_by_key(&d.source, |e| e.source).err().ok_or_else(invalid)?;
+-            edges.insert(place, edge);
+-        }
+-        Err(i) => copy.sparse_spans.insert(i, GpuV11SparseSpan { target: d.target, edges: vec![edge] }),
+-    }
+-    copy.last_work.structural = work;
+-    copy.last_work.cognitive = copy.make_cognitive_receipt()?;
+-    let durable = copy.checkpoint();
+-    structural_bits(&durable)?;
+-    let topology = GpuLiveTopologyCheckpointV1::recompile_for_phenotype(phenotype, durable)?;
+-    Ok((topology, d))
+-}
+-
+-fn fixture_ordinary_wire_rebuild(
+-    phenotype: &BrainPhenotype, after: &GpuLiveTopologyCheckpointV1,
+-) -> Result<GpuLiveTopologyCheckpointV1> {
+-    let exact = serde_json::to_vec(&after.v11_checkpoint).map_err(|_| invalid())?;
+-    let restored: GpuV11Checkpoint = serde_json::from_slice(&exact).map_err(|_| invalid())?;
+-    if !same_serialized(&after.v11_checkpoint, &restored)? {
+-        return Err(invalid());
+-    }
+-    GpuLiveTopologyCheckpointV1::recompile_for_phenotype(phenotype, restored)
+-}
+-
+-fn reciprocal_scaffold_fixture() -> BrainPhenotype {
+-    use alife_core::{BrainGenome, DevelopmentState, NormalizedScalar, PhenotypeCompiler, SensorProfile, Tick};
+-    let capacity = BrainCapacityClass::n2048();
+-    let genome = BrainGenome::scaffold(0xF0A0_CA11, capacity.id());
+-    let development = DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(0.35).unwrap());
+-    PhenotypeCompiler::compile(&genome, &capacity, &development, SensorProfile::GroundedObjectSlotsV1).unwrap()
+-}
+-
+-fn choose_fixture_only_neurons(p: &BrainPhenotype) -> (u32, u32, u32) {
+-    use std::collections::BTreeSet;
+-    // Derive toy coordinates entirely from the generated test scaffold; never
+-    // read R44 bytes, real snapshots, accepted traces, or project user inputs.
+-    let forbidden: BTreeSet<_> = p.synapses().iter().filter(|e| e.kind() == CompiledSynapseKind::Recurrent)
+-        .map(|e| (e.source(), e.target())).collect();
+-    let t = p.lobe_layout().region(LobeKind::TemporalPredictive).unwrap();
+-    let m = p.lobe_layout().region(LobeKind::MemoryInterface).unwrap();
+-    let s = p.lobe_layout().region(LobeKind::PerceptualIntegration).unwrap();
+-    let (a, b) = (t.start..t.start + t.len).find_map(|a|
+-        (m.start..m.start + m.len).find(|&b|
+-            !forbidden.contains(&(a, b)) && !forbidden.contains(&(b, a))).map(|b| (a, b))).unwrap();
+-    let c = (s.start..s.start + s.len).find(|&c| !forbidden.contains(&(c, a))).unwrap();
+-    (a, b, c)
+-}
+-
+-fn synthetic_pulse(placement: AuditedRecurrentPlacement, source: u32, target: u32, points: u32)
+-    -> SyntheticRoutedFixturePulse
+-{
+-    // Fixture-only event units, not a real captured activation or selected weight.
+-    SyntheticRoutedFixturePulse { region: DiscoveryBudgetRegion(0), placement,
+-        observations: alife_core::CoactivationEvidence { region: 0, source, target,
+-            coactivation: points, eligibility: 0, concept_gap_support: 0 } }
+-}
+-
+-#[test]
+-fn routed_fixture_region_zero_materializes_two_typed_routes_on_two_boundaries() {
+-    use super::GpuV11CausalState;
+-    let phenotype = reciprocal_scaffold_fixture();
+-    let (t, m, perception) = choose_fixture_only_neurons(&phenotype);
+-    let mut queue = GpuV11CausalState::for_phenotype(&phenotype).unwrap();
+-    let legacy = alife_core::CoactivationEvidence {
+-        region: 0, source: perception, target: t, coactivation: 2, eligibility: 0, concept_gap_support: 0
+-    };
+-    queue.structural.discover_candidates(&[legacy]).unwrap();
+-    let before = GpuLiveTopologyCheckpointV1::recompile_for_phenotype(&phenotype, queue.checkpoint()).unwrap();
+-    let baseline = serde_json::to_vec(&before).unwrap();
+-    let (first, d1) = fixture_place_one(&phenotype, &before.v11_checkpoint,
+-        synthetic_pulse(AuditedRecurrentPlacement::TemporalToMemory, t, m, 6)).unwrap();
+-    let first_rebuilt = fixture_ordinary_wire_rebuild(&phenotype, &first).unwrap();
+-    let (second, d2) = fixture_place_one(&phenotype, &first_rebuilt.v11_checkpoint,
+-        synthetic_pulse(AuditedRecurrentPlacement::MemoryToTemporal, m, t, 7)).unwrap();
+-    let second_rebuilt = fixture_ordinary_wire_rebuild(&phenotype, &second).unwrap();
+-    prove_exact_two_phase_shape(&phenotype,
+-        MaterializedBoundary { before: &before, after: &first, ordinary_reopened: &first_rebuilt, new: d1 },
+-        MaterializedBoundary { before: &first_rebuilt, after: &second, ordinary_reopened: &second_rebuilt, new: d2 },
+-    ).unwrap();
+-    assert_eq!((d1.route, d2.route), (9, 10));
+-    assert_eq!(first.v11_checkpoint.structural.candidate_count(), 1);
+-    assert_eq!(second.v11_checkpoint.structural.candidate_count(), 1);
+-    let stock_queue = serde_json::to_value(&before.v11_checkpoint.structural).unwrap()["candidates"].clone();
+-    for point in [&first_rebuilt, &second_rebuilt] {
+-        assert_eq!(serde_json::to_value(&point.v11_checkpoint.structural).unwrap()["candidates"], stock_queue);
+-    }
+-    assert_eq!(serde_json::to_vec(&before).unwrap(), baseline);
+-}
+-
+-#[test]
+-fn routed_fixture_refuses_unselected_collision_or_disguised_budget_placement() {
+-    use super::GpuV11CausalState;
+-    let p = reciprocal_scaffold_fixture();
+-    let (t, m, other) = choose_fixture_only_neurons(&p);
+-    let mut queue = GpuV11CausalState::for_phenotype(&p).unwrap();
+-    let a = synthetic_pulse(AuditedRecurrentPlacement::TemporalToMemory, t, m, 6);
+-    let x = alife_core::CoactivationEvidence { source: other, target: t, coactivation: 8, ..a.observations };
+-    queue.structural.discover_candidates(&[x]).unwrap();
+-    let pending = queue.checkpoint();
+-    let exact = serde_json::to_vec(&pending).unwrap();
+-    assert!(fixture_place_one(&p, &pending, a).is_err()); // genuine queue winner differs
+-    assert!(fixture_place_one(&p, &pending,
+-        SyntheticRoutedFixturePulse { observations: x, ..a }).is_err()); // cannot stack on old candidate
+-    let blank = GpuV11Checkpoint::canonical_for_phenotype(&p).unwrap();
+-    assert!(fixture_place_one(&p, &blank,
+-        SyntheticRoutedFixturePulse { placement: AuditedRecurrentPlacement::MemoryToTemporal, ..a }).is_err());
+-    assert!(fixture_place_one(&p, &blank,
+-        SyntheticRoutedFixturePulse { region: DiscoveryBudgetRegion(9), ..a }).is_err());
+-    assert_eq!(serde_json::to_vec(&pending).unwrap(), exact);
+-}

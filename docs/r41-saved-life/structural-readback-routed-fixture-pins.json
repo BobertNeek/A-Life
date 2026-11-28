@@ -1,0 +1,33 @@
+{
+  "exact_unit_names": [
+    "closed_loop_v11::reciprocal_readback_contract::routed_fixture_refuses_unselected_collision_or_disguised_budget_placement",
+    "closed_loop_v11::reciprocal_readback_contract::routed_fixture_region_zero_materializes_two_typed_routes_on_two_boundaries"
+  ],
+  "forward": [
+    "fdf332122665b92be589b01336b377a8dfda380316c7711581e0c65e409b0a08",
+    10140
+  ],
+  "inverse": [
+    "05e5fa509ba94940e88e2beb2e042123cf04f1fd29c3a5ac6495a165a451b017",
+    10140
+  ],
+  "leaf": "crates/alife_gpu_backend/src/closed_loop_v11/reciprocal_readback_contract.rs",
+  "new_features": [],
+  "prior_commit": "32f36c9c0feb5bdaa3235f330a35648f7f4718d1",
+  "prior_patch_sha256": "a7737cc87649fea4eced9707c244534d639442cc8fc3b87230781b7d4efbd7c7",
+  "prior_pins_sha256": "3e38df58768aa7182764b93dcf34a0d5e6dbc0d08c0e52595e8ecd40f401a4ba",
+  "prior_tree": "cc4ef2325b749ff1ee1f55bad0466141035b3d8a",
+  "schema": "qualia.source_only.bounded_recurrent_route_fixture.v1",
+  "source": {
+    "fixture": [
+      "8b2564e371fbb147545a6d7f876339cec3edf21cec2068edb248c7c80319244e",
+      26198
+    ],
+    "note24": [
+      "fa4ef600d1868d5c9187d94835aa9475fbdaa981cff3c3f881eb0f82bce8a80c",
+      16740
+    ]
+  },
+  "test_only": true,
+  "unit_filter": "closed_loop_v11::reciprocal_readback_contract::routed_fixture_"
+}

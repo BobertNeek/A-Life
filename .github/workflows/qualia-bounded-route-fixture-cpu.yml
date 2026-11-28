@@ -1,0 +1,258 @@
+name: Qualia bounded recurrent route fixture CPU qualification
+on:
+  push:
+    branches: ["bob/qualia-bounded-route-fixture-cpu-20261128"]
+    paths: [".github/workflows/qualia-bounded-route-fixture-cpu.yml"]
+
+permissions:
+  contents: read
+concurrency:
+  group: qualia-bounded-route-fixture-cpu-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test-only:
+    if: github.repository == 'BobertNeek/A-Life' && github.ref == 'refs/heads/bob/qualia-bounded-route-fixture-cpu-20261128'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    env:
+      PIN_PRIOR: 32f36c9c0feb5bdaa3235f330a35648f7f4718d1
+      PIN_PRIOR_TREE: cc4ef2325b749ff1ee1f55bad0466141035b3d8a
+      PIN_PRIOR_WORKFLOW: 566f91774c72d4e9562282cfa52f7bb26a25b71fa035153938dcf08b7ffc9b0d
+      PIN_FIXTURE_FORWARD: fdf332122665b92be589b01336b377a8dfda380316c7711581e0c65e409b0a08
+      PIN_FIXTURE_INVERSE: 05e5fa509ba94940e88e2beb2e042123cf04f1fd29c3a5ac6495a165a451b017
+      PIN_FIXTURE_PINS: 3afd2273969b5d8969b40e46a0183e35467761d92824407f6c14096e295e8f43
+      PIN_BASE: c5d250178cb70a10f99f78ebcc974e0ad5533b41
+      PIN_BASE_TREE: e9844c8237ac5a297f9fe6c21bcf55e8d196323f
+      PIN_PARENT: f466b83791cccb97568e6f718b92b052999cfb2b
+      PIN_PARENT_TREE: 23462813a8d22e80428fa0b9f199b0cfc5654f0e
+      PIN_MANIFEST_BLOB: 7010cd90fb587a18cd75c6109d95e5311e5a9a86
+      PIN_RESTORE_BLOB: 28b3868f208796f8d2f96a870f7589f1ed0360e5
+      PIN_MANIFEST_SHA: 16a63a8f3fb12262f7da2830e3721fc727e20073a8795e91ccfb0765913288ad
+      PIN_RESTORE_SHA: bd554f6fa39054ddc08d17487e18ee4edc314c249eabfad2261bf8c1a53c3cef
+      PIN_LOCK: 155699e9274f8890bc8c335669a62de48203ba315a33388a8f0caca71f0f7f37
+      PIN_PATCH: a7737cc87649fea4eced9707c244534d639442cc8fc3b87230781b7d4efbd7c7
+      PIN_PINS: 3e38df58768aa7182764b93dcf34a0d5e6dbc0d08c0e52595e8ecd40f401a4ba
+      RUST_VERSION: "1.100.0"
+      PIN_RUST_COMMIT: 0ef1bc386059596dada8fb65b50425aab2ea637a
+      TARGET: x86_64-unknown-linux-gnu
+      CARGO_BUILD_JOBS: "2"
+      CARGO_INCREMENTAL: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
+      CARGO_TERM_COLOR: never
+      CARGO_NET_RETRY: "2"
+      PRE_FREE: "10737418240"
+      LIVE_FREE: "5368709120"
+      LC_ALL: C
+
+    steps:
+      - name: Checkout exact source-only push
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Authenticate isolation and reconstruct the signed ordinary source
+        run: |
+          set -euo pipefail
+          umask 077
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git show -s --format=%P HEAD)" = "$PIN_PRIOR"
+          test "$(git show -s --format=%P "$PIN_PRIOR")" = "$PIN_PARENT"
+          test "$(git show -s --format=%P "$PIN_PARENT")" = "$PIN_BASE"
+          test "$(git show -s --format=%T "$PIN_PRIOR")" = "$PIN_PRIOR_TREE"
+          test "$(git show -s --format=%T "$PIN_PARENT")" = "$PIN_PARENT_TREE"
+          test "$(git show -s --format=%T "$PIN_BASE")" = "$PIN_BASE_TREE"
+          docs=docs/r41-saved-life
+          old_workflow=.github/workflows/qualia-structural-readback-cpu.yml
+          old_patch="$docs/structural-readback-cpu.patch"
+          old_pins="$docs/structural-readback-cpu-pins.json"
+          wf=.github/workflows/qualia-bounded-route-fixture-cpu.yml
+          p="$docs/structural-readback-routed-fixture"
+          diff -u <(printf 'A\t%s\n' "$wf" "$p.patch" "$p.inverse.patch" "$p-pins.json" | sort) \
+                  <(git diff --name-status --no-renames "$PIN_PRIOR" HEAD | sort)
+          diff -u <(printf 'A\t%s\n' "$old_workflow" "$old_patch" "$old_pins" | sort) \
+                  <(git diff --name-status --no-renames "$PIN_PARENT" "$PIN_PRIOR" | sort)
+          git diff --exit-code "$PIN_PARENT" HEAD -- "$docs/SOURCE.json" "$docs/restore_source.py" "$docs/patches"
+          for f in "$wf" "$p.patch" "$p.inverse.patch" "$p-pins.json" "$old_workflow" "$old_patch" "$old_pins" "$docs/SOURCE.json" "$docs/restore_source.py"; do
+            test -f "$f" && test ! -L "$f"
+            test "$(git ls-tree HEAD -- "$f" | awk '{print $1}')" = 100644
+          done
+          test "$(git rev-parse "$PIN_PARENT:$docs/SOURCE.json")" = "$PIN_MANIFEST_BLOB"
+          test "$(git rev-parse "$PIN_PARENT:$docs/restore_source.py")" = "$PIN_RESTORE_BLOB"
+          printf '%s  %s\n' "$PIN_MANIFEST_SHA" "$docs/SOURCE.json" "$PIN_RESTORE_SHA" "$docs/restore_source.py" \
+            "$PIN_PRIOR_WORKFLOW" "$old_workflow" "$PIN_PATCH" "$old_patch" "$PIN_PINS" "$old_pins" \
+            "$PIN_FIXTURE_FORWARD" "$p.patch" "$PIN_FIXTURE_INVERSE" "$p.inverse.patch" \
+            "$PIN_FIXTURE_PINS" "$p-pins.json" | sha256sum -c -
+          exact="$RUNNER_TEMP/qualia-bounded-route-fixture-exact"
+          target="$RUNNER_TEMP/qualia-bounded-route-fixture-target"
+          mkdir -m 0700 -- "$target"
+          test "$(df -PB1 "$target" | awk 'NR==2{print $4}')" -ge "$PRE_FREE"
+          printf 'EXACT_SRC=%s\nCARGO_TARGET_DIR=%s\n' "$exact" "$target" >> "$GITHUB_ENV"
+          python3 -IB "$docs/restore_source.py" "$GITHUB_WORKSPACE" "$exact"
+          test "$(df -PB1 "$target" | awk 'NR==2{print $4}')" -ge "$PRE_FREE"
+
+      - name: Check exact prior and new fixture sources with reversible proof
+        run: |
+          set -euo pipefail
+          cd "$EXACT_SRC"
+          python3 -IB - "$GITHUB_WORKSPACE/docs/r41-saved-life" <<'PY'
+          from hashlib import sha256
+          from pathlib import Path
+          import json, os, subprocess, sys
+
+          docs = Path(sys.argv[1])
+          previous = docs / "structural-readback-cpu.patch"
+          previous_pins = docs / "structural-readback-cpu-pins.json"
+          forward = docs / "structural-readback-routed-fixture.patch"
+          inverse = docs / "structural-readback-routed-fixture.inverse.patch"
+          fixture_pins = docs / "structural-readback-routed-fixture-pins.json"
+          old = json.loads(previous_pins.read_bytes())
+          spec = json.loads(fixture_pins.read_bytes())
+
+          def pin(path):
+              assert not path.is_symlink(), path
+              if not path.exists():
+                  return None
+              assert path.is_file() and path.stat().st_size < 1_000_000, path
+              data = path.read_bytes()
+              return [sha256(data).hexdigest(), len(data)]
+
+          assert spec["schema"] == "qualia.source_only.bounded_recurrent_route_fixture.v1"
+          assert spec["test_only"] is True and spec["new_features"] == old["new_features"] == []
+          assert old["schema"] == "qualia.source_only.structural_readback_cpu.v1"
+          assert old["closure_files"] == 827
+          assert spec["unit_filter"] == "closed_loop_v11::reciprocal_readback_contract::routed_fixture_"
+          for field, env in (("anchor_commit", "PIN_BASE"), ("anchor_tree", "PIN_BASE_TREE"),
+                             ("restore_parent", "PIN_PARENT"), ("restore_parent_tree", "PIN_PARENT_TREE"),
+                             ("manifest_blob", "PIN_MANIFEST_BLOB"), ("restore_blob", "PIN_RESTORE_BLOB"),
+                             ("lock_sha256", "PIN_LOCK"), ("patch_sha256", "PIN_PATCH")):
+              assert old[field] == os.environ[env], field
+          for field, env in (("prior_commit", "PIN_PRIOR"), ("prior_tree", "PIN_PRIOR_TREE"),
+                             ("prior_patch_sha256", "PIN_PATCH"), ("prior_pins_sha256", "PIN_PINS")):
+              assert spec[field] == os.environ[env], field
+          assert pin(previous)[0] == spec["prior_patch_sha256"]
+          assert pin(previous_pins)[0] == spec["prior_pins_sha256"]
+          assert pin(fixture_pins)[0] == os.environ["PIN_FIXTURE_PINS"]
+          assert pin(forward) == spec["forward"] and spec["forward"][0] == os.environ["PIN_FIXTURE_FORWARD"]
+          assert pin(inverse) == spec["inverse"] and spec["inverse"][0] == os.environ["PIN_FIXTURE_INVERSE"]
+
+          anchor = "crates/alife_gpu_backend/src/closed_loop_v11.rs"
+          leaf = "crates/alife_gpu_backend/src/closed_loop_v11/reciprocal_readback_contract.rs"
+          assert spec["leaf"] == leaf
+          assert set(old["source"]) == {anchor, leaf}
+          assert old["source"][leaf]["after"] == spec["source"]["note24"]
+
+          def numstat(patch):
+              entries = subprocess.check_output(["git", "apply", "--numstat", "-z", patch]).split(b"\0")
+              assert entries[-1] == b""
+              return [x.decode().split("\t", 2) for x in entries[:-1]]
+          assert numstat(previous) == [["3", "0", anchor], ["329", "0", leaf]]
+          assert numstat(forward) == [["181", "0", leaf]]
+          assert numstat(inverse) == [["0", "181", leaf]]
+
+          def check(stage):
+              assert pin(Path("Cargo.lock"))[0] == old["lock_sha256"]
+              assert pin(Path(anchor)) == old["source"][anchor]["before" if stage == "stock" else "after"]
+              expected = old["source"][leaf]["before"] if stage == "stock" else spec["source"][stage]
+              assert pin(Path(leaf)) == expected
+
+          def apply(patch, *flags):
+              cmd = ["git", "apply", "--whitespace=error", *flags]
+              subprocess.run([*cmd, "--check", patch], check=True)
+              subprocess.run([*cmd, patch], check=True)
+
+          check("stock")
+          apply(previous); check("note24")
+          apply(forward); check("fixture")
+          apply(inverse); check("note24")
+          apply(previous, "--reverse"); check("stock")
+          apply(previous); check("note24")
+          apply(forward); check("fixture")
+          print("exact stock -> prior two-leaf test overlay -> one-leaf synthetic fixture -> exact inverse -> reapplied")
+          PY
+
+      - name: Compile and execute exactly two new routed_fixture_ CPU tests
+        run: |
+          set -euo pipefail
+          cd "$EXACT_SRC"
+          export VK_DRIVER_FILES="$RUNNER_TEMP/qualia-do-not-use-a-vulkan-icd.json"
+          test ! -e "$VK_DRIVER_FILES"
+          python3 -IB - "$GITHUB_WORKSPACE/docs/r41-saved-life/structural-readback-routed-fixture-pins.json" <<'PY'
+          import json, os, re, signal, subprocess, sys, time
+          from pathlib import Path
+
+          dev = Path("/dev")
+          assert not any((dev / "dri").glob("renderD*"))
+          assert not any(dev.glob("nvidia*")) and not (dev / "kfd").exists()
+          spec = json.loads(Path(sys.argv[1]).read_bytes())
+          expected = spec["exact_unit_names"]
+          assert len(expected) == len(set(expected)) == 2 and expected == sorted(expected)
+          assert all(x.startswith("closed_loop_v11::reciprocal_readback_contract::routed_fixture_") for x in expected)
+
+          t = Path(os.environ["CARGO_TARGET_DIR"])
+          pre, floor = int(os.environ["PRE_FREE"]), int(os.environ["LIVE_FREE"])
+          def free():
+              fs = os.statvfs(t)
+              return fs.f_bavail * fs.f_frsize
+          assert t.is_dir() and free() >= pre
+          out = Path(os.environ["RUNNER_TEMP"])
+          low = free()
+
+          def bounded(argv, wall, name):
+              global low
+              log = out / (name + ".log")
+              assert free() >= floor
+              with log.open("xb") as f:
+                  p = subprocess.Popen(argv, stdout=f, stderr=subprocess.STDOUT, start_new_session=True)
+                  deadline = time.monotonic() + wall
+                  try:
+                      while True:
+                          low = min(low, free())
+                          if low < floor:
+                              raise RuntimeError("hosted disk below live floor")
+                          if time.monotonic() >= deadline:
+                              raise TimeoutError(name)
+                          status = p.poll()
+                          if status is not None:
+                              break
+                          time.sleep(1)
+                  except BaseException:
+                      if p.poll() is None:
+                          os.killpg(p.pid, signal.SIGTERM)
+                          try:
+                              p.wait(timeout=12)
+                          except subprocess.TimeoutExpired:
+                              os.killpg(p.pid, signal.SIGKILL)
+                              p.wait()
+                      raise
+              assert log.stat().st_size <= 4 * 1024 * 1024
+              text = log.read_text()
+              print(text, end="" if text.endswith("\n") else "\n")
+              assert status == 0, (name, status)
+              return text
+
+          version, target = os.environ["RUST_VERSION"], os.environ["TARGET"]
+          bounded(["rustup", "toolchain", "install", version, "--profile", "minimal", "--target", target], 360, "bounded-routed-fixture-toolchain")
+          v = bounded(["rustc", "+" + version, "-vV"], 60, "bounded-routed-fixture-rustc").splitlines()
+          for exact in ("release: " + version, "host: " + target, "commit-hash: " + os.environ["PIN_RUST_COMMIT"]):
+              assert exact in v, exact
+          cmd = ["cargo", "+" + version, "test", "--locked", "--target", target,
+                 "-p", "alife_gpu_backend", "--lib"]
+          unit_filter = spec["unit_filter"]
+          bounded([*cmd, "--no-run", unit_filter], 1200, "bounded-routed-fixture-compile")
+          listing = bounded([*cmd, "--offline", unit_filter, "--", "--list"], 180, "bounded-routed-fixture-list")
+          names = sorted(s.removesuffix(": test") for s in listing.splitlines() if s.endswith(": test"))
+          assert names == expected and not any(s.endswith(": benchmark") for s in listing.splitlines())
+          result = bounded([*cmd, "--offline", unit_filter, "--", "--test-threads=1"], 180, "bounded-routed-fixture-tests")
+          assert re.search(r"^test result: ok\. 2 passed; 0 failed; 0 ignored;", result, flags=re.M)
+          for unit in expected:
+              assert f"test {unit} ... ok" in result
+          assert free() >= floor
+          print(f"synthetic route fixture CPU qualification, min hosted free bytes {low}, no game/device/live assets")
+          PY
+          printf '%s  %s\n' "$PIN_LOCK" Cargo.lock | sha256sum -c -
