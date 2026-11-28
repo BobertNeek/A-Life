@@ -1,0 +1,183 @@
+name: Qualia bounded sleep replay identity CPU qualification
+on:
+  push:
+    branches: ["bob/qualia-sleep-replay-identity-unaligned-cpu-20261128"]
+    paths: [".github/workflows/qualia-sleep-replay-identity-cpu.yml"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qualia-sleep-replay-identity-cpu-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  map-only-cpu:
+    if: github.ref == 'refs/heads/bob/qualia-sleep-replay-identity-unaligned-cpu-20261128'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      PIN_RESTORE: f466b83791cccb97568e6f718b92b052999cfb2b
+      PIN_BASE: c5d250178cb70a10f99f78ebcc974e0ad5533b41
+      PIN_MANIFEST_BLOB: 7010cd90fb587a18cd75c6109d95e5311e5a9a86
+      PIN_RESTORE_BLOB: 28b3868f208796f8d2f96a870f7589f1ed0360e5
+      PIN_LOCK: 155699e9274f8890bc8c335669a62de48203ba315a33388a8f0caca71f0f7f37
+      PIN_RESERVE: b30962d94a66776e214bbfcf8a6ba1b5bf20de5fa0c1a476e5c87c06aa88f48a
+      PIN_QUALIFIER: 7550abe758fcac6395f0c56d769042a86b6d55d1ea4bf951ee3a4a8193f2fd61
+      PIN_PINS: 5eb2e5ed0c72463ed583b01212f6fdc9e9fb84627ae110cb3f03d454a07f6188
+      RUST_VERSION: "1.100.0"
+      PIN_RUSTC_COMMIT: 0ef1bc386059596dada8fb65b50425aab2ea637a
+      TARGET: x86_64-unknown-linux-gnu
+      CARGO_INCREMENTAL: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
+      CARGO_BUILD_JOBS: "2"
+      CARGO_NET_RETRY: "2"
+      CARGO_TERM_COLOR: never
+      LC_ALL: C
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout exact detached source push
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Authenticate four additions and reconstruct public source
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git show -s --format=%P HEAD)" = "$PIN_RESTORE"
+          test "$(git show -s --format=%P "$PIN_RESTORE")" = "$PIN_BASE"
+          diff -u <(printf '%s\n' \
+            $'A\t.github/workflows/qualia-sleep-replay-identity-cpu.yml' \
+            $'A\tdocs/r41-saved-life/replay-local-identity-qualification-pins.json' \
+            $'A\tdocs/r41-saved-life/replay-local-identity-qualifier.patch' \
+            $'A\tdocs/r41-saved-life/replay-local-identity-reserve.patch' | sort) \
+            <(git diff --name-status --no-renames "$PIN_RESTORE" HEAD | sort)
+          test "$(git rev-parse "$PIN_RESTORE:docs/r41-saved-life/SOURCE.json")" = "$PIN_MANIFEST_BLOB"
+          test "$(git rev-parse "$PIN_RESTORE:docs/r41-saved-life/restore_source.py")" = "$PIN_RESTORE_BLOB"
+          git diff --exit-code "$PIN_RESTORE" HEAD -- docs/r41-saved-life/{SOURCE.json,restore_source.py,patches}
+          exact="$RUNNER_TEMP/qualia-replay-identity-exact"
+          umask 077
+          printf 'EXACT_SRC=%s\nCARGO_TARGET_DIR=%s\n' "$exact" "$RUNNER_TEMP/qualia-sleep-replay-identity-target" >> "$GITHUB_ENV"
+          python3 -IB docs/r41-saved-life/restore_source.py "$GITHUB_WORKSPACE" "$exact"
+
+      - name: Verify and round-trip both source overlays
+        run: |
+          set -euo pipefail
+          cd "$EXACT_SRC"
+          python3 -IB - "$GITHUB_WORKSPACE" <<'PY'
+          from hashlib import sha256
+          from pathlib import Path
+          import json, os, subprocess, sys, tomllib
+
+          public = Path(sys.argv[1]) / 'docs/r41-saved-life'
+          reserve = public / 'replay-local-identity-reserve.patch'
+          qualifier = public / 'replay-local-identity-qualifier.patch'
+          pins = public / 'replay-local-identity-qualification-pins.json'
+          def digest(p):
+              p = Path(p)
+              assert p.is_file() and not p.is_symlink() and p.stat().st_size < 1_000_000, p
+              return sha256(p.read_bytes()).hexdigest()
+          assert digest(pins) == os.environ['PIN_PINS']
+          spec = json.loads(pins.read_bytes())
+          assert spec['schema'] == 'qualia.source_only.sleep_replay_identity_qualification.v1'
+          assert spec['source_restore_commit'] == os.environ['PIN_RESTORE']
+          assert spec['git_base_commit'] == os.environ['PIN_BASE']
+          assert spec['source_manifest_git_blob'] == os.environ['PIN_MANIFEST_BLOB']
+          assert spec['source_restore_script_git_blob'] == os.environ['PIN_RESTORE_BLOB']
+          assert spec['lock_sha256'] == os.environ['PIN_LOCK']
+          assert spec['reserve_patch_sha256'] == os.environ['PIN_RESERVE'] == digest(reserve)
+          assert spec['qualifier_patch_sha256'] == os.environ['PIN_QUALIFIER'] == digest(qualifier)
+          assert spec['qualifier_only'] is True
+          assert spec['launches_game_or_device'] is False and spec['uses_retained_save_or_model_data'] is False
+          scope = spec['run']
+          assert scope['cargo_package'] == 'alife_gpu_backend'
+          assert scope['cargo_features'] == ['training-rollout', 'gpu-tests']
+          assert scope['unit_filter'] == 'sleep_replay_identity_qualification::'
+          assert scope['toolchain'] == os.environ['RUST_VERSION']
+          assert scope['rustc_git_commit'] == os.environ['PIN_RUSTC_COMMIT']
+          assert scope['target'] == os.environ['TARGET']
+          assert len(set(scope['selected_tests'])) == len(scope['selected_tests']) == 4
+
+          src = 'crates/alife_gpu_backend/src/'
+          base_paths = {src + 'closed_loop_runtime.rs', src + 'closed_loop_buffers/bucket.rs'}
+          new_path = src + 'closed_loop_runtime/sleep_replay_identity_qualification.rs'
+          expected = base_paths | {new_path}
+          def changed(patch):
+              rows = subprocess.check_output(['git', 'apply', '--numstat', '-z', patch]).split(b'\0')
+              assert rows[-1] == b''
+              paths = [r.decode().split('\t', 2)[2] for r in rows[:-1]]
+              assert len(set(paths)) == len(paths)
+              return set(paths)
+          tree = spec['source_leaves']
+          assert changed(reserve) == base_paths
+          assert changed(qualifier) == expected == set(tree)
+          assert tree[new_path]['reconstructed'] is None and tree[new_path]['reserve'] is None
+
+          backend = tomllib.loads(Path('crates/alife_gpu_backend/Cargo.toml').read_text())
+          assert backend['features']['default'] == []
+          assert backend['features']['training-rollout'] == []
+          assert backend['features']['gpu-tests'] == ['test-support']
+          def check(phase):
+              assert digest('Cargo.lock') == spec['lock_sha256']
+              for name, phases in tree.items():
+                  p = Path(name)
+                  assert not p.is_symlink()
+                  assert (digest(p) if p.exists() else None) == phases[phase], (phase, p)
+          def apply(patch, *options):
+              command = ['git', 'apply', '--whitespace=error', *options]
+              subprocess.run([*command, '--check', patch], check=True)
+              subprocess.run([*command, patch], check=True)
+
+          check('reconstructed')
+          apply(reserve); check('reserve')
+          apply(qualifier); check('qualifier')
+          apply(qualifier, '--reverse'); check('reserve')
+          apply(reserve, '--reverse'); check('reconstructed')
+          apply(reserve); check('reserve')
+          apply(qualifier); check('qualifier')
+          assert spec['run']['selected_tests'] == sorted(spec['run']['selected_tests'])
+          print('exact public closure; reserve and CPU qualifier separately round-trip')
+          PY
+
+      - name: Compile and run only the four device-free backend tests
+        run: |
+          set -euo pipefail
+          cd "$EXACT_SRC"
+          python3 -IB - <<'PY'
+          from pathlib import Path
+          dev = Path('/dev')
+          assert not any((dev / 'dri').glob('renderD*'))
+          assert not any(dev.glob('nvidia*')) and not (dev / 'kfd').exists()
+          PY
+          export VK_DRIVER_FILES="$RUNNER_TEMP/no-vulkan-icd.json"
+          test ! -e "$VK_DRIVER_FILES"
+          rustup toolchain install "$RUST_VERSION" --profile minimal --target "$TARGET"
+          rustc_info="$(rustc "+$RUST_VERSION" -vV)"
+          grep -Fxq "release: $RUST_VERSION" <<< "$rustc_info"
+          grep -Fxq "host: $TARGET" <<< "$rustc_info"
+          grep -Fxq "commit-hash: $PIN_RUSTC_COMMIT" <<< "$rustc_info"
+          cat <<< "$rustc_info"
+          selected="$RUNNER_TEMP/qualia-replay-identity-tests.txt"
+          flags=(--locked --target "$TARGET" -p alife_gpu_backend --no-default-features --features training-rollout,gpu-tests --lib)
+          filter=sleep_replay_identity_qualification::
+          cargo "+$RUST_VERSION" test "${flags[@]}" --no-run "$filter"
+          cargo "+$RUST_VERSION" test --offline "${flags[@]}" "$filter" -- --list > "$selected"
+          python3 -IB - "$selected" "$GITHUB_WORKSPACE/docs/r41-saved-life/replay-local-identity-qualification-pins.json" <<'PY'
+          from pathlib import Path
+          import json, sys
+          lines = Path(sys.argv[1]).read_text().splitlines()
+          actual = sorted(s.removesuffix(': test') for s in lines if s.endswith(': test'))
+          expected = json.loads(Path(sys.argv[2]).read_bytes())['run']['selected_tests']
+          assert actual == expected, (actual, expected)
+          assert not any(s.endswith(': benchmark') for s in lines)
+          for name in actual:
+              print(name)
+          PY
+          cargo "+$RUST_VERSION" test --offline "${flags[@]}" "$filter" -- --test-threads=1
+          sha256sum Cargo.lock
+          printf '%s\n' 'CPU-only mapping qualification; no game, GPU, retained data, or promotion effect.'

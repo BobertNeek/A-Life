@@ -1,0 +1,150 @@
+diff --git a/crates/alife_gpu_backend/src/closed_loop_runtime.rs b/crates/alife_gpu_backend/src/closed_loop_runtime.rs
+--- a/crates/alife_gpu_backend/src/closed_loop_runtime.rs
++++ b/crates/alife_gpu_backend/src/closed_loop_runtime.rs
+@@ -3307,48 +3307,60 @@
+         {
+             return Err(ScaffoldContractError::BrainOwnershipMismatch);
+         }
+-        let phenotype = self
+-            .class_buckets
+-            .get(&handle.class_id.raw())
+-            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+-            .resident(handle)?
+-            .phenotype
+-            .clone();
+-        let replay = &evidence.batch;
+-        replay.validate_contract(
+-            phenotype.replay_capture_plan().event_capacity(),
+-            phenotype.replay_capture_plan().sample_capacity(),
+-            phenotype.budgets().global.total_synapses,
+-        )?;
++        // A replay span names a physical ID in this resident slot, never a
++        // canonical phenotype ordinal. Reconstruct the immutable native plan
++        // with the same builder that admitted this exact owner and its retained
++        // structural edges; do not reinterpret any of the actual replay samples.
++        self.validate_handle_backend(handle)?;
++        let pool = self
++            .class_buckets
++            .get(&handle.class_id.raw())
++            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
++        let resident = pool.resident(handle)?;
++        let bucket = pool.bucket_for_handle(handle)?;
++        let native = compile_v11_slot_upload(
++            &bucket.plan, &resident.brain_slot, &resident.phenotype, &resident.v11,
++        )
++        .map_err(map_gpu_contract_error)?;
++        if native.brain_slot() != &resident.brain_slot {
++            return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
++        }
++        let phenotype = &resident.phenotype;
++        let replay = &evidence.batch;
++        replay.validate_contract(
++            phenotype.replay_capture_plan().event_capacity(),
++            phenotype.replay_capture_plan().sample_capacity(),
++            resident.brain_slot.record().synapse_count,
++        )?;
+         let base_pairs = phenotype
+             .synapses()
+             .iter()
+             .map(|synapse| (synapse.source(), synapse.target()))
+             .collect::<std::collections::BTreeSet<_>>();
+-        let active = replay
+-            .synapse_spans
+-            .iter()
+-            .filter_map(|span| {
+-                let start = usize::try_from(span.sample_start).ok()?;
+-                let count = usize::try_from(span.sample_count).ok()?;
+-                let samples = replay
+-                    .eligibility_samples
+-                    .get(start..start.checked_add(count)?)?;
+-                let eligibility = samples
+-                    .iter()
+-                    .map(|sample| u32::from(sample.eligibility_q15.unsigned_abs()))
+-                    .max()
+-                    .unwrap_or(0);
+-                if eligibility == 0 {
+-                    return None;
+-                }
+-                let synapse = phenotype
+-                    .synapses()
+-                    .get(usize::try_from(span.local_synapse_id).ok()?)?;
+-                Some((synapse.source(), synapse.target(), eligibility))
+-            })
+-            .take(32)
+-            .collect::<Vec<_>>();
++        let mut active = Vec::with_capacity(32);
++        for span in &replay.synapse_spans {
++            let invalid = || ScaffoldContractError::ConsolidationGenerationMismatch;
++            let start = usize::try_from(span.sample_start).map_err(|_| invalid())?;
++            let count = usize::try_from(span.sample_count).map_err(|_| invalid())?;
++            let end = start.checked_add(count).ok_or_else(|| invalid())?;
++            let samples = replay.eligibility_samples.get(start..end).ok_or_else(invalid)?;
++            let eligibility = samples
++                .iter()
++                .map(|sample| u32::from(sample.eligibility_q15.unsigned_abs()))
++                .max()
++                .unwrap_or(0);
++            if eligibility == 0 {
++                continue;
++            }
++            let (source, target) = native
++                .sleep_replay_local_endpoints(span.local_synapse_id)
++                .map_err(map_gpu_contract_error)?;
++            active.push((source, target, eligibility));
++            if active.len() == 32 {
++                break;
++            }
++        }
++        drop(native);
+         // Local growth proposals are anchored in replay eligibility. Unit
+         // coactivation is proposal support, not an observed firing count.
+         const CANONICAL_SLEEP_STRUCTURAL_REGION: u16 = 0;
+diff --git a/crates/alife_gpu_backend/src/closed_loop_buffers/bucket.rs b/crates/alife_gpu_backend/src/closed_loop_buffers/bucket.rs
+--- a/crates/alife_gpu_backend/src/closed_loop_buffers/bucket.rs
++++ b/crates/alife_gpu_backend/src/closed_loop_buffers/bucket.rs
+@@ -2973,7 +2973,44 @@
+         &self.brain_slot
+     }
+ 
+-    pub(crate) fn live_topology_checkpoint(
++    /// Read typed local neuron endpoints from the owner-bound immutable
++    /// upload plan, including shifted decoder IDs and inserted recurrent edges.
++    /// The replay caller obtains that plan via the resident V11 compiler.
++    pub(crate) fn sleep_replay_local_endpoints(
++        &self,
++        local_id: u32,
++    ) -> Result<(u32, u32), GpuClosedLoopError> {
++        let slot = self.brain_slot.record();
++        if local_id >= slot.synapse_count {
++            return Err(GpuClosedLoopError::MalformedUpload);
++        }
++        let base = self.ranges.immutable_plan_words.start;
++        let range = &self.ranges.layout.synapse_learning_metadata_words;
++        let stride = (std::mem::size_of::<GpuSynapseLearningMetadata>()
++            / std::mem::size_of::<u32>()) as u32;
++        let index = local_id
++            .checked_mul(stride)
++            .and_then(|i| range.start.checked_add(i))
++            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
++        let end = index.checked_add(stride).ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
++        if index < base || end > range.end {
++            return Err(GpuClosedLoopError::MalformedUpload);
++        }
++        let words = self.immutable_plan_words
++            .get((index - base) as usize..(end - base) as usize)
++            .ok_or(GpuClosedLoopError::MalformedUpload)?;
++        // Packed word offsets need not align a borrowed host record.
++        let row = GpuSynapseLearningMetadata::from_words(words)?;
++        let kind = if local_id < slot.recurrent_synapse_count { 1 } else { 2 };
++        if row.global_synapse_id != local_id || row.kind != kind || row.reserved != 0
++            || row.source_neuron >= slot.neuron_count || row.target_neuron >= slot.neuron_count
++        {
++            return Err(GpuClosedLoopError::MalformedUpload);
++        }
++        Ok((row.source_neuron, row.target_neuron))
++    }
++
++    pub(crate) fn live_topology_checkpoint(
+         &self,
+         phenotype_hash: alife_core::PhenotypeHash,
+         v11_checkpoint: GpuV11Checkpoint,
