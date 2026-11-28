@@ -1,0 +1,51 @@
+{
+  "changed_leaves": {
+    "crates/alife_gpu_backend/src/closed_loop_pipeline.rs": {
+      "after": "a91ff183bc3897f13f7f8f545a2fba73855759348fff84d49847f52a676f1afd",
+      "after_git_blob": "1ddd27ab1219bdf33dfe59696b3f41d06cf231cf",
+      "before": "bf40a8b5d27e792d6ae970e2b7514ac6d3dce01c12442c60ce4c335fe1e3e015",
+      "bytes": 215898
+    },
+    "crates/alife_gpu_backend/src/closed_loop_pipeline/research_n4096_h_inherited.rs": {
+      "after": "75564637c70b4f6c1ec951bee83e2bed50e111794d4a162673718e58e428a796",
+      "after_git_blob": "e852a2d198ece05ef1edfb604a3a3210084b691c",
+      "before": "e03af15f1550a0956e07d1c2918eb1fff18083c0d55a7fc9dc58eb00625d7d7e",
+      "bytes": 23610
+    },
+    "crates/alife_gpu_backend/src/closed_loop_pipeline/research_n4096_h_record.rs": {
+      "after": "f61cffd56cd806d49778132270b9e66caab0833bce1e0e5155f538fcb3e97e62",
+      "after_git_blob": "24fd180e2a1572a654a5b23d75cee5b815761165",
+      "before": null,
+      "bytes": 28806
+    },
+    "crates/alife_gpu_backend/src/closed_loop_runtime.rs": {
+      "after": "8e3ad09f411f956dbc6c4c027cf087a3994fef191e01aa0b519bb43d5560fc70",
+      "after_git_blob": "aadb25cb6fd954104ac52974424056db86bc4de8",
+      "before": "f6c2f7579ada6a509f02a136e2bc9ed1bc6a54fb3fa3f1d5fd79f32fb2cb58a3",
+      "bytes": 290984
+    }
+  },
+  "command_submitted_or_stock_path_changed": false,
+  "compiler_or_device_or_private_current_consumed": false,
+  "covers_accumulator_and_encoded_scratch": true,
+  "exact_parent_git": "4a9cb1e1163067232b6d55c7dae564fb9545bc06",
+  "exact_parent_tree": "6d6f34c006f43e5451aa506fac4c091bfeed1891",
+  "forward": "a1c0e8bae43d6844184b1150551bd358608d53517cdb5ca4454ddae10daac3e5",
+  "inverse": "6dd8e3583779d773321b5cd4d050f28b37a93c66950ef7f819e5e51347dbb683",
+  "metadata_only_actual_wgsl_write_domains": [
+    "diagnostics[0..4]",
+    "selection[12..16]"
+  ],
+  "parent_cpu_run": 46102046472,
+  "parent_cpu_terminal_sha256": "8e74f135a911c562870f724372669509b431d31d74803fc375bda7d816497807",
+  "q_word_witness_count": 12288,
+  "schema": "qualia.n4096.owner-bound-h-prefix-source-only.v1",
+  "source_per_pass_order": [
+    "clear_diagnostics",
+    "guarded_encode",
+    "clear_v11_work",
+    "guarded_recurrent[0..microsteps]"
+  ],
+  "static_forward_inverse_forward": true,
+  "zero_over_zero_negative_requires_write_admission": true
+}
