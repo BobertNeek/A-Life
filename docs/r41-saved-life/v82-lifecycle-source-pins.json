@@ -1,0 +1,18 @@
+{
+  "actual_build_overlay_sha256": "1d7fa0e2560b22d35e3e29f18a3baa224217c4a9ce92cd55f4b2181f3f88a1b3",
+  "after": {
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_native_custody.rs": "2493b81f7fb96d012f938120d8d14678002aa3e0e5b588f55b47786fe10c1312",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_predecessor.rs": "5c12529d578cc88e0e734b8ed5a0e842951da0ca3a9ec515cb37c4d8398b52b1"
+  },
+  "authorizes_run_or_release": false,
+  "before": {
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_native_custody.rs": "00c07b23fb90a2b681159720dc8465f50eb72ade2f59f7272a27f552ab9eebda",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_predecessor.rs": "5083d453af6221c942062a0e9defe439e717e8ebd151603523af7937e42c35f6"
+  },
+  "forward_sha256": "ddce0bc53d20a110a3d5bf043aec6eb1b18bf09336817b6345259b8ed1e552c6",
+  "inverse_sha256": "0ab20600fbb8d36fd6f51a4b0c52a45f878e03d3c22146ef3e192a62bb67ee37",
+  "live_parent_commit": "c998b485662c1f10b7ee21b28cbc1c4edf76e046",
+  "schema": "qualia.private.note19.detached_source_only.successor_closure.v1",
+  "scope": "only opted-in v82 actual lifecycle, not an issuer or release",
+  "source_only": true
+}

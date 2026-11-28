@@ -1,0 +1,573 @@
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_predecessor.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_predecessor.rs
+--- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_predecessor.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_predecessor.rs
+@@ -704,9 +704,8 @@
+ )->Result<TimingAncestry>{
+     use super::ordinary_ingress_diagnostic_role::{ArmKey,IndependentlyClosedCase};
+     use super::ordinary_ingress_timing_relation::exact_timing_relation;
+-    let current_input=v5_lifecycle::read(&checked_path(root,"note19-current-case.json")?,&start.case_pair_sha256)?;
+-    let foil_input=v5_lifecycle::read(&checked_path(root,"note19-counterfactual-case.json")?,&start.foil_pair_sha256)?;
+-    let (a,b)=(current_input.pair(),foil_input.pair());
++    let a:Acceptance=json_leaf(&checked_path(root,"note19-current-case.json")?,&start.case_pair_sha256,SMALL)?;
++    let b:Acceptance=json_leaf(&checked_path(root,"note19-counterfactual-case.json")?,&start.foil_pair_sha256,SMALL)?;
+     let (root_label,foil_label)=(profile.primary_case.as_str(),profile.foil_case.as_str());
+     if a.case_id!=case || ![(root_label,foil_label),(foil_label,root_label)].contains(&(a.case_id.as_str(),b.case_id.as_str()))
+        || a.case_id==b.case_id || a.owner!=owner || b.owner!=owner || a.current_sha256!=current || b.current_sha256!=current
+@@ -716,28 +715,21 @@
+     }
+     let compare_scope=digest(&serde_json::to_vec(&(super::ordinary_ingress_observer::PURPOSE,semantic,nonce,profile.first))?);
+     if a.scope_sha256!=compare_scope{return Err("actually prepared same-case semantic setup differs".into());}
+-    let (mut x,mut y)=v5_lifecycle::compare(root,&current_input,run,start,profile)?;
+-    let (mut u,mut v)=v5_lifecycle::compare(root,&foil_input,run,start,profile)?;
+-    if !v5_lifecycle::cross_distinct([&x,&y,&u,&v]){
+-        return Err("Note19 cross-case lifecycle version, actual environment inode or argv alias refused".into());
+-    }
++    let (x,y)=same_new_pair(root,&a,run,start,profile)?;let (u,v)=same_new_pair(root,&b,run,start,profile)?;
+     let all=[&a.off,&a.reference,&b.off,&b.reference];
+     let names=all.iter().map(|k|k.run_id.as_str()).collect::<std::collections::BTreeSet<_>>();
+     let rooms=all.iter().map(|k|k.relative_room.as_str()).collect::<std::collections::BTreeSet<_>>();
+-    let ids=[&x.child,&y.child,&u.child,&v.child];
++    let ids=[&x.process.child,&y.process.child,&u.process.child,&v.process.child];
+     if names.len()!=4 || rooms.len()!=4 || ids.iter().enumerate().any(|(i,p)|ids[..i].iter().any(|q| q.pid==p.pid && q.namespace==p.namespace && q.proc_start_ticks==p.proc_start_ticks))
+        || y.exact_hardware!=v.exact_hardware{
+         return Err("cross-case reused actual closed native ancestor or hardware differs".into());
+     }
+-    let aa=v5_lifecycle::fork_rows(root,a,&mut x)?;
+-    let bb=v5_lifecycle::fork_rows(root,b,&mut u)?;
++    let aa=real_fork_rows(root,&a,profile.first)?;let bb=real_fork_rows(root,&b,profile.first)?;
+     if !(if a.case_id==root_label{actual_fork(&aa,&bb)}else{actual_fork(&bb,&aa)}){
+         return Err("actual in-run Root/ActivityToy physical fork no longer admits all seven pre-action cuts".into());
+     }
+-    let off=v5_lifecycle::timed_original(root,a,&a.off,&mut x)?;
+-    let reference=v5_lifecycle::timed_original(root,a,&a.reference,&mut y)?;
+-    let bo=v5_lifecycle::timed_original(root,b,&b.off,&mut u)?;
+-    let br=v5_lifecycle::timed_original(root,b,&b.reference,&mut v)?;
++    let (off,reference)=(timing_final(root,&a.off,owner,profile.first+256)?,timing_final(root,&a.reference,owner,profile.first+256)?);
++    let (bo,br)=(timing_final(root,&b.off,owner,profile.first+256)?,timing_final(root,&b.reference,owner,profile.first+256)?);
+     if !exact_timing_relation(&off,&reference) || !exact_timing_relation(&bo,&br){
+         return Err("true independently matched raw endpoint proof beyond timing-only relation".into());
+     }
+@@ -745,13 +737,6 @@
+     if e.persisted_continuation.next_completed_gpu_time_ns!=reference.actual_next_gpu_ns
+        || e.persisted_continuation.throttle_sequence_digest!=reference.actual_throttle_seal{
+         return Err("actual native Reference persisted continuation wire mismatch".into());
+-    }
+-    if matches!(&foil_input,v5_lifecycle::Input::Current(_)){
+-        let proof=v.reference_evidence.as_ref().ok_or("actual Foil Reference evidence absent")?;
+-        if proof.persisted_continuation.next_completed_gpu_time_ns!=br.actual_next_gpu_ns
+-           || proof.persisted_continuation.throttle_sequence_digest!=br.actual_throttle_seal{
+-            return Err("actual other-case v5 Reference persisted continuation wire mismatch".into());
+-        }
+     }
+     let arm=|h:&Arm|ArmKey {run_id:h.run_id.clone(),signed_root_ticket_sha256:h.authority_sha256.clone(),
+         started_witness_sha256:h.started_sha256.clone(),process_group_identity_sha256:h.process_sha256.clone(),
+@@ -760,8 +745,8 @@
+         &start.raw_proc_environ_sha256,&y.exact_hardware,&y.exact_sampler_after))?);
+     Ok(TimingAncestry{native_setup_sha256:a.native_setup_sha256.clone(),actual_reference_hardware:y.exact_hardware.clone(),
+         actual_reference_final_sampler:y.exact_sampler_after.clone(),case:IndependentlyClosedCase{
+-        case_id:a.case_id.clone(),matched_current_sha256:current.into(),actual_executing_elf_sha256:start.evaluator_sha256.clone(),
+-        frozen_case_and_native_setup_sha256:a.native_setup_sha256.clone(),
++        case_id:a.case_id,matched_current_sha256:current.into(),actual_executing_elf_sha256:start.evaluator_sha256.clone(),
++        frozen_case_and_native_setup_sha256:a.native_setup_sha256,
+         actual_boot_environment_hardware_and_seed_sha256:common,independent_disposition_sha256:start.case_pair_sha256.clone(),
+         selected_reference_state_sha256:e.state_window_sha256.clone(),
+         selected_reference_complete_projected_rows_sha256:e.ordinary_action_evidence_sha256.clone(),
+@@ -794,479 +779,3 @@
+         assert!(!actual_fork(&root,&foil));
+     }
+ }
+-
+-/// Note19-v82 only. This is a different, explicitly selected input ABI; no
+-/// rewrite of original lifecycle bytes and no fallback from a malformed v5 wire.
+-#[cfg(all(target_os="linux",feature="retained-prefork-timing-diagnostic-v1"))]
+-mod v5_lifecycle {
+-    use super::*;
+-    use std::{collections::BTreeSet, os::unix::fs::{MetadataExt,OpenOptionsExt}};
+-    use super::super::ordinary_ingress_native_custody::{HostStart,ProcessKey,VerifiedStockV11Profile};
+-
+-    const LEGACY:&str="qualia.private.note19.sealed_same_case_timing_parents.v1";
+-    const V5:&str="qualia.private.note19.sealed_same_case_actual_v5_timing_parents.v1";
+-
+-    #[derive(Deserialize)]
+-    struct Tag{schema:String}
+-    #[derive(Deserialize)]
+-    #[serde(deny_unknown_fields)]
+-    pub(super) struct V5Pair {
+-        schema:String,
+-        pub(super) pair:Acceptance,
+-        actual_exec_argv_sha256:[String;2],
+-        actual_driver_sha256:String,
+-        exact_source_anchor_sha256:String,
+-        independently_accepted_originals:[String;2],
+-        exact_owner_original_readbacks:[String;2],
+-        exact_timing_relation_sha256:String,
+-    }
+-    pub(super) enum Input { Legacy(Acceptance), Current(V5Pair) }
+-    impl Input{
+-        pub(super) fn pair(&self)->&Acceptance {
+-            match self {Self::Legacy(a)=>a,Self::Current(v)=>&v.pair}
+-        }
+-    }
+-
+-    type EnvIds=BTreeMap<String,(u64,u64,u32,u32)>;
+-
+-    #[derive(Clone,Copy,Debug,PartialEq,Eq,Deserialize)]
+-    #[serde(rename_all="snake_case")]
+-    enum OriginalRole {DefaultOff,FoilDefaultOff,RootReference,FoilReference}
+-    impl OriginalRole {
+-        fn schema(self)->&'static str {
+-            match self {
+-                Self::DefaultOff=>"qualia.private.note19.prefork_v5.stock_default_off_reap.v1",
+-                Self::FoilDefaultOff=>"qualia.private.note19.prefork_v5.stock_foil_default_off_reap.v1",
+-                Self::RootReference=>"qualia.private.note19.prefork_v5.stock_root_reference_reap.v1",
+-                Self::FoilReference=>"qualia.private.note19.prefork_v5.stock_foil_reference_reap.v1",
+-            }
+-        }
+-        fn is_ref(self)->bool{matches!(self,Self::RootReference|Self::FoilReference)}
+-        fn is_foil(self)->bool{matches!(self,Self::FoilDefaultOff|Self::FoilReference)}
+-    }
+-    #[derive(Deserialize,PartialEq)]
+-    #[serde(deny_unknown_fields)]
+-    struct Quiet {samples:u32,elapsed_seconds:f64,minimum_disk_bytes:u64,minimum_ram_kib:u64}
+-    #[derive(Deserialize)]
+-    #[serde(deny_unknown_fields)]
+-    struct Census {native_seen:bool,verified_restarts:u64}
+-    fn present<'de,D:serde::Deserializer<'de>,T:Deserialize<'de>>(d:D)->std::result::Result<Option<T>,D::Error>{
+-        T::deserialize(d).map(Some)
+-    }
+-    #[derive(Deserialize)]
+-    #[serde(deny_unknown_fields)]
+-    struct Event {
+-        schema:String, role:OriginalRole, run_id:String, case:String, child:ProcessKey, parent:ProcessKey,
+-        started_utc:String, boot:String, fence:[u64;2], root_ticket_sha256:String, manifest_sha256:String,
+-        keeper_evaluator_sha256:String,parent_source_current_sha256:String,actual_proc_argv_sha256:String,
+-        actual_proc_cwd:String,actual_proc_environment_sha256:String,actual_inherited_locked_ofd:bool,
+-        fresh_empty_env_identities:EnvIds,real_post_source_quiet:Quiet,sampler_before:serde_json::Value,
+-        same_elf_zero_exact_owner_readback_sha256:String,same_elf_zero_independent_sha256:String,
+-        no_official_state_changed:bool,scorecard_eligible:bool,stock_only_no_score:bool,
+-        root_actual_independent_sha256:Option<String>,root_actual_owner_readback_sha256:Option<String>,
+-        runtime_fork_prescribed:Option<bool>,
+-        reaped_utc:Option<String>,actual_process_group_reaped:Option<bool>,actual_driver_map_samples:Option<u64>,
+-        driver_sha256:Option<String>,exit_code:Option<i32>,
+-        #[serde(default,deserialize_with="present")] stop:Option<Option<String>>,
+-        supervision_dirty:Option<bool>,clean_stock_native_candidate:Option<bool>,
+-        clean_digest_only_reference_candidate:Option<bool>,output_raw_sha256:Option<BTreeMap<String,String>>,
+-        stderr_sha256:Option<String>,stdout_sha256:Option<String>,terminal_resources:Option<[u64;2]>,
+-        min_live_resources:Option<[u64;2]>,census:Option<Census>,
+-    }
+-    #[derive(Deserialize)]
+-    #[serde(deny_unknown_fields)]
+-    struct Fence {
+-        actual_process_group_reaped:bool,actual_shared_fence_released_utc:String,
+-        authentic_off_reference_pair_proven:bool,boot:String,clean_fence_release:bool,fence:[u64;2],
+-        next_role_authorized:bool,process_sha256:String,role:OriginalRole,root_ticket_sha256:String,run_id:String,
+-    }
+-    #[derive(Deserialize)]
+-    #[serde(deny_unknown_fields)]
+-    struct SourceProof {
+-        schema:String,current_sha256:String,evaluator_sha256:String,source_opening_world_sha256:String,
+-        source_assets:BTreeMap<String,String>, independently_sealed_source_zero_sha256:String,
+-        exact_source_owner_readback_sha256:String,descriptor_sha256:String,
+-        independently_verified_original_source:bool,authorizes_next:bool,
+-    }
+-    #[derive(Deserialize)]
+-    #[serde(deny_unknown_fields)]
+-    struct Independent {
+-        schema:String,current_sha256:String,evaluator_sha256:String,case_id:String,
+-        off_process:String,reference_process:String,off_release:String,reference_release:String,
+-        raw_finals:[String;2],complete_projected_rows_sha256:String,scope_sha256:String,
+-        exact_source_anchor_sha256:String,independently_accepted_originals:[String;2],
+-        exact_owner_original_readbacks:[String;2],exact_timing_relation_sha256:String,
+-        can_grant_capture_or_continuation_or_score:bool,
+-    }
+-
+-    fn pin(s:&str)->bool{is_sha(s)&&s.bytes().any(|v|v!=b'0')}
+-    fn snap(m:&fs::Metadata)->(u64,u64,u32,u32,u64,u64,i64,i64,i64,i64){
+-        (m.dev(),m.ino(),m.uid(),m.mode(),m.nlink(),m.len(),m.mtime(),m.mtime_nsec(),m.ctime(),m.ctime_nsec())
+-    }
+-    fn v5_owner(m:&fs::Metadata)->Result<()>{
+-        if m.uid()!=fs::metadata("/proc/self")?.uid()||m.nlink()!=1{
+-            return Err("actual v5 original owner or link count refused".into());
+-        }
+-        Ok(())
+-    }
+-    fn open_original(path:&Path,cap:u64,v5:bool)->Result<(fs::File,fs::Metadata)>{
+-        // Baseline read conditions deliberately preserve accepted legacy
+-        // canonical, private regular bytes. Owner/nlink are v5-only.
+-        let m=fs::symlink_metadata(path)?;
+-        if path.canonicalize()?!=path || !m.is_file() || m.mode()&0o077!=0 || m.len()==0 || m.len()>cap{
+-            return Err("Note19 bounded canonical private regular input required".into());
+-        }
+-        if v5{v5_owner(&m)?;}
+-        // Linux O_NOFOLLOW | O_NONBLOCK. A FIFO substituted after lstat
+-        // cannot hang the open. Never read until the opened FD is the
+-        // exact initial regular inode; a nonblocking FIFO FD is refused.
+-        const FLAGS:i32=0x20000|0o4000;
+-        let f=fs::OpenOptions::new().read(true).custom_flags(FLAGS).open(path)?;
+-        if snap(&f.metadata()?)!=snap(&m){return Err("actual protected original changed at open".into());}
+-        Ok((f,m))
+-    }
+-    fn safe_original(path:&Path,cap:u64)->Result<(fs::File,fs::Metadata)>{
+-        open_original(path,cap,true)
+-    }
+-    fn stable(f:&fs::File,path:&Path,m:&fs::Metadata)->Result<()>{
+-        if snap(&f.metadata()?)!=snap(m)||snap(&fs::symlink_metadata(path)?)!=snap(m){
+-            return Err("actual protected original inode changed while read or decoded".into());
+-        }
+-        Ok(())
+-    }
+-    fn held_bytes(f:&fs::File,m:&fs::Metadata,expected:&str,cap:u64)->Result<Vec<u8>>{
+-        let mut b=Vec::with_capacity(m.len() as usize);
+-        f.take(cap+1).read_to_end(&mut b)?;
+-        if b.len() as u64!=m.len()||digest(&b)!=expected{
+-            return Err("actual protected original byte hash changed".into());
+-        }
+-        Ok(b)
+-    }
+-    fn hashed<T:serde::de::DeserializeOwned>(path:&Path,expected:&str,cap:u64)->Result<T>{
+-        if !pin(expected){return Err("actual v5 independent original pin required".into());}
+-        let (f,m)=safe_original(path,cap)?;
+-        let b=held_bytes(&f,&m,expected,cap)?;
+-        let v=serde_json::from_slice(&b)?;
+-        stable(&f,path,&m)?;
+-        Ok(v)
+-    }
+-    // No blocking legacy probe. Discriminator and selected full role use
+-    // the same authenticated bytes from one still-held checked descriptor.
+-    pub(super) fn read(path:&Path,expected:&str)->Result<Input>{
+-        let (f,m)=open_original(path,SMALL,false)?;
+-        let b=held_bytes(&f,&m,expected,SMALL)?;
+-        let kind:Tag=serde_json::from_slice(&b)?;
+-        let input=match kind.schema.as_str(){
+-            LEGACY=>Input::Legacy(serde_json::from_slice(&b)?),
+-            V5=>{
+-                if !pin(expected){return Err("actual v5 independent ancestor pin required".into());}
+-                v5_owner(&m)?;
+-                Input::Current(serde_json::from_slice(&b)?)
+-            }
+-            _=>return Err("unknown typed Note19 lifecycle ancestry version".into()),
+-        };
+-        stable(&f,path,&m)?;
+-        Ok(input)
+-    }
+-    fn dir_id(p:&Path)->Result<(u64,u64,u32,u32)>{
+-        let m=fs::symlink_metadata(p)?;
+-        if p.canonicalize()?!=p || !m.is_dir() || m.uid()!=fs::metadata("/proc/self")?.uid()
+-          || m.mode()&0o7777!=0o700 || m.ino()==0 {
+-            return Err("v5 protected private cohort/closed env dir changed".into());
+-        }
+-        Ok((m.dev(),m.ino(),m.uid(),m.mode()&0o7777))
+-    }
+-    fn env_ids(room:&Path)->Result<EnvIds>{
+-        let d=room.join("closed-exec-env");
+-        let mut out=BTreeMap::new();
+-        out.insert(".".to_owned(),dir_id(&d)?);
+-        for n in ["cache","home","runtime","tmp"]{out.insert(n.to_owned(),dir_id(&d.join(n))?);}
+-        if fs::read_dir(d)?.count()!=4 || out.values().map(|s|(s.0,s.1)).collect::<BTreeSet<_>>().len()!=5{
+-            return Err("v5 actual closed environment aliases".into());
+-        }
+-        Ok(out)
+-    }
+-    fn totals(v:Option<[u64;2]>)->bool{v.is_some_and(|a|a[0]>=9_900_000_000&&a[1]>=5_242_880)}
+-    fn same_event(a:&Event,b:&Event)->bool{
+-        a.schema==b.schema && a.role==b.role && a.run_id==b.run_id&&a.case==b.case
+-        && a.child==b.child&&a.parent==b.parent&&a.started_utc==b.started_utc&&a.boot==b.boot&&a.fence==b.fence
+-        && a.root_ticket_sha256==b.root_ticket_sha256&&a.manifest_sha256==b.manifest_sha256
+-        && a.keeper_evaluator_sha256==b.keeper_evaluator_sha256&&a.parent_source_current_sha256==b.parent_source_current_sha256
+-        && a.actual_proc_argv_sha256==b.actual_proc_argv_sha256
+-        && a.actual_proc_cwd==b.actual_proc_cwd&&a.actual_proc_environment_sha256==b.actual_proc_environment_sha256
+-        && a.actual_inherited_locked_ofd&&b.actual_inherited_locked_ofd
+-        && a.fresh_empty_env_identities==b.fresh_empty_env_identities&&a.real_post_source_quiet==b.real_post_source_quiet
+-        && a.sampler_before==b.sampler_before
+-        && a.same_elf_zero_exact_owner_readback_sha256==b.same_elf_zero_exact_owner_readback_sha256
+-        && a.same_elf_zero_independent_sha256==b.same_elf_zero_independent_sha256
+-        && a.no_official_state_changed&&b.no_official_state_changed&&!a.scorecard_eligible&&!b.scorecard_eligible
+-        && a.stock_only_no_score&&b.stock_only_no_score
+-        && a.root_actual_independent_sha256==b.root_actual_independent_sha256
+-        && a.root_actual_owner_readback_sha256==b.root_actual_owner_readback_sha256
+-        && a.runtime_fork_prescribed==b.runtime_fork_prescribed
+-    }
+-    fn started_only(s:&Event)->bool {
+-        s.reaped_utc.is_none()&&s.actual_process_group_reaped.is_none()&&s.actual_driver_map_samples.is_none()
+-        &&s.driver_sha256.is_none()&&s.exit_code.is_none()&&s.stop.is_none()&&s.supervision_dirty.is_none()
+-        &&s.clean_stock_native_candidate.is_none()&&s.clean_digest_only_reference_candidate.is_none()
+-        &&s.output_raw_sha256.is_none()&&s.stderr_sha256.is_none()&&s.stdout_sha256.is_none()
+-        &&s.terminal_resources.is_none()&&s.min_live_resources.is_none()&&s.census.is_none()
+-    }
+-    fn terminal(p:&Event,f:&Fence)->bool{
+-        p.actual_process_group_reaped==Some(true)&&f.actual_process_group_reaped&&f.clean_fence_release
+-        &&!f.next_role_authorized&&!f.authentic_off_reference_pair_proven&&p.exit_code==Some(0)
+-        &&p.stop==Some(None)&&p.supervision_dirty==Some(false)&&p.actual_driver_map_samples.is_some_and(|x|x>0)
+-        &&p.census.as_ref().is_some_and(|c|c.native_seen&&c.verified_restarts<=3)
+-        &&totals(p.terminal_resources)&&totals(p.min_live_resources)
+-        &&(if p.role.is_ref(){p.clean_digest_only_reference_candidate==Some(true)&&p.clean_stock_native_candidate.is_none()}
+-           else{p.clean_stock_native_candidate==Some(true)&&p.clean_digest_only_reference_candidate.is_none()})
+-    }
+-    fn environment_keys(m:&EnvIds)->BTreeSet<(u64,u64)>{m.values().map(|x|(x.0,x.1)).collect()}
+-
+-    type Endpoint=super::super::ordinary_ingress_timing_relation::Endpoint;
+-
+-    fn exact_raw_rows(path:&Path,h:&Arm,a:&Acceptance)->Result<(String,Vec<ForkFrame>)>{
+-        use super::super::ordinary_ingress_row_parity as parity;
+-        let (f,m)=safe_original(path,NATIVE_ROWS)?;
+-        let mut stream=BufReader::with_capacity(64<<10,f);
+-        let (mut raw,mut projected)=(Sha256::new(),Sha256::new());
+-        let mut line=Vec::new();let mut count=0u64;let mut fork=Vec::new();
+-        for i in 0..256 {
+-            line.clear();
+-            let n=(&mut stream).take(parity::MAX_ROW_BYTES as u64+1).read_until(b'\n',&mut line)?;
+-            count=count.checked_add(n as u64).ok_or("v5 bounded stable original row extent")?;
+-            if count>m.len()||n==0||n>parity::MAX_ROW_BYTES as usize{
+-                return Err("v5 exact original row bound or missing decision".into());
+-            }
+-            let tick=a.window_start_tick.checked_add(i as u64).ok_or("v5 decision range overflow")?;
+-            raw.update(&line);
+-            parity::update(&mut projected,&line,i,a.owner,tick)?;
+-            if h.role==Role::DefaultOff&&i<7{fork.push(material_fork_row(&line,tick,a.owner)?);}
+-        }
+-        if count!=m.len()||!stream.fill_buf()?.is_empty()||format!("{:x}",raw.finalize())!=h.rows_sha256{
+-            return Err("v5 full raw original row SHA/coverage differs".into());
+-        }
+-        stable(stream.get_ref(),path,&m)?;
+-        Ok((format!("{:x}",projected.finalize()),fork))
+-    }
+-
+-    fn exact_raw_timing(path:&Path,h:&Arm,a:&Acceptance)->Result<Endpoint>{
+-        let (f,m)=safe_original(path,64<<20)?;
+-        let mut bytes=Vec::with_capacity(m.len() as usize);
+-        (&f).take(m.len()+1).read_to_end(&mut bytes)?;
+-        if bytes.len() as u64!=m.len(){return Err("v5 exact portable original grew or truncated".into());}
+-        let tick=a.window_start_tick.checked_add(256).ok_or("v5 portable tick overflow")?;
+-        let relation=super::super::ordinary_ingress_timing_relation::endpoint(
+-               &bytes,&h.final_checkpoint_sha256,a.owner,tick)?;
+-        // Same owner-only FD spans full header/body hash and typed timing decode.
+-        stable(&f,path,&m)?;
+-        Ok(relation)
+-    }
+-
+-    pub(super) struct ObservedTiming {
+-        pub(super) child:Child, pub(super) exact_hardware:serde_json::Value,
+-        pub(super) exact_sampler_after:serde_json::Value,
+-        pub(super) reference_evidence:Option<ReferenceEvidence>,
+-        env:Option<EnvIds>, argv:Option<String>, anchors:Option<String>,
+-        fnormalized:String, started:String, released:String,
+-        raw_timing:Option<Endpoint>,first_fork_rows:Option<Vec<ForkFrame>>,
+-    }
+-    impl From<Observed> for ObservedTiming{
+-        fn from(v:Observed)->Self{
+-            Self{child:v.process.child,exact_hardware:v.exact_hardware,exact_sampler_after:v.exact_sampler_after,
+-                 reference_evidence:v.reference_evidence,env:None,argv:None,anchors:None,
+-                 fnormalized:v.normalized_rows_sha256,started:v.process.started_at_utc,
+-                 released:v.release.actual_shared_fence_released_utc,raw_timing:None,first_fork_rows:None}
+-        }
+-    }
+-    pub(super) fn cross_distinct(xs:[&ObservedTiming;4])->bool{
+-        let ids=xs.iter().filter_map(|x|x.env.as_ref()).collect::<Vec<_>>();
+-        if ids.is_empty(){return true;} // Exact unchanged legacy pair parser.
+-        let all=ids.iter().flat_map(|q|environment_keys(q)).collect::<BTreeSet<_>>();
+-        let argv=xs.iter().filter_map(|q|q.argv.as_ref()).collect::<BTreeSet<_>>();
+-        let anchors=xs.iter().filter_map(|q|q.anchors.as_ref()).collect::<BTreeSet<_>>();
+-        // Every actual interval is checked against every other, not only the
+-        // two same-case orderings. Equal release/start is not a proven handoff.
+-        let proper=xs.iter().all(|p|p.started<p.released);
+-        let serial=xs.iter().enumerate().all(|(i,p)|
+-           xs[..i].iter().all(|q|q.released<p.started||p.released<q.started));
+-        ids.len()==4&&all.len()==20&&argv.len()==4&&anchors.len()==1&&proper&&serial
+-    }
+-
+-    pub(super) fn fork_rows(root:&Path,a:&Acceptance,off:&mut ObservedTiming)->Result<Vec<ForkFrame>>{
+-        match off.first_fork_rows.take() {
+-            Some(r) if r.len()==7=>Ok(r),
+-            None if off.env.is_none()=>real_fork_rows(root,a,a.window_start_tick),
+-            _=>Err("v5 actual raw rows custody not complete; no reopen fallback".into()),
+-        }
+-    }
+-
+-    pub(super) fn timed_original(root:&Path,a:&Acceptance,h:&Arm,w:&mut ObservedTiming)->Result<Endpoint>{
+-        match w.raw_timing.take(){
+-            Some(x)=>Ok(x),
+-            None if w.env.is_none()=>timing_final(root,h,a.owner,a.window_start_tick+256),
+-            _=>Err("v5 actual raw timing custody not complete; no reopen fallback".into()),
+-        }
+-    }
+-
+-    fn arm(root:&Path,a:&Acceptance,h:&Arm,v:&V5Pair,src:&SourceProof,which:usize,
+-           start:&HostStart,profile:&VerifiedStockV11Profile)->Result<ObservedTiming>{
+-        if !id(&h.relative_room)||!id(&h.run_id){return Err("unknown literal v5 ancestor room/run".into());}
+-        let room=checked_path(root,&h.relative_room)?;
+-        let root_uid=dir_id(root)?.2;
+-        if dir_id(&room)?.2!=root_uid {return Err("wrong v5 original owner".into());}
+-        let s:Event=hashed(&room.join("started.json"),&h.started_sha256,SMALL)?;
+-        let p:Event=hashed(&room.join("process.json"),&h.process_sha256,SMALL)?;
+-        let f:Fence=hashed(&room.join("fence-release.json"),&h.release_sha256,SMALL)?;
+-        let expected_ref=h.role==Role::Reference;
+-        let argv=&v.actual_exec_argv_sha256[which];
+-        if !same_event(&s,&p)||!started_only(&s)||!terminal(&p,&f)
+-          || p.schema!=p.role.schema()||p.role!=f.role||p.role.is_ref()!=expected_ref
+-          || p.role.is_foil()!=(a.case_id==profile.foil_case)
+-          || p.boot!=start.boot||f.boot!=start.boot||p.fence!=[start.fence_device,start.fence_inode]||p.fence!=f.fence
+-          || p.run_id!=h.run_id||f.run_id!=h.run_id||p.case!=a.case_id
+-          || p.root_ticket_sha256!=h.authority_sha256||f.root_ticket_sha256!=h.authority_sha256
+-          || f.process_sha256!=h.process_sha256||p.manifest_sha256!=h.manifest_sha256
+-          || p.keeper_evaluator_sha256!=a.evaluator_sha256||p.parent_source_current_sha256!=a.current_sha256
+-          || p.actual_proc_argv_sha256.as_str()!=argv.as_str()||p.actual_proc_environment_sha256!=start.raw_proc_environ_sha256
+-          || Path::new(&p.actual_proc_cwd)!=root||p.driver_sha256.as_deref()!=Some(v.actual_driver_sha256.as_str())
+-          || p.child.pid<2||p.child.ppid!=p.parent.pid||p.child.pid!=p.child.pgrp||p.child.pid!=p.child.session
+-          || p.child.start_ticks<p.parent.start_ticks||p.parent.start_ticks==0||!p.child.namespace.starts_with("pid:[")
+-          || p.child.namespace!=p.parent.namespace||p.child.same(&start.child)
+-          || p.same_elf_zero_independent_sha256!=src.independently_sealed_source_zero_sha256
+-          || p.same_elf_zero_exact_owner_readback_sha256!=src.exact_source_owner_readback_sha256
+-          || p.runtime_fork_prescribed!=(if p.role.is_foil(){Some(false)}else{None})
+-          || [p.root_actual_independent_sha256.as_deref(),p.root_actual_owner_readback_sha256.as_deref()]
+-               .iter().any(|q|if p.role.is_foil(){!q.is_some_and(pin)}else{q.is_some()})
+-          || p.real_post_source_quiet.samples!=129||p.real_post_source_quiet.elapsed_seconds<16.
+-          || !p.real_post_source_quiet.elapsed_seconds.is_finite()
+-          || p.real_post_source_quiet.minimum_disk_bytes<10_424_142_016
+-          || p.real_post_source_quiet.minimum_ram_kib<6_300_000
+-          || p.fresh_empty_env_identities!=env_ids(&room)?
+-          || !fixed_utc(&p.started_utc)||!fixed_utc(&f.actual_shared_fence_released_utc)
+-          || !fixed_utc(&start.actual_start_utc)
+-          || p.reaped_utc.as_ref().is_none_or(|s|!fixed_utc(s)||s<=&p.started_utc||s>&f.actual_shared_fence_released_utc)
+-          || f.actual_shared_fence_released_utc>=start.actual_start_utc{
+-            return Err("same-ELF v5 actual original start/reap/fence/role/owner/env refused".into());
+-        }
+-        let hashes=p.output_raw_sha256.as_ref().ok_or("no v5 actual raw original hashes")?;
+-        if hashes.len()!=3
+-           || hashes.get("rows.jsonl")!=Some(&h.rows_sha256)
+-           || hashes.get("retention.json")!=Some(&h.native_receipt_sha256)
+-           || hashes.get("final.alife-checkpoint")!=Some(&h.final_checkpoint_sha256)
+-           || !p.stdout_sha256.as_deref().is_some_and(pin)||!p.stderr_sha256.as_deref().is_some_and(pin){
+-            return Err("v5 actual raw native asset hash missing".into());
+-        }
+-        let ticket:serde_json::Value=hashed(&room.join("root-authority.json"),&h.authority_sha256,SMALL)?;
+-        let t=ticket.as_object().ok_or("v5 authority not an object")?;
+-        let field=|n:&str|t.get(n).and_then(serde_json::Value::as_str);
+-        if field("run_id")!=Some(h.run_id.as_str())||field("case")!=Some(a.case_id.as_str())
+-          || field("evaluator_sha256")!=Some(a.evaluator_sha256.as_str())||field("current_sha256")!=Some(a.current_sha256.as_str())
+-          || field("manifest_sha256")!=Some(h.manifest_sha256.as_str())||field("boot_id")!=Some(p.boot.as_str())
+-          || field("raw_proc_environ_sha256")!=Some(p.actual_proc_environment_sha256.as_str())
+-          || t.get("root_operator_authorization").and_then(serde_json::Value::as_bool)!=Some(true)
+-          || t.get("scorecard_eligible").and_then(serde_json::Value::as_bool)!=Some(false)
+-          || t.get("fence_device").and_then(serde_json::Value::as_u64)!=Some(p.fence[0])
+-          || t.get("fence_inode").and_then(serde_json::Value::as_u64)!=Some(p.fence[1]){
+-            return Err("v5 original independently hashed authority scope mismatch".into());
+-        }
+-        let m:serde_json::Value=hashed(&room.join("experiment.json"),&h.manifest_sha256,SMALL)?;
+-        manifest(&m,h,a)?;
+-        let out=checked_path(&room,"native-output")?;
+-        let r:serde_json::Value=hashed(&out.join("retention.json"),&h.native_receipt_sha256,NATIVE_JSON)?;
+-        native(&r,h,a)?;
+-        if r["sampling_before"]!=p.sampler_before{return Err("real original v5 sampler differs from checked start".into());}
+-        let semantic=r["retained_experiment"]["identity"]["semantic_settings_sha256"].as_str().filter(|s|pin(s))
+-            .ok_or("real native v5 case semantic unbound")?;
+-        let computed=digest(&serde_json::to_vec(&(super::super::ordinary_ingress_observer::PURPOSE,semantic,a.evaluation_nonce,a.window_start_tick))?);
+-        if computed!=a.scope_sha256{return Err("real native v5 case scope differs".into());}
+-        let (projected,fork_rows)=exact_raw_rows(&out.join("rows.jsonl"),h,a)?;
+-        let raw_timing=exact_raw_timing(&out.join("final.alife-checkpoint"),h,a)?;
+-        let ev=if expected_ref{
+-            let measured=&r["ordinary_ingress_observation_v1"];
+-            let e=ReferenceEvidence{
+-                state_window_sha256:measured["state_window_sha256"].as_str().filter(|s|pin(s)).ok_or("missing v5 digest Reference exact state")?.to_owned(),
+-                ordinary_action_evidence_sha256:projected.clone(),exact_native_endpoint_sha256:h.final_checkpoint_sha256.clone(),
+-                persisted_continuation:PersistedContinuation::deserialize(&r["final_endpoint"]["ordinary_ingress_persisted_continuation_v1"])?,
+-            };
+-            if measured["raw_proc_environ_sha256"]!=p.actual_proc_environment_sha256
+-              || r["retained_experiment"]["identity"]["ordinary_ingress"]["raw_proc_environ_sha256"]!=p.actual_proc_environment_sha256
+-              || measured["ordinary_action_evidence_sha256"]!=projected
+-              || PersistedContinuation::deserialize(&measured["persisted_continuation"])?!=e.persisted_continuation
+-              || e.parity()!=a.parity_sha256 || out.join("ordinary-ingress-observation.v1.bin").symlink_metadata().is_ok(){
+-                return Err("v5 original Reference actual digest or no-export shape mismatch".into());
+-            }
+-            Some(e)
+-        }else{None};
+-        // Only verified projections leave the held original FDs. Neither raw path
+-        // is reopened for the v5 fork or timing relation; no constructed old receipt.
+-        Ok(ObservedTiming{
+-            child:Child{pid:p.child.pid,ppid:p.child.ppid,pgrp:p.child.pgrp,session:p.child.session,
+-                namespace:p.child.namespace,proc_start_ticks:p.child.start_ticks},
+-            exact_hardware:r["hardware"].clone(),exact_sampler_after:r["sampling_after"].clone(),
+-            reference_evidence:ev,env:Some(p.fresh_empty_env_identities),argv:Some(p.actual_proc_argv_sha256),
+-            anchors:Some(v.exact_source_anchor_sha256.clone()),fnormalized:projected,started:p.started_utc,
+-            released:f.actual_shared_fence_released_utc,raw_timing:Some(raw_timing),
+-            first_fork_rows:if expected_ref{None}else{Some(fork_rows)},
+-        })
+-    }
+-
+-    pub(super) fn compare(root:&Path,input:&Input,run:&str,start:&HostStart,profile:&VerifiedStockV11Profile)
+-        ->Result<(ObservedTiming,ObservedTiming)>{
+-        let v=match input {
+-            Input::Legacy(a)=>{let (x,y)=same_new_pair(root,a,run,start,profile)?;return Ok((x.into(),y.into()));}
+-            Input::Current(v)=>v,
+-        };
+-        let a=&v.pair;
+-        if v.schema!=V5||a.schema!=V5||!a.independently_accepted||a.scorecard_eligible
+-          ||a.evaluator_sha256!=start.evaluator_sha256||a.window_start_tick!=profile.first
+-          ||a.initial_phenotype_sha256!=profile.initial_phenotype_asset_sha256
+-          ||a.compiled_sensor_profile!="GroundedTerrainVisionV1"||a.off.role!=Role::DefaultOff||a.reference.role!=Role::Reference
+-          ||a.off.run_id==a.reference.run_id||a.off.run_id==run||a.reference.run_id==run||a.off.relative_room==a.reference.relative_room
+-          ||a.off.authority_sha256==a.reference.authority_sha256||a.off.manifest_sha256==a.reference.manifest_sha256
+-          ||a.off.started_sha256==a.reference.started_sha256||a.off.process_sha256==a.reference.process_sha256
+-          ||a.off.release_sha256==a.reference.release_sha256||a.off.rows_sha256==a.reference.rows_sha256
+-          ||a.off.native_receipt_sha256==a.reference.native_receipt_sha256||a.off.final_checkpoint_sha256==a.reference.final_checkpoint_sha256
+-          ||v.actual_exec_argv_sha256[0]==v.actual_exec_argv_sha256[1]||v.independently_accepted_originals[0]==v.independently_accepted_originals[1]
+-          ||v.exact_owner_original_readbacks[0]==v.exact_owner_original_readbacks[1]
+-          ||![&a.scope_sha256,&a.current_sha256,&a.independent_verifier_sha256,&a.independent_comparison_sha256,
+-               &a.native_setup_sha256,&a.sampling_sha256,&a.parity_sha256,&a.opening_world_sha256,&a.initial_phenotype_sha256,
+-               &v.actual_driver_sha256,&v.exact_source_anchor_sha256,&v.exact_timing_relation_sha256]
+-             .into_iter().chain(v.actual_exec_argv_sha256.iter()).chain(v.independently_accepted_originals.iter())
+-             .chain(v.exact_owner_original_readbacks.iter()).all(|s|pin(s)){
+-            return Err("explicit actual v5 ancestry requires exact two separately accepted original stock roles".into());
+-        }
+-        let source:SourceProof=hashed(&root.join("note19-v5-original-source-anchor.json"),&v.exact_source_anchor_sha256,SMALL)?;
+-        let ph=source.source_assets.iter().filter(|(k,_)|k.starts_with("gpu-brain/phenotype-")).map(|(_,q)|q.as_str()).collect::<Vec<_>>();
+-        if source.schema!="qualia.private.note19.original_v5_source_anchor.v1"||source.current_sha256!=a.current_sha256
+-          ||source.evaluator_sha256!=a.evaluator_sha256||source.source_opening_world_sha256!=a.opening_world_sha256
+-          ||source.descriptor_sha256!=profile.source_descriptor_sha256||source.source_assets.len()!=13
+-          ||ph.as_slice()!=[a.initial_phenotype_sha256.as_str()]
+-          ||!source.source_assets.values().all(|s|pin(s))||!pin(&source.independently_sealed_source_zero_sha256)
+-          ||!pin(&source.exact_source_owner_readback_sha256)||!source.independently_verified_original_source||source.authorizes_next{
+-            return Err("independently pinned original v5 source anchors absent or false".into());
+-        }
+-        rehash(&checked_path(root,"note19-independent-verifier.source")?,&a.independent_verifier_sha256,VERIFIER_SOURCE)?;
+-        let n:Independent=hashed(&root.join(if a.case_id==profile.primary_case{"note19-root-independent-comparison.json"}
+-            else{"note19-foil-independent-comparison.json"}),&a.independent_comparison_sha256,SMALL)?;
+-        if n.schema!="qualia.private.note19.independent_actual_v5_same_case_projection.v1"
+-          ||n.current_sha256!=a.current_sha256||n.evaluator_sha256!=a.evaluator_sha256||n.case_id!=a.case_id
+-          ||n.off_process!=a.off.process_sha256||n.reference_process!=a.reference.process_sha256
+-          ||n.off_release!=a.off.release_sha256||n.reference_release!=a.reference.release_sha256
+-          ||n.raw_finals!=[a.off.final_checkpoint_sha256.clone(),a.reference.final_checkpoint_sha256.clone()]
+-          ||n.scope_sha256!=a.scope_sha256||n.can_grant_capture_or_continuation_or_score
+-          ||n.exact_source_anchor_sha256!=v.exact_source_anchor_sha256
+-          ||n.independently_accepted_originals!=v.independently_accepted_originals
+-          ||n.exact_owner_original_readbacks!=v.exact_owner_original_readbacks
+-          ||n.exact_timing_relation_sha256!=v.exact_timing_relation_sha256||!pin(&n.complete_projected_rows_sha256){
+-            return Err("actual v5 independent per-case original scope or custody changed".into());
+-        }
+-        let x=arm(root,a,&a.off,v,&source,0,start,profile)?;
+-        let y=arm(root,a,&a.reference,v,&source,1,start,profile)?;
+-        if x.child==y.child||x.released>=y.started||x.exact_sampler_after!=y.exact_sampler_after
+-          ||x.exact_hardware!=y.exact_hardware||x.fnormalized!=n.complete_projected_rows_sha256||y.fnormalized!=n.complete_projected_rows_sha256{
+-            return Err("actual separate v5 same-case custody, role, rows or sampler compare false".into());
+-        }
+-        Ok((x,y))
+-    }
+-}
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_native_custody.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_native_custody.rs
+--- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_native_custody.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_native_custody.rs
+@@ -191,7 +191,6 @@
+ pub(super) struct VerifiedStockV11Profile {
+     pub primary_case:String,pub foil_case:String,pub first:u64,pub fork:u64,pub owner:u64,
+     pub phenotype_identity_sha256:String,pub initial_phenotype_asset_sha256:String,
+-    pub source_descriptor_sha256:String,
+     pub axes:[u32;8],pub branch_count:usize,pub rows:[V11Expectation;3],
+     pub speech_input:u32,pub speech_output:u32,pub canonical_payload:u32,
+     pub base_recurrent:u32,pub live_prefix_insertion:u32,
+@@ -289,7 +288,6 @@
+     }
+     Ok(VerifiedStockV11Profile{primary_case:w.primary_case,foil_case:w.foil_case,first:w.first,fork:w.fork,owner:w.owner,
+         phenotype_identity_sha256:w.phenotype_identity_sha256,initial_phenotype_asset_sha256:w.initial_phenotype_asset_sha256,
+-        source_descriptor_sha256:w.source_descriptor_sha256,
+         axes:w.axes,branch_count:w.branch_count,rows:w.rows,speech_input:w.speech_input,speech_output:w.speech_output,
+         canonical_payload:w.canonical_payload,base_recurrent:w.base_recurrent,live_prefix_insertion:w.live_prefix_insertion,
+         _authenticated:()})
