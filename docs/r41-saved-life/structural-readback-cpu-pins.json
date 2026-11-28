@@ -1,0 +1,37 @@
+{
+  "anchor_commit": "c5d250178cb70a10f99f78ebcc974e0ad5533b41",
+  "anchor_tree": "e9844c8237ac5a297f9fe6c21bcf55e8d196323f",
+  "closure_files": 827,
+  "exact_unit_names": [
+    "closed_loop_v11::reciprocal_readback_contract::one_synthetic_native_plan_materialization_does_not_qualify_a_reciprocal_life",
+    "closed_loop_v11::reciprocal_readback_contract::valid_layout_does_not_establish_legal_edges_or_native_authority"
+  ],
+  "lock_sha256": "155699e9274f8890bc8c335669a62de48203ba315a33388a8f0caca71f0f7f37",
+  "manifest_blob": "7010cd90fb587a18cd75c6109d95e5311e5a9a86",
+  "new_features": [],
+  "patch_sha256": "a7737cc87649fea4eced9707c244534d639442cc8fc3b87230781b7d4efbd7c7",
+  "restore_blob": "28b3868f208796f8d2f96a870f7589f1ed0360e5",
+  "restore_parent": "f466b83791cccb97568e6f718b92b052999cfb2b",
+  "restore_parent_tree": "23462813a8d22e80428fa0b9f199b0cfc5654f0e",
+  "schema": "qualia.source_only.structural_readback_cpu.v1",
+  "source": {
+    "crates/alife_gpu_backend/src/closed_loop_v11.rs": {
+      "after": [
+        "64056737f406c3b7def81fc2716809a3806f69b9d8fd9369e0382fb9486057fa",
+        26591
+      ],
+      "before": [
+        "13e3df79e0e20fa18f88e18adc19060c9d8f2da2fe280650a91f45a81f497b3c",
+        26543
+      ]
+    },
+    "crates/alife_gpu_backend/src/closed_loop_v11/reciprocal_readback_contract.rs": {
+      "after": [
+        "fa4ef600d1868d5c9187d94835aa9475fbdaa981cff3c3f881eb0f82bce8a80c",
+        16740
+      ],
+      "before": null
+    }
+  },
+  "unit_filter": "reciprocal_readback_contract::"
+}

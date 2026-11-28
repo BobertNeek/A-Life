@@ -1,0 +1,344 @@
+diff --git a/crates/alife_gpu_backend/src/closed_loop_v11.rs b/crates/alife_gpu_backend/src/closed_loop_v11.rs
+--- a/crates/alife_gpu_backend/src/closed_loop_v11.rs
++++ b/crates/alife_gpu_backend/src/closed_loop_v11.rs
+@@ -712,3 +712,6 @@
+         assert!(GpuV11CausalState::restore(checkpoint).is_err());
+     }
+ }
++
++#[cfg(test)]
++mod reciprocal_readback_contract;
+diff --git a/crates/alife_gpu_backend/src/closed_loop_v11/reciprocal_readback_contract.rs b/crates/alife_gpu_backend/src/closed_loop_v11/reciprocal_readback_contract.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/alife_gpu_backend/src/closed_loop_v11/reciprocal_readback_contract.rs
+@@ -0,0 +1,329 @@
++//! Detached, test-only verifier of engine-facing reciprocal persistence shape.
++//! No writer, device, applicant-supplied authorization, mode, or observation producer.
++//! The caller must *separately* authenticate real directed wake taps, two ordinary sleep
++//! commits, process custody, reserve, and full SCC stability. Stock cannot yet supply
++//! those here or route both projections through its single candidate region.
++
++use super::{GpuLiveTopologyCheckpointV1, GpuV11Checkpoint};
++use alife_core::{
++    BrainCapacityClass, BrainPhenotype, CompiledSynapseKind, LobeKind, ProjectionType,
++    ScaffoldContractError,
++};
++use std::collections::BTreeMap;
++
++type Result<T> = std::result::Result<T, ScaffoldContractError>;
++
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++struct Direction {
++    source: u32,
++    target: u32,
++    route: u16,
++    // Read actual installed bits in a future admitted copy. This module never selects them.
++    installed_bits: u32,
++}
++
++const fn invalid() -> ScaffoldContractError {
++    ScaffoldContractError::InvalidSparseProjectionSchema
++}
++
++fn qualify_recurrent_route(phenotype: &BrainPhenotype, d: Direction) -> Result<()> {
++    let layout = phenotype.lobe_layout();
++    let source = layout.lobe_by_neuron_index(d.source).ok_or_else(invalid)?.kind;
++    let target = layout.lobe_by_neuron_index(d.target).ok_or_else(invalid)?.kind;
++    let expected = match (source, target) {
++        (LobeKind::TemporalPredictive, LobeKind::MemoryInterface) => (9, ProjectionType::FeedForward),
++        (LobeKind::MemoryInterface, LobeKind::TemporalPredictive) => (10, ProjectionType::Feedback),
++        _ => return Err(invalid()),
++    };
++    let p = phenotype.projections().get(usize::from(d.route)).ok_or_else(invalid)?;
++    let (start, count) = p.synapse_range();
++    let end = start.checked_add(count).ok_or_else(invalid)?;
++    let existing = phenotype.synapses().get(start as usize..end as usize).ok_or_else(invalid)?;
++    let weight = f32::from_bits(d.installed_bits);
++    if phenotype.neuron_count() != 2048
++        || d.source == d.target
++        || (d.route, p.projection_type()) != expected
++        || p.route_index() != d.route
++        || p.source_lobe() != source || p.target_lobe() != target
++        || existing.is_empty()
++        || existing.iter().any(|x| x.kind() != CompiledSynapseKind::Recurrent)
++        || !(0.0 < weight && weight <= 1.0)
++        || !phenotype.genetic_weight_sign_policy(CompiledSynapseKind::Recurrent, p.projection_type())
++            .accepts(weight)
++    {
++        return Err(invalid());
++    }
++    Ok(())
++}
++
++fn prove_reciprocal_routes(phenotype: &BrainPhenotype, ab: Direction, ba: Direction) -> Result<()> {
++    if ab.route != 9 || ba.route != 10 || (ab.source, ab.target) != (ba.target, ba.source) {
++        return Err(invalid());
++    }
++    qualify_recurrent_route(phenotype, ab)?;
++    qualify_recurrent_route(phenotype, ba)
++}
++
++type EdgeBits = BTreeMap<(u32, u32), u32>;
++
++fn structural_bits(c: &GpuV11Checkpoint) -> Result<EdgeBits> {
++    c.structural.validate_contract().map_err(|_| invalid())?;
++    if c.structural.connection_count() > 4
++        || c.pending_lifetime_synapse.is_some()
++        || c.work.structural.accepted_edges > 1
++    {
++        return Err(invalid());
++    }
++    let core: EdgeBits = c.structural.connections()
++        .map(|(source, target, weight)| ((source, target), weight.to_bits())).collect();
++    let mut sparse = EdgeBits::new();
++    for span in &c.sparse_spans {
++        for edge in &span.edges {
++            if edge.target != span.target
++                || sparse.insert((edge.source, edge.target), edge.weight.to_bits()).is_some()
++            {
++                return Err(invalid());
++            }
++        }
++    }
++    if sparse != core || core.len() != c.structural.connection_count() {
++        return Err(invalid());
++    }
++    Ok(core)
++}
++
++fn shifted(id: u32, insertion: u32) -> Option<u32> {
++    id.checked_add(u32::from(id >= insertion))
++}
++
++fn shifted_ids(before: &[u32], after: &[u32], insertion: u32) -> bool {
++    before.len() == after.len()
++        && before.iter().zip(after).all(|(&a, &b)| shifted(a, insertion) == Some(b))
++}
++
++fn plus_one_ids(before: &[u32], after: &[u32]) -> bool {
++    before.len() == after.len()
++        && before.iter().zip(after).all(|(&a, &b)| a.checked_add(1) == Some(b))
++}
++
++fn same_serialized<T: serde::Serialize>(left: &T, right: &T) -> Result<bool> {
++    // Use actual wire bytes for V11/branch equality: f32 PartialEq conflates signed zero.
++    let encode = |v: &T| serde_json::to_vec(v).map_err(|_| invalid());
++    Ok(encode(left)? == encode(right)?)
++}
++
++fn words_at(words: &[u32], i: u32) -> Result<[u32; 8]> {
++    let start = (i as usize).checked_mul(8).ok_or_else(invalid)?;
++    let end = start.checked_add(8).ok_or_else(invalid)?;
++    words.get(start..end).ok_or_else(invalid)?.try_into().map_err(|_| invalid())
++}
++
++fn prove_exact_one_materialized_direction(
++    phenotype: &BrainPhenotype,
++    old: &GpuLiveTopologyCheckpointV1,
++    new: &GpuLiveTopologyCheckpointV1,
++    ordinary_reopened: &GpuLiveTopologyCheckpointV1,
++    d: Direction,
++) -> Result<()> {
++    qualify_recurrent_route(phenotype, d)?;
++    let capacity = BrainCapacityClass::production_for_id(phenotype.brain_class_id())?;
++    old.validate_for_capacity(&capacity)?;
++    new.validate_for_capacity(&capacity)?;
++    ordinary_reopened.validate_for_capacity(&capacity)?;
++    let old_rec = old.recurrent_synapse_count;
++    let old_total = old.total_synapse_count;
++    let mut expected_bits = structural_bits(&old.v11_checkpoint)?;
++    if old.phenotype_hash != phenotype.phenotype_hash()
++        || new.phenotype_hash != old.phenotype_hash
++        || new.neuron_count != old.neuron_count
++        || old.neuron_count != phenotype.neuron_count()
++        || old_rec.checked_add(1) != Some(new.recurrent_synapse_count)
++        || old_total.checked_add(1) != Some(new.total_synapse_count)
++        || new.decoder_synapse_count != old.decoder_synapse_count
++        || new != ordinary_reopened
++        || !same_serialized(&new.v11_checkpoint, &ordinary_reopened.v11_checkpoint)?
++        || !same_serialized(&new.v11_checkpoint.dendritic_branches, &old.v11_checkpoint.dendritic_branches)?
++        || [old, new].into_iter().any(|s|
++            (s.total_synapse_count as usize).checked_mul(8) != Some(s.synapse_learning_metadata_words.len())
++                || (s.decoder_synapse_count as usize).checked_mul(8) != Some(s.decoder_eligibility_metadata_words.len()))
++        || new.v11_checkpoint.work.structural.accepted_edges != 1
++        || new.v11_checkpoint.work.structural.pruned_edges != 0
++        || expected_bits.len() >= 4
++        || expected_bits.insert((d.source, d.target), d.installed_bits).is_some()
++        || expected_bits != structural_bits(&new.v11_checkpoint)?
++    {
++        return Err(invalid());
++    }
++
++    // Compare the actual portable plan. Recompiling earlier accepted spans sorts by target
++    // and source, not by history. Locate the unique actual final row; do not guess an
++    // inherited ordinal or insist on a transient insertion offset. All other rows retain order.
++    let t = d.target as usize;
++    let old_range = old.target_offsets[t]..old.target_offsets[t + 1];
++    if old_range.clone().any(|i| old.source_indices[i as usize] == d.source) {
++        return Err(invalid());
++    }
++    let mut added = (new.target_offsets[t]..new.target_offsets[t + 1])
++        .filter(|&i| new.source_indices[i as usize] == d.source
++            && new.route_indices[i as usize] == u32::from(d.route));
++    let at = added.next().ok_or_else(invalid)?;
++    if added.next().is_some()
++        || new.genetic_weight_bits[at as usize] != d.installed_bits
++        || new.alpha_bits[at as usize] != (-0.0_f32).to_bits()
++        || words_at(&new.synapse_learning_metadata_words, at)?
++            != [at, 1, d.source, d.target, 0, at, u32::MAX, 0]
++        || !old.target_offsets.iter().zip(&new.target_offsets).enumerate()
++            .all(|(i, (&a, &b))| a.checked_add(u32::from(i > t)) == Some(b))
++        || !new.v11_checkpoint.sparse_spans.iter().flat_map(|s| &s.edges).any(|edge|
++            edge.source == d.source && edge.target == d.target
++                && edge.route == u32::from(d.route) && edge.weight.to_bits() == d.installed_bits)
++    {
++        return Err(invalid());
++    }
++
++    let old_routes: BTreeMap<_, _> = old.v11_checkpoint.sparse_spans.iter()
++        .flat_map(|s| &s.edges).map(|e| ((e.source, e.target), e.route)).collect();
++    let new_routes: BTreeMap<_, _> = new.v11_checkpoint.sparse_spans.iter()
++        .flat_map(|s| &s.edges).filter(|e| (e.source, e.target) != (d.source, d.target))
++        .map(|e| ((e.source, e.target), e.route)).collect();
++    if old_routes != new_routes
++        || !plus_one_ids(&old.decoder_synapse_starts, &new.decoder_synapse_starts)
++        || !plus_one_ids(&old.decoder_weight_global_synapse_ids, &new.decoder_weight_global_synapse_ids)
++        || !shifted_ids(&old.memory_weight_indices, &new.memory_weight_indices, at)
++    {
++        return Err(invalid());
++    }
++
++    // Every inherited genetic/alpha f32 and metadata identity stays bit exact after
++    // allowing only established native renumbering of physical addresses.
++    for j in 0..old_total {
++        let k = shifted(j, at).ok_or_else(invalid)?;
++        let mut a = words_at(&old.synapse_learning_metadata_words, j)?;
++        if a[0] != j || (j < old_rec && a[5] != j) {
++            return Err(invalid());
++        }
++        a[0] = k;
++        if j < old_rec {
++            a[5] = k;
++            if (old.source_indices[j as usize], old.route_indices[j as usize])
++                != (new.source_indices[k as usize], new.route_indices[k as usize])
++            {
++                return Err(invalid());
++            }
++        }
++        if a != words_at(&new.synapse_learning_metadata_words, k)?
++            || (old.genetic_weight_bits[j as usize], old.alpha_bits[j as usize])
++                != (new.genetic_weight_bits[k as usize], new.alpha_bits[k as usize])
++        {
++            return Err(invalid());
++        }
++    }
++    for j in 0..old.decoder_synapse_count {
++        let mut a = words_at(&old.decoder_eligibility_metadata_words, j)?;
++        a[0] = shifted(a[0], at).ok_or_else(invalid)?;
++        if a != words_at(&new.decoder_eligibility_metadata_words, j)? {
++            return Err(invalid());
++        }
++    }
++    Ok(())
++}
++
++#[derive(Clone, Copy)]
++struct MaterializedBoundary<'a> {
++    before: &'a GpuLiveTopologyCheckpointV1,
++    after: &'a GpuLiveTopologyCheckpointV1,
++    ordinary_reopened: &'a GpuLiveTopologyCheckpointV1,
++    // Weight and endpoint identity are observations, never selected by this function.
++    new: Direction,
++}
++
++fn prove_exact_two_phase_shape(
++    phenotype: &BrainPhenotype,
++    first: MaterializedBoundary<'_>,
++    second: MaterializedBoundary<'_>,
++) -> Result<()> {
++    prove_reciprocal_routes(phenotype, first.new, second.new)?;
++    prove_exact_one_materialized_direction(phenotype, first.before, first.after,
++        first.ordinary_reopened, first.new)?;
++    // Native replay/candidate evidence may evolve between phases. Only the exact
++    // live topology plan (including all immutable f32 words) must stay unchanged.
++    if first.after.canonical_digest != second.before.canonical_digest
++        || structural_bits(&first.after.v11_checkpoint)? != structural_bits(&second.before.v11_checkpoint)?
++        || !same_serialized(&first.after.v11_checkpoint.dendritic_branches,
++                            &second.before.v11_checkpoint.dendritic_branches)?
++    {
++        return Err(invalid());
++    }
++    prove_exact_one_materialized_direction(phenotype, second.before, second.after,
++        second.ordinary_reopened, second.new)
++}
++
++#[test]
++fn valid_layout_does_not_establish_legal_edges_or_native_authority() {
++    use alife_core::{BrainGenome, DevelopmentState, NormalizedScalar, PhenotypeCompiler, SensorProfile, Tick};
++    // CPU test scaffold only. The first indices below are derived from its actual layout,
++    // not a suggestion to use those cells in a real R44. No structural state is changed.
++    let capacity = BrainCapacityClass::n2048();
++    let genome = BrainGenome::scaffold(97, capacity.id());
++    let development = DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(0.35).unwrap());
++    let phenotype = PhenotypeCompiler::compile(&genome, &capacity, &development,
++                                               SensorProfile::GroundedObjectSlotsV1).unwrap();
++    let t = phenotype.lobe_layout().region(LobeKind::TemporalPredictive).unwrap().start;
++    let m = phenotype.lobe_layout().region(LobeKind::MemoryInterface).unwrap().start;
++    let ab = Direction { source: t, target: m, route: 9, installed_bits: 0.1_f32.to_bits() };
++    let ba = Direction { source: m, target: t, route: 10, ..ab };
++    prove_reciprocal_routes(&phenotype, ab, ba).unwrap();
++    assert!(prove_reciprocal_routes(&phenotype, ab, Direction { route: 0, ..ba }).is_err());
++    assert!(prove_reciprocal_routes(&phenotype, ab, Direction { route: 16, ..ba }).is_err());
++    assert!(prove_reciprocal_routes(&phenotype, ab, Direction { target: m, ..ba }).is_err());
++    assert!(prove_reciprocal_routes(&phenotype, ab, Direction { installed_bits: f32::NAN.to_bits(), ..ba }).is_err());
++    assert!(prove_reciprocal_routes(&phenotype, ab, Direction { installed_bits: (-0.1_f32).to_bits(), ..ba }).is_err());
++    let core = GpuV11Checkpoint::canonical_for_phenotype(&phenotype).unwrap();
++    let same = GpuLiveTopologyCheckpointV1::recompile_for_phenotype(&phenotype, core).unwrap();
++    let claimed_first = MaterializedBoundary { before: &same, after: &same, ordinary_reopened: &same, new: ab };
++    let claimed_second = MaterializedBoundary { new: ba, ..claimed_first };
++    assert!(prove_exact_two_phase_shape(&phenotype, claimed_first, claimed_second).is_err());
++}
++
++#[test]
++fn one_synthetic_native_plan_materialization_does_not_qualify_a_reciprocal_life() {
++    use super::GpuV11CausalState;
++    use alife_core::{
++        BrainGenome, CoactivationEvidence, DevelopmentState, NormalizedScalar, PhenotypeCompiler,
++        SensorProfile, Tick,
++    };
++    let capacity = BrainCapacityClass::n2048();
++    let genome = BrainGenome::scaffold(0xF0A0_CA11, capacity.id());
++    let development = DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(0.35).unwrap());
++    let phenotype = PhenotypeCompiler::compile(&genome, &capacity, &development,
++                                               SensorProfile::GroundedObjectSlotsV1).unwrap();
++    let source = phenotype.lobe_layout().region(LobeKind::TemporalPredictive).unwrap().start;
++    let memory = phenotype.lobe_layout().region(LobeKind::MemoryInterface).unwrap();
++    let target = (memory.start..memory.start + memory.len).find(|&target|
++        !phenotype.synapses().iter().any(|r| r.kind() == CompiledSynapseKind::Recurrent
++            && (r.source(), r.target()) == (source, target))).unwrap();
++    // Isolated CPU scaffold only; its queue starts empty, unlike real R44.
++    // Legacy region=route expresses this ONE synthetic phase. It cannot prove that
++    // mature resident route admission, a live slot, or the reverse phase exists.
++    let mut state = GpuV11CausalState::for_phenotype(&phenotype).unwrap();
++    let before = GpuLiveTopologyCheckpointV1::recompile_for_phenotype(&phenotype, state.checkpoint()).unwrap();
++    let work = state.apply_structural_phase(&[CoactivationEvidence { region: 9, source, target,
++        coactivation: 100, eligibility: 0, concept_gap_support: 0 }]).unwrap();
++    assert_eq!(work.structural.accepted_edges, 1);
++    let pending = state.pending_lifetime_synapse().unwrap();
++    let edge = Direction { source, target, route: 9, installed_bits: pending.initial_weight.to_bits() };
++    // Validate ordinary pending restore first. A synthetic clear is only preparation
++    // for rebuilding the CPU plan, not evidence of actual native commit/reopen.
++    GpuV11CausalState::restore(state.checkpoint()).unwrap();
++    state.clear_pending_lifetime_synapse(&pending).unwrap();
++    let after = GpuLiveTopologyCheckpointV1::recompile_for_phenotype(&phenotype, state.checkpoint()).unwrap();
++    let readback: GpuLiveTopologyCheckpointV1 =
++        serde_json::from_slice(&serde_json::to_vec(&after).unwrap()).unwrap();
++    prove_exact_one_materialized_direction(&phenotype, &before, &after, &readback, edge).unwrap();
++    let mut counterfeit = readback;
++    counterfeit.memory_weight_indices.push(0);
++    counterfeit.canonical_digest = counterfeit.recompute_canonical_digest().unwrap();
++    assert!(prove_exact_one_materialized_direction(&phenotype, &before, &after, &counterfeit, edge).is_err());
++    assert!(prove_exact_one_materialized_direction(&phenotype, &before, &after, &after,
++        Direction { route: 0, ..edge }).is_err());
++}

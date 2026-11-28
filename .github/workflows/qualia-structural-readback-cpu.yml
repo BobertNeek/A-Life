@@ -1,0 +1,219 @@
+name: Qualia structural readback CPU qualification
+on:
+  push:
+    branches: ["bob/qualia-structural-readback-cpu-20261128"]
+    paths: [".github/workflows/qualia-structural-readback-cpu.yml"]
+
+permissions:
+  contents: read
+concurrency:
+  group: qualia-structural-readback-cpu-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test-only:
+    if: github.repository == 'BobertNeek/A-Life' && github.ref == 'refs/heads/bob/qualia-structural-readback-cpu-20261128'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    env:
+      PIN_BASE: c5d250178cb70a10f99f78ebcc974e0ad5533b41
+      PIN_BASE_TREE: e9844c8237ac5a297f9fe6c21bcf55e8d196323f
+      PIN_PARENT: f466b83791cccb97568e6f718b92b052999cfb2b
+      PIN_PARENT_TREE: 23462813a8d22e80428fa0b9f199b0cfc5654f0e
+      PIN_MANIFEST_BLOB: 7010cd90fb587a18cd75c6109d95e5311e5a9a86
+      PIN_RESTORE_BLOB: 28b3868f208796f8d2f96a870f7589f1ed0360e5
+      PIN_MANIFEST_SHA: 16a63a8f3fb12262f7da2830e3721fc727e20073a8795e91ccfb0765913288ad
+      PIN_RESTORE_SHA: bd554f6fa39054ddc08d17487e18ee4edc314c249eabfad2261bf8c1a53c3cef
+      PIN_LOCK: 155699e9274f8890bc8c335669a62de48203ba315a33388a8f0caca71f0f7f37
+      PIN_PATCH: a7737cc87649fea4eced9707c244534d639442cc8fc3b87230781b7d4efbd7c7
+      PIN_PINS: 3e38df58768aa7182764b93dcf34a0d5e6dbc0d08c0e52595e8ecd40f401a4ba
+      RUST_VERSION: "1.100.0"
+      PIN_RUST_COMMIT: 0ef1bc386059596dada8fb65b50425aab2ea637a
+      TARGET: x86_64-unknown-linux-gnu
+      CARGO_BUILD_JOBS: "2"
+      CARGO_INCREMENTAL: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
+      CARGO_TERM_COLOR: never
+      CARGO_NET_RETRY: "2"
+      PRE_FREE: "10737418240"
+      LIVE_FREE: "5368709120"
+      LC_ALL: C
+
+    steps:
+      - name: Checkout exact source-only push
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Authenticate isolated ancestry and reconstruct signed stock source
+        run: |
+          set -euo pipefail
+          umask 077
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git show -s --format=%P HEAD)" = "$PIN_PARENT"
+          test "$(git show -s --format=%P "$PIN_PARENT")" = "$PIN_BASE"
+          test "$(git show -s --format=%T "$PIN_PARENT")" = "$PIN_PARENT_TREE"
+          test "$(git show -s --format=%T "$PIN_BASE")" = "$PIN_BASE_TREE"
+          docs=docs/r41-saved-life
+          wf=.github/workflows/qualia-structural-readback-cpu.yml
+          patch="$docs/structural-readback-cpu.patch"
+          pins="$docs/structural-readback-cpu-pins.json"
+          diff -u <(printf 'A\t%s\n' "$wf" "$patch" "$pins" | sort) \
+                  <(git diff --name-status --no-renames "$PIN_PARENT" HEAD | sort)
+          git diff --exit-code "$PIN_PARENT" HEAD -- "$docs/SOURCE.json" "$docs/restore_source.py" "$docs/patches"
+          for f in "$wf" "$patch" "$pins" "$docs/SOURCE.json" "$docs/restore_source.py"; do
+            test -f "$f" && test ! -L "$f"
+            test "$(git ls-tree HEAD -- "$f" | awk '{print $1}')" = 100644
+          done
+          test "$(git rev-parse "$PIN_PARENT:$docs/SOURCE.json")" = "$PIN_MANIFEST_BLOB"
+          test "$(git rev-parse "$PIN_PARENT:$docs/restore_source.py")" = "$PIN_RESTORE_BLOB"
+          printf '%s  %s\n' "$PIN_MANIFEST_SHA" "$docs/SOURCE.json" "$PIN_RESTORE_SHA" "$docs/restore_source.py" \
+            "$PIN_PATCH" "$patch" "$PIN_PINS" "$pins" | sha256sum -c -
+          exact="$RUNNER_TEMP/qualia-structural-readback-exact"
+          target="$RUNNER_TEMP/qualia-structural-readback-target"
+          mkdir -m 0700 -- "$target"
+          test "$(df -PB1 "$target" | awk 'NR==2{print $4}')" -ge "$PRE_FREE"
+          printf 'EXACT_SRC=%s\nCARGO_TARGET_DIR=%s\n' "$exact" "$target" >> "$GITHUB_ENV"
+          python3 -IB "$docs/restore_source.py" "$GITHUB_WORKSPACE" "$exact"
+          test "$(df -PB1 "$target" | awk 'NR==2{print $4}')" -ge "$PRE_FREE"
+
+      - name: Check two exact source leaves and round trip
+        run: |
+          set -euo pipefail
+          cd "$EXACT_SRC"
+          python3 -IB - "$GITHUB_WORKSPACE/docs/r41-saved-life" <<'PY'
+          from hashlib import sha256
+          from pathlib import Path
+          import json, os, subprocess, sys
+
+          docs = Path(sys.argv[1])
+          spec = json.loads((docs / "structural-readback-cpu-pins.json").read_bytes())
+          patch = docs / "structural-readback-cpu.patch"
+          def pin(path):
+              if not path.exists():
+                  return None
+              assert path.is_file() and not path.is_symlink() and path.stat().st_size < 1_000_000, path
+              data = path.read_bytes()
+              return [sha256(data).hexdigest(), len(data)]
+
+          assert spec["schema"] == "qualia.source_only.structural_readback_cpu.v1"
+          for field, env in (("anchor_commit", "PIN_BASE"), ("anchor_tree", "PIN_BASE_TREE"),
+                             ("restore_parent", "PIN_PARENT"), ("restore_parent_tree", "PIN_PARENT_TREE"),
+                             ("manifest_blob", "PIN_MANIFEST_BLOB"), ("restore_blob", "PIN_RESTORE_BLOB"),
+                             ("lock_sha256", "PIN_LOCK"), ("patch_sha256", "PIN_PATCH")):
+              assert spec[field] == os.environ[env], field
+          assert pin(patch)[0] == os.environ["PIN_PATCH"]
+          assert spec["closure_files"] == 827 and spec["new_features"] == []
+          assert spec["unit_filter"] == "reciprocal_readback_contract::"
+          expected = {
+              "crates/alife_gpu_backend/src/closed_loop_v11.rs",
+              "crates/alife_gpu_backend/src/closed_loop_v11/reciprocal_readback_contract.rs",
+          }
+          entries = subprocess.check_output(["git", "apply", "--numstat", "-z", patch]).split(b"\0")
+          assert entries[-1] == b"" and len(entries) == 3
+          assert {e.decode().split("\t", 2)[2] for e in entries[:-1]} == expected == set(spec["source"])
+          assert [(int(x.split(b"\t")[0]), int(x.split(b"\t")[1])) for x in entries[:-1]] == [(3, 0), (329, 0)]
+          def verify(phase):
+              assert pin(Path("Cargo.lock"))[0] == spec["lock_sha256"]
+              for name, record in spec["source"].items():
+                  assert pin(Path(name)) == record[phase], (name, phase)
+          def apply(*flags):
+              cmd = ["git", "apply", "--whitespace=error", *flags]
+              subprocess.run([*cmd, "--check", patch], check=True)
+              subprocess.run([*cmd, patch], check=True)
+
+          verify("before")
+          apply()
+          verify("after")
+          apply("--reverse")
+          verify("before")
+          apply()
+          verify("after")
+          print("two exact Rust leaves; stock -> test-only -> stock -> test-only")
+          PY
+
+      - name: Compile and execute exactly two backend CPU tests
+        run: |
+          set -euo pipefail
+          cd "$EXACT_SRC"
+          export VK_DRIVER_FILES="$RUNNER_TEMP/qualia-do-not-use-a-vulkan-icd.json"
+          test ! -e "$VK_DRIVER_FILES"
+          python3 -IB - "$GITHUB_WORKSPACE/docs/r41-saved-life/structural-readback-cpu-pins.json" <<'PY'
+          import json, os, re, signal, subprocess, sys, time
+          from pathlib import Path
+
+          dev = Path("/dev")
+          assert not any((dev / "dri").glob("renderD*"))
+          assert not any(dev.glob("nvidia*")) and not (dev / "kfd").exists()
+          spec = json.loads(Path(sys.argv[1]).read_bytes())
+          expected = spec["exact_unit_names"]
+          assert len(expected) == len(set(expected)) == 2 and expected == sorted(expected)
+          assert all(x.startswith("closed_loop_v11::reciprocal_readback_contract::") for x in expected)
+
+          t = Path(os.environ["CARGO_TARGET_DIR"])
+          pre, floor = int(os.environ["PRE_FREE"]), int(os.environ["LIVE_FREE"])
+          def free():
+              fs = os.statvfs(t)
+              return fs.f_bavail * fs.f_frsize
+          assert t.is_dir() and free() >= pre
+          out = Path(os.environ["RUNNER_TEMP"])
+          low = free()
+
+          def bounded(argv, wall, name):
+              global low
+              log = out / (name + ".log")
+              assert free() >= floor
+              with log.open("xb") as f:
+                  p = subprocess.Popen(argv, stdout=f, stderr=subprocess.STDOUT, start_new_session=True)
+                  deadline = time.monotonic() + wall
+                  try:
+                      while True:
+                          low = min(low, free())
+                          if low < floor:
+                              raise RuntimeError("hosted disk below live floor")
+                          if time.monotonic() >= deadline:
+                              raise TimeoutError(name)
+                          status = p.poll()
+                          if status is not None:
+                              break
+                          time.sleep(1)
+                  except BaseException:
+                      if p.poll() is None:
+                          os.killpg(p.pid, signal.SIGTERM)
+                          try:
+                              p.wait(timeout=12)
+                          except subprocess.TimeoutExpired:
+                              os.killpg(p.pid, signal.SIGKILL)
+                              p.wait()
+                      raise
+              assert log.stat().st_size <= 4 * 1024 * 1024
+              text = log.read_text()
+              print(text, end="" if text.endswith("\n") else "\n")
+              assert status == 0, (name, status)
+              return text
+
+          version, target = os.environ["RUST_VERSION"], os.environ["TARGET"]
+          bounded(["rustup", "toolchain", "install", version, "--profile", "minimal", "--target", target], 360, "structural-reader-toolchain")
+          v = bounded(["rustc", "+" + version, "-vV"], 60, "structural-reader-rustc").splitlines()
+          for exact in ("release: " + version, "host: " + target, "commit-hash: " + os.environ["PIN_RUST_COMMIT"]):
+              assert exact in v, exact
+          cmd = ["cargo", "+" + version, "test", "--locked", "--target", target,
+                 "-p", "alife_gpu_backend", "--lib"]
+          unit_filter = spec["unit_filter"]
+          bounded([*cmd, "--no-run", unit_filter], 1200, "structural-reader-compile")
+          listing = bounded([*cmd, "--offline", unit_filter, "--", "--list"], 180, "structural-reader-list")
+          names = sorted(s.removesuffix(": test") for s in listing.splitlines() if s.endswith(": test"))
+          assert names == expected and not any(s.endswith(": benchmark") for s in listing.splitlines())
+          result = bounded([*cmd, "--offline", unit_filter, "--", "--test-threads=1"], 180, "structural-reader-tests")
+          assert re.search(r"^test result: ok\. 2 passed; 0 failed; 0 ignored;", result, flags=re.M)
+          for unit in expected:
+              assert f"test {unit} ... ok" in result
+          assert free() >= floor
+          print(f"test-only CPU qualification, min hosted free bytes {low}, no game/device/live assets")
+          PY
+          printf '%s  %s\n' "$PIN_LOCK" Cargo.lock | sha256sum -c -
