@@ -1,0 +1,85 @@
+{
+  "changed_leaves": {
+    "crates/alife_gpu_backend/Cargo.toml": {
+      "after_bytes": 1078,
+      "after_git_blob": "d432fcc1674d3eb13fe87ebbf09af6158bae4840",
+      "after_sha256": "f4f296bfe368b4d840cbee76913045e9ee7b146ed996117d3e9dbf09f9f2f1ad",
+      "before_sha256": "fbaea08aec82b69f1ed4147288c443991c01425247cb900b169914cc2edc0380"
+    },
+    "crates/alife_gpu_backend/src/closed_loop_pipeline.rs": {
+      "after_bytes": 215811,
+      "after_git_blob": "77b2c593437d298fd70358311c67b5bae6ca20c9",
+      "after_sha256": "bf40a8b5d27e792d6ae970e2b7514ac6d3dce01c12442c60ce4c335fe1e3e015",
+      "before_sha256": "fb6ff4560ab704c5c28fdeb94c310b0dd73ce5bad6518ee2b5deec823cc14f65"
+    },
+    "crates/alife_gpu_backend/src/closed_loop_pipeline/research_n4096_h_inherited.rs": {
+      "after_bytes": 23362,
+      "after_git_blob": "8688f0c1436d055416c1c3ffbed10309bf616646",
+      "after_sha256": "e03af15f1550a0956e07d1c2918eb1fff18083c0d55a7fc9dc58eb00625d7d7e",
+      "before_sha256": null
+    }
+  },
+  "compile_or_native_or_private_current_consumed": false,
+  "exact_parent_git": "79cdd606ea7cc78c5957b01b58dcd8e659a4f112",
+  "exact_parent_tree": "aa46c8a3f5d6b27b7c69509e94025b611c061f93",
+  "forward": "dcbff538648ed6edf76d85f97e7190511f5e66df3afad142b694283caaab87d7",
+  "h_address_count": 2048,
+  "h_bands": [
+    [
+      0,
+      256
+    ],
+    [
+      512,
+      640
+    ],
+    [
+      768,
+      1024
+    ],
+    [
+      1280,
+      1536
+    ],
+    [
+      1792,
+      2240
+    ],
+    [
+      2688,
+      2944
+    ],
+    [
+      3200,
+      3328
+    ],
+    [
+      3456,
+      3680
+    ],
+    [
+      3904,
+      4000
+    ]
+  ],
+  "inverse": "4765757926aaa8126628c9abbfb9dd3503b513128f6231d56886bd76db8935fd",
+  "only_described_stages": [
+    "encode_perception",
+    "recurrent_microstep"
+  ],
+  "q_address_count": 2048,
+  "roundtrip_forward_inverse_forward": true,
+  "schema": "qualia.n4096.h-inherited-writers-device-free-source-check.v1",
+  "shader_composition": {
+    "encode": {
+      "static_reconstruction": "ea9c930879b37bb467e59a713189d1424113f01dedf77b61128b4b6396f3c2a3",
+      "stock": "3dc110bb65c4771098dbfc69820b9d48d98a25bdeece16eb544c1dc2b82d17ba"
+    },
+    "recurrent": {
+      "static_reconstruction": "a51f0957c11dddca66bfe4cecca60ddbbd3d423e3a996c64dc03a3d66b89c584",
+      "stock": "f3230a42f4ce9f3d3a40127f175d99353481eed613c237702bf864843b6f7a50"
+    }
+  },
+  "signed_manifest_blob": "7010cd90fb587a18cd75c6109d95e5311e5a9a86",
+  "stock_wgsl_and_default_features_unchanged": true
+}

@@ -1,22 +1,26 @@
-name: Qualia exact parked N4096 shared evaluator source-only qualification
+name: Qualia exact N4096 H-only writers CPU and Naga qualification
 on:
   push:
-    branches: ["bob/qualia-n4096-parked-shared-ordinary-and-registry-20261128"]
+    branches: ["bob/qualia-n4096-h-writers-cpu-20261128"]
     paths: [".github/workflows/qualia-n4096-width-intake-check.yml"]
 
 permissions:
   contents: read
 
 concurrency:
-  group: qualia-n4096-width-intake-${{ github.ref }}
+  group: qualia-n4096-h-writers-cpu-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   source-only:
-    if: github.ref == 'refs/heads/bob/qualia-n4096-parked-shared-ordinary-and-registry-20261128'
+    if: github.ref == 'refs/heads/bob/qualia-n4096-h-writers-cpu-20261128'
     runs-on: ubuntu-24.04
     timeout-minutes: 65
     env:
+      PIN_H_WRITER_PARENT: 79cdd606ea7cc78c5957b01b58dcd8e659a4f112
+      PIN_H_WRITER_PARENT_TREE: aa46c8a3f5d6b27b7c69509e94025b611c061f93
+      PIN_H_WRITER_PATCH: dcbff538648ed6edf76d85f97e7190511f5e66df3afad142b694283caaab87d7
+      PIN_H_WRITER_PINS: 523991d5d27a2fd0ec457c66ae644bd804fcefa657df9008d9cb8fd05e661864
       PIN_REGISTRY_HEAD: c1899515c25e3844818a985efb29a1682a06e64d
       PIN_REGISTRY_TREE: 99939c999bc3e6aa8ac9d44791b4540cf60e085a
       PIN_APP_META: 4ef4bbefd6f2503180cd35fe7c1d91c84bdb330e7822bb442f6046f0761f5853
@@ -79,14 +83,21 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git show -s --format=%P HEAD)" = "$PIN_REGISTRY_HEAD"
+          test "$(git show -s --format=%P HEAD)" = "$PIN_H_WRITER_PARENT"
+          test "$(git rev-parse "$PIN_H_WRITER_PARENT^{tree}")" = "$PIN_H_WRITER_PARENT_TREE"
+          diff -u <(printf '%s\n' \
+            $'M\t.github/workflows/qualia-n4096-width-intake-check.yml' \
+            $'A\tdocs/r41-saved-life/N4096-H-INHERITED-WRITERS.patch' \
+            $'A\tdocs/r41-saved-life/N4096-H-INHERITED-WRITERS-PINS.json' | LC_ALL=C sort) \
+            <(git diff --name-status --no-renames "$PIN_H_WRITER_PARENT" HEAD | LC_ALL=C sort)
+          test "$(git show -s --format=%P "$PIN_H_WRITER_PARENT")" = "$PIN_REGISTRY_HEAD"
           test "$(git rev-parse "$PIN_REGISTRY_HEAD^{tree}")" = "$PIN_REGISTRY_TREE"
           test "$(git show -s --format=%P "$PIN_REGISTRY_HEAD")" = "$PIN_CORE_FAILED_PREDECESSOR"
           diff -u <(printf '%s\n' \
             $'M\t.github/workflows/qualia-n4096-width-intake-check.yml' \
             $'A\tdocs/r41-saved-life/N4096-PARKED-RESIDENT-SHARED-APP.patch' \
             $'A\tdocs/r41-saved-life/PARKED-SHARED-APP-PINS.json' | LC_ALL=C sort) \
-            <(git diff --name-status --no-renames "$PIN_REGISTRY_HEAD" HEAD | LC_ALL=C sort)
+            <(git diff --name-status --no-renames "$PIN_REGISTRY_HEAD" "$PIN_H_WRITER_PARENT" | LC_ALL=C sort)
           test "$(git show -s --format=%P "$PIN_CORE_FAILED_PREDECESSOR")" = "$PIN_TRANSPORT_HEAD"
           diff -u <(printf '%s\n' \
             $'M\t.github/workflows/qualia-n4096-width-intake-check.yml' \
@@ -140,7 +151,7 @@ jobs:
             <(git diff --name-status --no-renames "$PIN_V3_HOST" "$PIN_EXACT_EMITTED_WIDTH" | LC_ALL=C sort)
           export EXACT_SRC="$RUNNER_TEMP/qualia-n4096-width-intake-source"
           export CARGO_TARGET_DIR="$RUNNER_TEMP/qualia-n4096-width-intake-target"
-          export EVIDENCE="$RUNNER_TEMP/qualia-n4096-width-intake-evidence"
+          export EVIDENCE="$RUNNER_TEMP/qualia-n4096-h-writer-evidence"
           printf 'EXACT_SRC=%s\nCARGO_TARGET_DIR=%s\nEVIDENCE=%s\n' \
             "$EXACT_SRC" "$CARGO_TARGET_DIR" "$EVIDENCE" >> "$GITHUB_ENV"
           mkdir "$EVIDENCE"
@@ -421,7 +432,65 @@ jobs:
           print('exact seven-leaf schema17 App forward/inverse/forward; source only')
           PY2
 
-      - name: Locked OFF and ON same-source parser, then final shared ELF compile and marker
+      - name: Exact H writers only, reversible and unchanged stock WGSL
+        run: |
+          set -euo pipefail
+          cd "$EXACT_SRC"
+          python3 -IB - "$GITHUB_WORKSPACE" <<'PY' | tee -a "$EVIDENCE/build.log"
+          from hashlib import sha256
+          import json, os, subprocess, sys
+          from pathlib import Path
+          docs=Path(sys.argv[1])/'docs/r41-saved-life'
+          pins=docs/'N4096-H-INHERITED-WRITERS-PINS.json'
+          patch=docs/'N4096-H-INHERITED-WRITERS.patch'
+          def read(p):
+              p=Path(p)
+              assert not p.is_symlink() and p.is_file() and p.stat().st_size<=2_000_000,p
+              return p.read_bytes()
+          def digest(p): return sha256(read(p)).hexdigest()
+          def digest_or_absent(p):
+              p=Path(p)
+              assert not p.is_symlink(),p
+              return digest(p) if p.exists() else None
+          assert digest(pins)==os.environ['PIN_H_WRITER_PINS']
+          rec=json.loads(read(pins))
+          assert rec['schema']=='qualia.n4096.h-inherited-writers-device-free-source-check.v1'
+          assert rec['exact_parent_git']==os.environ['PIN_H_WRITER_PARENT'] and rec['exact_parent_tree']==os.environ['PIN_H_WRITER_PARENT_TREE']
+          assert rec['signed_manifest_blob']=='7010cd90fb587a18cd75c6109d95e5311e5a9a86'
+          assert not rec['compile_or_native_or_private_current_consumed']
+          assert rec['roundtrip_forward_inverse_forward'] and rec['stock_wgsl_and_default_features_unchanged']
+          assert rec['forward']==os.environ['PIN_H_WRITER_PATCH']==digest(patch)
+          assert rec['only_described_stages']==['encode_perception','recurrent_microstep']
+          assert rec['h_address_count']==rec['q_address_count']==2048
+          backend='crates/alife_gpu_backend'
+          leaves=rec['changed_leaves']
+          allowed={backend+'/Cargo.toml',backend+'/src/closed_loop_pipeline.rs',
+             backend+'/src/closed_loop_pipeline/research_n4096_h_inherited.rs'}
+          names={s.decode().split('\t',2)[2] for s in subprocess.check_output(
+              ['git','apply','--numstat','-z',patch]).rstrip(b'\0').split(b'\0')}
+          assert set(leaves)==allowed==names
+          shaders=Path(backend)/'shaders'
+          def stock(stem):
+              return b''.join(read(shaders/f'closed_loop_{s}.wgsl') for s in ('abi','activity_validation',stem))
+          def check(phase):
+              assert digest('Cargo.lock')==os.environ['PIN_LOCK']
+              for name,v in leaves.items():
+                  assert digest_or_absent(name)==v[f'{phase}_sha256'],(phase,name)
+                  if phase=='after':
+                      blob=read(name)
+                      assert len(blob)==v['after_bytes']
+                      got=subprocess.check_output(['git','hash-object',name]).decode().strip()
+                      assert got==v['after_git_blob'],(name,got)
+              for name in ('encode','recurrent'):
+                  assert sha256(stock(name)).hexdigest()==rec['shader_composition'][name]['stock'],name
+          def apply(*flags):
+              for check_arg in (('--check',),()):
+                  subprocess.run(['git','apply','--whitespace=error',*flags,*check_arg,patch],check=True)
+          check('before');apply();check('after');apply('--reverse');check('before');apply();check('after')
+          print('exact detached H writer three-leaf overlay; reversible; stock kernels unchanged')
+          PY
+
+      - name: Locked backend-only OFF compile and ON five CPU/Naga tests
         run: |
           set -euo pipefail
           rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --target "$TARGET"
@@ -429,84 +498,65 @@ jobs:
           grep -Fqx "release: $RUST_TOOLCHAIN" <<< "$version"
           grep -Fqx "commit-hash: $PIN_RUSTC_COMMIT" <<< "$version"
           grep -Fqx "host: $TARGET" <<< "$version"
+          printf '%s\n' "$version" | tee -a "$EVIDENCE/build.log"
           cd "$EXACT_SRC"
           mkdir -p -- "$CARGO_TARGET_DIR"
-          test "$(df -PB1 "$CARGO_TARGET_DIR" | awk 'NR==2 {print $4}')" -ge 10737418240
+          test "$(df -PB1 "$CARGO_TARGET_DIR" | awk 'NR==2 { print $4 }')" -ge 10737418240
           timeout 8m cargo +"$RUST_TOOLCHAIN" fetch --locked --target "$TARGET" 2>&1 | tee -a "$EVIDENCE/build.log"
-          timeout 22m cargo +"$RUST_TOOLCHAIN" build --frozen --offline --target "$TARGET" --no-default-features \
-            -p alife_game_app --features retained-language-composition-v3 --bin evaluate_saved_life_retention \
-            2>&1 | tee -a "$EVIDENCE/build.log"
-          off="$CARGO_TARGET_DIR/$TARGET/debug/evaluate_saved_life_retention"
-          test -x "$off" && test -f "$off" && test ! -L "$off"
-          install -m 0700 "$off" "$RUNNER_TEMP/parked-shared-old-default-off"
-          timeout 20m cargo +"$RUST_TOOLCHAIN" test --frozen --offline --target "$TARGET" --no-default-features \
-            -p alife_game_app --test n4096_parked_intake_cpu --features retained-language-composition-v3,retained-n4096-auxiliary -- --nocapture \
-            2>&1 | tee "$EVIDENCE/parked-schema17-off.log"
-          grep -Fq 'parked_schema17_is_off_before_checkpoint ... ok' "$EVIDENCE/parked-schema17-off.log"
-          grep -Fq 'ordinary_schema1_refuses_parked_resident_scenario_before_checkpoint_decode ... ok' "$EVIDENCE/parked-schema17-off.log"
-          grep -Eq '^test result: ok. 2 passed; 0 failed; 0 ignored;' "$EVIDENCE/parked-schema17-off.log"
-          timeout 22m cargo +"$RUST_TOOLCHAIN" test --frozen --offline --target "$TARGET" --no-default-features \
-            -p alife_game_app --test n4096_parked_intake_cpu --features retained-language-composition-v3,retained-n4096-parked-resident-zero -- --nocapture \
-            2>&1 | tee "$EVIDENCE/parked-schema17-on.log"
-          grep -Fq 'parked_schema17_refuses_ordinary_alias_and_injected_state_before_checkpoint ... ok' "$EVIDENCE/parked-schema17-on.log"
-          grep -Fq 'ordinary_schema1_refuses_parked_resident_scenario_before_checkpoint_decode ... ok' "$EVIDENCE/parked-schema17-on.log"
-          grep -Eq '^test result: ok. 2 passed; 0 failed; 0 ignored;' "$EVIDENCE/parked-schema17-on.log"
-          test "$(df -PB1 "$CARGO_TARGET_DIR" | awk 'NR==2 {print $4}')" -ge 8589934592
-          timeout 20m cargo +"$RUST_TOOLCHAIN" build --frozen --offline --target "$TARGET" --no-default-features \
-            -p alife_game_app --features retained-language-composition-v3,retained-n4096-parked-resident-zero \
-            --bin evaluate_saved_life_retention --message-format=json-render-diagnostics > "$RUNNER_TEMP/parked-final-cargo.jsonl"
-          exe="$CARGO_TARGET_DIR/$TARGET/debug/evaluate_saved_life_retention"
-          test -x "$exe" && test -f "$exe" && test ! -L "$exe"
-          install -m 0700 "$exe" "$EVIDENCE/evaluate_saved_life_retention"
-          python3 -IB - "$RUNNER_TEMP/parked-final-cargo.jsonl" "$exe" "$EVIDENCE/evaluate_saved_life_retention" "$EVIDENCE/parked-compiled-source-only.json" <<'PY2'
-          from hashlib import sha256
+          # alife_core references already-tracked stock compile-time resources.
+          # No game package/binary, built-in decode, device or research input.
+          timeout 20m cargo +"$RUST_TOOLCHAIN" check --frozen --offline --target "$TARGET" --no-default-features \
+            -p alife_gpu_backend --lib 2>&1 | tee -a "$EVIDENCE/build.log"
+          test "$(df -PB1 "$CARGO_TARGET_DIR" | awk 'NR==2 { print $4 }')" -ge 8589934592
+          timeout 24m cargo +"$RUST_TOOLCHAIN" test --frozen --offline --target "$TARGET" --no-default-features \
+            --features research-n4096-h-inherited-kernels-v1 -p alife_gpu_backend --lib \
+            closed_loop_pipeline::research_n4096_h_inherited::tests -- --test-threads=1 \
+            2>&1 | tee "$EVIDENCE/h-writer-tests.log"
+          python3 -IB - "$EVIDENCE" <<'PY'
           from pathlib import Path
-          import json,os,sys
-          log,expect,elf,receipt=map(Path,sys.argv[1:])
-          rows=[json.loads(l) for l in log.read_bytes().splitlines()]
-          source=(Path(os.environ['EXACT_SRC'])/'crates/alife_game_app/src/bin/evaluate_saved_life_retention.rs').resolve(strict=True)
-          got=[r for r in rows if r.get('reason')=='compiler-artifact'
-              and r['target']['name']==expect.name and r['target']['kind']==['bin']
-              and Path(r['target']['src_path']).resolve()==source and r.get('executable')]
-          assert not expect.is_symlink() and not elf.is_symlink() and os.access(expect,os.X_OK) and os.access(elf,os.X_OK)
-          assert len(got)==1 and got[0]['executable']==str(expect)
-          assert {'retained-n4096-parked-resident-zero','retained-n4096-auxiliary'}<=set(got[0]['features'])
-          b=elf.read_bytes()
-          assert b[:4]==b'\x7fELF' and (1<<20)<len(b)<(256<<20) and b==expect.read_bytes()
-          for marker in (b'n4096_parked_resident_zero_only',b'n4096_ordinary_zero_proof_only',b'n4096_auxiliary_zero_inspection_only'):
-              assert marker in b
-          receipt.write_text(json.dumps({'event_head':os.environ['GITHUB_SHA'],'qualified_registry_head':os.environ['PIN_REGISTRY_HEAD'],
-            'qualified_registry_tree':os.environ['PIN_REGISTRY_TREE'],
-            'qualified_core_run':int(os.environ['PIN_CORE_QUALIFICATION_RUN']),
-            'core_logs_artifact_sha256':os.environ['PIN_CORE_QUALIFICATION_LOG_ZIP'],
-            'app_public_source_pins_sha256':os.environ['PIN_APP_META'],
-            'executable_sha256':sha256(b).hexdigest(),'executable_bytes':len(b),
-            'source_ci_only':True,'device_or_real_current_run':False,'resident_result':False,'score':False},
-            sort_keys=True,indent=2)+'\n')
-          PY2
-          python3 -IB "$GITHUB_WORKSPACE/scripts/check_n4096_app_device_free.py" \
-            "$RUNNER_TEMP/parked-shared-old-default-off" "$EVIDENCE/evaluate_saved_life_retention" \
-            | tee "$EVIDENCE/legacy-width-cli.log"
-          python3 -IB "$GITHUB_WORKSPACE/scripts/check_n4096_ordinary_proof_device_free.py" \
-            "$RUNNER_TEMP/parked-shared-old-default-off" "$EVIDENCE/evaluate_saved_life_retention" \
-            | tee "$EVIDENCE/legacy-ordinary-cli.log"
+          import json,os,re,sys
+          evidence=Path(sys.argv[1])
+          log=(evidence/'h-writer-tests.log').read_text()
+          names=re.findall(r'^test closed_loop_pipeline::research_n4096_h_inherited::tests::([a-z0-9_]+) \.\.\. ok$',log,re.M)
+          want={
+            'authentic_typed_topology_codec_does_not_make_q_edges_legal',
+            'empty_q_rows_would_not_prevent_stock_receptor_writes',
+            'exact_nine_bands_and_positive_zero_without_posthoc_masking',
+            'unchanged_stock_modules_and_two_guarded_naga_validated_dispatch_descriptions',
+            'v11_rejects_q_taps_targets_structural_candidates_and_pending_uploads',
+          }
+          assert len(names)==5 and set(names)==want,names
+          assert len(re.findall(r'^test result: ok\. 5 passed; 0 failed; 0 ignored;',log,re.M))==1
+          proof={
+            'schema':'qualia.n4096.h-writer-hosted-cpu-qualification.v1',
+            'event_head':os.environ['GITHUB_SHA'],
+            'exact_parent':os.environ['PIN_H_WRITER_PARENT'],
+            'exact_parent_tree':os.environ['PIN_H_WRITER_PARENT_TREE'],
+            'patch_sha256':os.environ['PIN_H_WRITER_PATCH'],
+            'source_pins_sha256':os.environ['PIN_H_WRITER_PINS'],
+            'rust_release':os.environ['RUST_TOOLCHAIN'],
+            'rust_commit':os.environ['PIN_RUSTC_COMMIT'],
+            'default_off_checked':True, 'passed_cpu_tests':sorted(want),
+            'naga_reflection_both_modules':True,
+            'game_executable_or_device_or_private_input':False,
+            'runnable_resident_or_save_or_score':False,
+          }
+          (evidence/'proof.json').write_text(json.dumps(proof,sort_keys=True,indent=2)+'\n')
+          PY
           cd "$EVIDENCE"
-          sha256sum evaluate_saved_life_retention parked-compiled-source-only.json build.log parked-schema17-off.log parked-schema17-on.log legacy-width-cli.log legacy-ordinary-cli.log > SHA256SUMS
+          sha256sum build.log h-writer-tests.log proof.json > SHA256SUMS
           sha256sum -c SHA256SUMS
+          test "$(find . -mindepth 1 -maxdepth 1 -type f | wc -l)" -eq 4
 
-      - name: Retain only generic shared evaluator and CPU proof logs
+      - name: Retain only CPU qualification text
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: qualia-n4096-parked-shared-source-${{ github.sha }}
+          name: qualia-n4096-h-writers-cpu-${{ github.sha }}
           path: |
-            ${{ runner.temp }}/qualia-n4096-width-intake-evidence/evaluate_saved_life_retention
-            ${{ runner.temp }}/qualia-n4096-width-intake-evidence/parked-compiled-source-only.json
-            ${{ runner.temp }}/qualia-n4096-width-intake-evidence/build.log
-            ${{ runner.temp }}/qualia-n4096-width-intake-evidence/parked-schema17-off.log
-            ${{ runner.temp }}/qualia-n4096-width-intake-evidence/parked-schema17-on.log
-            ${{ runner.temp }}/qualia-n4096-width-intake-evidence/legacy-width-cli.log
-            ${{ runner.temp }}/qualia-n4096-width-intake-evidence/legacy-ordinary-cli.log
-            ${{ runner.temp }}/qualia-n4096-width-intake-evidence/SHA256SUMS
+            ${{ runner.temp }}/qualia-n4096-h-writer-evidence/build.log
+            ${{ runner.temp }}/qualia-n4096-h-writer-evidence/h-writer-tests.log
+            ${{ runner.temp }}/qualia-n4096-h-writer-evidence/proof.json
+            ${{ runner.temp }}/qualia-n4096-h-writer-evidence/SHA256SUMS
           if-no-files-found: error
           retention-days: 5
           compression-level: 3

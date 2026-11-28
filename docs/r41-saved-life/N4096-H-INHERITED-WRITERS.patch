@@ -1,0 +1,555 @@
+diff --git a/crates/alife_gpu_backend/Cargo.toml b/crates/alife_gpu_backend/Cargo.toml
+--- a/crates/alife_gpu_backend/Cargo.toml
++++ b/crates/alife_gpu_backend/Cargo.toml
+@@ -28,3 +28,5 @@
+ research-n4096-auxiliary = ["research-n4096-shape", "gpu-tests"]
+ # Internal parked transport; adds no evaluator ingress or resident authority.
+ research-n4096-parked-transport = ["research-n4096-auxiliary", "alife_core/research-n4096-parked-transport"]
++# Source-only class-4 H writers; no resident or dispatch authority.
++research-n4096-h-inherited-kernels-v1 = ["research-n4096-parked-transport"]
+diff --git a/crates/alife_gpu_backend/src/closed_loop_pipeline.rs b/crates/alife_gpu_backend/src/closed_loop_pipeline.rs
+--- a/crates/alife_gpu_backend/src/closed_loop_pipeline.rs
++++ b/crates/alife_gpu_backend/src/closed_loop_pipeline.rs
+@@ -455,6 +455,9 @@
+     block.resize(detail_offset, u32::MAX);
+     Ok(block)
+ }
++
++#[cfg(feature = "research-n4096-h-inherited-kernels-v1")]
++mod research_n4096_h_inherited;
+ 
+ pub const CLOSED_LOOP_ENCODE_WGSL: &str = concat!(
+     include_str!("../shaders/closed_loop_abi.wgsl"),
+diff --git a/crates/alife_gpu_backend/src/closed_loop_pipeline/research_n4096_h_inherited.rs b/crates/alife_gpu_backend/src/closed_loop_pipeline/research_n4096_h_inherited.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/alife_gpu_backend/src/closed_loop_pipeline/research_n4096_h_inherited.rs
+@@ -0,0 +1,528 @@
++//! Default-off, CPU-only source/dispatch-description qualification for two H writers.
++//! This is not a kernel installed on a device and cannot reanimate a parked owner.
++#![allow(dead_code)] // The future runnable scope has no caller or authority in this patch.
++
++use alife_core::{
++    BrainCapacityClass, BrainPhenotype, CompiledSynapseKind, N2048FoundationLayoutV1,
++    N4096ResearchLayoutV1, ScaffoldContractError,
++};
++use std::{fmt::Write as _, ops::Range};
++
++use super::{
++    CLOSED_LOOP_ENCODE_WGSL, CLOSED_LOOP_RECURRENT_WGSL, GpuClosedLoopPipelines,
++    validate_production_shader_contract,
++};
++use crate::{
++    GpuLiveTopologyCheckpointV1, GpuV11Checkpoint,
++    research_n4096_parked_transport::ParkedExpectedTransport,
++    research_n4096_shape::address_bands,
++};
++
++type Result<T> = std::result::Result<T, ScaffoldContractError>;
++const NARROW: u32 = N2048FoundationLayoutV1::NEURON_COUNT;
++const WIDE: u32 = N4096ResearchLayoutV1::NEURON_COUNT;
++const THREADS: u32 = 64;
++const ENCODE_ANCHOR: &str = "  if (index >= brain.neuron_count) { return; }\n";
++const RECURRENT_ANCHOR: &str = "  if (target_index >= brain.neuron_count) { return; }\n";
++const H_FN: &str = "n4096_h_inherited_index_v1";
++const ROW_WORDS: usize = 8;
++
++fn refuse() -> ScaffoldContractError {
++    ScaffoldContractError::InvalidSparseProjectionSchema
++}
++
++fn validate_h_microstep_count(microsteps: u8) -> Result<()> {
++    let class = BrainCapacityClass::n4096_research();
++    let (min, max) = class.execution().microstep_range();
++    if !(min..=max).contains(&microsteps) {
++        return Err(refuse());
++    }
++    GpuClosedLoopPipelines::validate_microstep_count(u32::from(microsteps))
++        .map_err(|_| refuse())
++}
++
++#[derive(Debug)]
++struct HPartition {
++    inherited: [Range<u32>; 9],
++    old_by_wide: Vec<Option<u32>>,
++}
++
++impl HPartition {
++    fn canonical() -> Result<Self> {
++        let bands = address_bands().map_err(|_| refuse())?;
++        let mut old_by_wide = vec![None; WIDE as usize];
++        let mut inherited = Vec::with_capacity(9);
++        let (mut old_at, mut wide_at) = (0, 0);
++        for band in bands {
++            let len = band.old.end.checked_sub(band.old.start).ok_or_else(refuse)?;
++            if len == 0 || band.old.start != old_at || band.old.end > NARROW
++                || band.inherited_h.start != wide_at
++                || band.inherited_h.end.checked_sub(band.inherited_h.start) != Some(len)
++                || band.detached_q.start != band.inherited_h.end
++                || band.detached_q.end.checked_sub(band.detached_q.start) != Some(len)
++                || band.detached_q.end > WIDE
++            {
++                return Err(refuse());
++            }
++            old_at = band.old.end;
++            wide_at = band.detached_q.end;
++            for (old, wide) in band.old.zip(band.inherited_h.clone()) {
++                if old_by_wide[wide as usize].replace(old).is_some() {
++                    return Err(refuse());
++                }
++            }
++            inherited.push(band.inherited_h);
++        }
++        if old_at != NARROW || wide_at != WIDE
++            || !old_by_wide.iter().flatten().copied().eq(0..NARROW)
++        {
++            return Err(refuse());
++        }
++        Ok(Self {
++            inherited: inherited.try_into().map_err(|_| refuse())?,
++            old_by_wide,
++        })
++    }
++
++    fn is_h(&self, i: u32) -> bool {
++        self.old_by_wide.get(i as usize).is_some_and(Option::is_some)
++    }
++
++    fn inherited_span(&self, start: u32, len: u32) -> bool {
++        if let Some(end) = start.checked_add(len) {
++            len != 0 && end <= WIDE && (start..end).all(|i| self.is_h(i))
++        } else {
++            false
++        }
++    }
++
++    fn render_writer(&self, source: &str, anchor: &str, index: &str) -> Result<String> {
++        if source.matches(anchor).count() != 1 || source.contains(H_FN) {
++            return Err(refuse());
++        }
++        let mut helper = format!("fn {H_FN}(lane: u32) -> bool {{\n  return ");
++        for (i, band) in self.inherited.iter().enumerate() {
++            if i != 0 {
++                helper.push_str("\n    || ");
++            }
++            write!(helper, "(lane >= {}u && lane < {}u)", band.start, band.end)
++                .map_err(|_| refuse())?;
++        }
++        helper.push_str(";\n}\n");
++        let guard = format!(
++            "{anchor}  if (brain.neuron_count != {WIDE}u || !{H_FN}({index})) {{ return; }}\n"
++        );
++        // Original WGSL bytes are retained verbatim except this one insertion
++        // after the pre-existing invocation bound; the early return dominates
++        // all per-neuron writes (including diagnostic fault paths in encode).
++        let body = source.replacen(anchor, &guard, 1);
++        helper.push_str(&body);
++        Ok(helper)
++    }
++
++    // Exact packed 32-bit positive zero, not mathematical equality to zero.
++    // Future real GPU admission must separately attest the actual initialized
++    // encoded-input scratch and same-slot observations, not this CPU copy.
++    fn require_positive_zero_q(&self, words: &[u32], stride: usize) -> Result<()> {
++        if !matches!(stride, 1 | 2) || words.len() != WIDE as usize * stride
++            || words.chunks_exact(stride).enumerate().any(|(i, chunk)| {
++                !self.is_h(i as u32) && chunk.iter().any(|&word| word != 0)
++            })
++        {
++            return Err(refuse());
++        }
++        Ok(())
++    }
++
++    fn validate_compiled(&self, phenotype: &BrainPhenotype) -> Result<()> {
++        let cap = BrainCapacityClass::n4096_research();
++        phenotype.validate_against(&cap)?;
++        validate_h_microstep_count(phenotype.microstep_count())?;
++        let decoder = phenotype.candidate_decoder();
++        if !phenotype.is_parked_n4096_h_only() || phenotype.brain_class_id() != cap.id()
++            || phenotype.neuron_count() != WIDE
++            || phenotype.sensor_encoder().assignments().iter()
++                .any(|row| !self.is_h(row.target_neuron()))
++            || phenotype.synapses().iter()
++                .any(|row| !self.is_h(row.source()) || !self.is_h(row.target()))
++            || !self.inherited_span(decoder.motor_start(), u32::from(decoder.motor_width()))
++        {
++            return Err(refuse());
++        }
++        // The stock speech shader has fixed motor-relative windows, unlike
++        // ordinary decoder eligibility's absolute metadata neuron addresses.
++        // Prove those windows are H even though speech is not dispatched here.
++        if let Some(speech) = phenotype.speech_decoder() {
++            let source = decoder.motor_start().checked_add(128).ok_or_else(refuse)?;
++            let target = decoder.motor_start().checked_add(160).ok_or_else(refuse)?;
++            if speech.input_width() != 32 || speech.output_width() != 32
++                || !self.inherited_span(source, 32) || !self.inherited_span(target, 32)
++            {
++                return Err(refuse());
++            }
++        }
++        Ok(())
++    }
++
++    fn validate_v11(&self, v11: &GpuV11Checkpoint) -> Result<()> {
++        if v11.neuron_count != WIDE || v11.pending_lifetime_synapse.is_some()
++            || v11.dendritic_branches.branches().iter().any(|branch| {
++                !self.is_h(branch.target)
++                    || branch.inputs.iter().any(|tap| !self.is_h(tap.source))
++            })
++            || v11.sparse_spans.iter().any(|span| {
++                !self.is_h(span.target) || span.edges.iter().any(|edge| {
++                    edge.target != span.target || !self.is_h(edge.source)
++                })
++            })
++        {
++            return Err(refuse());
++        }
++        // Reuse the typed structural codec, not apparent live-edge counts:
++        // it checks every private pending candidate and learned edge, plus
++        // their ordering/shape, and refuses any absent inverse Q address.
++        v11.structural.remap_parked_research_addresses(NARROW, &self.old_by_wide)
++            .map_err(|_| refuse())?;
++        Ok(())
++    }
++
++    fn validate_live_topology(&self, topo: &GpuLiveTopologyCheckpointV1) -> Result<()> {
++        topo.validate_for_capacity(&BrainCapacityClass::n4096_research())?;
++        let nr = topo.recurrent_synapse_count as usize;
++        let nd = topo.decoder_synapse_count as usize;
++        let nt = topo.total_synapse_count as usize;
++        if topo.neuron_count != WIDE
++            || topo.synapse_learning_metadata_words.len() != nt.checked_mul(ROW_WORDS).ok_or_else(refuse)?
++            || topo.decoder_eligibility_metadata_words.len() != nd.checked_mul(ROW_WORDS).ok_or_else(refuse)?
++        {
++            return Err(refuse());
++        }
++        let meta = &topo.synapse_learning_metadata_words;
++        for (target, pair) in topo.target_offsets.windows(2).enumerate() {
++            if pair[0] != pair[1] && !self.is_h(target as u32) {
++                return Err(refuse());
++            }
++            for row in pair[0] as usize..pair[1] as usize {
++                let words = &meta[row * ROW_WORDS..][..ROW_WORDS];
++                if words[0] as usize != row || words[1] != CompiledSynapseKind::RECURRENT_RAW
++                    || words[2] != topo.source_indices[row] || !self.is_h(words[2])
++                    || words[3] != target as u32 || words[5] as usize != row
++                    || words[6] != u32::MAX || words[7] != 0
++                {
++                    return Err(refuse());
++                }
++            }
++        }
++        for (local, eligibility) in topo.decoder_eligibility_metadata_words
++            .chunks_exact(ROW_WORDS).enumerate()
++        {
++            let row = nr + local;
++            let words = &meta[row * ROW_WORDS..][..ROW_WORDS];
++            if words[0] as usize != row || words[1] != CompiledSynapseKind::DECODER_RAW
++                || !self.is_h(words[2]) || !self.is_h(words[3]) || words[7] != 0
++                || eligibility[0] != words[0] || eligibility[4] != words[2]
++                || eligibility[5] != words[4] || eligibility[6] as usize != local
++                || words[5] as usize != local || words[6] as usize != local || eligibility[7] != 0
++            {
++                return Err(refuse());
++            }
++        }
++        self.validate_v11(&topo.v11_checkpoint)
++    }
++}
++
++// This is only an explicit source-level allowlist. Other packed mutable
++// operations must later earn separately reviewed coverage on a runnable slot.
++// Do not silently skip any one of them in an ordinary or a future paid tick.
++#[derive(Debug, Clone, Copy)]
++enum Stage {
++    Encode,
++    Recurrent(u8),
++    ClearSlot,
++    V11DiagnosticsClear,
++    V11TopologyUpload,
++    DecodeSelectAndSpeech,
++    EligibilityAndCredit,
++    ReplayAndSleep,
++    SaveRestoreAndRetire,
++}
++
++#[derive(Debug)]
++struct WriterDispatch<'a> {
++    wgsl: &'a str,
++    entry: &'static str,
++    workgroups: [u32; 3],
++    microstep_override: Option<u8>,
++}
++
++struct HInheritedWriterSet {
++    encode: String,
++    recurrent: String,
++}
++
++impl HInheritedWriterSet {
++    fn render(partition: &HPartition) -> Result<Self> {
++        let encode = partition.render_writer(CLOSED_LOOP_ENCODE_WGSL, ENCODE_ANCHOR, "index")?;
++        let recurrent = partition.render_writer(
++            CLOSED_LOOP_RECURRENT_WGSL, RECURRENT_ANCHOR, "target_index",
++        )?;
++        validate_production_shader_contract(&encode, &["encode_perception"])
++            .map_err(|_| refuse())?;
++        validate_production_shader_contract(&recurrent, &["clear_v11_work", "recurrent_microstep"])
++            .map_err(|_| refuse())?;
++        Ok(Self { encode, recurrent })
++    }
++
++    fn dispatch_description(&self, stage: Stage, microsteps: u8) -> Result<WriterDispatch<'_>> {
++        validate_h_microstep_count(microsteps)?;
++        let (wgsl, entry, microstep_override) = match stage {
++            Stage::Encode => (self.encode.as_str(), "encode_perception", None),
++            Stage::Recurrent(step) if step < microsteps => {
++                (self.recurrent.as_str(), "recurrent_microstep", Some(step))
++            }
++            Stage::Recurrent(_) | Stage::ClearSlot | Stage::V11DiagnosticsClear
++            | Stage::V11TopologyUpload | Stage::DecodeSelectAndSpeech | Stage::EligibilityAndCredit
++            | Stage::ReplayAndSleep | Stage::SaveRestoreAndRetire => return Err(refuse()),
++        };
++        // The source computes physical addresses; retain 4096/64 x workgroups,
++        // one row only, no change to the shader's gid or active-row ABI.
++        Ok(WriterDispatch { wgsl, entry, workgroups: [WIDE / THREADS, 1, 1], microstep_override })
++    }
++}
++
++struct VerifiedHWriterDescription<'a> {
++    compiler: &'a BrainPhenotype,
++    _expected: &'a ParkedExpectedTransport,
++    kernels: HInheritedWriterSet,
++}
++
++impl<'a> VerifiedHWriterDescription<'a> {
++    // Pure CPU source/shape evidence from a checked expected transport, not an
++    // installed handle, live rebind, checkpoint authority, or device grant.
++    fn prepare(compiler: &'a BrainPhenotype, expected: &'a ParkedExpectedTransport) -> Result<Self> {
++        let partition = HPartition::canonical()?;
++        partition.validate_compiled(compiler)?;
++        let topology = expected.expected_topology();
++        if topology.phenotype_hash != compiler.phenotype_hash() {
++            return Err(refuse());
++        }
++        partition.validate_live_topology(topology)?;
++        let state = expected.expected_snapshot().clone().into_parts();
++        if state.phenotype_hash != topology.phenotype_hash {
++            return Err(refuse());
++        }
++        partition.require_positive_zero_q(&state.activation_a_bits, 1)?;
++        partition.require_positive_zero_q(&state.activation_b_bits, 1)?;
++        partition.require_positive_zero_q(&state.neuron_homeostasis_bits, 2)?;
++        let kernels = HInheritedWriterSet::render(&partition)?;
++        Ok(Self { compiler, _expected: expected, kernels })
++    }
++
++    fn describe(&self, stage: Stage) -> Result<WriterDispatch<'_>> {
++        self.kernels.dispatch_description(stage, self.compiler.microstep_count())
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use alife_core::{
++        CoactivationEvidence, DendriticBranch, DendriticBranchSet, DendriticInputRef,
++        PhenotypeHash, StructuralPlasticityConfig, StructuralPlasticityState,
++    };
++    use crate::{
++        AddLifetimeSynapse, GPU_LIVE_TOPOLOGY_CHECKPOINT_SCHEMA_VERSION,
++        GPU_V11_CAUSAL_STATE_SCHEMA_VERSION, GpuV11SparseEdge, GpuV11SparseSpan,
++        GpuV11WorkReceipt,
++    };
++
++    const H: [(u32, u32); 9] = [
++        (0, 256), (512, 640), (768, 1024), (1280, 1536), (1792, 2240),
++        (2688, 2944), (3200, 3328), (3456, 3680), (3904, 4000),
++    ];
++
++    #[test]
++    fn exact_nine_bands_and_positive_zero_without_posthoc_masking() {
++        let p = HPartition::canonical().unwrap();
++        assert_eq!(p.inherited.each_ref().map(|r| (r.start, r.end)), H);
++        let mut next_old = 0;
++        for index in 0..WIDE {
++            let expected = H.iter().any(|(a, b)| (*a..*b).contains(&index));
++            assert_eq!(p.is_h(index), expected);
++            if expected {
++                assert_eq!(p.old_by_wide[index as usize], Some(next_old));
++                next_old += 1;
++            }
++        }
++        assert_eq!(next_old, NARROW);
++        assert!(!p.is_h(WIDE));
++        assert!(!p.inherited_span(255, 2));
++        assert!(!p.inherited_span(u32::MAX, 32));
++        assert!(p.inherited_span(3456 + 128, 32));
++        assert!(p.inherited_span(3456 + 160, 32));
++
++        let mut activation = vec![0; WIDE as usize];
++        activation[512] = 0.25_f32.to_bits();
++        assert!(p.require_positive_zero_q(&activation, 1).is_ok());
++        activation[256] = 0x8000_0000; // Reject negative-zero raw words, not a fake snapshot.
++        assert!(p.require_positive_zero_q(&activation, 1).is_err());
++        let mut homeo = vec![0; WIDE as usize * 2];
++        assert!(p.require_positive_zero_q(&homeo, 2).is_ok());
++        homeo[4000 * 2 + 1] = 0.01_f32.to_bits();
++        assert!(p.require_positive_zero_q(&homeo, 2).is_err());
++    }
++
++    fn assert_only_expected_insertion(
++        stock: &str, new: &str, anchor: &str, index: &str,
++    ) {
++        let (helper, body) = new.split_once("\n}\n").unwrap();
++        assert!(helper.starts_with("fn n4096_h_inherited_index_v1"));
++        assert_eq!(helper.matches("lane >=").count(), 9);
++        let guard = format!(
++            "  if (brain.neuron_count != 4096u || !{H_FN}({index})) {{ return; }}\n",
++        );
++        assert_eq!(body.matches(&guard).count(), 1);
++        assert_eq!(body.replace(&guard, ""), stock);
++        assert!(body.contains(&format!("{anchor}{guard}")));
++        let guarded_entry = body.split_once(&guard).unwrap().1;
++        assert!(guarded_entry.contains("store_state_f32("));
++    }
++
++    #[test]
++    fn unchanged_stock_modules_and_two_guarded_naga_validated_dispatch_descriptions() {
++        let p = HPartition::canonical().unwrap();
++        let s = HInheritedWriterSet::render(&p).unwrap();
++        assert_only_expected_insertion(
++            CLOSED_LOOP_ENCODE_WGSL, &s.encode, ENCODE_ANCHOR, "index",
++        );
++        assert_only_expected_insertion(
++            CLOSED_LOOP_RECURRENT_WGSL, &s.recurrent, RECURRENT_ANCHOR, "target_index",
++        );
++        assert!(p.render_writer("wrong preimage", ENCODE_ANCHOR, "index").is_err());
++        assert!(p.render_writer(&ENCODE_ANCHOR.repeat(2), ENCODE_ANCHOR, "index").is_err());
++        assert!(p.render_writer(&s.encode, ENCODE_ANCHOR, "index").is_err());
++
++        let encode = s.dispatch_description(Stage::Encode, 2).unwrap();
++        assert_eq!((encode.entry, encode.workgroups, encode.microstep_override),
++            ("encode_perception", [64, 1, 1], None));
++        let rec = s.dispatch_description(Stage::Recurrent(1), 2).unwrap();
++        assert_eq!((rec.entry, rec.workgroups, rec.microstep_override),
++            ("recurrent_microstep", [64, 1, 1], Some(1)));
++        assert_ne!(encode.wgsl, rec.wgsl);
++        for forbidden in [
++            Stage::Recurrent(2), Stage::ClearSlot, Stage::V11DiagnosticsClear,
++            Stage::V11TopologyUpload, Stage::DecodeSelectAndSpeech,
++            Stage::EligibilityAndCredit, Stage::ReplayAndSleep, Stage::SaveRestoreAndRetire,
++        ] {
++            assert!(s.dispatch_description(forbidden, 2).is_err(), "{forbidden:?}");
++        }
++        assert!(s.dispatch_description(Stage::Encode, 0).is_err());
++        assert!(s.dispatch_description(Stage::Encode, 1).is_err());
++        assert!(s.dispatch_description(Stage::Recurrent(0), 1).is_err());
++        assert!(s.dispatch_description(Stage::Encode, 5).is_err());
++    }
++
++    fn evidence(source: u32, target: u32) -> CoactivationEvidence {
++        CoactivationEvidence {
++            region: 0, source, target, coactivation: 700,
++            eligibility: 30, concept_gap_support: 0,
++        }
++    }
++
++    fn v11(branch_target: u32, branch_tap: u32, evidence_source: u32) -> GpuV11Checkpoint {
++        let mut structural = StructuralPlasticityState::new(
++            WIDE, StructuralPlasticityConfig::default(),
++        ).unwrap();
++        structural.discover_candidates(&[evidence(evidence_source, 513)]).unwrap();
++        assert_eq!(structural.candidate_count(), 1);
++        GpuV11Checkpoint {
++            schema_version: GPU_V11_CAUSAL_STATE_SCHEMA_VERSION,
++            neuron_count: WIDE,
++            dendritic_branches: DendriticBranchSet::new(vec![DendriticBranch::new(
++                branch_target, 0.0, 1.0,
++                vec![DendriticInputRef::new(branch_tap, 1.0).unwrap()],
++            ).unwrap()]).unwrap(),
++            structural,
++            sparse_spans: vec![GpuV11SparseSpan {
++                target: 513, edges: vec![GpuV11SparseEdge {
++                    source: 512, target: 513, route: 0, weight: 0.25,
++                }],
++            }],
++            pending_lifetime_synapse: None,
++            work: GpuV11WorkReceipt::default(),
++        }
++    }
++
++    #[test]
++    fn v11_rejects_q_taps_targets_structural_candidates_and_pending_uploads() {
++        let p = HPartition::canonical().unwrap();
++        let valid = v11(513, 512, 512);
++        assert!(p.validate_v11(&valid).is_ok());
++        assert!(p.validate_v11(&v11(640, 512, 512)).is_err());
++        assert!(p.validate_v11(&v11(513, 640, 512)).is_err());
++        assert!(p.validate_v11(&v11(513, 512, 640)).is_err());
++        let mut q_edge = valid.clone();
++        q_edge.sparse_spans[0].edges[0].source = 640;
++        assert!(p.validate_v11(&q_edge).is_err());
++        let mut pending_h = valid;
++        pending_h.pending_lifetime_synapse = Some(AddLifetimeSynapse {
++            source: 512, target: 513, route: 0, initial_weight: 0.25,
++            evidence: evidence(512, 513),
++        });
++        assert!(p.validate_v11(&pending_h).is_err());
++    }
++
++    fn topology(recurrent_source: u32, recurrent_target: u32, decoder_source: u32) -> GpuLiveTopologyCheckpointV1 {
++        let mut s = GpuLiveTopologyCheckpointV1 {
++            schema_version: GPU_LIVE_TOPOLOGY_CHECKPOINT_SCHEMA_VERSION,
++            phenotype_hash: PhenotypeHash([1, 2, 3, 4]),
++            neuron_count: WIDE,
++            total_synapse_count: 2, recurrent_synapse_count: 1, decoder_synapse_count: 1,
++            target_offsets: (0..=WIDE).map(|i| if i > recurrent_target { 1 } else { 0 }).collect(),
++            source_indices: vec![recurrent_source], route_indices: vec![0],
++            genetic_weight_bits: vec![0.25_f32.to_bits(), 0.5_f32.to_bits()],
++            alpha_bits: vec![0.01_f32.to_bits(), 0.02_f32.to_bits()],
++            synapse_learning_metadata_words: vec![
++                0, 1, recurrent_source, recurrent_target, 0, 0, u32::MAX, 0,
++                1, 2, decoder_source, 3457, 0, 0, 0, 0,
++            ],
++            decoder_eligibility_metadata_words: vec![1, 0, 0, 0, decoder_source, 0, 0, 0],
++            decoder_synapse_starts: vec![0], decoder_weight_global_synapse_ids: vec![1],
++            memory_weight_indices: vec![1],
++            v11_checkpoint: v11(513, 512, 512),
++            canonical_digest: [0; 4],
++        };
++        s.canonical_digest = s.recompute_canonical_digest().unwrap();
++        s
++    }
++
++    #[test]
++    fn authentic_typed_topology_codec_does_not_make_q_edges_legal() {
++        let p = HPartition::canonical().unwrap();
++        for (source, target, decoder_source, accepted) in [
++            (512, 513, 3458, true), (640, 513, 3458, false),
++            (512, 640, 3458, false), (512, 513, 3680, false),
++        ] {
++            let topo = topology(source, target, decoder_source);
++            topo.validate_for_capacity(&BrainCapacityClass::n4096_research()).unwrap();
++            assert_eq!(p.validate_live_topology(&topo).is_ok(), accepted);
++        }
++        let mut mismatched = topology(512, 513, 3458);
++        mismatched.decoder_eligibility_metadata_words[4] = 3459;
++        mismatched.canonical_digest = mismatched.recompute_canonical_digest().unwrap();
++        assert!(p.validate_live_topology(&mismatched).is_err());
++    }
++
++    #[test]
++    fn empty_q_rows_would_not_prevent_stock_receptor_writes() {
++        // Not a model or GPU result: these are the 0-input/0-edge scalar
++        // terms present in the two pinned stock WGSL writers.
++        let state_gate = (0.2_f32 + 0.25 + 0.3) / 3.0;
++        assert_ne!((state_gate - 0.5) * 0.05, 0.0);
++        let local_threshold_shift = 0.125_f32;
++        assert_ne!((-local_threshold_shift).tanh(), 0.0);
++        let p = HPartition::canonical().unwrap();
++        assert!(!p.is_h(256));
++        assert!(p.is_h(255));
++    }
++}
