@@ -1,0 +1,38 @@
+{
+  "after": {
+    "crates/alife_game_app/Cargo.toml": "bce5a91b832158eb9dbf4a28e452b9b359cc84341007105b7874e56e985915de",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs": "39b92d56e6346d0c56aeaf30d821358c3879150566c348ec3be4a8318325b1d4",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs": "33f4908544234288d0e83431bdd44c786821bf4d271525686ce5942d78bdb9e0",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_observer.rs": "d4e53442c58be391e1be85a64dd43843b6a96367ffda71d327cf6ce25982ed59",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_predecessor.rs": "a909ab93e01220683375f42621cbd1d7bbad7273c712b40a0641f1dbcfb6c17e",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_row_parity.rs": "7da711baf06bcca51ba04e1d532df059abb6ad664a31b8564427b602256798ea",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_wire.rs": "d7def7a07841981aff038175c56018a8552610db1088d8c9b95f601867c2a659"
+  },
+  "basis_exact_published_workflow_sha256": "075da08148939fe1266f79125b6f6943552b827cbab451b6dcedc2491b038555",
+  "basis_git_commit": "a1b1add6ba4d5c0bb067b75496f6b03fdb0db1de",
+  "before": {
+    "crates/alife_game_app/Cargo.toml": "bd23d2b12ee34839ad0b7baf9ef7b1b0d775ea385a6298fdeb2b3a1d2c4881bb",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs": "c05453e87a9241c7a470a7670be029ff6b1e9f940f139c38422dad360b04c288",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs": "12ed45125302c5894a7d6ed0ab9e57782b7e2c392d467f475c279cb61633550b",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_observer.rs": null,
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_predecessor.rs": null,
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_row_parity.rs": null,
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_wire.rs": null
+  },
+  "note9_changed_leaves": [
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_observer.rs",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_predecessor.rs",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_wire.rs"
+  ],
+  "patches": {
+    "FORWARD.patch": "2c23478acfb25c560129c27745097de4425e4191f596207d62e355616c51ea65",
+    "INVERSE.patch": "21618ea8427da7ac54f1266a72a072cc0b45b0f706bf2ca94b5d8afb1f979f0e",
+    "NOTE9-DELTA-INVERSE.patch": "1f5884febcd9ec08b4d819dc3f1c29e382a83e91538b5ef47db800f22fbe9017",
+    "NOTE9-DELTA.patch": "cf90b0c21745c3a7f1b4064fe58abf1c9b0a2a8835319d8bff2f9cf4c3c7479d"
+  },
+  "prior_detached_source_patch_sha256": "95b8366669fd5d744dea69c72af3b031fc5e409b90595be958bde962f7375d11",
+  "schema": "qualia.ordinary_ingress_source_only.pins.v1",
+  "unchanged_required_lock_sha256": "155699e9274f8890bc8c335669a62de48203ba315a33388a8f0caca71f0f7f37"
+}
