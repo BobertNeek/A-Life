@@ -1,0 +1,14 @@
+{
+  "after_sha256": "8125c0417c4296e2cb3f4e0f20066742f6b94be0fd3127c6d97c75487d3dc6c2",
+  "allows_next_or_score": false,
+  "before_sha256": "80958cfbbd77488b755ff2293c6427d6b4277849b679183b066ccb9733ccb2fd",
+  "compile_or_native": false,
+  "forward_sha256": "f2c142ab5fa54018e0ba52431b52141b08aa848ef460db49c32e1205378d8b6d",
+  "inverse_sha256": "addde23e98beda036e49b9e58712b161ce05552cc23f54aa4a60d371ea220ef9",
+  "public_exact_ancestor": "a7460787147680a78c88a0531659e814a38085bf",
+  "public_restore_patch_sha256": "da7ccf322ea35ed66fb5b6cc055514bc5b9265332fc651e2052b107b9248d47f",
+  "relative_path": "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/wsp_out_of_reach_scope.rs",
+  "requires_fresh_separate_authority": true,
+  "schema": "qualia.wsp.schema16.source_only.steady_food_reciprocal.v1",
+  "unchanged_geometry_source_sha256": "d6623b5284629f65ae7f35f36c8d55e3f98838cf257c057ff49fc0b85a26bfee"
+}

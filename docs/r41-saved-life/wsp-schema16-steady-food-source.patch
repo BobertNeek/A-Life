@@ -1,0 +1,38 @@
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/wsp_out_of_reach_scope.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/wsp_out_of_reach_scope.rs
+--- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/wsp_out_of_reach_scope.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/wsp_out_of_reach_scope.rs
+@@ -23,5 +23,5 @@
+ #[serde(rename_all = "snake_case")]
+ enum Stimulus {
+-    RearEdgeGetBall, RearSteadyGetBall, Silent, RearEdgeGetOnly, RearEdgeGetFood,
++    RearEdgeGetBall, RearSteadyGetBall, Silent, RearEdgeGetOnly, RearEdgeGetFood, RearSteadyGetFood,
+ }
+ impl Stimulus {
+@@ -31,9 +31,26 @@
+             Self::Silent => &[],
+             Self::RearEdgeGetOnly => &[9],
+-            Self::RearEdgeGetFood => &[9, 1],
++            Self::RearEdgeGetFood | Self::RearSteadyGetFood => &[9, 1],
+         }
+     }
+     fn edge(self) -> bool {
+         matches!(self, Self::RearEdgeGetBall | Self::RearEdgeGetOnly | Self::RearEdgeGetFood)
++    }
++}
++#[cfg(test)]
++mod steady_reciprocal_catalog_control {
++    use super::Stimulus;
++
++    #[test]
++    fn steady_food_and_ball_use_same_native_point_and_opposite_real_nouns() {
++        let ball: Stimulus = serde_json::from_str(r#""rear_steady_get_ball""#).unwrap();
++        let food: Stimulus = serde_json::from_str(r#""rear_steady_get_food""#).unwrap();
++        let old_food: Stimulus = serde_json::from_str(r#""rear_edge_get_food""#).unwrap();
++        assert!(!ball.edge() && !food.edge() && old_food.edge());
++        assert_eq!(ball.terms(), &[9, 14]);
++        assert_eq!(food.terms(), &[9, 1]);
++        assert_eq!(old_food.terms(), food.terms());
++        assert_eq!(serde_json::to_string(&food).unwrap(), r#""rear_steady_get_food""#);
++        assert!(serde_json::from_str::<Stimulus>(r#""rear_steady_fake_food""#).is_err());
+     }
+ }
