@@ -389,7 +389,7 @@ index 0000000..ebce918
 +    }
 +}
 diff --git a/crates/alife_gpu_backend/src/closed_loop_runtime.rs b/crates/alife_gpu_backend/src/closed_loop_runtime.rs
-index 779904b..6d03c6b 100644
+index 559d4b1..32591e9 100644
 --- a/crates/alife_gpu_backend/src/closed_loop_runtime.rs
 +++ b/crates/alife_gpu_backend/src/closed_loop_runtime.rs
 @@ -10,6 +10,10 @@ mod selector_exploration;
@@ -403,7 +403,7 @@ index 779904b..6d03c6b 100644
  #[cfg(feature = "training-rollout")]
  pub use live_policy::GpuLivePolicyInstallReceipt;
  #[cfg(feature = "training-rollout")]
-@@ -2753,6 +2757,8 @@ pub struct GpuClosedLoopBackend {
+@@ -2765,6 +2769,8 @@ pub struct GpuClosedLoopBackend {
      runtime_budget: GpuRuntimeBudget,
      activity_policy: BrainActivityPolicyV1,
      admission: GpuAdmissionReceipt,
@@ -412,7 +412,7 @@ index 779904b..6d03c6b 100644
      pub(crate) class_buckets: BTreeMap<u16, ClassBucketPool>,
      slot_generation_watermarks: BTreeMap<(u16, u32), u32>,
      pub(crate) organisms: BTreeMap<u64, GpuBrainHandle>,
-@@ -2915,6 +2921,8 @@ impl GpuClosedLoopBackend {
+@@ -2931,6 +2937,8 @@ impl GpuClosedLoopBackend {
              runtime_budget,
              activity_policy,
              admission,
@@ -421,7 +421,7 @@ index 779904b..6d03c6b 100644
              class_buckets: BTreeMap::new(),
              slot_generation_watermarks: BTreeMap::new(),
              organisms: BTreeMap::new(),
-@@ -2954,6 +2962,10 @@ impl GpuClosedLoopBackend {
+@@ -2974,6 +2982,10 @@ impl GpuClosedLoopBackend {
      /// admission, generations, counters, and replay state are new and cannot
      /// accept handles issued by the live backend.
      pub fn new_staging_like_live(&self) -> Result<Self, ScaffoldContractError> {
@@ -432,7 +432,7 @@ index 779904b..6d03c6b 100644
          #[cfg(feature = "gpu-tests")]
          if self.offline_software_training_test {
              return Err(ScaffoldContractError::NeuralBackendUnavailable);
-@@ -2984,6 +2996,8 @@ impl GpuClosedLoopBackend {
+@@ -3004,6 +3016,8 @@ impl GpuClosedLoopBackend {
              runtime_budget: self.runtime_budget,
              activity_policy: self.activity_policy,
              admission: GpuAdmissionReceipt::empty(self.runtime_budget),
@@ -441,7 +441,7 @@ index 779904b..6d03c6b 100644
              class_buckets: BTreeMap::new(),
              slot_generation_watermarks: BTreeMap::new(),
              organisms: BTreeMap::new(),
-@@ -3026,6 +3040,8 @@ impl GpuClosedLoopBackend {
+@@ -3050,6 +3064,8 @@ impl GpuClosedLoopBackend {
      pub fn offline_training_device_queue(
          &self,
      ) -> Result<(&wgpu::Device, &wgpu::Queue), ScaffoldContractError> {
@@ -450,7 +450,7 @@ index 779904b..6d03c6b 100644
          if !matches!(self.state, GpuBackendState::Ready) || self.device_lost.load(Ordering::Acquire)
          {
              return Err(ScaffoldContractError::NeuralBackendUnavailable);
-@@ -5457,6 +5473,10 @@ impl GpuClosedLoopBackend {
+@@ -5503,6 +5519,10 @@ impl GpuClosedLoopBackend {
      }
  
      pub(crate) fn ensure_ready(&mut self) -> Result<(), ScaffoldContractError> {
@@ -461,7 +461,7 @@ index 779904b..6d03c6b 100644
          // Explicit software fixtures expose only the quiescent offline queue.
          // They cannot mint resident handles, live dispatches or restore targets.
          #[cfg(feature = "gpu-tests")]
-@@ -5477,6 +5497,10 @@ impl GpuClosedLoopBackend {
+@@ -5523,6 +5543,10 @@ impl GpuClosedLoopBackend {
          &self,
          handle: GpuBrainHandle,
      ) -> Result<(), ScaffoldContractError> {

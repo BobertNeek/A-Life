@@ -1,9 +1,11 @@
 {
+  "authenticated_restored_source_manifest_git_blob": "7010cd90fb587a18cd75c6109d95e5311e5a9a86",
+  "authenticated_restored_source_runtime_sha256": "6ab9151fda73dd30e3064143277f5d54f683ae87cebe0dc0a9f305d57f6d1605",
   "base_emitted_carrier_git": "d31f45d1f6b0157493080be9b89e45337d7cc4a7",
   "compiled_or_native": false,
   "composes_after_exact_transport_sha256": "3bc64a53caaf465eb527f2ca9158ee603fe4814650692102dc70180458d897ec",
-  "forward": "068f0b351c593cf5f7ff52eb12bba9414ddcdabd3398ce899f2209c6c39f7f24",
-  "inverse": "28d27816f5315343c529011bc948c0287b215b1f5ee5a7b3c0cfce05841321bb",
+  "forward": "ebaef8f9ebee1887e14d103ee5e21ec9fc647868fa579ea303996ec19c8f9306",
+  "inverse": "377f4b4bc42550b8ccf12e4a23fbb379d953fc2cc7b0ff204e19afa610dbb16f",
   "leaves": {
     "crates/alife_core/src/phenotype/record.rs": {
       "after": "ca556f11f342f0fb7892df000bfd75a13f950b00403f328ac9464631bb877763",
@@ -14,13 +16,15 @@
       "before": null
     },
     "crates/alife_gpu_backend/src/closed_loop_runtime.rs": {
-      "after": "30bea4a52986e4201e965694706b7d2377eb18647855286ceee40a7150aa5be3",
-      "before": "497896a2f5b2f128cb2d73dfaf2b99549ead1dc0952485f8de9ebda0b42bad4d"
+      "after": "d2b708511b9974aeea24506650f7fbbd8d22a7b83e6e791660bf786b0bd816e7",
+      "before": "6ab9151fda73dd30e3064143277f5d54f683ae87cebe0dc0a9f305d57f6d1605"
     }
   },
+  "mechanical_runtime_rebase_only": true,
   "prior": "eea29c451212b36d5dee7ca07dfff523b6748594d18a3ba3e2a3860ef1042c00",
   "private_current_or_live_authority": false,
   "production_source_delta_from_prior": false,
+  "reviewed_prior_same_edit_payload_forward": "068f0b351c593cf5f7ff52eb12bba9414ddcdabd3398ce899f2209c6c39f7f24",
   "roundtrip_static_verified": true,
   "schema": "qualia.n4096.parked-h-only-compiler-source.v1"
 }

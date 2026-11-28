@@ -17,9 +17,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 65
     env:
+      PIN_CORE_FAILED_PREDECESSOR: 52ad8b75b4a20b0e1b7f98ba39b19cae29a68bac
       PIN_TRANSPORT_HEAD: a84098b683ff37067e7b79c090a93ab212ee5ce1
-      PIN_H_ONLY_META: ede42cb6103512f488bee1cf0e80a1c114d1d1f60a9e3ffa177d8750c49972d7
-      PIN_REGISTRY_META: 6f663d878e8a62a66ed24ce8c4f2d76dda2e1365fedbc8177dbc4fc966861b4b
+      PIN_H_ONLY_META: b732124221821133679958b00d86b655eaf5f16efe7ae1c63d4ebafc15b5f8b8
+      PIN_REGISTRY_META: ec88cac581dbedec23fec5dc071bc290142d9e4f7be3dec3c2b60d2ba61772e4
       PIN_EXACT_EMITTED_WIDTH: d31f45d1f6b0157493080be9b89e45337d7cc4a7
       PIN_EXACT_EMITTED_WIDTH_TREE: 61dc2bf5226e87f3a3b92312708e254ff36d5d28
       PIN_PARKED_META: 63e7fc70c3b4ccbe9fbde78e2fe8d8efd05a31a33ddbb176608b14675024df56
@@ -71,7 +72,15 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git show -s --format=%P HEAD)" = "$PIN_TRANSPORT_HEAD"
+          test "$(git show -s --format=%P HEAD)" = "$PIN_CORE_FAILED_PREDECESSOR"
+          test "$(git show -s --format=%P "$PIN_CORE_FAILED_PREDECESSOR")" = "$PIN_TRANSPORT_HEAD"
+          diff -u <(printf '%s\n' \
+            $'M\t.github/workflows/qualia-n4096-width-intake-check.yml' \
+            $'M\tdocs/r41-saved-life/N4096-PARKED-H-ONLY-COMPILER.patch' \
+            $'M\tdocs/r41-saved-life/H-ONLY-COMPILER-PINS.json' \
+            $'M\tdocs/r41-saved-life/N4096-PARKED-NATIVE-REGISTRY.patch' \
+            $'M\tdocs/r41-saved-life/NATIVE-REGISTRY-PINS.json' | LC_ALL=C sort) \
+            <(git diff --name-status --no-renames "$PIN_CORE_FAILED_PREDECESSOR" HEAD | LC_ALL=C sort)
           test "$(git show -s --format=%P "$PIN_TRANSPORT_HEAD")" = "$PIN_EXACT_EMITTED_WIDTH"
           diff -u <(printf '%s\n' \
             $'M\t.github/workflows/qualia-n4096-width-intake-check.yml' \
@@ -79,7 +88,7 @@ jobs:
             $'A\tdocs/r41-saved-life/H-ONLY-COMPILER-PINS.json' \
             $'A\tdocs/r41-saved-life/N4096-PARKED-NATIVE-REGISTRY.patch' \
             $'A\tdocs/r41-saved-life/NATIVE-REGISTRY-PINS.json' | LC_ALL=C sort) \
-            <(git diff --name-status --no-renames "$PIN_TRANSPORT_HEAD" HEAD | LC_ALL=C sort)
+            <(git diff --name-status --no-renames "$PIN_TRANSPORT_HEAD" "$PIN_CORE_FAILED_PREDECESSOR" | LC_ALL=C sort)
           test "$(git rev-parse "$PIN_EXACT_EMITTED_WIDTH^{tree}")" = "$PIN_EXACT_EMITTED_WIDTH_TREE"
           test "$(git show -s --format=%P "$PIN_EXACT_EMITTED_WIDTH")" = "$PIN_WIDTH_PARENT"
           diff -u <(printf '%s\n' \

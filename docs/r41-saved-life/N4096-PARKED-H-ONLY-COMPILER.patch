@@ -319,10 +319,10 @@ index 0000000..fcfc2ff
 +    assert!(!serde_json::from_value::<BrainPhenotype>(json).unwrap().is_parked_n4096_h_only());
 +}
 diff --git a/crates/alife_gpu_backend/src/closed_loop_runtime.rs b/crates/alife_gpu_backend/src/closed_loop_runtime.rs
-index d36f8e1..779904b 100644
+index 131f873..559d4b1 100644
 --- a/crates/alife_gpu_backend/src/closed_loop_runtime.rs
 +++ b/crates/alife_gpu_backend/src/closed_loop_runtime.rs
-@@ -5108,6 +5108,12 @@ impl GpuClosedLoopBackend {
+@@ -5154,6 +5154,12 @@ impl GpuClosedLoopBackend {
          allow_research: bool,
      ) -> Result<GpuBrainHandle, ScaffoldContractError> {
          self.ensure_ready()?;
