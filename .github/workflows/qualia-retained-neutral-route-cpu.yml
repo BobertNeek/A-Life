@@ -17,6 +17,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 65
     env:
+      PIN_FAILED_HEAD: c1658822ab5fcb2a744f4d0c84a61e5f1fc323a5
+      PIN_FAILED_TREE: d8d324112aeb339d280340f0a2eff7479cd8592d
       PIN_PARENT: 23a27f3b45aa5aa9e6d44bf86f7b83aa4de27a66
       PIN_PARENT_TREE: a20a4b8223b43dc7a660537df2907e532ed0a0da
       PIN_PARENT_PREDECESSOR: 52fac4138cd5e11d0b37c5b76c3295c7a3056fc5
@@ -24,12 +26,12 @@ jobs:
       PIN_MANIFEST_BLOB: 7010cd90fb587a18cd75c6109d95e5311e5a9a86
       PIN_RESTORE_BLOB: 28b3868f208796f8d2f96a870f7589f1ed0360e5
       PIN_PRAISE_PATCH_BLOB: 95f99c968f9a549c197ecee8f5a40ab8b14206b7
-      PIN_PRAISE_PINS_BLOB: 155e34e1b23853428c8e19efb2d96b4a83d7ff
+      PIN_PRAISE_PINS_BLOB: 155e34e1b23853428c8e19efb2d96b6b4a83d7ff
       PIN_PRAISE_PATCH: aa1b1f7240eecd588f88f2b074740492ad456926aabe2eca48603cbd1d02dba5
       PIN_PRAISE_PINS: 5b58908ab217e2de6bcacbd297a1bc581eb3aa7fa30c24ae73b4840b6d4e5818
       PIN_FORWARD: 446b7d5f120c1d0df17ca33c5b09a0372c3db037234293015ea9c9a1aca0b10f
       PIN_INVERSE: a94b2a991d7f24ca3b7cfe942f310cc00ba4f36fe2315f209f6426d6dd1e5f1d
-      PIN_PINS: 857ccb963e252ed84b7041d3db9127fee7130ea3e2a2d0d006ca4a98a0196965
+      PIN_PINS: 73af9e5369452bd321055528d1cda3e8a4375aad8bbbe5495b0ca6c7f2e0a25e
       PIN_CLI: 4e7ae13bf6fb496a175166ebaf3e9feb66598ec9cd35644c02203ea58bc6b570
       PIN_LOCK: 155699e9274f8890bc8c335669a62de48203ba315a33388a8f0caca71f0f7f37
       PIN_RUSTC_COMMIT: 0ef1bc386059596dada8fb65b50425aab2ea637a
@@ -58,9 +60,21 @@ jobs:
 
       - name: Authenticate exact parent and five source-only added blobs
         run: |
-          set -euo pipefail
+          set -Eeuo pipefail
+          stage=pin-shapes
+          trap 'rc=$?; printf "::error title=Neutral source admission::%s failed (exit %s)\n" "$stage" "$rc" >&2; exit "$rc"' ERR
+          phase() { stage="$1"; printf '[neutral source admission] %s\n' "$stage"; }
+          phase pin-shapes
+          for value in "$PIN_FAILED_HEAD" "$PIN_FAILED_TREE" "$PIN_PARENT" "$PIN_PARENT_TREE" \
+            "$PIN_PARENT_PREDECESSOR" "$PIN_RESTORE" "$PIN_MANIFEST_BLOB" "$PIN_RESTORE_BLOB" \
+            "$PIN_PRAISE_PATCH_BLOB" "$PIN_PRAISE_PINS_BLOB"; do
+            [[ "$value" =~ ^[0-9a-f]{40}$ ]]
+          done
+          phase exact-checkout-and-fixed-retry-ancestry
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git show -s --format=%P HEAD)" = "$PIN_PARENT"
+          test "$(git show -s --format=%P HEAD)" = "$PIN_FAILED_HEAD"
+          test "$(git rev-parse "$PIN_FAILED_HEAD^{tree}")" = "$PIN_FAILED_TREE"
+          test "$(git show -s --format=%P "$PIN_FAILED_HEAD")" = "$PIN_PARENT"
           test "$(git rev-parse "$PIN_PARENT^{tree}")" = "$PIN_PARENT_TREE"
           test "$(git show -s --format=%P "$PIN_PARENT")" = "$PIN_PARENT_PREDECESSOR"
           git merge-base --is-ancestor "$PIN_RESTORE" "$PIN_PARENT"
@@ -71,17 +85,28 @@ jobs:
             docs/r41-saved-life/NEUTRAL-ROUTE-PINS.json
             scripts/qualia-check-neutral-route-cpu.py
           )
+          phase previous-five-additions-and-two-leaf-fix
+          diff -u <(printf 'A\t%s\n' "${leaves[@]}" | LC_ALL=C sort) \
+            <(git diff --name-status --no-renames "$PIN_PARENT" "$PIN_FAILED_HEAD" | LC_ALL=C sort)
           diff -u <(printf 'A\t%s\n' "${leaves[@]}" | LC_ALL=C sort) \
             <(git diff --name-status --no-renames "$PIN_PARENT" HEAD | LC_ALL=C sort)
+          diff -u <(printf 'M\t%s\n' "${leaves[0]}" "${leaves[3]}" | LC_ALL=C sort) \
+            <(git diff --name-status --no-renames "$PIN_FAILED_HEAD" HEAD | LC_ALL=C sort)
           for path in "${leaves[@]}"; do
+            phase "regular-file:$path"
             test "$(git ls-tree HEAD -- "$path" | cut -d' ' -f1)" = 100644
-            test -f "$path" && test ! -L "$path"
+            test -f "$path"
+            test ! -L "$path"
           done
+          phase stock-manifest-and-unchanged-restore-closure
           test "$(git rev-parse "$PIN_RESTORE:docs/r41-saved-life/SOURCE.json")" = "$PIN_MANIFEST_BLOB"
           test "$(git rev-parse "$PIN_RESTORE:docs/r41-saved-life/restore_source.py")" = "$PIN_RESTORE_BLOB"
           git diff --exit-code "$PIN_RESTORE" HEAD -- docs/r41-saved-life/{SOURCE.json,restore_source.py,patches}
+          phase prior-praise-source-patch-git-blob
           test "$(git rev-parse "HEAD:docs/r41-saved-life/PRAISE-INGRESS.patch")" = "$PIN_PRAISE_PATCH_BLOB"
+          phase prior-praise-source-pins-git-blob
           test "$(git rev-parse "HEAD:docs/r41-saved-life/PRAISE-INGRESS-PINS.json")" = "$PIN_PRAISE_PINS_BLOB"
+          phase six-source-input-sha256
           printf '%s  %s\n' \
             "$PIN_PRAISE_PATCH" docs/r41-saved-life/PRAISE-INGRESS.patch \
             "$PIN_PRAISE_PINS" docs/r41-saved-life/PRAISE-INGRESS-PINS.json \
@@ -89,6 +114,7 @@ jobs:
             "$PIN_INVERSE" docs/r41-saved-life/NEUTRAL-ROUTE.inverse.patch \
             "$PIN_PINS" docs/r41-saved-life/NEUTRAL-ROUTE-PINS.json \
             "$PIN_CLI" scripts/qualia-check-neutral-route-cpu.py | sha256sum -c -
+          phase restored-stock-source-closure
           umask 077
           exact="$RUNNER_TEMP/qualia-neutral-route-exact"
           out="$RUNNER_TEMP/qualia-neutral-route-evidence"

@@ -5,7 +5,7 @@
   "base_stock_source_manifest": "7010cd90fb587a18cd75c6109d95e5311e5a9a86",
   "base_praise_patch_sha256": "aa1b1f7240eecd588f88f2b074740492ad456926aabe2eca48603cbd1d02dba5",
   "base_praise_patch_git_blob": "95f99c968f9a549c197ecee8f5a40ab8b14206b7",
-  "base_praise_pins_git_blob": "155e34e1b23853428c8e19efb2d96b4a83d7ff",
+  "base_praise_pins_git_blob": "155e34e1b23853428c8e19efb2d96b6b4a83d7ff",
   "forward_sha256": "446b7d5f120c1d0df17ca33c5b09a0372c3db037234293015ea9c9a1aca0b10f",
   "inverse_sha256": "a94b2a991d7f24ca3b7cfe942f310cc00ba4f36fe2315f209f6426d6dd1e5f1d",
   "changed_leaves": [
