@@ -1,0 +1,793 @@
+diff --git a/crates/alife_game_app/Cargo.toml b/crates/alife_game_app/Cargo.toml
+--- a/crates/alife_game_app/Cargo.toml
++++ b/crates/alife_game_app/Cargo.toml
+@@ -93,6 +93,7 @@
+ contact211-rank32-crossed = ["contact211-rank32"]
+ wsp-cue-latch-observer = ["contact211-rank32-crossed", "alife_world/wsp-cue-latch-observer"]
+ wsp-cue-latch-armed = ["wsp-cue-latch-observer", "alife_gpu_backend/wsp-cue-latch-armed"]
++wsp-out-of-reach-fixture = ["retained-language-pilot"]
+ bevy-app = [
+     "dep:accesskit",
+     "dep:bevy",
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs
+--- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs
+@@ -33,6 +33,12 @@
+ #[cfg(feature = "wsp-cue-latch-armed")]
+ #[path = "saved_life_retention/wsp_cue_latch_armed_scope.rs"]
+ mod wsp_cue_latch_armed_scope;
++#[cfg(feature = "wsp-out-of-reach-fixture")]
++#[path = "saved_life_retention/wsp_out_of_reach_fixture.rs"]
++mod wsp_out_of_reach_fixture;
++#[cfg(feature = "wsp-out-of-reach-fixture")]
++#[path = "saved_life_retention/wsp_out_of_reach_scope.rs"]
++mod wsp_out_of_reach_scope;
+ #[cfg(feature = "gpu-tests")]
+ pub use experiments::evaluate_saved_life_retention_experiment;
+ 
+@@ -417,6 +423,8 @@
+     let wsp_latch = experiment.as_ref().and_then(experiments::ExperimentIdentity::wsp_cue_latch);
+     #[cfg(feature = "wsp-cue-latch-armed")]
+     let wsp_armed = experiment.as_ref().and_then(experiments::ExperimentIdentity::wsp_armed);
++    #[cfg(feature = "wsp-out-of-reach-fixture")]
++    let crossed_fixture=experiment.as_ref().and_then(experiments::ExperimentIdentity::crossed_fixture);
+     if let Some(scope) = scent_scope {
+         scope.validate(&request)?;
+     }
+@@ -672,6 +680,10 @@
+     if research.is_some() && isolated_archive { return Err("research catalog does not admit isolated archives".into()); }
+     #[cfg(feature = "retained-language-pilot")]
+     if language.is_some() && isolated_archive { return Err("language pilot does not admit isolated archives".into()); }
++    #[cfg(feature = "wsp-out-of-reach-fixture")]
++    if crossed_fixture.is_some() && (!software_simulation || controlled_pressure!=Some(0) || isolated_archive) {
++        return Err("crossed fixture requires exact fixed0ns native software mode without isolated archives".into());
++    }
+     if (controlled_pressure.is_some() || isolated_archive)
+         && (!software_simulation || !cfg!(feature = "gpu-tests"))
+     {
+@@ -862,6 +874,23 @@
+         );
+         Some(opened)
+     } else { None };
++    #[cfg(feature = "wsp-out-of-reach-fixture")]
++    let crossed_setup=if let Some(scope)=crossed_fixture {
++        if language_setup.is_some()||research_setup.is_some()||scent_scope.is_some()
++            ||request.direct_weights.is_some()||request.navigation_task.is_some()||!software_simulation {
++            return Err("crossed fixture cannot share another optional prediction or policy path".into());
++        }
++        let t=runtime.world().tick();
++        let sampling=runtime.foundation_training_sampling_state();
++        let (opened,setup)=scope.open(runtime.world_mut(),id)?;
++        if t!=runtime.world().tick()||sampling!=runtime.foundation_training_sampling_state() {
++            return Err("crossed fixture changed the stock decision clock or sampling".into());
++        }
++        receipt["shared_crossed_fixture_setup"]=setup;
++        Some(opened)
++    } else {None};
++    #[cfg(feature = "wsp-out-of-reach-fixture")]
++    let mut crossed_rows=0usize;
+     #[cfg(feature = "wsp-cue-latch-armed")]
+     let mut armed_rows=0usize;
+     #[cfg(feature = "wsp-cue-latch-armed")]
+@@ -945,6 +974,8 @@
+             break "teacher_cue_observed";
+         }
+         let before_tick = runtime.world().tick();
++        #[cfg(feature = "wsp-out-of-reach-fixture")]
++        let crossed_before=crossed_setup.as_ref().map(|s|s.cut(runtime.world())).transpose()?;
+         #[cfg(feature = "retained-language-pilot")]
+         let language_before = language_setup.as_ref()
+             .map(|p| p.custody(runtime.world())).transpose()?;
+@@ -1010,6 +1041,10 @@
+         if wsp_armed.is_some() && !matches!(&tick,Ok(crate::gpu_live_runtime::GpuLiveTickOutcome::Progressed(_))) {
+             return Err("Armed cue latch stopped on unmatched actual native decision; no fallback".into());
+         }
++        #[cfg(feature = "wsp-out-of-reach-fixture")]
++        if crossed_setup.is_some() && !matches!(&tick,Ok(crate::gpu_live_runtime::GpuLiveTickOutcome::Progressed(_))) {
++            return Err("crossed fixture stopped on unmatched actual native decision; no fallback".into());
++        }
+         let tick_error = tick.err().map(|e| e.to_string());
+         let after_tick = runtime.world().tick();
+         let after_pose = runtime
+@@ -1077,6 +1112,10 @@
+         #[cfg(feature = "wsp-cue-latch-armed")]
+         if wsp_armed.is_some() && (steps.len()!=1||before_tick.raw().checked_add(1)!=Some(after_tick.raw())) {
+             return Err("armed cue latch needs one authentic sealed decision per World tick".into());
++        }
++        #[cfg(feature = "wsp-out-of-reach-fixture")]
++        if crossed_setup.is_some() && (steps.len()!=1||before_tick.raw().checked_add(1)!=Some(after_tick.raw())){
++            return Err("crossed fixture needs one actual signed decision and one World tick".into());
+         }
+         if let Some(step) = steps.pop() {
+             if step.frame.organism_id() != id || step.frame.tick() != before_tick {
+@@ -1267,6 +1306,16 @@
+                 if let Some(native)=latch_observation {
+                     row["wsp_cue_latch_native_observation"]=native;
+                 }
++                #[cfg(feature = "wsp-out-of-reach-fixture")]
++                if let Some(opened)=crossed_setup.as_ref(){
++                    if step.frame.frame_digest()!=step.patch.pre_action().perception().frame_digest()
++                       || step.patch.outcome().outcome_tick!=after_tick {
++                        return Err("crossed fixture World observer did not match actual settled inference".into());
++                    }
++                    row["shared_crossed_fixture_native_observation"]=opened.observe(&step.frame,
++                        crossed_before.ok_or("missing exact pre-World fixture readback")?, runtime.world())?;
++                    crossed_rows+=1;
++                }
+                 if controlled_pressure.is_some() {
+                     row["observer_host_pressure_control"] =
+                         runtime.controlled_pressure_evidence_for_test();
+@@ -1502,6 +1551,22 @@
+             "still_needs_independent_paired_native_grade":true, "scorecard_eligible":false});
+         for key in ["coverage_complete","measurement_valid","software_simulation_integrity_valid","qualified","retention_demonstrated"] {
+             receipt[key]=serde_json::json!(false);
++        }
++    }
++    #[cfg(feature = "wsp-out-of-reach-fixture")]
++    if crossed_setup.is_some() {
++        let d=wsp_out_of_reach_scope::CUTS;
++        if rows!=d||calls!=d as u64||crossed_rows!=d||stop!="decision_limit"
++            ||runtime.world().tick().raw().checked_sub(source_world_tick)!=Some(d as u64)
++            ||!alive||!software_simulation||!base_unchanged||!prior_clear||!unchanged||!cue_free
++            ||!endpoint_preserved||error.is_some()||controlled_pressure!=Some(0) {
++            return Err("crossed fixture did not settle the exact observer-only stock arm".into());
++        }
++        receipt["shared_crossed_fixture_integrity"]=serde_json::json!({
++             "native_cut_count":d,"one_signed_decision_per_world_tick":true,
++             "same_saved_actor_no_optional_policy":true,"observer_only":true,"scorecard_eligible":false});
++        for k in ["coverage_complete","measurement_valid","software_simulation_integrity_valid","qualified","retention_demonstrated"] {
++            receipt[k]=serde_json::json!(false);
+         }
+     }
+     alife_storage::write(
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
+--- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
+@@ -89,9 +89,15 @@
+     #[cfg(feature = "wsp-cue-latch-armed")]
+     #[serde(skip_serializing_if="Option::is_none")]
+     wsp_armed: Option<super::wsp_cue_latch_armed_scope::Scope>,
++    #[cfg(feature = "wsp-out-of-reach-fixture")]
++    #[serde(skip_serializing_if = "Option::is_none")]
++    crossed_fixture: Option<super::wsp_out_of_reach_scope::Scope>,
+ }
+ 
+ impl ExperimentIdentity {
++    #[cfg(feature = "wsp-out-of-reach-fixture")]
++    pub(super) fn crossed_fixture(&self)->Option<&super::wsp_out_of_reach_scope::Scope> { self.crossed_fixture.as_ref() }
++
+     pub(super) fn card_case(&self) -> Option<&str> {
+         self.card_case.as_deref()
+     }
+@@ -279,6 +285,8 @@
+             wsp_cue_latch: None,
+         #[cfg(feature = "wsp-cue-latch-armed")]
+         wsp_armed: None,
++        #[cfg(feature = "wsp-out-of-reach-fixture")]
++        crossed_fixture: None,
+         },
+         request,
+         scent,
+@@ -322,6 +330,8 @@
+         wsp_cue_latch: None,
+         #[cfg(feature = "wsp-cue-latch-armed")]
+         wsp_armed: None,
++        #[cfg(feature = "wsp-out-of-reach-fixture")]
++        crossed_fixture: None,
+     }, request, scent: None })
+ }
+ 
+@@ -365,6 +375,8 @@
+         wsp_cue_latch: None,
+         #[cfg(feature = "wsp-cue-latch-armed")]
+         wsp_armed: None,
++        #[cfg(feature = "wsp-out-of-reach-fixture")]
++        crossed_fixture: None,
+     }, request, scent: None })
+ }
+ 
+@@ -428,6 +440,35 @@
+     struct Version { schema: u16 }
+     let version: Version = serde_json::from_slice(&bytes)?;
+     // New grammar fails closed before opening Current or creating an output.
++    #[cfg(not(feature = "wsp-out-of-reach-fixture"))]
++    if version.schema==16 { return Err("WSP crossed out-of-reach fixture is disabled".into()); }
++    #[cfg(feature = "wsp-out-of-reach-fixture")]
++    if version.schema==super::wsp_out_of_reach_scope::SCHEMA {
++        use super::wsp_out_of_reach_scope as w;
++        let scope=w::resolve(admission_root,&bytes)?;
++        let request=SavedLifeRetentionRequest {
++            schema:3,evaluation_nonce:w::NONCE,cue_free_food_placement:false,direct_weights:None,
++            navigation_task:None,max_decisions:w::CUTS,max_world_ticks:w::CUTS as u64,
++            deadline_unix_seconds:scope.decision_deadline(),finalization_deadline_unix_seconds:Some(scope.finalization_deadline()),
++            max_output_bytes:256*1024*1024
++        };
++        request.validate(now()?)?;
++        let identity=ExperimentIdentity {
++            schema:w::SCHEMA,run_id:scope.run_id().to_string(),manifest_sha256:digest(&bytes),
++            semantic_settings_sha256:scope.semantic()?,owner:3,source_current_sha256:scope.source_current().to_string(),
++            scenario:ScenarioV1::LanguagePilotV2,card_case:None,intervention:"wsp_crossed_geometry_observer_only",
++            visible_self_grip_v1:None,research:None,language_pilot:None,
++            #[cfg(all(feature = "retained-language-pilot", feature = "contact211-witness"))]
++            contact211_parity:None,
++            #[cfg(feature = "wsp-cue-latch-observer")]
++            wsp_cue_latch:None,
++            #[cfg(feature = "wsp-cue-latch-armed")]
++            wsp_armed:None,
++            crossed_fixture:Some(scope),
++        };
++        admitted_paths(admission_root,source,output,manifest_path)?;
++        return evaluate_saved_life_retention_inner(source,output,request,None,Some(identity));
++    }
+     #[cfg(not(feature = "wsp-cue-latch-armed"))]
+     if version.schema==13 {return Err("WSP armed cue latch feature is disabled".into());}
+     #[cfg(feature = "wsp-cue-latch-armed")]
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/wsp_out_of_reach_fixture.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/wsp_out_of_reach_fixture.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/wsp_out_of_reach_fixture.rs
+@@ -0,0 +1,313 @@
++//! Shared named physical fixture v1, not an evaluator request or action authority.
++//! No speech, actor, sampling, scoring, tick or optional candidate modification.
++//! Its future native callers must separately verify current/ELF and arm grants.
++use super::Result;
++use alife_core::{OrganismId, Tick, Vec3f, WorldEntityId};
++use alife_world::{HeadlessWorld, WorldObjectKind};
++use serde::{Deserialize, Serialize};
++
++const FIXTURE: &str = "qualia.saved_life.wsp_crossed_out_of_reach_geometry.v1";
++const OWNER: OrganismId = OrganismId(3);
++const OPENING: u64 = 3074;
++const WORLD_SEED: u64 = 202612240055;
++const FOOD: WorldEntityId = WorldEntityId(2);
++const BALL: WorldEntityId = WorldEntityId(3);
++const MAX_ORDINARY_STEP: f64 = 0.10000101;
++const MIN_OPEN_RANGE: f64 = 1.51;
++const MAX_OPEN_RANGE: f64 = 1.60;
++const GRAB_RADIUS: f64 = 1.25;
++const HEARING_RADIUS: f64 = 6.0;
++
++#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
++#[serde(rename_all = "snake_case")]
++pub(super) enum FixtureLayoutV1 {
++    A,
++    B,
++}
++
++#[derive(Clone, Copy, Debug, Serialize)]
++pub(super) struct GeometryWitnessV1 {
++    schema: &'static str,
++    layout: FixtureLayoutV1,
++    owner: OrganismId,
++    tick: Tick,
++    source_world_signature: [u64; 4],
++    staged_world_signature: [u64; 4],
++    body: WorldEntityId,
++    body_position: Vec3f,
++    body_yaw: f32,
++    prop_ids_in_food_ball_order: [WorldEntityId; 2],
++    prop_positions_in_food_ball_order: [Vec3f; 2],
++    measured_center_ranges_m: [f64; 2],
++    visible_world_order: [WorldEntityId; 2],
++    opening_grab_probe: [(bool, bool); 2],
++    rear_edge_source: Vec3f,
++    rear_steady_source: Vec3f,
++    geometry_only: bool,
++}
++
++impl GeometryWitnessV1 {
++    /// Hand these points to the ordinary World emitter under a separate typed
++    /// admission. Geometry must never emit even when the caller names an edge.
++    pub(super) fn acoustic_points(&self) -> (Vec3f, Vec3f) {
++        (self.rear_edge_source, self.rear_steady_source)
++    }
++    pub(super) fn body(&self) -> WorldEntityId { self.body }
++    pub(super) fn prop_ids(&self) -> [WorldEntityId; 2] { self.prop_ids_in_food_ball_order }
++    pub(super) fn prop_positions(&self) -> [Vec3f; 2] { self.prop_positions_in_food_ball_order }
++    pub(super) fn center_range(&self, a: Vec3f, b: Vec3f) -> f64 { range(a,b) }
++    pub(super) fn ordinary_pose_is_safe(&self, point: Vec3f, intervals: u64) -> bool {
++        intervals<=2 && range(self.body_position,point)<=intervals as f64*MAX_ORDINARY_STEP
++            && self.prop_positions_in_food_ball_order.into_iter().all(|p|range(point,p)>GRAB_RADIUS)
++    }
++    pub(super) fn ordinary_interval_is_safe(&self, a: &Vec3f, b: &Vec3f) -> bool {
++        range(*a,*b)<=MAX_ORDINARY_STEP
++    }
++}
++
++/// Actual detached lifted/owned result: parent may inspect, never mutate the
++/// caller's original World here. No serde input or user-chosen coordinates.
++pub(super) struct StagedFixtureV1 {
++    pub(super) world: HeadlessWorld,
++    pub(super) witness: GeometryWitnessV1,
++}
++
++fn offset(body: Vec3f, yaw: f32, front: f32, side: f32) -> Vec3f {
++    let (sn, cs) = yaw.sin_cos();
++    Vec3f::new(
++        body.x + front * cs - side * sn,
++        body.y,
++        body.z + front * sn + side * cs,
++    )
++}
++
++fn range(a: Vec3f, b: Vec3f) -> f64 {
++    (f64::from(a.x) - f64::from(b.x))
++        .hypot(f64::from(a.y) - f64::from(b.y))
++        .hypot(f64::from(a.z) - f64::from(b.z))
++}
++
++fn free_stationary(world: &HeadlessWorld, id: WorldEntityId, kind: WorldObjectKind) -> bool {
++    world.entity(id).is_some_and(|o| {
++        o.kind == kind
++            && o.organism_id.is_none()
++            && !o.consumed
++            && !o.activity_hold
++            && o.carried_by.is_none()
++            && world.player_held_object() != Some(id)
++            && o.teacher_channel.is_none()
++            && o.token_id.is_none()
++            && o.hazard_pain == 0.0
++            && o.grounded_physical.velocity == Vec3f::ZERO
++    })
++}
++
++/// The single shared builder for later schema-specific consumers. Asset and
++/// native action admission are deliberately outside this module. Require the
++/// same exact mature R44 *World* anchors as the private retained fixtures.
++pub(super) fn build_fixed_fixture_v1(
++    world: &HeadlessWorld,
++    owner: OrganismId,
++    layout: FixtureLayoutV1,
++) -> Result<StagedFixtureV1> {
++    if owner != OWNER
++        || world.tick().raw() != OPENING
++        || world.seed() != WORLD_SEED
++        || world.object_snapshots().len() != 10
++        || !world.entity(FOOD).is_some_and(|o| {
++            o.radius.to_bits() == 0.45_f32.to_bits()
++                && o.nutrition.to_bits() == 0.85_f32.to_bits()
++        })
++        || !world.entity(BALL).is_some_and(|o| {
++            o.radius.to_bits() == 0.30_f32.to_bits() && o.nutrition == 0.0
++        })
++    {
++        return Err("out-of-reach fixture requires the unchanged mature opening world".into());
++    }
++    stage_geometry(world, owner, layout, [FOOD, BALL])
++}
++
++fn stage_geometry(
++    world: &HeadlessWorld,
++    owner: OrganismId,
++    layout: FixtureLayoutV1,
++    props: [WorldEntityId; 2],
++) -> Result<StagedFixtureV1> {
++    let tick = world.tick();
++    let snapshots = world.object_snapshots();
++    let body = snapshots
++        .iter()
++        .find(|o| o.organism_id == Some(owner))
++        .ok_or("missing out-of-reach fixture resident body")?;
++    if world.terrain().is_some()
++        || world.player_held_object().is_some()
++        || !world.audible_utterances().is_empty()
++        || snapshots.iter().any(|o| o.carried_by == Some(owner) || o.teacher_channel.is_some())
++        || !world.organism_registry().get(owner).is_some_and(|r| r.lifecycle().is_alive())
++        || !free_stationary(world, props[0], WorldObjectKind::Food)
++        || !free_stationary(world, props[1], WorldObjectKind::Ball)
++    {
++        return Err("out-of-reach fixture requires actual free stationary props and clean ears".into());
++    }
++
++    let p = body.position;
++    let yaw = body.body_yaw;
++    let near = offset(p, yaw, 1.380, 0.621);
++    let far = offset(p, yaw, 1.440, -0.648);
++    let berths = match layout {
++        FixtureLayoutV1::A => [near, far],
++        FixtureLayoutV1::B => [far, near],
++    };
++    let radii = berths.map(|v| range(p, v));
++    let rear_edge_source = offset(p, yaw, -5.980, 0.0);
++    let rear_steady_source = offset(p, yaw, -5.700, 0.0);
++    if radii.iter().any(|&r| {
++        !(MIN_OPEN_RANGE..MAX_OPEN_RANGE).contains(&r)
++            || r - 2.0 * MAX_ORDINARY_STEP <= GRAB_RADIUS
++    }) || !(5.9798..5.9802).contains(&range(p, rear_edge_source))
++        || range(p, rear_steady_source) + 2.0 * MAX_ORDINARY_STEP >= HEARING_RADIUS
++    {
++        return Err("out-of-reach fixture pose breaks the signed two-cut geometry proof".into());
++    }
++
++    let mut staged = world.clone();
++    for (id, to) in props.into_iter().zip(berths) {
++        let mut expected = world.entity(id).ok_or("missing exact loose target")?.clone();
++        expected.position = to;
++        expected.grounded_physical.velocity = Vec3f::ZERO;
++        // Same established world editor setup as legacy retained geometry;
++        // the second same-position call zeros the editor displacement lane.
++        staged.editor_move_object(id, to)?;
++        staged.editor_move_object(id, to)?;
++        if staged.entity(id) != Some(&expected) {
++            return Err("out-of-reach fixture changed more than the stationary berth".into());
++        }
++    }
++    let opening_grab_probe = props.map(|id| staged.retained_language_pilot_grab_probe(owner, id));
++    let mut ecology = staged.ecology().clone();
++    ecology.metrics = world.ecology().metrics.clone();
++    let sensory = staged.sensory_report(owner, tick)?;
++    let seen = sensory.visible_entities.iter().map(|v| v.id).collect::<Vec<_>>();
++    if &ecology != world.ecology()
++        || staged.tick() != tick
++        || staged.organism_registry().get(owner) != world.organism_registry().get(owner)
++        || snapshots.iter().any(|o| !props.contains(&o.id) && staged.entity(o.id) != Some(o))
++        || !staged.audible_utterances().is_empty()
++        || opening_grab_probe != [(false, false); 2]
++        || !sensory.contact_entities.is_empty()
++        || sensory.core_snapshot.language_context.heard_tokens.iter().any(Option::is_some)
++        || seen.len() != 2
++        || !props.iter().all(|id| seen.contains(id))
++    {
++        return Err("out-of-reach fixture changed the resident, audibility, free reach or roster".into());
++    }
++    Ok(StagedFixtureV1 {
++        witness: GeometryWitnessV1 {
++            schema: FIXTURE,
++            layout,
++            owner,
++            tick,
++            source_world_signature: world.canonical_signature_digest()?.words,
++            staged_world_signature: staged.canonical_signature_digest()?.words,
++            body: body.id,
++            body_position: p,
++            body_yaw: yaw,
++            prop_ids_in_food_ball_order: props,
++            prop_positions_in_food_ball_order: berths,
++            measured_center_ranges_m: radii,
++            visible_world_order: [seen[0], seen[1]],
++            opening_grab_probe,
++            rear_edge_source,
++            rear_steady_source,
++            geometry_only: true,
++        },
++        world: staged,
++    })
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use alife_core::{BiochemistryState, BrainCapacityClass, CreatureGenome, FoundationGeneticIdentity, LanguageTokenId};
++    use alife_world::{HeadlessScenarioBuilder, WorldEditorSpawnSpec, WorldOrganismRecord};
++
++    fn native_world() -> (HeadlessWorld, [WorldEntityId; 2]) {
++        let mut world = HeadlessScenarioBuilder::new(9811)
++            .agent("geometry-listener", OWNER, Vec3f::ZERO)
++            .food("real-food", Vec3f::new(1.8, 0.0, 0.5), 0.85)
++            .build().unwrap();
++        world.editor_spawn_object(WorldEditorSpawnSpec {
++            label: "real-ball".into(), kind: WorldObjectKind::Ball, organism_id: None,
++            position: Vec3f::new(1.9, 0.0, -0.5), nutrition: 0.0, hazard_pain: 0.0, radius: 0.30, token_id: None,
++        }).unwrap();
++        let body = world.entity_id("geometry-listener").unwrap();
++        let tick = world.tick();
++        let founder = FoundationGeneticIdentity::new(10, 1, 7, BrainCapacityClass::N512_ID).unwrap();
++        let genome = CreatureGenome::early_mammal_founder(0xE10_32A1, founder).unwrap();
++        let phenotype = genome.express().unwrap();
++        let biology = BiochemistryState::new(&phenotype, tick).unwrap();
++        world.register_organism_record(
++            WorldOrganismRecord::new(OWNER, body, genome, phenotype, biology, tick).unwrap()
++        ).unwrap();
++        let props = [world.entity_id("real-food").unwrap(), world.entity_id("real-ball").unwrap()];
++        (world, props)
++    }
++
++    #[test]
++    fn real_fixed_berths_cross_without_emitting_advancing_or_touching_resident() {
++        let (world, ids) = native_world();
++        let witness_before = world.canonical_signature_digest().unwrap();
++        let a = stage_geometry(&world, OWNER, FixtureLayoutV1::A, ids).unwrap();
++        let b = stage_geometry(&world, OWNER, FixtureLayoutV1::B, ids).unwrap();
++        assert_eq!(world.canonical_signature_digest().unwrap(), witness_before);
++        assert_eq!(a.witness.source_world_signature, b.witness.source_world_signature);
++        assert_eq!(a.witness.prop_positions_in_food_ball_order, [
++            b.witness.prop_positions_in_food_ball_order[1], b.witness.prop_positions_in_food_ball_order[0],
++        ]);
++        assert_eq!(a.witness.acoustic_points(), b.witness.acoustic_points());
++        assert_ne!(a.witness.staged_world_signature, b.witness.staged_world_signature);
++        assert!(build_fixed_fixture_v1(&world, OWNER, FixtureLayoutV1::A).is_err());
++        for s in [a, b] {
++            assert_eq!(s.world.tick(), world.tick());
++            assert_eq!(s.world.organism_registry().get(OWNER), world.organism_registry().get(OWNER));
++            assert!(s.world.audible_utterances().is_empty());
++            assert_eq!(s.witness.opening_grab_probe, [(false, false); 2]);
++            assert!(s.witness.measured_center_ranges_m.iter().all(|r|
++                (*r - 2.0 * MAX_ORDINARY_STEP) > GRAB_RADIUS
++            ));
++        }
++    }
++
++    #[test]
++    fn separate_test_only_native_emitter_can_use_both_points_without_movement() {
++        let (world, ids) = native_world();
++        let s = stage_geometry(&world, OWNER, FixtureLayoutV1::A, ids).unwrap();
++        let t = s.world.tick();
++        let (edge, steady) = s.witness.acoustic_points();
++        for point in [edge, steady] {
++            // This unit test calls the real speaker separately. The fixture
++            // never emits; the test does not choose actions or advance World.
++            let mut audible = s.world.clone();
++            let words = [9_u16, 14_u16].map(|x| LanguageTokenId::new(x).unwrap());
++            let atom = audible.emit_player_tokens(Some(OWNER), point, words.to_vec()).unwrap();
++            let actual = audible.sensory_report(OWNER, t).unwrap();
++            let tokens = actual.core_snapshot.language_context.heard_tokens.iter().flatten().collect::<Vec<_>>();
++            assert_eq!(tokens.iter().map(|x| x.token_id).collect::<Vec<_>>(), vec![9, 14]);
++            assert!(tokens.iter().all(|x| x.utterance_id == atom.utterance_id && x.confidence.raw() > 0.0));
++            assert_eq!(atom.expires_after_tick.raw(), t.raw() + 1);
++            assert_eq!(audible.tick(), t);
++            assert_eq!(audible.entity(s.witness.body), s.world.entity(s.witness.body));
++            assert_eq!(ids.map(|i| audible.retained_language_pilot_grab_probe(OWNER, i)), [(false, false); 2]);
++        }
++        assert!(s.world.audible_utterances().is_empty());
++    }
++
++    #[test]
++    fn impostor_prop_and_missing_actual_body_fail_before_placement() {
++        let (world, ids) = native_world();
++        let sig = world.canonical_signature_digest().unwrap();
++        assert!(stage_geometry(&world, OWNER, FixtureLayoutV1::A, [ids[1], ids[0]]).is_err());
++        assert!(stage_geometry(&world, OrganismId(4), FixtureLayoutV1::A, ids).is_err());
++        assert_eq!(world.canonical_signature_digest().unwrap(), sig);
++    }
++}
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/wsp_out_of_reach_scope.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/wsp_out_of_reach_scope.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/wsp_out_of_reach_scope.rs
+@@ -0,0 +1,246 @@
++//! Optional, strictly observer-only shared geometry admission. Stock policy,
++//! sound producers, selector, saved weights and all legacy grammars are unchanged.
++use super::{digest, now, Result};
++use super::wsp_out_of_reach_fixture::{FixtureLayoutV1, GeometryWitnessV1, build_fixed_fixture_v1};
++use alife_core::{LanguageTokenId, OrganismId, PerceptionFrame, Tick, UtteranceSourceKind, Vec3f, WorldEntityId};
++use alife_world::{AudibleUtterance, HeadlessWorld};
++use serde::{Deserialize, Serialize};
++use serde_json::{Value, json};
++use std::{fs, io::Read, path::Path};
++
++pub(super) const SCHEMA: u16 = 16;
++pub(super) const CUTS: usize = 3;
++pub(super) const NONCE: u64 = 1794935016;
++const SCOPE: &str = "qualia.saved_life.wsp_crossed_out_of_reach_observer.v1";
++const CURRENT: &str = "55672f322eadc64e223289d9df9883f62d0cc01aa97c0478119ad6c51d2852ee";
++const FIXTURE: &str = "qualia.saved_life.wsp_crossed_out_of_reach_geometry.v1";
++const ADMISSION: &str = "wsp-crossed-out-of-reach-admission.v1.json";
++const GRANT: &str = "wsp-crossed-out-of-reach-independent-grant.v1.json";
++const OPEN: u64 = 3074;
++const OWNER: OrganismId = OrganismId(3);
++
++#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
++#[serde(rename_all = "snake_case")]
++enum Stimulus {
++    RearEdgeGetBall, RearSteadyGetBall, Silent, RearEdgeGetOnly, RearEdgeGetFood,
++}
++impl Stimulus {
++    fn terms(self)-> &'static [u16] {
++        match self {
++            Self::RearEdgeGetBall | Self::RearSteadyGetBall => &[9, 14],
++            Self::Silent => &[],
++            Self::RearEdgeGetOnly => &[9],
++            Self::RearEdgeGetFood => &[9, 1],
++        }
++    }
++    fn edge(self) -> bool {
++        matches!(self, Self::RearEdgeGetBall | Self::RearEdgeGetOnly | Self::RearEdgeGetFood)
++    }
++}
++#[derive(Deserialize)]
++#[serde(deny_unknown_fields)]
++struct Envelope { schema: u16, scope: String, admission_sha256: String }
++#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++struct Binding {
++    scope: String, fixture: String, run_id: String,
++    source_current_sha256: String, evaluator_sha256: String,
++    layout: FixtureLayoutV1, stimulus: Stimulus, owner: u64,
++    max_decisions: u8, max_world_ticks: u8, applied_pressure_ns: u64,
++    deadline_unix_seconds: u64, finalization_deadline_unix_seconds: u64, expires_unix_seconds: u64,
++}
++#[derive(Deserialize)]
++#[serde(deny_unknown_fields)]
++struct Admission { schema: String, binding: Binding, independent_grant_sha256: String }
++#[derive(Deserialize)]
++#[serde(deny_unknown_fields)]
++struct Grant { schema: String, binding: Binding }
++#[derive(Serialize)]
++pub(super) struct Scope { schema: &'static str, binding: Binding, admission_sha256: String }
++
++fn hex(x: &str) -> bool { x.len()==64 && x.bytes().all(|b|matches!(b,b'0'..=b'9'|b'a'..=b'f')) }
++fn bounded(p: &Path, max: u64) -> Result<Vec<u8>> {
++    let mut raw=Vec::new();
++    fs::File::open(p)?.take(max+1).read_to_end(&mut raw)?;
++    if raw.is_empty() || raw.len() as u64>max { return Err("invalid crossed fixture file extent".into()); }
++    Ok(raw)
++}
++fn leaf(root: &Path, name: &str) -> Result<Vec<u8>> {
++    let p=root.join(name);
++    if p.canonicalize()?!=p || !fs::symlink_metadata(&p)?.is_file() {
++        return Err("crossed fixture requires canonical regular admission leaves".into());
++    }
++    bounded(&p, 8192)
++}
++
++pub(super) fn resolve(root: &Path, input: &[u8]) -> Result<Scope> {
++    if input.len()>8192 { return Err("crossed fixture envelope exceeds limit".into()); }
++    let e: Envelope=serde_json::from_slice(input)?;
++    if e.schema!=SCHEMA || e.scope!=SCOPE || !hex(&e.admission_sha256) {
++        return Err("unadmitted crossed fixture envelope".into());
++    }
++    // This observer is never an isolated lineage/archive request. Refuse
++    // before any permit/current/output restore or GPU/backend startup.
++    if std::env::var("ALIFE_EXPLICIT_RETENTION_ARCHIVE_TEST").is_ok_and(|v|v=="1") {
++        return Err("crossed fixture does not admit isolated archives".into());
++    }
++    let a=leaf(root,ADMISSION)?;
++    if digest(&a)!=e.admission_sha256 { return Err("crossed fixture permit digest changed".into()); }
++    let a: Admission=serde_json::from_slice(&a)?;
++    let b=a.binding;
++    let t=now()?;
++    if a.schema!="qualia.saved_life.wsp_crossed_out_of_reach.admission.v1"
++        || b.scope!=SCOPE || b.fixture!=FIXTURE || b.source_current_sha256!=CURRENT
++        || b.owner!=OWNER.raw() || !hex(&b.evaluator_sha256) || !hex(&a.independent_grant_sha256)
++        || b.run_id.is_empty() || b.run_id.len()>64
++        || !b.run_id.bytes().all(|c|c.is_ascii_alphanumeric()||matches!(c,b'_'|b'-'))
++        || usize::from(b.max_decisions)!=CUTS || usize::from(b.max_world_ticks)!=CUTS || b.applied_pressure_ns!=0
++        || b.deadline_unix_seconds<=t || b.deadline_unix_seconds>b.finalization_deadline_unix_seconds
++        || b.finalization_deadline_unix_seconds>b.deadline_unix_seconds.saturating_add(120)
++        || b.finalization_deadline_unix_seconds>b.expires_unix_seconds || b.expires_unix_seconds>t.saturating_add(600)
++    {
++        return Err("crossed fixture clock, source, layout authority or bounds refused".into());
++    }
++    let g=leaf(root,GRANT)?;
++    if digest(&g)!=a.independent_grant_sha256 { return Err("crossed fixture independent grant digest changed".into()); }
++    let g: Grant=serde_json::from_slice(&g)?;
++    if g.schema!="qualia.saved_life.wsp_crossed_out_of_reach.independent_grant.v1" || g.binding!=b {
++        return Err("crossed fixture grant did not bind this exact immutable opening".into());
++    }
++    for name in ["wsp-armed-admission.v1.json","cue-latch-admission.v1.json","contact211-f0-admission.v1.json",
++                 "contact211-rank32.weights.v1.json","wsp-approach-v2-admission.json"] {
++        match fs::symlink_metadata(root.join(name)) {
++            Err(x) if x.kind()==std::io::ErrorKind::NotFound=>(),
++            _=>return Err("legacy treatment or observer admission cannot share crossed fixture".into()),
++        }
++    }
++    if digest(&bounded(&std::env::current_exe()?,256*1024*1024)?)!=b.evaluator_sha256 {
++        return Err("crossed fixture running an unpinned evaluator".into());
++    }
++    Ok(Scope{schema:SCOPE,binding:b,admission_sha256:e.admission_sha256})
++}
++
++#[derive(Serialize)]
++pub(super) struct BearingCutV1 {
++    tick: Tick,
++    world_signature: [u64; 4],
++    listener: Vec3f,
++    props: [(Vec3f,Option<OrganismId>,bool,bool,bool); 2],
++    actual_grab_probe: [(bool, bool); 2],
++    native_live_player_atom: Option<AudibleUtterance>,
++}
++pub(super) struct Opened {
++    witness: GeometryWitnessV1,
++    stimulus: Stimulus,
++    atom: Option<AudibleUtterance>,
++}
++impl Scope {
++    pub(super) fn run_id(&self) -> &str { &self.binding.run_id }
++    pub(super) fn source_current(&self) -> &str { &self.binding.source_current_sha256 }
++    pub(super) fn decision_deadline(&self) -> u64 { self.binding.deadline_unix_seconds }
++    pub(super) fn finalization_deadline(&self) -> u64 { self.binding.finalization_deadline_unix_seconds }
++    pub(super) fn semantic(&self) -> Result<String> {
++        Ok(digest(&serde_json::to_vec(&(SCOPE,FIXTURE,self.binding.source_current_sha256.as_str(),
++            self.binding.layout,self.binding.stimulus,self.binding.owner,CUTS,self.binding.applied_pressure_ns))?))
++    }
++    pub(super) fn open(&self, world: &mut HeadlessWorld, owner: OrganismId) -> Result<(Opened,Value)> {
++        if owner!=OWNER || now()?>=self.binding.expires_unix_seconds { return Err("crossed fixture stale at opening".into()); }
++        let mut s=build_fixed_fixture_v1(world,owner,self.binding.layout)?;
++        let tick=s.world.tick();
++        let before=s.world.sensory_report(owner,tick)?;
++        let words=self.binding.stimulus.terms().iter().copied().map(LanguageTokenId::new).collect::<std::result::Result<Vec<_>,_>>()?;
++        let (rear_edge,rear_steady)=s.witness.acoustic_points();
++        let atom=if words.is_empty() {
++            None
++        } else {
++            let point=if self.binding.stimulus.edge() {rear_edge}else{rear_steady};
++            let a=s.world.emit_player_tokens(Some(owner),point,words)?;
++            if a.source_kind!=UtteranceSourceKind::Player || a.addressee!=Some(owner)
++                || a.source_position!=point || a.emitted_tick!=tick || a.expires_after_tick.raw()!=OPEN+1
++                || a.speaker_id.is_some() || a.teacher_channel.is_some() || a.confidence.raw()!=1.0
++                || s.world.audible_utterances().as_slice()!=std::slice::from_ref(&a) {
++                return Err("expected one authentic bounded native Player atom".into());
++            }
++            Some(a)
++        };
++        let after=s.world.sensory_report(owner,tick)?;
++        if s.world.tick()!=tick || s.world.organism_registry().get(owner)!=world.organism_registry().get(owner)
++            || s.world.entity(s.witness.body())!=world.entity(s.witness.body())
++            || before.visible_entities.iter().map(|x|x.id).ne(after.visible_entities.iter().map(|x|x.id))
++            || before.contact_entities!=after.contact_entities
++            || (atom.is_none() && (before.core_snapshot!=after.core_snapshot || !s.world.audible_utterances().is_empty())) {
++            return Err("crossed fixture emitted sound changed custody, pose, time or declared silence".into());
++        }
++        let setup=json!({"geometry":s.witness,"stimulus":self.binding.stimulus,"actual_native_player_atom":atom,
++            "before_sound_sha256":digest(&serde_json::to_vec(&before.core_snapshot)?),
++            "after_sound_sha256":digest(&serde_json::to_vec(&after.core_snapshot)?),
++            "scope":SCOPE,"actor_or_policy_modified":false,"scorecard_eligible":false});
++        *world=s.world;
++        Ok((Opened{witness:s.witness,stimulus:self.binding.stimulus,atom},setup))
++    }
++}
++
++impl Opened {
++    fn live_player(&self, world: &HeadlessWorld, tick: Tick) -> Result<Option<AudibleUtterance>> {
++        let matches=world.audible_utterances().into_iter().filter(|a|a.source_kind==UtteranceSourceKind::Player)
++            .collect::<Vec<_>>();
++        let expected=self.atom.as_ref().filter(|a|a.emitted_tick<=tick&&tick<=a.expires_after_tick);
++        if matches.as_slice()!=expected.map_or(&[][..],std::slice::from_ref) {
++            return Err("crossed fixture actual pre-World Player atom mismatch".into());
++        }
++        Ok(expected.cloned())
++    }
++    /// Capture actual World geometry at a real boundary, never turn a bound into a selector hint.
++    pub(super) fn cut(&self, world: &HeadlessWorld) -> Result<BearingCutV1> {
++        let tick=world.tick();
++        if !(OPEN..=OPEN+CUTS as u64).contains(&tick.raw()) { return Err("crossed fixture escaped bounded World ticks".into()); }
++        let ids=self.witness.prop_ids();
++        let positions=self.witness.prop_positions();
++        let mut actual=[(Vec3f::ZERO,None,false,false,false);2];
++        for (i,(id,p)) in ids.into_iter().zip(positions).enumerate() {
++            let o=world.entity(id).ok_or("crossed fixture lost real placed object")?;
++            let player=world.player_held_object()==Some(id);
++            if tick.raw()<=OPEN+2 && (o.position!=p || o.grounded_physical.velocity!=Vec3f::ZERO
++                || o.carried_by.is_some() || o.activity_hold || o.consumed || player) {
++                return Err("crossed fixture props did not remain stationary and free before expiry".into());
++            }
++            actual[i]=(o.position,o.carried_by,o.activity_hold,o.consumed,player);
++        }
++        let listener=world.entity(self.witness.body()).ok_or("crossed fixture lost resident body")?.position;
++        let grab=ids.map(|id|world.retained_language_pilot_grab_probe(OWNER,id));
++        if tick.raw()<=OPEN+2 && (grab!=[(false,false);2] || !self.witness.ordinary_pose_is_safe(listener,tick.raw()-OPEN)) {
++            return Err("crossed fixture reach appeared before true native expiry".into());
++        }
++        Ok(BearingCutV1{tick,world_signature:world.canonical_signature_digest()?.words,listener,props:actual,
++             actual_grab_probe:grab,native_live_player_atom:self.live_player(world,tick)?})
++    }
++    pub(super) fn observe(&self, frame: &PerceptionFrame, pre: BearingCutV1, world: &HeadlessWorld) -> Result<Value> {
++        let post=self.cut(world)?;
++        if frame.organism_id()!=OWNER || frame.tick()!=pre.tick || post.tick.raw()!=pre.tick.raw()+1
++            || frame.body().pose.translation!=pre.listener || !self.witness.ordinary_interval_is_safe(&pre.listener,&post.listener) {
++            return Err("crossed fixture native decision and World pose are not the same cut".into());
++        }
++        let lane=&frame.sensory().language_context.heard_tokens;
++        let lines=lane.iter().flatten().collect::<Vec<_>>();
++        let player=lines.iter().filter(|w|w.source_kind==UtteranceSourceKind::Player).copied().collect::<Vec<_>>();
++        let distance=self.atom.as_ref().map(|a|self.witness.center_range(pre.listener,a.source_position));
++        let full=pre.native_live_player_atom.as_ref().is_some_and(|a|
++            !player.is_empty()&&player.len()==a.tokens.len()&&player.iter().enumerate().all(|(i,x)|
++                x.utterance_id==a.utterance_id && x.sequence_position as usize==i
++                && x.token_id==u32::from(a.tokens[i].raw())&&x.confidence.raw()>0.0
++                && x.source_position==a.source_position && x.addressee==a.addressee
++                && x.speaker_id.is_none()&&x.source_entity.is_none()&&x.teacher_channel.is_none())
++        );
++        if pre.native_live_player_atom.is_none() && (!player.is_empty() || (self.atom.is_none()&&!lines.is_empty())) {
++            return Err("crossed fixture produced a Player cue under true absence".into());
++        }
++        let dropout=pre.tick.raw()==OPEN+1 && pre.native_live_player_atom.is_some() && lines.is_empty()
++            && distance.is_some_and(|d|d>6.0);
++        Ok(json!({"schema":SCOPE,"declared_stimulus":self.stimulus,"pre_world":pre,"settled_world":post,"frame":frame.frame_digest(),
++            "actual_sealed_hearing":lane,"measured_acoustic_range_m":distance,"genuine_fully_heard":full,
++            "true_physical_dropout_before_expiry":dropout,"actual_emitted_atom_expired":self.atom.as_ref().is_some_and(|a|
++                frame.tick()>a.expires_after_tick&&pre.native_live_player_atom.is_none()),
++            "never_emitted_atom":self.atom.is_none(),"readback_only":true,"causal_carry_or_movement_credit":false,
++            "scorecard_eligible":false}))
++    }
++}

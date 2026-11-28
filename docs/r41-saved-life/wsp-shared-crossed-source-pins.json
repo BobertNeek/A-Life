@@ -1,0 +1,30 @@
+{
+  "after": {
+    "crates/alife_game_app/Cargo.toml": "8cbb56dde498c0de054b81686baf284632cfc056d6c997a67ae28d819301d2e9",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs": "6a4cdf8ea7df35197d76857b3415470cff1ac88d9f33589141ecbdd649a0e303",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs": "c284c74d8bae88946cde3dd67aedc3b4ec96db10a6792db56e34b7123635a592",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/wsp_out_of_reach_fixture.rs": "d6623b5284629f65ae7f35f36c8d55e3f98838cf257c057ff49fc0b85a26bfee",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/wsp_out_of_reach_scope.rs": "80958cfbbd77488b755ff2293c6427d6b4277849b679183b066ccb9733ccb2fd"
+  },
+  "before": {
+    "crates/alife_game_app/Cargo.toml": "12a59fae67462ccd68b3e3fcd6ec7c2a315303d1f2f94758977347a12c1f109e",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs": "292756993ac4066487f708f6c660fd488ce5d1f8f76979ffd4e49fa60f13c943",
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs": "326d518c677d6a9d2b65536f75cef7a65113c167230ba027f0203e61edc5bcf4"
+  },
+  "compile_executed": false,
+  "current_activity": "isolated schema16 stock geometry observer; no live authority",
+  "default_off": true,
+  "device_executed": false,
+  "evaluator_ingress_added": true,
+  "forward_sha256": "da7ccf322ea35ed66fb5b6cc055514bc5b9265332fc651e2052b107b9248d47f",
+  "game_executed": false,
+  "inverse_sha256": "194fce90c89e54c7df6e245d426ce8ff0e0f0760b0fe3c5f67240bcf666b2cd8",
+  "old_modules_unchanged": true,
+  "parent_hosted_head": "cd215f531bdada0777b2bb530af2681bddfd6866",
+  "parent_source_tree_sha256": "6457529ef814c1def3ca60be6e42e367a83637d70f0ff5cd0d6aecb3cf206ad1",
+  "prior_e477_rust_source_receipt_sha256": "92e9a2cc29fa443fb1a7decc5d00ecabea764813b91e7eefeef088486d1c8353",
+  "schema": "qualia.private.shared_symmetric_geometry_v1.catalog_source_only.v1",
+  "source_geometry_tests_authored": 3,
+  "source_geometry_tests_run": false,
+  "source_only_apply_inverse_reapply": true
+}
