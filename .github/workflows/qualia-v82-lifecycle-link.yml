@@ -1,0 +1,731 @@
+name: Qualia v82 lifecycle linked ELF only
+
+"on":
+  push:
+    branches: ["bob/qualia-v82-lifecycle-link-20261128"]
+    paths:
+      - ".github/workflows/qualia-v82-lifecycle-link.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qualia-v82-lifecycle-linked-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  qualify-linked-elf:
+    if: github.repository == 'BobertNeek/A-Life' && github.ref == 'refs/heads/bob/qualia-v82-lifecycle-link-20261128'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 105
+    defaults:
+      run:
+        shell: bash
+    env:
+      PATCHED_FROM_TO: '{"crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_native_custody.rs":{"before":"00c07b23fb90a2b681159720dc8465f50eb72ade2f59f7272a27f552ab9eebda","after":"2493b81f7fb96d012f938120d8d14678002aa3e0e5b588f55b47786fe10c1312"},"crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/ordinary_ingress_predecessor.rs":{"before":"5083d453af6221c942062a0e9defe439e717e8ebd151603523af7937e42c35f6","after":"5c12529d578cc88e0e734b8ed5a0e842951da0ca3a9ec515cb37c4d8398b52b1"}}'
+      PIN_LINK_PARENT: 74f53b1484637ea44776b7ec704cfeb78a2be89f
+      PIN_LINK_PARENT_TREE: c9b93138a1001271d89bd4f15a8e333441981cd8
+      PIN_LINK_PARENT_WF: 6bd243e1c50975630d261cd7b6f303722cedc899ff5bf11b26a00cd599f584e8
+      PIN_V82_BASE: c998b485662c1f10b7ee21b28cbc1c4edf76e046
+      PIN_V82_BASE_TREE: 30d74ef483a86b800216e7cd895a3245b90357ff
+      PIN_V82_FWD: ddce0bc53d20a110a3d5bf043aec6eb1b18bf09336817b6345259b8ed1e552c6
+      PIN_V82_INV: 0ab20600fbb8d36fd6f51a4b0c52a45f878e03d3c22146ef3e192a62bb67ee37
+      PIN_V82_PINS: abec052e70ce20dba940d99a880c5068e7842457fe0ec148f81e5478aacc5298
+      PIN_PREFORK_PARENT: bb3cf7b6bf6ed7d6a300d8f880387ea00f2754f7
+      PIN_PREFORK_TREE: c30fceed1ea9ec22bad34e52bbc99a3887f37f8f
+      PIN_PREFORK_PARENT_WF: 6e2955b989d19d2bb32a9c2cc89ab413246dab14df4a29829f7d7f7461205788
+      PIN_PREFORK_PATCH: 1d7fa0e2560b22d35e3e29f18a3baa224217c4a9ce92cd55f4b2181f3f88a1b3
+      PIN_PREFORK_PINS: 0b1a981d1b996ad244d960d0e043947671ce537408ad681a6339d12ac8bbfc31
+      PIN_PREFORK_CLI: b427c1db27ce2b9ec548b73265e35f6186dab96e0831f8b12daa37fd1f5d8a3f
+      PIN_WORD_PARENT: a1b1add6ba4d5c0bb067b75496f6b03fdb0db1de
+      PIN_FAILED_INGRESS_HEAD: 97a3e2cde67d9870ca5416b72ff9c1b0466991a5
+      PIN_FAILED_INGRESS_TREE: 92a6185d8a93cd8d3a95be4a792b272f0f182ec2
+      PIN_FAILED_INGRESS_WF: 8c5773c5059542ce02faa0d59d2b702fcc9182c5cd2808c03bf3ec1215e3ced8
+      PIN_FAILED_INGRESS_PATCH: 2c23478acfb25c560129c27745097de4425e4191f596207d62e355616c51ea65
+      PIN_FAILED_INGRESS_PINS: ad4eb6fe2c54dad05d9cb541850c127d16ace2cd5845f4d200a1a1537c99e1a6
+      PIN_WORD_PARENT_WORKFLOW: 075da08148939fe1266f79125b6f6943552b827cbab451b6dcedc2491b038555
+      PIN_INGRESS_PATCH: 24ddeea1c586284f06909dc7fb1e71bc42f854e7444a78ef5d2938e2b249694a
+      PIN_INGRESS_PINS: 6f70cad34556f69f5d3c6202f705c38382f7b2b15b51a92c41a21e94782c4a92
+      PIN_INGRESS_CLI: f71f51f4c12b42bc30789bca4c46f289d4161ebb38c87b4e9038db372e647669
+      PIN_DE8: de8b39fb47d768513eed4cd2e8f8647d5f22e88f
+      PIN_DE8_TREE: d45c0bb7d00e3cc7490dbcfd1e8fbbc3a7336002
+      PIN_DE8_PARENT: 8423919c1b397b44e08146eeeb548ea6fe9117d5
+      PIN_WORD_PATCH: 50c6db2aee94fc4759c89f1a4af20c2d89e31d12f7d7c2d02cee7303db202d50
+      PIN_WORD_PINS: 0b539d36a81b6cf019b7510ac85622b5bf8efb2f3d1424f63f834650207a8ad1
+      PIN_WORD_WORLD: ce3b0ef0e962033a78f42194deadcd879bcc8ed9c343ebd122457b3acb0a98fa
+      PIN_WORD_CLI: 825725b463f425440b60a419abbf466e3c61a11bcaa6e643a33c34e3248d65f0
+      PIN_FIRST_CROSSED: 2ccb3364ffea6fbb6a8d517174aad6984a807112
+      PIN_CPU_HARNESS: d31e44da4df32dd83bd9848ed663cbc4cfc262bcf9d6e2784cce5e43f01fe319
+      PIN_RANK_COMMIT: 3c9c6e50391834023490b8edecff45ee4e133e0c
+      PIN_CROSSED_PATCH: d6ed64c12f5e9a58b80f2a1737f7c29b7d4029842916e87747df92f5e8c6a9da
+      PIN_CROSSED_LEAVES: 7fe116bae6f1b493d31d2c742d2cea684804bc8b6a22aa0599378828a24ceaf2
+      PIN_CROSSED_CHECK: c66f1e1a13b7a7b4f3e70366277ab3802929236c08269d38dce03f90982c2a2f
+      PIN_PARENT: aaa0c3b0cfd7b588fb2d202178c3a7016aa68ab3
+      PIN_PARENT_TREE: 2fe4b0ace78b6ce657a9a057d297e3afb82672e1
+      PIN_STRICT_PREDECESSOR: 8aef03ea2608b82ce24261400961b3b16b04789c
+      PIN_B00: b00de30b27b8d501c5e01f8df527ffa3471a2d10
+      PIN_TREE: a1f474ce9feb2dd70356d93004698525fe7d2bad
+      PIN_LEGACY_PARENT: 7a5061285be79275d914f3f8852eaace75c9af1b
+      PIN_SOURCE: f466b83791cccb97568e6f718b92b052999cfb2b
+      PIN_ANCHOR: c5d250178cb70a10f99f78ebcc974e0ad5533b41
+      PIN_RESEARCH: 0cd14f12a8012a9b00119a7b33939ca5e3dbeb53
+      PIN_SOURCE_MANIFEST: 16a63a8f3fb12262f7da2830e3721fc727e20073a8795e91ccfb0765913288ad
+      PIN_RESTORE: bd554f6fa39054ddc08d17487e18ee4edc314c249eabfad2261bf8c1a53c3cef
+      PIN_RESEARCH_PATCH: 3dcf657b2b1149a7da52e7867c3bdbc4c4dfe8d4785b53c95f429c78aa1cd490
+      PIN_REPAIR_PATCH: c2815992c4e3e70a7b7bc42b307dc1d96e8c34483ea36cf2c98e06b9920282e6
+      PIN_LEGACY_PATCH: 692ec25acc620f502581e7299d952471c039812646e41f85cdd1d6f87ed5c66d
+      PIN_V2_PATCH: f0a836086d20e47e434eb947ebc9083f52dc50c344403d24e8ede08ae23ad657
+      PIN_V2_LEAVES: 0ca357bc54e8d997c1f3d12a3cbe697959d87c910f8ac257b9019febeb157349
+      PIN_LOCK: 155699e9274f8890bc8c335669a62de48203ba315a33388a8f0caca71f0f7f37
+      PIN_F0_PATCH: dab4a38f54fba616f9d789cd9e1b4853b09eee5229da91362b29be6aab686cde
+      PIN_F0_LEAVES: a1fc172b35206dffedd1c593cc1f890dab6fda0b287420d8cf5bc1c531b64ac7
+      PIN_STRICT_PATCH: 18ac5322a3e41e2c6ff1e67cf4c9b7eb0d3d3a4cbfbb9f002add7b60e3b43c77
+      PIN_STRICT_LEAVES: 87dac60cf9f540a60a400aa235d798716645cc778648d8ef85fb0b7cf8718791
+      PIN_STRICT_CHECK: 907535345f3ab9c85ab7c7f78ee66cc3d680cecf974ce6c337f59a96d82dde84
+      PIN_RANK_PATCH: 0069bf5a621d6092868540d76ffe3e3a7d06329ac00fdd4a5ad02afcc9edbb38
+      PIN_RANK_LEAVES: 8339b8c2bd4a94a00895920733aab315f9cfa913a8c68974a2483fcdb976610e
+      PIN_RANK_CHECK: a2fa8bff69e4f81729de3475d4353af76b4d1d0931e6e5999414bb85c404e5c7
+      PIN_RUSTC: 0ef1bc386059596dada8fb65b50425aab2ea637a
+      RUST_TOOLCHAIN: "1.100.0"
+      TARGET: x86_64-unknown-linux-gnu
+      CARGO_BUILD_JOBS: "2"
+      CARGO_INCREMENTAL: "0"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_DEV_OPT_LEVEL: "1"
+      CARGO_PROFILE_DEV_INCREMENTAL: "false"
+    steps:
+      - name: Check out candidate commit with no persisted credentials
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Authenticate the sole workflow child on the exact compiler parent and recover public source
+        run: |
+          set -euo pipefail
+          export LC_ALL=C
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git show -s --format=%P HEAD)" = "$PIN_LINK_PARENT"
+          test "$(git rev-parse "$PIN_LINK_PARENT^{tree}")" = "$PIN_LINK_PARENT_TREE"
+          test "$(git show -s --format=%P "$PIN_LINK_PARENT")" = "$PIN_V82_BASE"
+          diff -u <(printf 'A\t%s\n' '.github/workflows/qualia-v82-lifecycle-link.yml') <(git diff --name-status --no-renames "$PIN_LINK_PARENT" HEAD)
+          new_workflow='.github/workflows/qualia-v82-lifecycle-link.yml'
+          test -f "$new_workflow" && test ! -L "$new_workflow" && test "$(git ls-tree HEAD -- "$new_workflow" | cut -d' ' -f1)" = 100644
+          git show "$PIN_LINK_PARENT:.github/workflows/qualia-v82-lifecycle-compile.yml" | sha256sum | cut -d' ' -f1 | grep -Fx "$PIN_LINK_PARENT_WF"
+          printf '%s  %s\n' "$PIN_LINK_PARENT_WF" '.github/workflows/qualia-v82-lifecycle-compile.yml' | sha256sum -c -
+          test "$(git rev-parse "$PIN_V82_BASE^{tree}")" = "$PIN_V82_BASE_TREE"
+          test "$(git show -s --format=%P "$PIN_V82_BASE")" = "$PIN_PREFORK_PARENT"
+          diff -u <(printf 'A\t%s\n' '.github/workflows/qualia-v82-lifecycle-compile.yml' 'docs/r41-saved-life/v82-lifecycle-source.patch' 'docs/r41-saved-life/v82-lifecycle-source-inverse.patch' 'docs/r41-saved-life/v82-lifecycle-source-pins.json' | sort) <(git diff --name-status --no-renames "$PIN_V82_BASE" "$PIN_LINK_PARENT" | sort)
+          for leaf in '.github/workflows/qualia-v82-lifecycle-compile.yml' 'docs/r41-saved-life/v82-lifecycle-source.patch' 'docs/r41-saved-life/v82-lifecycle-source-inverse.patch' 'docs/r41-saved-life/v82-lifecycle-source-pins.json'; do
+            test -f "$leaf" && test ! -L "$leaf" && test "$(git ls-tree HEAD -- "$leaf" | cut -d' ' -f1)" = 100644
+          done
+          test "$(git rev-parse "$PIN_PREFORK_PARENT^{tree}")" = "$PIN_PREFORK_TREE"
+          git show "$PIN_PREFORK_PARENT:.github/workflows/qualia-ordinary-ingress-observer-v1-check.yml" | sha256sum | cut -d' ' -f1 | grep -Fx "$PIN_PREFORK_PARENT_WF"
+          diff -u <(printf 'A\t%s\n' \
+            '.github/workflows/qualia-prefork-timing-check.yml' \
+            'docs/r41-saved-life/prefork-timing-diagnostic-source.patch' \
+            'docs/r41-saved-life/prefork-timing-diagnostic-source-pins.json' \
+            'scripts/check_prefork_timing_diagnostic_cli.py' \
+            | sort) <(git diff --name-status --no-renames "$PIN_PREFORK_PARENT" "$PIN_V82_BASE" | sort)
+          for leaf in '.github/workflows/qualia-prefork-timing-check.yml' 'docs/r41-saved-life/prefork-timing-diagnostic-source.patch' 'docs/r41-saved-life/prefork-timing-diagnostic-source-pins.json' 'scripts/check_prefork_timing_diagnostic_cli.py'; do
+            test -f "$leaf" && test ! -L "$leaf" && test "$(git ls-tree HEAD -- "$leaf" | cut -d' ' -f1)" = 100644
+          done
+          test "$(git show -s --format=%P "$PIN_PREFORK_PARENT")" = "$PIN_FAILED_INGRESS_HEAD"
+          test "$(git show -s --format=%P "$PIN_FAILED_INGRESS_HEAD")" = "$PIN_WORD_PARENT"
+          test "$(git rev-parse "$PIN_FAILED_INGRESS_HEAD^{tree}")" = "$PIN_FAILED_INGRESS_TREE"
+          # Accept exactly the first failed published parent, not an arbitrary ancestor.
+          git show "$PIN_FAILED_INGRESS_HEAD:.github/workflows/qualia-ordinary-ingress-observer-v1-check.yml" | sha256sum | cut -d' ' -f1 | grep -Fx "$PIN_FAILED_INGRESS_WF"
+          git show "$PIN_FAILED_INGRESS_HEAD:docs/r41-saved-life/ordinary-ingress-observer-v1-source.patch" | sha256sum | cut -d' ' -f1 | grep -Fx "$PIN_FAILED_INGRESS_PATCH"
+          git show "$PIN_FAILED_INGRESS_HEAD:docs/r41-saved-life/ordinary-ingress-observer-v1-source-pins.json" | sha256sum | cut -d' ' -f1 | grep -Fx "$PIN_FAILED_INGRESS_PINS"
+          diff -u <(printf 'M\t%s\n' \
+            '.github/workflows/qualia-ordinary-ingress-observer-v1-check.yml' \
+            'docs/r41-saved-life/ordinary-ingress-observer-v1-source.patch' \
+            'docs/r41-saved-life/ordinary-ingress-observer-v1-source-pins.json' \
+            | sort) <(git diff --name-status --no-renames "$PIN_FAILED_INGRESS_HEAD" "$PIN_PREFORK_PARENT" | sort)
+          test "$(git show -s --format=%P "$PIN_WORD_PARENT")" = "$PIN_DE8"
+          test "$(git rev-parse "$PIN_DE8^{tree}")" = "$PIN_DE8_TREE"
+          test "$(git show -s --format=%P "$PIN_DE8")" = "$PIN_DE8_PARENT"
+          printf '%s  %s\n' "$PIN_WORD_PARENT_WORKFLOW" '.github/workflows/qualia-word-local-grounding-v1-check.yml' | sha256sum -c -
+          diff -u <(printf 'A\t%s\n' \
+            '.github/workflows/qualia-ordinary-ingress-observer-v1-check.yml' \
+            'docs/r41-saved-life/ordinary-ingress-observer-v1-source.patch' \
+            'docs/r41-saved-life/ordinary-ingress-observer-v1-source-pins.json' \
+            'scripts/check_ordinary_ingress_observer_v1_cli.py' \
+            | sort) <(git diff --name-status --no-renames "$PIN_WORD_PARENT" "$PIN_PREFORK_PARENT" | sort)
+          test "$(git rev-list --parents -n 1 "$PIN_RANK_COMMIT")" = "$PIN_RANK_COMMIT $PIN_PARENT"
+          git merge-base --is-ancestor "$PIN_RANK_COMMIT" "$PIN_DE8"
+          test "$(git rev-list --count "$PIN_RANK_COMMIT..$PIN_DE8")" = 6
+          test "$(git rev-list --count "$PIN_FIRST_CROSSED..$PIN_DE8")" = 2
+          git merge-base --is-ancestor "$PIN_FIRST_CROSSED" "$PIN_DE8"
+          test -z "$(git rev-list --merges "$PIN_RANK_COMMIT..$PIN_DE8")"
+          test "$(git rev-parse "$PIN_PARENT^{tree}")" = "$PIN_PARENT_TREE"
+          test "$(git rev-list --parents -n 1 "$PIN_PARENT")" = "$PIN_PARENT $PIN_STRICT_PREDECESSOR"
+          test "$(git rev-list --parents -n 1 "$PIN_STRICT_PREDECESSOR")" = "$PIN_STRICT_PREDECESSOR $PIN_B00"
+          test "$(git rev-parse "$PIN_B00^{tree}")" = "$PIN_TREE"
+          git merge-base --is-ancestor "$PIN_SOURCE" "$PIN_LEGACY_PARENT"
+          git merge-base --is-ancestor "$PIN_RESEARCH" "$PIN_LEGACY_PARENT"
+          git merge-base --is-ancestor "$PIN_LEGACY_PARENT" "$PIN_B00"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+          workflow='.github/workflows/qualia-contact211-rank32-check.yml'
+          docs='docs/r41-saved-life'
+          overlay="$docs/contact211-f0-source.patch"
+          leaves="$docs/contact211-f0-source-pins.json"
+          strict_overlay="$docs/contact211-strict-source.patch"
+          strict_leaves="$docs/contact211-strict-source-pins.json"
+          strict_check="$docs/contact211-strict-source-check.py"
+          rank_overlay="$docs/contact211-rank32-source.patch"
+          rank_leaves="$docs/contact211-rank32-source-pins.json"
+          rank_check="$docs/contact211-rank32-source-check.py"
+          diff -u <(printf 'A\t%s\n' "$workflow" "$rank_overlay" "$rank_leaves" "$rank_check" | sort) \
+            <(git diff --name-status --no-renames "$PIN_PARENT" "$PIN_RANK_COMMIT" | sort)
+          cw='.github/workflows/qualia-contact211-rank32-crossed-check.yml'
+          cp='docs/r41-saved-life/contact211-rank32-crossed-source.patch'
+          cl='docs/r41-saved-life/contact211-rank32-crossed-source-pins.json'
+          cc='docs/r41-saved-life/contact211-rank32-crossed-source-check.py'
+          ch='docs/r41-saved-life/contact211-rank32-crossed-cpu-harness.rs'
+          diff -u <(printf 'A\t%s\n' "$cw" "$cp" "$cl" "$cc" "$ch" | sort) <(git diff --name-status --no-renames "$PIN_RANK_COMMIT" "$PIN_DE8" | sort)
+          diff -u <(printf 'M\t%s\nA\t%s\n' "$cw" "$ch" | sort) <(git diff --name-status --no-renames "$PIN_FIRST_CROSSED" "$PIN_DE8" | sort)
+          for path in "$workflow" "$rank_overlay" "$rank_leaves" "$rank_check" "$strict_overlay" "$strict_leaves" "$strict_check" "$overlay" "$leaves" "$cw" "$cp" "$cl" "$cc" "$ch"; do
+            test -f "$path" && test ! -L "$path"
+            test "$(git ls-tree HEAD -- "$path" | cut -d' ' -f1)" = 100644
+          done
+          printf '%s  %s\n' \
+            "$PIN_F0_PATCH" "$overlay" "$PIN_F0_LEAVES" "$leaves" \
+            "$PIN_STRICT_PATCH" "$strict_overlay" "$PIN_STRICT_LEAVES" "$strict_leaves" "$PIN_STRICT_CHECK" "$strict_check" \
+            "$PIN_RANK_PATCH" "$rank_overlay" "$PIN_RANK_LEAVES" "$rank_leaves" "$PIN_RANK_CHECK" "$rank_check" \
+            "$PIN_CROSSED_PATCH" "$cp" "$PIN_CROSSED_LEAVES" "$cl" "$PIN_CROSSED_CHECK" "$cc" "$PIN_CPU_HARNESS" "$ch" | sha256sum -c -
+
+          exact="$RUNNER_TEMP/qualia-contact211-rank32-exact"
+          layer="$RUNNER_TEMP/qualia-contact211-rank32-layers"
+          evidence="$RUNNER_TEMP/qualia-contact211-rank32-evidence"
+          build="$RUNNER_TEMP/qualia-contact211-rank32-target"
+          mkdir "$layer" "$evidence"
+          git show "$PIN_SOURCE:$docs/restore_source.py" > "$layer/restore_source.py"
+          git show "$PIN_SOURCE:$docs/SOURCE.json" > "$layer/SOURCE.json"
+          mapfile -t diffs < <(git ls-tree -r --name-only "$PIN_SOURCE" -- "$docs/patches" | sort)
+          test "${#diffs[@]}" -eq 69
+          for path in "${diffs[@]}"; do
+            case "$path" in "$docs/patches/"*.patch) ;; *) exit 1;; esac
+            rel="${path#"$docs"/}"
+            mkdir -p "$layer/$(dirname "$rel")"
+            git show "$PIN_SOURCE:$path" > "$layer/$rel"
+          done
+          git show "$PIN_RESEARCH:$docs/research-catalog-source-only.patch" > "$layer/research.patch"
+          git show "$PIN_LEGACY_PARENT:$docs/sleep-boundary-repair-source.patch" > "$layer/repair.patch"
+          git show "$PIN_LEGACY_PARENT:$docs/sleep-legacy-publication-source.patch" > "$layer/legacy.patch"
+          git show "$PIN_B00:$docs/retained-language-pilot-source.patch" > "$layer/v2.patch"
+          git show "$PIN_B00:$docs/retained-language-pilot-source-pins.json" > "$layer/v2-pins.json"
+          printf '%s  %s\n' \
+            "$PIN_RESTORE" "$layer/restore_source.py" "$PIN_SOURCE_MANIFEST" "$layer/SOURCE.json" \
+            "$PIN_RESEARCH_PATCH" "$layer/research.patch" "$PIN_REPAIR_PATCH" "$layer/repair.patch" \
+            "$PIN_LEGACY_PATCH" "$layer/legacy.patch" "$PIN_V2_PATCH" "$layer/v2.patch" \
+            "$PIN_V2_LEAVES" "$layer/v2-pins.json" | sha256sum -c - | tee "$evidence/qualification.txt"
+          printf 'rank32_source_patch_sha256=%s\nrank32_source_pins_sha256=%s\n' \
+            "$PIN_RANK_PATCH" "$PIN_RANK_LEAVES" | tee -a "$evidence/qualification.txt"
+          printf 'head=%s\nactual_parent=%s\nactual_parent_tree=%s\nstrict_patch_sha256=%s\nstrict_pins_sha256=%s\n' \
+            "$GITHUB_SHA" "$PIN_PARENT" "$PIN_PARENT_TREE" "$PIN_STRICT_PATCH" "$PIN_STRICT_LEAVES" | tee -a "$evidence/qualification.txt"
+          printf 'head=%s\nprior=%s\nprior_tree=%s\nF0_patch_sha256=%s\n' \
+            "$GITHUB_SHA" "$PIN_B00" "$PIN_TREE" "$PIN_F0_PATCH" | tee -a "$evidence/qualification.txt"
+          python3 -I "$layer/restore_source.py" "$GITHUB_WORKSPACE" "$exact" | tee -a "$evidence/qualification.txt"
+          test "$(git -C "$GITHUB_WORKSPACE" rev-parse "$PIN_ANCHOR")" = "$PIN_ANCHOR"
+          cd "$exact"
+          for patch in "$layer/research.patch" "$layer/repair.patch" "$layer/legacy.patch"; do
+            git apply --check "$patch"
+            git apply "$patch"
+          done
+
+          python3 -I - "$layer/v2-pins.json" "$layer/v2.patch" \
+            "$GITHUB_WORKSPACE/$leaves" "$GITHUB_WORKSPACE/$overlay" \
+            "$GITHUB_WORKSPACE/$strict_leaves" "$GITHUB_WORKSPACE/$strict_overlay" "$GITHUB_WORKSPACE/$strict_check" \
+            "$GITHUB_WORKSPACE/$rank_leaves" "$GITHUB_WORKSPACE/$rank_overlay" "$layer/checked-tree.json" <<'PY' | tee -a "$evidence/qualification.txt"
+          from hashlib import sha256
+          import json, os, pathlib, re, subprocess, sys
+
+          def require(condition, label):
+              if not condition:
+                  raise SystemExit(f'Contact211 F0 source check refused: {label}')
+
+          root = pathlib.Path.cwd()
+          v2_json, v2_patch, f0_json, f0_patch, strict_json, strict_patch, strict_check, rank_json, rank_patch, checked_tree = map(pathlib.Path, sys.argv[1:])
+          v2 = json.loads(v2_json.read_bytes())
+          f0 = json.loads(f0_json.read_bytes())
+
+          modified = {
+              'crates/alife_game_app/Cargo.toml',
+              'crates/alife_game_app/src/gpu_live_runtime.rs',
+              'crates/alife_game_app/src/gpu_live_runtime/staged_tick.rs',
+              'crates/alife_gpu_backend/Cargo.toml',
+              'crates/alife_gpu_backend/src/closed_loop_pipeline.rs',
+              'crates/alife_gpu_backend/src/closed_loop_runtime.rs',
+              'crates/alife_gpu_backend/src/closed_loop_runtime/tick.rs',
+              'crates/alife_gpu_backend/src/training_rollout.rs',
+              'crates/alife_world/Cargo.toml',
+              'crates/alife_world/src/candidate_enumerator.rs',
+              'crates/alife_world/src/headless.rs',
+          }
+          added = {
+              'crates/alife_game_app/src/gpu_live_runtime/contact211_f0_witness.rs',
+              'crates/alife_world/src/headless/contact211_witness.rs',
+          }
+          shaders = {
+              'crates/alife_gpu_backend/shaders/closed_loop_decode.wgsl',
+              'crates/alife_gpu_backend/shaders/closed_loop_memory_context.wgsl',
+              'crates/alife_gpu_backend/shaders/training_rollout.wgsl',
+          }
+          before = f0['overlaid_source_before_sha256']
+          after = f0['overlaid_source_after_sha256']
+          shader_pins = f0['unchanged_shaders_sha256']
+          require(f0['schema'] == 'qualia.contact211_f0_compile_source.v1'
+                  and f0['prior_commit'] == os.environ['PIN_B00']
+                  and f0['prior_tree'] == os.environ['PIN_TREE']
+                  and f0['forward_sha256'] == os.environ['PIN_F0_PATCH']
+                  and f0['lock_sha256'] == os.environ['PIN_LOCK']
+                  and f0['policy_or_native_result'] is False
+                  and set(before) == modified and set(after) == modified | added
+                  and set(shader_pins) == shaders, 'independent exact F0 leaf allowlist')
+          require(sha256(f0_patch.read_bytes()).hexdigest() == os.environ['PIN_F0_PATCH'], 'overlay bytes')
+          headers = [l for l in f0_patch.read_text().splitlines() if l.startswith('diff --git ')]
+          path_pattern = re.compile(r'diff --git a/([a-zA-Z0-9_./-]+) b/([a-zA-Z0-9_./-]+)')
+          names = []
+          for line in headers:
+              m = path_pattern.fullmatch(line)
+              require(m is not None and m[1] == m[2], 'patch header shape')
+              names.append(m[1])
+          require(len(names) == 13 and set(names) == modified | added, 'patch target allowlist')
+
+          def digest(rel):
+              path = root / rel
+              require(not path.is_symlink(), f'symlink {rel}')
+              return sha256(path.read_bytes()).hexdigest() if path.is_file() else None
+
+          def verify(pins, label):
+              for path, want in sorted(pins.items()):
+                  require(digest(path) == want, f'{label}: {path}')
+
+          def apply(patch):
+              subprocess.run(['git', 'apply', '--check', str(patch)], cwd=root, check=True)
+              subprocess.run(['git', 'apply', str(patch)], cwd=root, check=True)
+
+          v2_leaves = v2['changed_source_leaves']
+          catalog = 'crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/research_catalog.rs'
+          require(len(v2_leaves) == 6 and sum(x['parent_sha256'] is None for x in v2_leaves.values()) == 1,
+                  'v2 historical leaf shape')
+          for phase in ('parent', 'result'):
+              if phase == 'result':
+                  apply(v2_patch)
+              verify({path: pins[phase + '_sha256'] for path, pins in v2_leaves.items()}
+                     | {catalog: v2['research_catalog_unchanged_sha256']}, f'v2 {phase}')
+          verify(before | shader_pins | {'Cargo.lock': os.environ['PIN_LOCK']}, 'authentic B00 emitted preimage')
+          require(all(digest(p) is None and not (root / p).exists() for p in added), 'F0 new files already present')
+
+          def tree():
+              nodes = list(root.rglob('*'))
+              require(not any(p.is_symlink() for p in nodes), 'symlink in restored closure')
+              return {p.relative_to(root).as_posix(): sha256(p.read_bytes()).hexdigest()
+                      for p in nodes if p.is_file()}
+
+          source_before = tree()
+          apply(f0_patch)
+          verify(after | shader_pins | {'Cargo.lock': os.environ['PIN_LOCK']}, 'exact F0 postimage')
+          source_after = tree()
+          changed = {p for p in source_before.keys() | source_after.keys() if source_before.get(p) != source_after.get(p)}
+          require(changed == modified | added and set(source_after) - set(source_before) == added,
+                  'whole reconstructed tree diff outside exact 13-leaf allowlist')
+          subprocess.run(['git', 'apply', '--reverse', '--check', str(f0_patch)], cwd=root, check=True)
+          print('status=source+locks+three_shaders_authenticated; restored_827+historical_layers+exact_13_leaf_f0')
+
+          strict = json.loads(strict_json.read_bytes())
+          app = 'crates/alife_game_app/src/'
+          strict_modified = {
+              app + 'gpu_live_runtime.rs',
+              app + 'gpu_live_runtime/contact211_f0_witness.rs',
+              app + 'gpu_live_runtime/staged_tick.rs',
+              app + 'foundation_training_cycle/saved_life_retention.rs',
+              app + 'foundation_training_cycle/saved_life_retention/experiments.rs',
+              'crates/alife_gpu_backend/src/closed_loop_runtime.rs',
+          }
+          strict_added = {app + 'foundation_training_cycle/saved_life_retention/contact211_parity.rs'}
+          pre, post = strict['before_sha256'], strict['after_sha256']
+          require(strict['official_or_native_ready'] is False and set(pre) == strict_modified
+                  and set(post) == strict_modified | strict_added, 'independent exact strict source allowlist')
+          require(sha256(strict_patch.read_bytes()).hexdigest() == os.environ['PIN_STRICT_PATCH']
+                  and sha256(strict_json.read_bytes()).hexdigest() == os.environ['PIN_STRICT_LEAVES'],
+                  'exact strict overlay and leaf bytes')
+          headers = [path_pattern.fullmatch(l) for l in strict_patch.read_text().splitlines()
+                     if l.startswith('diff --git ')]
+          require(len(headers) == 7 and all(m is not None and m[1] == m[2] for m in headers)
+                  and {m[1] for m in headers} == strict_modified | strict_added, 'strict patch target allowlist')
+          verify(pre | shader_pins | {'Cargo.lock': os.environ['PIN_LOCK']}, 'exact strict preimage')
+          require(all(digest(p) is None and not (root / p).exists() for p in strict_added), 'strict new file already present')
+          apply(strict_patch)
+          verify(post | shader_pins | {'Cargo.lock': os.environ['PIN_LOCK']}, 'exact strict postimage')
+          strict_after = tree()
+          changed = {p for p in source_after.keys() | strict_after.keys() if source_after.get(p) != strict_after.get(p)}
+          require(changed == strict_modified | strict_added and set(strict_after) - set(source_after) == strict_added,
+                  'whole reconstructed tree diff outside strict seven-leaf allowlist')
+          subprocess.run(['git', 'apply', '--reverse', '--check', str(strict_patch)], cwd=root, check=True)
+          print('status=strict_seven_leaf_source_and_exact_inverse_checked; frozen_lock+three_shaders_unchanged')
+          inherited = subprocess.check_output([sys.executable, '-I', str(strict_check), str(root)], text=True)
+          require(inherited.count('DENIED ') == 7, 'inherited strict negative controls')
+          print(inherited, end='')
+          print('strict_source_negative_controls=7_PASS')
+          rank = json.loads(rank_json.read_bytes())
+          gpu = 'crates/alife_gpu_backend/'
+          app = 'crates/alife_game_app/'
+          rank_modified = {
+              app + 'Cargo.toml', gpu + 'Cargo.toml',
+              app + 'src/gpu_live_runtime.rs',
+              app + 'src/gpu_live_runtime/contact211_f0_witness.rs',
+              app + 'src/foundation_training_cycle/saved_life_retention/contact211_parity.rs',
+              app + 'src/foundation_training_cycle/saved_life_retention/experiments.rs',
+              gpu + 'src/training_rollout.rs',
+              gpu + 'src/closed_loop_runtime.rs',
+              gpu + 'src/closed_loop_runtime/tick.rs',
+              gpu + 'src/closed_loop_pipeline.rs',
+          }
+          rank_added = {gpu + 'shaders/contact211_rank32.wgsl'}
+          pre, post = rank['before_sha256'], rank['after_sha256']
+          require(set(pre) == rank_modified and set(post) == rank_modified | rank_added
+                  and sha256(rank_patch.read_bytes()).hexdigest() == os.environ['PIN_RANK_PATCH']
+                  and sha256(rank_json.read_bytes()).hexdigest() == os.environ['PIN_RANK_LEAVES'],
+                  'independent exact Rank32 source allowlist/pins')
+          headers = [path_pattern.fullmatch(line) for line in rank_patch.read_text().splitlines()
+                     if line.startswith('diff --git ')]
+          require(len(headers) == 11 and all(m is not None and m[1] == m[2] for m in headers)
+                  and {m[1] for m in headers} == rank_modified | rank_added, 'exact Rank32 patch paths')
+          verify(pre | shader_pins | {'Cargo.lock': os.environ['PIN_LOCK']}, 'rank32 preimage from strict AAA0')
+          require(all(not (root / p).exists() for p in rank_added), 'rank32 new shader exists before patch')
+          require(not any(p.name in ('contact211-rank32.weights.v1.json', 'CONTACT-LEXICAL-WEIGHTS.v1.json',
+                                    'rows.jsonl', 'Current.alife-checkpoint') for p in root.rglob('*')),
+                  'private weights, traces, or saved-life file in restored CI closure')
+          apply(rank_patch)
+          verify(post | shader_pins | {'Cargo.lock': os.environ['PIN_LOCK']}, 'exact Rank32 postimage')
+          rank_after = tree()
+          changed = {p for p in strict_after.keys() | rank_after.keys() if strict_after.get(p) != rank_after.get(p)}
+          require(changed == rank_modified | rank_added and set(rank_after) - set(strict_after) == rank_added,
+                  'whole reconstructed tree diff outside exact rank32 eleven-leaf allowlist')
+          subprocess.run(['git', 'apply', '--reverse', '--check', str(rank_patch)], cwd=root, check=True)
+          checked_tree.write_text(json.dumps(rank_after, sort_keys=True) + '\n')
+          print('status=rank32_exact_eleven_leaf_source_and_inverse_checked; frozen_lock+three_stock_shaders_unchanged')
+          PY
+          python3 -I "$GITHUB_WORKSPACE/$rank_check" "$exact" | tee -a "$evidence/qualification.txt"
+          test "$(grep -c '^REJECTED ' "$evidence/qualification.txt")" = 5
+          python3 -I "$GITHUB_WORKSPACE/$cc" "$GITHUB_WORKSPACE/$cl" "$GITHUB_WORKSPACE/$cp" "$layer/checked-tree.json" | tee -a "$evidence/qualification.txt"
+          printf 'crossed_source_patch_sha256=%s\ncrossed_source_pins_sha256=%s\nqualified_rank32_parent=%s\n' \
+            "$PIN_CROSSED_PATCH" "$PIN_CROSSED_LEAVES" "$PIN_RANK_COMMIT" | tee -a "$evidence/qualification.txt"
+          printf 'EXACT_SRC=%s\nCARGO_TARGET_DIR=%s\nF0_LAYER=%s\nF0_EVIDENCE=%s\n' \
+            "$exact" "$build" "$layer" "$evidence" >> "$GITHUB_ENV"
+
+
+      - name: Apply exact eleven-leaf reversible Word-local source
+        run: |
+          set -euo pipefail
+          cd "$EXACT_SRC"
+          WORD_EVIDENCE="$RUNNER_TEMP/qualia-word-local-grounding-evidence"
+          mkdir -- "$WORD_EVIDENCE"
+          printf 'WORD_EVIDENCE=%s\n' "$WORD_EVIDENCE" >> "$GITHUB_ENV"
+          p="$GITHUB_WORKSPACE/docs/r41-saved-life/word-local-grounding-v1-source.patch"
+          j="$GITHUB_WORKSPACE/docs/r41-saved-life/word-local-grounding-v1-source-pins.json"
+          w="$GITHUB_WORKSPACE/scripts/word_local_grounding_v1_world_cpu.rs"
+          c="$GITHUB_WORKSPACE/scripts/check_word_local_grounding_v1_cli.py"
+          for f in "$p" "$j" "$w" "$c"; do
+            test -f "$f" && test ! -L "$f"
+            test "$(git -C "$GITHUB_WORKSPACE" ls-tree HEAD -- "${f#"$GITHUB_WORKSPACE"/}" | cut -d' ' -f1)" = 100644
+          done
+          printf '%s  %s\n' "$PIN_WORD_PATCH" "$p" "$PIN_WORD_PINS" "$j" "$PIN_WORD_WORLD" "$w" "$PIN_WORD_CLI" "$c" | tee "$WORD_EVIDENCE/source.log" | sha256sum -c -
+          python3 -I - "$p" "$j" "$F0_LAYER/checked-tree.json" "$F0_LAYER/word-checked-tree.json" <<'PY' | tee -a "$WORD_EVIDENCE/source.log"
+          from hashlib import sha256
+          from pathlib import Path
+          import json,os,subprocess,sys
+          patch,pins,parent,record=map(Path,sys.argv[1:])
+          p=json.loads(pins.read_bytes())
+          assert set(p)=={'schema','before','after','source_forward_sha256','exact_source_basis_git','exact_source_basis_tree','stock_unchanged_context_shader_sha256','legacy_lock_sha256'}
+          root=Path('.').resolve()
+          assert p['schema']=='qualia.source_only.word_local_grounding_v1.pins.v1' and p['exact_source_basis_git']==os.environ['PIN_DE8']
+          assert p['exact_source_basis_tree']==os.environ['PIN_DE8_TREE'] and p['source_forward_sha256']==os.environ['PIN_WORD_PATCH']
+          assert p['legacy_lock_sha256']==os.environ['PIN_LOCK']
+          leaves={
+            'crates/alife_game_app/Cargo.toml',
+            'crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs',
+            'crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs',
+            'crates/alife_game_app/src/gpu_live_runtime.rs',
+            'crates/alife_game_app/src/gpu_live_runtime/staged_tick.rs',
+            'crates/alife_game_app/src/gpu_live_runtime/word_local_grounding.rs',
+            'crates/alife_gpu_backend/shaders/word_local_grounding_v1.wgsl',
+            'crates/alife_gpu_backend/src/closed_loop_memory.rs',
+            'crates/alife_gpu_backend/src/closed_loop_pipeline.rs',
+            'crates/alife_world/Cargo.toml',
+            'crates/alife_world/src/candidate_enumerator.rs',
+          }
+          assert set(p['before'])==set(p['after'])==leaves
+          raw=subprocess.check_output(['git','apply','--numstat','-z',str(patch)])
+          assert {b.decode().split('\t',2)[2] for b in raw.rstrip(b'\0').split(b'\0')}==leaves
+          trusted=json.loads(parent.read_bytes())
+          assert all(trusted.get(n)==pin for n,pin in p['before'].items())
+          assert p['stock_unchanged_context_shader_sha256']==trusted['crates/alife_gpu_backend/shaders/closed_loop_memory_context.wgsl']
+          assert sum(x is None for x in p['before'].values())==2
+          expected={**trusted,**p['after']}
+          def all_sha():
+              nodes=[n for n in root.rglob('*')]
+              assert all(not n.is_symlink() for n in nodes)
+              return {n.relative_to(root).as_posix():sha256(n.read_bytes()).hexdigest() for n in nodes if n.is_file()}
+          def apply(*extra):
+              for flags in (('--check',),()):
+                  subprocess.run(['git','apply','--whitespace=error',*extra,*flags,str(patch)],check=True)
+          assert all_sha()==trusted
+          apply();assert all_sha()==expected
+          apply('--reverse');assert all_sha()==trusted
+          apply();assert all_sha()==expected
+          assert expected['Cargo.lock']==p['legacy_lock_sha256']
+          record.write_text(json.dumps(expected,sort_keys=True,indent=2)+'\n')
+          print('word_local_source_exact_forward_inverse_and_immutable_legacy_shader=PASS')
+          PY
+
+      - name: Apply exact seven-leaf reversible ingress source to the same App
+        run: |
+          set -euo pipefail
+          cd "$EXACT_SRC"
+          e="$RUNNER_TEMP/qualia-ordinary-ingress-observer-evidence"
+          mkdir -- "$e"
+          printf 'INGRESS_EVIDENCE=%s\n' "$e" >> "$GITHUB_ENV"
+          p="$GITHUB_WORKSPACE/docs/r41-saved-life/ordinary-ingress-observer-v1-source.patch"
+          j="$GITHUB_WORKSPACE/docs/r41-saved-life/ordinary-ingress-observer-v1-source-pins.json"
+          c="$GITHUB_WORKSPACE/scripts/check_ordinary_ingress_observer_v1_cli.py"
+          for f in "$p" "$j" "$c"; do
+            test -f "$f" && test ! -L "$f"
+            test "$(git -C "$GITHUB_WORKSPACE" ls-tree HEAD -- "${f#"$GITHUB_WORKSPACE"/}" | cut -d' ' -f1)" = 100644
+          done
+          printf '%s  %s\n' "$PIN_INGRESS_PATCH" "$p" "$PIN_INGRESS_PINS" "$j" "$PIN_INGRESS_CLI" "$c" | tee "$e/ingress-source.log" | sha256sum -c -
+          git -C "$GITHUB_WORKSPACE" rev-parse "$PIN_WORD_PARENT^{tree}" > "$e/exact-parent-tree.txt"
+          python3 -IB - "$p" "$j" "$F0_LAYER/word-checked-tree.json" "$F0_LAYER/ingress-checked-tree.json" <<'PY' | tee -a "$e/ingress-source.log"
+          from hashlib import sha256
+          from pathlib import Path
+          import json,os,subprocess,sys
+          patch,pins,parent,record=map(Path,sys.argv[1:])
+          p=json.loads(pins.read_bytes())
+          root=Path('.').resolve()
+          assert p['schema']=='qualia.ordinary_ingress_source_only.pins.v1'
+          assert p['basis_git_commit']==os.environ['PIN_WORD_PARENT']
+          assert p['basis_exact_published_workflow_sha256']==os.environ['PIN_WORD_PARENT_WORKFLOW']
+          assert p['patches']['FORWARD.patch']==os.environ['PIN_INGRESS_PATCH']
+          assert p['unchanged_required_lock_sha256']==os.environ['PIN_LOCK']
+          app='crates/alife_game_app/'
+          rel='src/foundation_training_cycle/saved_life_retention'
+          leaves={app+x for x in ['Cargo.toml',rel+'.rs',rel+'/experiments.rs',
+              *(rel+'/ordinary_ingress_'+n+'.rs' for n in ('observer','predecessor','row_parity','wire'))]}
+          assert set(p['before'])==set(p['after'])==leaves and sum(v is None for v in p['before'].values())==4
+          raw=subprocess.check_output(['git','apply','--numstat','-z',str(patch)])
+          assert {b.decode().split('\t',2)[2] for b in raw.rstrip(b'\0').split(b'\0')}==leaves
+          trusted=json.loads(parent.read_bytes())
+          assert all(trusted.get(n)==pin for n,pin in p['before'].items())
+          expected={**trusted,**p['after']}
+          def all_sha():
+              nodes=list(root.rglob('*'))
+              assert not any(n.is_symlink() for n in nodes)
+              return {n.relative_to(root).as_posix():sha256(n.read_bytes()).hexdigest() for n in nodes if n.is_file()}
+          def apply(*extra):
+              for flags in (('--check',),()):
+                  subprocess.run(['git','apply','--whitespace=error-all',*extra,*flags,str(patch)],check=True)
+          assert all_sha()==trusted
+          apply();assert all_sha()==expected
+          apply('--reverse');assert all_sha()==trusted
+          apply();assert all_sha()==expected and expected['Cargo.lock']==os.environ['PIN_LOCK']
+          record.write_text(json.dumps(expected,sort_keys=True,indent=2)+'\n')
+          print('ordinary_ingress_exact_seven_leaf_forward_inverse_and_stock_tree=PASS')
+          PY
+
+      - name: Verify and apply only the sanitized nine-leaf App overlay
+        run: |
+          set -euo pipefail
+          cd "$EXACT_SRC"
+          pub="$GITHUB_WORKSPACE/docs/r41-saved-life"
+          patch="$pub/prefork-timing-diagnostic-source.patch"
+          pins="$pub/prefork-timing-diagnostic-source-pins.json"
+          harness="$GITHUB_WORKSPACE/scripts/check_prefork_timing_diagnostic_cli.py"
+          printf '%s  %s\n' "$PIN_PREFORK_PATCH" "$patch" "$PIN_PREFORK_PINS" "$pins" "$PIN_PREFORK_CLI" "$harness" | sha256sum -c -
+          python3 -IB - "$patch" "$pins" "$F0_LAYER/ingress-checked-tree.json" "$F0_LAYER/prefork-checked-tree.json" <<'PY'
+          from hashlib import sha256
+          from pathlib import Path
+          import json,os,subprocess,sys
+          patch,pins,parent,record=map(Path,sys.argv[1:])
+          opt=json.loads(pins.read_bytes())
+          assert opt['schema']=='qualia.prefork_timing_diagnostic.public_source_closure.v1'
+          assert opt['basis_git_commit']==os.environ['PIN_PREFORK_PARENT'] and opt['basis_git_tree']==os.environ['PIN_PREFORK_TREE']
+          assert opt['overlay_sha256']==os.environ['PIN_PREFORK_PATCH'] and opt['source_only'] is True and opt['authorizes_native'] is False
+          assert opt['unchanged_required_lock_sha256']==os.environ['PIN_LOCK']
+          app='crates/alife_game_app/'
+          rel='src/foundation_training_cycle/saved_life_retention'
+          path=lambda n:app+rel+'/ordinary_ingress_'+n+'.rs'
+          leaves={app+x for x in ['Cargo.toml',rel+'.rs',rel+'/experiments.rs']}
+          leaves.update(path(n) for n in ['diagnostic_role','native_custody','observer','predecessor','prefork_residual','timing_relation'])
+          assert set(opt['before'])==set(opt['after'])==leaves and sum(v is None for v in opt['before'].values())==4
+          old={app+x for x in ['Cargo.toml',rel+'.rs',rel+'/experiments.rs']}
+          old.update(path(n) for n in ['observer','predecessor','row_parity','wire'])
+          assert set(opt['observed_seven_parents'])==old
+          raw=subprocess.check_output(['git','apply','--numstat','-z',str(patch)])
+          parsed=[f.decode().split('\t',2)[2] for f in raw.rstrip(b'\0').split(b'\0')]
+          assert set(parsed)==leaves and len(parsed)==len(leaves)
+          trusted=json.loads(parent.read_bytes())
+          assert all(trusted.get(p)==h for p,h in opt['observed_seven_parents'].items())
+          assert all(trusted.get(p)==h for p,h in opt['before'].items())
+          expected={**trusted,**opt['after']}
+          def check():
+              files=list(Path('.').rglob('*'))
+              assert not any(x.is_symlink() for x in files)
+              return {x.as_posix():sha256(x.read_bytes()).hexdigest() for x in files if x.is_file()}
+          def apply(*flags):
+              for test in (('--check',),()):
+                  subprocess.run(['git','apply','--whitespace=error-all',*flags,*test,str(patch)],check=True)
+          assert check()==trusted
+          apply();assert check()==expected
+          apply('--reverse');assert check()==trusted
+          apply();assert check()==expected and expected['Cargo.lock']==os.environ['PIN_LOCK']
+          record.write_text(json.dumps(expected,sort_keys=True,indent=2)+'\n')
+          print('sanitized_app_overlay_exact_apply_reverse_check=PASS')
+          PY
+
+      - name: Authenticate exact two-leaf v82 forward and inverse
+        run: |
+          set -euo pipefail
+          cd "$EXACT_SRC"
+          pub="$GITHUB_WORKSPACE/docs/r41-saved-life"
+          forward="$pub/v82-lifecycle-source.patch"
+          reverse="$pub/v82-lifecycle-source-inverse.patch"
+          pins="$pub/v82-lifecycle-source-pins.json"
+          printf '%s  %s\n' "$PIN_V82_FWD" "$forward" "$PIN_V82_INV" "$reverse" "$PIN_V82_PINS" "$pins" | sha256sum -c -
+          python3 -IB - "$forward" "$reverse" "$F0_LAYER/prefork-checked-tree.json" "$F0_LAYER/v82-link-checked-tree.json" <<'PY'
+          from hashlib import sha256
+          from pathlib import Path
+          import json, os, subprocess, sys
+          forward, reverse, tree, published = map(Path, sys.argv[1:])
+          wanted = json.loads(tree.read_bytes())
+          expect = json.loads(os.environ["PATCHED_FROM_TO"])
+          assert len(expect)==2 and all(wanted[p]==x["before"] for p,x in expect.items())
+          expected = {**wanted, **{p:x["after"] for p,x in expect.items()}}
+          def snapshot():
+              paths=list(Path(".").rglob("*"))
+              assert not any(p.is_symlink() for p in paths)
+              return {p.as_posix():sha256(p.read_bytes()).hexdigest() for p in paths if p.is_file()}
+          def run(p):
+              raw=subprocess.check_output(["git","apply","--numstat","-z",str(p)])
+              leaves=[l.decode().split("\t",2)[2] for l in raw.rstrip(b"\0").split(b"\0")]
+              assert len(leaves)==2 and set(leaves)==set(expect)
+              for mode in (["--check"],[]):
+                  subprocess.run(["git","apply","--whitespace=error-all",*mode,str(p)],check=True)
+          assert snapshot()==wanted
+          run(forward); assert snapshot()==expected
+          run(reverse); assert snapshot()==wanted
+          run(forward); assert snapshot()==expected and expected["Cargo.lock"]==os.environ["PIN_LOCK"]
+          published.write_text(json.dumps(expected,sort_keys=True,indent=2)+"\n")
+          print("v82_exact_rust_overlay_and_inverse=PASS")
+          PY
+
+      - name: Link the exact final schema82 ON ELF once without executing it
+        run: |
+          set -euo pipefail
+          umask 077
+          cd "$EXACT_SRC"
+          mkdir -p -- "$CARGO_TARGET_DIR"
+          floor() {
+            local free
+            free="$(df -PB1 "$CARGO_TARGET_DIR" | awk 'NR==2 {print $4}')"
+            [[ "$free" =~ ^[0-9]+$ ]]
+            test "$free" -ge "$1"
+          }
+          floor 8589934592
+          timeout --kill-after=10s 10m rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --target "$TARGET"
+          version="$(rustc +"$RUST_TOOLCHAIN" -vV)"
+          grep -Fqx "commit-hash: $PIN_RUSTC" <<< "$version"
+          grep -Fqx "host: $TARGET" <<< "$version"
+          timeout --kill-after=10s 12m cargo +"$RUST_TOOLCHAIN" fetch --locked --target "$TARGET"
+          floor 8589934592
+          features='contact211-rank32-crossed,retained-word-local-grounding-v1,retained-ordinary-ingress-observer-v1,retained-prefork-timing-diagnostic-v1'
+          raw="$CARGO_TARGET_DIR/$TARGET/debug/evaluate_saved_life_retention"
+          test ! -e "$raw" && test ! -L "$raw"
+          # One exact ON link, two build jobs, per-process address/file limits,
+          # bounded time/kill grace, offline locked dependency closure.
+          (
+            ulimit -v 7340032
+            ulimit -f 4194304
+            exec timeout --kill-after=10s 38m cargo +"$RUST_TOOLCHAIN" build --frozen --offline               --target "$TARGET" -j 2 --no-default-features -p alife_game_app               --features "$features" --bin evaluate_saved_life_retention
+          )
+          floor 4294967296
+          out="$RUNNER_TEMP/qualia-v82-linked-public"
+          mkdir -- "$out"
+          dst="$out/evaluate_saved_life_retention"
+          test -x "$raw" && test -f "$raw" && test ! -L "$raw" && test ! -e "$dst" && test ! -L "$dst"
+          size="$(stat -c %s -- "$raw")"
+          test "$size" -gt 1048576 && test "$size" -lt 134217728
+          # Retained copy is not executable in CI. Never invoke raw/dst,
+          # ldd, the legacy CLI harness, tests or any native evaluator flag.
+          install -m 0400 -- "$raw" "$dst"
+          cmp -- "$raw" "$dst"
+          LC_ALL=C readelf -W -h "$dst" > "$out/elf-header.txt"
+          grep -E 'Class:[[:space:]]+ELF64' "$out/elf-header.txt"
+          grep -E 'Data:[[:space:]]+2.s complement, little endian' "$out/elf-header.txt"
+          grep -E 'Machine:[[:space:]]+Advanced Micro Devices X86-64' "$out/elf-header.txt"
+          grep -E 'Type:[[:space:]]+DYN' "$out/elf-header.txt"
+          dynamic="$(LC_ALL=C readelf -W -d "$dst")"
+          if grep -Eq '\((RPATH|RUNPATH)\)' <<< "$dynamic"; then exit 7; fi
+          python3 -IB - "$dst" "$F0_LAYER/v82-link-checked-tree.json" "$out/qualification.json" <<'PY'
+          from hashlib import sha256
+          from pathlib import Path
+          import json,mmap,os,sys
+          elf,tree,proof=map(Path,sys.argv[1:])
+          e=os.environ
+          assert elf.is_file() and not elf.is_symlink() and 2**20<elf.stat().st_size<2**27
+          digest=lambda b:sha256(b).hexdigest()
+          with elf.open('rb') as f, mmap.mmap(f.fileno(),0,access=mmap.ACCESS_READ) as m:
+              assert m[:6]==b'\x7fELF\x02\x01'
+              markers=(
+                b'ordinary_ingress_persisted_continuation_v1',
+                b'qualia.private.note19.stock_v11_profile.v1',
+                b'qualia.private.note19.sealed_same_case_actual_v5_timing_parents.v1',
+                b'Note19 bounded canonical private regular input required',
+              )
+              assert all(m.find(marker)>=0 for marker in markers)
+              elf_sha=digest(m)
+          before=tree.read_bytes()
+          nodes=list(Path('.').rglob('*'))
+          assert not any(x.is_symlink() for x in nodes)
+          now={x.as_posix():digest(x.read_bytes()) for x in nodes if x.is_file()}
+          assert now==json.loads(before) and now['Cargo.lock']==e['PIN_LOCK']
+          workflow=Path(e['GITHUB_WORKSPACE'])/'.github/workflows/qualia-v82-lifecycle-link.yml'
+          info=dict(schema='qualia.v82_lifecycle.public_link_only_qualification.v1',
+              exact_head=e['GITHUB_SHA'],workflow_sha256=digest(workflow.read_bytes()),
+              exact_compiler_parent=e['PIN_LINK_PARENT'],exact_compiler_parent_tree=e['PIN_LINK_PARENT_TREE'],
+              compiler_parent_workflow_sha256=e['PIN_LINK_PARENT_WF'],
+              prior_compiler_only_run=46123774130,prior_compiler_only_job=140913733304,
+              two_leaf_forward_sha256=e['PIN_V82_FWD'],two_leaf_inverse_sha256=e['PIN_V82_INV'],
+              source_pin_sha256=e['PIN_V82_PINS'],compiled_tree_manifest_sha256=digest(before),
+              dependency_lock_sha256=e['PIN_LOCK'],rustc_commit=e['PIN_RUSTC'],target=e['TARGET'],
+              on_elf_sha256=elf_sha,on_elf_bytes=elf.stat().st_size,final_on_link_count=1,
+              linked_markers_checked=True,only_static_elf_inspection=True,public_asset_free=True,
+              evaluator_executed=False,device_free_cli_refusals_run=False,app_tests_run=False,
+              current_accessed=False,device_used=False,private_data_used=False,real_prefork_export=False,
+              native_launch=False,runtime_parity_proven=False,continuation_equivalent=False,
+              same_new_elf_controls_completed=False,protected_controller_or_descriptor_authorized=False,
+              scorecard_eligible=False,authorizes_next=False)
+          proof.write_text(json.dumps(info,sort_keys=True,indent=2)+'\n')
+          PY
+          cd "$out"
+          sha256sum evaluate_saved_life_retention qualification.json elf-header.txt > SHA256SUMS
+          sha256sum -c SHA256SUMS
+          diff -u <(printf '%s\n' SHA256SUMS elf-header.txt evaluate_saved_life_retention qualification.json | sort) \
+             <(find . -mindepth 1 -maxdepth 1 -printf '%f\n' | sort)
+          test "$(find . -mindepth 1 -maxdepth 1 -type f -links 1 -printf '%f\n' | wc -l)" = 4
+          test ! -x evaluate_saved_life_retention
+
+      - name: Retain only exact ON ELF and asset-free static text proof
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: qualia-v82-lifecycle-linked-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/qualia-v82-linked-public/evaluate_saved_life_retention
+            ${{ runner.temp }}/qualia-v82-linked-public/qualification.json
+            ${{ runner.temp }}/qualia-v82-linked-public/elf-header.txt
+            ${{ runner.temp }}/qualia-v82-linked-public/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 5
+          compression-level: 3
