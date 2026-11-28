@@ -1,0 +1,811 @@
+diff --git a/crates/alife_gpu_backend/src/closed_loop_pipeline.rs b/crates/alife_gpu_backend/src/closed_loop_pipeline.rs
+--- a/crates/alife_gpu_backend/src/closed_loop_pipeline.rs
++++ b/crates/alife_gpu_backend/src/closed_loop_pipeline.rs
+@@ -459,7 +459,7 @@
+ #[cfg(feature = "research-n4096-h-inherited-kernels-v1")]
+ mod research_n4096_h_inherited;
+ #[cfg(feature = "research-n4096-h-inherited-kernels-v1")]
+-mod research_n4096_h_record;
++pub(crate) mod research_n4096_h_record;
+ 
+ pub const CLOSED_LOOP_ENCODE_WGSL: &str = concat!(
+     include_str!("../shaders/closed_loop_abi.wgsl"),
+@@ -2012,6 +2012,8 @@
+         header: &crate::GpuSleepHeader,
+         payload_words: &[u32],
+     ) -> Result<(), GpuClosedLoopError> {
++        #[cfg(feature = "research-n4096-h-inherited-kernels-v1")]
++        Self::require_unwidened_stock_writer(self.max_neurons)?;
+         self.validate_sleep_dispatch(buffers, header, payload_words)?;
+         queue.write_buffer(buffers.neural_buffers()[4], 0, bytemuck::bytes_of(header));
+         queue.write_buffer(
+@@ -2072,6 +2074,8 @@
+         submission_started: &mut bool,
+     ) -> Result<(), GpuClosedLoopError> {
+         *submission_started = false;
++        #[cfg(feature = "research-n4096-h-inherited-kernels-v1")]
++        Self::require_unwidened_stock_writer(self.max_neurons)?;
+         self.validate_sleep_dispatch(buffers, header, payload_words)?;
+         if reset_word_count == 0 {
+             return Err(GpuClosedLoopError::MalformedUpload);
+@@ -2373,6 +2377,14 @@
+         Ok(initial_side ^ (microsteps & 1))
+     }
+ 
++    #[cfg(feature = "research-n4096-h-inherited-kernels-v1")]
++    fn require_unwidened_stock_writer(max_neurons: u32) -> Result<(), GpuClosedLoopError> {
++        if max_neurons == research_n4096_h_inherited::WIDE {
++            return Err(GpuClosedLoopError::LayoutMismatch);
++        }
++        Ok(())
++    }
++
+     pub(crate) fn write_staged_uploads(
+         &self,
+         queue: &wgpu::Queue,
+@@ -2380,6 +2392,8 @@
+         batch: &GpuActiveBatchUpload,
+     ) -> Result<(), GpuClosedLoopError> {
+         self.validate_buffers_and_dispatch(buffers, batch)?;
++        #[cfg(feature = "research-n4096-h-inherited-kernels-v1")]
++        Self::require_unwidened_stock_writer(self.max_neurons)?;
+         let neural = buffers.neural_buffers();
+         queue.write_buffer(
+             neural[4],
+@@ -2410,6 +2424,8 @@
+         submission_started: &mut bool,
+     ) -> Result<GpuTimedFastPlasticityResult, GpuClosedLoopError> {
+         *submission_started = false;
++        #[cfg(feature = "research-n4096-h-inherited-kernels-v1")]
++        Self::require_unwidened_stock_writer(self.max_neurons)?;
+         #[cfg(feature = "gpu-tests")]
+         let faults = self.fast_plasticity_faults_for_test.take();
+         self.last_fast_plasticity_malformed = None;
+@@ -3073,6 +3089,8 @@
+         pending: &GpuPendingEligibilityRecord,
+         expected_transaction_generation: u64,
+     ) -> Result<GpuEligibilityDiscardRecord, GpuClosedLoopError> {
++        #[cfg(feature = "research-n4096-h-inherited-kernels-v1")]
++        Self::require_unwidened_stock_writer(self.max_neurons)?;
+         let selection_words = u32::try_from(crate::GPU_SELECTION_RECORD_BYTES / 4)
+             .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
+         let selection_bytes = crate::GPU_SELECTION_RECORD_BYTES as u64;
+@@ -3253,6 +3271,8 @@
+         selector_readback: Option<&wgpu::Buffer>,
+     ) -> Result<u64, GpuClosedLoopError> {
+         self.validate_buffers_and_dispatch(buffers, batch)?;
++        #[cfg(feature = "research-n4096-h-inherited-kernels-v1")]
++        Self::require_unwidened_stock_writer(self.max_neurons)?;
+         let readback_bytes = self.readback_bytes(buffers, batch)?;
+         self.authority.record_encode(batch.authority_nonce)?;
+         let result = (|| {
+diff --git a/crates/alife_gpu_backend/src/closed_loop_runtime.rs b/crates/alife_gpu_backend/src/closed_loop_runtime.rs
+--- a/crates/alife_gpu_backend/src/closed_loop_runtime.rs
++++ b/crates/alife_gpu_backend/src/closed_loop_runtime.rs
+@@ -2619,6 +2619,16 @@
+     Ok(receipt)
+ }
+ 
++#[cfg(feature = "research-n4096-h-inherited-kernels-v1")]
++pub(crate) fn require_stock_writer_classes(
++    classes: impl IntoIterator<Item = BrainClassId>,
++) -> Result<(), ScaffoldContractError> {
++    if classes.into_iter().any(|class| class == BrainCapacityClass::N4096_RESEARCH_ID) {
++        return Err(ScaffoldContractError::UnsupportedProductionBrainClass);
++    }
++    Ok(())
++}
++
+ fn capacity_for_promoted_class(
+     class_id: BrainClassId,
+ ) -> Result<BrainCapacityClass, ScaffoldContractError> {
+@@ -3287,6 +3297,8 @@
+         neuron: u32,
+         probe: crate::GpuV11MutableStateProbe,
+     ) -> Result<(), ScaffoldContractError> {
++        #[cfg(feature = "research-n4096-h-inherited-kernels-v1")]
++        require_stock_writer_classes([handle.class_id()])?;
+         self.validate_handle_backend(handle)?;
+         let pool = self
+             .class_buckets
+@@ -3315,6 +3327,10 @@
+         handle: GpuBrainHandle,
+         evidence: &alife_core::sleep::SleepReplayEvidence,
+     ) -> Result<(), ScaffoldContractError> {
++        #[cfg(feature = "research-n4096-h-inherited-kernels-v1")]
++        if handle.class_id() == BrainCapacityClass::N4096_RESEARCH_ID {
++            return Err(ScaffoldContractError::UnsupportedProductionBrainClass);
++        }
+         evidence.validate_contract()?;
+         if evidence
+             .prediction_targets
+@@ -3414,6 +3430,8 @@
+         handle: GpuBrainHandle,
+         branches: DendriticBranchSet,
+     ) -> Result<(), ScaffoldContractError> {
++        #[cfg(feature = "research-n4096-h-inherited-kernels-v1")]
++        require_stock_writer_classes([handle.class_id()])?;
+         self.ensure_ready()?;
+         self.validate_handle_backend(handle)?;
+         let pool = self
+@@ -3464,6 +3482,10 @@
+         handle: GpuBrainHandle,
+         evidence: &[CoactivationEvidence],
+     ) -> Result<GpuV11WorkReceipt, ScaffoldContractError> {
++        #[cfg(feature = "research-n4096-h-inherited-kernels-v1")]
++        if handle.class_id() == BrainCapacityClass::N4096_RESEARCH_ID {
++            return Err(ScaffoldContractError::UnsupportedProductionBrainClass);
++        }
+         self.ensure_ready()?;
+         self.validate_handle_backend(handle)?;
+         let pool = self
+@@ -3587,6 +3609,10 @@
+         handle: GpuBrainHandle,
+         checkpoint: GpuV11Checkpoint,
+     ) -> Result<(), ScaffoldContractError> {
++        #[cfg(feature = "research-n4096-h-inherited-kernels-v1")]
++        if handle.class_id() == BrainCapacityClass::N4096_RESEARCH_ID {
++            return Err(ScaffoldContractError::UnsupportedProductionBrainClass);
++        }
+         self.ensure_ready()?;
+         self.validate_handle_backend(handle)?;
+         let pool = self
+@@ -3652,6 +3678,10 @@
+         handle: GpuBrainHandle,
+         checkpoint: &GpuLiveTopologyCheckpointV1,
+     ) -> Result<(), ScaffoldContractError> {
++        #[cfg(feature = "research-n4096-h-inherited-kernels-v1")]
++        if handle.class_id() == BrainCapacityClass::N4096_RESEARCH_ID {
++            return Err(ScaffoldContractError::UnsupportedProductionBrainClass);
++        }
+         self.ensure_ready()?;
+         self.validate_handle_backend(handle)?;
+         let capacity = capacity_for_gpu_class(handle.class_id)?;
+@@ -4379,6 +4409,8 @@
+         &mut self,
+         batch: &[(GpuBrainHandle, &ExperiencePatch, &NeuralReceptorFrame)],
+     ) -> Result<Vec<GpuLearningReceipt>, ScaffoldContractError> {
++        #[cfg(feature = "research-n4096-h-inherited-kernels-v1")]
++        require_stock_writer_classes(batch.iter().map(|(handle, _, _)| handle.class_id()))?;
+         let mut published = false;
+         let result = self.apply_sealed_outcome_batch_inner(batch, &mut published);
+         if result.is_err() && published {
+@@ -4712,6 +4744,8 @@
+         handle: GpuBrainHandle,
+         identity: &PendingEligibilityIdentity,
+     ) -> Result<PendingEligibilityDiscardReceipt, ScaffoldContractError> {
++        #[cfg(feature = "research-n4096-h-inherited-kernels-v1")]
++        require_stock_writer_classes([handle.class_id()])?;
+         self.ensure_ready()?;
+         self.validate_handle_backend(handle)?;
+         let (brain_slot, pending_receipt, pending_record, transaction_generation) = {
+@@ -4909,6 +4943,9 @@
+         batch: &GpuClosedLoopMemoryBatchInput<'_>,
+         sampling: &[crate::GpuTrainingSamplingConfig],
+     ) -> Result<Vec<GpuClosedLoopTick>, ScaffoldContractError> {
++        #[cfg(feature = "research-n4096-h-inherited-kernels-v1")]
++        require_stock_writer_classes(self.organisms.values().map(|h| h.class_id())
++            .chain(batch.members.iter().map(|input| input.handle.class_id())))?;
+         let inputs = batch
+             .members
+             .iter()
+@@ -4926,6 +4963,10 @@
+         batch: &GpuClosedLoopMemoryBatchInput<'_>,
+         requested_candidate_indices: &[u16],
+     ) -> Result<Vec<GpuClosedLoopTick>, GpuRuntimeSelectorDiagnosticError> {
++        #[cfg(feature = "research-n4096-h-inherited-kernels-v1")]
++        require_stock_writer_classes(self.organisms.values().map(|h| h.class_id())
++            .chain(batch.members.iter().map(|input| input.handle.class_id())))
++            .map_err(GpuRuntimeSelectorDiagnosticError::Preflight)?;
+         let inputs = batch
+             .members
+             .iter()
+@@ -4975,6 +5016,9 @@
+         batch: &[GpuRuntimeTickInput<'_>],
+         selector_diagnostic_candidate_indices: Option<&[u16]>,
+     ) -> Result<Vec<GpuClosedLoopTick>, ScaffoldContractError> {
++        #[cfg(feature = "research-n4096-h-inherited-kernels-v1")]
++        require_stock_writer_classes(self.organisms.values().map(|h| h.class_id())
++            .chain(batch.iter().map(|input| input.handle.class_id())))?;
+         self.tick_inputs_with_selector_diagnostic_capture(
+             batch,
+             selector_diagnostic_candidate_indices,
+@@ -5152,6 +5196,14 @@
+         &mut self,
+         cohort: &GpuCuratedResidencyCohort,
+     ) -> GpuCuratedResidencyOutcome {
++        #[cfg(feature = "research-n4096-h-inherited-kernels-v1")]
++        if let Err(error) = require_stock_writer_classes(
++            self.organisms.values().map(|handle| handle.class_id()).chain(
++                cohort.ordered_entries.iter().map(|entry| entry.phenotype.brain_class_id()),
++            ),
++        ) {
++            return GpuCuratedResidencyOutcome::PreSubmitFailure { error, retryable: false };
++        }
+         if let Err(error) = self.ensure_ready() {
+             self.mark_device_lost();
+             return GpuCuratedResidencyOutcome::Unknown {
+@@ -5169,6 +5221,8 @@
+         phenotype: BrainPhenotype,
+         allow_research: bool,
+     ) -> Result<GpuBrainHandle, ScaffoldContractError> {
++        #[cfg(feature = "research-n4096-h-inherited-kernels-v1")]
++        require_stock_writer_classes([phenotype.brain_class_id()])?;
+         self.ensure_ready()?;
+         // A separately owned parked transaction is the only possible consumer.
+         // Generic insertion/restore must not make this compiled shape runnable.
+@@ -5427,6 +5481,8 @@
+     }
+ 
+     pub fn remove_brain(&mut self, handle: GpuBrainHandle) -> Result<(), ScaffoldContractError> {
++        #[cfg(feature = "research-n4096-h-inherited-kernels-v1")]
++        require_stock_writer_classes([handle.class_id()])?;
+         self.ensure_ready()?;
+         self.validate_handle_backend(handle)?;
+         let class_raw = handle.class_id.raw();
+diff --git a/crates/alife_gpu_backend/src/closed_loop_pipeline/research_n4096_h_record.rs b/crates/alife_gpu_backend/src/closed_loop_pipeline/research_n4096_h_record.rs
+--- a/crates/alife_gpu_backend/src/closed_loop_pipeline/research_n4096_h_record.rs
++++ b/crates/alife_gpu_backend/src/closed_loop_pipeline/research_n4096_h_record.rs
+@@ -2,6 +2,8 @@
+ //! Feature-off stock kernel/readiness/command order is unchanged. There is no
+ //! evaluator entrypoint, new resident admission, checkpoint, or runnable API.
+ #![allow(dead_code)] // Intentionally uncalled until the rest of the tick is reviewed.
++
++mod owned_frame;
+ 
+ use std::{borrow::Cow, ops::Range};
+ 
+@@ -350,15 +352,30 @@
+     words: PhysicalWords,
+     kernels: GuardedPair,
+     pre_state_q: QBits,
++    tail: owned_frame::TailPlan,
+ }
+ 
+ // Intentionally no finish/submit/command or readback-labelled-post accessors.
+ // Dropping the unsubmitted encoder is the sole lifecycle in this slice.
+-struct RecordedUnsubmittedPrefix {
++#[must_use]
++pub(crate) struct RecordedUnsubmittedFrame {
+     _encoder: wgpu::CommandEncoder,
+     binding: OwnerFence,
+     realized_coverage: Vec<WriteAdmission>,
++    tail_coverage: Vec<owned_frame::TailAdmission>,
++    upload: owned_frame::BoundGpuTransfer,
+     raw_q_before: QBits,
++}
++
++impl GpuClosedLoopBackend {
++    /// Backend seam for the future strictly admitted ordinary paid-tick arm.
++    /// This method is uncalled by the App and cannot finish or submit a frame.
++    pub(crate) fn record_detached_owned_h_frame(
++        &self, handle: GpuBrainHandle, batch: &GpuActiveBatchUpload,
++        expected: &ParkedExpectedTransport,
++    ) -> Result<RecordedUnsubmittedFrame> {
++        OwnedHRecorder::prepare(self,handle,batch,expected)?.record()
++    }
+ }
+ 
+ impl<'a> OwnedHRecorder<'a> {
+@@ -416,6 +433,8 @@
+         // Independent actual mutable slot capture includes pre-existing
+         // encoded scratch and accumulator, not only checkpoint snapshot lanes.
+         let readback = backend.read_slot_mutable_words(handle,&fixed)?;
++        owned_frame::authenticate_device_slot(backend,bucket,resident)?;
++        let tail = owned_frame::TailPlan::from_mapped(resident,batch,&words,&h,&readback)?;
+         let pre_state_q = words.read_q_bits(&h,&readback)?;
+         // Also pin actual H bits from this same physical copy, not just Q.
+         // The later runnable/save authority must prove all acquired banks and
+@@ -425,7 +444,7 @@
+             || words.slice(&words.homeostasis, &readback)? != expected_native.neuron_homeostasis_bits.as_slice()
+         { return Err(deny()); }
+         let kernels = GuardedPair::build(&backend.device,shared,&source,binding.microsteps)?;
+-        let rec = Self { backend,bucket,resident,batch,binding,h,words,kernels,pre_state_q };
++        let rec = Self { backend,bucket,resident,batch,binding,h,words,kernels,pre_state_q,tail };
+         rec.require_current()?;
+         Ok(rec)
+     }
+@@ -473,7 +492,7 @@
+         Ok(())
+     }
+ 
+-    fn record(self) -> Result<RecordedUnsubmittedPrefix> {
++    fn record(self) -> Result<RecordedUnsubmittedFrame> {
+         self.require_current()?;
+         let shared = &self.bucket.pipelines;
+         let p = self.binding.active_side;
+@@ -481,10 +500,16 @@
+         if self.kernels.recurrent.len() != usize::from(n) { return Err(deny()); }
+         let plan = expected_passes(&self.h,&self.words,&self.kernels.provenance,p,n)?;
+         verify_coverage(&self.h,&self.words,&self.kernels.provenance,p,n,&plan)?;
+-        // All admission above is complete before the first command is encoded.
++        let upload = owned_frame::BoundGpuTransfer::prepare(
++            self.backend,self.bucket,self.batch,&self.binding,
++        )?;
++        self.tail.verify(&self.words,&self.h)?;
++        // Exact uploads and pre-consume destination snapshots are in this sole
++        // encoder, in front of both guarded writers and the ordinary tail.
+         let mut encoder = self.backend.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+-            label: Some("n4096-h-owned-prefix-unsubmitted"),
++            label: Some("n4096-h-owned-frame-unsubmitted"),
+         });
++        upload.record_ordered(&mut encoder,self.bucket,self.batch,&self.binding)?;
+         let mut realized = Vec::with_capacity(plan.len());
+         {
+             let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+@@ -504,11 +529,13 @@
+                 pass.dispatch_workgroups(x,y,z);
+                 realized.push(actual);
+             }
++            self.tail.record(shared,&mut pass)?;
+         }
+         verify_coverage(&self.h,&self.words,&self.kernels.provenance,p,n,&realized)?;
+         self.require_current()?;
+-        Ok(RecordedUnsubmittedPrefix {
+-            _encoder:encoder,binding:self.binding,realized_coverage:realized,raw_q_before:self.pre_state_q,
++        Ok(RecordedUnsubmittedFrame {
++            _encoder:encoder,binding:self.binding,realized_coverage:realized,
++            tail_coverage:self.tail.into_coverage(),upload,raw_q_before:self.pre_state_q,
+         })
+     }
+ }
+diff --git a/crates/alife_gpu_backend/src/closed_loop_pipeline/research_n4096_h_record/owned_frame.rs b/crates/alife_gpu_backend/src/closed_loop_pipeline/research_n4096_h_record/owned_frame.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/alife_gpu_backend/src/closed_loop_pipeline/research_n4096_h_record/owned_frame.rs
+@@ -0,0 +1,395 @@
++//! Ordered input and pre-action inference tail for the owner-bound frame.
++//! No queue writer, command submission, paid World action or later authority.
++use super::*;
++use crate::{
++    GpuBrainSlotExtensionRecord, GpuSlotLearningStateRecord,
++    GpuPendingEligibilityRecord, GpuSpeechPayloadRecord, GpuSelectionRecord,
++    GPU_CLOSED_LOOP_LAYOUT_VERSION,
++    closed_loop_sleep::read_gpu_word_ranges,
++};
++
++const UPLOAD_BINDINGS: [usize;2]=[4,5];
++const MAX_FRAME_BYTES:u64=1024*1024;
++const COPY_USAGE:wgpu::BufferUsages=wgpu::BufferUsages::COPY_DST.union(wgpu::BufferUsages::COPY_SRC);
++const WORD_BYTES:u64=4;
++
++fn word_span(span:&Range<u64>)->Result<Range<u32>>{
++    if span.start>=span.end || span.start%WORD_BYTES!=0 || span.end%WORD_BYTES!=0 {
++        return Err(deny());
++    }
++    let start=u32::try_from(span.start/WORD_BYTES).map_err(|_|deny())?;
++    let end=u32::try_from(span.end/WORD_BYTES).map_err(|_|deny())?;
++    Ok(start..end)
++}
++
++pub(super) fn authenticate_device_slot(
++    backend:&GpuClosedLoopBackend,bucket:&ClassBucketRuntime,resident:&ResidentBrainSlot,
++)->Result<()>{
++    // Descriptor/identity bytes, not the CPU copy of the descriptor or its
++    // cached offsets. This is a bounded copy-only native inspection when used.
++    let neural=bucket.buffers.neural_buffers();
++    let descriptor=word_span(&resident.ranges.brain_slot_bytes)?;
++    let identity=word_span(&resident.ranges.identity_bytes)?;
++    let slot=resident.brain_slot.record().words();
++    let owner=resident.brain_slot.identity().words();
++    if descriptor.len()!=slot.len() || identity.len()!=owner.len(){return Err(deny());}
++    let read=read_gpu_word_ranges(&backend.device,&backend.queue,
++        &[(neural[0],descriptor),(neural[1],identity)],"n4096-h-owned-device-slot",None)?;
++    let [actual_slot,actual_id]=read.as_slice() else{return Err(deny());};
++    if actual_slot.as_slice()!=slot || actual_id.as_slice()!=owner {return Err(deny());}
++    Ok(())
++}
++
++#[derive(Debug,Clone,Eq,PartialEq)]
++struct FrameSeal{
++    backend:u64,bucket:u64,buffer_set:u64,allocation:u64,dispatch_generation:u64,
++    slot_generation:u32,nonce:u64,frame_tick:u64,phenotype:Digest,topology:Digest,
++    lengths:[u64;2],total:u64, digest:Digest,
++}
++
++fn split(lo:u32,hi:u32)->u64{u64::from(lo)|(u64::from(hi)<<32)}
++
++fn checked_lengths(l:[usize;2])->Result<([u64;2],u64)>{
++    let one=|n:usize|u64::try_from(n).ok().filter(|n|*n>0).and_then(|n|n.checked_mul(WORD_BYTES)).ok_or_else(deny);
++    let parts=[one(l[0])?,one(l[1])?];
++    let total=parts[0].checked_add(parts[1]).filter(|n|*n<=MAX_FRAME_BYTES).ok_or_else(deny)?;
++    Ok((parts,total))
++}
++
++impl FrameSeal{
++    fn new(owner:&OwnerFence,batch:&GpuActiveBatchUpload)->Result<Self>{
++        let [header]=batch.headers() else{return Err(deny());};
++        let dispatch_generation=split(header.dispatch_generation_lo,header.dispatch_generation_hi);
++        if dispatch_generation==0 || header.slot_generation!=owner.handle.generation()
++            || split(header.tick_lo,header.tick_hi)!=owner.frame_tick || batch.authority_nonce!=owner.batch_nonce
++        {return Err(deny());}
++        let (lengths,total)=checked_lengths([batch.dispatch_header_words().len(),batch.frame_payload_words().len()])?;
++        let mut s=Self{
++            backend:owner.backend_instance,bucket:owner.bucket_token,buffer_set:owner.buffer_token,
++            allocation:owner.allocation,dispatch_generation,slot_generation:header.slot_generation,
++            nonce:owner.batch_nonce,frame_tick:owner.frame_tick,phenotype:owner.phenotype.0,topology:owner.topology,
++            lengths,total,digest:[0;4],
++        };
++        s.digest=s.hash_bytes([
++            bytemuck::cast_slice(batch.dispatch_header_words()),bytemuck::cast_slice(batch.frame_payload_words()),
++        ])?;
++        Ok(s)
++    }
++    fn hash_bytes(&self,bytes:[&[u8];2])->Result<Digest>{
++        let mut h=CanonicalDigestBuilder::new(b"alife.n4096.h.frame-input-ordered-same-buffer.v1");
++        for n in [self.backend,self.bucket,self.buffer_set,self.allocation,self.dispatch_generation,
++            u64::from(self.slot_generation),self.nonce,self.frame_tick]{h.write_u64(n);}
++        for n in self.phenotype.into_iter().chain(self.topology){h.write_u64(n);}
++        for (i,part) in bytes.into_iter().enumerate(){
++            if part.len() as u64!=self.lengths[i]{return Err(deny());}
++            h.write_u32(UPLOAD_BINDINGS[i] as u32);
++            h.write_u64(0); // destination offset in the genuine bound buffer
++            h.write_u64(self.lengths[i]);
++            h.write_bytes(part);
++        }
++        Ok(h.finish256())
++    }
++    fn confirm_preconsume_bytes(&self,mapped:&[u8])->Result<()>{
++        let total=usize::try_from(self.total).map_err(|_|deny())?;
++        let boundary=usize::try_from(self.lengths[0]).map_err(|_|deny())?;
++        if mapped.len()!=total || boundary>=total{return Err(deny());}
++        if self.hash_bytes([&mapped[..boundary],&mapped[boundary..]])?!=self.digest{return Err(deny());}
++        Ok(())
++    }
++}
++
++pub(super) struct BoundGpuTransfer{
++    seal:FrameSeal,
++    source:wgpu::Buffer,
++    _preconsume_copy:wgpu::Buffer,
++}
++
++impl BoundGpuTransfer{
++    pub(super) fn prepare(backend:&GpuClosedLoopBackend,bucket:&ClassBucketRuntime,
++        batch:&GpuActiveBatchUpload,owner:&OwnerFence)->Result<Self>{
++        let seal=FrameSeal::new(owner,batch)?;
++        Self::check_destination(bucket,&seal)?;
++        if seal.total>backend.device.limits().max_buffer_size
++            || seal.total.checked_mul(2).is_none_or(|n|n>2*MAX_FRAME_BYTES)
++        {return Err(deny());}
++        let source=backend.device.create_buffer(&wgpu::BufferDescriptor{
++            label:Some("n4096-h-canonical-staged-frame-bytes"),
++            size:seal.total,usage:wgpu::BufferUsages::COPY_SRC,mapped_at_creation:true,
++        });
++        {
++            let mut dst=source.slice(..).get_mapped_range_mut();
++            let first=seal.lengths[0] as usize;
++            dst[..first].copy_from_slice(bytemuck::cast_slice(batch.dispatch_header_words()));
++            dst[first..].copy_from_slice(bytemuck::cast_slice(batch.frame_payload_words()));
++        }
++        source.unmap();
++        let read=backend.device.create_buffer(&wgpu::BufferDescriptor{
++            label:Some("n4096-h-ordered-gpu-input-readback"),
++            size:seal.total,usage:wgpu::BufferUsages::COPY_DST|wgpu::BufferUsages::MAP_READ,
++            mapped_at_creation:false,
++        });
++        Ok(Self{seal,source,_preconsume_copy:read})
++    }
++
++    fn check_destination(bucket:&ClassBucketRuntime,seal:&FrameSeal)->Result<()>{
++        let neural=bucket.buffers.neural_buffers();
++        if bucket.buffers.ownership_token()!=seal.bucket || bucket.buffers.buffer_set_token()!=seal.buffer_set
++            || std::ptr::eq(neural[4],neural[5])
++        {return Err(deny());}
++        for (i,index) in UPLOAD_BINDINGS.into_iter().enumerate(){
++            if neural[index].size()<seal.lengths[i] || !neural[index].usage().contains(COPY_USAGE){
++                return Err(deny());
++            }
++        }
++        Ok(())
++    }
++
++    pub(super) fn record_ordered(&self,encoder:&mut wgpu::CommandEncoder,bucket:&ClassBucketRuntime,
++        batch:&GpuActiveBatchUpload,owner:&OwnerFence)->Result<()>{
++        if FrameSeal::new(owner,batch)?!=self.seal{return Err(deny());}
++        Self::check_destination(bucket,&self.seal)?;
++        let neural=bucket.buffers.neural_buffers();
++        let parts=[0,self.seal.lengths[0]];
++        for (part,index) in UPLOAD_BINDINGS.into_iter().enumerate(){
++            encoder.copy_buffer_to_buffer(&self.source,parts[part],neural[index],0,self.seal.lengths[part]);
++        }
++        // Same destination buffers that the actual compute bind group uses,
++        // immediately after the ordered writes, BEFORE any consume.
++        for (part,index) in UPLOAD_BINDINGS.into_iter().enumerate(){
++            encoder.copy_buffer_to_buffer(neural[index],0,&self._preconsume_copy,parts[part],self.seal.lengths[part]);
++        }
++        Ok(())
++    }
++}
++
++#[derive(Debug,Clone,Copy,Eq,PartialEq)]
++enum LaterPass{Decode,Context,Select,Speech,PrevalidateEligibility,RecurrentEligibility,DecoderEligibility,FinalizeEligibility}
++
++#[derive(Debug,Clone,Eq,PartialEq)]
++pub(super) struct TailAdmission{
++    pass:LaterPass, entry:&'static str, source:Digest, groups:[u32;3], writes:Vec<Range<u32>>,
++}
++
++#[derive(Debug)]
++pub(super) struct TailPlan{
++    logits:Range<u32>,select:Range<u32>,speech:Range<u32>,diag:Range<u32>,
++    r_eligibility:Range<u32>,d_eligibility:Range<u32>, pending:Range<u32>, learning:Range<u32>,
++    groups:[u32;2],coverage:Vec<TailAdmission>,
++}
++
++fn words_of<T>()->u32{(std::mem::size_of::<T>()/4) as u32}
++fn fixed_span(base:u32,n:u32,layout:&Range<u32>)->Result<Range<u32>>{
++    let expected=bounded_span(base,n)?;
++    if !within(&expected,layout) || expected.start!=layout.start{return Err(deny());}
++    Ok(expected)
++}
++fn exactly(base:u32,n:u32,layout:&Range<u32>)->Result<Range<u32>>{
++    let s=fixed_span(base,n,layout)?;
++    if &s!=layout{return Err(deny());}Ok(s)
++}
++
++impl TailPlan{
++    pub(super) fn from_mapped(resident:&ResidentBrainSlot,batch:&GpuActiveBatchUpload,
++        atlas:&PhysicalWords,h:&HPartition,raw:&[u32])->Result<Self>{
++        let [header]=batch.headers() else{return Err(deny());};
++        let [learn]=batch.learning_headers() else{return Err(deny());};
++        let s=resident.brain_slot.record();
++        let l=resident.brain_slot.word_ranges();
++        if header.reserved!=0 || batch.visible_self_grip_v1 || header.candidate_count==0
++            || header.candidate_count!=learn.candidate_count
++            || learn.selection_offset!=s.selection_offset || learn.recurrent_synapse_count!=s.recurrent_synapse_count
++            || s.recurrent_synapse_count.checked_add(learn.decoder_synapse_count)!=Some(s.synapse_count)
++        {return Err(deny());}
++        let ext_words=exactly(s.extension_record_offset,words_of::<GpuBrainSlotExtensionRecord>(),&l.extension_words)?;
++        let ext=GpuBrainSlotExtensionRecord::from_words(atlas.slice(&ext_words,raw)?).map_err(|_|deny())?;
++        let learning=exactly(ext.learning_state_offset,words_of::<GpuSlotLearningStateRecord>(),&l.learning_state_words)?;
++        let state=GpuSlotLearningStateRecord::from_words(atlas.slice(&learning,raw)?).map_err(|_|deny())?;
++        let pending=exactly(ext.pending_eligibility_offset,words_of::<GpuPendingEligibilityRecord>(),&l.pending_eligibility_words)?;
++        if ext.schema_version!=GPU_CLOSED_LOOP_LAYOUT_VERSION || ext.decoder_synapse_count!=learn.decoder_synapse_count
++            || ext.decoder_synapse_local_start!=s.recurrent_synapse_count
++            || ext.receptor_offset!=l.receptor_words.start
++            || ext.decoder_input_plan_offset!=l.decoder_plan_words.start
++            || ext.decoder_metadata_offset!=l.decoder_eligibility_metadata_words.start
++            || ext.synapse_metadata_offset!=l.synapse_learning_metadata_words.start
++            || ext.reserved1!=l.dendritic_branch_words.start
++            || ext.fast_bank_1_offset!=l.fast_weight_bank_1_words.start
++            || ext.lifetime_bank_1_offset!=l.lifetime_weight_bank_1_words.start
++            || ext.memory_plan_offset!=l.memory_channel_plan_words.start
++            || ext.memory_weight_map_offset!=l.memory_weight_index_words.start
++            || ext.replay_plan_identity_offset!=l.replay_plan_identity_words.start
++            || state.replay_plan_identity_offset!=ext.replay_plan_identity_offset
++            || state.schema_version!=u32::from(alife_core::SchemaVersions::CURRENT.learning.raw())
++            || learn.pending_eligibility_offset!=pending.start || state.pending_eligibility_offset!=pending.start
++            || state.pending_valid!=0 || atlas.slice(&pending,raw)?.iter().any(|&x|x!=0)
++            || state.active_eligibility_bank!=u32::from(resident.active_eligibility_bank)
++            || state.active_eligibility_bank>1 || state.active_weight_bank!=u32::from(resident.active_weight_bank)
++            || state.active_weight_bank>1
++            || split(state.active_weight_generation_lo,state.active_weight_generation_hi)!=resident.active_weight_generation
++            || state.replay_cursor!=resident.replay_journal_cursor
++            || state.replay_event_count!=resident.replay_journal_event_count
++            || split(state.active_eligibility_generation_lo,state.active_eligibility_generation_hi)!=resident.active_eligibility_generation
++            || split(state.transaction_generation_lo,state.transaction_generation_hi)!=resident.transaction_generation
++            || split(state.inactive_eligibility_generation_lo,state.inactive_eligibility_generation_hi)!=0
++            || split(state.replay_generation_lo,state.replay_generation_hi)!=resident.replay_journal_generation
++        {return Err(deny());}
++        let r=[
++            fixed_span(s.recurrent_eligibility_offset,learn.recurrent_synapse_count,&l.recurrent_eligibility_words)?,
++            fixed_span(ext.recurrent_eligibility_bank_1_offset,learn.recurrent_synapse_count,&l.recurrent_eligibility_bank_1_words)?,
++        ];
++        let d=[
++            fixed_span(s.decoder_eligibility_offset,learn.decoder_synapse_count,&l.decoder_eligibility_words)?,
++            fixed_span(ext.decoder_eligibility_bank_1_offset,learn.decoder_synapse_count,&l.decoder_eligibility_bank_1_words)?,
++        ];
++        let logits=fixed_span(s.candidate_logit_offset,header.candidate_count,&l.candidate_logit_words)?;
++        let select=exactly(s.selection_offset,words_of::<GpuSelectionRecord>(),&l.selection_words)?;
++        let speech=exactly(ext.reserved0,words_of::<GpuSpeechPayloadRecord>(),&l.speech_payload_words)?;
++        let all=[&r[0],&r[1],&d[0],&d[1],&logits,&select,&speech,&pending,&learning,&ext_words];
++        if all.iter().enumerate().any(|(i,a)|all[i+1..].iter().any(|b|overlaps(a,b)))
++            || all.iter().any(|r|overlaps(r,&atlas.diagnostics)||atlas.lanes().into_iter().any(|(a,_)|overlaps(r,a)))
++            || !within(&atlas.v11_work,&select)
++        {return Err(deny());}
++        let write_bank=(state.active_eligibility_bank^1) as usize;
++        let mut plan=Self{
++            logits,select,speech,diag:atlas.diagnostics.clone(),
++            r_eligibility:r[write_bank].clone(),d_eligibility:d[write_bank].clone(),pending,learning,
++            groups:[learn.recurrent_synapse_count.div_ceil(64),learn.decoder_synapse_count.div_ceil(64)],
++            coverage:Vec::new(),
++        };
++        plan.coverage=plan.ordered()?;
++        plan.verify(atlas,h)?;
++        Ok(plan)
++    }
++
++    fn ordered(&self)->Result<Vec<TailAdmission>>{
++        use LaterPass::*;
++        use super::super::{CLOSED_LOOP_DECODE_WGSL,CLOSED_LOOP_MEMORY_CONTEXT_WGSL,CLOSED_LOOP_ELIGIBILITY_WGSL};
++        let d=digest_source(CLOSED_LOOP_DECODE_WGSL);
++        let m=digest_source(CLOSED_LOOP_MEMORY_CONTEXT_WGSL);
++        let e=digest_source(CLOSED_LOOP_ELIGIBILITY_WGSL);
++        let diag=bounded_span(self.diag.start+2,1)?;
++        let sel5=bounded_span(self.select.start+5,1)?;
++        let row=|pass,entry,source,x,writes|TailAdmission{pass,entry,source,groups:[x,1,1],writes};
++        Ok(vec![
++            row(Decode,"decode_candidates",d,1,vec![self.logits.clone(),diag.clone()]),
++            row(Context,"add_candidate_memory_context",m,1,vec![self.logits.clone(),diag.clone()]),
++            row(Select,"select_candidate",d,1,vec![bounded_span(self.select.start,12)?,diag.clone()]),
++            row(Speech,"decode_speech_payload",d,1,vec![self.speech.clone(),diag.clone()]),
++            row(PrevalidateEligibility,"prevalidate_eligibility",e,1,vec![sel5.clone()]),
++            row(RecurrentEligibility,"accumulate_recurrent_eligibility",e,self.groups[0],vec![self.r_eligibility.clone(),diag.clone()]),
++            row(DecoderEligibility,"accumulate_decoder_eligibility",e,self.groups[1],vec![self.d_eligibility.clone(),diag]),
++            row(FinalizeEligibility,"finalize_pending_eligibility",e,1,vec![self.pending.clone(),
++                bounded_span(self.learning.start+3,1)?,bounded_span(self.learning.start+8,2)?,
++                bounded_span(self.learning.start+22,2)?,sel5]),
++        ])
++    }
++
++    pub(super) fn verify(&self,atlas:&PhysicalWords,h:&HPartition)->Result<()>{
++        if self.ordered()?!=self.coverage{return Err(deny());}
++        for p in &self.coverage{
++            if p.groups[0]==0 || p.source==[0;4]{return Err(deny());}
++            atlas.refuse_q_or_foreign_write(h,&p.writes)?;
++        }
++        Ok(())
++    }
++
++    pub(super) fn record<'pass>(&self,shared:&'pass GpuClosedLoopPipelines,pass:&mut wgpu::ComputePass<'pass>)->Result<()>{
++        // Stock tail only, in stock order. Diagnostic/Grip extras never enter.
++        for p in &self.coverage{
++            if p.groups[0]>shared.max_compute_workgroups_per_dimension{return Err(deny());}
++        }
++        for p in &self.coverage{
++            let k=match p.pass{
++                LaterPass::Decode=>&shared.kernels.decode_pipeline,
++                LaterPass::Context=>&shared.kernels.memory_context_pipeline,
++                LaterPass::Select=>&shared.kernels.select_pipeline,
++                LaterPass::Speech=>&shared.kernels.speech_decode_pipeline,
++                LaterPass::PrevalidateEligibility=>&shared.kernels.prevalidate_eligibility_pipeline,
++                LaterPass::RecurrentEligibility=>&shared.kernels.recurrent_eligibility_pipeline,
++                LaterPass::DecoderEligibility=>&shared.kernels.decoder_eligibility_pipeline,
++                LaterPass::FinalizeEligibility=>&shared.kernels.finalize_pending_eligibility_pipeline,
++            };
++            pass.set_pipeline(k);
++            pass.set_bind_group(0,&shared.bind_group,&[]);
++            pass.dispatch_workgroups(p.groups[0],p.groups[1],p.groups[2]);
++        }
++        Ok(())
++    }
++
++    pub(super) fn into_coverage(self)->Vec<TailAdmission>{self.coverage}
++}
++
++#[cfg(test)]
++mod tests{
++    use super::*;
++
++    #[test]
++    fn ordered_exact_frame_proof_rejects_same_size_substitution_and_wrong_owner(){
++        let a=[1u8,2,3,4];
++        let b=[8u8,9,10,11,12,13,14,15];
++        let mut seal=FrameSeal{
++            backend:1,bucket:2,buffer_set:3,allocation:4,dispatch_generation:5,slot_generation:6,
++            nonce:7,frame_tick:8,phenotype:[9;4],topology:[10;4],lengths:[4,8],total:12,digest:[0;4],
++        };
++        seal.digest=seal.hash_bytes([&a,&b]).unwrap();
++        let mut bytes=[a.as_slice(),b.as_slice()].concat();
++        assert!(seal.confirm_preconsume_bytes(&bytes).is_ok());
++        bytes[4]^=1;
++        assert!(seal.confirm_preconsume_bytes(&bytes).is_err());
++        bytes[4]^=1;
++        let mut moved=seal.clone();
++        moved.buffer_set+=1;
++        assert!(moved.confirm_preconsume_bytes(&bytes).is_err());
++        moved=seal.clone();
++        moved.frame_tick-=1;
++        assert!(moved.confirm_preconsume_bytes(&bytes).is_err());
++        assert!(seal.confirm_preconsume_bytes(&bytes[..11]).is_err());
++        assert!(checked_lengths([0,1]).is_err());
++        assert!(checked_lengths([usize::MAX,1]).is_err());
++        assert!(word_span(&(1..8)).is_err());
++    }
++
++    #[test]
++    fn full_inference_tail_is_ordered_and_never_writes_q(){
++        let h=HPartition::canonical().unwrap();
++        let rr=|i,n|bounded_span(i,n).unwrap();
++        let atlas=PhysicalWords{
++            slot:0..6*WIDE+128,activation:[rr(0,WIDE),rr(WIDE,WIDE)],
++            accumulator:rr(2*WIDE,WIDE),encoded:rr(3*WIDE,WIDE),homeostasis:rr(4*WIDE,2*WIDE),
++            diagnostics:rr(6*WIDE,4),v11_work:rr(6*WIDE+16,4),
++        };
++        let at=6*WIDE;
++        let mut plan=TailPlan{
++            logits:rr(at+20,3),select:rr(at+4,16),speech:rr(at+24,4),diag:atlas.diagnostics.clone(),
++            r_eligibility:rr(at+30,2),d_eligibility:rr(at+32,3),pending:rr(at+36,36),
++            learning:rr(at+72,24),groups:[1,1],coverage:Vec::new(),
++        };
++        plan.coverage=plan.ordered().unwrap();
++        plan.verify(&atlas,&h).unwrap();
++        use LaterPass::*;
++        assert_eq!(plan.coverage.iter().map(|p|p.pass).collect::<Vec<_>>(),
++            vec![Decode,Context,Select,Speech,PrevalidateEligibility,RecurrentEligibility,DecoderEligibility,FinalizeEligibility]);
++        let mut reordered=plan.coverage.clone();reordered.swap(1,2);
++        let good=std::mem::replace(&mut plan.coverage,reordered);
++        assert!(plan.verify(&atlas,&h).is_err());
++        plan.coverage=good;
++        plan.speech=rr(atlas.encoded.start+256,4);
++        plan.coverage=plan.ordered().unwrap(); // consistent lie still intersects Q
++        assert!(plan.verify(&atlas,&h).is_err());
++    }
++
++    #[test]
++    fn generic_stock_phase_cannot_bypass_h_frame_on_class4(){
++        assert!(GpuClosedLoopPipelines::require_unwidened_stock_writer(2048).is_ok());
++        assert!(GpuClosedLoopPipelines::require_unwidened_stock_writer(4096).is_err());
++        use alife_core::BrainCapacityClass as Classes;
++        use crate::closed_loop_runtime::require_stock_writer_classes;
++        assert!(require_stock_writer_classes([Classes::N2048_ID]).is_ok());
++        for mixed in [
++            [Classes::N2048_ID,Classes::N4096_RESEARCH_ID],
++            [Classes::N4096_RESEARCH_ID,Classes::N2048_ID],
++        ] {
++            assert!(matches!(require_stock_writer_classes(mixed),
++                Err(ScaffoldContractError::UnsupportedProductionBrainClass)));
++        }
++    }
++}
+diff --git a/crates/alife_gpu_backend/src/closed_loop_checkpoint.rs b/crates/alife_gpu_backend/src/closed_loop_checkpoint.rs
+--- a/crates/alife_gpu_backend/src/closed_loop_checkpoint.rs
++++ b/crates/alife_gpu_backend/src/closed_loop_checkpoint.rs
+@@ -1867,6 +1867,8 @@
+         phenotype: BrainPhenotype,
+         request: GpuBrainRestoreRequest,
+     ) -> Result<GpuBrainRestoreReceipt, ScaffoldContractError> {
++        #[cfg(feature = "research-n4096-h-inherited-kernels-v1")]
++        crate::closed_loop_runtime::require_stock_writer_classes([phenotype.brain_class_id()])?;
+         self.ensure_ready()?;
+         let snapshot = request.into_snapshot();
+         let checkpoint_digest = snapshot.canonical_digest();
+@@ -2271,6 +2273,8 @@
+         staged: &ConsolidationStagedOutput,
+         parts: GpuCompletedSleepStagingParts,
+     ) -> Result<GpuSleepStagingReceipt, ScaffoldContractError> {
++        #[cfg(feature = "research-n4096-h-inherited-kernels-v1")]
++        crate::closed_loop_runtime::require_stock_writer_classes([handle.class_id()])?;
+         self.ensure_ready()?;
+         self.validate_handle_backend(handle)?;
+         request.validate_contract()?;
+diff --git a/crates/alife_gpu_backend/src/closed_loop_sleep.rs b/crates/alife_gpu_backend/src/closed_loop_sleep.rs
+--- a/crates/alife_gpu_backend/src/closed_loop_sleep.rs
++++ b/crates/alife_gpu_backend/src/closed_loop_sleep.rs
+@@ -435,6 +435,8 @@
+         replay: &BoundedReplayBatch,
+         lost_process_job_id: GpuSleepJobId,
+     ) -> Result<GpuSleepJobId, ScaffoldContractError> {
++        #[cfg(feature = "research-n4096-h-inherited-kernels-v1")]
++        crate::closed_loop_runtime::require_stock_writer_classes([handle.class_id()])?;
+         if self.sleep_jobs.contains_key(&lost_process_job_id.raw())
+             || self
+                 .committed_sleep
+@@ -493,6 +495,8 @@
+         staged: &ConsolidationStagedOutput,
+         submission_started: &mut bool,
+     ) -> Result<GpuSleepConsolidationReceipt, ScaffoldContractError> {
++        #[cfg(feature = "research-n4096-h-inherited-kernels-v1")]
++        crate::closed_loop_runtime::require_stock_writer_classes([handle.class_id()])?;
+         self.ensure_ready()?;
+         self.validate_handle_backend(handle)?;
+         request.validate_contract()?;
+@@ -753,6 +757,8 @@
+         replay: &BoundedReplayBatch,
+         recovery_job: Option<GpuSleepJobId>,
+     ) -> Result<GpuSleepJobId, ScaffoldContractError> {
++        #[cfg(feature = "research-n4096-h-inherited-kernels-v1")]
++        crate::closed_loop_runtime::require_stock_writer_classes([handle.class_id()])?;
+         self.ensure_ready()?;
+         self.validate_handle_backend(handle)?;
+         if self
+@@ -1102,6 +1108,8 @@
+         &mut self,
+         handle: GpuBrainHandle,
+     ) -> Result<(), ScaffoldContractError> {
++        #[cfg(feature = "research-n4096-h-inherited-kernels-v1")]
++        crate::closed_loop_runtime::require_stock_writer_classes([handle.class_id()])?;
+         self.ensure_ready()?;
+         let snapshot = self.sleep_slot_snapshot(handle)?;
+         let words = self.read_slot_mutable_words(handle, &snapshot.ranges)?;

@@ -1,22 +1,26 @@
-name: Qualia exact N4096 H-only owned prefix CPU qualification
+name: Qualia exact N4096 H-only ordered frame CPU qualification
 on:
   push:
-    branches: ["bob/qualia-n4096-h-owned-prefix-cpu-20261128"]
+    branches: ["bob/qualia-n4096-h-ordered-frame-cpu-20261128"]
     paths: [".github/workflows/qualia-n4096-width-intake-check.yml"]
 
 permissions:
   contents: read
 
 concurrency:
-  group: qualia-n4096-h-owned-prefix-cpu-${{ github.ref }}
+  group: qualia-n4096-h-ordered-frame-cpu-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   source-only:
-    if: github.ref == 'refs/heads/bob/qualia-n4096-h-owned-prefix-cpu-20261128'
+    if: github.ref == 'refs/heads/bob/qualia-n4096-h-ordered-frame-cpu-20261128'
     runs-on: ubuntu-24.04
     timeout-minutes: 65
     env:
+      PIN_H_FRAME_PARENT: ea436109492335803e504981d990eaf63dd8f800
+      PIN_H_FRAME_TREE: f0387b1a500947e1b80cdd2ed09a54a8800e765b
+      PIN_H_FRAME_PATCH: 4b49e1147eed1daa8d93fd24be66280e830cbbec23b5aecb44af50751c9aa7f1
+      PIN_H_FRAME_PINS: d3a712a7750f36f14988e90bf95ef2af9715144ec5fd7717ea9e205a140be1b5
       PIN_OWNER_PREFIX_PARENT: 4a9cb1e1163067232b6d55c7dae564fb9545bc06
       PIN_OWNER_PREFIX_TREE: 6d6f34c006f43e5451aa506fac4c091bfeed1891
       PIN_OWNER_PREFIX_PATCH: a1c0e8bae43d6844184b1150551bd358608d53517cdb5ca4454ddae10daac3e5
@@ -87,13 +91,20 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git show -s --format=%P HEAD)" = "$PIN_OWNER_PREFIX_PARENT"
+          test "$(git show -s --format=%P HEAD)" = "$PIN_H_FRAME_PARENT"
+          test "$(git rev-parse "$PIN_H_FRAME_PARENT^{tree}")" = "$PIN_H_FRAME_TREE"
+          diff -u <(printf '%s\n' \
+            $'M\t.github/workflows/qualia-n4096-width-intake-check.yml' \
+            $'A\tdocs/r41-saved-life/N4096-H-ORDERED-FRAME.patch' \
+            $'A\tdocs/r41-saved-life/N4096-H-ORDERED-FRAME-PINS.json' | LC_ALL=C sort) \
+            <(git diff --name-status --no-renames "$PIN_H_FRAME_PARENT" HEAD | LC_ALL=C sort)
+          test "$(git show -s --format=%P "$PIN_H_FRAME_PARENT")" = "$PIN_OWNER_PREFIX_PARENT"
           test "$(git rev-parse "$PIN_OWNER_PREFIX_PARENT^{tree}")" = "$PIN_OWNER_PREFIX_TREE"
           diff -u <(printf '%s\n' \
             $'M\t.github/workflows/qualia-n4096-width-intake-check.yml' \
             $'A\tdocs/r41-saved-life/N4096-H-OWNED-PREFIX.patch' \
             $'A\tdocs/r41-saved-life/N4096-H-OWNED-PREFIX-PINS.json' | LC_ALL=C sort) \
-            <(git diff --name-status --no-renames "$PIN_OWNER_PREFIX_PARENT" HEAD | LC_ALL=C sort)
+            <(git diff --name-status --no-renames "$PIN_OWNER_PREFIX_PARENT" "$PIN_H_FRAME_PARENT" | LC_ALL=C sort)
           test "$(git show -s --format=%P "$PIN_OWNER_PREFIX_PARENT")" = "$PIN_H_WRITER_PARENT"
           test "$(git rev-parse "$PIN_H_WRITER_PARENT^{tree}")" = "$PIN_H_WRITER_PARENT_TREE"
           diff -u <(printf '%s\n' \
@@ -162,7 +173,7 @@ jobs:
             <(git diff --name-status --no-renames "$PIN_V3_HOST" "$PIN_EXACT_EMITTED_WIDTH" | LC_ALL=C sort)
           export EXACT_SRC="$RUNNER_TEMP/qualia-n4096-width-intake-source"
           export CARGO_TARGET_DIR="$RUNNER_TEMP/qualia-n4096-width-intake-target"
-          export EVIDENCE="$RUNNER_TEMP/qualia-n4096-h-owned-prefix-evidence"
+          export EVIDENCE="$RUNNER_TEMP/qualia-n4096-h-ordered-frame-evidence"
           printf 'EXACT_SRC=%s\nCARGO_TARGET_DIR=%s\nEVIDENCE=%s\n' \
             "$EXACT_SRC" "$CARGO_TARGET_DIR" "$EVIDENCE" >> "$GITHUB_ENV"
           mkdir "$EVIDENCE"
@@ -563,7 +574,71 @@ jobs:
           print('exact four-leaf owner-bound source overlay forward/reverse/forward; no ordinary writer or stock shader change')
           PY
 
-      - name: Locked backend-only OFF compile and ON eight CPU/Naga tests
+      - name: Exact six-leaf ordered same-buffer frame and stock-writer refusal
+        run: |
+          set -euo pipefail
+          cd "$EXACT_SRC"
+          python3 -IB - "$GITHUB_WORKSPACE" <<'PY' | tee -a "$EVIDENCE/build.log"
+          from hashlib import sha256
+          import json, os, subprocess, sys
+          from pathlib import Path
+          docs=Path(sys.argv[1])/'docs/r41-saved-life'
+          pins=docs/'N4096-H-ORDERED-FRAME-PINS.json'
+          patch=docs/'N4096-H-ORDERED-FRAME.patch'
+          def read(p):
+              p=Path(p)
+              assert not p.is_symlink() and p.is_file() and p.stat().st_size<=2_000_000,p
+              return p.read_bytes()
+          def digest(p): return sha256(read(p)).hexdigest()
+          def digest_or_absent(p):
+              p=Path(p)
+              assert not p.is_symlink(),p
+              return digest(p) if p.exists() else None
+          assert digest(pins)==os.environ['PIN_H_FRAME_PINS']
+          q=json.loads(read(pins))
+          assert q['schema']=='qualia.n4096.same-buffer-frame.source-only.v1'
+          assert q['exact_parent']==os.environ['PIN_H_FRAME_PARENT'] and q['exact_parent_tree']==os.environ['PIN_H_FRAME_TREE']
+          assert q['parent_cpu_run']==46103168813
+          assert q['parent_cpu_terminal_sha256']=='5a9fab08cdea7637b2c397d7251f8e044395d9d3a7c056aaab89f88d4bbeb1af'
+          assert q['forward']==os.environ['PIN_H_FRAME_PATCH']==digest(patch)
+          assert q['static_reversible'] and q['guarded_q_and_stock_n2048_preserved']
+          assert q['ownership_guard_includes_existing_and_proposed_curated_classes'] and q['unsupported_stock_writers_fail_closed']
+          assert not q['compiled_or_device_or_native_upload_or_submit_seen'] and not q['scored_or_saved']
+          backend='crates/alife_gpu_backend/src/'
+          new=backend+'closed_loop_pipeline/research_n4096_h_record/owned_frame.rs'
+          allowed={new,backend+'closed_loop_runtime.rs',backend+'closed_loop_pipeline.rs',
+              backend+'closed_loop_checkpoint.rs',backend+'closed_loop_sleep.rs',
+              backend+'closed_loop_pipeline/research_n4096_h_record.rs'}
+          names={s.decode().split('\t',2)[2] for s in subprocess.check_output(
+              ['git','apply','--numstat','-z',patch]).rstrip(b'\0').split(b'\0')}
+          leaves=q['changed_leaves']
+          assert set(leaves)==allowed==names
+          assert sum(v['before'] is None for v in leaves.values())==1 and leaves[new]['before'] is None
+          earlier=json.loads(read(docs/'N4096-H-INHERITED-WRITERS-PINS.json'))
+          prefix=json.loads(read(docs/'N4096-H-OWNED-PREFIX-PINS.json'))
+          def check(phase):
+              assert digest('Cargo.lock')==os.environ['PIN_LOCK']
+              assert digest('crates/alife_gpu_backend/Cargo.toml')==earlier['changed_leaves']['crates/alife_gpu_backend/Cargo.toml']['after_sha256']
+              carry=backend+'closed_loop_pipeline/research_n4096_h_inherited.rs'
+              assert digest(carry)==prefix['changed_leaves'][carry]['after']
+              for name,v in leaves.items():
+                  assert digest_or_absent(name)==v[phase],(phase,name)
+                  if phase=='after':
+                      blob=read(name)
+                      assert len(blob)==v['bytes']
+                      got=subprocess.check_output(['git','hash-object',name]).decode().strip()
+                      assert got==v['git_blob'],(name,got)
+              for stem in ('encode','recurrent'):
+                  src=b''.join(read(f'crates/alife_gpu_backend/shaders/closed_loop_{s}.wgsl') for s in ('abi','activity_validation',stem))
+                  assert sha256(src).hexdigest()==earlier['shader_composition'][stem]['stock']
+          def apply(*flags):
+              for check_arg in (('--check',),()):
+                  subprocess.run(['git','apply','--whitespace=error',*flags,*check_arg,patch],check=True)
+          check('before');apply();check('after');apply('--reverse');check('before');apply();check('after')
+          print('exact six-leaf ordered frame source forward/reverse/forward; no stock shader change')
+          PY
+
+      - name: Locked backend-only OFF compile and ON eleven CPU/Naga tests
         run: |
           set -euo pipefail
           rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --target "$TARGET"
@@ -584,13 +659,13 @@ jobs:
           timeout 24m cargo +"$RUST_TOOLCHAIN" test --frozen --offline --target "$TARGET" --no-default-features \
             --features research-n4096-h-inherited-kernels-v1 -p alife_gpu_backend --lib \
             closed_loop_pipeline::research_n4096_h_ -- --test-threads=1 \
-            2>&1 | tee "$EVIDENCE/h-owned-prefix-tests.log"
+            2>&1 | tee "$EVIDENCE/h-ordered-frame-tests.log"
           python3 -IB - "$EVIDENCE" <<'PY'
           from pathlib import Path
           import json,os,re,sys
           evidence=Path(sys.argv[1])
-          log=(evidence/'h-owned-prefix-tests.log').read_text()
-          names=re.findall(r'^test closed_loop_pipeline::research_n4096_h_(?:inherited|record)::tests::([a-z0-9_]+) \.\.\. ok$',log,re.M)
+          log=(evidence/'h-ordered-frame-tests.log').read_text()
+          names=re.findall(r'^test closed_loop_pipeline::research_n4096_h_(?:inherited|record(?:::owned_frame)?)::tests::([a-z0-9_]+) \.\.\. ok$',log,re.M)
           want={
             'authentic_typed_topology_codec_does_not_make_q_edges_legal',
             'empty_q_rows_would_not_prevent_stock_receptor_writes',
@@ -600,17 +675,21 @@ jobs:
             'exact_order_and_bank_alternation_in_nonzero_physical_slot',
             'zeros_cannot_hide_stock_writer_missing_pass_or_q_zero_store',
             'raw_q_bits_cover_both_sides_accumulator_encoded_and_homeostasis',
+            'ordered_exact_frame_proof_rejects_same_size_substitution_and_wrong_owner',
+            'full_inference_tail_is_ordered_and_never_writes_q',
+            'generic_stock_phase_cannot_bypass_h_frame_on_class4',
           }
-          assert len(names)==8 and set(names)==want,names
-          assert len(re.findall(r'^test result: ok\. 8 passed; 0 failed; 0 ignored;',log,re.M))==1
+          assert len(names)==11 and set(names)==want,names
+          assert len(re.findall(r'^test result: ok\. 11 passed; 0 failed; 0 ignored;',log,re.M))==1
           proof={
-            'schema':'qualia.n4096.h-owned-prefix-hosted-cpu-qualification.v1',
+            'schema':'qualia.n4096.h-ordered-frame-hosted-cpu-qualification.v1',
             'event_head':os.environ['GITHUB_SHA'],
-            'exact_parent':os.environ['PIN_OWNER_PREFIX_PARENT'],
-            'exact_parent_tree':os.environ['PIN_OWNER_PREFIX_TREE'],
-            'patch_sha256':os.environ['PIN_OWNER_PREFIX_PATCH'],
-            'source_pins_sha256':os.environ['PIN_OWNER_PREFIX_PINS'],
+            'exact_parent':os.environ['PIN_H_FRAME_PARENT'],
+            'exact_parent_tree':os.environ['PIN_H_FRAME_TREE'],
+            'patch_sha256':os.environ['PIN_H_FRAME_PATCH'],
+            'source_pins_sha256':os.environ['PIN_H_FRAME_PINS'],
             'writer_predecessor_patch_sha256':os.environ['PIN_H_WRITER_PATCH'],
+            'owned_prefix_predecessor_patch_sha256':os.environ['PIN_OWNER_PREFIX_PATCH'],
             'rust_release':os.environ['RUST_TOOLCHAIN'],
             'rust_commit':os.environ['PIN_RUSTC_COMMIT'],
             'default_off_checked':True, 'passed_cpu_tests':sorted(want),
@@ -622,19 +701,19 @@ jobs:
           (evidence/'proof.json').write_text(json.dumps(proof,sort_keys=True,indent=2)+'\n')
           PY
           cd "$EVIDENCE"
-          sha256sum build.log h-owned-prefix-tests.log proof.json > SHA256SUMS
+          sha256sum build.log h-ordered-frame-tests.log proof.json > SHA256SUMS
           sha256sum -c SHA256SUMS
           test "$(find . -mindepth 1 -maxdepth 1 -type f | wc -l)" -eq 4
 
       - name: Retain only CPU qualification text
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: qualia-n4096-h-owned-prefix-cpu-${{ github.sha }}
+          name: qualia-n4096-h-ordered-frame-cpu-${{ github.sha }}
           path: |
-            ${{ runner.temp }}/qualia-n4096-h-owned-prefix-evidence/build.log
-            ${{ runner.temp }}/qualia-n4096-h-owned-prefix-evidence/h-owned-prefix-tests.log
-            ${{ runner.temp }}/qualia-n4096-h-owned-prefix-evidence/proof.json
-            ${{ runner.temp }}/qualia-n4096-h-owned-prefix-evidence/SHA256SUMS
+            ${{ runner.temp }}/qualia-n4096-h-ordered-frame-evidence/build.log
+            ${{ runner.temp }}/qualia-n4096-h-ordered-frame-evidence/h-ordered-frame-tests.log
+            ${{ runner.temp }}/qualia-n4096-h-ordered-frame-evidence/proof.json
+            ${{ runner.temp }}/qualia-n4096-h-ordered-frame-evidence/SHA256SUMS
           if-no-files-found: error
           retention-days: 5
           compression-level: 3

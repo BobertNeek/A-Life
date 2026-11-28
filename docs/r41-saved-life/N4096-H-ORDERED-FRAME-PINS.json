@@ -1,0 +1,79 @@
+{
+  "blocked_before_queue_or_state_writer": [
+    "dendritic setter",
+    "debug seed/replay writer",
+    "generic insert/remove/curated replacement",
+    "ordinary mixed tick/diagnostic/training",
+    "stock update/discard",
+    "generic research/sleep restore",
+    "sleep submit/recover/commit"
+  ],
+  "changed_leaves": {
+    "crates/alife_gpu_backend/src/closed_loop_checkpoint.rs": {
+      "after": "190c37d58852aa58bff2876b4381d9c482094791355d427e1f51cc222359b83d",
+      "before": "56d1707a11891d3f00d29fb3b81cbc643683d22c547618bdd61f31e2112279d6",
+      "bytes": 118449,
+      "git_blob": "c051c239c752f7d69d46c07459ea670379f86590"
+    },
+    "crates/alife_gpu_backend/src/closed_loop_pipeline.rs": {
+      "after": "88689e44a6456a03951a8500707580eb7820c0317dfe3f003f1b0865704fce63",
+      "before": "a91ff183bc3897f13f7f8f545a2fba73855759348fff84d49847f52a676f1afd",
+      "bytes": 217002,
+      "git_blob": "bf5d346232f865b5168f04a2596d482c23be4539"
+    },
+    "crates/alife_gpu_backend/src/closed_loop_pipeline/research_n4096_h_record.rs": {
+      "after": "686d43e02466932cfef090f3702392ac91b8395b20f503a1442f57fa83c50f60",
+      "before": "f61cffd56cd806d49778132270b9e66caab0833bce1e0e5155f538fcb3e97e62",
+      "bytes": 30064,
+      "git_blob": "a6823bd3d00e26e1343d6003d3a0cd8a5a5d8a1e"
+    },
+    "crates/alife_gpu_backend/src/closed_loop_pipeline/research_n4096_h_record/owned_frame.rs": {
+      "after": "77cacd53c7551031ed3932baba75f2908848b027d0ffdd98e7561d4f2bf183bd",
+      "before": null,
+      "bytes": 21299,
+      "git_blob": "9e5dfcb7e78e0fa704fe52969f57eb0f4e221ffd"
+    },
+    "crates/alife_gpu_backend/src/closed_loop_runtime.rs": {
+      "after": "918d5db541ed04436ef8372de23bb8edc76e0fb98377006c9597d4b18434c57e",
+      "before": "8e3ad09f411f956dbc6c4c027cf087a3994fef191e01aa0b519bb43d5560fc70",
+      "bytes": 294246,
+      "git_blob": "884e059f555c531e41b9ec4ed0754929150db59d"
+    },
+    "crates/alife_gpu_backend/src/closed_loop_sleep.rs": {
+      "after": "d70306a06af40f9440c57ad9d406b2b3fc3e0c610cea8fadcca48c48d6cdacc6",
+      "before": "0573a76a717753be220c6cfca598d1fd1541423b5c4773a2411afedbb432faf1",
+      "bytes": 77030,
+      "git_blob": "dbc1d2b41d0d760e44199fda75e9315ea9f13045"
+    }
+  },
+  "compiled_or_device_or_native_upload_or_submit_seen": false,
+  "exact_parent": "ea436109492335803e504981d990eaf63dd8f800",
+  "exact_parent_tree": "f0387b1a500947e1b80cdd2ed09a54a8800e765b",
+  "forward": "4b49e1147eed1daa8d93fd24be66280e830cbbec23b5aecb44af50751c9aa7f1",
+  "guarded_q_and_stock_n2048_preserved": true,
+  "inverse": "7bfc58b8994d8b4221bc8c3128421fc6f703efa704dda36215b61fff8ab3ab98",
+  "ownership_guard_includes_existing_and_proposed_curated_classes": true,
+  "parent_cpu_run": 46103168813,
+  "parent_cpu_terminal_sha256": "5a9fab08cdea7637b2c397d7251f8e044395d9d3a7c056aaab89f88d4bbeb1af",
+  "prior_source_review_hold": "f76f1c8b25b6d47fc92580daeac8134ad5165d4a8de290ccbfb035ca0e438dc1",
+  "schema": "qualia.n4096.same-buffer-frame.source-only.v1",
+  "scored_or_saved": false,
+  "source_order": [
+    "copy header+payload to native actual bindings [4,5]",
+    "same-bound GPU pre-consume readback copy",
+    "guarded H compute",
+    "ordinary eight-stage inference tail"
+  ],
+  "static_reversible": true,
+  "tail_names": [
+    "decode_candidates",
+    "add_candidate_memory_context",
+    "select_candidate",
+    "decode_speech_payload",
+    "prevalidate_eligibility",
+    "accumulate_recurrent_eligibility",
+    "accumulate_decoder_eligibility",
+    "finalize_pending_eligibility"
+  ],
+  "unsupported_stock_writers_fail_closed": true
+}
