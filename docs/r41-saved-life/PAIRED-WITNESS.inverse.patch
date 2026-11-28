@@ -1,0 +1,1001 @@
+diff --git a/crates/alife_game_app/Cargo.toml b/crates/alife_game_app/Cargo.toml
+--- a/crates/alife_game_app/Cargo.toml
++++ b/crates/alife_game_app/Cargo.toml
+@@ -121,7 +121,6 @@
+ research-retained-neutral-paid-route-v1 = ["foundation-training", "gpu-tests", "alife_gpu_backend/research-retained-neutral-paid-route-v1"]
+ research-retained-matched-praise-fast-delta-v1 = ["research-retained-neutral-paid-route-v1", "research-retained-praise-ingress-v1"]
+ research-retained-matched-praise-quiet-witness-v1 = ["research-retained-matched-praise-fast-delta-v1", "alife_world/research-world-signature-preimage-v1"]
+-research-retained-matched-praise-paired-witness-v1 = ["research-retained-matched-praise-quiet-witness-v1"]
+ gpu-tests = [
+     "gpu-runtime",
+     "dep:alife_training",
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
+--- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
+@@ -33,8 +33,6 @@
+     NeutralRouteObservationV1 { observation: neutral_route::NeutralRouteObserverSpecV1 },
+     #[cfg(feature = "research-retained-matched-praise-fast-delta-v1")]
+     MatchedPraiseFastDeltaV1 { protocol: super::matched_praise::Spec },
+-    #[cfg(feature = "research-retained-matched-praise-paired-witness-v1")]
+-    MatchedPraisePairedWitnessV1 { protocol: super::matched_praise::Spec },
+ }
+ 
+ #[derive(Debug, Clone, Deserialize)]
+@@ -91,9 +89,6 @@
+     #[cfg(feature = "research-retained-matched-praise-fast-delta-v1")]
+     #[serde(skip_serializing_if = "Option::is_none")]
+     matched_praise_fast_delta_v1: Option<super::matched_praise::Spec>,
+-    #[cfg(feature = "research-retained-matched-praise-paired-witness-v1")]
+-    #[serde(skip_serializing_if = "Option::is_none")]
+-    matched_praise_paired_witness_v1: Option<super::matched_praise::Spec>,
+     #[cfg(feature = "research-retained-matched-praise-fast-delta-v1")]
+     #[serde(skip)]
+     matched_praise_binding: Option<super::matched_praise::Binding>,
+@@ -114,10 +109,7 @@
+     pub(super) fn take_matched_praise(&mut self)
+         -> Result<Option<(super::matched_praise::Spec, super::matched_praise::Binding)>>
+     {
+-        let spec = self.matched_praise_fast_delta_v1.clone();
+-        #[cfg(feature = "research-retained-matched-praise-paired-witness-v1")]
+-        let spec = spec.or_else(|| self.matched_praise_paired_witness_v1.clone());
+-        match (spec, self.matched_praise_binding.take()) {
++        match (self.matched_praise_fast_delta_v1.clone(), self.matched_praise_binding.take()) {
+             (None, None) => Ok(None),
+             (Some(spec), Some(binding)) => Ok(Some((spec, binding))),
+             _ => Err("matched Praise manifest did not bind private source bytes".into()),
+@@ -174,14 +166,7 @@
+         InterventionV1::MatchedPraiseFastDeltaV1 { protocol } => Some(protocol.clone()),
+         _ => None,
+     };
+-    #[cfg(feature = "research-retained-matched-praise-paired-witness-v1")]
+-    let matched_praise_paired_witness_v1 = match &config.intervention {
+-        InterventionV1::MatchedPraisePairedWitnessV1 { protocol } => Some(protocol.clone()),
+-        _ => None,
+-    };
+     let expected_schema = match &config.intervention {
+-        #[cfg(feature = "research-retained-matched-praise-paired-witness-v1")]
+-        InterventionV1::MatchedPraisePairedWitnessV1 { .. } => super::matched_praise::PAIRED_SCHEMA,
+         #[cfg(feature = "research-retained-matched-praise-fast-delta-v1")]
+         InterventionV1::MatchedPraiseFastDeltaV1 { .. } => super::matched_praise::SCHEMA,
+         #[cfg(feature = "research-retained-praise-ingress-v1")]
+@@ -231,18 +216,6 @@
+             || bytes.len() > super::matched_praise::CONFIG_LIMIT
+         {
+             return Err("matched Praise requires exact retained-opening paired bounds".into());
+-        }
+-    }
+-    #[cfg(feature = "research-retained-matched-praise-paired-witness-v1")]
+-    if let Some(spec) = &matched_praise_paired_witness_v1 {
+-        spec.validate()?;
+-        if config.scenario != ScenarioV1::RetainedOpening || config.card_case.is_some()
+-            || config.max_decisions != super::matched_praise::CUTS as usize
+-            || config.max_world_ticks != super::matched_praise::CUTS
+-            || !(neutral_route::MIN_OUTPUT_BYTES..=neutral_route::MAX_OUTPUT_BYTES).contains(&config.max_output_bytes)
+-            || bytes.len() > super::matched_praise::CONFIG_LIMIT
+-        {
+-            return Err("paired witness requires exact retained-opening paired bounds".into());
+         }
+     }
+     let card = config.card_case.as_deref().map(|name| {
+@@ -323,8 +296,6 @@
+         InterventionV1::NeutralRouteObservationV1 { .. } => ("neutral_route_observation_v1", None, None, None),
+         #[cfg(feature = "research-retained-matched-praise-fast-delta-v1")]
+         InterventionV1::MatchedPraiseFastDeltaV1 { .. } => ("matched_praise_fast_delta_v1", None, None, None),
+-        #[cfg(feature = "research-retained-matched-praise-paired-witness-v1")]
+-        InterventionV1::MatchedPraisePairedWitnessV1 { .. } => ("matched_praise_paired_witness_v1", None, None, None),
+     };
+     if bytes.len() > MAX_SMALL_CONFIG_BYTES
+         && !direct_weights.as_ref().is_some_and(|edit| edit.schema == 3)
+@@ -372,8 +343,6 @@
+             neutral_route_observation_v1,
+             #[cfg(feature = "research-retained-matched-praise-fast-delta-v1")]
+             matched_praise_fast_delta_v1,
+-            #[cfg(feature = "research-retained-matched-praise-paired-witness-v1")]
+-            matched_praise_paired_witness_v1,
+             #[cfg(feature = "research-retained-matched-praise-fast-delta-v1")]
+             matched_praise_binding: None,
+         },
+@@ -463,19 +432,6 @@
+         let binding = super::matched_praise::bind_private_bytes(admission_root, spec,
+             &resolved.identity.run_id, resolved.identity.owner, &resolved.identity.manifest_sha256,
+             &resolved.identity.source_current_sha256)?;
+-        resolved.identity.matched_praise_binding = Some(binding);
+-    }
+-    #[cfg(feature = "research-retained-matched-praise-paired-witness-v1")]
+-    if let Some(spec) = &resolved.identity.matched_praise_paired_witness_v1 {
+-        if std::env::var_os("ALIFE_EXPLICIT_FIXED_HOST_PRESSURE_NS").is_some()
+-            || std::env::var_os("ALIFE_EXPLICIT_RETENTION_ARCHIVE_TEST").is_some()
+-            || !std::env::var("ALIFE_EXPLICIT_SOFTWARE_RETENTION_TEST").is_ok_and(|value| value == "1")
+-        {
+-            return Err("paired witness requires natural-pressure software mode with no archive override".into());
+-        }
+-        let binding = super::matched_praise::bind_paired_private_bytes(admission_root, spec,
+-            &resolved.identity.run_id, resolved.identity.owner, &resolved.identity.manifest_sha256,
+-            &resolved.identity.source_current_sha256, resolved.request.deadline_unix_seconds)?;
+         resolved.identity.matched_praise_binding = Some(binding);
+     }
+     evaluate_saved_life_retention_inner(
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/matched_praise.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/matched_praise.rs
+--- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/matched_praise.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/matched_praise.rs
+@@ -9,10 +9,6 @@
+ use std::{fs, io::Read, path::Path};
+ #[cfg(feature = "research-retained-matched-praise-quiet-witness-v1")]
+ mod quiet_witness;
+-#[cfg(feature = "research-retained-matched-praise-paired-witness-v1")]
+-mod paired_witness;
+-#[cfg(feature = "research-retained-matched-praise-paired-witness-v1")]
+-pub(super) const PAIRED_SCHEMA: u16 = paired_witness::SCHEMA;
+ 
+ pub(super) const SCHEMA: u16 = 20;
+ pub(super) const CUTS: u64 = 12;
+@@ -195,18 +191,12 @@
+ fn compare_cuts(a: &CutCoordinatesV1, b: &CutCoordinatesV1,
+     points: &[FixedRouteCoordinateV1; 8], require_common_input: bool,
+ ) -> Option<[MatchedCoordinateDeltaV1; 8]> {
+-    compare_cuts_with_work_match(a, b, points, require_common_input, a.work_sha256 == b.work_sha256)
+-}
+-
+-fn compare_cuts_with_work_match(a: &CutCoordinatesV1, b: &CutCoordinatesV1,
+-    points: &[FixedRouteCoordinateV1; 8], require_common_input: bool, exact_work_scope: bool,
+-) -> Option<[MatchedCoordinateDeltaV1; 8]> {
+     if !a.valid() || !b.valid() || a.origin_tick != b.origin_tick || a.world_tick != b.world_tick
+         || a.fast_generations != b.fast_generations || a.paid_candidate_index != b.paid_candidate_index
+         || a.actual_joint_candidate_slots != b.actual_joint_candidate_slots
+         || a.actual_representative_index != b.actual_representative_index
+         || a.actual_admission_masks_sha256 != b.actual_admission_masks_sha256
+-        || a.paid_own_energy_cost_f32 != b.paid_own_energy_cost_f32 || !exact_work_scope
++        || a.paid_own_energy_cost_f32 != b.paid_own_energy_cost_f32 || a.work_sha256 != b.work_sha256
+         || a.paid_own_displacement_f32 != b.paid_own_displacement_f32
+         || a.actual_world_pre_pose_xyzyaw_f32 != b.actual_world_pre_pose_xyzyaw_f32
+         || a.actual_world_post_pose_xyzyaw_f32 != b.actual_world_post_pose_xyzyaw_f32
+@@ -282,31 +272,6 @@
+     root_sha256: String,
+     root: RootInputsV1,
+     quiet: Option<VerifiedQuietAnchorV1>,
+-    #[cfg(feature = "research-retained-matched-praise-paired-witness-v1")]
+-    paired: bool,
+-    #[cfg(feature = "research-retained-matched-praise-paired-witness-v1")]
+-    paired_prior: Option<paired_witness::Prior>,
+-}
+-
+-#[cfg(feature = "research-retained-matched-praise-paired-witness-v1")]
+-pub(super) fn bind_paired_private_bytes(root: &Path, spec: &Spec, run: &str, owner: u64,
+-    manifest_sha256: &str, current_sha256: &str, deadline: u64) -> Result<Binding>
+-{
+-    paired_witness::bind(root, spec, run, owner, manifest_sha256, current_sha256, deadline)
+-}
+-
+-#[cfg(feature = "research-retained-matched-praise-quiet-witness-v1")]
+-impl Binding {
+-    fn permits_witness_mode(&self, spec: &Spec) -> bool {
+-        #[cfg(feature = "research-retained-matched-praise-paired-witness-v1")]
+-        if self.paired {
+-            return match spec.arm {
+-                Arm::Quiet => self.quiet.is_none() && self.paired_prior.is_none(),
+-                Arm::Praise => self.quiet.is_some() && self.paired_prior.is_some(),
+-            };
+-        }
+-        spec.is_quiet_witness_arm()
+-    }
+ }
+ 
+ pub(super) fn bind_private_bytes(root: &Path, spec: &Spec, run: &str, owner: u64,
+@@ -340,12 +305,7 @@
+         }
+         Some(a)
+     } else { None };
+-    Ok(Binding { root_sha256, root: inputs, quiet,
+-        #[cfg(feature = "research-retained-matched-praise-paired-witness-v1")]
+-        paired: false,
+-        #[cfg(feature = "research-retained-matched-praise-paired-witness-v1")]
+-        paired_prior: None,
+-    })
++    Ok(Binding { root_sha256, root: inputs, quiet })
+ }
+ 
+ fn validate_quiet_links(root: &RootInputsV1, spec: &Spec, a: &VerifiedQuietAnchorV1,
+@@ -454,12 +414,6 @@
+     control_confound: bool,
+     #[cfg(feature = "research-retained-matched-praise-quiet-witness-v1")]
+     quiet_witness: quiet_witness::Capture,
+-    #[cfg(feature = "research-retained-matched-praise-paired-witness-v1")]
+-    paired_at_seam: bool,
+-    #[cfg(feature = "research-retained-matched-praise-paired-witness-v1")]
+-    paired_withheld: Option<&'static str>,
+-    #[cfg(feature = "research-retained-matched-praise-paired-witness-v1")]
+-    paired_credit: Vec<serde_json::Value>,
+ }
+ 
+ impl Probe {
+@@ -470,19 +424,13 @@
+             return Err("matched Praise requires the exact originally silent retained opening".into());
+         }
+         #[cfg(feature = "research-retained-matched-praise-quiet-witness-v1")]
+-        if !binding.permits_witness_mode(&spec) {
+-            return Err("matched Praise requires Quiet witness or an independently admitted paired arm".into());
++        if !spec.is_quiet_witness_arm() {
++            return Err("matched Praise quiet-witness runtime refuses treatment".into());
+         }
+         Ok(Self { spec, binding, stage: DoseStage::PendingAnchor, boundaries: Vec::new(),
+             observed_care: None, acoustic: Vec::new(), anchor_sha256: None, control_confound: false,
+             #[cfg(feature = "research-retained-matched-praise-quiet-witness-v1")]
+             quiet_witness: quiet_witness::Capture::default(),
+-            #[cfg(feature = "research-retained-matched-praise-paired-witness-v1")]
+-            paired_at_seam: false,
+-            #[cfg(feature = "research-retained-matched-praise-paired-witness-v1")]
+-            paired_withheld: None,
+-            #[cfg(feature = "research-retained-matched-praise-paired-witness-v1")]
+-            paired_credit: Vec::new(),
+         })
+     }
+ 
+@@ -495,47 +443,9 @@
+             // A missing/late authority never slides the intervention.
+             self.stage = DoseStage::Withheld;
+         }
+-        #[cfg(feature = "research-retained-matched-praise-paired-witness-v1")]
+-        if self.binding.paired && before.raw() == self.spec.anchor_tick()
+-            && !self.paired_at_seam && self.paired_withheld.is_none()
+-        {
+-            if !matches!((self.spec.arm, self.stage),
+-                (Arm::Quiet, DoseStage::Quiet) | (Arm::Praise, DoseStage::Ready))
+-            {
+-                self.paired_withheld = Some("exact_pre_cue_paid_trace_world_or_quiet_pair_unmatched");
+-                if self.spec.arm == Arm::Praise { self.stage = DoseStage::Withheld; }
+-                return Ok(());
+-            }
+-            // Both arms perform the same read-only full preimage read at the same cut.
+-            let (actual_signature, actual_world) = runtime.world()
+-                .canonical_signature_digest_with_bounded_preimage_v1(quiet_witness::WORLD_LIMIT)?;
+-            let in_scope = runtime.world().tick() == before && owner.raw() == self.binding.root.owner
+-                && runtime.world().organism_registry().get(owner).is_some_and(|r| r.lifecycle().is_alive())
+-                && !self.control_confound && self.observed_care.is_none()
+-                && self.quiet_witness.matches_world(&actual_world);
+-            if !in_scope {
+-                self.paired_withheld = Some("live_world_owner_or_boundary_changed_before_ingress");
+-                if self.spec.arm == Arm::Praise { self.stage = DoseStage::Withheld; }
+-                return Ok(());
+-            }
+-            if let Some(prior) = &self.binding.paired_prior {
+-                if prior.authorize_at_queue(&self.spec, &self.binding.root,
+-                    &serde_json::to_value(actual_signature)?).is_err()
+-                {
+-                    self.paired_withheld = Some("independent_pair_or_explicit_dose_authority_changed");
+-                    self.stage = DoseStage::Withheld;
+-                    return Ok(());
+-                }
+-            }
+-            self.paired_at_seam = true;
+-        }
+-        #[cfg(feature = "research-retained-matched-praise-paired-witness-v1")]
+-        if self.binding.paired && (!self.paired_at_seam || self.paired_withheld.is_some()) {
+-            return Ok(());
+-        }
+         if !queue_due(self.stage, before.raw(), self.spec.anchor_tick()) { return Ok(()); }
+         #[cfg(feature = "research-retained-matched-praise-quiet-witness-v1")]
+-        if self.spec.arm != Arm::Praise || !self.binding.permits_witness_mode(&self.spec) {
++        if self.spec.is_quiet_witness_arm() {
+             return Err("matched Praise quiet-witness runtime cannot queue a World dose".into());
+         }
+         self.stage = DoseStage::Withheld; // refuse and never requeue even if the World returns no dose
+@@ -586,11 +496,6 @@
+         let mut reason = Some("ordinary_published_route_unobserved");
+         if let [step] = steps {
+             if clean {
+-                #[cfg(feature = "research-retained-matched-praise-paired-witness-v1")]
+-                if self.binding.paired {
+-                    self.paired_credit.push(paired_witness::credit(step, owner, before, after)?);
+-                    self.quiet_witness.record_work(self.spec.anchor_tick(), world_tick, serde_json::to_vec(&step.work)?)?;
+-                }
+                 paid = actual_paid_step(step);
+                 if let Ok(value) = runtime.observe_fixed_retained_route_v1(
+                     self.spec.observation(), step, after, &self.spec.coordinates
+@@ -617,15 +522,7 @@
+                         };
+                         if row.valid() {
+                             #[cfg(feature = "research-retained-matched-praise-quiet-witness-v1")]
+-                            {
+-                                #[cfg(feature = "research-retained-matched-praise-paired-witness-v1")]
+-                                let paired = self.binding.paired;
+-                                #[cfg(not(feature = "research-retained-matched-praise-paired-witness-v1"))]
+-                                let paired = false;
+-                                if !paired {
+-                                    self.quiet_witness.record_work(self.spec.anchor_tick(), world_tick, work_json)?;
+-                                }
+-                            }
++                            self.quiet_witness.record_work(self.spec.anchor_tick(), world_tick, work_json)?;
+                             numeric_paid_cut = Some(row);
+                         }
+                     }
+@@ -656,12 +553,7 @@
+                     self.quiet_witness.record_anchor(world_bytes, anchor_bytes)?;
+                     self.anchor_sha256 = Some(a.clone());
+                     if self.binding.quiet.as_ref().is_some_and(|q| q.actual_a_pre_cue_anchor_sha256 == a) {
+-                        #[cfg(feature = "research-retained-matched-praise-paired-witness-v1")]
+-                        let extra = !self.binding.paired || self.binding.paired_prior.as_ref()
+-                            .is_some_and(|prior| prior.exact_pre_cue(&self.quiet_witness));
+-                        #[cfg(not(feature = "research-retained-matched-praise-paired-witness-v1"))]
+-                        let extra = true;
+-                        if extra { self.stage = DoseStage::Ready; }
++                        self.stage = DoseStage::Ready;
+                     }
+                 }
+             }
+@@ -678,21 +570,7 @@
+             && self.boundaries.len() == 3 && self.acoustic.len() == CUTS as usize;
+         let mut primary = None;
+         let mut next = None;
+-        #[cfg(feature = "research-retained-matched-praise-paired-witness-v1")]
+-        let paired = self.binding.paired;
+-        #[cfg(not(feature = "research-retained-matched-praise-paired-witness-v1"))]
+-        let paired = false;
+-        #[cfg(feature = "research-retained-matched-praise-paired-witness-v1")]
+-        let paired_dose_frame_intact = self.stage == DoseStage::Applied
+-            && self.acoustic.iter().enumerate().all(|(i, &(tick, bits))|
+-                self.spec.source_world_tick.checked_add(i as u64) == Some(tick)
+-                && if tick == self.spec.anchor_tick() {
+-                    let heard = f32::from_bits(bits);
+-                    heard.is_finite() && heard > 0.0
+-                } else { bits == 0 });
+-        #[cfg(feature = "research-retained-matched-praise-paired-witness-v1")]
+-        let mut work_match = [None; 2];
+-        if controls && !paired && self.stage == DoseStage::Applied {
++        if controls && self.stage == DoseStage::Applied {
+             if let (Some(a), [anchor, first, later]) = (&self.binding.quiet, self.boundaries.as_slice()) {
+                 if let (Some(prior), Some(b)) = (&anchor.numeric_paid_cut, &first.numeric_paid_cut) {
+                     if self.anchor_sha256.as_deref() == Some(a.actual_a_pre_cue_anchor_sha256.as_str())
+@@ -711,56 +589,14 @@
+                 }
+             }
+         }
+-        #[cfg(feature = "research-retained-matched-praise-paired-witness-v1")]
+-        if controls && paired && paired_dose_frame_intact && self.paired_at_seam
+-            && self.paired_withheld.is_none()
+-        {
+-            if let (Some(a), Some(exact_prior), [prior, first, next_boundary]) =
+-                (&self.binding.quiet, &self.binding.paired_prior, self.boundaries.as_slice())
+-            {
+-                if let (Some(p), Some(b)) = (&prior.numeric_paid_cut, &first.numeric_paid_cut) {
+-                    if self.anchor_sha256.as_deref() == Some(a.actual_a_pre_cue_anchor_sha256.as_str())
+-                        && p.committed_fast_bits == b.before_fast_bits
+-                        && p.fast_generations[1] == b.fast_generations[0]
+-                    {
+-                        work_match[0] = self.quiet_witness.work_at(1)?.map(|b_work|
+-                            paired_witness::same_work_except_frame(&exact_prior.work[1], &b_work));
+-                        primary = compare_cuts_with_work_match(
+-                            &a.actual_a_primary, b, &self.spec.coordinates, true, work_match[0] == Some(true));
+-                        // Later differences are retained as observations, never filled with zero
+-                        // or averaged into the primary; later input is the actual arm's own carry.
+-                        if let (true, Some(l)) = (primary.is_some(), &next_boundary.numeric_paid_cut) {
+-                            if b.committed_fast_bits == l.before_fast_bits
+-                                && b.fast_generations[1] == l.fast_generations[0]
+-                            {
+-                                work_match[1] = self.quiet_witness.work_at(2)?.map(|b_work|
+-                                    paired_witness::same_work_except_frame(&exact_prior.work[2], &b_work));
+-                                next = compare_cuts_with_work_match(
+-                                    &a.actual_a_next, l, &self.spec.coordinates, false, work_match[1] == Some(true));
+-                            }
+-                        }
+-                    }
+-                }
+-            }
+-        }
+         #[cfg(feature = "research-retained-matched-praise-quiet-witness-v1")]
+-        let evidence = if !paired && controls && self.stage == DoseStage::Quiet && self.observed_care.is_none()
++        let evidence = if controls && self.stage == DoseStage::Quiet && self.observed_care.is_none()
+             && self.acoustic.iter().all(|&(_, word)| word == 0)
+         {
+             self.quiet_witness.publish(
+                 output, self.spec.anchor_tick(), self.anchor_sha256.as_deref(),
+-                &self.binding.root, &self.binding.root_sha256, quiet_witness::EvidenceKind::LegacyQuiet,
++                &self.binding.root, &self.binding.root_sha256,
+             )?
+-        } else { None };
+-        #[cfg(feature = "research-retained-matched-praise-paired-witness-v1")]
+-        let paired_evidence = if paired && controls && self.paired_at_seam
+-            && self.paired_withheld.is_none()
+-            && ((self.stage == DoseStage::Quiet && self.observed_care.is_none()
+-                    && self.acoustic.iter().all(|&(_, word)| word == 0))
+-                || (self.stage == DoseStage::Applied && self.observed_care.is_some()))
+-        {
+-            self.quiet_witness.publish(output, self.spec.anchor_tick(), self.anchor_sha256.as_deref(),
+-                &self.binding.root, &self.binding.root_sha256, quiet_witness::EvidenceKind::Paired)?
+         } else { None };
+         let report = serde_json::json!({
+             "schema_version":1, "comparison_scope":"retained_matched_praise_fast_delta_only",
+@@ -781,29 +617,7 @@
+         #[cfg(feature = "research-retained-matched-praise-quiet-witness-v1")]
+         {
+             let mut report = report;
+-            #[cfg(feature = "research-retained-matched-praise-paired-witness-v1")]
+-            if paired {
+-                report["paired_before_sense_evidence_v1"] = serde_json::json!(paired_evidence);
+-                report["paired_witness_comparison_v1"] = serde_json::json!({
+-                    "pre_sense_fixed_anchor_live_rechecked":self.paired_at_seam,
+-                    "withheld_reason":self.paired_withheld,
+-                    "single_observed_positive_acoustic_frame_at_dose_cut":paired_dose_frame_intact,
+-                    "authenticated_a_exact_tape_sha256":self.binding.paired_prior.as_ref().map(|p| p.tape_sha256()),
+-                    "post_treatment_work_equal_except_frame_and_dependent_receipt_digest":work_match,
+-                    "base_outcome_credit_by_observed_settlement":self.paired_credit,
+-                    "predeclared_primary_origin_tick":self.spec.anchor_tick(),
+-                    "predeclared_secondary_origin_tick":self.spec.anchor_tick() + 1,
+-                    "requires_independent_full_paid_physical_and_native_bank_join":true,
+-                    "null_comparison_means_unmatched_or_unobserved_not_measured_zero":true,
+-                    "paired_numeric_only_not_learning_memory_policy_or_score":true,
+-                });
+-            } else {
+-                report["quiet_before_sense_evidence_v1"] = serde_json::json!(evidence);
+-            }
+-            #[cfg(not(feature = "research-retained-matched-praise-paired-witness-v1"))]
+-            {
+-                report["quiet_before_sense_evidence_v1"] = serde_json::json!(evidence);
+-            }
++            report["quiet_before_sense_evidence_v1"] = serde_json::json!(evidence);
+             return Ok(report);
+         }
+         #[cfg(not(feature = "research-retained-matched-praise-quiet-witness-v1"))]
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/matched_praise/paired_witness.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/matched_praise/paired_witness.rs
+deleted file mode 100644
+--- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/matched_praise/paired_witness.rs
++++ /dev/null
+@@ -1,356 +0,0 @@
+-//! Separate opt-in admission and observation for an actual same-ELF Quiet/Praise pair.
+-//! Host authority and independently read back evidence are separate; neither can substitute for the other.
+-use super::*;
+-use alife_core::BrainWorkReceipt;
+-use std::path::PathBuf;
+-
+-pub(super) const SCHEMA: u16 = 21;
+-const AUTHORITY_ENV: &str = "ALIFE_EXPLICIT_MATCHED_PRAISE_DOSE_AUTHORITY_SHA256";
+-const AUTHORITY: &str = "matched-praise-paired-dose-authority.v1.json";
+-const A_ACCEPTANCE: &str = "matched-praise-paired-a5-quiet.v1.json";
+-const A_BACKUP: &str = "matched-praise-paired-a-owner.v1.json";
+-const A_TAPE: &str = "matched-praise-paired-a-before-sense.v1.bin";
+-const RAW_CAP: usize = 4 * 1024 * 1024;
+-
+-#[derive(Debug, Deserialize)]
+-#[serde(deny_unknown_fields)]
+-struct QuietPairV1 {
+-    schema: String,
+-    // Existing typed physical and process predicates still have to pass.
+-    closure: VerifiedQuietAnchorV1,
+-    actual_a_tape_sha256: String,
+-    actual_a_tape_bytes: usize,
+-    actual_a_world_preimage_sha256: String,
+-    actual_a_work_sha256: [String; 3],
+-}
+-
+-#[derive(Debug, Deserialize)]
+-#[serde(deny_unknown_fields)]
+-struct DoseAuthorityV1 {
+-    schema: String,
+-    role: Arm,
+-    explicitly_authorizes_one_world_praise: bool,
+-    run_id: String,
+-    owner: u64,
+-    manifest_sha256: String,
+-    source_current_sha256: String,
+-    evaluator_sha256: String,
+-    independent_zero_sha256: String,
+-    independent_quiet_sha256: String,
+-    quiet_owner_readback_sha256: String,
+-    quiet_tape_sha256: String,
+-    world_tick_before_next_sense: u64,
+-    latest_start_unix_seconds: u64,
+-}
+-
+-impl DoseAuthorityV1 {
+-    fn exact(&self, root: &RootInputsV1, spec: &Spec, q: &QuietProofInputsV1, tape_sha: &str,
+-        now: u64, request_deadline: u64) -> bool {
+-        self.schema == "qualia.private.retained_matched_praise.paired_dose_authority.v1"
+-            && self.role == Arm::Praise && self.explicitly_authorizes_one_world_praise
+-            && self.run_id == root.run_id && self.owner == root.owner
+-            && self.manifest_sha256 == root.manifest_sha256
+-            && self.source_current_sha256 == root.source_current_sha256
+-            && self.evaluator_sha256 == root.evaluator_sha256
+-            && self.independent_zero_sha256 == root.independent_zero_sha256
+-            && self.independent_quiet_sha256 == q.independent_a_sha256
+-            && self.quiet_owner_readback_sha256 == q.owner_readback_sha256
+-            && self.quiet_tape_sha256 == tape_sha
+-            && self.world_tick_before_next_sense == spec.anchor_tick()
+-            && now < self.latest_start_unix_seconds && self.latest_start_unix_seconds <= request_deadline
+-    }
+-}
+-
+-#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+-type Stamp = (u64, u64, u32, u32, u64, u64, i64, i64, i64, i64);
+-
+-#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+-fn stamp(m: &fs::Metadata) -> Stamp {
+-    use std::os::unix::fs::MetadataExt;
+-    (m.dev(), m.ino(), m.uid(), m.mode(), m.nlink(), m.len(),
+-        m.mtime(), m.mtime_nsec(), m.ctime(), m.ctime_nsec())
+-}
+-
+-struct EvidenceRoom {
+-    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+-    root: PathBuf,
+-    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+-    held: fs::File,
+-    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+-    original: Stamp,
+-}
+-
+-impl EvidenceRoom {
+-    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+-    fn open(root: &Path) -> Result<Self> {
+-        use std::os::unix::fs::OpenOptionsExt;
+-        let original = fs::symlink_metadata(root)?;
+-        if !original.is_dir() || stamp(&original).3 & 0o7777 != 0o700 || root.canonicalize()? != root {
+-            return Err("paired witness requires exact canonical owner-private admission room".into());
+-        }
+-        let held = fs::OpenOptions::new().read(true).custom_flags(0x30000).open(root)?;
+-        let this = Self { root: root.to_path_buf(), held, original: stamp(&original) };
+-        this.check()?;
+-        Ok(this)
+-    }
+-
+-    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+-    fn check(&self) -> Result<()> {
+-        // The admitted source directory may gain the native output before the queue seam;
+-        // root identity and private mode must remain unchanged, not its entry count/mtime.
+-        let key = |m: Stamp| (m.0, m.1, m.2, m.3);
+-        if key(stamp(&self.held.metadata()?)) != key(self.original)
+-            || key(stamp(&fs::symlink_metadata(&self.root)?)) != key(self.original)
+-            || self.root.canonicalize()? != self.root
+-        { return Err("paired witness admission directory changed".into()); }
+-        Ok(())
+-    }
+-
+-    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+-    fn read(&self, name: &'static str, max: usize) -> Result<Vec<u8>> {
+-        use std::os::{fd::AsRawFd, unix::fs::OpenOptionsExt};
+-        if name.contains('/') || name == "." || name == ".." || name.is_empty() {
+-            return Err("paired witness evidence filename is not a literal leaf".into());
+-        }
+-        self.check()?;
+-        let held_name = PathBuf::from(format!("/proc/self/fd/{}/{}", self.held.as_raw_fd(), name));
+-        let logical = self.root.join(name);
+-        let meta = fs::symlink_metadata(&held_name)?;
+-        let first = stamp(&meta);
+-        if !meta.is_file() || first.0 != self.original.0 || first.2 != self.original.2
+-            || first.3 & 0o7777 != 0o400 || first.4 != 1
+-            || first.5 == 0 || first.5 > max as u64
+-        { return Err("paired witness requires bounded owner-0400 evidence files".into()); }
+-        let file = fs::OpenOptions::new().read(true).custom_flags(0x20800).open(&held_name)?;
+-        if stamp(&file.metadata()?) != first || stamp(&fs::symlink_metadata(&logical)?) != first {
+-            return Err("paired witness evidence changed before read".into());
+-        }
+-        let mut out = Vec::new();
+-        (&file).take(max as u64 + 1).read_to_end(&mut out)?;
+-        if out.len() as u64 != first.5 || stamp(&file.metadata()?) != first
+-            || stamp(&fs::symlink_metadata(&held_name)?) != first
+-            || stamp(&fs::symlink_metadata(&logical)?) != first
+-        { return Err("paired witness evidence changed during read".into()); }
+-        self.check()?;
+-        Ok(out)
+-    }
+-
+-    #[cfg(not(all(target_os = "linux", target_arch = "x86_64")))]
+-    fn open(_: &Path) -> Result<Self> {
+-        Err("paired witness evidence requires Linux x86_64".into())
+-    }
+-
+-    #[cfg(not(all(target_os = "linux", target_arch = "x86_64")))]
+-    fn read(&self, _: &'static str, _: usize) -> Result<Vec<u8>> {
+-        Err("paired witness evidence requires Linux x86_64".into())
+-    }
+-
+-    fn read_typed<T: serde::de::DeserializeOwned>(&self,
+-        name: &'static str, cap: usize) -> Result<(T, String)> {
+-        let bytes = self.read(name, cap)?;
+-        Ok((serde_json::from_slice(&bytes)?, digest(&bytes)))
+-    }
+-
+-    fn check_raw(&self, name: &'static str, cap: usize, expected: &str) -> Result<()> {
+-        if !hash_shape(expected) || digest(&self.read(name, cap)?) != expected {
+-            return Err(format!("paired witness original byte identity differs: {name}").into());
+-        }
+-        Ok(())
+-    }
+-}
+-
+-pub(super) struct Prior {
+-    room: EvidenceRoom,
+-    grant_sha256: String,
+-    request_deadline: u64,
+-    tape_sha256: String,
+-    tape: Vec<u8>,
+-    world_signature: serde_json::Value,
+-    pub(super) work: [BrainWorkReceipt; 3],
+-}
+-
+-impl Prior {
+-    pub(super) fn tape_sha256(&self) -> &str { &self.tape_sha256 }
+-
+-    pub(super) fn exact_pre_cue(&self, capture: &quiet_witness::Capture) -> bool {
+-        quiet_witness::unframe(&self.tape).is_ok_and(|parts| capture.matches_prior(&parts))
+-    }
+-
+-    pub(super) fn authorize_at_queue(&self, spec: &Spec, root: &RootInputsV1,
+-        actual_world_signature: &serde_json::Value) -> Result<()> {
+-        if actual_world_signature != &self.world_signature {
+-            return Err("paired witness World changed before the fixed dose seam".into());
+-        }
+-        let q = spec.quiet_proof.as_ref().ok_or("paired witness lost quiet proof")?;
+-        let (g, sha) = self.room.read_typed::<DoseAuthorityV1>(AUTHORITY, CONFIG_LIMIT)?;
+-        if sha != self.grant_sha256
+-            || !g.exact(root, spec, q, &self.tape_sha256, super::super::now()?, self.request_deadline)
+-        { return Err("paired witness exact one-dose authority expired or changed".into()); }
+-        Ok(())
+-    }
+-}
+-
+-pub(super) fn bind(root: &Path, spec: &Spec, run: &str, owner: u64,
+-    manifest_sha256: &str, current_sha256: &str, request_deadline: u64) -> Result<Binding> {
+-    let room = EvidenceRoom::open(root)?;
+-    let (inputs, root_sha256) =
+-        room.read_typed::<RootInputsV1>("matched-praise-root-inputs.v1.json", CONFIG_LIMIT)?;
+-    if inputs.schema != "qualia.private.retained_matched_praise.root_inputs.v1"
+-        || inputs.role != spec.arm || inputs.run_id != run || inputs.owner != owner
+-        || inputs.manifest_sha256 != manifest_sha256 || inputs.source_current_sha256 != current_sha256
+-        || !hash_shape(&inputs.evaluator_sha256) || !hash_shape(&inputs.independent_zero_sha256)
+-    { return Err("paired witness root-input bytes do not bind exact manifest, role and source".into()); }
+-    let auth = std::env::var_os(AUTHORITY_ENV);
+-    let (quiet, paired_prior) = match (&spec.arm, &spec.quiet_proof, auth) {
+-        (Arm::Quiet, None, None) => (None, None),
+-        (Arm::Praise, Some(q), Some(authority_sha)) => {
+-            let authority_sha = authority_sha.into_string().map_err(|_| "paired witness malformed authority SHA")?;
+-            if !hash_shape(&authority_sha) { return Err("paired witness malformed authority SHA".into()); }
+-            let (grant, actual_sha) = room.read_typed::<DoseAuthorityV1>(AUTHORITY, CONFIG_LIMIT)?;
+-            let (a, a_sha) = room.read_typed::<QuietPairV1>(A_ACCEPTANCE, CONFIG_LIMIT)?;
+-            let (backup, backup_sha) = room.read_typed::<QuietOwnerReadbackV1>(A_BACKUP, CONFIG_LIMIT)?;
+-            let (a_root, a_root_sha) =
+-                room.read_typed::<RootInputsV1>("matched-praise-paired-a-root-inputs.v1.json", CONFIG_LIMIT)?;
+-            let c = &a.closure;
+-            if a.schema != "qualia.private.retained_matched_praise.independent_quiet_pair.v1"
+-                || authority_sha != actual_sha
+-                || !hash_shape(&a.actual_a_tape_sha256) || !hash_shape(&a.actual_a_world_preimage_sha256)
+-                || !grant.exact(&inputs, spec, q, &a.actual_a_tape_sha256, super::super::now()?, request_deadline)
+-                || a_sha != q.independent_a_sha256 || backup_sha != q.owner_readback_sha256
+-                || a_root_sha != c.actual_a_root_inputs_sha256 || a_root_sha == root_sha256
+-                || a_root.schema != inputs.schema || a_root.role != Arm::Quiet
+-                || a_root.run_id != c.run_id || a_root.owner != inputs.owner
+-                || a_root.manifest_sha256 != c.actual_a_request_sha256
+-                || a_root.source_current_sha256 != inputs.source_current_sha256
+-                || a_root.evaluator_sha256 != inputs.evaluator_sha256
+-                || a_root.independent_zero_sha256 != inputs.independent_zero_sha256
+-                || !validate_quiet_links(&inputs, spec, c, &backup, &a_sha)?
+-            { return Err("paired witness independent Quiet closure, owner backup or explicit B authority refused".into()); }
+-
+-            for (name, cap, sha) in [
+-                ("matched-praise-paired-a-request.json", CONFIG_LIMIT, &c.actual_a_request_sha256),
+-                ("matched-praise-paired-a-rows.jsonl", RAW_CAP, &c.actual_a_native_rows_sha256),
+-                ("matched-praise-paired-a-retention.json", RAW_CAP, &c.actual_a_native_receipt_sha256),
+-                ("matched-praise-paired-a-process.json", CONFIG_LIMIT, &c.actual_a_native_process_sha256),
+-                ("matched-praise-paired-a-fence-release.json", CONFIG_LIMIT, &c.actual_a_fence_release_sha256),
+-            ] { room.check_raw(name, cap, sha)?; }
+-
+-            let tape = room.read(A_TAPE, quiet_witness::FRAME_LIMIT)?;
+-            let (world_signature, work) = authenticate_tape(&tape, &a, spec.anchor_tick())?;
+-            (Some(a.closure), Some(Prior { room, grant_sha256: actual_sha,
+-                request_deadline, tape_sha256: a.actual_a_tape_sha256, tape, world_signature, work }))
+-        }
+-        _ => return Err("paired witness accepts Quiet without dose authority or Praise with explicit one-dose authority".into()),
+-    };
+-    Ok(Binding { root_sha256, root: inputs, quiet, paired: true, paired_prior })
+-}
+-
+-fn authenticate_tape(tape: &[u8], a: &QuietPairV1, anchor_tick: u64)
+-    -> Result<(serde_json::Value, [BrainWorkReceipt; 3])> {
+-    let parts = quiet_witness::unframe(tape)?;
+-    let c = &a.closure;
+-    if tape.len() != a.actual_a_tape_bytes || digest(tape) != a.actual_a_tape_sha256
+-        || digest(parts[0]) != a.actual_a_world_preimage_sha256
+-        || digest(parts[1]) != c.actual_a_pre_cue_anchor_sha256
+-        || [digest(parts[2]), digest(parts[3]), digest(parts[4])] != a.actual_a_work_sha256
+-        || a.actual_a_work_sha256[1] != c.actual_a_primary.work_sha256
+-        || a.actual_a_work_sha256[2] != c.actual_a_next.work_sha256
+-    { return Err("paired witness original Quiet tape is not the independently accepted tape".into()); }
+-    let [domain, common, world, _, prior_work, _, _, prior_physical] =
+-        serde_json::from_slice::<[serde_json::Value; 8]>(parts[1])?;
+-    let work: [BrainWorkReceipt; 3] = [serde_json::from_slice(parts[2])?,
+-        serde_json::from_slice(parts[3])?, serde_json::from_slice(parts[4])?];
+-    let physical: CutCoordinatesV1 = serde_json::from_value(prior_physical)?;
+-    if domain.as_str() != Some("matched-praise-actual-before-sense-anchor-v1")
+-        || common.as_str() != Some(c.common_spec_sha256.as_str())
+-        || serde_json::to_value(&work[0])? != prior_work || !physical.valid()
+-        || physical.world_tick != anchor_tick || physical.work_sha256 != a.actual_a_work_sha256[0]
+-        || physical.committed_fast_bits != c.actual_a_primary.before_fast_bits
+-        || physical.fast_generations[1] != c.actual_a_primary.fast_generations[0]
+-        || work.iter().zip([physical.origin_tick, c.actual_a_primary.origin_tick, c.actual_a_next.origin_tick])
+-            .any(|(w, t)| w.organism_id_raw != c.owner || w.tick != t
+-                || w.atp_before_q16.checked_sub(w.atp_debit_q16) != Some(w.atp_after_q16))
+-    { return Err("paired witness Quiet tape does not join paid anchor and both work boundaries".into()); }
+-    Ok((world, work))
+-}
+-
+-// Exact raw identities are already joined individually to the real underlying frames.
+-// Across treatment compare every field of full typed Work except the deliberately
+-// changed sensory frame ID and its dependent receipt self-digest; do not ignore
+-// changed counters, route schedule, pressure-induced work, ATP or dispatch lineage.
+-pub(super) fn same_work_except_frame(a: &BrainWorkReceipt, b: &BrainWorkReceipt) -> bool {
+-    let mut compared = b.clone();
+-    compared.frame_digest = a.frame_digest;
+-    compared.receipt_digest = a.receipt_digest;
+-    a == &compared
+-}
+-
+-pub(super) fn credit(step: &FoundationTrainingStep, owner: OrganismId, before: Tick, after: Tick)
+-    -> Result<serde_json::Value> {
+-    let p = step.outcome_credit;
+-    if p != alife_core::OutcomeCreditPacket::from_sealed_patch(&step.patch)?
+-        || p.organism_id() != owner || p.originating_tick() != before || p.outcome_tick() != after
+-        || p.frame_digest() != step.frame.frame_digest() || p.dispatch_generation() != step.work.dispatch_generation
+-    { return Err("paired witness base credit is not this actually sealed patch".into()); }
+-    Ok(serde_json::json!({
+-        "scope":"actual_sealed_patch_base_outcome_credit_not_receptor_conditioned_gpu_upload",
+-        "schema_version":p.schema_version(), "organism_id":p.organism_id().raw(),
+-        "origin_tick":before.raw(), "world_tick":after.raw(), "sequence_id":p.sequence_id(),
+-        "frame_digest":p.frame_digest(), "dispatch_generation":p.dispatch_generation(),
+-        "selected_candidate":p.selected_candidate(), "selected_family":p.selected_family().raw(),
+-        "selected_action":p.selected_action().raw(), "active_activation_side":p.active_activation_side(),
+-        "base_signed_lane_f32_bits":(*p.modulator().frame().lanes()).map(f32::to_bits),
+-    }))
+-}
+-
+-#[cfg(test)]
+-mod tests {
+-    use super::*;
+-
+-    #[test]
+-    fn work_comparison_permits_only_the_treatment_frame_and_own_digest() {
+-        let a: BrainWorkReceipt = serde_json::from_str(r#"{
+-            "schema_version":1,"class_id_raw":3,"organism_id_raw":7,"tick":106,
+-            "handle_slot":2,"handle_generation":1,"dispatch_generation":9,
+-            "frame_digest":[1,1,1,1],"sequence_cursor":9,
+-            "counters":{"microsteps":2,"neuron_updates":1,"tile_visits":1,
+-                "synapse_ops":1,"decoder_candidate_ops":1,"memory_context_ops":1},
+-            "route_schedule_digest":[1,2,3,4],"neural_cost_q24":1,"atp_before_q16":5,
+-            "atp_debit_q16":1,"atp_after_q16":4,"receipt_digest":[1,2,3,4]
+-        }"#).unwrap();
+-        let mut b = a.clone();
+-        b.frame_digest = [2, 3, 4, 5];
+-        b.receipt_digest = [8, 9, 10, 11];
+-        assert!(same_work_except_frame(&a, &b));
+-        for changed in [
+-            { let mut w = b.clone(); w.counters.microsteps += 1; w },
+-            { let mut w = b.clone(); w.route_schedule_digest[0] += 1; w },
+-            { let mut w = b.clone(); w.atp_debit_q16 += 1; w },
+-            { let mut w = b.clone(); w.dispatch_generation += 1; w },
+-            { let mut w = b.clone(); w.handle_generation += 1; w },
+-            { let mut w = b.clone(); w.sequence_cursor += 1; w },
+-            { let mut w = b.clone(); w.organism_id_raw += 1; w },
+-            { let mut w = b.clone(); w.tick += 1; w },
+-        ] { assert!(!same_work_except_frame(&a, &changed)); }
+-    }
+-
+-    #[test]
+-    fn tape_unframe_refuses_empty_trailing_and_offset_overrun() {
+-        let mut tape = b"QAPWv1\0\0".to_vec();
+-        for _ in 0..5 { tape.extend(1u32.to_le_bytes()); }
+-        tape.extend(b"abcde");
+-        assert_eq!(quiet_witness::unframe(&tape).unwrap(), [b"a", b"b", b"c", b"d", b"e"]);
+-        assert!(quiet_witness::unframe(&tape[..32]).is_err());
+-        let mut changed = tape.clone();
+-        changed.push(b'x');
+-        assert!(quiet_witness::unframe(&changed).is_err());
+-        changed = tape.clone();
+-        changed[8..12].copy_from_slice(&0u32.to_le_bytes());
+-        assert!(quiet_witness::unframe(&changed).is_err());
+-        changed[8..12].copy_from_slice(&u32::MAX.to_le_bytes());
+-        assert!(quiet_witness::unframe(&changed).is_err());
+-        changed.copy_from_slice(&tape);
+-        changed[0] = b'x';
+-        assert!(quiet_witness::unframe(&changed).is_err());
+-    }
+-}
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/matched_praise/quiet_witness.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/matched_praise/quiet_witness.rs
+--- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/matched_praise/quiet_witness.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/matched_praise/quiet_witness.rs
+@@ -9,33 +9,6 @@
+ const WORK_LIMIT: usize = 16 * 1024;
+ const NAME: &str = "matched-praise-quiet-before-sense.v1.bin";
+ const MAGIC: &[u8; 8] = b"QAPWv1\0\0";
+-#[cfg(feature = "research-retained-matched-praise-paired-witness-v1")]
+-pub(super) const FRAME_LIMIT: usize = 28 + WORLD_LIMIT + ANCHOR_LIMIT + 3 * WORK_LIMIT;
+-
+-#[derive(Clone, Copy)]
+-pub(super) enum EvidenceKind {
+-    LegacyQuiet,
+-    #[cfg(feature = "research-retained-matched-praise-paired-witness-v1")]
+-    Paired,
+-}
+-
+-impl EvidenceKind {
+-    fn name(self) -> &'static str {
+-        match self {
+-            Self::LegacyQuiet => NAME,
+-            #[cfg(feature = "research-retained-matched-praise-paired-witness-v1")]
+-            Self::Paired => "matched-praise-paired-before-sense.v1.bin",
+-        }
+-    }
+-
+-    fn seal_schema(self) -> &'static str {
+-        match self {
+-            Self::LegacyQuiet => "qualia.retained_matched_praise.quiet-before-sense-evidence.v1",
+-            #[cfg(feature = "research-retained-matched-praise-paired-witness-v1")]
+-            Self::Paired => "qualia.retained_matched_praise.paired-before-sense-evidence.v1",
+-        }
+-    }
+-}
+ 
+ #[derive(Default)]
+ pub(super) struct Capture {
+@@ -87,42 +60,23 @@
+         Ok(())
+     }
+ 
+-    #[cfg(feature = "research-retained-matched-praise-paired-witness-v1")]
+-    pub(super) fn matches_prior(&self, parts: &[&[u8]; 5]) -> bool {
+-        self.world_and_anchor.as_ref().is_some_and(|(world, anchor)|
+-            world.as_slice() == parts[0] && anchor.as_slice() == parts[1])
+-            && self.work[0].as_deref() == Some(parts[2])
+-    }
+-
+-    #[cfg(feature = "research-retained-matched-praise-paired-witness-v1")]
+-    pub(super) fn matches_world(&self, actual_world: &[u8]) -> bool {
+-        self.world_and_anchor.as_ref().is_some_and(|(world, _)| world.as_slice() == actual_world)
+-    }
+-
+-    #[cfg(feature = "research-retained-matched-praise-paired-witness-v1")]
+-    pub(super) fn work_at(&self, i: usize) -> Result<Option<alife_core::BrainWorkReceipt>> {
+-        self.work.get(i).and_then(Option::as_deref)
+-            .map(|bytes| serde_json::from_slice(bytes).map_err(Into::into)).transpose()
+-    }
+-
+     pub(super) fn publish<'a>(
+         &self, output: &Path, tick: u64, anchor_sha256: Option<&'a str>,
+-        root: &'a RootInputsV1, root_inputs_sha256: &'a str, kind: EvidenceKind,
++        root: &'a RootInputsV1, root_inputs_sha256: &'a str,
+     ) -> Result<Option<SealV1<'a>>> {
+         let (Some((world, anchor)), [Some(w0), Some(w1), Some(w2)], Some(anchor_sha256)) =
+             (&self.world_and_anchor, &self.work, anchor_sha256) else { return Ok(None); };
+-        if (matches!(kind, EvidenceKind::LegacyQuiet) && root.role != Arm::Quiet)
+-            || !hash_shape(root_inputs_sha256)
++        if root.role != Arm::Quiet || !hash_shape(root_inputs_sha256)
+             || !hash_shape(anchor_sha256) || digest(anchor) != anchor_sha256
+         { return Err("quiet witness wrong role or anchor binding".into()); }
+         let ticks = [tick, tick.checked_add(1).ok_or("quiet witness tick overflow")?,
+             tick.checked_add(2).ok_or("quiet witness tick overflow")?];
+         let parts = [world.as_slice(), anchor.as_slice(), w0.as_slice(), w1.as_slice(), w2.as_slice()];
+         let bytes = frame(parts)?;
+-        write_private_budgeted(output, kind.name(), &bytes)?;
++        write_private_budgeted(output, &bytes)?;
+         Ok(Some(SealV1 {
+-            schema: kind.seal_schema(),
+-            file: kind.name(), bytes: bytes.len() as u64, sha256: digest(&bytes),
++            schema: "qualia.retained_matched_praise.quiet-before-sense-evidence.v1",
++            file: NAME, bytes: bytes.len() as u64, sha256: digest(&bytes),
+             world_signature_preimage_sha256: digest(world), anchor_sha256,
+             work_sha256_by_world_boundary: [digest(w0), digest(w1), digest(w2)],
+             world_tick_before_next_sense: tick, work_world_boundaries: ticks,
+@@ -146,24 +100,6 @@
+     Ok(out)
+ }
+ 
+-#[cfg(feature = "research-retained-matched-praise-paired-witness-v1")]
+-pub(super) fn unframe(bytes: &[u8]) -> Result<[&[u8]; 5]> {
+-    if bytes.len() < 28 || bytes.len() > FRAME_LIMIT || &bytes[..8] != MAGIC {
+-        return Err("paired witness wrong fixed original tape framing".into());
+-    }
+-    let mut at: usize = 28;
+-    let mut parts = [&bytes[0..0]; 5];
+-    for (i, cap) in [WORLD_LIMIT, ANCHOR_LIMIT, WORK_LIMIT, WORK_LIMIT, WORK_LIMIT].into_iter().enumerate() {
+-        let n = u32::from_le_bytes(bytes[8+i*4..12+i*4].try_into()?) as usize;
+-        if n == 0 || n > cap { return Err("paired witness invalid tape field bound".into()); }
+-        let end = at.checked_add(n).ok_or("paired witness tape offset overflow")?;
+-        parts[i] = bytes.get(at..end).ok_or("paired witness short original tape")?;
+-        at = end;
+-    }
+-    if at != bytes.len() { return Err("paired witness trailing tape bytes".into()); }
+-    Ok(parts)
+-}
+-
+ #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+ use std::fs::{self, File, OpenOptions};
+ #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+@@ -175,7 +111,7 @@
+ }
+ 
+ #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+-fn create_in_held_output(held: &File, name: &'static str) -> Result<File> {
++fn create_in_held_output(held: &File) -> Result<File> {
+     use std::ffi::CString;
+     use std::os::fd::{AsRawFd, FromRawFd};
+     use std::os::raw::{c_char, c_int, c_uint};
+@@ -184,7 +120,7 @@
+     }
+     // Linux x86_64 fcntl.h: O_RDWR|O_CREAT|O_EXCL|O_NONBLOCK|O_NOFOLLOW|O_CLOEXEC.
+     const FLAGS: c_int = 0x2 | 0x40 | 0x80 | 0x800 | 0x20000 | 0x80000;
+-    let literal = CString::new(name)?;
++    let literal = CString::new(NAME)?;
+     // SAFETY: held is an owned open directory, literal is a live NUL-terminated
+     // constant leaf with no path components, and O_CREAT takes a Linux mode_t.
+     let fd = unsafe { openat(held.as_raw_fd(), literal.as_ptr(), FLAGS, 0o400 as c_uint) };
+@@ -207,11 +143,11 @@
+ 
+ #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+ fn check_witness_binding(
+-    output: &Path, logical: &Path, name: &'static str, held: &File, directory: &fs::Metadata,
++    output: &Path, logical: &Path, held: &File, directory: &fs::Metadata,
+     file: &File, first: &fs::Metadata, len: u64,
+ ) -> Result<()> {
+     check_directory(output, held, directory)?;
+-    if logical != output.join(name) || !alife_storage::budget_for(logical)?
++    if logical != output.join(NAME) || !alife_storage::budget_for(logical)?
+             .is_some_and(|b| b.root() == output)
+     {
+         return Err("quiet witness lost its exact logical output accounting".into());
+@@ -230,10 +166,10 @@
+ }
+ 
+ #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+-fn write_private_budgeted(output: &Path, name: &'static str, bytes: &[u8]) -> Result<()> {
++fn write_private_budgeted(output: &Path, bytes: &[u8]) -> Result<()> {
+     use std::io::Write;
+     let directory = fs::symlink_metadata(output)?;
+-    let logical = output.join(name);
++    let logical = output.join(NAME);
+     // O_DIRECTORY | O_NOFOLLOW. The producer will never create via logical.
+     let held = OpenOptions::new().read(true).custom_flags(0x30000).open(output)?;
+     check_directory(output, &held, &directory)?;
+@@ -241,13 +177,13 @@
+         return Err("quiet witness requires the actual private budgeted native output".into());
+     }
+ 
+-    let file = create_in_held_output(&held, name)?;
++    let file = create_in_held_output(&held)?;
+     let first = file.metadata()?;
+-    check_witness_binding(output, &logical, name, &held, &directory, &file, &first, 0)?;
++    check_witness_binding(output, &logical, &held, &directory, &file, &first, 0)?;
+     // Register the same held empty file against the authenticated logical quota.
+     // A second path+FD check after registration is mandatory BEFORE any bytes.
+     let mut writer = alife_storage::writer(&logical, file)?;
+-    check_witness_binding(output, &logical, name, &held, &directory, writer.get_ref(), &first, 0)?;
++    check_witness_binding(output, &logical, &held, &directory, writer.get_ref(), &first, 0)?;
+     writer.write_all(bytes)?;
+     writer.sync_all()?;
+     let mut readback = vec![0; bytes.len()];
+@@ -257,7 +193,7 @@
+     }
+     held.sync_all()?;
+     check_witness_binding(
+-        output, &logical, name, &held, &directory, writer.get_ref(), &first, bytes.len() as u64,
++        output, &logical, &held, &directory, writer.get_ref(), &first, bytes.len() as u64,
+     )
+ }
+ 
+@@ -279,10 +215,10 @@
+     check_directory(&output, &held, &original).unwrap();
+     fs::rename(&output, &moved).unwrap();
+     fs::DirBuilder::new().mode(0o700).create(&output).unwrap();
+-    let original_leaf_fd = create_in_held_output(&held, NAME).unwrap();
++    let original_leaf_fd = create_in_held_output(&held).unwrap();
+     let first = original_leaf_fd.metadata().unwrap();
+     assert!(check_witness_binding(
+-        &output, &output.join(NAME), NAME, &held, &original, &original_leaf_fd, &first, 0,
++        &output, &output.join(NAME), &held, &original, &original_leaf_fd, &first, 0,
+     ).is_err());
+     assert!(!output.join(NAME).exists());
+     assert_eq!(fs::symlink_metadata(moved.join(NAME)).unwrap().len(), 0);
+@@ -294,7 +230,7 @@
+ }
+ 
+ #[cfg(not(all(target_os = "linux", target_arch = "x86_64")))]
+-fn write_private_budgeted(_: &Path, _: &'static str, _: &[u8]) -> Result<()> {
++fn write_private_budgeted(_: &Path, _: &[u8]) -> Result<()> {
+     Err("quiet witness private output requires Linux x86_64".into())
+ }
+ 

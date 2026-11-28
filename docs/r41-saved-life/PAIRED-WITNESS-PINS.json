@@ -1,0 +1,92 @@
+{
+  "added_manifest_schema": 21,
+  "authorizes_run_or_dose": false,
+  "cargo_lock_sha256": "155699e9274f8890bc8c335669a62de48203ba315a33388a8f0caca71f0f7f37",
+  "changed_leaves": {
+    "crates/alife_game_app/Cargo.toml": {
+      "after": {
+        "bytes": 4514,
+        "sha256": "eab36705812592b6a48c56a68993201788227f432b736fb9b00178dcb6f03827"
+      },
+      "before": {
+        "bytes": 4407,
+        "sha256": "55b777fa4cc812ddbc9c7a28e92691bb0e50431adc23763c8466b4a4649ddb69"
+      }
+    },
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs": {
+      "after": {
+        "bytes": 38052,
+        "sha256": "e24b09ac5b6b006328127787ffa83dc6efeff819be33df3d89df090b14c61aaf"
+      },
+      "before": {
+        "bytes": 35124,
+        "sha256": "cdc91009fac5121739f141c83d3525bb730670e87ec705c1e2dc00ed9c615f85"
+      }
+    },
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/matched_praise.rs": {
+      "after": {
+        "bytes": 47398,
+        "sha256": "c8afad9ab910424962da0aeeb57aeb02b8c7a2736ab99fa8bb780e7172d80e0a"
+      },
+      "before": {
+        "bytes": 36086,
+        "sha256": "9485bd77bb1339ee8a493b644f7b1d9a118272384cc1037683e394e6c0938ec4"
+      }
+    },
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/matched_praise/paired_witness.rs": {
+      "after": {
+        "bytes": 18782,
+        "sha256": "de6ffd79b26346d06b8177979452b98366731629e2d5e1263e589a69fcb1b48b"
+      },
+      "before": null
+    },
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/matched_praise/quiet_witness.rs": {
+      "after": {
+        "bytes": 14646,
+        "sha256": "fe8159c6cac2e357ce8bfb07eeda2cc422493f49b8c0070dcfb7d94c76cef983"
+      },
+      "before": {
+        "bytes": 11655,
+        "sha256": "88a1ceecc9928a222369df2444738772ec9ca210e36489f0b989b83a7f50ff50"
+      }
+    }
+  },
+  "contains_actual_current_or_runtime_evidence": false,
+  "default_off_feature": "research-retained-matched-praise-paired-witness-v1",
+  "exact_stock_source_commit": "f466b83791cccb97568e6f718b92b052999cfb2b",
+  "forward_sha256": "a98d90ffb224005cc8abdad4dbf1e7ee016090365a5c9288fcd2de11e82086b0",
+  "inverse_sha256": "891c6d921bb465a59435e343b320e02f1336fdc1b3575dc3d888e11a5598fa76",
+  "mechanical_forward_inverse_forward_verified": true,
+  "parent_linked_commit": "ba6f9fa4ebf7c5df3b82afbab5887429f81ff0de",
+  "parent_linked_tree": "9cd638e368ee342c0c9f1db249e947ff51061f57",
+  "parent_witness_overlay_sha256": "1e024f79219b566a854b79d5055e2dd010596d53acfe686dd3fd1eacac10f430",
+  "parent_witness_pins_sha256": "2da5900b3fbe500aeb6e555e9ec8c256a1c84a0fd86313d05e65baca922c358b",
+  "schema": "qualia.retained_matched_praise.paired_witness_source_pins.v1",
+  "source_compiled_by_author": false,
+  "unchanged_inherited_leaves": {
+    "crates/alife_core/Cargo.toml": {
+      "bytes": 450,
+      "sha256": "fd7ccee2f085d56ebee9c7f3d386c621b3478d38e7ea0e04e54ca40f5417b89d"
+    },
+    "crates/alife_core/src/canonical_digest.rs": {
+      "bytes": 5639,
+      "sha256": "b4ba3848f88d081adfd3e6dfebd53277bade0b88ac7262281741a09b4d9d5734"
+    },
+    "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs": {
+      "bytes": 81794,
+      "sha256": "867b3ad66de48633a2e89f8bb5323dab472625180556314c441ed1b2f20ec05a"
+    },
+    "crates/alife_world/Cargo.toml": {
+      "bytes": 404,
+      "sha256": "5ca7140898c32c6534fc7af056f3f90aee21e3b953a2d839f31513e0c4bf0135"
+    },
+    "crates/alife_world/src/headless.rs": {
+      "bytes": 658150,
+      "sha256": "076a2e3bf1b177dbcc645a4338ee7ef2768d9c472d757485c6257e700edd559b"
+    },
+    "crates/alife_world/tests/retained_canonical_preimage.rs": {
+      "bytes": 1164,
+      "sha256": "502d60d1b4be18309a690446659959726b7fc4735727aca46c9cfafd17161ca3"
+    }
+  }
+}
