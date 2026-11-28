@@ -1,0 +1,65 @@
+{
+  "schema": "qualia.retained_matched_praise.source_pins.v1",
+  "public_elf_source_head_without_successor": "6322f16a9c7d57ee5df576002fcbd503e7e8fb38",
+  "qualified_neutral_source_overlay_sha256": "446b7d5f120c1d0df17ca33c5b09a0372c3db037234293015ea9c9a1aca0b10f",
+  "stock_exact_source_manifest_git_blob": "7010cd90fb587a18cd75c6109d95e5311e5a9a86",
+  "added_outer_manifest_schema": 20,
+  "forward_sha256": "97360073f9eaea9053b824b31d9d2e5501cd4ae4fb8b284d3651a671b44e52cd",
+  "inverse_sha256": "3299ea27f27a8b22a63d4b2781bb31a4d738ca3a11bc5eb9ea77943ca0555e20",
+  "leaves": [
+    {
+      "path": "crates/alife_game_app/Cargo.toml",
+      "preimage": {
+        "bytes": 4120,
+        "sha256": "133dc04d723d936cc303e6744a0e7f471c0a68389f53dcc81910d99b32cd2d28"
+      },
+      "postimage": {
+        "bytes": 4252,
+        "sha256": "f0cf1b1dfd939dc523f5607eaffdde8111287a53d4b115457cc41e02f6d984c7"
+      }
+    },
+    {
+      "path": "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs",
+      "preimage": {
+        "bytes": 78500,
+        "sha256": "86a4146d553b6ae381659f9605dc6b75e3326c29724b1465f6b89b318cdae989"
+      },
+      "postimage": {
+        "bytes": 81530,
+        "sha256": "06966f678d17487278a8ea95d574e9a40577e31e60643f293bac9757c8101651"
+      }
+    },
+    {
+      "path": "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs",
+      "preimage": {
+        "bytes": 29920,
+        "sha256": "b1b933cdec94d227d9f24cb0cbd53a40db92e36e3c6122326611cd018c0a33d7"
+      },
+      "postimage": {
+        "bytes": 33444,
+        "sha256": "90d87ee443877b854d55c90dd0e39e84c1a8a88b94a14f60e7c7dc3aa3d1c513"
+      }
+    },
+    {
+      "path": "crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/matched_praise.rs",
+      "preimage": null,
+      "postimage": {
+        "bytes": 33198,
+        "sha256": "4b317e1ce697f959c700449e52db6387d3af075c4ae762b5084db910e68098dd"
+      }
+    },
+    {
+      "path": "crates/alife_game_app/src/gpu_live_runtime/retained_neutral_route.rs",
+      "preimage": {
+        "bytes": 19639,
+        "sha256": "b73d24cce3017fffbcd8e32e44f3cef1869d956671ca52672cd14c5703158def"
+      },
+      "postimage": {
+        "bytes": 25828,
+        "sha256": "a75a0099074cef50e5688bff2f995b747f29ec83da117d16590c0031a2664f8c"
+      }
+    }
+  ],
+  "device_authority": false,
+  "source_compiled": false
+}

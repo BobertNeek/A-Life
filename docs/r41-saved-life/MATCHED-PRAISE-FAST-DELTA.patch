@@ -1,0 +1,1088 @@
+diff --git a/crates/alife_game_app/Cargo.toml b/crates/alife_game_app/Cargo.toml
+--- a/crates/alife_game_app/Cargo.toml
++++ b/crates/alife_game_app/Cargo.toml
+@@ -119,6 +119,7 @@
+ cpu-training = ["foundation-training", "alife_training/cpu-backend"]
+ research-retained-praise-ingress-v1 = ["foundation-training", "gpu-tests"]
+ research-retained-neutral-paid-route-v1 = ["foundation-training", "gpu-tests", "alife_gpu_backend/research-retained-neutral-paid-route-v1"]
++research-retained-matched-praise-fast-delta-v1 = ["research-retained-neutral-paid-route-v1", "research-retained-praise-ingress-v1"]
+ gpu-tests = [
+     "gpu-runtime",
+     "dep:alife_training",
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs
+--- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention.rs
+@@ -16,6 +16,8 @@
+ mod experiments;
+ #[cfg(feature = "research-retained-praise-ingress-v1")]
+ mod praise_probe;
++#[cfg(feature = "research-retained-matched-praise-fast-delta-v1")]
++mod matched_praise;
+ #[cfg(feature = "gpu-tests")]
+ #[path = "saved_life_retention/card_cases.rs"]
+ mod card_cases;
+@@ -395,6 +397,8 @@
+     scent_scope: Option<RetainedScentScope>,
+     #[cfg(feature = "gpu-tests")] experiment: Option<experiments::ExperimentIdentity>,
+ ) -> Result<serde_json::Value> {
++    #[cfg(feature = "research-retained-matched-praise-fast-delta-v1")]
++    let mut experiment = experiment;
+     request.validate(now()?)?;
+     if let Some(scope) = scent_scope {
+         scope.validate(&request)?;
+@@ -527,6 +531,13 @@
+             return Err("neutral selected-route observation requires exact restored tick and a naturally silent opening".into());
+         }
+     }
++    #[cfg(feature = "research-retained-matched-praise-fast-delta-v1")]
++    let mut paired_praise = if let Some(identity) = &mut experiment {
++        identity.take_matched_praise()?.map(|(spec, binding)| matched_praise::Probe::new(
++            spec, binding, source_world_tick, loaded.save.world.pending_player_care.is_empty(),
++            world.audible_utterances().is_empty(),
++        )).transpose()?
++    } else { None };
+     if world.seed() != baseline.seed {
+         return Err("retention source world seed mismatch".into());
+     }
+@@ -620,6 +631,18 @@
+             || checkpoint.sensor_profile.profile()? != alife_core::SensorProfile::GroundedTerrainVisionV1
+         {
+             return Err("neutral selected-route observation requires the sole N2048 GroundedTerrainVisionV1 brain".into());
++        }
++    }
++    #[cfg(feature = "research-retained-matched-praise-fast-delta-v1")]
++    if paired_praise.is_some() {
++        let [checkpoint] = checkpoints.as_slice() else {
++            return Err("matched Praise requires one exact saved brain".into());
++        };
++        if checkpoint.organism_id != id
++            || checkpoint.capacity_class_id != alife_core::BrainCapacityClass::N2048_ID
++            || checkpoint.sensor_profile.profile()? != alife_core::SensorProfile::GroundedTerrainVisionV1
++        {
++            return Err("matched Praise requires sole N2048 GroundedTerrainVisionV1".into());
+         }
+     }
+     if scent_scope.is_some() {
+@@ -918,6 +941,13 @@
+                 }
+             }
+         }
++        #[cfg(feature = "research-retained-matched-praise-fast-delta-v1")]
++        if let Some(probe) = &mut paired_praise {
++            if let Err(e) = probe.maybe_queue(&mut runtime, id, before_tick) {
++                error = Some(e.to_string());
++                break "matched_praise_world_queue_refused";
++            }
++        }
+         calls += 1;
+         #[cfg(feature = "gpu-tests")]
+         let tick = match (
+@@ -975,6 +1005,18 @@
+                 &mut runtime, spec, before_tick, after_tick, &steps, clean, !neutral_external_input_observed,
+             ) {
+                 neutral_route_samples.push(sample);
++            }
++        }
++        #[cfg(feature = "research-retained-matched-praise-fast-delta-v1")]
++        if let Some(probe) = &mut paired_praise {
++            let clean = tick_error.is_none() && runtime.last_memory_preparation_errors().is_empty()
++                && runtime.last_post_seal_learning_failures().is_empty()
++                && prior_off(runtime.semantic_prior_metrics());
++            if let Err(e) = probe.observe(
++                &mut runtime, id, before_tick, after_tick, &steps, clean, before_pose, after_pose,
++            ) {
++                error = Some(e.to_string());
++                break "matched_praise_control_or_world_care_mismatch";
+             }
+         }
+         #[cfg(feature = "research-retained-praise-ingress-v1")]
+@@ -1371,6 +1413,20 @@
+         receipt["qualified"] = serde_json::json!(false);
+         receipt["retention_demonstrated"] = serde_json::json!(false);
+     }
++    #[cfg(feature = "research-retained-matched-praise-fast-delta-v1")]
++    if let Some(probe) = paired_praise {
++        receipt["matched_praise_fast_delta"] = probe.report(
++            complete && unchanged && endpoint_preserved && cue_free && rows == request.max_decisions
++                && receipt["world_ticks"].as_u64() == Some(request.max_world_ticks)
++        )?;
++        receipt["measurement_valid"] = serde_json::json!(false);
++        receipt["software_simulation_integrity_valid"] = serde_json::json!(false);
++        receipt["qualified"] = serde_json::json!(false);
++        receipt["retention_demonstrated"] = serde_json::json!(false);
++        if receipt["matched_praise_fast_delta"]["actual_singleton_world_care"].is_object() {
++            receipt["cue_free"] = serde_json::json!(false);
++        }
++    }
+     alife_storage::write(
+         output.join("retention.json"),
+         serde_json::to_vec_pretty(&receipt)?,
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
+--- a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/experiments.rs
+@@ -31,6 +31,8 @@
+     PraiseCalibrationV1 { calibration: super::praise_probe::Spec },
+     #[cfg(feature = "research-retained-neutral-paid-route-v1")]
+     NeutralRouteObservationV1 { observation: neutral_route::NeutralRouteObserverSpecV1 },
++    #[cfg(feature = "research-retained-matched-praise-fast-delta-v1")]
++    MatchedPraiseFastDeltaV1 { protocol: super::matched_praise::Spec },
+ }
+ 
+ #[derive(Debug, Clone, Deserialize)]
+@@ -84,6 +86,12 @@
+     #[cfg(feature = "research-retained-neutral-paid-route-v1")]
+     #[serde(skip_serializing_if = "Option::is_none")]
+     neutral_route_observation_v1: Option<neutral_route::NeutralRouteObserverSpecV1>,
++    #[cfg(feature = "research-retained-matched-praise-fast-delta-v1")]
++    #[serde(skip_serializing_if = "Option::is_none")]
++    matched_praise_fast_delta_v1: Option<super::matched_praise::Spec>,
++    #[cfg(feature = "research-retained-matched-praise-fast-delta-v1")]
++    #[serde(skip)]
++    matched_praise_binding: Option<super::matched_praise::Binding>,
+ }
+ 
+ impl ExperimentIdentity {
+@@ -95,6 +103,17 @@
+     #[cfg(feature = "research-retained-neutral-paid-route-v1")]
+     pub(super) fn neutral_route_observation_v1(&self) -> Option<neutral_route::NeutralRouteObserverSpecV1> {
+         self.neutral_route_observation_v1
++    }
++
++    #[cfg(feature = "research-retained-matched-praise-fast-delta-v1")]
++    pub(super) fn take_matched_praise(&mut self)
++        -> Result<Option<(super::matched_praise::Spec, super::matched_praise::Binding)>>
++    {
++        match (self.matched_praise_fast_delta_v1.clone(), self.matched_praise_binding.take()) {
++            (None, None) => Ok(None),
++            (Some(spec), Some(binding)) => Ok(Some((spec, binding))),
++            _ => Err("matched Praise manifest did not bind private source bytes".into()),
++        }
+     }
+ 
+     pub(super) fn card_case(&self) -> Option<&str> {
+@@ -142,7 +161,14 @@
+         InterventionV1::NeutralRouteObservationV1 { observation } => Some(*observation),
+         _ => None,
+     };
++    #[cfg(feature = "research-retained-matched-praise-fast-delta-v1")]
++    let matched_praise_fast_delta_v1 = match &config.intervention {
++        InterventionV1::MatchedPraiseFastDeltaV1 { protocol } => Some(protocol.clone()),
++        _ => None,
++    };
+     let expected_schema = match &config.intervention {
++        #[cfg(feature = "research-retained-matched-praise-fast-delta-v1")]
++        InterventionV1::MatchedPraiseFastDeltaV1 { .. } => super::matched_praise::SCHEMA,
+         #[cfg(feature = "research-retained-praise-ingress-v1")]
+         InterventionV1::PraiseCalibrationV1 { .. } => super::praise_probe::SCHEMA,
+         #[cfg(feature = "research-retained-neutral-paid-route-v1")]
+@@ -174,6 +200,18 @@
+             || bytes.len() > neutral_route::MAX_CONFIG_BYTES
+         {
+             return Err("neutral selected-route observation requires unchanged retained opening and bounded cuts".into());
++        }
++    }
++    #[cfg(feature = "research-retained-matched-praise-fast-delta-v1")]
++    if let Some(spec) = &matched_praise_fast_delta_v1 {
++        spec.validate()?;
++        if config.scenario != ScenarioV1::RetainedOpening || config.card_case.is_some()
++            || config.max_decisions != super::matched_praise::CUTS as usize
++            || config.max_world_ticks != super::matched_praise::CUTS
++            || !(neutral_route::MIN_OUTPUT_BYTES..=neutral_route::MAX_OUTPUT_BYTES).contains(&config.max_output_bytes)
++            || bytes.len() > super::matched_praise::CONFIG_LIMIT
++        {
++            return Err("matched Praise requires exact retained-opening paired bounds".into());
+         }
+     }
+     let card = config.card_case.as_deref().map(|name| {
+@@ -252,6 +290,8 @@
+         InterventionV1::PraiseCalibrationV1 { .. } => ("praise_calibration_v1", None, None, None),
+         #[cfg(feature = "research-retained-neutral-paid-route-v1")]
+         InterventionV1::NeutralRouteObservationV1 { .. } => ("neutral_route_observation_v1", None, None, None),
++        #[cfg(feature = "research-retained-matched-praise-fast-delta-v1")]
++        InterventionV1::MatchedPraiseFastDeltaV1 { .. } => ("matched_praise_fast_delta_v1", None, None, None),
+     };
+     if bytes.len() > MAX_SMALL_CONFIG_BYTES
+         && !direct_weights.as_ref().is_some_and(|edit| edit.schema == 3)
+@@ -297,6 +337,10 @@
+             praise_calibration_v1,
+             #[cfg(feature = "research-retained-neutral-paid-route-v1")]
+             neutral_route_observation_v1,
++            #[cfg(feature = "research-retained-matched-praise-fast-delta-v1")]
++            matched_praise_fast_delta_v1,
++            #[cfg(feature = "research-retained-matched-praise-fast-delta-v1")]
++            matched_praise_binding: None,
+         },
+         request,
+         scent,
+@@ -355,6 +399,8 @@
+         .take((MAX_CONFIG_BYTES + 1) as u64)
+         .read_to_end(&mut bytes)?;
+     let resolved = resolve(&bytes)?;
++    #[cfg(feature = "research-retained-matched-praise-fast-delta-v1")]
++    let mut resolved = resolved;
+     #[cfg(feature = "research-retained-praise-ingress-v1")]
+     if resolved.identity.praise_calibration_v1().is_some()
+         && (std::env::var_os("ALIFE_EXPLICIT_FIXED_HOST_PRESSURE_NS").is_some()
+@@ -370,6 +416,19 @@
+         {
+             return Err("neutral selected-route observation requires natural-pressure software mode with no archive override".into());
+         }
++    }
++    #[cfg(feature = "research-retained-matched-praise-fast-delta-v1")]
++    if let Some(spec) = &resolved.identity.matched_praise_fast_delta_v1 {
++        if std::env::var_os("ALIFE_EXPLICIT_FIXED_HOST_PRESSURE_NS").is_some()
++            || std::env::var_os("ALIFE_EXPLICIT_RETENTION_ARCHIVE_TEST").is_some()
++            || !std::env::var("ALIFE_EXPLICIT_SOFTWARE_RETENTION_TEST").is_ok_and(|value| value == "1")
++        {
++            return Err("matched Praise requires natural-pressure software mode with no archive override".into());
++        }
++        let binding = super::matched_praise::bind_private_bytes(admission_root, spec,
++            &resolved.identity.run_id, resolved.identity.owner, &resolved.identity.manifest_sha256,
++            &resolved.identity.source_current_sha256)?;
++        resolved.identity.matched_praise_binding = Some(binding);
+     }
+     evaluate_saved_life_retention_inner(
+         source,
+diff --git a/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/matched_praise.rs b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/matched_praise.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/alife_game_app/src/foundation_training_cycle/saved_life_retention/matched_praise.rs
+@@ -0,0 +1,671 @@
++//! Opt-in retained quiet / single World Praise diagnostic. Never score or authorize.
++use super::{digest, neutral_route, Result};
++use crate::gpu_live_runtime::{FoundationTrainingStep, GpuLiveBrainRuntime};
++use alife_core::{MotorChannel, OrganismId, PhysicalContactKind, Tick, Validate, Vec3f};
++use alife_world::{HeadlessActionIds, PlayerCareKind, PlayerCareKindSet, PlayerCareReceipt,
++    PlayerInteractionQueueOutcomeV1, PlayerInteractionV1};
++use neutral_route::{FixedRouteCoordinateV1, FixedRouteCutV1, NeutralRouteObserverSpecV1};
++use serde::{Deserialize, Serialize};
++use std::{fs, io::Read, path::Path};
++
++pub(super) const SCHEMA: u16 = 20;
++pub(super) const CUTS: u64 = 12;
++pub(super) const ANCHOR_OFFSET: u64 = 6;
++pub(super) const CONFIG_LIMIT: usize = 16_384;
++
++#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
++#[serde(rename_all = "snake_case")]
++pub(super) enum Arm { Quiet, Praise }
++
++#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++pub(super) struct QuietProofInputsV1 {
++    independent_a_sha256: String,
++    owner_readback_sha256: String,
++}
++
++#[derive(Debug, Clone, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++pub(super) struct Spec {
++    pub(super) arm: Arm,
++    pub(super) source_world_tick: u64,
++    hand_world_position: [f32; 3],
++    coordinates: [FixedRouteCoordinateV1; 8],
++    #[serde(default, skip_serializing_if = "Option::is_none")]
++    quiet_proof: Option<QuietProofInputsV1>,
++}
++
++fn hash_shape(s: &str) -> bool {
++    s.len() == 64 && s.bytes().any(|b| b != b'0')
++        && s.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
++}
++
++impl Spec {
++    pub(super) fn validate(&self) -> Result<()> {
++        self.observation().validate()?;
++        self.position().validate()?;
++        if self.source_world_tick.checked_add(CUTS).is_none()
++            || !self.coordinates.iter().all(FixedRouteCoordinateV1::valid)
++            || self.coordinates.windows(2).any(|w| w[0].decoder_local_index >= w[1].decoder_local_index)
++            || self.coordinates.iter().enumerate().any(|(i, a)|
++                self.coordinates[..i].iter().any(|b| a.canonical_phenotype_index == b.canonical_phenotype_index
++                    || a.gpu_local_synapse_id == b.gpu_local_synapse_id))
++        {
++            return Err("matched Praise requires eight unique, sorted and typed Approach coordinates".into());
++        }
++        match (&self.arm, &self.quiet_proof) {
++            (Arm::Quiet, None) => Ok(()),
++            (Arm::Praise, Some(q)) if hash_shape(&q.independent_a_sha256)
++                && hash_shape(&q.owner_readback_sha256)
++                && q.independent_a_sha256 != q.owner_readback_sha256 => Ok(()),
++            _ => Err("matched Praise accepts quiet or Praise bound to actual independent quiet proof bytes".into()),
++        }
++    }
++
++    fn observation(&self) -> NeutralRouteObserverSpecV1 {
++        NeutralRouteObserverSpecV1 { source_world_tick: self.source_world_tick,
++            first_postcommit_world_offset: ANCHOR_OFFSET as u8, postcommit_boundary_count: 3 }
++    }
++
++    fn anchor_tick(&self) -> u64 { self.source_world_tick + ANCHOR_OFFSET }
++
++    fn position(&self) -> Vec3f {
++        let [x, y, z] = self.hand_world_position;
++        Vec3f::new(x, y, z)
++    }
++
++    fn common_spec_sha256(&self) -> Result<String> {
++        Ok(digest(&serde_json::to_vec(&("qualia-retained-matched-praise-common-v1", self.observation(),
++            self.hand_world_position.map(f32::to_bits), &self.coordinates))?))
++    }
++}
++
++/// Evidence link only, not the operator's authorization. Actual signed scope,
++/// evaluator bytes, independent 0/0, and native lease must be checked by host.
++#[derive(Debug, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++struct RootInputsV1 {
++    schema: String,
++    role: Arm,
++    run_id: String,
++    owner: u64,
++    manifest_sha256: String,
++    source_current_sha256: String,
++    evaluator_sha256: String,
++    independent_zero_sha256: String,
++}
++
++#[derive(Debug, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++struct VerifiedQuietAnchorV1 {
++    schema: String,
++    role: Arm,
++    independently_accepted: bool,
++    authorizes_next_arm: bool,
++    owned_native_process_reaped: bool,
++    actual_paid_window_observed: bool,
++    source_world_tick: u64,
++    owner: u64,
++    run_id: String,
++    source_current_sha256: String,
++    evaluator_sha256: String,
++    independent_zero_sha256: String,
++    common_spec_sha256: String,
++    actual_a_root_inputs_sha256: String,
++    actual_a_request_sha256: String,
++    actual_a_native_rows_sha256: String,
++    actual_a_native_receipt_sha256: String,
++    actual_a_native_process_sha256: String,
++    actual_a_fence_release_sha256: String,
++    actual_a_pre_cue_anchor_sha256: String,
++    actual_a_primary: CutCoordinatesV1,
++    actual_a_next: CutCoordinatesV1,
++}
++
++#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++struct CutCoordinatesV1 {
++    origin_tick: u64,
++    world_tick: u64,
++    paid_candidate_index: u16,
++    actual_joint_candidate_slots: [u16; 6],
++    actual_representative_index: u16,
++    actual_admission_masks_sha256: String,
++    paid_own_energy_cost_f32: u32,
++    paid_own_displacement_f32: [u32; 3],
++    actual_world_pre_pose_xyzyaw_f32: [u32; 4],
++    actual_world_post_pose_xyzyaw_f32: [u32; 4],
++    work_sha256: String,
++    fast_generations: [u64; 2],
++    before_fast_bits: [u32; 8],
++    committed_fast_bits: [u32; 8],
++}
++
++impl CutCoordinatesV1 {
++    fn valid(&self) -> bool {
++        let xyz_pose_delta_matches_own_execution = self.actual_world_pre_pose_xyzyaw_f32.iter()
++            .chain(&self.actual_world_post_pose_xyzyaw_f32).all(|&b| f32::from_bits(b).is_finite())
++            && (0..3).all(|i|
++                (f32::from_bits(self.actual_world_post_pose_xyzyaw_f32[i])
++                 - f32::from_bits(self.actual_world_pre_pose_xyzyaw_f32[i])).to_bits()
++                == self.paid_own_displacement_f32[i]);
++        let positive = f32::from_bits(self.paid_own_energy_cost_f32);
++        self.origin_tick.checked_add(1) == Some(self.world_tick)
++            && self.paid_candidate_index != u16::MAX
++            && self.actual_joint_candidate_slots[0] == self.paid_candidate_index
++            && self.actual_representative_index != u16::MAX
++            && self.actual_joint_candidate_slots.contains(&self.actual_representative_index)
++            && hash_shape(&self.actual_admission_masks_sha256)
++            && positive.is_finite() && positive > 0.0
++            && self.paid_own_displacement_f32.iter().all(|&b| f32::from_bits(b).is_finite())
++            && self.paid_own_displacement_f32.iter().any(|&b| f32::from_bits(b) != 0.0)
++            && self.fast_generations[0] != 0
++            && self.fast_generations[0].checked_add(1) == Some(self.fast_generations[1])
++            && self.before_fast_bits.iter().chain(&self.committed_fast_bits)
++                .all(|&b| f32::from_bits(b).is_finite() && b != 0x8000_0000)
++            && xyz_pose_delta_matches_own_execution && hash_shape(&self.work_sha256)
++    }
++}
++
++#[derive(Serialize)]
++struct MatchedCoordinateDeltaV1 {
++    origin_tick: u64,
++    coordinate: FixedRouteCoordinateV1,
++    quiet_before_fast_f32: u32,
++    quiet_committed_fast_f32: u32,
++    praise_before_fast_f32: u32,
++    praise_committed_fast_f32: u32,
++    quiet_out_minus_in_f64_bits: u64,
++    praise_out_minus_in_f64_bits: u64,
++    praise_minus_quiet_increment_f64_bits: u64,
++}
++
++/// None means no supported matched numeric observation, not eight unchanged words.
++fn compare_cuts(a: &CutCoordinatesV1, b: &CutCoordinatesV1,
++    points: &[FixedRouteCoordinateV1; 8], require_common_input: bool,
++) -> Option<[MatchedCoordinateDeltaV1; 8]> {
++    if !a.valid() || !b.valid() || a.origin_tick != b.origin_tick || a.world_tick != b.world_tick
++        || a.fast_generations != b.fast_generations || a.paid_candidate_index != b.paid_candidate_index
++        || a.actual_joint_candidate_slots != b.actual_joint_candidate_slots
++        || a.actual_representative_index != b.actual_representative_index
++        || a.actual_admission_masks_sha256 != b.actual_admission_masks_sha256
++        || a.paid_own_energy_cost_f32 != b.paid_own_energy_cost_f32 || a.work_sha256 != b.work_sha256
++        || a.paid_own_displacement_f32 != b.paid_own_displacement_f32
++        || a.actual_world_pre_pose_xyzyaw_f32 != b.actual_world_pre_pose_xyzyaw_f32
++        || a.actual_world_post_pose_xyzyaw_f32 != b.actual_world_post_pose_xyzyaw_f32
++        || (require_common_input && a.before_fast_bits != b.before_fast_bits)
++    { return None; }
++    Some(std::array::from_fn(|i| {
++        let diff = |before, after| f64::from(f32::from_bits(after)) - f64::from(f32::from_bits(before));
++        let a_delta = diff(a.before_fast_bits[i], a.committed_fast_bits[i]);
++        let b_delta = diff(b.before_fast_bits[i], b.committed_fast_bits[i]);
++        MatchedCoordinateDeltaV1 {
++            origin_tick: b.origin_tick, coordinate: points[i],
++            quiet_before_fast_f32: a.before_fast_bits[i], quiet_committed_fast_f32: a.committed_fast_bits[i],
++            praise_before_fast_f32: b.before_fast_bits[i], praise_committed_fast_f32: b.committed_fast_bits[i],
++            quiet_out_minus_in_f64_bits: a_delta.to_bits(), praise_out_minus_in_f64_bits: b_delta.to_bits(),
++            praise_minus_quiet_increment_f64_bits: (b_delta - a_delta).to_bits(),
++        }
++    }))
++}
++
++#[derive(Debug, Deserialize)]
++#[serde(deny_unknown_fields)]
++struct QuietOwnerReadbackV1 {
++    schema: String,
++    authorizes_next_arm: bool,
++    private_owner_only_before_and_after: bool,
++    raw_full_byte_stream_match: bool,
++    independent_a_sha256: String,
++    actual_a_native_process_sha256: String,
++    actual_a_fence_release_sha256: String,
++    archive_sha256: String,
++    archive_bytes: u64,
++}
++
++/// Exact owner-0400 inputs, same directory owner, no symlink, same held inode
++/// and stable metadata throughout. Nothing here grants a kernel lock or starts a run.
++#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
++fn read_evidence<T: serde::de::DeserializeOwned>(root: &Path, name: &str) -> Result<(T, String)> {
++    use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
++    let dir = fs::symlink_metadata(root)?;
++    let path = root.join(name);
++    let before = fs::symlink_metadata(&path)?;
++    let stamp = |m: &fs::Metadata| (m.dev(), m.ino(), m.uid(), m.mode(), m.nlink(),
++        m.len(), m.mtime(), m.mtime_nsec(), m.ctime(), m.ctime_nsec());
++    if !dir.is_dir() || dir.mode() & 0o7777 != 0o700
++        || !before.is_file() || before.mode() & 0o7777 != 0o400
++        || before.uid() != dir.uid() || before.nlink() != 1 || before.len() == 0
++        || before.len() > CONFIG_LIMIT as u64
++    {
++        return Err("matched Praise requires bounded private immutable evidence inputs".into());
++    }
++    // Linux x86_64 O_NOFOLLOW | O_NONBLOCK; a raced FIFO never blocks this preflight.
++    let file = fs::OpenOptions::new().read(true).custom_flags(0x20800).open(&path)?;
++    if stamp(&file.metadata()?) != stamp(&before) {
++        return Err("matched Praise evidence inode changed before read".into());
++    }
++    let mut bytes = Vec::new();
++    (&file).take(CONFIG_LIMIT as u64 + 1).read_to_end(&mut bytes)?;
++    if bytes.len() as u64 != before.len() || stamp(&file.metadata()?) != stamp(&before)
++        || stamp(&fs::symlink_metadata(&path)?) != stamp(&before)
++        || stamp(&fs::symlink_metadata(root)?) != stamp(&dir)
++    {
++        return Err("matched Praise evidence changed during read".into());
++    }
++    Ok((serde_json::from_slice(&bytes)?, digest(&bytes)))
++}
++
++#[cfg(not(all(target_os = "linux", target_arch = "x86_64")))]
++fn read_evidence<T: serde::de::DeserializeOwned>(_: &Path, _: &str) -> Result<(T, String)> {
++    Err("matched Praise private evidence admission is implemented only on Linux x86_64".into())
++}
++
++pub(super) struct Binding {
++    root_sha256: String,
++    root: RootInputsV1,
++    quiet: Option<VerifiedQuietAnchorV1>,
++}
++
++pub(super) fn bind_private_bytes(root: &Path, spec: &Spec, run: &str, owner: u64,
++    manifest_sha256: &str, current_sha256: &str) -> Result<Binding>
++{
++    let (inputs, root_sha256) =
++        read_evidence::<RootInputsV1>(root, "matched-praise-root-inputs.v1.json")?;
++    if inputs.schema != "qualia.private.retained_matched_praise.root_inputs.v1"
++        || inputs.role != spec.arm || inputs.run_id != run || inputs.owner != owner
++        || inputs.manifest_sha256 != manifest_sha256 || inputs.source_current_sha256 != current_sha256
++        || !hash_shape(&inputs.evaluator_sha256) || !hash_shape(&inputs.independent_zero_sha256)
++    {
++        return Err("matched Praise root-input bytes do not bind the exact manifest, role and source".into());
++    }
++    let quiet = if let Some(q) = &spec.quiet_proof {
++        let (a, a_sha) = read_evidence::<VerifiedQuietAnchorV1>(root, "matched-praise-a5-quiet.v1.json")?;
++        let (backup, backup_sha) = read_evidence::<QuietOwnerReadbackV1>(root, "matched-praise-a-owner.v1.json")?;
++        let (a_root, a_root_sha) =
++            read_evidence::<RootInputsV1>(root, "matched-praise-a-root-inputs.v1.json")?;
++        if a_sha != q.independent_a_sha256 || backup_sha != q.owner_readback_sha256
++            || a_root_sha != a.actual_a_root_inputs_sha256 || a_root_sha == root_sha256
++            || a_root.schema != inputs.schema || a_root.role != Arm::Quiet
++            || a_root.run_id != a.run_id || a_root.owner != inputs.owner
++            || a_root.manifest_sha256 != a.actual_a_request_sha256
++            || a_root.source_current_sha256 != inputs.source_current_sha256
++            || a_root.evaluator_sha256 != inputs.evaluator_sha256
++            || a_root.independent_zero_sha256 != inputs.independent_zero_sha256
++            || !validate_quiet_links(&inputs, spec, &a, &backup, &a_sha)?
++        {
++            return Err("matched Praise cross-role exact independent quiet and owner bytes do not agree".into());
++        }
++        Some(a)
++    } else { None };
++    Ok(Binding { root_sha256, root: inputs, quiet })
++}
++
++fn validate_quiet_links(root: &RootInputsV1, spec: &Spec, a: &VerifiedQuietAnchorV1,
++    backup: &QuietOwnerReadbackV1, a_sha: &str) -> Result<bool>
++{
++    Ok(a.schema == "qualia.private.retained_matched_praise.independent_quiet.v1"
++        && a.role == Arm::Quiet && a.independently_accepted && !a.authorizes_next_arm
++        && a.owned_native_process_reaped && a.actual_paid_window_observed
++        && a.source_world_tick == spec.source_world_tick && a.owner == root.owner
++        && !a.run_id.is_empty() && a.run_id != root.run_id
++        && a.source_current_sha256 == root.source_current_sha256
++        && a.evaluator_sha256 == root.evaluator_sha256
++        && a.independent_zero_sha256 == root.independent_zero_sha256
++        && a.common_spec_sha256 == spec.common_spec_sha256()?
++        && [&a.actual_a_root_inputs_sha256, &a.actual_a_request_sha256, &a.actual_a_native_rows_sha256,
++            &a.actual_a_native_receipt_sha256, &a.actual_a_native_process_sha256,
++            &a.actual_a_fence_release_sha256, &a.actual_a_pre_cue_anchor_sha256]
++            .into_iter().all(|s| hash_shape(s))
++        && a.actual_a_root_inputs_sha256 != a.actual_a_request_sha256
++        && a.actual_a_request_sha256 != root.manifest_sha256
++        && a.actual_a_native_process_sha256 != a.actual_a_fence_release_sha256
++        && a.actual_a_primary.valid() && a.actual_a_next.valid()
++        && a.actual_a_primary.origin_tick == spec.anchor_tick()
++        && a.actual_a_next.origin_tick == a.actual_a_primary.world_tick
++        && a.actual_a_next.before_fast_bits == a.actual_a_primary.committed_fast_bits
++        && a.actual_a_next.fast_generations[0] == a.actual_a_primary.fast_generations[1]
++        && backup.schema == "qualia.private.retained_matched_praise.quiet_owner_readback.v1"
++        && !backup.authorizes_next_arm && backup.private_owner_only_before_and_after
++        && backup.raw_full_byte_stream_match && backup.independent_a_sha256 == a_sha
++        && backup.actual_a_native_process_sha256 == a.actual_a_native_process_sha256
++        && backup.actual_a_fence_release_sha256 == a.actual_a_fence_release_sha256
++        && hash_shape(&backup.archive_sha256) && backup.archive_bytes > 0)
++}
++
++#[derive(Clone, Copy, Serialize)]
++struct PaidLocomotionV1 {
++    actual_joint_candidate_index: u16,
++    own_positive_energy_cost_f32: u32,
++    own_physical_displacement_f32: [u32; 3],
++}
++
++fn displacement_words(v: Vec3f) -> [u32; 3] { [v.x.to_bits(), v.y.to_bits(), v.z.to_bits()] }
++fn pose_words((v, yaw): (Vec3f, f32)) -> [u32; 4] {
++    [v.x.to_bits(), v.y.to_bits(), v.z.to_bits(), yaw.to_bits()]
++}
++
++fn actual_paid_step(step: &FoundationTrainingStep) -> Option<PaidLocomotionV1> {
++    let slot = step.behavior.motor_indices[0];
++    let c = step.frame.candidates().get(usize::from(slot))?;
++    let p = step.patch.outcome();
++    let b = step.patch.selected_bundle()?;
++    let joint = p.joint.as_ref()?;
++    let cmd = b.channels.iter().find(|x| x.channel == MotorChannel::Locomotion)?;
++    let o = joint.channel_observations.iter().find(|x| x.channel == MotorChannel::Locomotion)?;
++    let ch = joint.channel_outcomes.iter().find(|x| x.channel == MotorChannel::Locomotion)?;
++    let e = ch.execution_evidence.as_ref()?;
++    let physical = &ch.physical;
++    let displacement = displacement_words(physical.displacement);
++    let energy = physical.energy_cost.raw();
++    (c.candidate_index == slot && c.action_id == HeadlessActionIds::STEP_FORWARD && c.family.raw() == 3
++        && c.target.entity.is_none() && c.target.position.is_none()
++        && cmd.primitive == c.action_id && cmd.target.is_none()
++        && o.executed && e.succeeded && e.primitive == c.action_id && e.command_target.is_none()
++        && physical.target_entity.is_none() && physical.contact == PhysicalContactKind::Moved
++        && energy.is_finite() && energy > 0.0 && physical.displacement.validate().is_ok()
++        && displacement.iter().any(|&bits| f32::from_bits(bits) != 0.0)
++        && displacement_words(o.displacement) == displacement).then_some(PaidLocomotionV1 {
++            actual_joint_candidate_index: slot,
++            own_positive_energy_cost_f32: energy.to_bits(),
++            own_physical_displacement_f32: displacement,
++        })
++}
++
++fn external_speech(runtime: &GpuLiveBrainRuntime, steps: &[FoundationTrainingStep]) -> bool {
++    use alife_core::UtteranceSourceKind::{Player, Teacher};
++    runtime.world().audible_utterances().iter().any(|x| matches!(x.source_kind, Player | Teacher))
++        || steps.iter().any(|s| s.frame.sensory().language_context.heard_tokens.iter().flatten()
++            .any(|x| matches!(x.source_kind, Player | Teacher)))
++}
++
++#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
++#[serde(rename_all = "snake_case")]
++enum DoseStage { PendingAnchor, Quiet, Withheld, Ready, Queued, Applied }
++
++fn queue_due(stage: DoseStage, before: u64, at: u64) -> bool {
++    stage == DoseStage::Ready && before == at
++}
++
++#[derive(Serialize)]
++struct BoundaryV1 {
++    world_tick: u64,
++    paid_locomotion: Option<PaidLocomotionV1>,
++    cut: Option<FixedRouteCutV1>,
++    numeric_paid_cut: Option<CutCoordinatesV1>,
++    unobserved_reason: Option<&'static str>,
++}
++
++pub(super) struct Probe {
++    spec: Spec,
++    binding: Binding,
++    stage: DoseStage,
++    boundaries: Vec<BoundaryV1>,
++    observed_care: Option<PlayerCareReceipt>,
++    acoustic: Vec<(u64, u32)>,
++    anchor_sha256: Option<String>,
++    control_confound: bool,
++}
++
++impl Probe {
++    pub(super) fn new(spec: Spec, binding: Binding, source_tick: u64,
++        pending_empty: bool, speech_empty: bool) -> Result<Self>
++    {
++        if !spec.observation().matches_restored_opening(source_tick, pending_empty, speech_empty) {
++            return Err("matched Praise requires the exact originally silent retained opening".into());
++        }
++        Ok(Self { spec, binding, stage: DoseStage::PendingAnchor, boundaries: Vec::new(),
++            observed_care: None, acoustic: Vec::new(), anchor_sha256: None, control_confound: false })
++    }
++
++    pub(super) fn maybe_queue(&mut self, runtime: &mut GpuLiveBrainRuntime, owner: OrganismId,
++        before: Tick) -> Result<()>
++    {
++        if before.raw() > self.spec.anchor_tick()
++            && matches!(self.stage, DoseStage::PendingAnchor | DoseStage::Ready)
++        {
++            // A missing/late authority never slides the intervention.
++            self.stage = DoseStage::Withheld;
++        }
++        if !queue_due(self.stage, before.raw(), self.spec.anchor_tick()) { return Ok(()); }
++        self.stage = DoseStage::Withheld; // refuse and never requeue even if the World returns no dose
++        match runtime.provide_player_interaction_v1(owner, self.spec.position(), PlayerInteractionV1::Praise)? {
++            PlayerInteractionQueueOutcomeV1::Queued => { self.stage = DoseStage::Queued; Ok(()) }
++            PlayerInteractionQueueOutcomeV1::NoReceivedDose => Err("actual World Hand queued no Praise".into()),
++        }
++    }
++
++    pub(super) fn observe(&mut self, runtime: &mut GpuLiveBrainRuntime, owner: OrganismId,
++        before: Tick, after: Tick, steps: &[FoundationTrainingStep], clean: bool,
++        pre_pose: Option<(Vec3f, f32)>, post_pose: Option<(Vec3f, f32)>,
++    ) -> Result<()>
++    {
++        self.control_confound |= !clean;
++        let latest = runtime.world().last_player_care(owner);
++        let fresh = latest.filter(|x| x.applied_tick.raw() > before.raw());
++        if after == before {
++            if fresh.is_some() || !steps.is_empty() { return Err("matched Praise pulse or row on a poll".into()); }
++            return Ok(());
++        }
++        let is_consumption_cut = self.stage == DoseStage::Queued && before.raw() == self.spec.anchor_tick();
++        match (is_consumption_cut, fresh) {
++            (true, Some(care)) if care.applied_tick == after
++                && care.kinds == PlayerCareKindSet::single(PlayerCareKind::Praise) =>
++            {
++                self.observed_care = Some(care);
++                self.stage = DoseStage::Applied;
++            }
++            (false, None) => {},
++            _ => return Err("matched Praise missing singleton real care or received foreign care".into()),
++        }
++        if external_speech(runtime, steps) {
++            return Err("matched Praise refuses exterior speech tokens".into());
++        }
++        if let [s] = steps {
++            let bits = s.frame.sensory().channels.auditory_acoustic[1].to_bits();
++            if self.observed_care.is_none() && bits != 0 {
++                return Err("matched Praise acoustic input without authoritative care".into());
++            }
++            self.acoustic.push((before.raw(), bits));
++        }
++        let world_tick = after.raw();
++        if !self.spec.observation().requested(world_tick) { return Ok(()); }
++        let mut paid = None;
++        let mut cut = None;
++        let mut numeric_paid_cut = None;
++        let mut reason = Some("ordinary_published_route_unobserved");
++        if let [step] = steps {
++            if clean {
++                paid = actual_paid_step(step);
++                if let Ok(value) = runtime.observe_fixed_retained_route_v1(
++                    self.spec.observation(), step, after, &self.spec.coordinates
++                ) {
++                    if let (Some(loc), Some(pre), Some(post)) =
++                        (paid.filter(|p| value.anchor_uses_paid_slot(p.actual_joint_candidate_index)), pre_pose, post_pose)
++                    {
++                        let (before_fast_bits, committed_fast_bits) = value.raw_fast_words();
++                        let row = CutCoordinatesV1 {
++                            origin_tick: before.raw(), world_tick, paid_candidate_index: loc.actual_joint_candidate_index,
++                            actual_joint_candidate_slots: value.motor_candidates(),
++                            actual_representative_index: step.behavior.representative_index,
++                            actual_admission_masks_sha256: digest(&serde_json::to_vec(&(
++                                &step.behavior.representative_mask, &step.behavior.motor_masks,
++                                &step.behavior.forced_motor_slots,
++                            ))?),
++                            paid_own_energy_cost_f32: loc.own_positive_energy_cost_f32,
++                            paid_own_displacement_f32: loc.own_physical_displacement_f32,
++                            actual_world_pre_pose_xyzyaw_f32: pose_words(pre),
++                            actual_world_post_pose_xyzyaw_f32: pose_words(post),
++                            work_sha256: digest(&serde_json::to_vec(&step.work)?),
++                            fast_generations: value.raw_generation_pair(), before_fast_bits, committed_fast_bits,
++                        };
++                        if row.valid() { numeric_paid_cut = Some(row); }
++                    }
++                    cut = Some(value);
++                    reason = None;
++                }
++            }
++        }
++        if world_tick == self.spec.anchor_tick() {
++            self.stage = match self.spec.arm { Arm::Quiet => DoseStage::Quiet, Arm::Praise => DoseStage::Withheld };
++            if let (Some(paid), Some(cut), Some(physical), [step]) =
++                (&paid, &cut, &numeric_paid_cut, steps)
++            {
++                if cut.all_active_nonzero() && cut.anchor_uses_paid_slot(paid.actual_joint_candidate_index)
++                    && self.observed_care.is_none() && !self.control_confound
++                {
++                    let a = digest(&serde_json::to_vec(&(
++                        "matched-praise-actual-before-sense-anchor-v1", self.spec.common_spec_sha256()?,
++                        runtime.world().canonical_signature_digest()?, &step.behavior.sampling,
++                        &step.work, &cut, paid, physical,
++                    ))?);
++                    self.anchor_sha256 = Some(a.clone());
++                    if self.binding.quiet.as_ref().is_some_and(|q| q.actual_a_pre_cue_anchor_sha256 == a) {
++                        self.stage = DoseStage::Ready;
++                    }
++                }
++            }
++        }
++        self.boundaries.push(BoundaryV1 { world_tick, paid_locomotion: paid, cut, numeric_paid_cut, unobserved_reason: reason });
++        Ok(())
++    }
++
++    pub(super) fn report(self, valid_stock_closure: bool) -> Result<serde_json::Value> {
++        let controls = valid_stock_closure && !self.control_confound
++            && self.boundaries.len() == 3 && self.acoustic.len() == CUTS as usize;
++        let mut primary = None;
++        let mut next = None;
++        if controls && self.stage == DoseStage::Applied {
++            if let (Some(a), [anchor, first, later]) = (&self.binding.quiet, self.boundaries.as_slice()) {
++                if let (Some(prior), Some(b)) = (&anchor.numeric_paid_cut, &first.numeric_paid_cut) {
++                    if self.anchor_sha256.as_deref() == Some(a.actual_a_pre_cue_anchor_sha256.as_str())
++                        && prior.committed_fast_bits == b.before_fast_bits
++                        && prior.fast_generations[1] == b.fast_generations[0]
++                    {
++                        primary = compare_cuts(&a.actual_a_primary, b, &self.spec.coordinates, true);
++                        if let (true, Some(l)) = (primary.is_some(), &later.numeric_paid_cut) {
++                            if b.committed_fast_bits == l.before_fast_bits
++                                && b.fast_generations[1] == l.fast_generations[0]
++                            {
++                                next = compare_cuts(&a.actual_a_next, l, &self.spec.coordinates, false);
++                            }
++                        }
++                    }
++                }
++            }
++        }
++        Ok(serde_json::json!({
++            "schema_version":1, "comparison_scope":"retained_matched_praise_fast_delta_only",
++            "role":self.spec.arm, "source_world_tick":self.spec.source_world_tick,
++            "common_spec_sha256":self.spec.common_spec_sha256()?,
++            "root_inputs_sha256":self.binding.root_sha256, "root_inputs":self.binding.root,
++            "quiet_proof_inputs": self.spec.quiet_proof, "actual_pre_cue_anchor_sha256":self.anchor_sha256,
++            "actual_dose_stage":self.stage, "actual_singleton_world_care":self.observed_care,
++            "sealed_row_acoustic_praise_bits":self.acoustic, "boundaries":self.boundaries,
++            "bounded_control_closure_intact":controls,
++            "primary_provisional_named_delta_comparison":primary,
++            "next_provisional_named_delta_comparison":next,
++            "packet_and_independent_same_role_raw_verification_required":true,
++            "scorecard_eligible":false,
++            "evaluation_only":true, "authorizes_next_arm":false,
++            "matched_credit_or_memory_verified":false,
++        }))
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    #[test]
++    fn late_stale_failed_and_poll_states_never_schedule_praise() {
++        for invalid in [DoseStage::PendingAnchor, DoseStage::Quiet, DoseStage::Withheld,
++            DoseStage::Queued, DoseStage::Applied]
++        { assert!(!queue_due(invalid, 106, 106)); }
++        assert!(!queue_due(DoseStage::Ready, 105, 106));
++        assert!(!queue_due(DoseStage::Ready, 107, 106));
++        assert!(queue_due(DoseStage::Ready, 106, 106));
++    }
++    #[test]
++    fn root_literals_are_not_zero_sentinels_or_noncanonical_hashes() {
++        assert!(!hash_shape(&"0".repeat(64)));
++        assert!(!hash_shape(&"C".repeat(64)));
++        assert!(!hash_shape(&"a".repeat(63)));
++        assert!(hash_shape(&"a".repeat(64)));
++    }
++}
++
++#[cfg(test)]
++mod numeric_protocol_tests {
++    use super::*;
++
++    fn coordinates() -> [FixedRouteCoordinateV1; 8] {
++        std::array::from_fn(|i| FixedRouteCoordinateV1 { canonical_phenotype_index: 100 + i as u32,
++            decoder_local_index: 3 + i as u32, gpu_local_synapse_id: 30 + i as u32,
++            decoder_input_lane: 1, absolute_source_neuron: 2, receptor_index: 3 })
++    }
++
++    fn cut() -> CutCoordinatesV1 {
++        CutCoordinatesV1 {
++            origin_tick: 106, world_tick: 107, paid_candidate_index: 2,
++            actual_joint_candidate_slots: [2, 4, u16::MAX, u16::MAX, u16::MAX, u16::MAX],
++            actual_representative_index: 4, actual_admission_masks_sha256: "a".repeat(64),
++            paid_own_energy_cost_f32: 0.25f32.to_bits(), paid_own_displacement_f32: [1.0f32.to_bits(), 0, 0],
++            actual_world_pre_pose_xyzyaw_f32: [0; 4],
++            actual_world_post_pose_xyzyaw_f32: [1.0f32.to_bits(), 0, 0, 0],
++            work_sha256: "b".repeat(64), fast_generations: [190, 191],
++            before_fast_bits: [0.25f32.to_bits(); 8], committed_fast_bits: [0.26f32.to_bits(); 8],
++        }
++    }
++
++    #[test]
++    fn fixed_coordinates_and_cross_role_shape_fail_closed() {
++        let mut c = Spec { arm: Arm::Quiet, source_world_tick: 100, hand_world_position: [1.0, 2.0, 3.0],
++            coordinates: coordinates(), quiet_proof: None };
++        assert!(c.validate().is_ok());
++        c.arm = Arm::Praise;
++        assert!(c.validate().is_err());
++        c.quiet_proof = Some(QuietProofInputsV1 { independent_a_sha256: "a".repeat(64),
++            owner_readback_sha256: "a".repeat(64) });
++        assert!(c.validate().is_err());
++        c.quiet_proof.as_mut().unwrap().owner_readback_sha256 = "b".repeat(64);
++        assert!(c.validate().is_ok());
++        c.coordinates[0].absolute_source_neuron = 2048;
++        assert!(c.validate().is_err());
++        c.coordinates = coordinates();
++        c.coordinates[1].gpu_local_synapse_id = c.coordinates[0].gpu_local_synapse_id;
++        assert!(c.validate().is_err());
++    }
++
++    #[test]
++    fn typed_delta_distinguishes_zero_wrong_preimage_unpaid_and_later_divergence() {
++        let a = cut();
++        let mut b = cut();
++        let c = coordinates();
++        assert_eq!(compare_cuts(&a, &b, &c, true).unwrap()[0].praise_minus_quiet_increment_f64_bits, 0);
++        b.committed_fast_bits[0] = 0.25f32.to_bits();
++        assert!(f64::from_bits(compare_cuts(&a, &b, &c, true).unwrap()[0].praise_minus_quiet_increment_f64_bits) < 0.0);
++        b.before_fast_bits[0] = 0.27f32.to_bits();
++        assert!(compare_cuts(&a, &b, &c, true).is_none());
++        assert!(compare_cuts(&a, &b, &c, false).is_some());
++        b.paid_own_energy_cost_f32 = 0;
++        assert!(compare_cuts(&a, &b, &c, false).is_none());
++        b = cut();
++        b.actual_representative_index = 2;
++        assert!(compare_cuts(&a, &b, &c, true).is_none());
++        b = cut();
++        b.actual_joint_candidate_slots[0] = 1;
++        assert!(compare_cuts(&a, &b, &c, true).is_none());
++        b = cut();
++        b.actual_admission_masks_sha256 = "c".repeat(64);
++        assert!(compare_cuts(&a, &b, &c, true).is_none());
++        b = cut();
++        b.paid_own_displacement_f32[0] = 2.0f32.to_bits();
++        assert!(!b.valid()); // World pose cannot substantiate this settlement
++        b.actual_world_post_pose_xyzyaw_f32[0] = 2.0f32.to_bits();
++        assert!(b.valid()); // actual independently grounded drift, not an equal physical cut
++        assert!(compare_cuts(&a, &b, &c, true).is_none());
++        b = cut();
++        b.actual_world_post_pose_xyzyaw_f32[3] = 1.0f32.to_bits();
++        assert!(b.valid() && compare_cuts(&a, &b, &c, true).is_none());
++    }
++}
+diff --git a/crates/alife_game_app/src/gpu_live_runtime/retained_neutral_route.rs b/crates/alife_game_app/src/gpu_live_runtime/retained_neutral_route.rs
+--- a/crates/alife_game_app/src/gpu_live_runtime/retained_neutral_route.rs
++++ b/crates/alife_game_app/src/gpu_live_runtime/retained_neutral_route.rs
+@@ -2,6 +2,8 @@
+ use super::{FoundationTrainingStep, GpuLiveBrainRuntime};
+ use alife_core::{CompiledSynapseKind, DecisionEvidence, DecoderHeadKind, ScaffoldContractError, Tick};
+ use serde::Serialize;
++#[cfg(feature = "research-retained-matched-praise-fast-delta-v1")]
++use serde::Deserialize;
+ use std::collections::{BTreeMap, BTreeSet};
+ 
+ mod scope;
+@@ -149,6 +151,65 @@
+     }).collect())
+ }
+ 
++#[cfg(feature = "research-retained-matched-praise-fast-delta-v1")]
++#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++pub(crate) struct FixedRouteCoordinateV1 {
++    pub canonical_phenotype_index: u32,
++    pub decoder_local_index: u32,
++    pub gpu_local_synapse_id: u32,
++    pub decoder_input_lane: u16,
++    pub absolute_source_neuron: u32,
++    pub receptor_index: u16,
++}
++
++#[cfg(feature = "research-retained-matched-praise-fast-delta-v1")]
++impl FixedRouteCoordinateV1 {
++    pub(crate) fn valid(&self) -> bool {
++        self.canonical_phenotype_index < 32_768 && self.decoder_local_index < 8_192
++            && self.gpu_local_synapse_id > self.decoder_local_index
++            && self.gpu_local_synapse_id <= 49_151
++            && self.decoder_input_lane < 24
++            && self.absolute_source_neuron < 2_048
++    }
++}
++
++#[cfg(feature = "research-retained-matched-praise-fast-delta-v1")]
++#[derive(Serialize)]
++pub(crate) struct FixedRouteCutV1 {
++    reading: NeutralRouteBoundaryV1,
++    /// Exact out-minus-in at these named coordinates, not total learned credit.
++    raw_fast_delta_out_minus_in_f64_bits: [u64; 8],
++}
++
++#[cfg(feature = "research-retained-matched-praise-fast-delta-v1")]
++impl FixedRouteCutV1 {
++    pub(crate) fn raw_fast_words(&self) -> ([u32; 8], [u32; 8]) {
++        (std::array::from_fn(|i| self.reading.observed_named_words_only[i].before_fast_f32),
++         std::array::from_fn(|i| self.reading.observed_named_words_only[i].actual_committed_fast_f32))
++    }
++
++    pub(crate) fn raw_generation_pair(&self) -> [u64; 2] {
++        [self.reading.actual_input_fast_generation, self.reading.actual_committed_fast_generation]
++    }
++
++    pub(crate) fn motor_candidates(&self) -> [u16; 6] {
++        self.reading.actual_joint_motor_candidate_slots
++    }
++
++    pub(crate) fn all_active_nonzero(&self) -> bool {
++        self.reading.observed_named_words_only.len() == 8
++            && self.reading.observed_named_words_only.iter()
++                .all(|w| w.actual_active_eligibility_before_next_sense_f32 != 0)
++    }
++
++    pub(crate) fn anchor_uses_paid_slot(&self, index: u16) -> bool {
++        self.reading.observed_named_words_only.iter().all(|w|
++            w.after_inference_source_activation_f32 != 0
++            && matches!(w.selected_inputs_candidate_index_and_f32.as_slice(), [(i, b)] if *i == index && *b != 0))
++    }
++}
++
+ struct NamedProbe {
+     canonical: u32,
+     local: u32,
+@@ -168,6 +229,37 @@
+         spec: NeutralRouteObserverSpecV1,
+         step: &FoundationTrainingStep,
+         after: Tick,
++    ) -> Result<NeutralRouteBoundaryV1, ScaffoldContractError> {
++        #[cfg(feature = "research-retained-matched-praise-fast-delta-v1")]
++        { self.observe_retained_route_named_v1(spec, step, after, None) }
++        #[cfg(not(feature = "research-retained-matched-praise-fast-delta-v1"))]
++        { self.observe_retained_route_named_v1(spec, step, after) }
++    }
++
++    #[cfg(feature = "research-retained-matched-praise-fast-delta-v1")]
++    pub(crate) fn observe_fixed_retained_route_v1(
++        &mut self, spec: NeutralRouteObserverSpecV1, step: &FoundationTrainingStep,
++        after: Tick, fixed: &[FixedRouteCoordinateV1; 8],
++    ) -> Result<FixedRouteCutV1, ScaffoldContractError> {
++        let reading = self.observe_retained_route_named_v1(spec, step, after, Some(fixed))?;
++        if reading.observed_named_words_only.len() != fixed.len() {
++            return Err(ScaffoldContractError::LearningEvidenceMismatch);
++        }
++        let delta = std::array::from_fn(|i| {
++            let w = &reading.observed_named_words_only[i];
++            (f64::from(f32::from_bits(w.actual_committed_fast_f32))
++                - f64::from(f32::from_bits(w.before_fast_f32))).to_bits()
++        });
++        Ok(FixedRouteCutV1 { reading, raw_fast_delta_out_minus_in_f64_bits: delta })
++    }
++
++    fn observe_retained_route_named_v1(
++        &mut self,
++        spec: NeutralRouteObserverSpecV1,
++        step: &FoundationTrainingStep,
++        after: Tick,
++        #[cfg(feature = "research-retained-matched-praise-fast-delta-v1")]
++        fixed: Option<&[FixedRouteCoordinateV1; 8]>,
+     ) -> Result<NeutralRouteBoundaryV1, ScaffoldContractError> {
+         const MISMATCH: ScaffoldContractError = ScaffoldContractError::LearningEvidenceMismatch;
+         spec.validate()?;
+@@ -266,6 +358,30 @@
+         let mut count_by_family = BTreeMap::<u8, usize>::new();
+         let mut named = Vec::<NamedProbe>::new();
+         for (local, (canonical, row, c)) in decoder.into_iter().enumerate() {
++            #[cfg(feature = "research-retained-matched-praise-fast-delta-v1")]
++            if let Some(fixed) = fixed {
++                let Some(w) = fixed.iter().find(|w| w.decoder_local_index == local as u32) else { continue; };
++                if !w.valid() || c.head() != DecoderHeadKind::ActionCandidate || c.family().raw() != 3
++                    || w.canonical_phenotype_index != canonical as u32
++                    || w.decoder_input_lane != c.input_lane() || usize::from(c.input_lane()) >= lanes
++                    || w.absolute_source_neuron != row.source() || w.receptor_index != row.receptor_index()
++                {
++                    return Err(MISMATCH);
++                }
++                let activation_bits = activations.get(row.source() as usize).ok_or(MISMATCH)?.to_bits();
++                if !valid_bits(activation_bits) { return Err(MISMATCH); }
++                let mut inputs = Vec::new();
++                for x in selected.iter().filter(|x| x.family == c.family().raw()) {
++                    let at = usize::from(x.candidate_index) * b.decoder_input_stride + usize::from(c.input_lane());
++                    let value = b.decoder_inputs.get(at).ok_or(MISMATCH)?.to_bits();
++                    if !valid_bits(value) { return Err(MISMATCH); }
++                    inputs.push((x.candidate_index, value)); // preserve actual zeros; do not reselect the map
++                }
++                named.push(NamedProbe { canonical: canonical as u32, local: local as u32,
++                    family: c.family().raw(), lane: c.input_lane(), source: row.source(),
++                    receptor: row.receptor_index(), inputs, activation_bits });
++                continue;
++            }
+             if c.head() != DecoderHeadKind::ActionCandidate || usize::from(c.input_lane()) >= lanes {
+                 continue;
+             }
+@@ -303,6 +419,8 @@
+                 family, lane: c.input_lane(), source: row.source(), receptor: row.receptor_index(),
+                 activation_bits: activation.to_bits(), inputs});
+         }
++        #[cfg(feature = "research-retained-matched-praise-fast-delta-v1")]
++        if fixed.is_some_and(|points| points.len() != named.len()) { return Err(MISMATCH); }
+         if named.is_empty() || named.len() > MAX_NAMED_WORDS {
+             return Err(MISMATCH);
+         }
+@@ -316,6 +434,10 @@
+         }
+         for (n, raw) in named.into_iter().zip(&words.decoder_metadata_words) {
+             let expected_global = words.live_recurrent_count.checked_add(n.local).ok_or(MISMATCH)?;
++            #[cfg(feature = "research-retained-matched-praise-fast-delta-v1")]
++            if fixed.is_some_and(|points| !points.iter().any(|w|
++                w.decoder_local_index == n.local && w.gpu_local_synapse_id == expected_global))
++            { return Err(MISMATCH); }
+             if *raw != [expected_global, 1, u32::from(n.family), u32::from(n.lane),
+                 n.source, u32::from(n.receptor), n.local, 0] {
+                 return Err(MISMATCH);
